@@ -222,7 +222,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 # descriptor. The current milestone detects raw key presses
                 # but deliberately defers XKB symbol translation.
                 client.sendall(wire_message(12, 0))  # wl_buffer.release
-                keymap_data = b"xkb_keymap { };\\0"
+                keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
