@@ -1,4 +1,4 @@
-# Wayland backend: first window prototype
+# Wayland backend: interactive editing prototype
 
 ## Purpose and current scope
 
