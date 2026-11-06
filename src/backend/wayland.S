@@ -97,10 +97,6 @@ msg_connect:           .ascii "NekoEdit: could not connect to the Wayland displa
 msg_connect_end:
 msg_file_error:        .ascii "NekoEdit: could not open file or file exceeds the 64 KiB document limit.\n"
 msg_file_error_end:
-msg_keymap_trace:       .ascii "NekoEdit DEBUG: keymap event dispatched\n"
-msg_keymap_trace_end:
-msg_keymap_header_trace: .ascii "NekoEdit DEBUG: keyboard opcode 0 header received\n"
-msg_keymap_header_trace_end:
 msg_globals:           .ascii "NekoEdit: compositor, wl_shm, or xdg_wm_base is unavailable.\n"
 msg_globals_end:
 msg_protocol:          .ascii "NekoEdit: Wayland protocol or shared-memory setup failed.\n"
@@ -1868,15 +1864,6 @@ wl_read_event:
     cmp eax, 4096
     ja .read_event_bad
     mov dword ptr [rip + last_size], eax
-    cmp dword ptr [rip + last_object], 16
-    jne .read_event_no_header_trace
-    cmp dword ptr [rip + last_opcode], 0
-    jne .read_event_no_header_trace
-    mov edi, 2
-    lea rsi, [rip + msg_keymap_header_trace]
-    mov edx, msg_keymap_header_trace_end - msg_keymap_header_trace
-    call linux_write_all
-.read_event_no_header_trace:
     cmp dword ptr [rip + last_size], 0
     je .read_event_ok
     mov edi, dword ptr [rip + socket_fd]
@@ -1909,11 +1896,6 @@ wl_read_event:
     cmp dword ptr [rip + last_opcode], 0
     jne .read_event_check_display_error
 .read_event_dispatch_keymap:
-    # Temporary CI trace: proves this path reached the keymap validator.
-    mov edi, 2
-    lea rsi, [rip + msg_keymap_trace]
-    mov edx, msg_keymap_trace_end - msg_keymap_trace
-    call linux_write_all
     cmp dword ptr [rip + last_opcode], 0
     jne .read_event_bad
     call handle_keyboard_keymap
