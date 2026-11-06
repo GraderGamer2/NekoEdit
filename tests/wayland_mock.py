@@ -131,6 +131,10 @@ def run(
             document.write(b"H")
         with open(os.path.join(runtime_dir, "nested-dir", "empty.txt"), "wb") as document:
             document.write(b"")
+        with open(os.path.join(runtime_dir, "nested-dir", "prefill-alpha.txt"), "wb") as document:
+            document.write(b"A")
+        with open(os.path.join(runtime_dir, "nested-dir", "prefill-beta.txt"), "wb") as document:
+            document.write(b"B")
         for index in range(32):
             with open(os.path.join(runtime_dir, f"scroll-entry-{index:02d}.txt"), "wb") as document:
                 document.write(b"S")
@@ -939,7 +943,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -950,6 +954,8 @@ xkb_symbols "nekoedit-sparse" {
                                 if name in {"picker_name_buffer", "doc_buffer", "picker_path_buffer", "picker_current_path", "current_path_buffer", "picker_target_buffer"}:
                                     size = 64 if name in {"picker_name_buffer", "doc_buffer"} else 256
                                     result[name] = os.pread(fd, size, address).split(b"\0", 1)[0]
+                                elif name == "picker_suggestion_indices":
+                                    result[name] = struct.unpack("<5I", os.pread(fd, 20, address))
                                 elif name == "current_file_path":
                                     pointer = struct.unpack("<Q", os.pread(fd, 8, address))[0]
                                     result[name] = pointer
@@ -1415,6 +1421,59 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     observations.append(
                         "path/name fields support cursor placement, middle insertion, Backspace, Home/End-ready editing, Ctrl+A replacement, and filename prefix search"
+                    )
+
+                    # A partial filename now opens a visible, selectable list
+                    # of file recommendations rather than only highlighting an
+                    # invisible first prefix match.
+                    open_picker_from_menu(serial + 10, "filename autocomplete suggestions")
+                    serial = double_click_picker_row(
+                        120, 139, serial + 30, "enter directory for filename autocomplete"
+                    )
+                    serial = workflow_type_path("prefill-", serial + 10)
+                    suggestion_state = picker_state()
+                    if (
+                        suggestion_state.get("picker_name_buffer") != b"prefill-"
+                        or suggestion_state.get("picker_suggestion_count") != 2
+                        or suggestion_state.get("picker_suggestion_selected") != 0
+                        or suggestion_state.get("picker_selected") != suggestion_state.get("picker_suggestion_indices", ())[0]
+                    ):
+                        raise AssertionError(
+                            f"filename autocomplete did not show both matching files: {suggestion_state!r}"
+                        )
+                    # The dropdown overlays the lower list area and is rendered
+                    # with a distinct dark panel above the Search field.
+                    popup_pixel = struct.unpack_from(
+                        "<I", pixels, 272 * 800 * 4 + 168 * 4
+                    )[0]
+                    if popup_pixel != 0xFF171C24:
+                        raise AssertionError(
+                            f"filename recommendation popup was not visible: {hex(popup_pixel)}"
+                        )
+                    key_step(serial + 2, 108, "Down selects the second filename recommendation")
+                    suggestion_state = picker_state()
+                    if (
+                        suggestion_state.get("picker_suggestion_selected") != 1
+                        or suggestion_state.get("picker_selected") != suggestion_state.get("picker_suggestion_indices", (0, 0))[1]
+                    ):
+                        raise AssertionError(
+                            f"Down did not highlight the second filename recommendation: {suggestion_state!r}"
+                        )
+                    key_step(serial + 4, 28, "Enter opens the selected filename recommendation")
+                    suggestion_open_state = picker_state()
+                    expected_suggestion_path = os.path.join(
+                        runtime_dir, "nested-dir", "prefill-beta.txt"
+                    ).encode()
+                    if (
+                        suggestion_open_state.get("active_path") != expected_suggestion_path
+                        or suggestion_open_state.get("doc_length") != 1
+                        or suggestion_open_state.get("doc_buffer", b"")[:1] != b"B"
+                    ):
+                        raise AssertionError(
+                            f"autocomplete opened the wrong recommendation: {suggestion_open_state!r}"
+                        )
+                    observations.append(
+                        "partial filename input renders multiple autocomplete recommendations; mouse/keyboard selection is supported and Enter opens the highlighted exact file"
                     )
 
                     client.sendall(wire_message(10, 1))

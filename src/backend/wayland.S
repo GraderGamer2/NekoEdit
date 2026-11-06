@@ -64,6 +64,10 @@
 .equ PICKER_ENTRY_SIZE, 260
 .equ PICKER_DIR_BYTES, 8192
 .equ PICKER_VISIBLE_ROWS, 15
+.equ PICKER_SUGGESTION_MAX, 5
+.equ PICKER_SUGGESTION_TOP, 272
+.equ PICKER_SUGGESTION_ROW_HEIGHT, 16
+.equ PICKER_SUGGESTION_BOTTOM, 356
 .equ PICKER_PATH_VISIBLE_CHARS, 82
 .equ PICKER_NAME_VISIBLE_CHARS, 52
 .equ PICKER_TRACK_TOP, 130
@@ -322,7 +326,7 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
-.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_path_cursor, picker_name_cursor, picker_name_match, picker_edit_select_all, picker_path_buffer, picker_current_path, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
+.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_path_cursor, picker_name_cursor, picker_name_match, picker_edit_select_all, picker_path_buffer, picker_current_path, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, picker_suggestion_count, picker_suggestion_selected, picker_suggestion_indices, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
 picker_mode:            .long 0
 picker_focus:           .long 0
 picker_dir_fd:          .long 0
@@ -344,6 +348,9 @@ picker_name_length:     .long 0
 picker_name_cursor:     .long 0
 picker_name_view_start: .long 0
 picker_name_match:      .long 0
+picker_suggestion_count: .long 0
+picker_suggestion_selected: .long 0
+picker_suggestion_indices: .zero (PICKER_SUGGESTION_MAX * 4)
 picker_edit_select_all: .long 0
 picker_last_click_index: .long 0
 picker_last_click_time: .long 0
@@ -2383,8 +2390,8 @@ picker_copy_selected_name:
     ret
 .size picker_copy_selected_name, . - picker_copy_selected_name
 
-# Case-insensitive ASCII filename-prefix search. On a match, select the first
-# regular file and scroll it into view; on no match, clear the stale selection.
+# Case-insensitive ASCII filename-prefix search. Collect up to five regular-file
+# suggestions, default to the first result, and scroll that result into view.
 .type picker_find_name_prefix, @function
 picker_find_name_prefix:
     push rbx
@@ -2393,13 +2400,17 @@ picker_find_name_prefix:
     push r14
     push r15
     sub rsp, 8
+    mov dword ptr [rip + picker_suggestion_count], 0
+    mov dword ptr [rip + picker_suggestion_selected], 0
+    mov dword ptr [rip + picker_selected], -1
+    mov dword ptr [rip + picker_name_match], 0
     mov r12d, dword ptr [rip + picker_name_length]
     test r12d, r12d
-    jz .picker_find_name_no_match
+    jz .picker_find_name_done
     xor r13d, r13d
 .picker_find_name_entry:
     cmp r13d, dword ptr [rip + picker_entry_count]
-    jae .picker_find_name_no_match
+    jae .picker_find_name_done
     mov eax, r13d
     imul eax, PICKER_ENTRY_SIZE
     lea rbx, [rip + picker_entries]
@@ -2431,27 +2442,34 @@ picker_find_name_prefix:
     inc ecx
     jmp .picker_find_name_compare
 .picker_find_name_match:
+    # Keep the first five sorted matches for the visible suggestion popup.
+    mov eax, dword ptr [rip + picker_suggestion_count]
+    cmp eax, PICKER_SUGGESTION_MAX
+    jae .picker_find_name_next
+    lea rdx, [rip + picker_suggestion_indices]
+    mov dword ptr [rdx + rax*4], r13d
+    inc eax
+    mov dword ptr [rip + picker_suggestion_count], eax
+    cmp eax, 1
+    jne .picker_find_name_next
     mov dword ptr [rip + picker_selected], r13d
     mov dword ptr [rip + picker_name_match], 1
+    # Scroll the default (first) suggestion into the 15-row directory view.
     mov eax, dword ptr [rip + picker_scroll]
     cmp r13d, eax
-    jae .picker_find_name_check_bottom
-    mov dword ptr [rip + picker_scroll], r13d
-    jmp .picker_find_name_done
-.picker_find_name_check_bottom:
+    jb .picker_find_name_scroll_top
     mov edx, r13d
     sub edx, eax
     cmp edx, PICKER_VISIBLE_ROWS
-    jb .picker_find_name_done
+    jb .picker_find_name_next
     sub r13d, PICKER_VISIBLE_ROWS - 1
     mov dword ptr [rip + picker_scroll], r13d
-    jmp .picker_find_name_done
+    jmp .picker_find_name_next
+.picker_find_name_scroll_top:
+    mov dword ptr [rip + picker_scroll], r13d
 .picker_find_name_next:
     inc r13d
     jmp .picker_find_name_entry
-.picker_find_name_no_match:
-    mov dword ptr [rip + picker_selected], -1
-    mov dword ptr [rip + picker_name_match], 0
 .picker_find_name_done:
     add rsp, 8
     pop r15
@@ -2461,6 +2479,61 @@ picker_find_name_prefix:
     pop rbx
     ret
 .size picker_find_name_prefix, . - picker_find_name_prefix
+
+# Move the active autocomplete candidate without changing the typed prefix.
+# EDI is -1 or +1. The first matching filename remains the default candidate.
+.type picker_cycle_suggestion, @function
+picker_cycle_suggestion:
+    mov ecx, dword ptr [rip + picker_suggestion_count]
+    test ecx, ecx
+    jz .picker_cycle_suggestion_done
+    mov eax, dword ptr [rip + picker_suggestion_selected]
+    add eax, edi
+    test eax, eax
+    jns .picker_cycle_suggestion_upper
+    lea eax, [rcx - 1]
+    jmp .picker_cycle_suggestion_store
+.picker_cycle_suggestion_upper:
+    cmp eax, ecx
+    jb .picker_cycle_suggestion_store
+    xor eax, eax
+.picker_cycle_suggestion_store:
+    mov dword ptr [rip + picker_suggestion_selected], eax
+    lea rdx, [rip + picker_suggestion_indices]
+    mov edx, dword ptr [rdx + rax*4]
+    mov dword ptr [rip + picker_selected], edx
+    mov eax, dword ptr [rip + picker_scroll]
+    cmp edx, eax
+    jb .picker_cycle_suggestion_scroll_top
+    mov ecx, edx
+    sub ecx, eax
+    cmp ecx, PICKER_VISIBLE_ROWS
+    jb .picker_cycle_suggestion_done
+    sub edx, PICKER_VISIBLE_ROWS - 1
+    mov dword ptr [rip + picker_scroll], edx
+    ret
+.picker_cycle_suggestion_scroll_top:
+    mov dword ptr [rip + picker_scroll], edx
+.picker_cycle_suggestion_done:
+    ret
+.size picker_cycle_suggestion, . - picker_cycle_suggestion
+
+# Accept the highlighted suggestion into the filename field and return focus
+# to the list. The user can then press Enter or click Open to activate it.
+.type picker_accept_suggestion, @function
+picker_accept_suggestion:
+    mov eax, dword ptr [rip + picker_suggestion_count]
+    test eax, eax
+    jz .picker_accept_suggestion_done
+    mov eax, dword ptr [rip + picker_suggestion_selected]
+    lea rdx, [rip + picker_suggestion_indices]
+    mov eax, dword ptr [rdx + rax*4]
+    mov dword ptr [rip + picker_selected], eax
+    call picker_copy_selected_name
+    mov dword ptr [rip + picker_focus], 0
+.picker_accept_suggestion_done:
+    ret
+.size picker_accept_suggestion, . - picker_accept_suggestion
 
 # Insert AL at the current field cursor, replacing the field first after Ctrl+A.
 .type picker_edit_insert_byte, @function
@@ -3132,6 +3205,13 @@ picker_handle_key:
     call picker_close
     jmp .picker_key_done
 .picker_key_tab:
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_key_tab_cycle
+    cmp dword ptr [rip + picker_suggestion_count], 0
+    je .picker_key_tab_cycle
+    call picker_accept_suggestion
+    jmp .picker_key_done
+.picker_key_tab_cycle:
     mov eax, dword ptr [rip + picker_focus]
     inc eax
     cmp eax, 3
@@ -3186,12 +3266,24 @@ picker_handle_key:
     call picker_edit_delete_byte
     jmp .picker_key_done
 .picker_key_up:
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_key_up_list
+    mov edi, -1
+    call picker_cycle_suggestion
+    jmp .picker_key_done
+.picker_key_up_list:
     cmp dword ptr [rip + picker_focus], 0
     jne .picker_key_done
     mov edi, -1
     call picker_move_selection
     jmp .picker_key_done
 .picker_key_down:
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_key_down_list
+    mov edi, 1
+    call picker_cycle_suggestion
+    jmp .picker_key_done
+.picker_key_down_list:
     cmp dword ptr [rip + picker_focus], 0
     jne .picker_key_done
     mov edi, 1
@@ -3401,6 +3493,31 @@ picker_handle_pointer:
     jmp .picker_pointer_done
 
 .picker_pointer_list:
+    # The autocomplete popup overlays the lower part of the listing. Its rows
+    # accept a single click and fill the filename field with that candidate.
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_pointer_list_rows_area
+    cmp dword ptr [rip + picker_suggestion_count], 0
+    je .picker_pointer_list_rows_area
+    cmp r13d, PICKER_SUGGESTION_TOP
+    jb .picker_pointer_list_rows_area
+    cmp r13d, PICKER_SUGGESTION_BOTTOM
+    jae .picker_pointer_list_rows_area
+    cmp r12d, 168
+    jb .picker_pointer_list_rows_area
+    cmp r12d, 608
+    jae .picker_pointer_list_rows_area
+    mov eax, r13d
+    sub eax, PICKER_SUGGESTION_TOP
+    xor edx, edx
+    mov ecx, PICKER_SUGGESTION_ROW_HEIGHT
+    div ecx
+    cmp eax, dword ptr [rip + picker_suggestion_count]
+    jae .picker_pointer_done
+    mov dword ptr [rip + picker_suggestion_selected], eax
+    call picker_accept_suggestion
+    jmp .picker_pointer_done
+.picker_pointer_list_rows_area:
     cmp r13d, 128
     jb .picker_pointer_name
     cmp r13d, 350
@@ -6217,11 +6334,76 @@ render_picker:
 
 .render_picker_empty_or_name:
     cmp dword ptr [rip + picker_entry_count], 0
-    jne .render_picker_name
+    jne .render_picker_suggestions
     mov edi, 72
     mov esi, 142
     lea rdx, [rip + ui_picker_empty]
     call draw_text
+
+.render_picker_suggestions:
+    cmp dword ptr [rip + picker_mode], 1
+    jne .render_picker_name
+    cmp dword ptr [rip + picker_focus], 2
+    jne .render_picker_name
+    mov r12d, dword ptr [rip + picker_suggestion_count]
+    test r12d, r12d
+    jz .render_picker_name
+    # A compact dropdown is drawn over the lower list rows, directly above
+    # the Search field. It shows up to five selectable regular-file matches.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 168
+    mov edx, PICKER_SUGGESTION_TOP
+    mov ecx, 440
+    mov eax, r12d
+    imul eax, PICKER_SUGGESTION_ROW_HEIGHT
+    add eax, 4
+    mov r8d, eax
+    mov r9d, 0xff171c24
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 170
+    mov edx, PICKER_SUGGESTION_TOP + 2
+    mov ecx, 436
+    mov eax, r12d
+    imul eax, PICKER_SUGGESTION_ROW_HEIGHT
+    mov r8d, eax
+    mov r9d, 0xff1f242d
+    call draw_rect
+    xor r13d, r13d
+.render_picker_suggestion_rows:
+    cmp r13d, r12d
+    jae .render_picker_name
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 172
+    mov eax, r13d
+    imul eax, PICKER_SUGGESTION_ROW_HEIGHT
+    lea edx, [rax + PICKER_SUGGESTION_TOP + 2]
+    mov ecx, 432
+    mov r8d, PICKER_SUGGESTION_ROW_HEIGHT
+    cmp r13d, dword ptr [rip + picker_suggestion_selected]
+    jne .render_picker_suggestion_normal
+    mov r9d, 0xff414b5a
+    jmp .render_picker_suggestion_fill
+.render_picker_suggestion_normal:
+    mov r9d, 0xff252a33
+.render_picker_suggestion_fill:
+    call draw_rect
+    mov eax, r13d
+    imul eax, 4
+    lea rdx, [rip + picker_suggestion_indices]
+    mov eax, dword ptr [rdx + rax]
+    imul eax, PICKER_ENTRY_SIZE
+    lea rbx, [rip + picker_entries]
+    add rbx, rax
+    mov edi, 184
+    mov eax, r13d
+    imul eax, PICKER_SUGGESTION_ROW_HEIGHT
+    lea esi, [rax + PICKER_SUGGESTION_TOP + 5]
+    lea rdx, [rbx + 4]
+    mov ecx, 50
+    call draw_bounded_ascii
+    inc r13d
+    jmp .render_picker_suggestion_rows
 
 .render_picker_name:
     mov edi, 56
