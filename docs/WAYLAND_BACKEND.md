@@ -6,7 +6,7 @@ This document describes the first native Wayland slice. It is deliberately not a
 
 The prototype currently:
 
-- Connects to the socket named by WAYLAND_DISPLAY, defaulting to wayland-0 under XDG_RUNTIME_DIR. An absolute WAYLAND_DISPLAY path is also accepted.
+- Uses WAYLAND_SOCKET when a launcher supplies an inherited, already-connected socket descriptor. Otherwise connects to WAYLAND_DISPLAY (defaulting to wayland-0 under XDG_RUNTIME_DIR); an absolute WAYLAND_DISPLAY path is also accepted.
 - Discovers and binds wl_compositor, wl_shm, and xdg_wm_base.
 - Creates one top-level window with the title “NekoEdit - development window”.
 - Allocates an 800×480 XRGB8888 software buffer.
@@ -21,7 +21,8 @@ It does not yet implement keyboard/pointer input, window resizing, text, fonts, 
 
 The implementation sends and receives the Wayland protocol directly over an AF_UNIX/SOCK_STREAM socket. The current binding version is 1 for each interface.
 
-1. Send wl_display.get_registry and wl_display.sync.
+1. Resolve the connection: use the decimal file descriptor in WAYLAND_SOCKET when present; otherwise create and connect an AF_UNIX socket using WAYLAND_DISPLAY and XDG_RUNTIME_DIR.
+2. Send wl_display.get_registry and wl_display.sync.
 2. Process wl_registry.global events and remember the registry names for wl_compositor, wl_shm, and xdg_wm_base.
 3. Bind those globals to client object IDs 4, 5, and 6.
 4. Allocate every subsequent client object ID densely: the second sync callback is ID 7, followed by wl_surface 8, xdg_surface 9, xdg_toplevel 10, wl_shm_pool 11, and wl_buffer 12. Skipped IDs are a protocol error on strict compositors.
@@ -54,7 +55,7 @@ The current loop is intentionally blocking. Before keyboard input or clipboard t
 
 ## Error behavior
 
-The prototype reports concise errors for a missing XDG_RUNTIME_DIR, an unavailable socket, missing required globals, and protocol/shared-memory setup failure. A display-server disconnection currently terminates the window session. Better error decoding using wl_display.error and protocol-specific diagnostics is a follow-up task.
+The prototype reports concise errors for a missing XDG_RUNTIME_DIR, an unavailable socket, missing required globals, and protocol/shared-memory setup failure. A wl_display.error event is fatal; its length-prefixed message is printed only after validating the event bounds and NUL terminator. A display-server disconnection terminates the window session.
 
 ## Testing
 
@@ -73,12 +74,10 @@ This verifies the client-side wire serialization and basic shared-memory mechani
 
 ## Known limitations and next work
 
-1. Support WAYLAND_SOCKET when a launcher passes an already-connected socket descriptor.
-2. Decode wl_display.error and provide useful protocol diagnostics.
-3. Handle seat capabilities, keyboard and pointer objects, and focus.
-4. Implement keymap translation without libxkbcommon; do not assume physical keycodes equal text characters.
-5. Recreate buffers after configure/resize and output scale changes.
-6. Replace the blocking loop with poll and nonblocking I/O.
-7. Add frame callbacks and buffer-release tracking.
-8. Add wl_data_device clipboard support, with immutable copy snapshots independent of the document gap buffer.
-9. Connect the backend-neutral renderer and editor event model.
+1. Handle seat capabilities, keyboard and pointer objects, and focus.
+2. Implement keymap translation without libxkbcommon; do not assume physical keycodes equal text characters.
+3. Recreate buffers after configure/resize and output scale changes.
+4. Replace the blocking loop with poll and nonblocking I/O.
+5. Add frame callbacks and buffer-release tracking.
+6. Add wl_data_device clipboard support, with immutable copy snapshots independent of the document gap buffer.
+7. Connect the backend-neutral renderer and editor event model.
