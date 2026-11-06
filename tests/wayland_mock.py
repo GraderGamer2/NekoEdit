@@ -957,14 +957,14 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(650, 110, serial, "show hidden files")
                     serial += 10
                     serial = double_click_picker_row(160, 139, serial, "open hidden file")
-                    # H's first glyph row lights columns 0 and 4, not column 1.
+                    # H's first glyph row lights columns 0 and 4; the caret overlays column 0.
                     hidden_state = picker_state()
                     hidden_path = os.path.join(runtime_dir, "nested-dir", ".hidden-note").encode()
                     if (
                         hidden_state.get("active_path") != hidden_path
                         or hidden_state.get("doc_length") != 1
                         or hidden_state.get("doc_buffer", b"")[:1] != b"H"
-                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9
+                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 20 * 4)[0] != 0xFFD8DEE9
                     ):
                         raise AssertionError(f"double-clicking a hidden file did not open its document; state={hidden_state!r}")
                     observations.append("directory entry navigation, hidden-file toggle, and double-click Open verified")
@@ -978,14 +978,14 @@ xkb_symbols "nekoedit-sparse" {
                     serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
                     serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files visible")
                     # Verify the exact selected document: H and N share the same
-                    # first-row edge pixels, so a pixel-only check is insufficient.
+                    # first-row edge pixels, and the caret overlays column 0.
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
                     nested_state = picker_state()
                     if (
                         nested_state.get("active_path") != nested_file.encode()
                         or nested_state.get("doc_length") != 1
                         or nested_state.get("doc_buffer", b"")[:1] != b"N"
-                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9
+                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 20 * 4)[0] != 0xFFD8DEE9
                     ):
                         raise AssertionError(f"directory picker did not open inside.txt; state={nested_state!r}")
                     observations.append("Up navigation and a second nested-file Open verified")
