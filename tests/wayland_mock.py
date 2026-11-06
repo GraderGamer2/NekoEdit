@@ -306,22 +306,9 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
                 )
 
-                def pointer_click(
-                    x: int, y: int, serial: int, label: str, *, reenter: bool = False
-                ) -> None:
-                    if reenter:
-                        pointer_position = wire_message(
-                            15, 0, struct.pack("<IIii", serial, 8, x * 256, y * 256)
-                        )
-                        pointer_prefix = wire_message(15, 1, struct.pack("<II", serial - 1, 8))
-                    else:
-                        pointer_position = wire_message(
-                            15, 2, struct.pack("<Iii", serial, x * 256, y * 256)
-                        )
-                        pointer_prefix = b""
+                def pointer_click(x: int, y: int, serial: int, label: str) -> None:
                     client.sendall(
-                        pointer_prefix
-                        + pointer_position
+                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
@@ -335,9 +322,8 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(wire_message(12, 0))
 
-                # Mouse clicks snap to character insertion boundaries. Click
-                # after the first-line b, at the start of line two, then
-                # between 2 and ! to cover multiple lines and columns.
+                # Mouse movement followed by a click snaps to character
+                # insertion boundaries across lines and between characters.
                 pointer_click(22, 170, 1100, "mouse caret first line")
                 first_line_caret = struct.unpack_from(
                     "<I", pixels, 164 * 800 * 4 + 24 * 4
@@ -345,34 +331,14 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 if first_line_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret after first-line text")
 
-                pointer_click(18, 182, 1110, "mouse caret second-line start", reenter=True)
+                pointer_click(18, 182, 1110, "mouse caret second-line start")
                 second_line_start = struct.unpack_from(
                     "<I", pixels, 176 * 800 * 4 + 16 * 4
                 )[0]
                 if second_line_start != 0xFFFFFFFF:
-                    second_line_probe = {
-                        x: [
-                            struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
-                            for y in range(164, 190)
-                        ]
-                        for x in (16, 24, 32, 40)
-                    }
-                    row_caret_candidates = {
-                        (x, y): struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
-                        for x in (16, 24, 32, 40)
-                        for y in (164, 165, 176, 177, 184)
-                    }
-                    pointer_debug = [
-                        struct.unpack_from("<I", pixels, 470 * 800 * 4 + x * 4)[0] & 0x00FFFFFF
-                        for x in range(700, 708)
-                    ]
-                    raise AssertionError(
-                        "mouse click did not place caret at second-line start; "
-                        f"pixel={hex(second_line_start)}, "
-                        f"column_pixels={{{", ".join(f"{x}: {[hex(v) for v in values]}" for x, values in second_line_probe.items())}}}, candidates={{{", ".join(f"{key}: {hex(value)}" for key, value in row_caret_candidates.items())}}}, pointer_debug={pointer_debug}"
-                    )
+                    raise AssertionError("mouse click did not place caret at second-line start")
 
-                pointer_click(26, 182, 1120, "mouse caret between characters", reenter=True)
+                pointer_click(26, 182, 1120, "mouse caret between characters")
                 between_chars = struct.unpack_from(
                     "<I", pixels, 176 * 800 * 4 + 24 * 4
                 )[0]
