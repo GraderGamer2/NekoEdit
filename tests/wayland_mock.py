@@ -188,6 +188,14 @@ def run(
             expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
             expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
             expect_message(client, (9, 1, struct.pack("<I", 10)), "get_toplevel")
+            expect_message(
+                client, (10, 8, struct.pack("<ii", 480, 360)),
+                "set minimum window size"
+            )
+            expect_message(
+                client, (10, 7, struct.pack("<ii", 3840, 2160)),
+                "set maximum window size"
+            )
             title = recv_wayland_message(client)
             if title[0:2] != (10, 2) or title[3]:
                 raise AssertionError(f"unexpected set_title request: {title!r}")
@@ -1047,6 +1055,26 @@ xkb_symbols "nekoedit-sparse" {
                     # double-click it. Directories are listed before files.
                     open_picker_from_menu(2100, "Open picker")
                     serial = double_click_picker_row(120, 139, 2120, "enter nested directory")
+                    small_directory_state = picker_state()
+                    small_directory_pixel = struct.unpack_from(
+                        "<I", pixels, 200 * 800 * 4 + 726 * 4
+                    )[0]
+                    if (
+                        small_directory_state.get("picker_entry_count", 999) > 15
+                        or small_directory_state.get("picker_scroll_thumb_height") != 0
+                        or small_directory_pixel != 0xFF252A33
+                    ):
+                        raise AssertionError(
+                            "a directory that fits its visible rows must not draw a scrollbar: "
+                            f"state={small_directory_state!r}, pixel={hex(small_directory_pixel)}"
+                        )
+                    workflow_click(730, 200, serial, "click empty scrollbar gutter with no overflow")
+                    no_scroll_drag_state = picker_state()
+                    if no_scroll_drag_state.get("picker_scroll_drag") != 0:
+                        raise AssertionError(
+                            f"non-scrollable directory started a scrollbar drag: {no_scroll_drag_state!r}"
+                        )
+                    serial += 10
                     workflow_click(650, 110, serial, "show hidden files")
                     serial += 10
                     serial = double_click_picker_row(160, 139, serial, "open hidden file")
@@ -1532,7 +1560,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(
                         wire_message(12, 0)
                         + wire_message(10, 0, struct.pack("<iiIII", 1024, 768, 8, 1, 4))
-                        + wire_message(10, 0, struct.pack("<iiIII", 1280, 720, 8, 1, 4))
+                        + wire_message(10, 0, struct.pack("<iiIII", 1920, 1080, 8, 1, 4))
                         + wire_message(9, 0, struct.pack("<I", 1235))
                     )
                     expect_message(
@@ -1541,7 +1569,7 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (12, 0, b""), "destroy released pre-maximize buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", 256, 0, 1280, 720, 5120, 1)),
+                        (11, 0, struct.pack("<6I", 256, 0, 1920, 1080, 7680, 1)),
                         "create maximized buffer",
                     )
                     expect_message(
@@ -1549,20 +1577,20 @@ xkb_symbols "nekoedit-sparse" {
                         "attach maximized buffer",
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 1280, 720)),
+                        client, (8, 2, struct.pack("<4I", 0, 0, 1920, 1080)),
                         "damage maximized surface",
                     )
                     expect_message(client, (8, 6, b""), "commit maximized surface")
                     max_state = picker_state()
                     if (
-                        max_state.get("window_width") != 1280
-                        or max_state.get("window_height") != 720
-                        or max_state.get("window_stride") != 5120
+                        max_state.get("window_width") != 1920
+                        or max_state.get("window_height") != 1080
+                        or max_state.get("window_stride") != 7680
                         or max_state.get("window_buffer_id") != 256
                         or max_state.get("window_is_maximized") != 1
                     ):
                         raise AssertionError(f"maximized configure was not applied: {max_state!r}")
-                    max_close_pixel = struct.unpack_from("<I", pixels, 4 * 5120 + 1240 * 4)[0]
+                    max_close_pixel = struct.unpack_from("<I", pixels, 4 * 7680 + 1880 * 4)[0]
                     if max_close_pixel != 0xFF754B52:
                         raise AssertionError(
                             f"window controls did not follow the maximized width: {hex(max_close_pixel)}"
@@ -1573,7 +1601,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Restore: deliver the configure while buffer 256 is still
                     # compositor-owned. The client must ack but defer replacement.
-                    workflow_window_click(1220, serial + 30, 10, "restore")
+                    workflow_window_click(1860, serial + 30, 10, "restore")
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiII", 800, 480, 4, 4))
                         + wire_message(9, 0, struct.pack("<I", 1236))
@@ -1617,7 +1645,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     # The left edge requests a compositor-controlled interactive resize.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 60, 4 * 256, 240 * 256))
+                        wire_message(15, 2, struct.pack("<Iii", serial + 60, 10 * 256, 240 * 256))
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 61, serial + 62, 0x110, 1)
                         )
@@ -1661,12 +1689,29 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
                     client.sendall(wire_message(258, 0))
 
+                    # Probe every remaining edge and corner with coordinates
+                    # deliberately inside the new 12-pixel grab band.
+                    for index, (x, y, edges, label) in enumerate((
+                        (710, 240, 8, "right edge"),
+                        (360, 10, 1, "top edge"),
+                        (360, 470, 2, "bottom edge"),
+                        (710, 10, 9, "top-right corner"),
+                        (710, 470, 10, "bottom-right corner"),
+                        (10, 10, 5, "top-left corner"),
+                        (10, 470, 6, "bottom-left corner"),
+                    )):
+                        base_serial = serial + 80 + index * 4
+                        workflow_window_click(
+                            x, base_serial, 6, label, y=y,
+                            request_payload=struct.pack("<III", 13, base_serial + 1, edges),
+                        )
+
                     # The app's own Close control exits cleanly; no terminal
                     # shutdown or synthetic xdg_toplevel.close is required.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 70, 692 * 256, 12 * 256))
+                        wire_message(15, 2, struct.pack("<Iii", serial + 120, 692 * 256, 12 * 256))
                         + wire_message(
-                            15, 3, struct.pack("<IIII", serial + 71, serial + 72, 0x110, 1)
+                            15, 3, struct.pack("<IIII", serial + 121, serial + 122, 0x110, 1)
                         )
                     )
                     closed = client.recv(1)

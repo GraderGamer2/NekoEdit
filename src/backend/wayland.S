@@ -55,6 +55,7 @@
 .equ SHM_BUFFER_CAPACITY, (MAX_WINDOW_WIDTH * MAX_WINDOW_HEIGHT * 4)
 .equ WINDOW_MIN_WIDTH, 480
 .equ WINDOW_MIN_HEIGHT, 360
+.equ WINDOW_RESIZE_BORDER, 12
 .equ BTN_LEFT,          0x110
 .equ CLOCK_MONOTONIC,      1
 .equ TFD_CLOEXEC,     0x80000
@@ -661,6 +662,29 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    # Advertise the smallest supported window geometry and the largest geometry
+    # covered by the preallocated shared-memory pool. These size hints are
+    # double-buffered and take effect with the initial surface commit.
+    mov dword ptr [rip + payload_buffer], WINDOW_MIN_WIDTH
+    mov dword ptr [rip + payload_buffer + 4], WINDOW_MIN_HEIGHT
+    mov edi, 10
+    mov esi, 8                  # xdg_toplevel.set_min_size
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+
+    mov dword ptr [rip + payload_buffer], MAX_WINDOW_WIDTH
+    mov dword ptr [rip + payload_buffer + 4], MAX_WINDOW_HEIGHT
+    mov edi, 10
+    mov esi, 7                  # xdg_toplevel.set_max_size
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+
     # xdg_toplevel.set_title("NekoEdit - development window")
     lea rsi, [rip + wayland_title]
     mov ecx, 30                 # string length including NUL
@@ -1110,24 +1134,24 @@ wayland_main:
     # Edge/corner dragging belongs to the compositor. Send xdg_toplevel.resize
     # with the serial from this button press rather than resizing locally.
     xor r12d, r12d
-    cmp eax, 6
+    cmp eax, WINDOW_RESIZE_BORDER
     jae .pointer_resize_check_right
     or r12d, 4                  # left
     jmp .pointer_resize_check_vertical
 .pointer_resize_check_right:
     mov ecx, dword ptr [rip + window_width]
-    sub ecx, 6
+    sub ecx, WINDOW_RESIZE_BORDER
     cmp eax, ecx
     jb .pointer_resize_check_vertical
     or r12d, 8                  # right
 .pointer_resize_check_vertical:
-    cmp edx, 6
+    cmp edx, WINDOW_RESIZE_BORDER
     jae .pointer_resize_check_bottom
     or r12d, 1                  # top
     jmp .pointer_resize_send_check
 .pointer_resize_check_bottom:
     mov ecx, dword ptr [rip + window_height]
-    sub ecx, 6
+    sub ecx, WINDOW_RESIZE_BORDER
     cmp edx, ecx
     jb .pointer_resize_send_check
     or r12d, 2                  # bottom
@@ -3181,7 +3205,12 @@ picker_scrollbar_geometry:
     push rbx
     mov ecx, dword ptr [rip + picker_entry_count]
     cmp ecx, PICKER_VISIBLE_ROWS
-    jbe .picker_scrollbar_full_thumb
+    ja .picker_scrollbar_has_overflow
+    mov dword ptr [rip + picker_scroll_thumb_height], 0
+    mov dword ptr [rip + picker_scroll_thumb_top], PICKER_TRACK_TOP
+    pop rbx
+    ret
+.picker_scrollbar_has_overflow:
     mov eax, PICKER_TRACK_HEIGHT
     imul eax, PICKER_VISIBLE_ROWS
     xor edx, edx
@@ -3190,8 +3219,6 @@ picker_scrollbar_geometry:
     jae .picker_scrollbar_thumb_ready
     mov eax, PICKER_TRACK_MIN_THUMB
     jmp .picker_scrollbar_thumb_ready
-.picker_scrollbar_full_thumb:
-    mov eax, PICKER_TRACK_HEIGHT
 .picker_scrollbar_thumb_ready:
     mov dword ptr [rip + picker_scroll_thumb_height], eax
     mov ebx, PICKER_TRACK_HEIGHT
@@ -3260,6 +3287,8 @@ picker_scrollbar_drag_to_y:
 .type picker_scrollbar_begin_drag, @function
 picker_scrollbar_begin_drag:
     push r12
+    cmp dword ptr [rip + picker_entry_count], PICKER_VISIBLE_ROWS
+    jbe .picker_scrollbar_begin_no_overflow
     mov r12d, esi
     call picker_scrollbar_geometry
     mov eax, r12d
@@ -3279,6 +3308,9 @@ picker_scrollbar_begin_drag:
     mov dword ptr [rip + picker_scroll_drag], 1
     mov esi, r12d
     call picker_scrollbar_drag_to_y
+    pop r12
+    ret
+.picker_scrollbar_begin_no_overflow:
     pop r12
     ret
 .size picker_scrollbar_begin_drag, . - picker_scrollbar_begin_drag
@@ -3706,6 +3738,8 @@ picker_handle_pointer:
     jb .picker_pointer_done
     cmp r12d, 744
     jae .picker_pointer_done
+    cmp dword ptr [rip + picker_entry_count], PICKER_VISIBLE_ROWS
+    jbe .picker_pointer_list_rows
     cmp r12d, 720
     jb .picker_pointer_list_rows
     mov esi, r13d
@@ -4851,6 +4885,30 @@ draw_rect:
     mov r14d, ecx
     mov r15d, r8d
     mov r11d, r9d
+    test r12d, r12d
+    js .draw_rect_done
+    test r13d, r13d
+    js .draw_rect_done
+    test r14d, r14d
+    jle .draw_rect_done
+    test r15d, r15d
+    jle .draw_rect_done
+    mov eax, dword ptr [rip + window_width]
+    cmp r12d, eax
+    jae .draw_rect_done
+    sub eax, r12d
+    cmp r14d, eax
+    jbe .draw_rect_width_ready
+    mov r14d, eax
+.draw_rect_width_ready:
+    mov eax, dword ptr [rip + window_height]
+    cmp r13d, eax
+    jae .draw_rect_done
+    sub eax, r13d
+    cmp r15d, eax
+    jbe .draw_rect_height_ready
+    mov r15d, eax
+.draw_rect_height_ready:
     xor r10d, r10d
 .draw_rect_row:
     cmp r10d, r15d
@@ -5025,27 +5083,19 @@ window_capture_toplevel_configure:
     mov eax, dword ptr [rip + event_payload]
     test eax, eax
     jz .window_capture_width_done
-    cmp eax, WINDOW_MIN_WIDTH
-    jae .window_capture_width_max
-    mov eax, WINDOW_MIN_WIDTH
-.window_capture_width_max:
+    test eax, eax
+    js .window_capture_toplevel_error
     cmp eax, MAX_WINDOW_WIDTH
-    jbe .window_capture_width_store
-    mov eax, MAX_WINDOW_WIDTH
-.window_capture_width_store:
+    ja .window_capture_toplevel_error
     mov dword ptr [rip + window_pending_width], eax
 .window_capture_width_done:
     mov eax, dword ptr [rip + event_payload + 4]
     test eax, eax
     jz .window_capture_height_done
-    cmp eax, WINDOW_MIN_HEIGHT
-    jae .window_capture_height_max
-    mov eax, WINDOW_MIN_HEIGHT
-.window_capture_height_max:
+    test eax, eax
+    js .window_capture_toplevel_error
     cmp eax, MAX_WINDOW_HEIGHT
-    jbe .window_capture_height_store
-    mov eax, MAX_WINDOW_HEIGHT
-.window_capture_height_store:
+    ja .window_capture_toplevel_error
     mov dword ptr [rip + window_pending_height], eax
 .window_capture_height_done:
     mov eax, dword ptr [rip + event_payload + 8]
@@ -6073,6 +6123,14 @@ draw_glyph:
     push r15
     mov r12d, edi
     mov r13d, esi
+    test r12d, r12d
+    js .glyph_done
+    test r13d, r13d
+    js .glyph_done
+    cmp r12d, dword ptr [rip + window_width]
+    jae .glyph_done
+    cmp r13d, dword ptr [rip + window_height]
+    jae .glyph_done
     mov eax, edx
     cmp eax, ' '
     je .glyph_done
@@ -6277,10 +6335,14 @@ draw_glyph:
     jnc .glyph_next_column
     mov eax, r13d
     add eax, r14d
-    mov ecx, dword ptr [rip + window_stride]
-    imul eax, ecx
+    cmp eax, dword ptr [rip + window_height]
+    jae .glyph_next_column
     mov edx, r12d
     add edx, r15d
+    cmp edx, dword ptr [rip + window_width]
+    jae .glyph_next_column
+    mov ecx, dword ptr [rip + window_stride]
+    imul eax, ecx
     shl edx, 2
     add eax, edx
     mov rdi, qword ptr [rip + shm_mapping]
@@ -6688,7 +6750,12 @@ render_picker:
     mov r8d, 222
     mov r9d, 0xff252a33
     call draw_rect
-    # Scrollbar track and proportionally sized thumb.
+    # A scrollbar exists only when entries overflow the visible list.
+    call picker_scrollbar_geometry
+    mov r12d, dword ptr [rip + picker_scroll]
+    xor r13d, r13d
+    cmp dword ptr [rip + picker_scroll_thumb_height], 0
+    je .render_picker_rows
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, PICKER_TRACK_X
     mov edx, PICKER_TRACK_TOP
@@ -6696,7 +6763,6 @@ render_picker:
     mov r8d, PICKER_TRACK_HEIGHT
     mov r9d, 0xff171c24
     call draw_rect
-    call picker_scrollbar_geometry
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, PICKER_TRACK_X + 2
     mov edx, dword ptr [rip + picker_scroll_thumb_top]
@@ -6710,8 +6776,6 @@ render_picker:
     mov r9d, 0xff687789
 .render_picker_scroll_thumb_draw:
     call draw_rect
-    mov r12d, dword ptr [rip + picker_scroll]
-    xor r13d, r13d
 .render_picker_rows:
     cmp r13d, PICKER_VISIBLE_ROWS
     jae .render_picker_empty_or_name
