@@ -136,7 +136,7 @@ def run(binary: str) -> None:
                 raise AssertionError(f"wl_shm.create_pool did not transfer exactly one fd: {pool!r}")
             pool_id, buffer_size = struct.unpack("<II", pool[2])
             expected_size = 800 * 480 * 4
-            if (pool_id, buffer_size) != (10, expected_size):
+            if (pool_id, buffer_size) != (11, expected_size):
                 raise AssertionError(f"unexpected shm pool args: {(pool_id, buffer_size)!r}")
             shm_fd = pool[3][0]
             try:
@@ -154,10 +154,10 @@ def run(binary: str) -> None:
 
             expect_message(
                 client,
-                (10, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
+                (11, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
                 "create wl_buffer",
             )
-            expect_message(client, (10, 1, b""), "destroy shm pool")
+            expect_message(client, (11, 1, b""), "destroy shm pool")
             expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
             expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
             expect_message(client, (8, 6, b""), "map surface")
