@@ -13,7 +13,7 @@ The prototype currently:
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
 - Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard focus, key, and modifier events.
-- Provides three clickable palette swatches and a document area. Pointer clicks select a swatch; focused key events insert US-QWERTY ASCII characters and execute basic editing/navigation commands.
+- Provides three clickable palette swatches and a document area. Pointer clicks select a swatch or place the caret at the nearest character insertion boundary on the clicked row; focused key events insert US-QWERTY ASCII characters and execute basic editing/navigation commands.
 - Uses a fixed 64 KiB byte array, a built-in US-QWERTY evdev lookup table, and an embedded 5×7 bitmap font. Shift and Caps state are synchronized from Wayland modifier events, with physical Shift/Caps key transitions as fallback.
 - Waits for wl_buffer.release before rewriting and recommitting the single shared buffer.
 - Answers xdg_wm_base ping requests.
@@ -53,7 +53,7 @@ The memfd is sized before mapping. The request uses sendmsg with a SOL_SOCKET/SC
 
 ## Event handling
 
-The current blocking read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping, tracks wl_buffer.release, and dispatches wl_pointer enter, leave, motion, and button events plus wl_keyboard enter, leave, key, and modifiers events. Left-clicking a palette swatch changes its selected border. When the surface has keyboard focus, supported key presses are translated through a built-in US-QWERTY evdev table and applied to the document. The supported commands are text insertion, Backspace, Delete, Enter, four-space Tab, Left/Right/Up/Down, Home, and End. The renderer repaints the document and caret after the buffer is released. The XKB keymap FD and repeat-info are not parsed, so the application does not follow the compositor's selected keyboard layout. Pointer coordinates are fixed-point surface-local values; they are converted from 24.8 fixed point before hit testing. The process exits when xdg_toplevel.close arrives.
+The current blocking read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping, tracks wl_buffer.release, and dispatches wl_pointer enter, leave, motion, and button events plus wl_keyboard enter, leave, key, and modifiers events. Left-clicking a palette swatch changes its selected border. Clicking inside the document area converts surface-local pointer coordinates into a line and visual column, then places the byte cursor at the nearest character insertion boundary (including tab spans and avoiding UTF-8 continuation-byte boundaries). When the surface has keyboard focus, supported key presses are translated through a built-in US-QWERTY evdev table and applied to the document. The supported commands are text insertion, Backspace, Delete, Enter, four-space Tab, Left/Right/Up/Down, Home, and End. The renderer repaints the document and caret after the buffer is released. The XKB keymap FD and repeat-info are not parsed, so the application does not follow the compositor's selected keyboard layout. Pointer coordinates are fixed-point surface-local values; they are converted from 24.8 fixed point before hit testing. The process exits when xdg_toplevel.close arrives.
 
 The current loop is intentionally blocking. Before keyboard input or clipboard transfers are introduced, replace it with a nonblocking poll-based loop that monitors the Wayland socket and pending data-transfer descriptors. All event payloads must be length-checked before parsing; the prototype currently applies a fixed upper bound to event payload size.
 
@@ -77,6 +77,7 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - Pointer object creation, pointer focus, and left-click hit testing.
 - Keyboard object creation, focus handling, physical key events, and Wayland modifier-mask synchronization. The fixture sends a synthetic keymap event, but the implementation does not parse its payload or consume it as an XKB mapping.
 - US-QWERTY text insertion, cursor movement, Backspace, Enter, Shift+1, and pixel checks for the rendered glyphs and caret.
+- Pointer-motion/button sequences that place the caret after first-line text, at the start of the second line, and between two characters on that line.
 - Buffer release before each edit redraw, ensuring the single shared-memory buffer is not modified while the compositor owns it.
 
 This verifies the client-side wire serialization and basic shared-memory mechanics. It does **not** prove compatibility with every real compositor. Run the binary inside the target GNOME Wayland session as a separate integration test.
