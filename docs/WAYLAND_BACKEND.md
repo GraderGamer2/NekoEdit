@@ -23,15 +23,16 @@ The implementation sends and receives the Wayland protocol directly over an AF_U
 
 1. Send wl_display.get_registry and wl_display.sync.
 2. Process wl_registry.global events and remember the registry names for wl_compositor, wl_shm, and xdg_wm_base.
-3. Bind those globals to client object IDs.
-4. Send a second wl_display.sync to ensure the bindings have been processed.
-5. Create a wl_surface using wl_compositor.
-6. Create its xdg_surface role and xdg_toplevel using xdg_wm_base.
-7. Set the toplevel title and issue an initial empty wl_surface.commit.
-8. Wait for xdg_surface.configure and send xdg_surface.ack_configure with its serial.
-9. Call memfd_create, ftruncate, and mmap to create a shared pixel buffer.
-10. Send wl_shm.create_pool with the memfd attached as SCM_RIGHTS ancillary data.
-11. Create a wl_buffer from the pool, destroy the pool object, attach the buffer, damage the surface, and commit.
+3. Bind those globals to client object IDs 4, 5, and 6.
+4. Allocate every subsequent client object ID densely: the second sync callback is ID 7, followed by wl_surface 8, xdg_surface 9, xdg_toplevel 10, wl_shm_pool 11, and wl_buffer 12. Skipped IDs are a protocol error on strict compositors.
+5. Send a second wl_display.sync to ensure the bindings have been processed.
+6. Create a wl_surface using wl_compositor.
+7. Create its xdg_surface role and xdg_toplevel using xdg_wm_base.
+8. Set the toplevel title and issue an initial empty wl_surface.commit.
+9. Wait for xdg_surface.configure and send xdg_surface.ack_configure with its serial.
+10. Call memfd_create, ftruncate, and mmap to create a shared pixel buffer.
+11. Send wl_shm.create_pool with the memfd attached as SCM_RIGHTS ancillary data.
+12. Create a wl_buffer from the pool, destroy the pool object, attach the buffer, damage the surface, and commit.
 
 The initial surface commit is required to receive the first configure. The buffer is attached only after acknowledging that configure.
 
