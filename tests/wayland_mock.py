@@ -112,10 +112,15 @@ def run(
         except FileNotFoundError:
             pass
     if file_workflow:
+        os.makedirs(os.path.join(runtime_dir, "nested-dir"))
         with open(os.path.join(runtime_dir, "relative-open.txt"), "wb") as document:
             document.write(b"I")
         with open(os.path.join(runtime_dir, "oversized.txt"), "wb") as document:
             document.write(b"x" * 65537)
+        with open(os.path.join(runtime_dir, "nested-dir", "inside.txt"), "wb") as document:
+            document.write(b"N")
+        with open(os.path.join(runtime_dir, "nested-dir", ".hidden-note"), "wb") as document:
+            document.write(b"H")
 
     def fake_compositor():
         client = None
@@ -869,8 +874,7 @@ xkb_symbols "nekoedit-sparse" {
                     return serial
 
                 if file_workflow:
-                    # The File control must be visible even when the process
-                    # starts with --backend=wayland and no document path.
+                    # The File control must remain available in the compact editor header.
                     file_pixels = [
                         struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
                         for y in range(12, 20) for x in range(112, 144)
@@ -879,76 +883,108 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("the File menu control was not rendered in the header")
                     observations.append("visible File menu header control")
 
-                    # Ctrl+S on Untitled opens Save As. Correct a mistyped final
-                    # character with Backspace, then confirm a relative path.
+                    def assert_picker(label: str) -> None:
+                        if struct.unpack_from("<I", pixels, 36 * 800 * 4 + 40 * 4)[0] != 0xFF1F242D:
+                            raise AssertionError(f"{label}: native picker panel was not rendered")
+                        if struct.unpack_from("<I", pixels, 64 * 800 * 4 + 56 * 4)[0] != 0xFF252A33:
+                            raise AssertionError(f"{label}: location field was not rendered")
+
+                    def open_picker_from_menu(serial: int, label: str) -> None:
+                        workflow_click(120, 12, serial, f"{label}: open File menu")
+                        workflow_click(120, 44, serial + 10, f"{label}: select File > Open")
+                        assert_picker(label)
+
+                    def save_picker_from_menu(serial: int, label: str) -> None:
+                        workflow_click(120, 12, serial, f"{label}: open File menu")
+                        workflow_click(120, 92, serial + 10, f"{label}: select File > Save As")
+                        assert_picker(label)
+
+                    def double_click_picker_row(x: int, y: int, serial: int, label: str) -> int:
+                        workflow_click(x, y, serial, f"{label}: first click")
+                        workflow_click(x, y, serial + 10, f"{label}: second click")
+                        return serial + 20
+
+                    # Ctrl+S on Untitled opens the directory picker in Save mode.
                     key_step(2000, evdev["h"], "type first Untitled character")
                     key_step(2002, evdev["i"], "type second Untitled character")
-                    workflow_shortcut(2010, 31, "Ctrl+S opens Save As for Untitled")
-                    if struct.unpack_from("<I", pixels, 184 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
-                        raise AssertionError("Untitled Ctrl+S did not render the Save As path prompt")
-                    if struct.unpack_from("<I", pixels, 204 * 800 * 4 + 72 * 4)[0] != 0xFF252A33:
-                        raise AssertionError("Save As path-entry field was not rendered")
+                    workflow_shortcut(2010, 31, "Ctrl+S opens Save picker for Untitled")
+                    assert_picker("Untitled Ctrl+S")
                     serial = workflow_type_path("created.txz", 2020)
-                    key_step(serial, 14, "path prompt Backspace")
-                    key_step(serial + 2, evdev["t"], "correct Save As path")
-                    key_step(serial + 4, 28, "confirm Untitled Save As")
+                    key_step(serial, 14, "Save picker filename Backspace")
+                    key_step(serial + 2, evdev["t"], "correct Save picker filename")
+                    key_step(serial + 4, 28, "confirm Untitled Save")
                     with open(os.path.join(runtime_dir, "created.txt"), "rb") as saved:
                         if saved.read() != b"hi":
                             raise AssertionError("Ctrl+S on Untitled did not create the selected file")
-                    observations.append("Ctrl+S on Untitled opened Save As; relative path and Backspace worked")
+                    observations.append("Ctrl+S on Untitled opened the native Save picker and created a relative file")
 
-                    # The now-named document saves in place with Ctrl+S.
+                    # Save now targets the successfully selected filename.
                     key_step(serial + 6, evdev["c"], "edit named document")
                     workflow_shortcut(serial + 8, 31, "Ctrl+S saves named document")
                     with open(os.path.join(runtime_dir, "created.txt"), "rb") as saved:
                         if saved.read() != b"hic":
                             raise AssertionError("Ctrl+S did not update the active named file")
 
-                    # Open is available from the pointer-operated File menu.
-                    workflow_click(120, 12, 2100, "open File menu")
-                    if struct.unpack_from("<I", pixels, 35 * 800 * 4 + 108 * 4)[0] != 0xFF1F242D:
-                        raise AssertionError("File dropdown background was not rendered")
-                    workflow_click(120, 44, 2110, "select File > Open")
-                    if struct.unpack_from("<I", pixels, 184 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
-                        raise AssertionError("File > Open did not render its path prompt")
-                    serial = workflow_type_path("relative-open.txz", 2120)
-                    key_step(serial, 14, "Open path Backspace")
-                    key_step(serial + 2, evdev["t"], "correct Open path")
-                    key_step(serial + 4, 28, "confirm Open")
+                    # Browse into the directory entry, reveal a hidden file, and
+                    # double-click it. Directories are listed before files.
+                    open_picker_from_menu(2100, "Open picker")
+                    serial = double_click_picker_row(120, 139, 2120, "enter nested directory")
+                    workflow_click(650, 110, serial, "show hidden files")
+                    serial += 10
+                    serial = double_click_picker_row(160, 139, serial, "open hidden file")
                     if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
-                        raise AssertionError("Open did not render the selected file's first character")
-                    observations.append("File > Open loaded a real relative-path document without restarting")
+                        raise AssertionError("double-clicking a hidden file did not open its document")
+                    observations.append("directory entry navigation, hidden-file toggle, and double-click Open verified")
 
-                    # Replace the opened one-character document and save it.
-                    workflow_shortcut(serial + 6, 30, "Ctrl+A before named-file edit")
-                    key_step(serial + 14, evdev["z"], "replace opened document")
-                    workflow_shortcut(serial + 16, 31, "Ctrl+S after Open")
-                    with open(os.path.join(runtime_dir, "relative-open.txt"), "rb") as saved:
+                    # Open again, enter the directory, go Up, re-enter it, then
+                    # open the ordinary file from the visible list.
+                    open_picker_from_menu(2200, "directory navigation picker")
+                    serial = double_click_picker_row(120, 139, 2220, "enter nested directory again")
+                    workflow_click(78, 108, serial, "navigate Up to parent directory")
+                    serial += 10
+                    serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
+                    serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files visible")
+                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                        raise AssertionError("directory picker did not open inside.txt")
+                    observations.append("Up navigation and a second nested-file Open verified")
+
+                    # Replace the opened document and validate Ctrl+S against
+                    # the actual selected file path.
+                    workflow_shortcut(serial, 30, "Ctrl+A before nested-file edit")
+                    key_step(serial + 8, evdev["z"], "replace nested document")
+                    workflow_shortcut(serial + 10, 31, "Ctrl+S after nested Open")
+                    nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
+                    with open(nested_file, "rb") as saved:
                         if saved.read() != b"z":
-                            raise AssertionError("Ctrl+S after Open did not target the opened file")
+                            raise AssertionError("Ctrl+S after picker Open did not save the nested file")
 
-                    # Exercise Save from the clickable menu as well.
-                    key_step(serial + 22, evdev["a"], "append before menu Save")
-                    workflow_click(120, 12, 2200, "reopen File menu")
-                    workflow_click(120, 68, 2210, "select File > Save")
-                    with open(os.path.join(runtime_dir, "relative-open.txt"), "rb") as saved:
+                    # Exercise File > Save as well.
+                    key_step(serial + 16, evdev["a"], "append before File > Save")
+                    workflow_click(120, 12, serial + 20, "reopen File menu")
+                    workflow_click(120, 68, serial + 30, "select File > Save")
+                    with open(nested_file, "rb") as saved:
                         if saved.read() != b"za":
                             raise AssertionError("File > Save did not write the active document")
 
-                    # Menu Save As changes the active path only after success.
-                    workflow_click(120, 12, 2220, "open File menu for Save As")
-                    workflow_click(120, 92, 2230, "select File > Save As")
-                    serial = workflow_type_path("menu-saveas.txt", serial + 30)
+                    # File > Save As uses the picker and returns to its starting
+                    # working directory; relative names stay relative to that directory.
+                    save_picker_from_menu(serial + 40, "menu Save As picker")
+                    serial = workflow_type_path("menu-saveas.txt", serial + 60)
                     key_step(serial, 28, "confirm menu Save As")
+                    menu_saveas = os.path.join(runtime_dir, "menu-saveas.txt")
+                    with open(menu_saveas, "rb") as saved:
+                        if saved.read() != b"za":
+                            raise AssertionError("menu Save As did not create its selected destination")
                     key_step(serial + 2, evdev["b"], "edit after menu Save As")
                     workflow_shortcut(serial + 4, 31, "Ctrl+S after menu Save As")
-                    with open(os.path.join(runtime_dir, "menu-saveas.txt"), "rb") as saved:
+                    with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zab":
-                            raise AssertionError("menu Save As did not change the active destination")
+                            raise AssertionError("Ctrl+S did not use the path selected by Save As")
 
-                    # Ctrl+Shift+S accepts an absolute path.
+                    # Ctrl+Shift+S accepts an absolute filename.
                     absolute_path = absolute_file_path
-                    workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S opens Save As", shift=True)
+                    workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S opens Save picker", shift=True)
+                    assert_picker("Ctrl+Shift+S picker")
                     serial = workflow_type_path(absolute_path, serial + 20)
                     key_step(serial, 28, "confirm absolute Save As")
                     with open(absolute_path, "rb") as saved:
@@ -959,56 +995,73 @@ xkb_symbols "nekoedit-sparse" {
                     with open(absolute_path, "rb") as saved:
                         if saved.read() != b"zabc":
                             raise AssertionError("Ctrl+S did not use the absolute Save As path")
-                    # A failed Save As must leave the previously active path
-                    # intact, so a subsequent Ctrl+S still writes that path.
-                    workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S before failed Save As", shift=True)
-                    serial = workflow_type_path("/no-such-nekoedit-directory/save.txt", serial + 20)
+
+                    # Existing files require a second confirmation before replace.
+                    workflow_shortcut(serial + 10, 31, "Save As before overwrite confirmation", shift=True)
+                    serial = workflow_type_path("menu-saveas.txt", serial + 20)
+                    key_step(serial, 28, "request overwrite confirmation")
+                    if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 184 * 4)[0] != 0xFF343D4B:
+                        raise AssertionError("existing target did not display the overwrite confirmation")
+                    key_step(serial + 2, evdev["n"], "decline overwrite")
+                    key_step(serial + 4, 1, "close picker after declining overwrite")
+                    with open(menu_saveas, "rb") as saved:
+                        if saved.read() != b"zab":
+                            raise AssertionError("declining overwrite changed the existing file")
+
+                    workflow_shortcut(serial + 10, 31, "Save As before confirmed overwrite", shift=True)
+                    serial = workflow_type_path("menu-saveas.txt", serial + 20)
+                    key_step(serial, 28, "request second overwrite confirmation")
+                    key_step(serial + 2, evdev["y"], "confirm overwrite with Y")
+                    with open(menu_saveas, "rb") as saved:
+                        if saved.read() != b"zabc":
+                            raise AssertionError("confirmed overwrite did not replace the existing file")
+                    observations.append("Save As overwrite confirmation and cancellation verified")
+
+                    # A failed Save As must preserve the previously active path.
+                    workflow_shortcut(serial + 4, 31, "Ctrl+Shift+S before failed Save As", shift=True)
+                    serial = workflow_type_path("/no-such-nekoedit-directory/save.txt", serial + 14)
                     key_step(serial, 28, "confirm failed Save As")
-                    key_step(serial + 2, 1, "Escape failed Save As prompt")
+                    key_step(serial + 2, 1, "Escape failed Save As picker")
                     key_step(serial + 4, evdev["d"], "edit after failed Save As")
                     workflow_shortcut(serial + 6, 31, "save to prior path after failed Save As")
-                    with open(absolute_path, "rb") as saved:
+                    with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabcd":
                             raise AssertionError("failed Save As changed the active document path")
-                    if os.path.exists("/no-such-nekoedit-directory/save.txt"):
-                        raise AssertionError("failed Save As unexpectedly created its destination")
-                    observations.append("File > Save, File > Save As, Ctrl+Shift+S, absolute paths, and failed Save As rollback verified")
 
-                    # A failed Open and an over-limit Open must leave the active
-                    # bytes/path untouched; Escape dismisses either prompt.
-                    workflow_shortcut(serial + 10, 24, "Ctrl+O opens path prompt")
-                    serial = workflow_type_path("missing-file.txt", serial + 20)
+                    # Failed and oversized Open operations must keep the current
+                    # document/path intact. Escape dismisses each error.
+                    workflow_shortcut(serial + 12, 24, "Ctrl+O before missing-file Open")
+                    serial = workflow_type_path("missing-file.txt", serial + 22)
                     key_step(serial, 28, "confirm missing-file Open")
-                    key_step(serial + 2, 1, "Escape failed Open prompt")
+                    key_step(serial + 2, 1, "Escape failed Open picker")
                     key_step(serial + 4, evdev["e"], "edit after failed Open")
                     workflow_shortcut(serial + 6, 31, "save after failed Open")
-                    with open(absolute_path, "rb") as saved:
+                    with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabcde":
-                            raise AssertionError("failed Open changed the active document or its save path")
+                            raise AssertionError("failed Open changed the active document or save path")
 
                     workflow_shortcut(serial + 12, 24, "Ctrl+O before oversized file")
                     serial = workflow_type_path("oversized.txt", serial + 22)
                     key_step(serial, 28, "reject file larger than 64 KiB")
-                    key_step(serial + 2, 1, "Escape oversized Open prompt")
+                    key_step(serial + 2, 1, "Escape oversized Open picker")
                     key_step(serial + 4, evdev["f"], "edit after oversized Open")
                     workflow_shortcut(serial + 6, 31, "save after oversized Open")
-                    with open(absolute_path, "rb") as saved:
+                    with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabcdef":
                             raise AssertionError("oversized Open damaged the active document")
 
-                    # Cancel Save As after entering a path; the active destination
-                    # must remain the absolute path from the prior successful save.
+                    # Escape from Save As must not alter the active destination.
                     workflow_shortcut(serial + 12, 31, "Ctrl+Shift+S before cancellation", shift=True)
                     serial = workflow_type_path("cancelled.txt", serial + 22)
-                    key_step(serial, 1, "Escape cancels Save As")
+                    key_step(serial, 1, "Escape cancels Save As picker")
                     key_step(serial + 2, evdev["g"], "edit after cancelling Save As")
                     workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
-                    with open(absolute_path, "rb") as saved:
+                    with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabcdefg":
                             raise AssertionError("cancelled Save As changed the active destination")
                     if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
                         raise AssertionError("Escape unexpectedly created the cancelled Save As path")
-                    observations.append("failed/oversized Open preservation and Escape cancellation verified")
+                    observations.append("missing/oversized Open rollback, failed Save As rollback, and Escape cancellation verified")
 
                     client.sendall(wire_message(10, 1))
                     return
