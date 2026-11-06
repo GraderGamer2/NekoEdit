@@ -4,7 +4,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
-- Recorded commits: **199** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 3 post-bootstrap documentation/synchronization commits).
+- Recorded commits: **201** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -238,6 +238,8 @@ These commits keep the feature milestone, main-branch changelog mirror, and PR b
 | 2026-11-06 12:19:24 UTC | [d35d54bb8726](https://github.com/GraderGamer2/NekoEdit/commit/d35d54bb8726f1c10cc3c9213ba49916939f06cf) | docs: record gap-buffer milestone and verification |
 | 2026-11-06 12:20:05 UTC | [f31dc4177c78](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d) | docs: sync gap-buffer milestone changelog to main |
 | 2026-11-06 12:22:24 UTC | [379a34981fc6](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d) | merge: sync main changelog into feature branch |
+| 2026-11-06 12:23:48 UTC | [dd5176adf27d](https://github.com/GraderGamer2/NekoEdit/commit/dd5176adf27dec5b282b3ec565c51f5c34dcf83c) | docs: record main changelog sync and clean PR ancestry |
+| 2026-11-06 12:25:00 UTC | [48861e43aac8](https://github.com/GraderGamer2/NekoEdit/commit/48861e43aac8cc20a70465b35e504d1a996c45d9) | docs: clarify feature branch synchronization status |
 
 ## Maintenance
 
