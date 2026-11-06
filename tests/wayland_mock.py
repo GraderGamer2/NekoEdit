@@ -222,7 +222,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 # evdev mapping. This sequence exercises insertion, cursor-left,
                 # Backspace, newline, digit insertion, and vertical movement.
                 client.sendall(wire_message(12, 0))  # release after pointer redraw
-                keymap_data = b"xkb_keymap { }; "
+                keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
