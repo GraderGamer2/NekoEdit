@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: early prototype.** The current build opens a minimal Wayland toplevel and displays a software-rendered 800×480 test surface. It can be closed through the compositor's normal window controls. This is a graphics/windowing proof of concept, not a usable text editor yet. Text editing, keyboard input, system fonts, clipboard, the directory-browser picker, and X11 are still under development.
+> **Development status: interactive backend prototype.** The Wayland build opens an 800×480 software-rendered window and handles pointer focus, motion, and left-clicks through `wl_seat`/`wl_pointer`. A temporary three-swatch palette demonstrates click-driven redraws. It is still not a usable text editor: keyboard input, text rendering, file operations, clipboard, the directory-browser picker, and X11 are under development.
 
 ## Project principles
 
@@ -22,12 +22,14 @@ The first Wayland backend is a freestanding assembly prototype. It:
 
 1. Uses WAYLAND_SOCKET when a launcher supplies an inherited connected descriptor; otherwise reads WAYLAND_DISPLAY and XDG_RUNTIME_DIR (including absolute socket paths).
 2. Connects to the Wayland Unix-domain socket using Linux system calls.
-3. Discovers and binds wl_compositor, wl_shm, and xdg_wm_base.
+3. Discovers wl_compositor, wl_shm, xdg_wm_base, and an optional wl_seat.
 4. Creates a wl_surface and an xdg_toplevel, then handles the initial configure/acknowledge sequence.
 5. Allocates a memfd-backed pixel buffer, passes its descriptor to the compositor with SCM_RIGHTS, and draws a simple test surface in software.
-6. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
+6. Handles seat pointer capability, pointer enter/leave/motion/button events, and redraws the surface when a palette swatch is clicked.
+7. Waits for wl_buffer.release before modifying and recommitting the single shared-memory buffer.
+8. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
 
-The current prototype does not yet process keyboard or pointer input, resize its buffer, draw text, or edit files. The X11 backend is not implemented yet.
+Keyboard input and keymap translation, resizing, text rendering, and file editing are not implemented yet. The X11 backend is not implemented.
 
 See [docs/WAYLAND_BACKEND.md](docs/WAYLAND_BACKEND.md) for protocol details.
 
@@ -75,7 +77,7 @@ Run inside a Wayland desktop session:
 ./build/nekoedit --backend=wayland
 ~~~
 
-The current test surface is static. Use the compositor's normal close button to exit.
+The current window shows three color swatches; click one to change the selected border. Use the compositor's normal close button to exit.
 
 The X11 backend is not ready. The explicit selector currently reports this rather than silently trying to use Wayland:
 
@@ -88,7 +90,7 @@ The CLI also supports --help and --version.
 ### Tests
 
 - **make test** runs command-line smoke tests.
-- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both WAYLAND_DISPLAY and inherited WAYLAND_SOCKET connections, the Wayland wire messages, shared-memory FD transfer, rendered pixels, and compositor protocol-error reporting without requiring an installed compositor.
+- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer setup, click-driven selection changes, buffer-release-safe redraws, shared-memory FD transfer, rendered pixels, and compositor protocol-error reporting without requiring an installed compositor.
 - **make check** rejects an ELF containing PT_INTERP or DT_NEEDED entries.
 - **make inspect** prints ELF metadata.
 
