@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered editor window with an active Untitled document tab, a live line/column/byte-count status bar, and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Ctrl+A select-all, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Long lines soft-wrap at the right edge, and the document scrolls vertically to keep the active caret visible. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
+> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered editor window with an active Untitled document tab, a live line/column/byte-count status bar, and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Ctrl+A select-all, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Long lines soft-wrap at the right edge, and the document scrolls vertically to keep the active caret visible. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, horizontal scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
 
 ## Project principles
 
@@ -26,7 +26,7 @@ The first Wayland backend is a freestanding assembly prototype. It:
 4. Creates a wl_surface and an xdg_toplevel, then handles the initial configure/acknowledge sequence.
 5. Allocates a memfd-backed pixel buffer, passes its descriptor to the compositor with SCM_RIGHTS, and draws a simple test surface in software.
 6. Handles seat pointer and keyboard capabilities, pointer enter/leave/motion/button events, and keyboard focus, key, and modifier events.
-7. Lets pointer clicks select a palette swatch or position the document caret at the nearest character insertion boundary. Holding the left button and dragging selects text across character and line boundaries. Shift+Left/Right and Shift+Up/Down/Home/End extend keyboard selections; unshifted Left/Right collapse an active selection. Typing or Backspace/Delete removes the selected range. Focused keyboard input edits the document through a built-in US-QWERTY evdev table; Shift and Caps state are synchronized from physical key transitions and Wayland modifier events.
+7. Lets pointer clicks position the document caret at the nearest character insertion boundary. Holding the left button and dragging selects text across character and line boundaries. Shift+Left/Right and Shift+Up/Down/Home/End extend keyboard selections; unshifted Left/Right collapse an active selection. Typing or Backspace/Delete removes the selected range. Focused keyboard input edits the document through a built-in US-QWERTY evdev table; Shift and Caps state are synchronized from physical key transitions and Wayland modifier events.
 8. Implements bounded byte insertion/deletion, Enter, four-space Tab, Backspace, Delete, Left/Right/Up/Down, Home, End, and Ctrl+A Select All.
 9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
 10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
@@ -110,7 +110,7 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 - UTF-8 text editing with a gap buffer and Unicode-aware cursor movement.
 - IME/dead-key composition through the appropriate Wayland text-input protocol.
 - Undo and redo.
-- Horizontal scrolling, viewport controls, and line/column status.
+- Horizontal scrolling and viewport controls.
 - Cut, copy, and paste with ordinary desktop applications.
 - Keyboard shortcuts: Ctrl+A (select all; implemented), Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+Z/Ctrl+Y (undo/redo), Ctrl+S (save), Ctrl+Shift+S (save as), Ctrl+O (open), and Ctrl+F (find).
 - Find and replace.
