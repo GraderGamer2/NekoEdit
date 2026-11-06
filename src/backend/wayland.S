@@ -79,7 +79,7 @@ pointer_object:         .long 0
 keyboard_created:       .long 0
 keyboard_object:        .long 0
 keyboard_focused:       .long 0
-next_input_object:      .long 15
+next_input_object:      .long 0
 seat_capabilities:      .long 0
 palette_selection:      .long 0
 buffer_busy:            .long 0
