@@ -684,6 +684,30 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 observations.append(
                     "long text soft-wrapped at the right edge, mouse hit testing followed wrapped rows, and the active line scrolled into view vertically"
                 )
+
+                # Ctrl+A selects the entire document, including content above
+                # the scrolled viewport, while keeping the final caret visible.
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1700, 1700, 29, 1))
+                    + wire_message(16, 4, struct.pack("<IIIII", 1701, 4, 0, 0, 0))
+                    + wire_message(16, 3, struct.pack("<IIII", 1702, 1702, 30, 1))
+                )
+                expect_redraw("Ctrl+A select all")
+                selection_pixel = struct.unpack_from(
+                    "<I", pixels, (bottom_row_y + 11) * 800 * 4 + 23 * 4
+                )[0]
+                if selection_pixel != 0xFF5E81AC:
+                    raise AssertionError(
+                        "Ctrl+A did not highlight the complete document through the visible final row; "
+                        f"pixel={hex(selection_pixel)}"
+                    )
+                observations.append("Ctrl+A selected the complete document and rendered its visible selection")
+                client.sendall(
+                    wire_message(12, 0)
+                    + wire_message(16, 3, struct.pack("<IIII", 1703, 1703, 30, 0))
+                    + wire_message(16, 3, struct.pack("<IIII", 1704, 1704, 29, 0))
+                    + wire_message(16, 4, struct.pack("<IIIII", 1705, 0, 0, 0, 0))
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
