@@ -2,6 +2,40 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-06 — Correct GNOME Wayland window-state sequencing and add interactive move/resize
+
+**Purpose:** Stop all unrelated feature work and address the user's report that the current build exits when Maximize is clicked under GNOME, cannot be edge-resized, and only sends the window behind when Minimize is clicked.
+
+### Source review and protocol diagnosis
+
+- The previous client sent `xdg_toplevel.set_maximized`, `unset_maximized`, and `set_minimized`, then jumped to the generic keyboard-change path. That path immediately attached/damaged/committed the current buffer, even though the compositor had not yet supplied the toplevel/surface configure sequence for the requested state.
+- Maximize/Restore/Minimize now return to the event loop after their xdg_toplevel request. They do not submit a stale-size frame. The next frame is scheduled by `xdg_toplevel.configure`, `xdg_surface.configure`, its `ack_configure`, and the existing release-safe buffer path.
+- The previous implementation had no `xdg_toplevel.move` or `xdg_toplevel.resize` request. The client now retains the serial from `wl_pointer.button`; dragging blank title-bar space sends `move(seat=13, serial)`, and pressing within a 6-pixel edge/corner hit region sends `resize(seat=13, serial, edges)` using the xdg-shell edge enum.
+- Resize requests are interactive compositor operations; NekoEdit does not locally guess a new size. The compositor supplies the configure dimensions, which are applied after `wl_buffer.release` if the prior frame is still owned.
+- The app still sends `xdg_toplevel.set_minimized`. Whether and how GNOME presents minimized windows is a compositor/desktop policy; this client does not emulate minimizing by hiding or destroying its own surface.
+
+### Regression tests added/changed
+
+- The window-control test helper now expects the xdg_toplevel request only. It no longer treats an immediate attach/damage/commit using the old geometry as correct behavior.
+- The maximize test emits a burst of toplevel configure events (with maximized and activated states) before the surface configure; the client must use the final geometry/state.
+- The restore test sends configure while the maximized buffer is still busy, verifies the configure acknowledgement, and only then releases the old buffer. Reallocation/presentation must wait for that release.
+- Added assertions for a title-bar move request with the original button serial and a left-edge interactive resize request with `resize_edge_left`. The resize configure is also delivered while the previous buffer remains busy.
+- The tests run through both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`.
+
+### Verification
+
+- Commit: [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969).
+- GitHub Actions [Build and test #251](https://github.com/GraderGamer2/NekoEdit/actions/runs/42255454769) passed all workflow steps: freestanding x86-64 build/ELF checks, CLI smoke tests, complete Wayland mock integration, executable inspection, and artifact upload.
+- The mock suite verified Maximize/Restore with deferred buffer replacement, title-bar move, edge resize request/serial/edge value, and the full existing file-picker/editor/protocol regressions through both transports.
+- Artifact: `nekoedit-linux-x86_64`, 29,625 bytes, ZIP SHA-256 `3c3a5563fe033772d46bd9209cbfd9fd31a1ae950a69c5851e6813afba6de2c1`, artifact ID `13521663942`, expires 2026-11-13 16:46:27 UTC. [Actions #251 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42255454769/artifacts/13521663942).
+
+### Explicit limitation
+
+- I could not run the executable inside the user's GNOME/Mutter session. Actions #251 proves the client-side build and mock protocol behavior, not the absence of a Mutter-specific crash on the user's machine. Manual GNOME testing of this exact artifact/commit is still required before the GNOME report can be marked resolved.
+- No unrelated roadmap work, dependency changes, or launch-command changes were made. `./nekoedit --backend=wayland` remains the supported launch form.
+
+---
+
 ## 2026-11-06 — Pass the complete two-transport Wayland and window-control suite
 
 **Purpose:** Verify the inherited-WAYLAND_SOCKET descriptor-lifetime correction from [`69b63767d1bc`](https://github.com/GraderGamer2/NekoEdit/commit/69b63767d1bc3223ac9d300b3be056cc9c36c56f) and record the complete CI result.

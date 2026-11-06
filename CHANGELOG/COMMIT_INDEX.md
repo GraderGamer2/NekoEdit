@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **222** (221 previously indexed commits + 1 passing two-transport validation documentation commit).
+- Recorded commits: **223** (222 previously indexed commits + 1 GNOME window-state sequencing and interactive resize fix).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -403,8 +403,9 @@ Actions run [#243](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224145
 | 2026-11-06 16:22:39 UTC | [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419) | test: release maximized buffer before window restore |
 | 2026-11-06 16:27:07 UTC | [`69b63767d1bc`](https://github.com/GraderGamer2/NekoEdit/commit/69b63767d1bc3223ac9d300b3be056cc9c36c56f) | test: close parent copy of inherited Wayland socket |
 | 2026-11-06 16:28:46 UTC | [`9969d027a99f`](https://github.com/GraderGamer2/NekoEdit/commit/9969d027a99f3b0a766c5b8e2620745d2c4027ae) | docs: record passing two-transport Wayland validation |
+| 2026-11-06 16:46:02 UTC | [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969) | fix: wait for GNOME configure and support interactive window resize |
 
-Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before Restore. Commit `93bedb579a89` adds the release event. Actions run [#247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) verified the `WAYLAND_DISPLAY` path and exposed the inherited-socket test's descriptor-lifetime issue. Commit `69b63767d1bc` closes the parent's duplicate after spawn; Actions run [#248](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357) passed the full suite through both transports and uploaded artifact `13520607975`.
+Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before Restore. Commit `93bedb579a89` adds the release event. Actions run [#247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) verified the `WAYLAND_DISPLAY` path and exposed the inherited-socket test's descriptor-lifetime issue. Commit `69b63767d1bc` closes the parent's duplicate after spawn; Actions run [#248](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357) passed the full suite through both transports and uploaded artifact `13520607975`. The GNOME-specific configure sequencing, move/resize requests, and buffer-release regression coverage are implemented in `77c8f9884e84`; Actions #251 passed and uploaded artifact `13521663942`.
 
 
 ## Maintenance

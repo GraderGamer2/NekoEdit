@@ -12,10 +12,12 @@ The prototype currently:
 - Starts at 800×480 and handles compositor-requested configure sizes between 480×360 and 3840×2160. The shared memfd mapping is sized for the maximum XRGB8888 surface; active stride and editor/status geometry are recalculated on resize.
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
-- Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard focus, key, and modifier events.
+- Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard focus, key, and modifier events. Button serials are retained for compositor-mediated interactive window move/resize requests.
 - Provides a compact title bar, an Untitled document tab, a document area, and a live status bar. Pointer clicks place the caret at the nearest character insertion boundary. Holding the left button and dragging selects the byte range between the anchor and current caret, including reverse-direction and multi-line drags; the renderer paints selected character cells, tabs, and newline cells. Typing or Backspace/Delete removes the selected range before applying the requested edit. Cursor movement, pointer hit-testing, selection, Backspace, and Delete respect valid UTF-8 code-point boundaries; malformed bytes are treated as individual editable units. Focused key events use the parsed XKB text-v1 subset for common ASCII symbols and execute basic editing/navigation commands, including Ctrl+A to select the complete document. An unparseable keymap falls back to the built-in US-QWERTY table.
 - Uses a fixed 64 KiB byte array and an embedded 5×7 bitmap font covering all printable 7-bit ASCII characters (space through tilde). Each valid non-ASCII code point and each malformed byte currently renders as one `?` placeholder; Unicode glyph lookup is not implemented. The bounded XKB parser extracts key names, XKB keycodes, common ASCII keysyms, symbols for up to four groups/four levels, and simplified alphabetic/four-level type flags. Translation uses the active Wayland group, Shift/Caps, and physical Right-Alt LevelThree. An unparseable/unsupported keymap falls back to a built-in US-QWERTY table.
 - Waits for `wl_buffer.release` before rewriting or destroying the active buffer. Resizing acknowledges the xdg surface configure, destroys the released old `wl_buffer`, creates a replacement from the retained `wl_shm_pool`, then attaches and commits it with the new dimensions/stride.
+- Sends `xdg_toplevel.move` from blank title-bar drags and `xdg_toplevel.resize` from a 6-pixel edge/corner hit region, using the serial from the initiating `wl_pointer.button` press.
+- Maximize/Restore/Minimize requests return to the event loop without a stale-size surface commit. The next frame follows the compositor's toplevel/surface configure and `ack_configure` sequence; if the old buffer is still busy, replacement waits for `wl_buffer.release`.
 - Answers xdg_wm_base ping requests.
 - Exits on xdg_toplevel.close.
 
@@ -92,9 +94,11 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - Timed key repeat for printable keys, Enter, Tab, Left/Right/Up/Down, Home/End, Backspace, and Delete, including compositor-provided delay/rate and the legacy fallback.
 - Buffer release before each edit redraw and before resize replacement, ensuring the shared-memory buffer is not modified or destroyed while the compositor owns it.
 - Minimize, Maximize, Restore, and Close title-bar hit testing and request serialization.
-- Compositor configure/acknowledge handling, dimension clamping, maximized-state capture, old-buffer destruction, new buffer creation, and rendering at the updated dimensions/stride.
+- Maximize/Restore requests do not commit a stale-size frame before compositor configure; the new surface size/state is acknowledged before repaint.
+- Blank title-bar `xdg_toplevel.move` and left/right/top/bottom/corner `xdg_toplevel.resize` request serialization with the originating pointer serial and the selected edge enum.
+- Configure arrival while the old `wl_buffer` is busy, deferred replacement until release, dimension clamping, maximized-state capture, new buffer creation, and rendering at the updated dimensions/stride.
 
-This verifies the client-side wire serialization and basic shared-memory mechanics. It does **not** prove compatibility with every real compositor. Run the binary inside the target GNOME Wayland session as a separate integration test.
+Actions #251 passes the expanded mock scenario through both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`. It verifies the configure/acknowledge and move/resize wire requests, as well as deferred buffer replacement. This still verifies client-side protocol serialization, not Mutter's actual compositor behavior. Run the resulting binary inside the target GNOME Wayland session as a separate integration test; the user's reported GNOME crash is not considered manually resolved until that test is confirmed.
 
 ## Known limitations and next work
 
@@ -102,7 +106,7 @@ This verifies the client-side wire serialization and basic shared-memory mechani
 2. Complete the UTF-8 document engine with a gap buffer, grapheme-aware navigation, Unicode glyph lookup and input, IME/compose support, undo, and redo. Initial code-point-safe navigation, selection, Backspace, and Delete on the fixed byte array are implemented and covered by integration tests.
 3. Add Wayland text-input integration for IME preedit/commit and dead-key composition.
 4. Add the system-font parser, glyph rasterizer, and text layout pipeline.
-5. Add horizontal scrolling and fuller viewport controls, output-scale/fractional-scale handling, and a small release-tracked multi-buffer set. Compositor configure/resize handling and release-safe buffer recreation are implemented.
+5. Add horizontal scrolling and fuller viewport controls, output-scale/fractional-scale handling, and a small release-tracked multi-buffer set. Compositor-configured resizing plus interactive edge/corner resize and title-bar move are implemented; manual GNOME/Mutter confirmation remains pending.
 6. Replace the blocking loop with poll and nonblocking I/O.
 7. Add wl_data_device clipboard support, with immutable copy snapshots independent of the document gap buffer.
 8. Add Ctrl+C/X/V clipboard integration and Ctrl+Z/Y undo/redo; Ctrl+O, Ctrl+S, and Ctrl+Shift+S now route to the initial file-management workflow.
