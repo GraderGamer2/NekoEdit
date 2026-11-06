@@ -5,7 +5,7 @@
 **Development branch:** `feat/wayland-socket-error-handling`  
 **Active development PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
 
-This document reconstructs the development of NekoEdit from the first repository prototype through the UTF-8 code-point-safe editing milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including all 188 commits captured on 2026-11-06. This document explains what those changes built.
+This document reconstructs the development of NekoEdit from the first repository prototype through the fixed-capacity gap-buffer milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
 ---
 
@@ -211,7 +211,24 @@ The test harness also received corrections to fixture positioning, dedicated UTF
 
 The user subsequently reported that the UTF-8 formatting/editing changes looked fine and that earlier functionality remained usable. This is recorded as user feedback, not as a substitute for the automated tests.
 
-## 10. Build, test, and artifact history
+## 10. Phase I — fixed-capacity gap-buffer document storage
+
+**Implementation commit:** [776a72c07579](https://github.com/GraderGamer2/NekoEdit/commit/776a72c07579ced1e54929946de65cea6271267e)  
+**Verification:** [Build and test #169](https://github.com/GraderGamer2/NekoEdit/actions/runs/42216369360), successful.
+
+The editor replaces its contiguous document-editing array with a byte-oriented gap buffer inside the existing 65,536-byte allocation.
+
+- doc_gap_start and doc_gap_end delimit the unused interval. Bytes before and after the interval form the logical document; document length, cursor, and selection offsets remain logical byte offsets.
+- doc_move_gap moves the interval to a requested logical offset using backwards copying for leftward moves and forwards copying for rightward moves.
+- doc_byte_at centralizes logical-to-physical offset translation. UTF-8 scalar validation, visual mapping, status calculation, selection rendering, and normal document rendering now use it instead of assuming the text is contiguous.
+- Insertions consume available gap bytes. Backspace, Delete, and selection deletion enlarge the gap at the deletion point rather than shifting all remaining bytes.
+- Startup load and successful staged Open place the gap after the loaded data. Save writes the prefix and suffix separately, omitting the gap while retaining the atomic temporary-file workflow.
+
+A new mock-compositor regression case places the gap immediately after a two-byte UTF-8 character in AéBC, performs insertion on both sides, cursor movement, Backspace, Delete, and selection deletion, then verifies the exact saved byte sequence AéC. The complete CI workflow passed, including the full existing Wayland integration suite and artifact upload.
+
+This is a real gap-buffer editing structure, but it is **not yet dynamically growing**. Its allocation is still 64 KiB, oversized files remain unsupported, and document/visual row mapping still uses linear scans rather than a line-start index. The existing code-point policy is unchanged: malformed bytes are individually editable, valid UTF-8 scalars remain whole, but grapheme clusters, non-ASCII rendering/input, and IME are not implemented.
+
+## 11. Build, test, and artifact history
 
 The Makefile provides these principal operations:
 
@@ -224,13 +241,13 @@ GitHub Actions builds on Ubuntu 24.04 and uploads the Linux x86-64 executable as
 
 On **2026-11-06**, Actions run [#160](https://github.com/GraderGamer2/NekoEdit/actions/runs/42213034086) passed for code commit `6cd9e08fada059ae3e24c9cdab7cf86762b24414`. The build, smoke tests, complete Wayland mock integration suite, executable inspection, and artifact upload succeeded. Artifact: `nekoedit-linux-x86_64`; reported archive SHA-256: `aa47ef8e0645e734f7dd7bd072cd31f51cc755907113603de6aebf8ab48917a7`; expiry: 2026-11-13.
 
-## 11. Current milestone boundary
+## 12. Current milestone boundary
 
-NekoEdit is an early interactive Wayland text-editor prototype with file operations, ASCII XKB translation, selection, scrolling, and code-point-safe editing of UTF-8 data. It is not yet a complete editor or a complete Unicode text stack.
+NekoEdit is an early interactive Wayland text-editor prototype with file operations, ASCII XKB translation, selection, scrolling, code-point-safe UTF-8 editing, and a fixed-capacity gap buffer. It is not yet dynamically growing, a complete editor, or a complete Unicode text stack.
 
 Important items still on the roadmap include:
 
-- Replace the fixed byte array with the planned gap buffer.
+- Add dynamic gap-buffer growth beyond 64 KiB and a line-start index.
 - Implement Unicode glyph lookup/rendering instead of question-mark placeholders.
 - Implement non-ASCII text input, Wayland text-input/IME, compose and dead-key behavior.
 - Add grapheme-cluster-aware navigation and deletion.

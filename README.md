@@ -148,7 +148,7 @@ See [docs/RENDERING.md](docs/RENDERING.md).
 2. Native Wayland window, xdg-shell setup, and software-buffer proof of concept. (Implemented prototype.)
 3. Pointer/keyboard editing, in-window file operations, and initial ASCII document editing. (Implemented prototype.)
 4. Bounded XKB text-v1 parsing and common ASCII layout-aware translation. (Implemented subset; sparse maps safely fall back.) Next: broader XKB modifier/type semantics and Wayland text-input integration.
-5. Complete the UTF-8 gap-buffer engine, grapheme-aware navigation, Unicode glyph/input support, undo/redo, and scrolling. (Code-point-safe cursor movement, selection, Backspace, and Delete now use the fixed-capacity gap buffer.)
+5. Add dynamic gap-buffer growth, line indexing, grapheme-aware navigation, Unicode glyph/input support, undo/redo, and scrolling. (The fixed-capacity 64 KiB gap buffer and code-point-safe editing operations are implemented.)
 6. Installed-font discovery, TrueType parsing, glyph rasterization, and text layout.
 7. File open/save, the directory-browser picker, and clipboard interoperability.
 8. Resize/output-scale handling, X11 backend, compatibility testing, and profiling.
