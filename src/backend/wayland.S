@@ -64,6 +64,12 @@
 .equ PICKER_ENTRY_SIZE, 260
 .equ PICKER_DIR_BYTES, 8192
 .equ PICKER_VISIBLE_ROWS, 15
+.equ PICKER_TRACK_TOP, 130
+.equ PICKER_TRACK_HEIGHT, 210
+.equ PICKER_TRACK_X, 724
+.equ PICKER_TRACK_WIDTH, 12
+.equ PICKER_TRACK_MIN_THUMB, 18
+.equ PICKER_WHEEL_ROW_FIXED, (14 * 256)
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
@@ -96,6 +102,7 @@ ui_picker_name_label:  .asciz "FILE NAME"
 ui_picker_up_label:   .asciz "UP"
 ui_picker_home_label: .asciz "HOME"
 ui_picker_hidden_label: .asciz "SHOW HIDDEN"
+ui_picker_check_mark: .asciz "x"
 ui_picker_cancel_label: .asciz "CANCEL"
 ui_picker_open_label: .asciz "OPEN"
 ui_picker_save_label: .asciz "SAVE"
@@ -312,7 +319,7 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
-.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
+.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
 picker_mode:            .long 0
 picker_focus:           .long 0
 picker_dir_fd:          .long 0
@@ -320,6 +327,11 @@ picker_error:           .long 0
 picker_entry_count:     .long 0
 picker_selected:        .long 0
 picker_scroll:          .long 0
+picker_scroll_drag:     .long 0
+picker_scroll_drag_offset: .long 0
+picker_scroll_thumb_top: .long PICKER_TRACK_TOP
+picker_scroll_thumb_height: .long PICKER_TRACK_HEIGHT
+picker_wheel_remainder: .long 0
 picker_show_hidden:     .long 0
 picker_truncated:       .long 0
 picker_path_length:     .long 0
@@ -907,6 +919,8 @@ wayland_main:
     je .pointer_motion
     cmp dword ptr [rip + last_opcode], 3
     je .pointer_button
+    cmp dword ptr [rip + last_opcode], 4
+    je .pointer_axis
     jmp .event_loop
 .pointer_enter:
     cmp dword ptr [rip + last_size], 16
@@ -931,6 +945,8 @@ wayland_main:
     mov eax, dword ptr [rip + event_payload + 8]
     sar eax, 8
     mov dword ptr [rip + pointer_y], eax
+    cmp dword ptr [rip + picker_mode], 0
+    jne .pointer_picker_motion
     cmp dword ptr [rip + pointer_button_down], 1
     jne .event_loop
     cmp dword ptr [rip + pointer_inside], 1
@@ -956,6 +972,38 @@ wayland_main:
 .Lneko_pointer_selection_set:
     mov dword ptr [rip + doc_selection_active], 1
     jmp .keyboard_changed
+.pointer_picker_motion:
+    cmp dword ptr [rip + picker_scroll_drag], 1
+    jne .event_loop
+    mov esi, dword ptr [rip + pointer_y]
+    call picker_scrollbar_drag_to_y
+    jmp .keyboard_changed
+
+.pointer_axis:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 4], 0
+    jne .event_loop
+    cmp dword ptr [rip + picker_mode], 0
+    je .event_loop
+    # Wayland sends a signed 24.8 distance. Accumulate smooth deltas and
+    # translate each 14 surface pixels into one file-list row.
+    movsxd rax, dword ptr [rip + picker_wheel_remainder]
+    movsxd rcx, dword ptr [rip + event_payload + 8]
+    add rax, rcx
+    mov ecx, PICKER_WHEEL_ROW_FIXED
+    cqo
+    idiv rcx
+    test eax, eax
+    jz .pointer_axis_store_remainder
+    mov dword ptr [rip + picker_wheel_remainder], edx
+    mov edi, eax
+    call picker_scroll_by
+    jmp .keyboard_changed
+.pointer_axis_store_remainder:
+    mov dword ptr [rip + picker_wheel_remainder], edx
+    jmp .event_loop
+
 .pointer_button:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
@@ -965,6 +1013,13 @@ wayland_main:
     je .pointer_button_press
     cmp dword ptr [rip + event_payload + 12], 0
     jne .event_loop
+    cmp dword ptr [rip + picker_mode], 0
+    je .pointer_button_release_document
+    cmp dword ptr [rip + picker_scroll_drag], 1
+    jne .event_loop
+    mov dword ptr [rip + picker_scroll_drag], 0
+    jmp .keyboard_changed
+.pointer_button_release_document:
     cmp dword ptr [rip + pointer_button_down], 1
     jne .event_loop
     mov dword ptr [rip + pointer_button_down], 0
@@ -2536,6 +2591,144 @@ picker_move_selection:
     ret
 .size picker_move_selection, . - picker_move_selection
 
+# Clamp a relative row delta to the current directory's valid scroll range.
+# EDI=delta rows. EAX=1 when the scroll offset changed, otherwise 0.
+.type picker_scroll_by, @function
+picker_scroll_by:
+    mov eax, dword ptr [rip + picker_entry_count]
+    sub eax, PICKER_VISIBLE_ROWS
+    jg .picker_scroll_by_max_ready
+    xor eax, eax
+.picker_scroll_by_max_ready:
+    mov edx, dword ptr [rip + picker_scroll]
+    add edx, edi
+    test edx, edx
+    jns .picker_scroll_by_lower_ready
+    xor edx, edx
+.picker_scroll_by_lower_ready:
+    cmp edx, eax
+    jle .picker_scroll_by_clamped
+    mov edx, eax
+.picker_scroll_by_clamped:
+    cmp edx, dword ptr [rip + picker_scroll]
+    je .picker_scroll_by_unchanged
+    mov dword ptr [rip + picker_scroll], edx
+    mov eax, 1
+    ret
+.picker_scroll_by_unchanged:
+    xor eax, eax
+    ret
+.size picker_scroll_by, . - picker_scroll_by
+
+# Recompute scrollbar thumb geometry from the current entry count and offset.
+# The track spans PICKER_TRACK_HEIGHT pixels; the thumb has a small minimum.
+.type picker_scrollbar_geometry, @function
+picker_scrollbar_geometry:
+    push rbx
+    mov ecx, dword ptr [rip + picker_entry_count]
+    cmp ecx, PICKER_VISIBLE_ROWS
+    jbe .picker_scrollbar_full_thumb
+    mov eax, PICKER_TRACK_HEIGHT
+    imul eax, PICKER_VISIBLE_ROWS
+    xor edx, edx
+    div ecx
+    cmp eax, PICKER_TRACK_MIN_THUMB
+    jae .picker_scrollbar_thumb_ready
+    mov eax, PICKER_TRACK_MIN_THUMB
+    jmp .picker_scrollbar_thumb_ready
+.picker_scrollbar_full_thumb:
+    mov eax, PICKER_TRACK_HEIGHT
+.picker_scrollbar_thumb_ready:
+    mov dword ptr [rip + picker_scroll_thumb_height], eax
+    mov ebx, PICKER_TRACK_HEIGHT
+    sub ebx, eax
+    mov ecx, dword ptr [rip + picker_entry_count]
+    sub ecx, PICKER_VISIBLE_ROWS
+    jg .picker_scrollbar_position
+    xor eax, eax
+    jmp .picker_scrollbar_store
+.picker_scrollbar_position:
+    mov eax, dword ptr [rip + picker_scroll]
+    imul eax, ebx
+    xor edx, edx
+    div ecx
+    add eax, PICKER_TRACK_TOP
+.picker_scrollbar_store:
+    mov dword ptr [rip + picker_scroll_thumb_top], eax
+    pop rbx
+    ret
+.size picker_scrollbar_geometry, . - picker_scrollbar_geometry
+
+# ESI=pointer y. Convert a dragged thumb top into a clamped row offset.
+.type picker_scrollbar_drag_to_y, @function
+picker_scrollbar_drag_to_y:
+    push rbx
+    push r12
+    push r13
+    mov r12d, esi
+    call picker_scrollbar_geometry
+    mov eax, r12d
+    sub eax, dword ptr [rip + picker_scroll_drag_offset]
+    sub eax, PICKER_TRACK_TOP
+    mov r13d, eax
+    mov ebx, PICKER_TRACK_HEIGHT
+    sub ebx, dword ptr [rip + picker_scroll_thumb_height]
+    test r13d, r13d
+    jns .picker_scroll_drag_lower_ready
+    xor r13d, r13d
+.picker_scroll_drag_lower_ready:
+    cmp r13d, ebx
+    jle .picker_scroll_drag_position_ready
+    mov r13d, ebx
+.picker_scroll_drag_position_ready:
+    mov ecx, dword ptr [rip + picker_entry_count]
+    sub ecx, PICKER_VISIBLE_ROWS
+    jg .picker_scroll_drag_scale
+    xor ecx, ecx
+    mov dword ptr [rip + picker_scroll], 0
+    jmp .picker_scroll_drag_done
+.picker_scroll_drag_scale:
+    test ebx, ebx
+    jz .picker_scroll_drag_done
+    mov eax, r13d
+    imul eax, ecx
+    xor edx, edx
+    div ebx
+    mov dword ptr [rip + picker_scroll], eax
+.picker_scroll_drag_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_scrollbar_drag_to_y, . - picker_scrollbar_drag_to_y
+
+# Begin dragging or track-clicking the scrollbar at surface y=ESI.
+.type picker_scrollbar_begin_drag, @function
+picker_scrollbar_begin_drag:
+    push r12
+    mov r12d, esi
+    call picker_scrollbar_geometry
+    mov eax, r12d
+    cmp eax, dword ptr [rip + picker_scroll_thumb_top]
+    jl .picker_scrollbar_center_thumb
+    mov edx, dword ptr [rip + picker_scroll_thumb_top]
+    add edx, dword ptr [rip + picker_scroll_thumb_height]
+    cmp eax, edx
+    jae .picker_scrollbar_center_thumb
+    sub eax, dword ptr [rip + picker_scroll_thumb_top]
+    jmp .picker_scrollbar_offset_ready
+.picker_scrollbar_center_thumb:
+    mov eax, dword ptr [rip + picker_scroll_thumb_height]
+    shr eax, 1
+.picker_scrollbar_offset_ready:
+    mov dword ptr [rip + picker_scroll_drag_offset], eax
+    mov dword ptr [rip + picker_scroll_drag], 1
+    mov esi, r12d
+    call picker_scrollbar_drag_to_y
+    pop r12
+    ret
+.size picker_scrollbar_begin_drag, . - picker_scrollbar_begin_drag
+
 
 .type picker_handle_key, @function
 picker_handle_key:
@@ -2834,9 +3027,9 @@ picker_handle_pointer:
     jb .picker_pointer_up
     cmp r12d, 160
     jb .picker_pointer_home
-    cmp r12d, 600
+    cmp r12d, 710
     jb .picker_pointer_list
-    cmp r12d, 744
+    cmp r12d, 740
     jae .picker_pointer_list
     xor dword ptr [rip + picker_show_hidden], 1
     call picker_scan_directory
@@ -2857,6 +3050,12 @@ picker_handle_pointer:
     jb .picker_pointer_done
     cmp r12d, 744
     jae .picker_pointer_done
+    cmp r12d, 720
+    jb .picker_pointer_list_rows
+    mov esi, r13d
+    call picker_scrollbar_begin_drag
+    jmp .picker_pointer_done
+.picker_pointer_list_rows:
     mov eax, r13d
     sub eax, 132
     xor edx, edx
@@ -5499,15 +5698,34 @@ render_picker:
     mov esi, 105
     lea rdx, [rip + ui_picker_hidden_label]
     call draw_text
+    # Bordered 16x16 checkbox, with a filled interior and visible check mark.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 714
+    mov edx, 100
+    mov ecx, 16
+    mov r8d, 16
+    mov r9d, 0xff9aa7b8
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 716
+    mov edx, 102
+    mov ecx, 12
+    mov r8d, 12
+    mov r9d, 0xff252a33
+    call draw_rect
     cmp dword ptr [rip + picker_show_hidden], 0
     je .render_picker_list
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 744
-    mov edx, 101
-    mov ecx, 7
-    mov r8d, 7
+    mov esi, 716
+    mov edx, 102
+    mov ecx, 12
+    mov r8d, 12
     mov r9d, 0xff78a9d4
     call draw_rect
+    mov edi, 718
+    mov esi, 101
+    lea rdx, [rip + ui_picker_check_mark]
+    call draw_text
 
 .render_picker_list:
     mov rdi, qword ptr [rip + shm_mapping]
@@ -5516,6 +5734,28 @@ render_picker:
     mov ecx, 688
     mov r8d, 222
     mov r9d, 0xff252a33
+    call draw_rect
+    # Scrollbar track and proportionally sized thumb.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, PICKER_TRACK_X
+    mov edx, PICKER_TRACK_TOP
+    mov ecx, PICKER_TRACK_WIDTH
+    mov r8d, PICKER_TRACK_HEIGHT
+    mov r9d, 0xff171c24
+    call draw_rect
+    call picker_scrollbar_geometry
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, PICKER_TRACK_X + 2
+    mov edx, dword ptr [rip + picker_scroll_thumb_top]
+    mov ecx, PICKER_TRACK_WIDTH - 4
+    mov r8d, dword ptr [rip + picker_scroll_thumb_height]
+    cmp dword ptr [rip + picker_scroll_drag], 0
+    je .render_picker_scroll_thumb_normal
+    mov r9d, 0xff9bb9d8
+    jmp .render_picker_scroll_thumb_draw
+.render_picker_scroll_thumb_normal:
+    mov r9d, 0xff687789
+.render_picker_scroll_thumb_draw:
     call draw_rect
     mov r12d, dword ptr [rip + picker_scroll]
     xor r13d, r13d
@@ -5533,7 +5773,7 @@ render_picker:
     mov eax, r13d
     imul eax, 14
     lea edx, [rax + 130]
-    mov ecx, 684
+    mov ecx, 660
     mov r8d, 14
     mov r9d, 0xff414b5a
     call draw_rect
@@ -5560,7 +5800,7 @@ render_picker:
     mov eax, r13d
     imul eax, 14
     lea esi, [rax + 133]
-    mov ecx, 78
+    mov ecx, 76
     call draw_bounded_ascii
     inc r13d
     jmp .render_picker_rows
