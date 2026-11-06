@@ -419,21 +419,21 @@ def run(
 
                 # Mouse movement followed by a click snaps to character
                 # insertion boundaries across lines and between characters.
-                pointer_click(22, 170, 1100, "mouse caret first line")
+                pointer_click(22, 98, 1100, "mouse caret first line")
                 first_line_caret = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 24 * 4
                 )[0]
                 if first_line_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret after first-line text")
 
-                pointer_click(18, 182, 1110, "mouse caret second-line start")
+                pointer_click(18, 110, 1110, "mouse caret second-line start")
                 second_line_start = struct.unpack_from(
                     "<I", pixels, 104 * 800 * 4 + 16 * 4
                 )[0]
                 if second_line_start != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret at second-line start")
 
-                pointer_click(26, 182, 1120, "mouse caret between characters")
+                pointer_click(26, 110, 1120, "mouse caret between characters")
                 between_chars = struct.unpack_from(
                     "<I", pixels, 104 * 800 * 4 + 24 * 4
                 )[0]
