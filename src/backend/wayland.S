@@ -1704,7 +1704,8 @@ doc_place_cursor_from_pointer:
     # Snap the vertical coordinate to the nearest 12-pixel line baseline.
     mov eax, esi
     sub eax, DOC_TOP
-    add eax, LINE_HEIGHT / 2
+    # Each rendered row owns its full 12-pixel band; do not round at the
+    # midpoint, which would send a normal center-of-glyph click to the next row.
     xor edx, edx
     mov ecx, LINE_HEIGHT
     div ecx
