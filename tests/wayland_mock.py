@@ -64,21 +64,30 @@ def expect_message(connection, expected, label: str):
     return actual
 
 
-def run(binary: str) -> None:
+def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: bool = False) -> None:
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
-    socket_path = os.path.join(runtime_dir, display_name)
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(socket_path)
-    server.listen(1)
-    server.settimeout(8)
+    if use_wayland_socket:
+        client_endpoint, compositor_endpoint = socket.socketpair()
+        server = None
+    else:
+        client_endpoint = None
+        compositor_endpoint = None
+        socket_path = os.path.join(runtime_dir, display_name)
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(socket_path)
+        server.listen(1)
+        server.settimeout(8)
     observations = []
     errors = []
 
     def fake_compositor():
         client = None
         try:
-            client, _ = server.accept()
+            if use_wayland_socket:
+                client = compositor_endpoint
+            else:
+                client, _ = server.accept()
             client.settimeout(8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
@@ -163,7 +172,14 @@ def run(binary: str) -> None:
             expect_message(client, (8, 6, b""), "map surface")
             observations.append("memfd+SCM_RIGHTS buffer verified")
 
-            client.sendall(wire_message(10, 1))  # xdg_toplevel.close
+            if send_protocol_error:
+                message = b"test compositor protocol error"
+                encoded = message + b"\\0"
+                padded = encoded + b"\\0" * (-len(encoded) % 4)
+                payload = struct.pack("<II", 0, 1) + struct.pack("<I", len(encoded)) + padded
+                client.sendall(wire_message(1, 0, payload))
+            else:
+                client.sendall(wire_message(10, 1))  # xdg_toplevel.close
         except Exception:
             errors.append(traceback.format_exc())
         finally:
@@ -173,12 +189,21 @@ def run(binary: str) -> None:
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
-    environment["XDG_RUNTIME_DIR"] = runtime_dir
-    environment["WAYLAND_DISPLAY"] = display_name
+    pass_fds = ()
+    if use_wayland_socket:
+        environment.pop("XDG_RUNTIME_DIR", None)
+        environment.pop("WAYLAND_DISPLAY", None)
+        environment["WAYLAND_SOCKET"] = str(client_endpoint.fileno())
+        pass_fds = (client_endpoint.fileno(),)
+    else:
+        environment["XDG_RUNTIME_DIR"] = runtime_dir
+        environment["WAYLAND_DISPLAY"] = display_name
+        environment.pop("WAYLAND_SOCKET", None)
     try:
         result = subprocess.run(
             [binary, "--backend=wayland"],
             env=environment,
+            pass_fds=pass_fds,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=10,
@@ -186,17 +211,28 @@ def run(binary: str) -> None:
         )
     finally:
         thread.join(timeout=9)
-        server.close()
+        if server is not None:
+            server.close()
+        if client_endpoint is not None:
+            client_endpoint.close()
 
     if thread.is_alive():
         raise AssertionError("mock compositor did not finish the protocol exchange")
     if errors:
         raise AssertionError("mock compositor failed:\n" + "\n".join(errors))
+    stderr = result.stderr.decode(errors="replace")
+    if send_protocol_error:
+        if result.returncode == 0 or "test compositor protocol error" not in stderr:
+            raise AssertionError(
+                "NekoEdit did not report the compositor's wl_display.error: "
+                f"status={result.returncode}, stderr={stderr!r}"
+            )
+        print("Wayland compositor protocol-error handling test passed.")
+        return
     if result.returncode != 0:
-        raise AssertionError(
-            f"NekoEdit exited {result.returncode}: {result.stderr.decode(errors='replace')}"
-        )
-    print("Wayland mock integration test passed (registry, xdg-shell, memfd, pixels, close).")
+        raise AssertionError(f"NekoEdit exited {result.returncode}: {stderr}")
+    transport = "WAYLAND_SOCKET" if use_wayland_socket else "WAYLAND_DISPLAY"
+    print(f"Wayland mock integration test passed using {transport} (registry, xdg-shell, memfd, pixels, close).")
     print("Verified: " + ", ".join(observations))
 
 
@@ -204,3 +240,5 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
+    run(sys.argv[1], use_wayland_socket=True)
+    run(sys.argv[1], send_protocol_error=True)
