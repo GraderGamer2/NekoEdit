@@ -286,6 +286,46 @@ def run(
                         + wire_message(12, 0)
                     )
 
+                if save_roundtrip:
+                    # Keep this path-specific test independent from the full
+                    # empty-document editor interaction suite below.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1800, 1800, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1801, 1801, 30, 1))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), "Ctrl+A attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "Ctrl+A damage"
+                    )
+                    expect_message(client, (8, 6, b""), "Ctrl+A commit")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1802, 1802, 30, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    key_step(1810, 44, "replace loaded text with z")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), "Ctrl+S attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "Ctrl+S damage"
+                    )
+                    expect_message(client, (8, 6, b""), "Ctrl+S commit")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    observations.append("launch-time load, selection replacement, and Ctrl+S write verified")
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 key_step(1002, 30, "insert a")
                 a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if a_pixel != 0xFFD8DEE9:
@@ -841,31 +881,6 @@ def run(
                     "printable characters, Enter, and Tab repeated while held; compositor repeat_info and legacy fallback were exercised"
                 )
 
-                if save_roundtrip:
-                    # Replace the loaded document with one byte and save it via
-                    # Ctrl+S, covering launch-time file loading and writing.
-                    client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1800, 1800, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1801, 1801, 30, 1))
-                    )
-                    expect_redraw("Ctrl+A before save roundtrip")
-                    client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1802, 1802, 30, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
-                        + wire_message(12, 0)
-                    )
-                    key_step(1810, 44, "replace with z before save")
-                    client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
-                    )
-                    expect_redraw("Ctrl+S save")
-                    client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
-                        + wire_message(12, 0)
-                    )
-                    observations.append("launch-time file load and Ctrl+S save round-trip verified")
             finally:
                 if pixels is not None:
                     pixels.close()
