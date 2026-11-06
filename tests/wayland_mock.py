@@ -75,6 +75,7 @@ def run(
     save_roundtrip: bool = False,
     file_workflow: bool = False,
     keyboard_layout_test: bool = False,
+    sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
@@ -378,6 +379,43 @@ xkb_symbols "nekoedit-test" {
 };
 };
 \0"""
+                elif sparse_keymap_test:
+                    # This map has enough punctuation symbols to pass the
+                    # old symbol-count test, but no alphabetic keys. It must
+                    # be rejected so the US-QWERTY fallback stays available.
+                    keymap_data = b"""xkb_keymap {
+xkb_keycodes "nekoedit-sparse" {
+    minimum = 8;
+    maximum = 255;
+    <AE01> = 10;
+    <AE02> = 11;
+    <AE03> = 12;
+    <AE04> = 13;
+    <AE05> = 14;
+    <AE06> = 15;
+    <AE07> = 16;
+    <AE08> = 17;
+    <AE09> = 18;
+    <AE10> = 19;
+    <AE11> = 20;
+    <AE12> = 21;
+};
+xkb_symbols "nekoedit-sparse" {
+    key <AE01> { [ 1, exclam ] };
+    key <AE02> { [ 2, at ] };
+    key <AE03> { [ 3, numbersign ] };
+    key <AE04> { [ 4, dollar ] };
+    key <AE05> { [ 5, percent ] };
+    key <AE06> { [ 6, asciicircum ] };
+    key <AE07> { [ 7, ampersand ] };
+    key <AE08> { [ 8, asterisk ] };
+    key <AE09> { [ 9, parenleft ] };
+    key <AE10> { [ 0, parenright ] };
+    key <AE11> { [ minus, underscore ] };
+    key <AE12> { [ equal, plus ] };
+};
+};
+\0"""
                 else:
                     keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
@@ -485,6 +523,33 @@ xkb_symbols "nekoedit-test" {
                     observations.append(
                         "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and the expected Group1/Group2 symbols"
                     )
+                if sparse_keymap_test:
+                    nm_text = subprocess.check_output(
+                        ["nm", "-n", binary], text=True
+                    )
+                    ready_address = None
+                    for line in nm_text.splitlines():
+                        fields = line.split()
+                        if len(fields) == 3 and fields[2] == "xkb_keymap_ready":
+                            ready_address = int(fields[0], 16)
+                            break
+                    if ready_address is None:
+                        raise AssertionError("xkb_keymap_ready symbol missing")
+                    mem_fd = os.open(f"/proc/{child.pid}/mem", os.O_RDONLY)
+                    try:
+                        parser_ready = struct.unpack(
+                            "<I", os.pread(mem_fd, 4, ready_address)
+                        )[0]
+                    finally:
+                        os.close(mem_fd)
+                    if parser_ready != 0:
+                        raise AssertionError(
+                            "sparse punctuation-only XKB map was incorrectly activated"
+                        )
+                    observations.append(
+                        "sparse punctuation-only XKB map was rejected and US-QWERTY fallback stayed active"
+                    )
+
                 observations.append(
                     "wl_keyboard.keymap SCM_RIGHTS FD was received, validated, and mapped read-only with MAP_PRIVATE"
                 )
@@ -1524,6 +1589,24 @@ if __name__ == "__main__":
     # the 300 ms / 30 Hz compatibility fallback.
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
     run(sys.argv[1], send_protocol_error=True)
+    # A punctuation-only map must not be accepted as a usable layout. The
+    # client must retain the US fallback and still replace/save a document.
+    sparse_fd, sparse_path = tempfile.mkstemp(prefix="nekoedit-sparse-xkb-")
+    try:
+        with os.fdopen(sparse_fd, "wb") as sparse_document:
+            sparse_document.write(b"I")
+        run(
+            sys.argv[1],
+            initial_file=sparse_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"z",
+            sparse_keymap_test=True,
+        )
+    finally:
+        try:
+            os.unlink(sparse_path)
+        except FileNotFoundError:
+            pass
     # Parse a compact compiled-keymap-shaped XKB text-v1 fixture and verify
     # actual document bytes after group, Shift, and LevelThree translation.
     xkb_fd, xkb_path = tempfile.mkstemp(prefix="nekoedit-xkb-")
