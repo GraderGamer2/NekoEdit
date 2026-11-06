@@ -4,6 +4,38 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Correct XKB ONE_LEVEL handling and expand shifted-punctuation tests
+
+**Purpose:** Address the reported case where ordinary keys worked but many shifted punctuation keys displayed `?`. Inspection found that the bounded XKB type classifier collapsed ONE_LEVEL into the generic non-alphabetic path, so a one-symbol key could select an empty Level 2 slot while Shift was held.
+
+### Implementation
+
+- Added an explicit ONE_LEVEL type flag in `src/backend/xkb.S`. The lookup now forces Level 1 for ONE_LEVEL keys regardless of Shift, Caps Lock, or LevelThree state, instead of attempting to read a nonexistent second level.
+- Kept the existing ALPHABETIC and three-/four-level handling unchanged. This is a targeted correction within the project's bounded XKB text-v1 subset, not full libxkbcommon-equivalent XKB support.
+- Updated `README.md`, `docs/WAYLAND_BACKEND.md`, and `CHANGELOG/CURRENT_STATUS.md` to describe the currently supported common ONE_LEVEL/ALPHABETIC/THREE_LEVEL/FOUR_LEVEL families.
+
+### Regression coverage and CI
+
+- Extended `tests/wayland_mock.py` with actual Wayland key events for shifted grave/tilde, bracket/brace, semicolon/colon, apostrophe/quote, comma/less-than, period/greater-than, and slash/question keys, plus a ONE_LEVEL keypad key while Shift is active.
+- The first CI attempt, [Build and test #185](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223115089), failed in the new test at the bracket key. The build/ELF verification and CLI smoke tests had passed; the Wayland integration test exposed incorrect fixture metadata: the added entries used raw evdev numbers, while the XKB fixture must declare the XKB keycode (evdev + 8).
+- Corrected the fixture in [commit `b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b), also removing an accidental duplicate AB09 entry. The physical key events still use evdev keycodes as required by Wayland.
+- The corrected [Build and test #186](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121) passed all eight workflow steps on `b260457007589469abdb492358b7581558c0cc5b`: freestanding build/link, ELF dependency checks, CLI smoke tests, complete Wayland mock integration, executable inspection, and artifact upload.
+- The XKB scenario verified the evdev-to-XKB +8 lookup, group switching, Shift/LevelThree, all twelve shifted number-row symbols, the added shifted punctuation rows, ONE_LEVEL Shift behavior, and the exact saved document bytes. The complete suite also passed the UTF-8, gap-buffer, file-workflow, protocol-error, and sparse-keymap fallback scenarios.
+- Artifact: `nekoedit-linux-x86_64`, 19,009 bytes, SHA-256 `a27b9571cf9752c947ff7700f012320316db4e720bba195773ec8647644a8d7b`, artifact ID `13504771747`, expires 2026-11-13. [Run #186 artifacts](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121/artifacts/13504771747).
+
+### Manual verification still needed
+
+- The latest user-reported desktop issue (most shifted punctuation showing `?`) has not yet been manually re-tested against this patched artifact in the user's GNOME Wayland session. The mock compositor validates a controlled synthetic keymap, not every installed layout or GNOME modifier map.
+- After downloading the #186 artifact, run it with the unchanged command `./nekoedit --backend=wayland` and test the full shifted punctuation sequence on the actual active layout. Report which physical keys still fail, if any. Do not call the user's desktop regression fully resolved until this check succeeds.
+
+### Scope
+
+- No third-party runtime libraries or external dependencies were added. The launch interface and document model are unchanged.
+- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and mergeable with a clean state at the time of this update.
+- Commits: [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) (parser + regression test + docs); [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b) (fixture keycode correction).
+
+---
+
 ## 2026-11-06 — Open replacement pull request #2 for early-alpha
 
 **Purpose:** Attach the renamed development branch to an active review so GitHub's recent-push prompt has a pull-request destination. The user explicitly authorized opening a pull request if required to clear the repository notification.
