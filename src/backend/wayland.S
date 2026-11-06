@@ -467,7 +467,7 @@ wayland_main:
     js .protocol_error
 
     # wl_surface.commit()
-    mov edi, 7
+    mov edi, 8
     mov esi, 6
     xor edx, edx
     xor ecx, ecx
