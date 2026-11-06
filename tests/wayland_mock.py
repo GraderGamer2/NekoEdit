@@ -399,7 +399,9 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 # Drag backwards across both characters on line two. Selection
                 # bounds must remain ordered even when the anchor is after the cursor.
                 pointer_drag(32, 182, 16, 182, 1130, "reverse mouse drag selection")
-                for x in (16, 24):
+                # Inspect each cell's trailing blank column so the
+                # insertion caret and glyph strokes do not mask the highlight.
+                for x in (23, 31):
                     selected_pixel = struct.unpack_from(
                         "<I", pixels, 176 * 800 * 4 + x * 4
                     )[0]
