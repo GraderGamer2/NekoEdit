@@ -245,8 +245,8 @@ wayland_main:
 
     lea rax, [rip + stage_bind_roundtrip]
     mov qword ptr [rip + failure_stage], rax
-    # Roundtrip callback 11 ensures bind requests have been processed.
-    mov dword ptr [rip + payload_buffer], 11
+    # Roundtrip callback 7 preserves dense client object IDs.
+    mov dword ptr [rip + payload_buffer], 7
     mov edi, 1
     xor esi, esi
     lea rdx, [rip + payload_buffer]
@@ -264,15 +264,15 @@ wayland_main:
     jne .bind_check_done
     call handle_xdg_ping
 .bind_check_done:
-    cmp dword ptr [rip + last_object], 11
+    cmp dword ptr [rip + last_object], 7
     jne .bind_roundtrip
     cmp dword ptr [rip + last_opcode], 0
     jne .bind_roundtrip
 
     lea rax, [rip + stage_xdg_create]
     mov qword ptr [rip + failure_stage], rax
-    # wl_compositor.create_surface(new_id=7)
-    mov dword ptr [rip + payload_buffer], 7
+    # wl_compositor.create_surface(new_id=8)
+    mov dword ptr [rip + payload_buffer], 8
     mov edi, 4
     xor esi, esi
     lea rdx, [rip + payload_buffer]
@@ -281,9 +281,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
-    # xdg_wm_base.get_xdg_surface(new_id=8, surface=7)
-    mov dword ptr [rip + payload_buffer], 8
-    mov dword ptr [rip + payload_buffer + 4], 7
+    # xdg_wm_base.get_xdg_surface(new_id=9, surface=8)
+    mov dword ptr [rip + payload_buffer], 9
+    mov dword ptr [rip + payload_buffer + 4], 8
     mov edi, 6
     mov esi, 2
     lea rdx, [rip + payload_buffer]
@@ -292,9 +292,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
-    # xdg_surface.get_toplevel(new_id=9)
-    mov dword ptr [rip + payload_buffer], 9
-    mov edi, 8
+    # xdg_surface.get_toplevel(new_id=10)
+    mov dword ptr [rip + payload_buffer], 10
+    mov edi, 9
     mov esi, 1
     lea rdx, [rip + payload_buffer]
     mov ecx, 4
@@ -308,7 +308,7 @@ wayland_main:
     mov dword ptr [rip + payload_buffer], 30
     lea rdi, [rip + payload_buffer + 4]
     rep movsb
-    mov edi, 9
+    mov edi, 10
     mov esi, 2
     lea rdx, [rip + payload_buffer]
     mov ecx, 36
@@ -317,7 +317,7 @@ wayland_main:
     js .protocol_error
 
     # Initial empty commit requests the first xdg_surface.configure.
-    mov edi, 7
+    mov edi, 8
     mov esi, 6
     xor edx, edx
     xor ecx, ecx
@@ -338,14 +338,14 @@ wayland_main:
     call handle_xdg_ping
     jmp .wait_configure
 .configure_check_surface:
-    cmp dword ptr [rip + last_object], 8
+    cmp dword ptr [rip + last_object], 9
     jne .wait_configure
     cmp dword ptr [rip + last_opcode], 0
     jne .wait_configure
     # xdg_surface.configure(serial)
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + payload_buffer], eax
-    mov edi, 8
+    mov edi, 9
     mov esi, 4
     lea rdx, [rip + payload_buffer]
     mov ecx, 4
@@ -401,8 +401,8 @@ wayland_main:
 
     lea rax, [rip + stage_pool]
     mov qword ptr [rip + failure_stage], rax
-    # wl_shm.create_pool(new_id=10, fd, size=BUFFER_SIZE)
-    mov dword ptr [rip + payload_buffer], 10
+    # wl_shm.create_pool(new_id=11, fd, size=BUFFER_SIZE)
+    mov dword ptr [rip + payload_buffer], 11
     mov dword ptr [rip + payload_buffer + 4], BUFFER_SIZE
     mov edi, 5
     xor esi, esi
@@ -422,7 +422,7 @@ wayland_main:
     mov dword ptr [rip + payload_buffer + 12], HEIGHT
     mov dword ptr [rip + payload_buffer + 16], STRIDE
     mov dword ptr [rip + payload_buffer + 20], 1
-    mov edi, 10
+    mov edi, 11
     xor esi, esi
     lea rdx, [rip + payload_buffer]
     mov ecx, 24
@@ -431,7 +431,7 @@ wayland_main:
     js .protocol_error
 
     # The wl_buffer retains the backing storage; release the pool object.
-    mov edi, 10
+    mov edi, 11
     mov esi, 1                  # wl_shm_pool.destroy
     xor edx, edx
     xor ecx, ecx
@@ -445,7 +445,7 @@ wayland_main:
     mov dword ptr [rip + payload_buffer], 12
     mov dword ptr [rip + payload_buffer + 4], 0
     mov dword ptr [rip + payload_buffer + 8], 0
-    mov edi, 7
+    mov edi, 8
     mov esi, 1
     lea rdx, [rip + payload_buffer]
     mov ecx, 12
@@ -458,7 +458,7 @@ wayland_main:
     mov dword ptr [rip + payload_buffer + 4], 0
     mov dword ptr [rip + payload_buffer + 8], WIDTH
     mov dword ptr [rip + payload_buffer + 12], HEIGHT
-    mov edi, 7
+    mov edi, 8
     mov esi, 2
     lea rdx, [rip + payload_buffer]
     mov ecx, 16
@@ -489,7 +489,7 @@ wayland_main:
     call handle_xdg_ping
     jmp .event_loop
 .check_toplevel_close:
-    cmp dword ptr [rip + last_object], 9
+    cmp dword ptr [rip + last_object], 10
     jne .event_loop
     cmp dword ptr [rip + last_opcode], 1
     jne .event_loop
