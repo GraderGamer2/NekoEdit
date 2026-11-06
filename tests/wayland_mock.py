@@ -258,7 +258,11 @@ def run(
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                clicked_caret_x = 24 if initial_file is not None else 16
+                clicked_caret_column = (
+                    min(10, os.path.getsize(initial_file))
+                    if initial_file is not None else 0
+                )
+                clicked_caret_x = 16 + clicked_caret_column * 8
                 if struct.unpack_from("<I", pixels, 92 * 800 * 4 + clicked_caret_x * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document click did not keep the caret visible after clamping to the document")
                 observations.append("document-area click was routed to the editor and safely redrew the buffer")
