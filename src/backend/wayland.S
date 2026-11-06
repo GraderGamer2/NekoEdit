@@ -34,7 +34,8 @@
 .equ REPEAT_MAX_RATE, 1000
 .equ DOC_CAPACITY,    65536
 .equ DOC_LEFT,           16
-.equ DOC_TOP,           164
+.equ DOC_TOP,            92
+.equ STATUS_TOP,         460
 .equ CELL_WIDTH,          8
 .equ LINE_HEIGHT,        12
 .equ DOC_COLUMNS,        ((WIDTH - DOC_LEFT - 8) / CELL_WIDTH)
@@ -46,6 +47,12 @@ wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
 empty_document_hint:   .asciz "TYPE HERE..."
+ui_app_name:           .asciz "NekoEdit"
+ui_document_name:      .asciz "Untitled"
+ui_mode_name:          .asciz "ASCII"
+ui_label_line:         .asciz "Ln "
+ui_label_column:       .asciz ", Col "
+ui_label_bytes:        .asciz "Bytes "
 wayland_title:         .asciz "NekoEdit - development window"
 memfd_label:           .asciz "nekoedit-shm"
 iface_compositor:      .asciz "wl_compositor"
@@ -176,7 +183,6 @@ keyboard_object:        .long 0
 keyboard_focused:       .long 0
 next_input_object:      .long 0
 seat_capabilities:      .long 0
-palette_selection:      .long 0
 pointer_button_down:    .long 0
 doc_selection_active:   .long 0
 doc_selection_anchor:   .long 0
@@ -823,43 +829,10 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
-    # Palette occupies its own hit-test band. A click elsewhere is routed
-    # to the document area below rather than silently discarded.
-    cmp edx, 96
-    jl .pointer_document_click
-    cmp edx, 144
-    jge .pointer_document_click
-    cmp eax, 80
-    jl .palette_second
-    cmp eax, 128
-    jge .palette_second
-    cmp dword ptr [rip + palette_selection], 0
-    je .event_loop
-    mov dword ptr [rip + palette_selection], 0
-    jmp .palette_changed
-.palette_second:
-    cmp eax, 160
-    jl .palette_third
-    cmp eax, 208
-    jge .palette_third
-    cmp dword ptr [rip + palette_selection], 1
-    je .event_loop
-    mov dword ptr [rip + palette_selection], 1
-    jmp .palette_changed
-.palette_third:
-    cmp eax, 240
-    jl .event_loop
-    cmp eax, 288
-    jge .event_loop
-    cmp dword ptr [rip + palette_selection], 2
-    je .event_loop
-    mov dword ptr [rip + palette_selection], 2
-    jmp .palette_changed
-
 .pointer_document_click:
     cmp edx, DOC_TOP
     jl .event_loop
-    cmp edx, HEIGHT
+    cmp edx, HEIGHT - 20
     jae .event_loop
     test eax, eax
     js .event_loop
@@ -873,348 +846,6 @@ wayland_main:
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
     jmp .keyboard_changed
-
-.palette_changed:
-    mov dword ptr [rip + redraw_pending], 1
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .event_loop
-    call present_buffer
-    test rax, rax
-    js .protocol_error
-    jmp .event_loop
-.check_keyboard_event:
-    mov eax, dword ptr [rip + keyboard_object]
-    test eax, eax
-    jz .check_toplevel_close
-    cmp dword ptr [rip + last_object], eax
-    jne .check_toplevel_close
-    cmp dword ptr [rip + last_opcode], 1
-    je .keyboard_enter
-    cmp dword ptr [rip + last_opcode], 2
-    je .keyboard_leave
-    cmp dword ptr [rip + last_opcode], 3
-    je .keyboard_key
-    cmp dword ptr [rip + last_opcode], 4
-    je .keyboard_modifiers
-    cmp dword ptr [rip + last_opcode], 5
-    je .keyboard_repeat_info
-    # The XKB keymap FD is still deferred; modifier and repeat settings are
-    # consumed below so input follows the compositor's active configuration.
-    jmp .event_loop
-.event_repeat_timer:
-    mov edi, dword ptr [rip + repeat_timer_fd]
-    lea rsi, [rip + repeat_timer_read]
-    mov edx, 8
-    call linux_read_exact
-    test rax, rax
-    js .protocol_error
-    cmp dword ptr [rip + repeat_keycode], 0
-    je .event_loop
-    cmp dword ptr [rip + keyboard_focused], 1
-    jne .event_repeat_cancel
-    mov eax, dword ptr [rip + repeat_keycode]
-    mov edx, 1
-    jmp .keyboard_non_modifier
-.event_repeat_cancel:
-    call repeat_cancel
-    jmp .event_loop
-
-.keyboard_repeat_info:
-    cmp dword ptr [rip + last_size], 8
-    jb .event_loop
-    # wl_keyboard.repeat_info(rate, delay). Negative values violate the
-    # protocol; a zero rate disables client-side repetition.
-    mov eax, dword ptr [rip + event_payload]
-    test eax, eax
-    js .protocol_error
-    mov edx, dword ptr [rip + event_payload + 4]
-    test edx, edx
-    js .protocol_error
-    # Defend the timerfd path against pathological rates while preserving
-    # practical compositor settings (the normal desktop range is far lower).
-    cmp eax, REPEAT_MAX_RATE
-    jbe .Lneko_repeat_rate_capped
-    mov eax, REPEAT_MAX_RATE
-.Lneko_repeat_rate_capped:
-    mov dword ptr [rip + repeat_rate], eax
-    mov dword ptr [rip + repeat_delay_ms], edx
-    test eax, eax
-    jnz .Lneko_repeat_info_reconfigure
-    call repeat_cancel
-    jmp .event_loop
-.Lneko_repeat_info_reconfigure:
-    mov eax, dword ptr [rip + repeat_keycode]
-    test eax, eax
-    jz .event_loop
-    # A changed rate/delay takes effect for the currently held key too.
-    call repeat_start_if_supported
-    jmp .event_loop
-
-.keyboard_modifiers:
-    cmp dword ptr [rip + last_size], 20
-    jb .event_loop
-    # wl_keyboard.modifiers: serial, depressed, latched, locked, group.
-    mov eax, dword ptr [rip + event_payload + 4]
-    or eax, dword ptr [rip + event_payload + 8]
-    test eax, 1
-    setnz al
-    movzx eax, al
-    mov dword ptr [rip + shift_down], eax
-    mov eax, dword ptr [rip + event_payload + 12]
-    and eax, 2
-    shr eax, 1
-    mov dword ptr [rip + caps_lock], eax
-    # The standard XKB Control modifier is bit 2. Physical Ctrl key
-    # transitions below are also tracked so this works before a modifier
-    # update is delivered and when a compositor omits modifier events.
-    mov eax, dword ptr [rip + event_payload + 4]
-    or eax, dword ptr [rip + event_payload + 8]
-    and eax, 4
-    setnz al
-    movzx eax, al
-    mov dword ptr [rip + ctrl_down], eax
-    jmp .event_loop
-.keyboard_enter:
-    cmp dword ptr [rip + last_size], 12
-    jb .event_loop
-    cmp dword ptr [rip + event_payload + 4], 8
-    jne .event_loop
-    mov dword ptr [rip + keyboard_focused], 1
-    jmp .event_loop
-.keyboard_leave:
-    cmp dword ptr [rip + last_size], 8
-    jb .event_loop
-    mov dword ptr [rip + keyboard_focused], 0
-    mov dword ptr [rip + ctrl_down], 0
-    call repeat_cancel
-    jmp .event_loop
-.keyboard_key:
-    cmp dword ptr [rip + last_size], 16
-    jb .event_loop
-    cmp dword ptr [rip + keyboard_focused], 1
-    jne .event_loop
-    mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
-    mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
-    cmp eax, 29
-    je .keyboard_control
-    cmp eax, 97
-    je .keyboard_control
-    cmp eax, 42
-    je .keyboard_shift
-    cmp eax, 54
-    je .keyboard_shift
-    test edx, edx
-    jz .keyboard_key_release
-    cmp eax, 58
-    jne .keyboard_key_pressed
-    xor dword ptr [rip + caps_lock], 1
-    jmp .keyboard_changed
-.keyboard_key_pressed:
-    call repeat_start_if_supported
-    mov eax, dword ptr [rip + event_payload + 8]
-    mov edx, 1
-    jmp .keyboard_non_modifier
-.keyboard_key_release:
-    cmp eax, dword ptr [rip + repeat_keycode]
-    jne .event_loop
-    call repeat_cancel
-    jmp .event_loop
-.keyboard_shift:
-    mov dword ptr [rip + shift_down], edx
-    jmp .event_loop
-.keyboard_control:
-    mov dword ptr [rip + ctrl_down], edx
-    jmp .event_loop
-.keyboard_non_modifier:
-    test edx, edx
-    jz .event_loop
-    cmp dword ptr [rip + ctrl_down], 0
-    je .keyboard_unmodified
-    cmp eax, 30
-    je .keyboard_select_all
-.keyboard_unmodified:
-    cmp eax, 105
-    je .keyboard_left
-    cmp eax, 106
-    je .keyboard_right
-    cmp eax, 103
-    je .keyboard_up
-    cmp eax, 108
-    je .keyboard_down
-    cmp eax, 102
-    je .keyboard_home
-    cmp eax, 107
-    je .keyboard_end
-    cmp eax, 14
-    je .keyboard_backspace
-    cmp eax, 111
-    je .keyboard_delete
-    cmp eax, 28
-    je .keyboard_enter_key
-    cmp eax, 15
-    je .keyboard_tab
-    mov edi, eax
-    call keycode_to_ascii
-    test eax, eax
-    jz .event_loop
-    mov r12d, eax
-    call doc_delete_selection
-    mov edi, r12d
-    call doc_insert_byte
-    jmp .keyboard_changed
-.keyboard_select_all:
-    # Ctrl+A selects the full document using the same anchor/cursor model
-    # as Shift+navigation and pointer dragging.
-    mov dword ptr [rip + doc_selection_anchor], 0
-    mov eax, dword ptr [rip + doc_length]
-    mov dword ptr [rip + doc_cursor], eax
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.keyboard_left:
-    cmp dword ptr [rip + shift_down], 0
-    jne .Lneko_keyboard_left_extend
-    cmp dword ptr [rip + doc_selection_active], 0
-    je .Lneko_keyboard_left_plain
-    mov eax, dword ptr [rip + doc_selection_anchor]
-    mov edx, dword ptr [rip + doc_cursor]
-    cmp eax, edx
-    jbe .Lneko_keyboard_left_collapse
-    mov eax, edx
-.Lneko_keyboard_left_collapse:
-    mov dword ptr [rip + doc_cursor], eax
-    call doc_clear_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_left_plain:
-    cmp dword ptr [rip + doc_cursor], 0
-    je .event_loop
-    dec dword ptr [rip + doc_cursor]
-    jmp .keyboard_changed
-.Lneko_keyboard_left_extend:
-    call doc_begin_keyboard_selection
-    cmp dword ptr [rip + doc_cursor], 0
-    je .Lneko_keyboard_left_extend_finish
-    dec dword ptr [rip + doc_cursor]
-.Lneko_keyboard_left_extend_finish:
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.keyboard_right:
-    cmp dword ptr [rip + shift_down], 0
-    jne .Lneko_keyboard_right_extend
-    cmp dword ptr [rip + doc_selection_active], 0
-    je .Lneko_keyboard_right_plain
-    mov eax, dword ptr [rip + doc_selection_anchor]
-    mov edx, dword ptr [rip + doc_cursor]
-    cmp eax, edx
-    jae .Lneko_keyboard_right_collapse
-    mov eax, edx
-.Lneko_keyboard_right_collapse:
-    mov dword ptr [rip + doc_cursor], eax
-    call doc_clear_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_right_plain:
-    mov eax, dword ptr [rip + doc_cursor]
-    cmp eax, dword ptr [rip + doc_length]
-    jae .event_loop
-    inc dword ptr [rip + doc_cursor]
-    jmp .keyboard_changed
-.Lneko_keyboard_right_extend:
-    call doc_begin_keyboard_selection
-    mov eax, dword ptr [rip + doc_cursor]
-    cmp eax, dword ptr [rip + doc_length]
-    jae .Lneko_keyboard_right_extend_finish
-    inc dword ptr [rip + doc_cursor]
-.Lneko_keyboard_right_extend_finish:
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.keyboard_up:
-    cmp dword ptr [rip + shift_down], 0
-    je .Lneko_keyboard_up_plain
-    call doc_begin_keyboard_selection
-    xor edi, edi
-    call doc_move_vertical
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_up_plain:
-    xor edi, edi
-    call doc_move_vertical
-    call doc_clear_selection
-    jmp .keyboard_changed
-.keyboard_down:
-    cmp dword ptr [rip + shift_down], 0
-    je .Lneko_keyboard_down_plain
-    call doc_begin_keyboard_selection
-    mov edi, 1
-    call doc_move_vertical
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_down_plain:
-    mov edi, 1
-    call doc_move_vertical
-    call doc_clear_selection
-    jmp .keyboard_changed
-.keyboard_home:
-    cmp dword ptr [rip + shift_down], 0
-    je .Lneko_keyboard_home_plain
-    call doc_begin_keyboard_selection
-    xor edi, edi
-    call doc_move_line_edge
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_home_plain:
-    xor edi, edi
-    call doc_move_line_edge
-    call doc_clear_selection
-    jmp .keyboard_changed
-.keyboard_end:
-    cmp dword ptr [rip + shift_down], 0
-    je .Lneko_keyboard_end_plain
-    call doc_begin_keyboard_selection
-    mov edi, 1
-    call doc_move_line_edge
-    call doc_finish_keyboard_selection
-    jmp .keyboard_changed
-.Lneko_keyboard_end_plain:
-    mov edi, 1
-    call doc_move_line_edge
-    call doc_clear_selection
-    jmp .keyboard_changed
-.keyboard_backspace:
-    cmp dword ptr [rip + doc_selection_active], 0
-    jne .Lneko_keyboard_backspace_selection
-    cmp dword ptr [rip + doc_cursor], 0
-    je .event_loop
-    dec dword ptr [rip + doc_cursor]
-    call doc_delete_at_cursor
-    jmp .keyboard_changed
-.Lneko_keyboard_backspace_selection:
-    call doc_delete_selection
-    jmp .keyboard_changed
-.keyboard_delete:
-    cmp dword ptr [rip + doc_selection_active], 0
-    jne .Lneko_keyboard_delete_selection
-    mov eax, dword ptr [rip + doc_cursor]
-    cmp eax, dword ptr [rip + doc_length]
-    jae .event_loop
-    call doc_delete_at_cursor
-    jmp .keyboard_changed
-.Lneko_keyboard_delete_selection:
-    call doc_delete_selection
-    jmp .keyboard_changed
-.keyboard_enter_key:
-    call doc_delete_selection
-    mov edi, 10
-    call doc_insert_byte
-    jmp .keyboard_changed
-.keyboard_tab:
-    call doc_delete_selection
-    mov edi, 32
-    call doc_insert_byte
-    mov edi, 32
-    call doc_insert_byte
-    mov edi, 32
-    call doc_insert_byte
-    mov edi, 32
-    call doc_insert_byte
 .keyboard_changed:
     call doc_ensure_cursor_visible
     mov dword ptr [rip + redraw_pending], 1
@@ -1755,6 +1386,7 @@ draw_rect:
 .type render_surface, @function
 render_surface:
     push rbp
+    # Main application background.
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     xor edx, edx
@@ -1762,85 +1394,54 @@ render_surface:
     mov r8d, HEIGHT
     mov r9d, 0xff252a33
     call draw_rect
+
+    # Compact title bar with a narrow accent rail.
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     xor edx, edx
     mov ecx, WIDTH
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, 3
+    mov r8d, 32
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 16
+    mov esi, 12
+    lea rdx, [rip + ui_app_name]
+    call draw_text
+    mov edi, 744
+    mov esi, 12
+    lea rdx, [rip + ui_mode_name]
+    call draw_text
+
+    # A single active scratch-document tab replaces the temporary palette.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 8
+    mov edx, 40
+    mov ecx, 152
     mov r8d, 36
     mov r9d, 0xff343d4b
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 48
-    xor edx, edx
-    mov ecx, 4
-    mov r8d, 4
+    mov esi, 8
+    mov edx, 74
+    mov ecx, 152
+    mov r8d, 2
     mov r9d, 0xff78a9d4
     call draw_rect
+    mov edi, 24
+    mov esi, 54
+    lea rdx, [rip + ui_document_name]
+    call draw_text
 
-    cmp dword ptr [rip + palette_selection], 0
-    jne .render_tile0_idle
-    mov r9d, 0xffffffff
-    jmp .render_tile0_border
-.render_tile0_idle:
-    mov r9d, 0xff596273
-.render_tile0_border:
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 77
-    mov edx, 93
-    mov ecx, 54
-    mov r8d, 54
-    call draw_rect
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 80
-    mov edx, 96
-    mov ecx, 48
-    mov r8d, 48
-    mov r9d, 0xff78a9d4
-    call draw_rect
-
-    cmp dword ptr [rip + palette_selection], 1
-    jne .render_tile1_idle
-    mov r9d, 0xffffffff
-    jmp .render_tile1_border
-.render_tile1_idle:
-    mov r9d, 0xff596273
-.render_tile1_border:
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 157
-    mov edx, 93
-    mov ecx, 54
-    mov r8d, 54
-    call draw_rect
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 160
-    mov edx, 96
-    mov ecx, 48
-    mov r8d, 48
-    mov r9d, 0xffe09f7d
-    call draw_rect
-
-    cmp dword ptr [rip + palette_selection], 2
-    jne .render_tile2_idle
-    mov r9d, 0xffffffff
-    jmp .render_tile2_border
-.render_tile2_idle:
-    mov r9d, 0xff596273
-.render_tile2_border:
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 237
-    mov edx, 93
-    mov ecx, 54
-    mov r8d, 54
-    call draw_rect
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 240
-    mov edx, 96
-    mov ecx, 48
-    mov r8d, 48
-    mov r9d, 0xff9dc58a
-    call draw_rect
     call render_selection
     call render_document
+    call render_status_bar
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -2604,6 +2205,176 @@ draw_glyph:
     pop rbx
     ret
 .size draw_glyph, . - draw_glyph
+
+# Draw a NUL-terminated ASCII label. EDI=x, ESI=y, RDX=string; EAX=next x.
+.type draw_text, @function
+draw_text:
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    mov r13d, esi
+    mov rbx, rdx
+.Lneko_draw_text_loop:
+    movzx edx, byte ptr [rbx]
+    test edx, edx
+    jz .Lneko_draw_text_done
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+    add r12d, CELL_WIDTH
+    inc rbx
+    jmp .Lneko_draw_text_loop
+.Lneko_draw_text_done:
+    mov eax, r12d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_text, . - draw_text
+
+# Draw an unsigned decimal value. EAX=value, EDI=x, ESI=y; returns next x.
+.type draw_decimal, @function
+draw_decimal:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 16
+    mov r13d, edi
+    mov r14d, esi
+    mov ebx, eax
+    lea r12, [rsp + 15]
+    mov byte ptr [r12], 0
+.Lneko_draw_decimal_convert:
+    mov eax, ebx
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    add dl, '0'
+    dec r12
+    mov byte ptr [r12], dl
+    mov ebx, eax
+    test ebx, ebx
+    jnz .Lneko_draw_decimal_convert
+.Lneko_draw_decimal_paint:
+    movzx edx, byte ptr [r12]
+    test edx, edx
+    jz .Lneko_draw_decimal_done
+    mov edi, r13d
+    mov esi, r14d
+    call draw_glyph
+    add r13d, CELL_WIDTH
+    inc r12
+    jmp .Lneko_draw_decimal_paint
+.Lneko_draw_decimal_done:
+    mov eax, r13d
+    add rsp, 16
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size draw_decimal, . - draw_decimal
+
+# Render the live logical line/column and current byte count in the footer.
+# Columns are one-based; tabs advance to the next four-column stop.
+.type render_status_bar, @function
+render_status_bar:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, STATUS_TOP
+    mov ecx, WIDTH
+    mov r8d, HEIGHT - STATUS_TOP
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, STATUS_TOP
+    mov ecx, WIDTH
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+    # Derive logical line and column from the cursor's byte offset.
+    mov ebx, dword ptr [rip + doc_cursor]
+    cmp ebx, dword ptr [rip + doc_length]
+    jbe .Lneko_status_cursor_bounded
+    mov ebx, dword ptr [rip + doc_length]
+.Lneko_status_cursor_bounded:
+    lea r12, [rip + doc_buffer]
+    xor r14d, r14d
+    mov r13d, 1
+    mov ebp, 1
+.Lneko_status_scan:
+    cmp r14d, ebx
+    jae .Lneko_status_scan_done
+    movzx eax, byte ptr [r12 + r14]
+    cmp eax, 10
+    je .Lneko_status_newline
+    cmp eax, 9
+    je .Lneko_status_tab
+    inc ebp
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_newline:
+    inc r13d
+    mov ebp, 1
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_tab:
+    dec ebp
+    add ebp, 4
+    and ebp, -4
+    inc ebp
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_scan_done:
+    mov edi, 16
+    mov esi, 466
+    lea rdx, [rip + ui_label_line]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, r13d
+    call draw_decimal
+    add eax, 4
+    mov edi, eax
+    mov esi, 466
+    lea rdx, [rip + ui_label_column]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, ebp
+    call draw_decimal
+
+    mov edi, 480
+    mov esi, 466
+    lea rdx, [rip + ui_label_bytes]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, dword ptr [rip + doc_length]
+    call draw_decimal
+    mov edi, 744
+    mov esi, 466
+    lea rdx, [rip + ui_mode_name]
+    call draw_text
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size render_status_bar, . - render_status_bar
+
 
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
