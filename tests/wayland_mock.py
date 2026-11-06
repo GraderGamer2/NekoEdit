@@ -196,14 +196,17 @@ def run(
                 raise AssertionError("window title was not serialized as a Wayland string")
             expect_message(client, (8, 6, b""), "initial surface commit")
 
-            client.sendall(wire_message(9, 0, struct.pack("<I", 1234)))
+            client.sendall(
+                wire_message(10, 0, struct.pack("<iiI", 800, 480, 0))
+                + wire_message(9, 0, struct.pack("<I", 1234))
+            )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
 
             pool = recv_wayland_message(client)
             if pool[0:2] != (5, 0) or len(pool[3]) != 1:
                 raise AssertionError(f"wl_shm.create_pool did not transfer exactly one fd: {pool!r}")
             pool_id, buffer_size = struct.unpack("<II", pool[2])
-            expected_size = 800 * 480 * 4
+            expected_size = 3840 * 2160 * 4
             if (pool_id, buffer_size) != (11, expected_size):
                 raise AssertionError(f"unexpected shm pool args: {(pool_id, buffer_size)!r}")
             shm_fd = pool[3][0]
@@ -216,6 +219,18 @@ def run(
                     raise AssertionError("expected title-bar background was not rendered")
                 if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
                     raise AssertionError("expected title-bar accent rail was not rendered")
+                for button_x, expected_color, button_name in (
+                    (696, 0xFF414B5A, "minimize"),
+                    (728, 0xFF414B5A, "maximize"),
+                    (760, 0xFF754B52, "close"),
+                ):
+                    button_pixel = struct.unpack_from(
+                        "<I", pixels, 4 * 800 * 4 + button_x * 4
+                    )[0]
+                    if button_pixel != expected_color:
+                        raise AssertionError(
+                            f"{button_name} window control was not rendered: {hex(button_pixel)}"
+                        )
                 if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
                     raise AssertionError("active document tab underline was not rendered")
                 if struct.unpack_from("<I", pixels, 460 * 800 * 4)[0] != 0xFF78A9D4:
@@ -239,7 +254,6 @@ def run(
                     (11, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
                     "create wl_buffer",
                 )
-                expect_message(client, (11, 1, b""), "destroy shm pool")
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
@@ -724,6 +738,35 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_redraw(label)
                     client.sendall(wire_message(12, 0))
 
+                def workflow_window_click(
+                    x: int, serial: int, request_opcode: int, label: str,
+                    buffer_id: int = 12, width: int = 800, height: int = 480,
+                ) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, 12 * 256))
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
+                        )
+                    )
+                    expect_message(
+                        client, (10, request_opcode, b""), f"{label}: xdg_toplevel request"
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", buffer_id, 0, 0)),
+                        f"{label}: attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, width, height)),
+                        f"{label}: damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label}: commit")
+                    client.sendall(
+                        wire_message(
+                            15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
+                        )
+                        + wire_message(buffer_id, 0)
+                    )
+
                 def workflow_scrollbar_drag(
                     start_x: int, start_y: int, end_x: int, end_y: int,
                     serial: int, label: str
@@ -943,7 +986,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -1476,7 +1519,118 @@ xkb_symbols "nekoedit-sparse" {
                         "partial filename input renders multiple autocomplete recommendations; mouse/keyboard selection is supported and Enter opens the highlighted exact file"
                     )
 
-                    client.sendall(wire_message(10, 1))
+                    # Minimize is a real xdg_toplevel request, not a decorative
+                    # titlebar control. The normal buffer remains valid after it.
+                    workflow_window_click(708, serial + 10, 13, "minimize")
+                    window_state = picker_state()
+                    if (
+                        window_state.get("window_width") != 800
+                        or window_state.get("window_height") != 480
+                        or window_state.get("window_buffer_id") != 12
+                    ):
+                        raise AssertionError(f"minimize changed client buffer geometry: {window_state!r}")
+                    observations.append("titlebar Minimize emits xdg_toplevel.set_minimized")
+
+                    # Maximize: the compositor configures a larger surface. The
+                    # client must ack, destroy the released old buffer, create
+                    # a correctly sized buffer from the retained shm pool, and
+                    # repaint it using the new stride.
+                    workflow_window_click(740, serial + 20, 9, "maximize")
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiII", 1280, 720, 4, 1))
+                        + wire_message(9, 0, struct.pack("<I", 1235))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1235)), "ack maximized configure"
+                    )
+                    expect_message(client, (12, 0, b""), "destroy released pre-maximize buffer")
+                    expect_message(
+                        client,
+                        (11, 0, struct.pack("<6I", 256, 0, 1280, 720, 5120, 1)),
+                        "create maximized buffer",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 256, 0, 0)),
+                        "attach maximized buffer",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 1280, 720)),
+                        "damage maximized surface",
+                    )
+                    expect_message(client, (8, 6, b""), "commit maximized surface")
+                    max_state = picker_state()
+                    if (
+                        max_state.get("window_width") != 1280
+                        or max_state.get("window_height") != 720
+                        or max_state.get("window_stride") != 5120
+                        or max_state.get("window_buffer_id") != 256
+                        or max_state.get("window_is_maximized") != 1
+                    ):
+                        raise AssertionError(f"maximized configure was not applied: {max_state!r}")
+                    max_close_pixel = struct.unpack_from("<I", pixels, 4 * 5120 + 1240 * 4)[0]
+                    if max_close_pixel != 0xFF754B52:
+                        raise AssertionError(
+                            f"window controls did not follow the maximized width: {hex(max_close_pixel)}"
+                        )
+                    observations.append(
+                        "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
+                    )
+
+                    # Restore asks the compositor to leave the maximized state;
+                    # the returned configure replaces the large buffer safely.
+                    workflow_window_click(
+                        1220, serial + 30, 10, "restore",
+                        buffer_id=256, width=1280, height=720,
+                    )
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiI", 800, 480, 0))
+                        + wire_message(9, 0, struct.pack("<I", 1236))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1236)), "ack restored configure"
+                    )
+                    expect_message(client, (256, 0, b""), "destroy released maximized buffer")
+                    expect_message(
+                        client,
+                        (11, 0, struct.pack("<6I", 257, 0, 800, 480, 3200, 1)),
+                        "create restored buffer",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 257, 0, 0)),
+                        "attach restored buffer",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)),
+                        "damage restored surface",
+                    )
+                    expect_message(client, (8, 6, b""), "commit restored surface")
+                    restored_state = picker_state()
+                    if (
+                        restored_state.get("window_width") != 800
+                        or restored_state.get("window_height") != 480
+                        or restored_state.get("window_buffer_id") != 257
+                        or restored_state.get("window_is_maximized") != 0
+                    ):
+                        raise AssertionError(f"restore configure was not applied: {restored_state!r}")
+                    client.sendall(wire_message(257, 0))
+                    observations.append(
+                        "Restore acknowledges the compositor's normal size and replaces the maximized buffer"
+                    )
+
+                    # The app's own Close control exits cleanly; no terminal
+                    # shutdown or synthetic xdg_toplevel.close is required.
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 40, 772 * 256, 12 * 256))
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 41, serial + 42, 0x110, 1)
+                        )
+                    )
+                    closed = client.recv(1)
+                    if closed != b"":
+                        raise AssertionError(
+                            f"titlebar Close did not terminate the Wayland client: {closed!r}"
+                        )
+                    observations.append("titlebar Close closes the Wayland connection and exits the application")
                     return
 
                 if sparse_keymap_test:

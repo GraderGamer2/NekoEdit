@@ -50,6 +50,11 @@
 .equ HEIGHT,           480
 .equ STRIDE,           (WIDTH * 4)
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
+.equ MAX_WINDOW_WIDTH, 3840
+.equ MAX_WINDOW_HEIGHT, 2160
+.equ SHM_BUFFER_CAPACITY, (MAX_WINDOW_WIDTH * MAX_WINDOW_HEIGHT * 4)
+.equ WINDOW_MIN_WIDTH, 480
+.equ WINDOW_MIN_HEIGHT, 360
 .equ BTN_LEFT,          0x110
 .equ CLOCK_MONOTONIC,      1
 .equ TFD_CLOEXEC,     0x80000
@@ -261,6 +266,19 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
+.global window_width, window_height, window_stride, window_status_top, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized
+window_width:           .long 0
+window_height:          .long 0
+window_stride:          .long 0
+window_status_top:      .long 0
+window_doc_columns:     .long 0
+window_doc_visible_rows: .long 0
+window_buffer_id:       .long 0
+window_next_buffer_id:  .long 0
+window_pending_width:   .long 0
+window_pending_height:  .long 0
+window_resize_pending:  .long 0
+window_is_maximized:    .long 0
 failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
@@ -403,6 +421,15 @@ recv_msg_control:      .zero 64
 wayland_main:
     push rbp                    # keep 16-byte call-site stack alignment
     mov dword ptr [rip + event_fd], -1
+    mov dword ptr [rip + window_width], WIDTH
+    mov dword ptr [rip + window_height], HEIGHT
+    mov dword ptr [rip + window_buffer_id], 12
+    mov dword ptr [rip + window_next_buffer_id], 256
+    mov dword ptr [rip + window_pending_width], 0
+    mov dword ptr [rip + window_pending_height], 0
+    mov dword ptr [rip + window_resize_pending], 0
+    mov dword ptr [rip + window_is_maximized], 0
+    call window_update_geometry
     call load_initial_document
     test rax, rax
     js .initial_file_error
@@ -663,10 +690,19 @@ wayland_main:
     test rax, rax
     js .protocol_error
     cmp dword ptr [rip + last_object], 6
+    jne .configure_check_toplevel
+    cmp dword ptr [rip + last_opcode], 0
+    jne .configure_check_toplevel
+    call handle_xdg_ping
+    jmp .wait_configure
+.configure_check_toplevel:
+    cmp dword ptr [rip + last_object], 10
     jne .configure_check_surface
     cmp dword ptr [rip + last_opcode], 0
-    jne .configure_check_surface
-    call handle_xdg_ping
+    jne .wait_configure
+    call window_capture_toplevel_configure
+    test rax, rax
+    js .protocol_error
     jmp .wait_configure
 .configure_check_surface:
     cmp dword ptr [rip + last_object], 9
@@ -683,6 +719,7 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
+    call window_commit_initial_size
 
     lea rax, [rip + stage_memfd]
     mov qword ptr [rip + failure_stage], rax
@@ -697,14 +734,14 @@ wayland_main:
 
     mov eax, SYS_ftruncate
     mov rdi, qword ptr [rip + shm_fd]
-    mov esi, BUFFER_SIZE
+    mov esi, SHM_BUFFER_CAPACITY
     syscall
     test rax, rax
     js .protocol_error
 
     mov eax, SYS_mmap
     xor edi, edi
-    mov esi, BUFFER_SIZE
+    mov esi, SHM_BUFFER_CAPACITY
     mov edx, PROT_READ | PROT_WRITE
     mov r10d, MAP_SHARED
     mov r8, qword ptr [rip + shm_fd]
@@ -722,7 +759,7 @@ wayland_main:
     mov qword ptr [rip + failure_stage], rax
     # wl_shm.create_pool(new_id=11, fd, size=BUFFER_SIZE)
     mov dword ptr [rip + payload_buffer], 11
-    mov dword ptr [rip + payload_buffer + 4], BUFFER_SIZE
+    mov dword ptr [rip + payload_buffer + 4], SHM_BUFFER_CAPACITY
     mov edi, 5
     xor esi, esi
     lea rdx, [rip + payload_buffer]
@@ -737,9 +774,12 @@ wayland_main:
     # wl_shm_pool.create_buffer(new_id=12, offset=0, width, height, stride, XRGB8888=1)
     mov dword ptr [rip + payload_buffer], 12
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov dword ptr [rip + payload_buffer + 8], WIDTH
-    mov dword ptr [rip + payload_buffer + 12], HEIGHT
-    mov dword ptr [rip + payload_buffer + 16], STRIDE
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov eax, dword ptr [rip + window_stride]
+    mov dword ptr [rip + payload_buffer + 16], eax
     mov dword ptr [rip + payload_buffer + 20], 1
     mov edi, 11
     xor esi, esi
@@ -749,19 +789,14 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
-    # The wl_buffer retains the backing storage; release the pool object.
-    mov edi, 11
-    mov esi, 1                  # wl_shm_pool.destroy
-    xor edx, edx
-    xor ecx, ecx
-    call wl_send_request
-    test rax, rax
-    js .protocol_error
+    # Keep wl_shm_pool 11 alive so future configure events can allocate
+    # size-specific wl_buffer objects from the same bounded mapping.
 
     lea rax, [rip + stage_attach]
     mov qword ptr [rip + failure_stage], rax
-    # wl_surface.attach(buffer=12, x=0, y=0)
-    mov dword ptr [rip + payload_buffer], 12
+    # wl_surface.attach(current buffer, x=0, y=0)
+    mov eax, dword ptr [rip + window_buffer_id]
+    mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
     mov dword ptr [rip + payload_buffer + 8], 0
     mov edi, 8
@@ -775,8 +810,10 @@ wayland_main:
     # wl_surface.damage(0,0,WIDTH,HEIGHT)
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov dword ptr [rip + payload_buffer + 8], WIDTH
-    mov dword ptr [rip + payload_buffer + 12], HEIGHT
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
     mov edi, 8
     mov esi, 2
     lea rdx, [rip + payload_buffer]
@@ -840,7 +877,8 @@ wayland_main:
     js .protocol_error
     jmp .seat_check_sync
 .seat_check_buffer_release:
-    cmp dword ptr [rip + last_object], 12
+    mov eax, dword ptr [rip + window_buffer_id]
+    cmp dword ptr [rip + last_object], eax
     jne .seat_check_sync
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_sync
@@ -901,14 +939,22 @@ wayland_main:
     call handle_xdg_ping
     jmp .event_loop
 .check_buffer_release:
-    cmp dword ptr [rip + last_object], 12
+    mov eax, dword ptr [rip + window_buffer_id]
+    cmp dword ptr [rip + last_object], eax
     jne .check_seat_event
     cmp dword ptr [rip + last_opcode], 0
     jne .check_seat_event
     mov dword ptr [rip + buffer_busy], 0
+    cmp dword ptr [rip + window_resize_pending], 0
+    jne .event_apply_window_resize
     cmp dword ptr [rip + redraw_pending], 0
     je .event_loop
     call present_buffer
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.event_apply_window_resize:
+    call window_apply_pending_resize
     test rax, rax
     js .protocol_error
     jmp .event_loop
@@ -970,12 +1016,12 @@ wayland_main:
     mov eax, dword ptr [rip + pointer_y]
     cmp eax, DOC_TOP
     jl .event_loop
-    cmp eax, HEIGHT
+    cmp eax, dword ptr [rip + window_height]
     jae .event_loop
     mov eax, dword ptr [rip + pointer_x]
     test eax, eax
     js .event_loop
-    cmp eax, WIDTH
+    cmp eax, dword ptr [rip + window_width]
     ja .event_loop
     mov edi, eax
     mov esi, dword ptr [rip + pointer_y]
@@ -1057,9 +1103,62 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
-    # The File control is part of the application header.
+    # Minimize, maximize/restore, and close controls occupy the right edge
+    # of the app-drawn title bar; the File button remains on the left.
     cmp edx, 32
     jae .pointer_menu_rows
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 104
+    cmp eax, ecx
+    jb .pointer_header_file_menu
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 80
+    cmp eax, ecx
+    jb .pointer_window_minimize
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 72
+    cmp eax, ecx
+    jb .pointer_header_outside
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 48
+    cmp eax, ecx
+    jb .pointer_window_maximize
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 40
+    cmp eax, ecx
+    jb .pointer_header_outside
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 16
+    cmp eax, ecx
+    jb .pointer_window_close
+    jmp .pointer_header_outside
+.pointer_window_minimize:
+    mov edi, 10
+    mov esi, 13                 # xdg_toplevel.set_minimized
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+    jmp .keyboard_changed
+.pointer_window_maximize:
+    mov edi, 10
+    cmp dword ptr [rip + window_is_maximized], 0
+    jne .pointer_window_restore
+    mov esi, 9                  # xdg_toplevel.set_maximized
+    jmp .pointer_window_toggle_send
+.pointer_window_restore:
+    mov esi, 10                 # xdg_toplevel.unset_maximized
+.pointer_window_toggle_send:
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+    jmp .keyboard_changed
+.pointer_window_close:
+    call application_exit
+.pointer_header_file_menu:
     cmp eax, 104
     jb .pointer_header_outside
     cmp eax, 160
@@ -1102,11 +1201,13 @@ wayland_main:
 .pointer_document_click:
     cmp edx, DOC_TOP
     jl .event_loop
-    cmp edx, HEIGHT - 20
+    mov ecx, dword ptr [rip + window_height]
+    sub ecx, 20
+    cmp edx, ecx
     jae .event_loop
     test eax, eax
     js .event_loop
-    cmp eax, WIDTH
+    cmp eax, dword ptr [rip + window_width]
     ja .event_loop
     mov dword ptr [rip + pointer_button_down], 1
     mov edi, eax
@@ -1573,14 +1674,26 @@ wayland_main:
     jmp .event_loop
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
-    jne .event_loop
+    jne .check_xdg_surface_configure
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_toplevel_close_event
+    call window_capture_toplevel_configure
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.check_toplevel_close_event:
     cmp dword ptr [rip + last_opcode], 1
     jne .event_loop
-    mov rdi, qword ptr [rip + socket_fd]
-    mov eax, SYS_close
-    syscall
-    xor edi, edi
-    jmp linux_exit
+    call application_exit
+.check_xdg_surface_configure:
+    cmp dword ptr [rip + last_object], 9
+    jne .event_loop
+    cmp dword ptr [rip + last_opcode], 0
+    jne .event_loop
+    call window_handle_surface_configure
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
 
 .initial_file_error:
     mov edi, 2
@@ -4677,7 +4790,8 @@ draw_rect:
     jae .draw_rect_done
     mov eax, r13d
     add eax, r10d
-    imul rax, STRIDE
+    mov ecx, dword ptr [rip + window_stride]
+    imul rax, rcx
     mov edx, r12d
     shl edx, 2
     add rax, rdx
@@ -4705,8 +4819,8 @@ render_surface:
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     xor edx, edx
-    mov ecx, WIDTH
-    mov r8d, HEIGHT
+    mov ecx, dword ptr [rip + window_width]
+    mov r8d, dword ptr [rip + window_height]
     mov r9d, 0xff252a33
     call draw_rect
 
@@ -4714,7 +4828,7 @@ render_surface:
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     xor edx, edx
-    mov ecx, WIDTH
+    mov ecx, dword ptr [rip + window_width]
     mov r8d, 32
     mov r9d, 0xff343d4b
     call draw_rect
@@ -4735,19 +4849,22 @@ render_surface:
     jne .render_open_error
     cmp dword ptr [rip + doc_save_error], 0
     jne .render_save_error
-    mov edi, 744
+    mov edi, dword ptr [rip + window_width]
+    sub edi, 184
     mov esi, 12
     lea rdx, [rip + ui_mode_name]
     call draw_text
     jmp .render_file_button
 .render_open_error:
-    mov edi, 704
+    mov edi, dword ptr [rip + window_width]
+    sub edi, 192
     mov esi, 12
     lea rdx, [rip + ui_open_error]
     call draw_text
     jmp .render_file_button
 .render_save_error:
-    mov edi, 720
+    mov edi, dword ptr [rip + window_width]
+    sub edi, 192
     mov esi, 12
     lea rdx, [rip + ui_mode_error]
     call draw_text
@@ -4790,6 +4907,7 @@ render_surface:
     call render_document
     call render_status_bar
     call render_file_menu
+    call render_window_controls
     call render_path_prompt
     call render_picker
     pop rbp
@@ -4798,13 +4916,245 @@ render_surface:
 
 # Attach and repaint the one buffer, but only after wl_buffer.release.
 # RAX = 0 on success, negative on failure.
+# Window geometry is shared by rendering, hit-testing, and buffer allocation.
+.type window_update_geometry, @function
+window_update_geometry:
+    mov eax, dword ptr [rip + window_width]
+    shl eax, 2
+    mov dword ptr [rip + window_stride], eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, 20
+    mov dword ptr [rip + window_status_top], eax
+    mov eax, dword ptr [rip + window_width]
+    sub eax, DOC_LEFT + 8
+    xor edx, edx
+    mov ecx, CELL_WIDTH
+    div ecx
+    test eax, eax
+    jnz .window_geometry_columns_ready
+    mov eax, 1
+.window_geometry_columns_ready:
+    mov dword ptr [rip + window_doc_columns], eax
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, DOC_TOP
+    xor edx, edx
+    mov ecx, LINE_HEIGHT
+    div ecx
+    test eax, eax
+    jnz .window_geometry_rows_ready
+    mov eax, 1
+.window_geometry_rows_ready:
+    mov dword ptr [rip + window_doc_visible_rows], eax
+    ret
+.size window_update_geometry, . - window_update_geometry
+
+# Parse xdg_toplevel.configure: width, height, and a uint32 array of states.
+.type window_capture_toplevel_configure, @function
+window_capture_toplevel_configure:
+    mov dword ptr [rip + window_pending_width], 0
+    mov dword ptr [rip + window_pending_height], 0
+    cmp dword ptr [rip + last_size], 12
+    jb .window_capture_toplevel_done
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jz .window_capture_width_done
+    cmp eax, WINDOW_MIN_WIDTH
+    jae .window_capture_width_max
+    mov eax, WINDOW_MIN_WIDTH
+.window_capture_width_max:
+    cmp eax, MAX_WINDOW_WIDTH
+    jbe .window_capture_width_store
+    mov eax, MAX_WINDOW_WIDTH
+.window_capture_width_store:
+    mov dword ptr [rip + window_pending_width], eax
+.window_capture_width_done:
+    mov eax, dword ptr [rip + event_payload + 4]
+    test eax, eax
+    jz .window_capture_height_done
+    cmp eax, WINDOW_MIN_HEIGHT
+    jae .window_capture_height_max
+    mov eax, WINDOW_MIN_HEIGHT
+.window_capture_height_max:
+    cmp eax, MAX_WINDOW_HEIGHT
+    jbe .window_capture_height_store
+    mov eax, MAX_WINDOW_HEIGHT
+.window_capture_height_store:
+    mov dword ptr [rip + window_pending_height], eax
+.window_capture_height_done:
+    mov eax, dword ptr [rip + event_payload + 8]
+    mov edx, dword ptr [rip + last_size]
+    sub edx, 12
+    cmp eax, edx
+    ja .window_capture_toplevel_error
+    test eax, 3
+    jnz .window_capture_toplevel_error
+    mov ecx, eax
+    lea rdx, [rip + event_payload + 12]
+    xor eax, eax
+.window_capture_state_loop:
+    test ecx, ecx
+    jz .window_capture_state_done
+    cmp dword ptr [rdx], 1
+    jne .window_capture_state_next
+    mov eax, 1
+.window_capture_state_next:
+    add rdx, 4
+    sub ecx, 4
+    jmp .window_capture_state_loop
+.window_capture_state_done:
+    mov dword ptr [rip + window_is_maximized], eax
+.window_capture_toplevel_done:
+    xor eax, eax
+    ret
+.window_capture_toplevel_error:
+    mov rax, -71
+    ret
+.size window_capture_toplevel_configure, . - window_capture_toplevel_configure
+
+.type window_commit_initial_size, @function
+window_commit_initial_size:
+    mov eax, dword ptr [rip + window_pending_width]
+    test eax, eax
+    jz .window_initial_width_done
+    mov dword ptr [rip + window_width], eax
+.window_initial_width_done:
+    mov eax, dword ptr [rip + window_pending_height]
+    test eax, eax
+    jz .window_initial_height_done
+    mov dword ptr [rip + window_height], eax
+.window_initial_height_done:
+    mov dword ptr [rip + window_pending_width], 0
+    mov dword ptr [rip + window_pending_height], 0
+    call window_update_geometry
+    ret
+.size window_commit_initial_size, . - window_commit_initial_size
+
+.type window_handle_surface_configure, @function
+window_handle_surface_configure:
+    push r12
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 9
+    mov esi, 4
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .window_surface_configure_done
+    mov r12d, 0
+    mov eax, dword ptr [rip + window_pending_width]
+    test eax, eax
+    jz .window_surface_keep_width
+    cmp eax, dword ptr [rip + window_width]
+    je .window_surface_keep_width
+    mov r12d, 1
+.window_surface_keep_width:
+    mov eax, dword ptr [rip + window_pending_height]
+    test eax, eax
+    jz .window_surface_keep_height
+    cmp eax, dword ptr [rip + window_height]
+    je .window_surface_keep_height
+    mov r12d, 1
+.window_surface_keep_height:
+    mov dword ptr [rip + window_resize_pending], r12d
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .window_surface_configure_done
+    call window_apply_pending_resize
+.window_surface_configure_done:
+    pop r12
+    ret
+.size window_handle_surface_configure, . - window_handle_surface_configure
+
+.type window_apply_pending_resize, @function
+window_apply_pending_resize:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + window_resize_pending], 0
+    je .window_resize_present
+    mov r12d, dword ptr [rip + window_pending_width]
+    test r12d, r12d
+    jnz .window_resize_width_ready
+    mov r12d, dword ptr [rip + window_width]
+.window_resize_width_ready:
+    mov r13d, dword ptr [rip + window_pending_height]
+    test r13d, r13d
+    jnz .window_resize_height_ready
+    mov r13d, dword ptr [rip + window_height]
+.window_resize_height_ready:
+    mov dword ptr [rip + window_pending_width], 0
+    mov dword ptr [rip + window_pending_height], 0
+    mov dword ptr [rip + window_resize_pending], 0
+    cmp r12d, dword ptr [rip + window_width]
+    jne .window_resize_dimensions_changed
+    cmp r13d, dword ptr [rip + window_height]
+    je .window_resize_present
+.window_resize_dimensions_changed:
+    mov dword ptr [rip + window_width], r12d
+    mov dword ptr [rip + window_height], r13d
+    call window_update_geometry
+    mov ebx, dword ptr [rip + window_buffer_id]
+    mov edi, ebx
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .window_resize_done
+    mov r14d, dword ptr [rip + window_next_buffer_id]
+    lea eax, [r14 + 1]
+    mov dword ptr [rip + window_next_buffer_id], eax
+    mov dword ptr [rip + payload_buffer], r14d
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], r12d
+    mov dword ptr [rip + payload_buffer + 12], r13d
+    mov eax, dword ptr [rip + window_stride]
+    mov dword ptr [rip + payload_buffer + 16], eax
+    mov dword ptr [rip + payload_buffer + 20], 1
+    mov edi, 11
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 24
+    call wl_send_request
+    test rax, rax
+    js .window_resize_done
+    mov dword ptr [rip + window_buffer_id], r14d
+.window_resize_present:
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .window_resize_done
+    call present_buffer
+.window_resize_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size window_apply_pending_resize, . - window_apply_pending_resize
+
+.type application_exit, @function
+application_exit:
+    mov edi, dword ptr [rip + socket_fd]
+    cmp edi, 0
+    jl .application_exit_now
+    mov eax, SYS_close
+    syscall
+.application_exit_now:
+    xor edi, edi
+    jmp linux_exit
+.size application_exit, . - application_exit
+
 .type present_buffer, @function
 present_buffer:
     sub rsp, 8                  # maintain 16-byte alignment for nested calls
     cmp dword ptr [rip + buffer_busy], 0
     jne .present_buffer_busy
     call render_surface
-    mov dword ptr [rip + payload_buffer], 12
+    mov eax, dword ptr [rip + window_buffer_id]
+    mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
     mov dword ptr [rip + payload_buffer + 8], 0
     mov edi, 8
@@ -4816,8 +5166,10 @@ present_buffer:
     js .present_buffer_done
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov dword ptr [rip + payload_buffer + 8], WIDTH
-    mov dword ptr [rip + payload_buffer + 12], HEIGHT
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
     mov edi, 8
     mov esi, 2
     lea rdx, [rip + payload_buffer]
@@ -5359,7 +5711,7 @@ doc_offset_to_visual:
     cmp eax, 128
     jb .Lneko_offset_visual_glyph
 .Lneko_offset_visual_glyph:
-    cmp ebx, DOC_COLUMNS
+    cmp ebx, dword ptr [rip + window_doc_columns]
     jb .Lneko_offset_visual_glyph_fit
     inc r14d
     xor ebx, ebx
@@ -5376,7 +5728,7 @@ doc_offset_to_visual:
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_tab:
     lea edx, [rbx + 4]
-    cmp edx, DOC_COLUMNS
+    cmp edx, dword ptr [rip + window_doc_columns]
     jbe .Lneko_offset_visual_tab_fit
     inc r14d
     xor ebx, ebx
@@ -5403,14 +5755,14 @@ doc_offset_to_visual:
     cmp eax, 128
     jb .Lneko_offset_visual_boundary_glyph
 .Lneko_offset_visual_boundary_glyph:
-    cmp ebx, DOC_COLUMNS
+    cmp ebx, dword ptr [rip + window_doc_columns]
     jb .Lneko_offset_visual_done
     inc r14d
     xor ebx, ebx
     jmp .Lneko_offset_visual_done
 .Lneko_offset_visual_boundary_tab:
     lea edx, [rbx + 4]
-    cmp edx, DOC_COLUMNS
+    cmp edx, dword ptr [rip + window_doc_columns]
     jbe .Lneko_offset_visual_done
     inc r14d
     xor ebx, ebx
@@ -5455,7 +5807,7 @@ doc_visual_to_offset:
     cmp eax, 128
     jb .Lneko_visual_offset_glyph
 .Lneko_visual_offset_glyph:
-    cmp ecx, DOC_COLUMNS
+    cmp ecx, dword ptr [rip + window_doc_columns]
     jb .Lneko_visual_offset_glyph_row_ready
     inc ebx
     xor ecx, ecx
@@ -5481,7 +5833,7 @@ doc_visual_to_offset:
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_tab:
     lea edx, [rcx + 4]
-    cmp edx, DOC_COLUMNS
+    cmp edx, dword ptr [rip + window_doc_columns]
     jbe .Lneko_visual_offset_tab_row_ready
     inc ebx
     xor ecx, ecx
@@ -5521,10 +5873,12 @@ doc_ensure_cursor_visible:
     mov dword ptr [rip + doc_view_top_row], eax
     ret
 .Lneko_ensure_cursor_lower:
-    lea ecx, [edx + DOC_VISIBLE_ROWS]
+    mov ecx, dword ptr [rip + window_doc_visible_rows]
+    add ecx, edx
     cmp eax, ecx
     jb .Lneko_ensure_cursor_done
-    sub eax, DOC_VISIBLE_ROWS - 1
+    sub eax, dword ptr [rip + window_doc_visible_rows]
+    inc eax
     mov dword ptr [rip + doc_view_top_row], eax
 .Lneko_ensure_cursor_done:
     ret
@@ -5856,7 +6210,8 @@ draw_glyph:
     jnc .glyph_next_column
     mov eax, r13d
     add eax, r14d
-    imul eax, STRIDE
+    mov ecx, dword ptr [rip + window_stride]
+    imul eax, ecx
     mov edx, r12d
     add edx, r15d
     shl edx, 2
@@ -5963,15 +6318,17 @@ render_status_bar:
     push r14
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
-    mov edx, STATUS_TOP
-    mov ecx, WIDTH
-    mov r8d, HEIGHT - STATUS_TOP
+    mov edx, dword ptr [rip + window_status_top]
+    mov ecx, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_height]
+    sub eax, dword ptr [rip + window_status_top]
+    mov r8d, eax
     mov r9d, 0xff343d4b
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
-    mov edx, STATUS_TOP
-    mov ecx, WIDTH
+    mov edx, dword ptr [rip + window_status_top]
+    mov ecx, dword ptr [rip + window_width]
     mov r8d, 1
     mov r9d, 0xff78a9d4
     call draw_rect
@@ -6010,34 +6367,36 @@ render_status_bar:
     inc r14d
     jmp .Lneko_status_scan
 .Lneko_status_scan_done:
+    mov r12d, dword ptr [rip + window_status_top]
+    add r12d, 6
     mov edi, 16
-    mov esi, 466
+    mov esi, r12d
     lea rdx, [rip + ui_label_line]
     call draw_text
     mov edi, eax
-    mov esi, 466
+    mov esi, r12d
     mov eax, r13d
     call draw_decimal
     add eax, 4
     mov edi, eax
-    mov esi, 466
+    mov esi, r12d
     lea rdx, [rip + ui_label_column]
     call draw_text
     mov edi, eax
-    mov esi, 466
+    mov esi, r12d
     mov eax, ebp
     call draw_decimal
 
     mov edi, 480
-    mov esi, 466
+    mov esi, r12d
     lea rdx, [rip + ui_label_bytes]
     call draw_text
     mov edi, eax
-    mov esi, 466
+    mov esi, r12d
     mov eax, dword ptr [rip + doc_length]
     call draw_decimal
     mov edi, 744
-    mov esi, 466
+    mov esi, r12d
     lea rdx, [rip + ui_mode_name]
     call draw_text
     pop r14
@@ -6556,6 +6915,83 @@ render_picker:
     ret
 .size render_picker, . - render_picker
 
+.type render_window_controls, @function
+render_window_controls:
+    push rbx
+    push r12
+    mov ebx, dword ptr [rip + window_width]
+    sub ebx, 104
+    # Minimize.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, ebx
+    mov edx, 4
+    mov ecx, 24
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    lea esi, [rbx + 8]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov edx, 15
+    mov ecx, 8
+    mov r8d, 2
+    mov r9d, 0xffd8dee9
+    call draw_rect
+    # Maximize/restore.
+    add ebx, 32
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, ebx
+    mov edx, 4
+    mov ecx, 24
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    lea r12d, [rbx + 7]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, 9
+    mov ecx, 10
+    mov r8d, 2
+    mov r9d, 0xffd8dee9
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, 19
+    mov ecx, 10
+    mov r8d, 2
+    mov r9d, 0xffd8dee9
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, 9
+    mov ecx, 2
+    mov r8d, 12
+    mov r9d, 0xffd8dee9
+    call draw_rect
+    lea esi, [r12 + 8]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov edx, 9
+    mov ecx, 2
+    mov r8d, 12
+    mov r9d, 0xffd8dee9
+    call draw_rect
+    # Close.
+    add ebx, 32
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, ebx
+    mov edx, 4
+    mov ecx, 24
+    mov r8d, 24
+    mov r9d, 0xff754b52
+    call draw_rect
+    lea edi, [rbx + 8]
+    mov esi, 12
+    mov edx, 'X'
+    call draw_glyph
+    pop r12
+    pop rbx
+    ret
+.size render_window_controls, . - render_window_controls
+
 .type render_file_menu, @function
 render_file_menu:
     cmp dword ptr [rip + file_menu_open], 1
@@ -6719,7 +7155,9 @@ render_selection:
     jb .Lneko_render_selection_character
 
 .Lneko_render_selection_character:
-    cmp r12d, WIDTH - 8
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 8
+    cmp r12d, eax
     jb .Lneko_render_selection_character_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
@@ -6727,11 +7165,15 @@ render_selection:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_advance_cell
-    cmp r12d, WIDTH - CELL_WIDTH
+    mov eax, dword ptr [rip + window_width]
+    sub eax, CELL_WIDTH
+    cmp r12d, eax
     ja .Lneko_render_selection_advance_cell
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_advance_cell
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jae .Lneko_render_selection_advance_cell
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -6751,9 +7193,13 @@ render_selection:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_newline_advance
-    cmp r12d, WIDTH - CELL_WIDTH
+    mov eax, dword ptr [rip + window_width]
+    sub eax, CELL_WIDTH
+    cmp r12d, eax
     jae .Lneko_render_selection_newline_advance
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jae .Lneko_render_selection_newline_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -6770,7 +7216,9 @@ render_selection:
 
 .Lneko_render_selection_tab:
     lea eax, [r12d + CELL_WIDTH * 4]
-    cmp eax, WIDTH - 8
+    mov edx, dword ptr [rip + window_width]
+    sub edx, 8
+    cmp eax, edx
     jbe .Lneko_render_selection_tab_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
@@ -6778,11 +7226,15 @@ render_selection:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_tab_advance
-    cmp r12d, WIDTH - CELL_WIDTH * 4
+    mov eax, dword ptr [rip + window_width]
+    sub eax, CELL_WIDTH * 4
+    cmp r12d, eax
     ja .Lneko_render_selection_tab_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_tab_advance
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jae .Lneko_render_selection_tab_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -6829,7 +7281,9 @@ render_document:
 .document_render_loop:
     cmp r14d, r15d
     jae .document_draw_cursor
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jge .document_draw_cursor
     mov edi, r14d
     call doc_byte_at
@@ -6847,11 +7301,15 @@ render_document:
     jb .document_next_byte
     mov edx, '?'
 .document_printable:
-    cmp r12d, WIDTH - 8
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 8
+    cmp r12d, eax
     jb .document_printable_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jge .document_draw_cursor
 .document_printable_fit:
     cmp r13d, DOC_TOP
@@ -6868,11 +7326,15 @@ render_document:
 
 .document_tab:
     lea eax, [r12d + CELL_WIDTH * 4]
-    cmp eax, WIDTH - 8
+    mov edx, dword ptr [rip + window_width]
+    sub edx, 8
+    cmp eax, edx
     jbe .document_tab_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
     jge .document_draw_cursor
 .document_tab_fit:
     add r12d, CELL_WIDTH * 4
@@ -6893,13 +7355,15 @@ render_document:
     sub r13d, dword ptr [rip + doc_view_top_row]
     test r13d, r13d
     js .document_render_done
-    cmp r13d, DOC_VISIBLE_ROWS
+    cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .document_render_done
     imul r12d, CELL_WIDTH
     add r12d, DOC_LEFT
     imul r13d, LINE_HEIGHT
     add r13d, DOC_TOP
-    cmp r12d, WIDTH - 2
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 2
+    cmp r12d, eax
     ja .document_render_done
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
