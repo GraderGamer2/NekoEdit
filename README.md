@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered window with a clickable palette and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
+> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered window with a clickable palette and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Long lines soft-wrap at the right edge, and the document scrolls vertically to keep the active caret visible. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
 
 ## Project principles
 
@@ -31,7 +31,7 @@ The first Wayland backend is a freestanding assembly prototype. It:
 9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
 10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
 
-The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The wl_keyboard.keymap FD and repeat-info event are not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. Navigation arrows, Backspace, and Delete use a local 300 ms initial repeat delay at approximately 30 actions per second rather than desktop-configured repeat settings. Unicode input/rendering, IME and dead-key composition, undo/redo, scrolling, file operations, clipboard, resizing, and the X11 backend remain unfinished.
+The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The wl_keyboard.keymap FD and repeat-info event are not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. Navigation arrows, Backspace, and Delete use a local 300 ms initial repeat delay at approximately 30 actions per second rather than desktop-configured repeat settings. Unicode input/rendering, IME and dead-key composition, undo/redo, file operations, clipboard, resizing, and the X11 backend remain unfinished. Vertical cursor-follow scrolling is implemented; horizontal scrolling and more complete viewport controls remain future work.
 
 See [docs/WAYLAND_BACKEND.md](docs/WAYLAND_BACKEND.md) for protocol details.
 
@@ -79,7 +79,7 @@ Run inside a Wayland desktop session:
 ./build/nekoedit --backend=wayland
 ~~~
 
-The current window shows three color swatches above a simple text area. Click a swatch to change its border, click within the document area to place the caret, or drag with the left mouse button to select text. Hold Shift while using the arrow keys or Home/End to extend a keyboard selection. Typing or Backspace/Delete removes the selected range. Focus the window and type basic US-QWERTY ASCII text. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Use the compositor's normal close button to exit.
+The current window shows three color swatches above a simple text area. Click a swatch to change its border, click within the document area to place the caret, or drag with the left mouse button to select text. Hold Shift while using the arrow keys or Home/End to extend a keyboard selection. Typing or Backspace/Delete removes the selected range. Focus the window and type basic US-QWERTY ASCII text. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Long lines wrap automatically, and the view follows the caret as it moves down through the document. Use the compositor's normal close button to exit.
 
 The X11 backend is not ready. The explicit selector currently reports this rather than silently trying to use Wayland:
 
@@ -92,7 +92,7 @@ The CLI also supports --help and --version.
 ### Tests
 
 - **make test** runs command-line smoke tests.
-- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, palette clicks, US-QWERTY text insertion, navigation, Backspace, Enter, Shift/modifier state, mouse caret placement, reverse-direction and multi-line drag selection, Shift+Arrow/Home/End keyboard selection and collapse behavior, typing to replace selected text, buffer-release-safe redraws, shared-memory FD transfer, and compositor protocol-error reporting without requiring an installed compositor.
+- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, palette clicks, US-QWERTY text insertion, navigation, Backspace, Enter, Shift/modifier state, mouse caret placement, reverse-direction and multi-line drag selection, Shift+Arrow/Home/End keyboard selection and collapse behavior, text wrapping beyond the window width, mouse hit testing on wrapped rows, vertical cursor-follow scrolling beyond the window height, typing to replace selected text, buffer-release-safe redraws, shared-memory FD transfer, and compositor protocol-error reporting without requiring an installed compositor.
 - **make check** rejects an ELF containing PT_INTERP or DT_NEEDED entries.
 - **make inspect** prints ELF metadata.
 
@@ -110,11 +110,11 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 - UTF-8 text editing with a gap buffer and Unicode-aware cursor movement.
 - IME/dead-key composition through the appropriate Wayland text-input protocol.
 - Undo and redo.
-- Scrolling and line/column status.
+- Horizontal scrolling, viewport controls, and line/column status.
 - Cut, copy, and paste with ordinary desktop applications.
 - Keyboard shortcuts: Ctrl+A (select all), Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+Z/Ctrl+Y (undo/redo), Ctrl+S (save), Ctrl+Shift+S (save as), Ctrl+O (open), and Ctrl+F (find).
 - Find and replace.
-- Word wrapping and basic view preferences.
+- Glyph/font-metric-aware wrapping and advanced view preferences.
 - A system-font software renderer.
 - Wayland and X11 backends.
 
