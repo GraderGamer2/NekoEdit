@@ -347,6 +347,54 @@ xkb_symbols "nekoedit-test" {
                         "wl_keyboard.keymap FD was not retained as a read-only "
                         f"MAP_PRIVATE mapping: {keymap_mapping_lines!r}"
                     )
+                # Inspect the exported parser tables while the child is
+                # paused in its event loop. This differentiates an XKB parse
+                # failure from a physical modifier / symbol-lookup failure.
+                if keyboard_layout_test:
+                    nm_text = subprocess.check_output(
+                        ["nm", "-n", binary], text=True
+                    )
+                    symbol_addresses = {}
+                    wanted_symbols = {
+                        "xkb_key_names",
+                        "xkb_ascii_levels",
+                        "xkb_key_types",
+                        "xkb_keymap_ready",
+                    }
+                    for line in nm_text.splitlines():
+                        fields = line.split()
+                        if len(fields) == 3 and fields[2] in wanted_symbols:
+                            symbol_addresses[fields[2]] = int(fields[0], 16)
+                    missing_symbols = wanted_symbols - symbol_addresses.keys()
+                    if missing_symbols:
+                        raise AssertionError(
+                            f"XKB test symbols missing from executable: {sorted(missing_symbols)}"
+                        )
+                    mem_fd = os.open(f"/proc/{child.pid}/mem", os.O_RDONLY)
+                    try:
+                        def child_memory(name: str, offset: int, size: int) -> bytes:
+                            return os.pread(
+                                mem_fd, size, symbol_addresses[name] + offset
+                            )
+                        ready = struct.unpack("<I", child_memory("xkb_keymap_ready", 0, 4))[0]
+                        key_name = child_memory("xkb_key_names", 24 * 4, 4)
+                        key_type = child_memory("xkb_key_types", 24, 1)
+                        levels = child_memory("xkb_ascii_levels", 24 * 16, 16)
+                    finally:
+                        os.close(mem_fd)
+                    if ready != 1 or key_name != b"AD01" or key_type != b"\\x03":
+                        raise AssertionError(
+                            "XKB parser did not build the expected AD01 metadata: "
+                            f"ready={ready}, key_name={key_name!r}, key_type={key_type!r}"
+                        )
+                    if levels[:6] != b"aA@\\\"qQ":
+                        raise AssertionError(
+                            "XKB parser produced incorrect Group1/Group2 levels: "
+                            f"{levels!r}"
+                        )
+                    observations.append(
+                        "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and [a,A,@,\"; q,Q] group symbols"
+                    )
                 observations.append(
                     "wl_keyboard.keymap SCM_RIGHTS FD was received, validated, and mapped read-only with MAP_PRIVATE"
                 )
