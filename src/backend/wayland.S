@@ -2370,6 +2370,24 @@ picker_open_file:
     test rax, rax
     jz .picker_open_file_error
     mov r12, rax
+    # Do not attempt to load a directory, symlink, or special file.
+    mov eax, SYS_newfstatat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    lea rsi, [rip + picker_name_buffer]
+    cmp byte ptr [rip + picker_name_buffer], '/'
+    jne .picker_open_stat_relative
+    mov edi, AT_FDCWD
+    mov rsi, r12
+.picker_open_stat_relative:
+    lea rdx, [rip + picker_stat_buffer]
+    mov r10d, AT_SYMLINK_NOFOLLOW
+    syscall
+    test rax, rax
+    js .picker_open_file_error
+    mov eax, dword ptr [rip + picker_stat_buffer + 24]
+    and eax, STAT_S_IFMT
+    cmp eax, STAT_S_IFREG
+    jne .picker_open_file_error
     mov rdi, r12
     call load_document_from_path
     test rax, rax
@@ -2405,6 +2423,10 @@ picker_save_file:
     syscall
     test rax, rax
     js .picker_save_new_target
+    mov eax, dword ptr [rip + picker_stat_buffer + 24]
+    and eax, STAT_S_IFMT
+    cmp eax, STAT_S_IFREG
+    jne .picker_save_file_error
     mov dword ptr [rip + picker_overwrite_pending], 1
     xor eax, eax
     jmp .picker_save_file_done
@@ -2508,6 +2530,7 @@ picker_move_selection:
 picker_handle_key:
     push rbx
     push r12
+    sub rsp, 8
     mov ebx, edi
     cmp dword ptr [rip + picker_overwrite_pending], 0
     je .picker_key_normal
@@ -2719,6 +2742,7 @@ picker_handle_key:
     lea rdi, [rdx + 4]
     call picker_enter_directory
 .picker_key_done:
+    add rsp, 8
     pop r12
     pop rbx
     ret
@@ -2730,6 +2754,7 @@ picker_handle_pointer:
     push r12
     push r13
     push r14
+    sub rsp, 8
     mov r12d, edi
     mov r13d, esi
     mov r14d, edx
@@ -2872,6 +2897,7 @@ picker_handle_pointer:
     jae .picker_pointer_done
     mov dword ptr [rip + picker_focus], 2
 .picker_pointer_done:
+    add rsp, 8
     pop r14
     pop r13
     pop r12
