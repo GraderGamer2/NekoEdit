@@ -337,7 +337,15 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     "<I", pixels, 176 * 800 * 4 + 16 * 4
                 )[0]
                 if second_line_start != 0xFFFFFFFF:
-                    raise AssertionError("mouse click did not place caret at second-line start")
+                    second_line_probe = [
+                        struct.unpack_from("<I", pixels, y * 800 * 4 + 16 * 4)[0]
+                        for y in range(164, 190)
+                    ]
+                    raise AssertionError(
+                        "mouse click did not place caret at second-line start; "
+                        f"pixel={hex(second_line_start)}, "
+                        f"column_pixels={[hex(value) for value in second_line_probe]}"
+                    )
 
                 pointer_click(26, 182, 1120, "mouse caret between characters")
                 between_chars = struct.unpack_from(
