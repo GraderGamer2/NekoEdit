@@ -886,15 +886,20 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
-                    def picker_state() -> dict[str, int]:
+                    def picker_state() -> dict[str, object]:
                         with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
-                            return {
-                                name: struct.unpack("<i", os.pread(memory.fileno(), 4, address))[0]
-                                for name, address in picker_symbols.items()
-                            }
+                            fd = memory.fileno()
+                            result: dict[str, object] = {}
+                            for name, address in picker_symbols.items():
+                                if name in {"picker_name_buffer", "doc_buffer"}:
+                                    size = 64 if name == "picker_name_buffer" else 8
+                                    result[name] = os.pread(fd, size, address)
+                                else:
+                                    result[name] = struct.unpack("<i", os.pread(fd, 4, address))[0]
+                            return result
 
                     def assert_picker(label: str) -> None:
                         panel_pixel = struct.unpack_from("<I", pixels, 70 * 800 * 4 + 40 * 4)[0]
@@ -949,7 +954,7 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 10
                     serial = double_click_picker_row(160, 139, serial, "open hidden file")
                     if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
-                        raise AssertionError("double-clicking a hidden file did not open its document")
+                        raise AssertionError(f"double-clicking a hidden file did not open its document; state={picker_state()!r}")
                     observations.append("directory entry navigation, hidden-file toggle, and double-click Open verified")
 
                     # Open again, enter the directory, go Up, re-enter it, then

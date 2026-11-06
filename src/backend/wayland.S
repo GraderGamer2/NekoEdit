@@ -312,7 +312,7 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
-.global picker_mode, picker_dir_fd, picker_error, picker_entry_count
+.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer
 picker_mode:            .long 0
 picker_focus:           .long 0
 picker_dir_fd:          .long 0
