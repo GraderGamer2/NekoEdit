@@ -1541,10 +1541,10 @@ render_surface:
     call render_document
     # Temporary diagnostic words in the bottom-right corner; removed after
     # pointer hit-testing is verified by the mock compositor.
-    mov rbx, qword ptr [rip + shm_mapping]
+    mov r11, qword ptr [rip + shm_mapping]
     mov eax, dword ptr [rip + debug_pointer_x]
     or eax, 0xff000000
-    mov dword ptr [rbx + STRIDE * 470 + 700 * 4], eax
+    mov dword ptr [r11 + STRIDE * 470 + 700 * 4], eax
     mov eax, dword ptr [rip + debug_pointer_y]
     or eax, 0xff000000
     mov dword ptr [rbx + STRIDE * 470 + 701 * 4], eax
