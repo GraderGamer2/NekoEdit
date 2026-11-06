@@ -184,6 +184,7 @@ buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
 caps_lock:              .long 0
+ctrl_down:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
 doc_buffer:             .zero DOC_CAPACITY
@@ -922,6 +923,15 @@ wayland_main:
     and eax, 2
     shr eax, 1
     mov dword ptr [rip + caps_lock], eax
+    # The standard XKB Control modifier is bit 2. Physical Ctrl key
+    # transitions below are also tracked so this works before a modifier
+    # update is delivered and when a compositor omits modifier events.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    and eax, 4
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + ctrl_down], eax
     jmp .event_loop
 .keyboard_enter:
     cmp dword ptr [rip + last_size], 12
@@ -934,6 +944,7 @@ wayland_main:
     cmp dword ptr [rip + last_size], 8
     jb .event_loop
     mov dword ptr [rip + keyboard_focused], 0
+    mov dword ptr [rip + ctrl_down], 0
     call repeat_cancel
     jmp .event_loop
 .keyboard_key:
@@ -943,6 +954,10 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
     mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
+    cmp eax, 29
+    je .keyboard_control
+    cmp eax, 97
+    je .keyboard_control
     cmp eax, 42
     je .keyboard_shift
     cmp eax, 54
@@ -966,9 +981,17 @@ wayland_main:
 .keyboard_shift:
     mov dword ptr [rip + shift_down], edx
     jmp .event_loop
+.keyboard_control:
+    mov dword ptr [rip + ctrl_down], edx
+    jmp .event_loop
 .keyboard_non_modifier:
     test edx, edx
     jz .event_loop
+    cmp dword ptr [rip + ctrl_down], 0
+    je .keyboard_unmodified
+    cmp eax, 30
+    je .keyboard_select_all
+.keyboard_unmodified:
     cmp eax, 105
     je .keyboard_left
     cmp eax, 106
@@ -997,6 +1020,14 @@ wayland_main:
     call doc_delete_selection
     mov edi, r12d
     call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_select_all:
+    # Ctrl+A selects the full document using the same anchor/cursor model
+    # as Shift+navigation and pointer dragging.
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_finish_keyboard_selection
     jmp .keyboard_changed
 .keyboard_left:
     cmp dword ptr [rip + shift_down], 0
