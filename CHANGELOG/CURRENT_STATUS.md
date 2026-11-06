@@ -3,7 +3,7 @@
 **Snapshot date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Active PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)  
-**Development branch:** `feat/wayland-socket-error-handling)  
+**Development branch:** `feat/wayland-socket-error-handling`  
 **Base branch:** `main` (PR #1 remains open; no merge is recorded here)
 
 ## Start here when continuing development
@@ -12,14 +12,15 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Latest verified program state
 
-- Latest fully verified **program-code commit:** `6cd9e08fada059ae3e24c9cdab7cf86762b24414`.
-- GitHub Actions [Build and test #160](https://github.com/GraderGamer2/NekoEdit/actions/runs/42213034086) passed for that code commit.
-- All pipeline stages passed: freestanding x86-64 assembly/link and ELF verification, command-line smoke tests, full Wayland mock-compositor integration suite, executable inspection, and artifact upload.
-- Uploaded artifact: `nekoedit-linux-x86_64`.
-- Artifact archive SHA-256 reported by GitHub: `aa47ef8e0645e734f7dd7bd072cd31f51cc755907113603de6aebf8ab48917a7`.
-- Artifact expiration was reported as 2026-11-13 (seven-day retention).
-- Commits after `6cd9e08f` in this retrospective task add changelog documentation only; they do not intentionally modify source, tests, build rules, or the executable.
-- The active PR includes the new `CHANGELOG/` records. Check the current PR head and newest Actions run before making a new claim about the latest branch verification.
+- Latest fully verified **program-code commit:** `776a72c07579ced1e54929946de65cea6271267e` — fixed-capacity 64 KiB gap-buffer document storage.
+- GitHub Actions [Build and test #169](https://github.com/GraderGamer2/NekoEdit/actions/runs/42216369360) passed for this commit on 2026-11-06.
+- All eight workflow steps passed: toolchain inspection, freestanding x86-64 build/ELF verification, CLI smoke tests, complete Wayland mock-compositor integration, executable inspection, and artifact upload.
+- Uploaded artifact: `nekoedit-linux-x86_64` (18,978 bytes).
+- Artifact SHA-256: `dae27df70c60ae73c4bd45e494b10c7c47c7d0962c86c8876f48ab00965b515a`.
+- Artifact expiration: 2026-11-13 (seven-day retention).
+- The new integration scenario exercised gap movement around a mixed-width UTF-8 prefix, insertion on both sides of the gap, Backspace, Delete, selection deletion, and serialization of the two physical document segments.
+- The changelog was separately installed on `main` by docs-only commit [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8). This copied the changelog and README link without merging the editor implementation; `main` remains the original prototype.
+- PR #1 remains open and unmerged. Inspect current refs and CI before making claims about later commits.
 
 ## Runtime and build interface
 
@@ -64,7 +65,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Wayland setup | Registry, compositor, shm, xdg-shell, configure, ping/pong, close, protocol-error reporting |
 | Rendering | CPU software rendering into a memfd-backed shared-memory buffer |
 | Editor window | 800×480 UI with header, File menu, active document tab, editor area, and live status bar |
-| Document storage | Fixed 64 KiB byte array; not yet a gap buffer |
+| Document storage | Fixed-capacity 64 KiB byte-oriented gap buffer; cursor/selection offsets remain logical byte offsets; no dynamic growth yet |
 | ASCII rendering | Embedded 5×7 glyphs for printable ASCII, including the full punctuation set |
 | Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, Shift/Caps, physical Right-Alt LevelThree, US fallback |
 | Keyboard editing | ASCII input, Left/Right/Up/Down, Home/End, Backspace, Delete, Enter, four-space Tab |
@@ -86,11 +87,11 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 - Physical keyboard/XKB text insertion remains ASCII-only.
 - No Wayland text-input/IME, compose/dead-key system, or non-ASCII keysyms.
 - No grapheme-cluster-aware navigation. Combining marks and multi-code-point emoji may still require multiple cursor positions.
-- The 64 KiB fixed byte array remains; it is not yet the intended gap buffer.
+- The gap buffer is still bounded by a fixed 64 KiB allocation; files larger than 64 KiB remain unsupported and the storage does not yet grow.
 
 ## Known unfinished work
 
-- Actual UTF-8 gap-buffer document engine and line indexing.
+- Dynamic gap-buffer growth beyond 64 KiB and a line-start index.
 - Unicode glyph lookup/font rendering.
 - Non-ASCII keyboard text input, IME, compose and dead-key handling.
 - Grapheme-cluster-aware movement and deletion.
@@ -109,7 +110,7 @@ File-operation limitations: the in-window path prompt is ASCII-only; the tempora
 
 - `src/entry.S` — freestanding entry point, command-line parsing, backend launch, help/version.
 - `src/linux/syscall.S` — low-level syscall helpers.
-- `src/backend/wayland.S` — Wayland protocol, window/UI, input, editor buffer, rendering, file operations, UTF-8 code-point helpers.
+- `src/backend/wayland.S` — Wayland protocol, window/UI, input, fixed-capacity gap-buffer document storage, rendering, file operations, UTF-8 code-point helpers.
 - `src/backend/xkb.S` — bounded XKB text-v1 parser and ASCII symbol lookup.
 - `tests/smoke.sh` — CLI smoke tests.
 - `tests/wayland_mock.py` — mock compositor and end-to-end protocol/editor regression tests.

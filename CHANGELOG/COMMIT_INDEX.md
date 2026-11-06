@@ -1,10 +1,10 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main` that established the freestanding Wayland window prototype and all 168 commits in the active `feat/wayland-socket-error-handling` / PR #1 development history through the UTF-8 code-point-safe editing work.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main`, all 169 implementation-history commits in the active `feat/wayland-socket-error-handling` / PR #1 branch through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
-- Recorded commits: **194** (20 original main + 168 source-development PR #1 + 6 changelog bootstrap commits).
+- Recorded commits: **196** (20 original main prototype + 169 PR #1 implementation history + 6 changelog bootstrap commits + 1 main-branch changelog installation).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -205,6 +205,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 | 2026-11-06 11:47:58 UTC | [`b71fa066fd3a`](https://github.com/GraderGamer2/NekoEdit/commit/b71fa066fd3afc65f42b0d6b5f245a5d2e945c6f) | test: verify pointer mapping across UTF-8 code points |
 | 2026-11-06 11:48:18 UTC | [`5c8b0aea3ed9`](https://github.com/GraderGamer2/NekoEdit/commit/5c8b0aea3ed9a39ed30f7cae03366f5c062ad471) | test: fix expected UTF-8 pointer fixture bytes |
 | 2026-11-06 11:49:03 UTC | [`6cd9e08fada0`](https://github.com/GraderGamer2/NekoEdit/commit/6cd9e08fada059ae3e24c9cdab7cf86762b24414) | test: route UTF-8 pointer case through its own edit scenario |
+| 2026-11-06 12:15:57 UTC | [`776a72c07579`](https://github.com/GraderGamer2/NekoEdit/commit/776a72c07579ced1e54929946de65cea6271267e) | feat: add fixed-capacity gap buffer for document editing |
 
 ## Changelog bootstrap commits
 
@@ -218,6 +219,15 @@ These six commits created the changelog system after the 188-commit source-histo
 | 2026-11-06 11:58:51 UTC | [`8401ae5f3997`](https://github.com/GraderGamer2/NekoEdit/commit/8401ae5f399797f3ac818a3ddcf4eddbaa0940e2) | \\|d\\|o\\|c\\|s\\|:\\| \\|a\\|d\\|d\\| \\|i\\|n\\|i\\|t\\|i\\|a\\|l\\| \\|d\\|e\\|v\\|e\\|l\\|o\\|p\\|m\\|e\\|n\\|t\\| \\|l\\|o\\|g\\| \\|e\\|n\\|t\\|r\\|y\\| |
 | 2026-11-06 11:59:21 UTC | [`7815e253ae38`](https://github.com/GraderGamer2/NekoEdit/commit/7815e253ae38fe544a69d15fe54b1e2a4c58fc2d) | \\|d\\|o\\|c\\|s\\|:\\| \\|a\\|d\\|d\\| \\|c\\|u\\|r\\|r\\|e\\|n\\|t\\| \\|N\\|e\\|k\\|o\\|E\\|d\\|i\\|t\\| \\|i\\|m\\|p\\|l\\|e\\|m\\|e\\|n\\|t\\|a\\|t\\|i\\|o\\|n\\| \\|s\\|t\\|a\\|t\\|u\\|s\\| |
 | 2026-11-06 11:59:30 UTC | [`1754d426a945`](https://github.com/GraderGamer2/NekoEdit/commit/1754d426a945580d3c9ae5372d1bb876d89b90be) | \\|d\\|o\\|c\\|s\\|:\\| \\|l\\|i\\|n\\|k\\| \\|p\\|r\\|o\\|j\\|e\\|c\\|t\\| \\|c\\|h\\|a\\|n\\|g\\|e\\|l\\|o\\|g\\| \\|f\\|r\\|o\\|m\\| \\|R\\|E\\|A\\|D\\|M\\|E\\| |
+
+
+## Main-branch changelog installation
+
+This docs-only commit copied the changelog directory and its root README link to `main`. It did not merge or copy the editor implementation from PR #1; `main` remains the original Wayland prototype.
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 12:09:42 UTC | [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8) | docs: add project changelog and continuity notes to main |
 
 ## Maintenance
 
