@@ -218,11 +218,11 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("the previously selected swatch border was not cleared")
                 observations.append("pointer click changed selection and safely redrew the buffer")
 
-                # A keyboard keymap is delivered with an SCM_RIGHTS file
-                # descriptor. The current milestone detects raw key presses
-                # but deliberately defers XKB symbol translation.
-                client.sendall(wire_message(12, 0))  # wl_buffer.release
-                keymap_data = b"xkb_keymap { };\0"
+                # The first editing milestone uses a documented US-QWERTY
+                # evdev mapping. This sequence exercises insertion, cursor-left,
+                # Backspace, newline, digit insertion, and vertical movement.
+                client.sendall(wire_message(12, 0))  # release after pointer redraw
+                keymap_data = b"xkb_keymap { }; "
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
@@ -233,18 +233,36 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     )
                 finally:
                     os.close(keymap_fd)
-                client.sendall(
-                    wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
-                    + wire_message(16, 3, struct.pack("<IIII", 1002, 1001, 30, 1))
-                )
-                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "keyboard redraw attach")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "keyboard redraw damage")
-                expect_message(client, (8, 6, b""), "keyboard redraw commit")
-                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 240 * 4)[0] != 0xFFFFFFFF:
-                    raise AssertionError("keyboard press did not advance the selected swatch")
-                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 160 * 4)[0] != 0xFF596273:
-                    raise AssertionError("keyboard selection did not clear the previous border")
-                observations.append("keyboard focus/key event changed UI state and safely redrew the buffer")
+
+                def key(serial: int, code: int, state: int = 1) -> bytes:
+                    return wire_message(16, 3, struct.pack("<IIII", serial, serial, code, state))
+
+                keyboard_events = [
+                    wire_message(16, 1, struct.pack("<III", 1001, 8, 0)),  # keyboard enter
+                    key(1002, 30),   # a
+                    key(1003, 48),   # b -> "ab"
+                    key(1004, 105),  # Left -> cursor before b
+                    key(1005, 14),   # Backspace -> "b"
+                    key(1006, 28),   # Enter -> "b\\n"
+                    key(1007, 3),    # 2 -> "b\\n2"
+                    key(1008, 103),  # Up
+                    key(1009, 108),  # Down
+                ]
+                client.sendall(b"".join(keyboard_events) + wire_message(12, 0))
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "document redraw attach")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "document redraw damage")
+                expect_message(client, (8, 6, b""), "document redraw commit")
+
+                # The remaining document must be "b\\n2": a is gone after
+                # Backspace, the second line contains 2, and the caret is at
+                # the end of that second line.
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("expected B glyph was not rendered at the first line")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("expected digit 2 was not rendered on the second line")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("document caret was not rendered at the second-line cursor")
+                observations.append("US-QWERTY text insertion, cursor movement, Backspace, Enter, digit rendering and caret verified")
             finally:
                 if pixels is not None:
                     pixels.close()
