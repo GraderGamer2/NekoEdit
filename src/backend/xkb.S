@@ -42,7 +42,7 @@
     .byte 10
     .ascii "semicolon"
     .byte 59
-    .byte 9
+    .byte 10
     .ascii "apostrophe"
     .byte 39
     .byte 5
@@ -102,7 +102,7 @@
     .byte 10
     .ascii "parenright"
     .byte 41
-    .byte 9
+    .byte 10
     .ascii "underscore"
     .byte 95
     .byte 8
