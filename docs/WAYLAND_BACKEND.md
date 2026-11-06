@@ -13,13 +13,13 @@ The prototype currently:
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
 - Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard focus, key, and modifier events.
-- Provides three clickable palette swatches and a document area. Pointer clicks select a swatch or place the caret at the nearest character insertion boundary. Holding the left button and dragging selects the byte range between the anchor and current caret, including reverse-direction and multi-line drags; the renderer paints selected character cells, tabs, and newline cells. Typing or Backspace/Delete removes the selected range before applying the requested edit. Focused key events otherwise insert US-QWERTY ASCII characters and execute basic editing/navigation commands.
+- Provides three clickable palette swatches and a document area. Pointer clicks select a swatch or place the caret at the nearest character insertion boundary. Holding the left button and dragging selects the byte range between the anchor and current caret, including reverse-direction and multi-line drags; the renderer paints selected character cells, tabs, and newline cells. Typing or Backspace/Delete removes the selected range before applying the requested edit. Focused key events otherwise insert US-QWERTY ASCII characters and execute basic editing/navigation commands, including Ctrl+A to select the complete document.
 - Uses a fixed 64 KiB byte array, a built-in US-QWERTY evdev lookup table, and an embedded 5×7 bitmap font. Shift and Caps state are synchronized from Wayland modifier events, with physical Shift/Caps key transitions as fallback.
 - Waits for wl_buffer.release before rewriting and recommitting the single shared buffer.
 - Answers xdg_wm_base ping requests.
 - Exits on xdg_toplevel.close.
 
-It does not yet parse the wl_keyboard.keymap FD, so the built-in US-QWERTY mapping is not adapted to the user's configured layout. It also lacks Unicode input/rendering, IME/dead-key composition, a gap buffer, keyboard-extended selection, undo/redo, text scrolling, window resizing, installed-font parsing, clipboard, frame scheduling, output scale changes, and X11. The current keyboard path is physical key-event handling, not the separate Wayland text-input protocol used by input methods.
+It does not yet parse the wl_keyboard.keymap FD, so the built-in US-QWERTY mapping is not adapted to the user's configured layout. It also lacks Unicode input/rendering, IME/dead-key composition, a gap buffer, keyboard-extended selection, undo/redo, text scrolling, window resizing, installed-font parsing, clipboard, frame scheduling, output scale changes, and X11. The current keyboard path is physical key-event handling, not the separate Wayland text-input protocol used by input methods. Ctrl+A selects the whole document; Control state is tracked from physical left/right Ctrl transitions and the standard XKB Control modifier bit.
 
 ## Protocol flow
 
@@ -80,6 +80,7 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - Pointer-motion/button sequences that place the caret after first-line text, at the start of the second line, and between two characters on that line.
 - Reverse-direction and multi-line pointer drag selection with highlight-pixel checks, including selected newline cells, and typing to replace selected text.
 - Shift+Left/Right and Shift+Up/Down/Home/End selection extension, returning to the anchor, and unshifted arrow collapse behavior.
+- Ctrl+A whole-document selection, including the visible portion after vertical scrolling.
 - Long-line soft wrapping, pointer placement on wrapped rows, and vertical caret-follow scrolling past the window's bottom edge.
 - Timed key repeat for held Left/Right/Up/Down, Backspace, and Delete, including the initial delay and repeat cadence.
 - Buffer release before each edit redraw, ensuring the single shared-memory buffer is not modified while the compositor owns it.
