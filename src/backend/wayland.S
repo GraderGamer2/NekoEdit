@@ -1,10 +1,17 @@
 .intel_syntax noprefix
 
 .equ SYS_read,          0
+.equ SYS_write,         1
 .equ SYS_close,         3
+.equ SYS_openat,      257
+.equ SYS_poll,          7
+.equ SYS_timerfd_create, 283
+.equ SYS_timerfd_settime, 286
 .equ SYS_socket,       41
 .equ SYS_connect,      42
 .equ SYS_sendmsg,      46
+.equ SYS_recvmsg,      47
+.equ SYS_munmap,       11
 .equ SYS_ftruncate,    77
 .equ SYS_mmap,          9
 .equ SYS_memfd_create, 319
@@ -14,32 +21,102 @@
 .equ PROT_READ,          1
 .equ PROT_WRITE,         2
 .equ MAP_SHARED,         1
+.equ MAP_PRIVATE,        2
 .equ MFD_CLOEXEC,        1
+.equ AT_FDCWD,          -100
+.equ O_WRONLY,             1
+.equ O_CREAT,             64
+.equ O_CLOEXEC,       0x80000
+.equ SYS_fsync,         74
+.equ SYS_getpid,        39
+.equ SYS_renameat,     264
+.equ SYS_unlinkat,     263
+.equ O_EXCL,           128
 .equ SOL_SOCKET,         1
 .equ SCM_RIGHTS,         1
+.equ MSG_CMSG_CLOEXEC, 0x40000000
+.equ MSG_CTRUNC,          8
+.equ XKB_KEYMAP_MAX_SIZE, 1048576
 .equ WIDTH,            800
 .equ HEIGHT,           480
 .equ STRIDE,           (WIDTH * 4)
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
+.equ BTN_LEFT,          0x110
+.equ CLOCK_MONOTONIC,      1
+.equ TFD_CLOEXEC,     0x80000
+.equ POLLIN,              1
+.equ REPEAT_DEFAULT_DELAY_MS, 300
+.equ REPEAT_DEFAULT_RATE, 30
+.equ REPEAT_NS_PER_SECOND, 1000000000
+.equ REPEAT_MAX_RATE, 1000
+.equ DOC_CAPACITY,    65536
+.equ PATH_CAPACITY,    4096
+.equ DOC_LEFT,           16
+.equ DOC_TOP,            92
+.equ STATUS_TOP,         460
+.equ CELL_WIDTH,          8
+.equ LINE_HEIGHT,        12
+.equ DOC_COLUMNS,        ((WIDTH - DOC_LEFT - 8) / CELL_WIDTH)
+.equ DOC_VISIBLE_ROWS,   ((STATUS_TOP - DOC_TOP) / LINE_HEIGHT)
 
 .section .rodata
+wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
 wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
+ui_app_name:           .asciz "NekoEdit"
+ui_mode_error:         .asciz "SAVE ERR"
+ui_document_name:      .asciz "Untitled"
+ui_mode_name:          .asciz "ASCII"
+ui_file_label:         .asciz "File"
+ui_menu_open_label:    .asciz "Open"
+ui_menu_save_label:    .asciz "Save"
+ui_menu_save_as_label: .asciz "Save As"
+ui_prompt_open_title:  .asciz "OPEN FILE PATH"
+ui_prompt_save_title:  .asciz "SAVE AS PATH"
+ui_prompt_help:        .asciz "ENTER: CONFIRM   ESC: CANCEL"
+ui_open_error:         .asciz "OPEN ERR"
+ui_label_line:         .asciz "Ln "
+ui_label_column:       .asciz ", Col "
+ui_label_bytes:        .asciz "Bytes "
 wayland_title:         .asciz "NekoEdit - development window"
 memfd_label:           .asciz "nekoedit-shm"
+xkb_keymap_magic:      .ascii "xkb_keymap"
 iface_compositor:      .asciz "wl_compositor"
 iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
+iface_seat:            .asciz "wl_seat"
+keymap_base:
+    .byte 0, 0, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 45, 61, 0, 0
+    .byte 113, 119, 101, 114, 116, 121, 117, 105, 111, 112, 91, 93, 0, 0, 97, 115
+    .byte 100, 102, 103, 104, 106, 107, 108, 59, 39, 96, 0, 92, 122, 120, 99, 118
+    .byte 98, 110, 109, 44, 46, 47, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+keymap_shift:
+    .byte 0, 0, 33, 64, 35, 36, 37, 94, 38, 42, 40, 41, 95, 43, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 125, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 58, 34, 126, 0, 124, 0, 0, 0, 0
+    .byte 0, 0, 0, 60, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 msg_no_env:            .ascii "NekoEdit: XDG_RUNTIME_DIR is not set; cannot locate the Wayland socket.\n"
 msg_no_env_end:
-msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display socket.\n"
+msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display using WAYLAND_SOCKET or its socket path.\n"
 msg_connect_end:
+msg_file_error:        .ascii "NekoEdit: could not open file or file exceeds the 64 KiB document limit.\n"
+msg_file_error_end:
 msg_globals:           .ascii "NekoEdit: compositor, wl_shm, or xdg_wm_base is unavailable.\n"
 msg_globals_end:
 msg_protocol:          .ascii "NekoEdit: Wayland protocol or shared-memory setup failed.\n"
 msg_protocol_end:
 newline_text:            .ascii "\n"
+msg_protocol_error_prefix: .ascii "NekoEdit: Wayland compositor protocol error: "
+msg_protocol_error_prefix_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -51,6 +128,88 @@ stage_pool:           .asciz "Wayland stage: send shm pool"
 stage_buffer:         .asciz "Wayland stage: create wl_buffer"
 stage_attach:         .asciz "Wayland stage: attach and commit"
 stage_event_loop:     .asciz "Wayland stage: event loop"
+
+.section .rodata
+.balign 1
+font_5x7:
+    .byte 14, 17, 17, 31, 17, 17, 17
+    .byte 30, 17, 17, 30, 17, 17, 30
+    .byte 15, 16, 16, 16, 16, 16, 15
+    .byte 30, 17, 17, 17, 17, 17, 30
+    .byte 31, 16, 16, 30, 16, 16, 31
+    .byte 31, 16, 16, 30, 16, 16, 16
+    .byte 15, 16, 16, 23, 17, 17, 15
+    .byte 17, 17, 17, 31, 17, 17, 17
+    .byte 14, 4, 4, 4, 4, 4, 14
+    .byte 7, 2, 2, 2, 18, 18, 12
+    .byte 17, 18, 20, 24, 20, 18, 17
+    .byte 16, 16, 16, 16, 16, 16, 31
+    .byte 17, 27, 21, 21, 17, 17, 17
+    .byte 17, 25, 21, 19, 17, 17, 17
+    .byte 14, 17, 17, 17, 17, 17, 14
+    .byte 30, 17, 17, 30, 16, 16, 16
+    .byte 14, 17, 17, 17, 21, 18, 13
+    .byte 30, 17, 17, 30, 20, 18, 17
+    .byte 15, 16, 16, 14, 1, 1, 30
+    .byte 31, 4, 4, 4, 4, 4, 4
+    .byte 17, 17, 17, 17, 17, 17, 14
+    .byte 17, 17, 17, 17, 17, 10, 4
+    .byte 17, 17, 17, 21, 21, 21, 10
+    .byte 17, 17, 10, 4, 10, 17, 17
+    .byte 17, 17, 10, 4, 4, 4, 4
+    .byte 31, 1, 2, 4, 8, 16, 31
+    .byte 14, 17, 19, 21, 25, 17, 14
+    .byte 4, 12, 4, 4, 4, 4, 14
+    .byte 14, 17, 1, 2, 4, 8, 31
+    .byte 30, 1, 1, 14, 1, 1, 30
+    .byte 2, 6, 10, 18, 31, 2, 2
+    .byte 31, 16, 16, 30, 1, 1, 30
+    .byte 14, 16, 16, 30, 17, 17, 14
+    .byte 31, 1, 2, 4, 8, 8, 8
+    .byte 14, 17, 17, 14, 17, 17, 14
+    .byte 14, 17, 17, 15, 1, 1, 14
+    .byte 14, 17, 1, 2, 4, 0, 4
+    .byte 0, 0, 0, 0, 0, 12, 12
+    .byte 0, 0, 0, 0, 12, 12, 8
+    .byte 0, 0, 12, 12, 0, 12, 12
+    .byte 0, 0, 0, 31, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 31
+    .byte 4, 4, 4, 4, 4, 0, 4
+    .byte 10, 10, 0, 0, 0, 0, 0
+    .byte 4, 4, 8, 0, 0, 0, 0
+    .byte 2, 4, 8, 8, 8, 4, 2
+    .byte 8, 4, 2, 2, 2, 4, 8
+    .byte 0, 4, 4, 31, 4, 4, 0
+    .byte 0, 0, 31, 0, 31, 0, 0
+    .byte 1, 2, 2, 4, 8, 8, 16
+
+    # Additional printable-ASCII punctuation glyphs (indices 50 through 67).
+    .byte 10, 10, 31, 10, 31, 10, 10       # #
+    .byte 4, 15, 20, 14, 5, 30, 4          # $
+    .byte 24, 25, 1, 2, 4, 19, 3           # %
+    .byte 12, 18, 20, 8, 21, 18, 13        # &
+    .byte 0, 21, 14, 31, 14, 21, 0         # *
+    .byte 0, 12, 12, 0, 12, 12, 8          # ;
+    .byte 2, 4, 8, 16, 8, 4, 2            # <
+    .byte 8, 4, 2, 1, 2, 4, 8              # >
+    .byte 14, 17, 23, 21, 23, 16, 14       # @
+    .byte 14, 8, 8, 8, 8, 8, 14            # [
+    .byte 16, 8, 8, 4, 2, 2, 1             # backslash
+    .byte 14, 2, 2, 2, 2, 2, 14            # ]
+    .byte 4, 10, 17, 0, 0, 0, 0            # ^
+    .byte 8, 4, 2, 0, 0, 0, 0              # grave accent
+    .byte 3, 4, 4, 8, 4, 4, 3              # {
+    .byte 4, 4, 4, 4, 4, 4, 4              # |
+    .byte 24, 4, 4, 2, 4, 4, 24            # }
+    .byte 0, 0, 9, 22, 0, 0, 0             # ~
+
+.section .data
+.balign 4
+repeat_rate:            .long REPEAT_DEFAULT_RATE
+repeat_delay_ms:        .long REPEAT_DEFAULT_DELAY_MS
+active_document_name:   .ascii "Untitled"
+                        .byte 0
+                        .zero 24
 
 .section .bss
 .balign 16
@@ -65,6 +224,63 @@ shm_mapping:           .quad 0
 compositor_global:     .long 0
 shm_global:            .long 0
 xdg_global:            .long 0
+seat_global:           .long 0
+seat_version:          .long 0
+pointer_x:             .long 0
+pointer_y:             .long 0
+pointer_inside:         .long 0
+pointer_created:        .long 0
+pointer_object:         .long 0
+keyboard_created:       .long 0
+keyboard_object:        .long 0
+keyboard_focused:       .long 0
+keyboard_group:         .long 0
+level3_down:            .long 0
+event_fd:               .long 0       # initialized to -1 in wayland_main
+keymap_format:          .long 0
+keymap_size:            .long 0
+keymap_processing_complete: .long 0
+.balign 8
+keymap_mapping:         .quad 0
+next_input_object:      .long 0
+seat_capabilities:      .long 0
+pointer_button_down:    .long 0
+doc_selection_active:   .long 0
+doc_selection_anchor:   .long 0
+doc_selection_start:    .long 0
+doc_selection_end:      .long 0
+doc_view_top_row:       .long 0
+repeat_timer_fd:         .long 0
+repeat_keycode:          .long 0
+poll_fds:               .zero 16
+repeat_timer_spec:      .zero 32
+repeat_timer_read:      .quad 0
+buffer_busy:            .long 0
+redraw_pending:         .long 0
+shift_down:             .long 0
+caps_lock:              .long 0
+ctrl_down:              .long 0
+doc_length:             .long 0
+doc_cursor:             .long 0
+# Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
+doc_gap_start:          .long 0
+doc_gap_end:            .long 0
+doc_buffer:             .zero DOC_CAPACITY
+current_file_path:      .quad 0
+doc_save_error:         .long 0
+doc_open_error:         .long 0
+file_menu_open:         .long 0
+path_prompt_mode:       .long 0
+path_prompt_length:     .long 0
+file_probe_byte:        .byte 0
+.balign 8
+save_target_path:       .quad 0
+.balign 16
+path_prompt_buffer:     .zero PATH_CAPACITY
+current_path_buffer:    .zero PATH_CAPACITY
+load_buffer:            .zero DOC_CAPACITY
+temp_path_buffer:       .zero PATH_CAPACITY
+temp_pid_digits:        .zero 16
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
@@ -82,15 +298,44 @@ msg_iov:               .zero 16
 msg_header:            .zero 56
 .balign 8
 msg_control:           .zero 24
+.balign 8
+recv_iov:              .zero 16
+.balign 8
+recv_msg_header:       .zero 56
+.balign 8
+recv_msg_control:      .zero 64
 
 .section .text
 .extern linux_write_all
 .extern linux_read_exact
 .extern linux_exit
+.extern initial_file_path
+.extern xkb_parse_keymap
+.extern xkb_reset_keymap
+.extern xkb_lookup_ascii
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
     push rbp                    # keep 16-byte call-site stack alignment
+    mov dword ptr [rip + event_fd], -1
+    call load_initial_document
+    test rax, rax
+    js .initial_file_error
+    # WAYLAND_SOCKET is an inherited, already-connected descriptor. It takes
+    # precedence over WAYLAND_DISPLAY when supplied by a session launcher.
+    lea rdi, [rip + wayland_socket_env_key]
+    mov esi, 14
+    call env_lookup
+    test rax, rax
+    jz .connect_using_display_name
+    mov rsi, rax
+    call parse_socket_fd
+    test rax, rax
+    js .connect_error
+    mov qword ptr [rip + socket_fd], rax
+    jmp .socket_connected
+
+.connect_using_display_name:
     # Resolve WAYLAND_DISPLAY (default wayland-0) and XDG_RUNTIME_DIR.
     lea rdi, [rip + wayland_env_key]
     mov esi, 15
@@ -165,6 +410,7 @@ wayland_main:
     test rax, rax
     js .connect_error
 
+.socket_connected:
     lea rax, [rip + stage_registry]
     mov qword ptr [rip + failure_stage], rax
     # wl_display.get_registry(new_id=2)
@@ -384,20 +630,8 @@ wayland_main:
     mov qword ptr [rip + mmap_result], rax
     mov qword ptr [rip + shm_mapping], rax
 
-    # Paint a simple dark surface with an accent header bar (XRGB8888).
-    mov rdi, rax
-    mov ecx, (WIDTH * HEIGHT)
-    mov eax, 0xff252a33
-    rep stosd
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov ecx, (WIDTH * 36)
-    mov eax, 0xff343d4b
-    rep stosd
-    mov rdi, qword ptr [rip + shm_mapping]
-    add rdi, (48 * 4)
-    mov ecx, (4 * 4)
-    mov eax, 0xff78a9d4
-    rep stosd
+    # Draw the initial software-rendered palette surface.
+    call render_surface
 
     lea rax, [rip + stage_pool]
     mov qword ptr [rip + failure_stage], rax
@@ -474,19 +708,723 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
+    mov dword ptr [rip + buffer_busy], 1
 
-    # Minimal event loop: answer shell pings and honor the compositor close event.
-.event_loop:
-    lea rax, [rip + stage_event_loop]
+    # Bind the optional wl_seat after the window objects so IDs 13-15 remain
+    # dense: seat=13, roundtrip callback=14, pointer=15.
+    cmp dword ptr [rip + seat_global], 0
+    je .event_loop
+    lea rax, [rip + stage_bind_roundtrip]
     mov qword ptr [rip + failure_stage], rax
+    mov edi, dword ptr [rip + seat_global]
+    lea rsi, [rip + iface_seat]
+    mov edx, 8
+    mov ecx, dword ptr [rip + seat_version]
+    mov r8d, 13
+    call wl_registry_bind
+    test rax, rax
+    js .protocol_error
+
+    # Input objects are allocated from 15 onward, in capability order.
+    mov dword ptr [rip + next_input_object], 15
+    # Roundtrip so the compositor can announce seat capabilities.
+    mov dword ptr [rip + payload_buffer], 14
+    mov edi, 1
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+.seat_roundtrip:
     call wl_read_event
     test rax, rax
     js .protocol_error
     cmp dword ptr [rip + last_object], 6
+    jne .seat_check_capabilities
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_capabilities
+    call handle_xdg_ping
+.seat_check_capabilities:
+    cmp dword ptr [rip + last_object], 13
+    jne .seat_check_buffer_release
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_buffer_release
+    call handle_seat_capabilities
+    test rax, rax
+    js .protocol_error
+    jmp .seat_check_sync
+.seat_check_buffer_release:
+    cmp dword ptr [rip + last_object], 12
+    jne .seat_check_sync
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_sync
+    mov dword ptr [rip + buffer_busy], 0
+.seat_check_sync:
+    cmp dword ptr [rip + last_object], 14
+    jne .seat_roundtrip
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_roundtrip
+
+    # Main event loop: pointer input edits the document. The single
+    # wl_buffer is only rewritten after wl_buffer.release.
+.event_loop:
+    lea rax, [rip + stage_event_loop]
+    mov qword ptr [rip + failure_stage], rax
+    cmp dword ptr [rip + repeat_timer_fd], 0
+    jne .event_poll_prepare
+    # A monotonic timerfd lets key repetition proceed while the Wayland
+    # socket is otherwise idle, without introducing a userspace runtime.
+    mov eax, SYS_timerfd_create
+    mov edi, CLOCK_MONOTONIC
+    mov esi, TFD_CLOEXEC
+    syscall
+    test rax, rax
+    js .protocol_error
+    mov dword ptr [rip + repeat_timer_fd], eax
+.event_poll_prepare:
+    mov eax, dword ptr [rip + socket_fd]
+    mov dword ptr [rip + poll_fds], eax
+    mov word ptr [rip + poll_fds + 4], POLLIN
+    mov eax, dword ptr [rip + repeat_timer_fd]
+    mov dword ptr [rip + poll_fds + 8], eax
+    mov word ptr [rip + poll_fds + 12], POLLIN
+    mov eax, SYS_poll
+    lea rdi, [rip + poll_fds]
+    mov esi, 2
+    mov edx, -1
+    syscall
+    test rax, rax
+    js .protocol_error
+    # Drain compositor events before a simultaneous repeat timeout so key
+    # releases always get a chance to cancel repetition first.
+    movzx eax, word ptr [rip + poll_fds + 6]
+    test eax, eax
+    jnz .event_read_wayland
+    movzx eax, word ptr [rip + poll_fds + 14]
+    test eax, eax
+    jnz .event_repeat_timer
+    jmp .event_loop
+.event_read_wayland:
+    call wl_read_event
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + last_object], 6
+    jne .check_buffer_release
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_buffer_release
+    call handle_xdg_ping
+    jmp .event_loop
+.check_buffer_release:
+    cmp dword ptr [rip + last_object], 12
+    jne .check_seat_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_seat_event
+    mov dword ptr [rip + buffer_busy], 0
+    cmp dword ptr [rip + redraw_pending], 0
+    je .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.check_seat_event:
+    cmp dword ptr [rip + last_object], 13
+    jne .check_pointer_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_pointer_event
+    call handle_seat_capabilities
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.check_pointer_event:
+    mov eax, dword ptr [rip + pointer_object]
+    test eax, eax
+    jz .check_keyboard_event
+    cmp dword ptr [rip + last_object], eax
+    jne .check_keyboard_event
+    cmp dword ptr [rip + last_opcode], 0
+    je .pointer_enter
+    cmp dword ptr [rip + last_opcode], 1
+    je .pointer_leave
+    cmp dword ptr [rip + last_opcode], 2
+    je .pointer_motion
+    cmp dword ptr [rip + last_opcode], 3
+    je .pointer_button
+    jmp .event_loop
+.pointer_enter:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+    mov dword ptr [rip + pointer_inside], 1
+    jmp .event_loop
+.pointer_leave:
+    mov dword ptr [rip + pointer_inside], 0
+    jmp .event_loop
+.pointer_motion:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    mov eax, dword ptr [rip + event_payload + 4]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+    cmp dword ptr [rip + pointer_button_down], 1
+    jne .event_loop
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_y]
+    cmp eax, DOC_TOP
+    jl .event_loop
+    cmp eax, HEIGHT
+    jae .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    test eax, eax
+    js .event_loop
+    cmp eax, WIDTH
+    ja .event_loop
+    mov edi, eax
+    mov esi, dword ptr [rip + pointer_y]
+    call doc_place_cursor_from_pointer
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    cmp eax, dword ptr [rip + doc_cursor]
+    jne .Lneko_pointer_selection_set
+    mov dword ptr [rip + doc_selection_active], 0
+    jmp .keyboard_changed
+.Lneko_pointer_selection_set:
+    mov dword ptr [rip + doc_selection_active], 1
+    jmp .keyboard_changed
+.pointer_button:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 8], BTN_LEFT
+    jne .event_loop
+    cmp dword ptr [rip + event_payload + 12], 1
+    je .pointer_button_press
+    cmp dword ptr [rip + event_payload + 12], 0
+    jne .event_loop
+    cmp dword ptr [rip + pointer_button_down], 1
+    jne .event_loop
+    mov dword ptr [rip + pointer_button_down], 0
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    cmp eax, dword ptr [rip + doc_cursor]
+    jne .Lneko_pointer_button_released
+    mov dword ptr [rip + doc_selection_active], 0
+.Lneko_pointer_button_released:
+    jmp .event_loop
+.pointer_button_press:
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    # A path prompt is modal: clicking through it must never reposition the
+    # document caret or insert text into the document.
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    mov edx, dword ptr [rip + pointer_y]
+    # The File control is part of the application header.
+    cmp edx, 32
+    jae .pointer_menu_rows
+    cmp eax, 104
+    jb .pointer_header_outside
+    cmp eax, 160
+    jae .pointer_header_outside
+    xor dword ptr [rip + file_menu_open], 1
+    jmp .keyboard_changed
+.pointer_header_outside:
+    cmp dword ptr [rip + file_menu_open], 0
+    je .pointer_document_click
+    mov dword ptr [rip + file_menu_open], 0
+    jmp .keyboard_changed
+.pointer_menu_rows:
+    cmp dword ptr [rip + file_menu_open], 1
+    jne .pointer_document_click
+    cmp eax, 104
+    jb .pointer_menu_outside
+    cmp eax, 232
+    jae .pointer_menu_outside
+    cmp edx, 32
+    jb .pointer_menu_outside
+    cmp edx, 112
+    jae .pointer_menu_outside
+    mov dword ptr [rip + file_menu_open], 0
+    cmp edx, 60
+    jb .pointer_menu_open
+    cmp edx, 84
+    jb .pointer_menu_save
+    jmp .pointer_menu_save_as
+.pointer_menu_open:
+    call start_open_prompt
+    jmp .keyboard_changed
+.pointer_menu_save:
+    call save_current_document
+    jmp .keyboard_changed
+.pointer_menu_save_as:
+    call start_save_as_prompt
+    jmp .keyboard_changed
+.pointer_menu_outside:
+    mov dword ptr [rip + file_menu_open], 0
+.pointer_document_click:
+    cmp edx, DOC_TOP
+    jl .event_loop
+    cmp edx, HEIGHT - 20
+    jae .event_loop
+    test eax, eax
+    js .event_loop
+    cmp eax, WIDTH
+    ja .event_loop
+    mov dword ptr [rip + pointer_button_down], 1
+    mov edi, eax
+    mov esi, edx
+    call doc_place_cursor_from_pointer
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov dword ptr [rip + doc_selection_active], 0
+    jmp .keyboard_changed
+.check_keyboard_event:
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .check_toplevel_close
+    cmp dword ptr [rip + last_object], eax
     jne .check_toplevel_close
     cmp dword ptr [rip + last_opcode], 0
-    jne .check_toplevel_close
-    call handle_xdg_ping
+    je .keyboard_keymap
+    cmp dword ptr [rip + last_opcode], 1
+    je .keyboard_enter
+    cmp dword ptr [rip + last_opcode], 2
+    je .keyboard_leave
+    cmp dword ptr [rip + last_opcode], 3
+    je .keyboard_key
+    cmp dword ptr [rip + last_opcode], 4
+    je .keyboard_modifiers
+    cmp dword ptr [rip + last_opcode], 5
+    je .keyboard_repeat_info
+    jmp .event_loop
+.keyboard_keymap:
+    cmp dword ptr [rip + last_size], 8
+    jne .protocol_error
+    cmp dword ptr [rip + event_fd], -1
+    je .protocol_error
+    call keyboard_keymap_update
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.event_repeat_timer:
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    lea rsi, [rip + repeat_timer_read]
+    mov edx, 8
+    call linux_read_exact
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + repeat_keycode], 0
+    je .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_repeat_cancel
+    mov eax, dword ptr [rip + repeat_keycode]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.event_repeat_cancel:
+    call repeat_cancel
+    jmp .event_loop
+
+.keyboard_repeat_info:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    # wl_keyboard.repeat_info(rate, delay). Negative values violate the
+    # protocol; a zero rate disables client-side repetition.
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    js .protocol_error
+    mov edx, dword ptr [rip + event_payload + 4]
+    test edx, edx
+    js .protocol_error
+    # Defend the timerfd path against pathological rates while preserving
+    # practical compositor settings (the normal desktop range is far lower).
+    cmp eax, REPEAT_MAX_RATE
+    jbe .Lneko_repeat_rate_capped
+    mov eax, REPEAT_MAX_RATE
+.Lneko_repeat_rate_capped:
+    mov dword ptr [rip + repeat_rate], eax
+    mov dword ptr [rip + repeat_delay_ms], edx
+    test eax, eax
+    jnz .Lneko_repeat_info_reconfigure
+    call repeat_cancel
+    jmp .event_loop
+.Lneko_repeat_info_reconfigure:
+    mov eax, dword ptr [rip + repeat_keycode]
+    test eax, eax
+    jz .event_loop
+    # A changed rate/delay takes effect for the currently held key too.
+    call repeat_start_if_supported
+    jmp .event_loop
+
+.keyboard_modifiers:
+    cmp dword ptr [rip + last_size], 20
+    jb .event_loop
+    # wl_keyboard.modifiers: serial, depressed, latched, locked, group.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    test eax, 1
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + shift_down], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    and eax, 2
+    shr eax, 1
+    mov dword ptr [rip + caps_lock], eax
+    mov eax, dword ptr [rip + event_payload + 16]
+    mov dword ptr [rip + keyboard_group], eax
+    # The standard XKB Control modifier is bit 2. Physical Ctrl key
+    # transitions below are also tracked so this works before a modifier
+    # update is delivered and when a compositor omits modifier events.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    and eax, 4
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + ctrl_down], eax
+    jmp .event_loop
+.keyboard_enter:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 4], 8
+    jne .event_loop
+    mov dword ptr [rip + keyboard_focused], 1
+    jmp .event_loop
+.keyboard_leave:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    mov dword ptr [rip + keyboard_focused], 0
+    mov dword ptr [rip + ctrl_down], 0
+    mov dword ptr [rip + level3_down], 0
+    call repeat_cancel
+    jmp .event_loop
+.keyboard_key:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_loop
+    mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
+    mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
+    cmp eax, 29
+    je .keyboard_control
+    cmp eax, 97
+    je .keyboard_control
+    cmp eax, 42
+    je .keyboard_shift
+    cmp eax, 54
+    je .keyboard_shift
+    cmp eax, 100                # Right Alt / common LevelThree key
+    je .keyboard_level3
+    test edx, edx
+    jz .keyboard_key_release
+    cmp eax, 58
+    jne .keyboard_key_pressed
+    xor dword ptr [rip + caps_lock], 1
+    jmp .keyboard_changed
+.keyboard_key_pressed:
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .keyboard_key_no_repeat
+    call repeat_start_if_supported
+.keyboard_key_no_repeat:
+    mov eax, dword ptr [rip + event_payload + 8]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.keyboard_key_release:
+    cmp eax, dword ptr [rip + repeat_keycode]
+    jne .event_loop
+    call repeat_cancel
+    jmp .event_loop
+.keyboard_shift:
+    mov dword ptr [rip + shift_down], edx
+    jmp .event_loop
+.keyboard_level3:
+    mov dword ptr [rip + level3_down], edx
+    jmp .event_loop
+.keyboard_control:
+    mov dword ptr [rip + ctrl_down], edx
+    jmp .event_loop
+.keyboard_non_modifier:
+    test edx, edx
+    jz .event_loop
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .keyboard_path_prompt
+    cmp dword ptr [rip + ctrl_down], 0
+    je .keyboard_unmodified
+    cmp eax, 24
+    je .keyboard_open_command
+    cmp eax, 30
+    je .keyboard_select_all
+    cmp eax, 31
+    jne .event_loop
+    cmp dword ptr [rip + shift_down], 0
+    jne .keyboard_save_as_command
+    cmp qword ptr [rip + current_file_path], 0
+    je .keyboard_save_as_command
+    jmp .keyboard_save
+.keyboard_unmodified:
+    cmp eax, 1
+    jne .keyboard_unmodified_dispatch
+    cmp dword ptr [rip + file_menu_open], 0
+    je .event_loop
+    mov dword ptr [rip + file_menu_open], 0
+    jmp .keyboard_changed
+.keyboard_unmodified_dispatch:
+    cmp eax, 105
+    je .keyboard_left
+    cmp eax, 106
+    je .keyboard_right
+    cmp eax, 103
+    je .keyboard_up
+    cmp eax, 108
+    je .keyboard_down
+    cmp eax, 102
+    je .keyboard_home
+    cmp eax, 107
+    je .keyboard_end
+    cmp eax, 14
+    je .keyboard_backspace
+    cmp eax, 111
+    je .keyboard_delete
+    cmp eax, 28
+    je .keyboard_enter_key
+    cmp eax, 15
+    je .keyboard_tab
+    mov edi, eax
+    call keycode_to_ascii
+    test eax, eax
+    jz .event_loop
+    mov r12d, eax
+    call doc_delete_selection
+    mov edi, r12d
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_open_command:
+    call start_open_prompt
+    jmp .keyboard_changed
+.keyboard_save_as_command:
+    call start_save_as_prompt
+    jmp .keyboard_changed
+.keyboard_save:
+    call save_document_file
+    jmp .keyboard_changed
+
+# The path editor owns all non-modifier keys while its prompt is visible.
+.keyboard_path_prompt:
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .event_loop
+    cmp eax, 1
+    je .keyboard_path_escape
+    cmp eax, 28
+    je .keyboard_path_enter
+    cmp eax, 14
+    je .keyboard_path_backspace
+    mov edi, eax
+    call keycode_to_ascii
+    test eax, eax
+    jz .event_loop
+    mov ecx, dword ptr [rip + path_prompt_length]
+    cmp ecx, PATH_CAPACITY - 1
+    jae .event_loop
+    lea rdx, [rip + path_prompt_buffer]
+    mov byte ptr [rdx + rcx], al
+    inc ecx
+    mov dword ptr [rip + path_prompt_length], ecx
+    mov byte ptr [rdx + rcx], 0
+    jmp .keyboard_changed
+.keyboard_path_backspace:
+    mov ecx, dword ptr [rip + path_prompt_length]
+    test ecx, ecx
+    jz .event_loop
+    dec ecx
+    mov dword ptr [rip + path_prompt_length], ecx
+    lea rdx, [rip + path_prompt_buffer]
+    mov byte ptr [rdx + rcx], 0
+    jmp .keyboard_changed
+.keyboard_path_escape:
+    call repeat_cancel
+    call cancel_path_prompt
+    jmp .keyboard_changed
+.keyboard_path_enter:
+    call repeat_cancel
+    call confirm_path_prompt
+    jmp .keyboard_changed
+
+.keyboard_select_all:
+    # Ctrl+A selects the full document using the same anchor/cursor model
+    # as Shift+navigation and pointer dragging.
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_left:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_left_extend
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_left_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_keyboard_left_collapse
+    mov eax, edx
+.Lneko_keyboard_left_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_left_plain:
+    cmp dword ptr [rip + doc_cursor], 0
+    je .event_loop
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
+    jmp .keyboard_changed
+.Lneko_keyboard_left_extend:
+    call doc_begin_keyboard_selection
+    cmp dword ptr [rip + doc_cursor], 0
+    je .Lneko_keyboard_left_extend_finish
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
+.Lneko_keyboard_left_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_right:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_right_extend
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_right_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jae .Lneko_keyboard_right_collapse
+    mov eax, edx
+.Lneko_keyboard_right_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_right_plain:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    mov edi, eax
+    call doc_utf8_next
+    mov dword ptr [rip + doc_cursor], eax
+    jmp .keyboard_changed
+.Lneko_keyboard_right_extend:
+    call doc_begin_keyboard_selection
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lneko_keyboard_right_extend_finish
+    mov edi, eax
+    call doc_utf8_next
+    mov dword ptr [rip + doc_cursor], eax
+.Lneko_keyboard_right_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_up:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_up_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_up_plain:
+    xor edi, edi
+    call doc_move_vertical
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_down:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_down_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_down_plain:
+    mov edi, 1
+    call doc_move_vertical
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_home:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_home_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_home_plain:
+    xor edi, edi
+    call doc_move_line_edge
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_end:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_end_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_end_plain:
+    mov edi, 1
+    call doc_move_line_edge
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_backspace:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_backspace_selection
+    cmp dword ptr [rip + doc_cursor], 0
+    je .event_loop
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.Lneko_keyboard_backspace_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
+.keyboard_delete:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_delete_selection
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.Lneko_keyboard_delete_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
+.keyboard_enter_key:
+    call doc_delete_selection
+    mov edi, 10
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_tab:
+    call doc_delete_selection
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+.keyboard_changed:
+    call doc_ensure_cursor_visible
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
@@ -497,6 +1435,14 @@ wayland_main:
     mov eax, SYS_close
     syscall
     xor edi, edi
+    jmp linux_exit
+
+.initial_file_error:
+    mov edi, 2
+    lea rsi, [rip + msg_file_error]
+    mov edx, msg_file_error_end - msg_file_error
+    call linux_write_all
+    mov edi, 1
     jmp linux_exit
 
 .missing_runtime_dir:
@@ -530,22 +1476,39 @@ wayland_main:
     jz .protocol_check_display_error
     call write_stderr_cstr
 .protocol_check_display_error:
-    # wl_display.error is event object 1/opcode 0:
-    # object_id, code, and a Wayland string.
+    # wl_display.error payload: object_id, code, then a length-prefixed
+    # Wayland string. Validate both the declared event size and NUL terminator.
     cmp dword ptr [rip + last_object], 1
     jne .protocol_exit
     cmp dword ptr [rip + last_opcode], 0
     jne .protocol_exit
+    mov ecx, dword ptr [rip + last_size]
+    cmp ecx, 12
+    jb .protocol_exit
     mov eax, dword ptr [rip + event_payload + 8]
     cmp eax, 1
     jb .protocol_exit
     cmp eax, 4000
     ja .protocol_exit
-    sub eax, 1
-    mov edx, eax
+    # The declared string may be shorter than the remaining padded payload.
+    # Clamp output to bytes actually received; never read beyond last_size.
+    dec eax
+    mov edx, ecx
+    sub edx, 12
+    cmp eax, edx
+    cmova eax, edx
+    mov r12d, eax
+    mov edi, 2
+    lea rsi, [rip + msg_protocol_error_prefix]
+    mov edx, msg_protocol_error_prefix_end - msg_protocol_error_prefix
+    call linux_write_all
+    test r12d, r12d
+    jz .protocol_error_message_newline
     mov edi, 2
     lea rsi, [rip + event_payload + 12]
+    mov edx, r12d
     call linux_write_all
+.protocol_error_message_newline:
     mov edi, 2
     lea rsi, [rip + newline_text]
     mov edx, 1
@@ -554,6 +1517,514 @@ wayland_main:
     mov edi, 1
     jmp linux_exit
 .size wayland_main, . - wayland_main
+
+# Load an optional initial file. A nonexistent path is a new, empty document;
+# existing files larger than the bounded document buffer are rejected.
+.type load_initial_document, @function
+load_initial_document:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, qword ptr [rip + initial_file_path]
+    test r12, r12
+    jz .load_file_empty
+    mov qword ptr [rip + current_file_path], r12
+    call set_active_document_name
+
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    xor edx, edx                 # O_RDONLY
+    xor r10d, r10d
+    syscall
+    cmp rax, -2                  # ENOENT: retain path for a later Ctrl+S
+    je .load_file_empty
+    test rax, rax
+    js .load_file_error
+    mov r14d, eax
+    xor r13d, r13d
+.load_file_read:
+    cmp r13d, DOC_CAPACITY
+    jae .load_file_probe
+    mov eax, SYS_read
+    mov edi, r14d
+    lea rsi, [rip + doc_buffer]
+    add rsi, r13
+    mov edx, DOC_CAPACITY
+    sub edx, r13d
+    syscall
+    test rax, rax
+    jg .load_file_advance
+    je .load_file_done
+    cmp rax, -4                  # EINTR
+    je .load_file_read
+    jmp .load_file_close_error
+.load_file_advance:
+    add r13, rax
+    jmp .load_file_read
+.load_file_probe:
+    # Read one extra byte to distinguish an exactly-full file from truncation.
+    mov eax, SYS_read
+    mov edi, r14d
+    lea rsi, [rip + file_probe_byte]
+    mov edx, 1
+    syscall
+    test rax, rax
+    jg .load_file_close_error
+    je .load_file_done
+    cmp rax, -4
+    je .load_file_probe
+    jmp .load_file_close_error
+.load_file_done:
+    mov edi, r14d
+    mov eax, SYS_close
+    syscall
+    test rax, rax
+    js .load_file_error
+    mov dword ptr [rip + doc_length], r13d
+    jmp .load_file_reset
+.load_file_close_error:
+    mov edi, r14d
+    mov eax, SYS_close
+    syscall
+.load_file_error:
+    mov rax, -5
+    jmp .load_file_return
+.load_file_empty:
+    mov dword ptr [rip + doc_length], 0
+.load_file_reset:
+    # The file was read contiguously at the start of the allocation. Put the
+    # initial gap after its bytes; the unused tail becomes the insertion space.
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_gap_start], eax
+    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
+    mov dword ptr [rip + doc_cursor], 0
+    mov dword ptr [rip + doc_view_top_row], 0
+    mov dword ptr [rip + doc_selection_active], 0
+    mov dword ptr [rip + doc_save_error], 0
+    xor eax, eax
+.load_file_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size load_initial_document, . - load_initial_document
+
+# Copy the basename into the tab label without retaining or rewriting argv.
+.type set_active_document_name, @function
+set_active_document_name:
+    lea rdi, [rip + active_document_name]
+    mov rsi, r12
+    mov r8, r12
+.set_name_find_end:
+    mov al, byte ptr [rsi]
+    test al, al
+    jz .set_name_copy
+    cmp al, '/'
+    jne .set_name_next
+    lea r8, [rsi + 1]
+.set_name_next:
+    inc rsi
+    jmp .set_name_find_end
+.set_name_copy:
+    xor ecx, ecx
+.set_name_copy_loop:
+    cmp ecx, 15
+    jae .set_name_done
+    mov al, byte ptr [r8 + rcx]
+    test al, al
+    jz .set_name_done
+    mov byte ptr [rdi + rcx], al
+    inc ecx
+    jmp .set_name_copy_loop
+.set_name_done:
+    mov byte ptr [rdi + rcx], 0
+    ret
+.size set_active_document_name, . - set_active_document_name
+
+# Save the active document. Untitled is routed to the in-window Save As
+# prompt by its caller; this routine deliberately refuses a null path.
+.type save_document_file, @function
+save_document_file:
+    mov rdi, qword ptr [rip + current_file_path]
+    test rdi, rdi
+    jz .save_file_no_path
+    jmp save_document_to_path
+.save_file_no_path:
+    mov dword ptr [rip + doc_save_error], 1
+    mov rax, -2
+    ret
+.size save_document_file, . - save_document_file
+
+# Atomically replace PATH with the current document. The temporary is created
+# in the destination directory (exclusive create), fully written, fsynced,
+# closed, then renamed over the target. A failed write never truncates target.
+.type save_document_to_path, @function
+save_document_to_path:
+    mov qword ptr [rip + save_target_path], rdi
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    test r12, r12
+    jz .save_atomic_error
+    cmp byte ptr [r12], 0
+    je .save_atomic_error
+
+    # Keep the temporary beside the destination so renameat stays on one FS.
+    xor r14d, r14d
+    mov rsi, r12
+.save_atomic_scan_path:
+    mov al, byte ptr [rsi]
+    test al, al
+    jz .save_atomic_path_scanned
+    inc rsi
+    cmp al, '/'
+    jne .save_atomic_scan_path
+    mov r14, rsi
+    sub r14, r12
+    jmp .save_atomic_scan_path
+.save_atomic_path_scanned:
+    cmp r14d, PATH_CAPACITY - 32
+    ja .save_atomic_error
+    lea rdi, [rip + temp_path_buffer]
+    mov rsi, r12
+    mov rcx, r14
+    rep movsb
+    mov r13, rdi
+    lea rsi, [rip + temp_prefix]
+    mov ecx, temp_prefix_end - temp_prefix
+    rep movsb
+    mov r13, rdi
+
+    mov eax, SYS_getpid
+    syscall
+    test rax, rax
+    js .save_atomic_error
+    lea rdi, [rip + temp_pid_digits + 15]
+    mov byte ptr [rdi], 0
+    mov ecx, 10
+.save_atomic_pid_digits:
+    xor edx, edx
+    div ecx
+    add dl, '0'
+    dec rdi
+    mov byte ptr [rdi], dl
+    test eax, eax
+    jnz .save_atomic_pid_digits
+    mov rsi, rdi
+    mov rdi, r13
+    lea rdx, [rip + temp_pid_digits + 15]
+    sub rdx, rsi
+    mov rcx, rdx
+    rep movsb
+    mov r13, rdi
+    lea rsi, [rip + temp_suffix]
+    mov ecx, temp_suffix_end - temp_suffix
+    rep movsb
+    mov byte ptr [rdi], 0
+
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    mov edx, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC
+    mov r10d, 0644
+    syscall
+    test rax, rax
+    js .save_atomic_error
+    mov ebx, eax
+    # Write the prefix before the gap, then the suffix after it. The physical
+    # gap is never serialized into the file.
+    lea r12, [rip + doc_buffer]
+    mov ebp, dword ptr [rip + doc_gap_start]
+    xor r15d, r15d
+.save_atomic_write:
+    test ebp, ebp
+    jnz .save_atomic_issue_write
+    test r15d, r15d
+    jnz .save_atomic_fsync
+    mov r15d, 1
+    lea r12, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add r12, rax
+    mov ebp, dword ptr [rip + doc_length]
+    sub ebp, dword ptr [rip + doc_gap_start]
+    jmp .save_atomic_write
+.save_atomic_issue_write:
+    mov eax, SYS_write
+    mov edi, ebx
+    mov rsi, r12
+    mov edx, ebp
+    syscall
+    test rax, rax
+    jg .save_atomic_advance
+    cmp rax, -4
+    je .save_atomic_issue_write
+    jmp .save_atomic_close_error
+.save_atomic_advance:
+    add r12, rax
+    sub ebp, eax
+    jmp .save_atomic_write
+.save_atomic_fsync:
+    mov eax, SYS_fsync
+    mov edi, ebx
+    syscall
+    cmp rax, -4
+    je .save_atomic_fsync
+    test rax, rax
+    js .save_atomic_close_error
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+    test rax, rax
+    js .save_atomic_unlink_error
+    mov ebx, -1
+
+    mov eax, SYS_renameat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    mov edx, AT_FDCWD
+    mov r10, qword ptr [rip + save_target_path]
+    syscall
+    test rax, rax
+    js .save_atomic_unlink_error
+    mov dword ptr [rip + doc_save_error], 0
+    xor eax, eax
+    jmp .save_atomic_return
+
+.save_atomic_close_error:
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+    mov ebx, -1
+.save_atomic_unlink_error:
+    mov eax, SYS_unlinkat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    xor edx, edx
+    syscall
+    jmp .save_atomic_error
+.save_atomic_error:
+    mov dword ptr [rip + doc_save_error], 1
+    mov rax, -5
+.save_atomic_return:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size save_document_to_path, . - save_document_to_path
+
+# Open a replacement document into a scratch buffer first. The live document,
+# path, and tab label are changed only after EOF and a successful close.
+.type load_document_from_path, @function
+load_document_from_path:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    test r12, r12
+    jz .load_path_error
+    cmp byte ptr [r12], 0
+    je .load_path_error
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    xor edx, edx
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .load_path_error
+    mov ebx, eax
+    xor r13d, r13d
+.load_path_read:
+    cmp r13d, DOC_CAPACITY
+    jae .load_path_probe
+    mov eax, SYS_read
+    mov edi, ebx
+    lea rsi, [rip + load_buffer]
+    add rsi, r13
+    mov edx, DOC_CAPACITY
+    sub edx, r13d
+    syscall
+    test rax, rax
+    jg .load_path_advance
+    je .load_path_close
+    cmp rax, -4
+    je .load_path_read
+    jmp .load_path_close_error
+.load_path_advance:
+    add r13, rax
+    jmp .load_path_read
+.load_path_probe:
+    mov eax, SYS_read
+    mov edi, ebx
+    lea rsi, [rip + file_probe_byte]
+    mov edx, 1
+    syscall
+    test rax, rax
+    jg .load_path_close_error
+    je .load_path_close
+    cmp rax, -4
+    je .load_path_probe
+    jmp .load_path_close_error
+.load_path_close:
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+    test rax, rax
+    js .load_path_error
+    lea rsi, [rip + load_buffer]
+    lea rdi, [rip + doc_buffer]
+    mov ecx, r13d
+    rep movsb
+    mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_gap_start], r13d
+    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
+    mov dword ptr [rip + doc_cursor], 0
+    mov dword ptr [rip + doc_view_top_row], 0
+    mov dword ptr [rip + doc_selection_active], 0
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov dword ptr [rip + doc_selection_start], 0
+    mov dword ptr [rip + doc_selection_end], 0
+    mov dword ptr [rip + doc_save_error], 0
+    mov dword ptr [rip + doc_open_error], 0
+    xor eax, eax
+    jmp .load_path_return
+.load_path_close_error:
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+.load_path_error:
+    mov dword ptr [rip + doc_open_error], 1
+    mov rax, -5
+.load_path_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size load_document_from_path, . - load_document_from_path
+
+.type start_open_prompt, @function
+start_open_prompt:
+    mov edi, 1
+    jmp begin_path_prompt
+.size start_open_prompt, . - start_open_prompt
+
+.type start_save_as_prompt, @function
+start_save_as_prompt:
+    mov edi, 2
+    jmp begin_path_prompt
+.size start_save_as_prompt, . - start_save_as_prompt
+
+.type begin_path_prompt, @function
+begin_path_prompt:
+    mov dword ptr [rip + path_prompt_mode], edi
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    ret
+.size begin_path_prompt, . - begin_path_prompt
+
+.type cancel_path_prompt, @function
+cancel_path_prompt:
+    mov dword ptr [rip + path_prompt_mode], 0
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    ret
+.size cancel_path_prompt, . - cancel_path_prompt
+
+# Commit the entered path only after the corresponding file operation succeeds.
+.type commit_path_prompt, @function
+commit_path_prompt:
+    push r12
+    lea rsi, [rip + path_prompt_buffer]
+    lea rdi, [rip + current_path_buffer]
+    mov ecx, dword ptr [rip + path_prompt_length]
+    rep movsb
+    mov byte ptr [rdi], 0
+    lea r12, [rip + current_path_buffer]
+    mov qword ptr [rip + current_file_path], r12
+    call set_active_document_name
+    mov dword ptr [rip + path_prompt_mode], 0
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    pop r12
+    ret
+.size commit_path_prompt, . - commit_path_prompt
+
+.type confirm_path_prompt, @function
+confirm_path_prompt:
+    push rbp
+    cmp dword ptr [rip + path_prompt_length], 0
+    je .confirm_path_error
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .confirm_path_save
+    lea rdi, [rip + path_prompt_buffer]
+    call load_document_from_path
+    test rax, rax
+    js .confirm_path_failed
+    call commit_path_prompt
+    xor eax, eax
+    pop rbp
+    ret
+.confirm_path_save:
+    lea rdi, [rip + path_prompt_buffer]
+    call save_document_to_path
+    test rax, rax
+    js .confirm_path_failed
+    call commit_path_prompt
+    xor eax, eax
+    pop rbp
+    ret
+.confirm_path_error:
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .confirm_path_save_error
+    mov dword ptr [rip + doc_open_error], 1
+    mov rax, -2
+    pop rbp
+    ret
+.confirm_path_save_error:
+    mov dword ptr [rip + doc_save_error], 1
+    mov rax, -2
+    pop rbp
+    ret
+.confirm_path_failed:
+    mov rax, -5
+    pop rbp
+    ret
+.size confirm_path_prompt, . - confirm_path_prompt
+
+.type save_current_document, @function
+save_current_document:
+    cmp qword ptr [rip + current_file_path], 0
+    je .save_current_prompt
+    jmp save_document_file
+.save_current_prompt:
+    jmp start_save_as_prompt
+.size save_current_document, . - save_current_document
+
+.section .rodata
+temp_prefix: .ascii ".nekoedit-"
+temp_prefix_end:
+temp_suffix: .ascii ".tmp"
+temp_suffix_end:
+.section .text
 
 # Print a NUL-terminated string to stderr. Input: RSI = string.
 .type write_stderr_cstr, @function
@@ -643,9 +2114,39 @@ copy_cstr:
     mov eax, ecx
     ret
 .copy_fail:
-    mov eax, -1
+    mov rax, -1
     ret
 .size copy_cstr, . - copy_cstr
+
+# Parse WAYLAND_SOCKET as a non-negative decimal file descriptor.
+# RSI = NUL-terminated decimal string. RAX = fd or -EINVAL.
+.type parse_socket_fd, @function
+parse_socket_fd:
+    xor eax, eax
+    xor ecx, ecx
+.parse_socket_fd_loop:
+    movzx edx, byte ptr [rsi + rcx]
+    test edx, edx
+    jz .parse_socket_fd_done
+    cmp edx, '0'
+    jb .parse_socket_fd_invalid
+    cmp edx, '9'
+    ja .parse_socket_fd_invalid
+    sub edx, '0'
+    imul rax, rax, 10
+    add rax, rdx
+    cmp rax, 0x7fffffff
+    ja .parse_socket_fd_invalid
+    inc ecx
+    jmp .parse_socket_fd_loop
+.parse_socket_fd_done:
+    test ecx, ecx
+    jz .parse_socket_fd_invalid
+    ret
+.parse_socket_fd_invalid:
+    mov rax, -22
+    ret
+.size parse_socket_fd, . - parse_socket_fd
 
 # wl_send_request(object=rdi, opcode=esi, payload=rdx, payload_length=ecx).
 .type wl_send_request, @function
@@ -799,14 +2300,251 @@ wl_registry_bind:
     ret
 .size wl_registry_bind, . - wl_registry_bind
 
+# Receive exactly RDX bytes from an AF_UNIX stream while preserving SCM_RIGHTS.
+# RDI=socket, RSI=destination, RDX=length. RAX=0 or negative errno.
+.type wl_recv_exact, @function
+wl_recv_exact:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13, rsi
+    mov r14, rdx
+.recv_exact_loop:
+    test r14, r14
+    jz .recv_exact_success
+    # Rebuild msghdr/iovec for every partial receive; ancillary data is tied
+    # to stream position and can arrive before the event payload is complete.
+    mov qword ptr [rip + recv_iov], r13
+    mov qword ptr [rip + recv_iov + 8], r14
+    lea rdi, [rip + recv_msg_header]
+    xor eax, eax
+    mov ecx, 14
+    rep stosd
+    lea rax, [rip + recv_iov]
+    mov qword ptr [rip + recv_msg_header + 16], rax
+    mov qword ptr [rip + recv_msg_header + 24], 1
+    lea rax, [rip + recv_msg_control]
+    mov qword ptr [rip + recv_msg_header + 32], rax
+    mov qword ptr [rip + recv_msg_header + 40], 64
+    lea rdi, [rip + recv_msg_control]
+    xor eax, eax
+    mov ecx, 16
+    rep stosd
+
+    mov eax, SYS_recvmsg
+    mov edi, r12d
+    lea rsi, [rip + recv_msg_header]
+    mov edx, MSG_CMSG_CLOEXEC
+    syscall
+    cmp rax, -4                 # EINTR
+    je .recv_exact_loop
+    test rax, rax
+    js .recv_exact_done
+    jz .recv_exact_eof
+    mov r15, rax
+
+    # A truncated control buffer may have silently lost SCM_RIGHTS handles;
+    # reject it rather than continue with a keymap whose FD was not retained.
+    mov eax, dword ptr [rip + recv_msg_header + 48]
+    test eax, MSG_CTRUNC
+    jnz .recv_exact_bad_control
+    mov rcx, qword ptr [rip + recv_msg_header + 40]
+    test rcx, rcx
+    jz .recv_exact_advance
+    cmp rcx, 16
+    jb .recv_exact_bad_control
+    lea rsi, [rip + recv_msg_control]
+    mov rax, qword ptr [rsi]
+    cmp rax, 16
+    jb .recv_exact_bad_control
+    cmp rax, rcx
+    ja .recv_exact_bad_control
+    cmp dword ptr [rsi + 8], SOL_SOCKET
+    jne .recv_exact_advance
+    cmp dword ptr [rsi + 12], SCM_RIGHTS
+    jne .recv_exact_advance
+    cmp rax, 20
+    jb .recv_exact_bad_control
+    mov rdx, rax
+    sub rdx, 16
+    test edx, 3
+    jnz .recv_exact_bad_control
+    shr rdx, 2
+    xor ebx, ebx
+.recv_exact_rights_loop:
+    cmp rbx, rdx
+    jae .recv_exact_advance
+    mov eax, dword ptr [rsi + rbx*4 + 16]
+    cmp dword ptr [rip + event_fd], -1
+    jne .recv_exact_close_extra
+    mov dword ptr [rip + event_fd], eax
+    jmp .recv_exact_next_right
+.recv_exact_close_extra:
+    mov edi, eax
+    mov eax, SYS_close
+    syscall
+.recv_exact_next_right:
+    inc rbx
+    jmp .recv_exact_rights_loop
+
+.recv_exact_advance:
+    add r13, r15
+    sub r14, r15
+    jmp .recv_exact_loop
+.recv_exact_success:
+    xor eax, eax
+    jmp .recv_exact_done
+.recv_exact_eof:
+    mov rax, -5                 # EIO / unexpected EOF
+    jmp .recv_exact_done
+.recv_exact_bad_control:
+    mov rax, -71                # EPROTO
+.recv_exact_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size wl_recv_exact, . - wl_recv_exact
+
+# Consume and validate the wl_keyboard.keymap event's descriptor.
+# XKB_V1 is retained as a bounded, read-only MAP_PRIVATE mapping for the
+# upcoming parser; this stage deliberately leaves the legacy key translator
+# active until keysyms and modifier levels are implemented.
+.type keyboard_keymap_update, @function
+keyboard_keymap_update:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov dword ptr [rip + keymap_processing_complete], 0
+    mov ebx, dword ptr [rip + event_fd]
+    mov dword ptr [rip + event_fd], -1
+    cmp ebx, 0
+    jl .keyboard_keymap_no_fd
+
+    # Replace a prior keymap only after releasing its mapping.
+    mov rdi, qword ptr [rip + keymap_mapping]
+    test rdi, rdi
+    jz .keyboard_keymap_clear_state
+    mov esi, dword ptr [rip + keymap_size]
+    mov eax, SYS_munmap
+    syscall
+.keyboard_keymap_clear_state:
+    mov qword ptr [rip + keymap_mapping], 0
+    mov dword ptr [rip + keymap_size], 0
+    mov dword ptr [rip + keymap_format], 0
+    call xkb_reset_keymap
+
+    mov r14d, dword ptr [rip + event_payload]
+    mov r12d, dword ptr [rip + event_payload + 4]
+    test r14d, r14d
+    jz .keyboard_keymap_no_map
+    cmp r14d, 1                  # WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1
+    jne .keyboard_keymap_bad
+    cmp r12d, 11                 # "xkb_keymap" plus the terminating NUL
+    jb .keyboard_keymap_bad
+    cmp r12d, XKB_KEYMAP_MAX_SIZE
+    ja .keyboard_keymap_bad
+
+    mov eax, SYS_mmap
+    xor edi, edi
+    mov esi, r12d
+    mov edx, PROT_READ
+    mov r10d, MAP_PRIVATE
+    mov r8d, ebx
+    xor r9d, r9d
+    syscall
+    test rax, rax
+    js .keyboard_keymap_map_error
+    mov r13, rax
+    cmp byte ptr [r13 + r12 - 1], 0
+    jne .keyboard_keymap_unmap_bad
+    lea rsi, [rip + xkb_keymap_magic]
+    mov rdi, r13
+    mov ecx, 10
+    repe cmpsb
+    jne .keyboard_keymap_unmap_bad
+
+    mov qword ptr [rip + keymap_mapping], r13
+    mov dword ptr [rip + keymap_size], r12d
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+    # Keep the mapped file only when the supported XKB text subset parsed.
+    mov rdi, r13
+    mov esi, r12d
+    call xkb_parse_keymap
+    test rax, rax
+    js .keyboard_keymap_parser_fallback
+    mov dword ptr [rip + keymap_format], 1
+    mov dword ptr [rip + keymap_processing_complete], 1
+    xor eax, eax
+    jmp .keyboard_keymap_done
+.keyboard_keymap_parser_fallback:
+    mov dword ptr [rip + keymap_format], 0
+    mov dword ptr [rip + keymap_processing_complete], 1
+    xor eax, eax
+    jmp .keyboard_keymap_done
+
+.keyboard_keymap_no_map:
+    # WL_KEYBOARD_KEYMAP_FORMAT_NO_KEYMAP still carries an FD argument.
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+    call xkb_reset_keymap
+    mov dword ptr [rip + keymap_processing_complete], 1
+    xor eax, eax
+    jmp .keyboard_keymap_done
+.keyboard_keymap_unmap_bad:
+    mov rdi, r13
+    mov esi, r12d
+    mov eax, SYS_munmap
+    syscall
+.keyboard_keymap_bad:
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+    mov rax, -71                # EPROTO: malformed/unsupported keymap
+    jmp .keyboard_keymap_done
+.keyboard_keymap_map_error:
+    mov r14, rax
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+    mov rax, r14
+    jmp .keyboard_keymap_done
+.keyboard_keymap_no_fd:
+    mov rax, -71
+.keyboard_keymap_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size keyboard_keymap_update, . - keyboard_keymap_update
+
 # Read one complete Wayland event; records last_object/opcode/size and payload.
 .type wl_read_event, @function
 wl_read_event:
     push rbp
+    # Any descriptor not consumed by the preceding event is not allowed to
+    # leak into the next dispatch cycle.
+    mov edi, dword ptr [rip + event_fd]
+    cmp edi, -1
+    je .read_event_start
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + event_fd], -1
+.read_event_start:
     mov edi, dword ptr [rip + socket_fd]
     lea rsi, [rip + event_header]
     mov edx, 8
-    call linux_read_exact
+    call wl_recv_exact
     test rax, rax
     js .read_event_done
     mov eax, dword ptr [rip + event_header]
@@ -827,16 +2565,25 @@ wl_read_event:
     mov edi, dword ptr [rip + socket_fd]
     lea rsi, [rip + event_payload]
     mov edx, eax
-    call linux_read_exact
+    call wl_recv_exact
     test rax, rax
     js .read_event_done
 .read_event_ok:
+    # wl_display.error is fatal; return an error while preserving its payload
+    # so the caller can print the compositor-provided diagnostic safely.
+    cmp dword ptr [rip + last_object], 1
+    jne .read_event_success
+    cmp dword ptr [rip + last_opcode], 0
+    jne .read_event_success
+    mov rax, -71                 # EPROTO
+    jmp .read_event_done
+.read_event_success:
     xor eax, eax
 .read_event_done:
     pop rbp
     ret
 .read_event_bad:
-    mov eax, -71
+    mov rax, -71
     jmp .read_event_done
 .size wl_read_event, . - wl_read_event
 
@@ -867,9 +2614,31 @@ registry_capture_global:
     lea rsi, [rip + iface_xdg_wm_base]
     call string_equal
     test eax, eax
-    jz .registry_done
+    jz .registry_try_seat
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + xdg_global], eax
+    jmp .registry_done
+.registry_try_seat:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_seat]
+    call string_equal
+    test eax, eax
+    jz .registry_done
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + seat_global], eax
+    # Request at most wl_seat version 4, which exposes wl_keyboard.repeat_info.
+    # Keep older compositor versions working with the local default timings.
+    mov eax, dword ptr [rip + event_payload + 4]
+    add eax, 3
+    and eax, -4
+    lea rdi, [rip + event_payload + 8]
+    add rdi, rax
+    mov edx, dword ptr [rdi]
+    cmp edx, 4
+    jbe .Lneko_seat_version_ready
+    mov edx, 4
+.Lneko_seat_version_ready:
+    mov dword ptr [rip + seat_version], edx
 .registry_done:
     pop rbp
     ret
@@ -895,6 +2664,1810 @@ string_equal:
     xor eax, eax
     ret
 .size string_equal, . - string_equal
+
+# Draw a filled rectangle.
+# Inputs: RDI=base, ESI=x, EDX=y, ECX=width, R8D=height, R9D=XRGB8888.
+.type draw_rect, @function
+draw_rect:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rbx, rdi
+    mov r12d, esi
+    mov r13d, edx
+    mov r14d, ecx
+    mov r15d, r8d
+    mov r11d, r9d
+    xor r10d, r10d
+.draw_rect_row:
+    cmp r10d, r15d
+    jae .draw_rect_done
+    mov eax, r13d
+    add eax, r10d
+    imul rax, STRIDE
+    mov edx, r12d
+    shl edx, 2
+    add rax, rdx
+    add rax, rbx
+    mov rdi, rax
+    mov ecx, r14d
+    mov eax, r11d
+    rep stosd
+    inc r10d
+    jmp .draw_rect_row
+.draw_rect_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_rect, . - draw_rect
+
+# Repaint the editor surface, including document chrome and status information.
+.type render_surface, @function
+render_surface:
+    push rbp
+    # Main application background.
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, WIDTH
+    mov r8d, HEIGHT
+    mov r9d, 0xff252a33
+    call draw_rect
+
+    # Compact title bar with a narrow accent rail.
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, WIDTH
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, 3
+    mov r8d, 32
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 16
+    mov esi, 12
+    lea rdx, [rip + ui_app_name]
+    call draw_text
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_save_error
+    cmp dword ptr [rip + doc_open_error], 0
+    jne .render_open_error
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_save_error
+    mov edi, 744
+    mov esi, 12
+    lea rdx, [rip + ui_mode_name]
+    call draw_text
+    jmp .render_file_button
+.render_open_error:
+    mov edi, 704
+    mov esi, 12
+    lea rdx, [rip + ui_open_error]
+    call draw_text
+    jmp .render_file_button
+.render_save_error:
+    mov edi, 720
+    mov esi, 12
+    lea rdx, [rip + ui_mode_error]
+    call draw_text
+
+.render_file_button:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 104
+    mov edx, 4
+    mov ecx, 48
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 112
+    mov esi, 12
+    lea rdx, [rip + ui_file_label]
+    call draw_text
+
+.render_document_tab:
+    # A single active document tab; the launch-time basename replaces Untitled.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 8
+    mov edx, 40
+    mov ecx, 152
+    mov r8d, 36
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 8
+    mov edx, 74
+    mov ecx, 152
+    mov r8d, 2
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 24
+    mov esi, 54
+    lea rdx, [rip + active_document_name]
+    call draw_text
+
+    call render_selection
+    call render_document
+    call render_status_bar
+    call render_file_menu
+    call render_path_prompt
+    pop rbp
+    ret
+.size render_surface, . - render_surface
+
+# Attach and repaint the one buffer, but only after wl_buffer.release.
+# RAX = 0 on success, negative on failure.
+.type present_buffer, @function
+present_buffer:
+    sub rsp, 8                  # maintain 16-byte alignment for nested calls
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .present_buffer_busy
+    call render_surface
+    mov dword ptr [rip + payload_buffer], 12
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], 0
+    mov edi, 8
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 12
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov dword ptr [rip + payload_buffer], 0
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], WIDTH
+    mov dword ptr [rip + payload_buffer + 12], HEIGHT
+    mov edi, 8
+    mov esi, 2
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov edi, 8
+    mov esi, 6
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov dword ptr [rip + buffer_busy], 1
+    mov dword ptr [rip + redraw_pending], 0
+    xor eax, eax
+    add rsp, 8
+    ret
+.present_buffer_busy:
+    mov rax, -16
+.present_buffer_done:
+    add rsp, 8
+    ret
+.size present_buffer, . - present_buffer
+
+# Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
+# as single-byte replacement units so the original file bytes remain editable.
+# EDI=byte offset; EAX=next byte offset.
+.type doc_byte_at, @function
+# Read one logical document byte, translating around the movable gap.
+# EDI=logical byte offset; EAX=byte value (zero for an out-of-range offset).
+doc_byte_at:
+    mov eax, edi
+    cmp eax, dword ptr [rip + doc_length]
+    jae .doc_byte_at_out_of_range
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .doc_byte_at_physical
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add eax, edx
+.doc_byte_at_physical:
+    lea rdx, [rip + doc_buffer]
+    movzx eax, byte ptr [rdx + rax]
+    ret
+.doc_byte_at_out_of_range:
+    xor eax, eax
+    ret
+.size doc_byte_at, . - doc_byte_at
+
+# Move the gap to a logical byte offset. EDI is clamped to doc_length.
+# The gap is [doc_gap_start, doc_gap_end); bytes outside it stay in order.
+.type doc_move_gap, @function
+doc_move_gap:
+    push rbx
+    push r12
+    push r13
+    mov ebx, edi
+    mov eax, dword ptr [rip + doc_length]
+    cmp ebx, eax
+    jbe .doc_move_gap_target_valid
+    mov ebx, eax
+.doc_move_gap_target_valid:
+    mov r12d, dword ptr [rip + doc_gap_start]
+    cmp ebx, r12d
+    jb .doc_move_gap_left
+    ja .doc_move_gap_right
+    jmp .doc_move_gap_done
+
+.doc_move_gap_left:
+    # Move the prefix tail backwards into the end of the current gap.
+    mov r13d, r12d
+    sub r13d, ebx
+    test r13d, r13d
+    jz .doc_move_gap_done
+    lea rsi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_start]
+    add rsi, rax
+    dec rsi
+    lea rdi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rdi, rax
+    dec rdi
+    mov ecx, r13d
+    std
+    rep movsb
+    cld
+    mov dword ptr [rip + doc_gap_start], ebx
+    sub dword ptr [rip + doc_gap_end], r13d
+    jmp .doc_move_gap_done
+
+.doc_move_gap_right:
+    # Move the suffix head forwards into the beginning of the current gap.
+    mov r13d, ebx
+    sub r13d, r12d
+    test r13d, r13d
+    jz .doc_move_gap_done
+    lea rsi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rsi, rax
+    lea rdi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_start]
+    add rdi, rax
+    mov ecx, r13d
+    cld
+    rep movsb
+    add dword ptr [rip + doc_gap_start], r13d
+    add dword ptr [rip + doc_gap_end], r13d
+.doc_move_gap_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_move_gap, . - doc_move_gap
+
+# Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
+# as single-byte replacement units so the original file bytes remain editable.
+# EDI=logical byte offset; EAX=next logical byte offset.
+.type doc_utf8_next, @function
+doc_utf8_next:
+    push rbx
+    mov r8d, edi
+    mov r9d, dword ptr [rip + doc_length]
+    mov eax, r8d
+    cmp r8d, r9d
+    jae .Lneko_utf8_next_done
+    mov edi, r8d
+    call doc_byte_at
+    mov r11d, eax
+    cmp r11d, 0xc2
+    jb .Lneko_utf8_next_single
+    cmp r11d, 0xdf
+    jbe .Lneko_utf8_next_two
+    cmp r11d, 0xef
+    jbe .Lneko_utf8_next_three
+    cmp r11d, 0xf4
+    jbe .Lneko_utf8_next_four
+    jmp .Lneko_utf8_next_single
+
+.Lneko_utf8_next_two:
+    lea edi, [r8d + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    lea eax, [r8d + 2]
+    jmp .Lneko_utf8_next_done
+
+.Lneko_utf8_next_three:
+    lea edi, [r8d + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    cmp r10d, 0x80
+    jb .Lneko_utf8_next_single
+    cmp r10d, 0xbf
+    ja .Lneko_utf8_next_single
+    cmp r11d, 0xe0
+    jne .Lneko_utf8_next_three_check_ed
+    cmp r10d, 0xa0
+    jb .Lneko_utf8_next_single
+    jmp .Lneko_utf8_next_three_second_ok
+.Lneko_utf8_next_three_check_ed:
+    cmp r11d, 0xed
+    jne .Lneko_utf8_next_three_second_ok
+    cmp r10d, 0x9f
+    ja .Lneko_utf8_next_single
+.Lneko_utf8_next_three_second_ok:
+    lea edi, [r8d + 2]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    lea eax, [r8d + 3]
+    jmp .Lneko_utf8_next_done
+
+.Lneko_utf8_next_four:
+    lea edi, [r8d + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    cmp r10d, 0x80
+    jb .Lneko_utf8_next_single
+    cmp r10d, 0xbf
+    ja .Lneko_utf8_next_single
+    cmp r11d, 0xf0
+    jne .Lneko_utf8_next_four_check_f4
+    cmp r10d, 0x90
+    jb .Lneko_utf8_next_single
+    jmp .Lneko_utf8_next_four_second_ok
+.Lneko_utf8_next_four_check_f4:
+    cmp r11d, 0xf4
+    jne .Lneko_utf8_next_four_second_ok
+    cmp r10d, 0x8f
+    ja .Lneko_utf8_next_single
+.Lneko_utf8_next_four_second_ok:
+    lea edi, [r8d + 2]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    lea edi, [r8d + 3]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    call doc_byte_at
+    mov r10d, eax
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    lea eax, [r8d + 4]
+    jmp .Lneko_utf8_next_done
+
+.Lneko_utf8_next_single:
+    lea eax, [r8d + 1]
+.Lneko_utf8_next_done:
+    pop rbx
+    ret
+.size doc_utf8_next, . - doc_utf8_next
+
+# Return the start of the valid UTF-8 scalar ending at EDI. Invalid trailing
+# bytes remain individually addressable. EDI=byte offset; EAX=previous offset.
+.type doc_utf8_prev, @function
+doc_utf8_prev:
+    push rbx
+    push r12
+    mov r12d, edi
+    test r12d, r12d
+    jz .Lneko_utf8_prev_zero
+    cmp r12d, 2
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 2]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+    cmp r12d, 3
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 3]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+    cmp r12d, 4
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 4]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+.Lneko_utf8_prev_fallback:
+    lea eax, [r12d - 1]
+    jmp .Lneko_utf8_prev_done
+.Lneko_utf8_prev_found:
+    mov eax, ebx
+    jmp .Lneko_utf8_prev_done
+.Lneko_utf8_prev_zero:
+    xor eax, eax
+.Lneko_utf8_prev_done:
+    pop r12
+    pop rbx
+    ret
+.size doc_utf8_prev, . - doc_utf8_prev
+
+# Insert one byte at the cursor. The bounded buffer never writes past its allocation.
+.type doc_insert_byte, @function
+# Insert a byte at the logical cursor by consuming one byte from the gap.
+doc_insert_byte:
+    push rbx
+    push r12
+    push r13
+    mov r13d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_move_gap
+    mov eax, dword ptr [rip + doc_gap_start]
+    cmp eax, dword ptr [rip + doc_gap_end]
+    jae .doc_insert_done
+    lea r12, [rip + doc_buffer]
+    mov byte ptr [r12 + rax], r13b
+    inc dword ptr [rip + doc_gap_start]
+    inc dword ptr [rip + doc_length]
+    inc dword ptr [rip + doc_cursor]
+.doc_insert_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_insert_byte, . - doc_insert_byte
+
+.type doc_delete_at_cursor, @function
+doc_delete_at_cursor:
+    push rbx
+    push r12
+    push r13
+    mov r12d, dword ptr [rip + doc_cursor]
+    cmp r12d, dword ptr [rip + doc_length]
+    jae .doc_delete_done
+    mov edi, r12d
+    call doc_utf8_next
+    mov r13d, eax
+    mov edi, r12d
+    call doc_move_gap
+    mov eax, r13d
+    sub eax, r12d
+    add dword ptr [rip + doc_gap_end], eax
+    sub dword ptr [rip + doc_length], eax
+.doc_delete_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_delete_at_cursor, . - doc_delete_at_cursor
+
+.type doc_delete_selection, @function
+# Remove a logical selection by extending the gap over its selected bytes.
+doc_delete_selection:
+    push rbx
+    push r12
+    push r13
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_delete_selection_done
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_delete_selection_bounds
+    xchg eax, edx
+.Lneko_delete_selection_bounds:
+    mov ebx, eax
+    mov r12d, edx
+    mov edi, ebx
+    call doc_move_gap
+    mov r13d, r12d
+    sub r13d, ebx
+    add dword ptr [rip + doc_gap_end], r13d
+    sub dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_cursor], ebx
+    mov dword ptr [rip + doc_selection_anchor], ebx
+    mov dword ptr [rip + doc_selection_active], 0
+.Lneko_delete_selection_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_delete_selection, . - doc_delete_selection
+
+# Clear selection state while retaining the current insertion point.
+.type doc_clear_selection, @function
+doc_clear_selection:
+    mov dword ptr [rip + doc_selection_active], 0
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    ret
+.size doc_clear_selection, . - doc_clear_selection
+
+# Start compositor-configured repeat for ordinary keys. Modifier and lock
+# keys are intentionally excluded. EAX=Linux evdev keycode.
+.type repeat_start_if_supported, @function
+repeat_start_if_supported:
+    # Shift, Ctrl, Alt, Meta/Super, Caps/Num/Scroll Lock and Compose do not repeat.
+    cmp eax, 42
+    je .Lneko_repeat_start_done
+    cmp eax, 54
+    je .Lneko_repeat_start_done
+    cmp eax, 29
+    je .Lneko_repeat_start_done
+    cmp eax, 97
+    je .Lneko_repeat_start_done
+    cmp eax, 56
+    je .Lneko_repeat_start_done
+    cmp eax, 100
+    je .Lneko_repeat_start_done
+    cmp eax, 125
+    je .Lneko_repeat_start_done
+    cmp eax, 126
+    je .Lneko_repeat_start_done
+    cmp eax, 58
+    je .Lneko_repeat_start_done
+    cmp eax, 69
+    je .Lneko_repeat_start_done
+    cmp eax, 70
+    je .Lneko_repeat_start_done
+    cmp eax, 127
+    je .Lneko_repeat_start_done
+    cmp dword ptr [rip + repeat_rate], 0
+    je .Lneko_repeat_start_done
+    mov dword ptr [rip + repeat_keycode], eax
+    # itimerspec.it_interval = 1 second / repeat_rate.
+    mov qword ptr [rip + repeat_timer_spec], 0
+    mov qword ptr [rip + repeat_timer_spec + 8], 0
+    mov rax, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    mov ecx, dword ptr [rip + repeat_rate]
+    div rcx
+    mov rcx, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    div rcx
+    mov qword ptr [rip + repeat_timer_spec], rax
+    mov qword ptr [rip + repeat_timer_spec + 8], rdx
+    # itimerspec.it_value = configured initial delay in milliseconds.
+    mov eax, dword ptr [rip + repeat_delay_ms]
+    imul rax, rax, 1000000
+    mov rcx, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    div rcx
+    mov qword ptr [rip + repeat_timer_spec + 16], rax
+    mov qword ptr [rip + repeat_timer_spec + 24], rdx
+    # timerfd interprets a zero it_value as disarmed; represent a zero-delay
+    # repeat with the smallest non-zero expiration.
+    cmp dword ptr [rip + repeat_delay_ms], 0
+    jne .Lneko_repeat_timer_arm
+    mov qword ptr [rip + repeat_timer_spec + 24], 1
+.Lneko_repeat_timer_arm:
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + repeat_timer_spec]
+    xor r10d, r10d
+    syscall
+.Lneko_repeat_start_done:
+    ret
+.size repeat_start_if_supported, . - repeat_start_if_supported
+
+.type repeat_cancel, @function
+repeat_cancel:
+    mov dword ptr [rip + repeat_keycode], 0
+    cmp dword ptr [rip + repeat_timer_fd], 0
+    je .Lneko_repeat_cancel_done
+    mov qword ptr [rip + repeat_timer_spec], 0
+    mov qword ptr [rip + repeat_timer_spec + 8], 0
+    mov qword ptr [rip + repeat_timer_spec + 16], 0
+    mov qword ptr [rip + repeat_timer_spec + 24], 0
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + repeat_timer_spec]
+    xor r10d, r10d
+    syscall
+.Lneko_repeat_cancel_done:
+    ret
+.size repeat_cancel, . - repeat_cancel
+
+# Begin or update a selection driven by Shift+navigation.
+.type doc_begin_keyboard_selection, @function
+doc_begin_keyboard_selection:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_begin_keyboard_selection_done
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+.Lneko_begin_keyboard_selection_done:
+    ret
+.size doc_begin_keyboard_selection, . - doc_begin_keyboard_selection
+
+.type doc_finish_keyboard_selection, @function
+doc_finish_keyboard_selection:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_selection_anchor]
+    je .Lneko_finish_keyboard_selection_clear
+    mov dword ptr [rip + doc_selection_active], 1
+    ret
+.Lneko_finish_keyboard_selection_clear:
+    mov dword ptr [rip + doc_selection_active], 0
+    ret
+.size doc_finish_keyboard_selection, . - doc_finish_keyboard_selection
+
+# EDI=0 Home, EDI=1 End.
+.type doc_move_line_edge, @function
+doc_move_line_edge:
+    push rbx
+    push r12
+    mov r12d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov ebx, eax
+    mov edi, ebx
+    xor esi, esi
+    test r12d, r12d
+    jz .Lneko_visual_edge_lookup
+    inc edi
+.Lneko_visual_edge_lookup:
+    call doc_visual_to_offset
+    test r12d, r12d
+    jz .Lneko_visual_edge_store
+    test eax, eax
+    jz .Lneko_visual_edge_store
+    mov ebx, eax
+    lea edi, [rbx - 1]
+    call doc_byte_at
+    cmp eax, 10
+    jne .Lneko_visual_edge_store_ebx
+    dec ebx
+.Lneko_visual_edge_store_ebx:
+    mov eax, ebx
+.Lneko_visual_edge_store:
+    mov dword ptr [rip + doc_cursor], eax
+    pop r12
+    pop rbx
+    ret
+.size doc_move_line_edge, . - doc_move_line_edge
+
+# Place the document cursor from surface-local pixel coordinates.
+# EDI=x, ESI=y. Clicks snap to the nearest character insertion boundary;
+# tabs occupy four cells and UTF-8 continuation bytes are never cursor stops.
+# Map a document byte offset to its soft-wrapped visual row and column.
+# EDI=byte offset; returns EAX=row and EDX=column.
+.type doc_offset_to_visual, @function
+doc_offset_to_visual:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, edi
+    mov r13d, dword ptr [rip + doc_length]
+    cmp r12d, r13d
+    cmova r12d, r13d
+    xor r14d, r14d
+    xor ebx, ebx
+    xor ecx, ecx
+.Lneko_offset_visual_scan:
+    cmp ecx, r12d
+    jae .Lneko_offset_visual_boundary
+    mov edi, ecx
+    call doc_byte_at
+    cmp eax, 10
+    je .Lneko_offset_visual_newline
+    cmp eax, 9
+    je .Lneko_offset_visual_tab
+    cmp eax, 32
+    jb .Lneko_offset_visual_skip
+    cmp eax, 128
+    jb .Lneko_offset_visual_glyph
+.Lneko_offset_visual_glyph:
+    cmp ebx, DOC_COLUMNS
+    jb .Lneko_offset_visual_glyph_fit
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_glyph_fit:
+    inc ebx
+    mov edi, ecx
+    call doc_utf8_next
+    mov ecx, eax
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_newline:
+    inc r14d
+    xor ebx, ebx
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_tab:
+    lea edx, [rbx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_offset_visual_tab_fit
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_tab_fit:
+    add ebx, 4
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_skip:
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_boundary:
+    # An insertion boundary immediately before a token that would wrap belongs
+    # at the start of the next visual row, not just beyond the right edge.
+    cmp r12d, r13d
+    jae .Lneko_offset_visual_done
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 10
+    je .Lneko_offset_visual_done
+    cmp eax, 9
+    je .Lneko_offset_visual_boundary_tab
+    cmp eax, 32
+    jb .Lneko_offset_visual_done
+    cmp eax, 128
+    jb .Lneko_offset_visual_boundary_glyph
+.Lneko_offset_visual_boundary_glyph:
+    cmp ebx, DOC_COLUMNS
+    jb .Lneko_offset_visual_done
+    inc r14d
+    xor ebx, ebx
+    jmp .Lneko_offset_visual_done
+.Lneko_offset_visual_boundary_tab:
+    lea edx, [rbx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_offset_visual_done
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_done:
+    mov eax, r14d
+    mov edx, ebx
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_offset_to_visual, . - doc_offset_to_visual
+
+# Map a visual row/column to the nearest byte insertion boundary.
+# EDI=visual row, ESI=visual column; returns EAX=byte offset.
+.type doc_visual_to_offset, @function
+doc_visual_to_offset:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, esi
+    mov r15d, dword ptr [rip + doc_length]
+    xor r14d, r14d
+    xor ebx, ebx
+    xor ecx, ecx
+.Lneko_visual_offset_scan:
+    cmp r14d, r15d
+    jae .Lneko_visual_offset_end
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    mov edi, r14d
+    call doc_byte_at
+    cmp eax, 10
+    je .Lneko_visual_offset_newline
+    cmp eax, 9
+    je .Lneko_visual_offset_tab
+    cmp eax, 32
+    jb .Lneko_visual_offset_skip
+    cmp eax, 128
+    jb .Lneko_visual_offset_glyph
+.Lneko_visual_offset_glyph:
+    cmp ecx, DOC_COLUMNS
+    jb .Lneko_visual_offset_glyph_row_ready
+    inc ebx
+    xor ecx, ecx
+.Lneko_visual_offset_glyph_row_ready:
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    cmp ebx, r12d
+    jne .Lneko_visual_offset_consume_glyph
+    cmp ecx, r13d
+    jae .Lneko_visual_offset_end
+.Lneko_visual_offset_consume_glyph:
+    inc ecx
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_newline:
+    cmp ebx, r12d
+    je .Lneko_visual_offset_end
+    inc ebx
+    xor ecx, ecx
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_tab:
+    lea edx, [rcx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_visual_offset_tab_row_ready
+    inc ebx
+    xor ecx, ecx
+.Lneko_visual_offset_tab_row_ready:
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    cmp ebx, r12d
+    jne .Lneko_visual_offset_consume_tab
+    lea edx, [rcx + 2]
+    cmp r13d, edx
+    jb .Lneko_visual_offset_end
+.Lneko_visual_offset_consume_tab:
+    add ecx, 4
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_skip:
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_end:
+    mov eax, r14d
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_visual_to_offset, . - doc_visual_to_offset
+
+# Keep the active insertion point within the vertically visible document rows.
+.type doc_ensure_cursor_visible, @function
+doc_ensure_cursor_visible:
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov edx, dword ptr [rip + doc_view_top_row]
+    cmp eax, edx
+    jae .Lneko_ensure_cursor_lower
+    mov dword ptr [rip + doc_view_top_row], eax
+    ret
+.Lneko_ensure_cursor_lower:
+    lea ecx, [edx + DOC_VISIBLE_ROWS]
+    cmp eax, ecx
+    jb .Lneko_ensure_cursor_done
+    sub eax, DOC_VISIBLE_ROWS - 1
+    mov dword ptr [rip + doc_view_top_row], eax
+.Lneko_ensure_cursor_done:
+    ret
+.size doc_ensure_cursor_visible, . - doc_ensure_cursor_visible
+
+# Place cursor from surface-local coordinates; rows include the current scroll.
+.type doc_place_cursor_from_pointer, @function
+doc_place_cursor_from_pointer:
+    mov r8d, edi
+    mov eax, edi
+    sub eax, DOC_LEFT
+    test eax, eax
+    jns .Lneko_pointer_x_nonnegative
+    xor eax, eax
+.Lneko_pointer_x_nonnegative:
+    add eax, CELL_WIDTH / 2
+    xor edx, edx
+    mov ecx, CELL_WIDTH
+    div ecx
+    mov esi, eax
+    mov eax, dword ptr [rip + pointer_y]
+    sub eax, DOC_TOP
+    test eax, eax
+    jns .Lneko_pointer_y_nonnegative
+    xor eax, eax
+.Lneko_pointer_y_nonnegative:
+    xor edx, edx
+    mov ecx, LINE_HEIGHT
+    div ecx
+    add eax, dword ptr [rip + doc_view_top_row]
+    mov edi, eax
+    call doc_visual_to_offset
+    mov dword ptr [rip + doc_cursor], eax
+    ret
+.size doc_place_cursor_from_pointer, . - doc_place_cursor_from_pointer
+
+# EDI=0 moves up; EDI=1 moves down by one visual row.
+.type doc_move_vertical, @function
+doc_move_vertical:
+    push rbx
+    push r12
+    mov r12d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov ebx, eax
+    test r12d, r12d
+    jnz .Lneko_vertical_move_down
+    test ebx, ebx
+    jz .Lneko_vertical_move_done
+    dec ebx
+    jmp .Lneko_vertical_move_lookup
+.Lneko_vertical_move_down:
+    inc ebx
+.Lneko_vertical_move_lookup:
+    mov edi, ebx
+    mov esi, edx
+    call doc_visual_to_offset
+    mov dword ptr [rip + doc_cursor], eax
+.Lneko_vertical_move_done:
+    pop r12
+    pop rbx
+    ret
+.size doc_move_vertical, . - doc_move_vertical
+
+# Translate printable input from the active XKB keymap when the supported
+# text-v1 subset was parsed. A parsed map's non-ASCII keys are deliberately
+# ignored rather than silently producing an unrelated US-QWERTY character.
+.type keycode_to_ascii, @function
+keycode_to_ascii:
+    push rbx
+    mov ebx, edi
+    cmp dword ptr [rip + keymap_format], 1
+    jne .Lneko_keymap_fallback
+    mov edi, ebx
+    mov esi, dword ptr [rip + shift_down]
+    mov edx, dword ptr [rip + caps_lock]
+    mov ecx, dword ptr [rip + level3_down]
+    mov r8d, dword ptr [rip + keyboard_group]
+    call xkb_lookup_ascii
+    pop rbx
+    ret
+.Lneko_keymap_fallback:
+    mov edi, ebx
+    cmp edi, 128
+    jae .keymap_unknown
+    mov ecx, edi
+    lea r8, [rip + keymap_base]
+    movzx eax, byte ptr [r8 + rcx]
+    test eax, eax
+    jz .keymap_unknown
+    cmp eax, 'a'
+    jb .keymap_shift_punctuation
+    cmp eax, 'z'
+    ja .keymap_shift_punctuation
+    mov edx, dword ptr [rip + shift_down]
+    xor edx, dword ptr [rip + caps_lock]
+    test edx, edx
+    jz .keymap_done
+    sub eax, 32
+    pop rbx
+    ret
+.keymap_shift_punctuation:
+    cmp dword ptr [rip + shift_down], 0
+    je .keymap_done
+    lea r8, [rip + keymap_shift]
+    movzx edx, byte ptr [r8 + rcx]
+    test edx, edx
+    jz .keymap_done
+    mov eax, edx
+.keymap_done:
+    pop rbx
+    ret
+.keymap_unknown:
+    xor eax, eax
+    pop rbx
+    ret
+.size keycode_to_ascii, . - keycode_to_ascii
+
+.type draw_glyph, @function
+draw_glyph:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, esi
+    mov eax, edx
+    cmp eax, ' '
+    je .glyph_done
+    cmp eax, 'a'
+    jb .glyph_upper
+    cmp eax, 'z'
+    ja .glyph_upper
+    sub eax, 32
+.glyph_upper:
+    cmp eax, 'A'
+    jb .glyph_digit
+    cmp eax, 'Z'
+    ja .glyph_digit
+    sub eax, 'A'
+    jmp .glyph_index_ready
+.glyph_digit:
+    cmp eax, '0'
+    jb .glyph_punctuation
+    cmp eax, '9'
+    ja .glyph_punctuation
+    sub eax, '0'
+    add eax, 26
+    jmp .glyph_index_ready
+.glyph_punctuation:
+    cmp eax, '?'
+    je .glyph_question
+    cmp eax, '.'
+    je .glyph_period
+    cmp eax, ','
+    je .glyph_comma
+    cmp eax, ':'
+    je .glyph_colon
+    cmp eax, '-'
+    je .glyph_dash
+    cmp eax, '_'
+    je .glyph_underscore
+    cmp eax, '!'
+    je .glyph_exclamation
+    cmp eax, '"'
+    je .glyph_quote
+    cmp eax, 39
+    je .glyph_apostrophe
+    cmp eax, '('
+    je .glyph_open_paren
+    cmp eax, ')'
+    je .glyph_close_paren
+    cmp eax, '+'
+    je .glyph_plus
+    cmp eax, '='
+    je .glyph_equals
+    cmp eax, '/'
+    je .glyph_slash
+    cmp eax, 35
+    je .glyph_numbersign
+    cmp eax, 36
+    je .glyph_dollar
+    cmp eax, 37
+    je .glyph_percent
+    cmp eax, 38
+    je .glyph_ampersand
+    cmp eax, 42
+    je .glyph_asterisk
+    cmp eax, 59
+    je .glyph_semicolon
+    cmp eax, 60
+    je .glyph_less
+    cmp eax, 62
+    je .glyph_greater
+    cmp eax, 64
+    je .glyph_at
+    cmp eax, 91
+    je .glyph_open_bracket
+    cmp eax, 92
+    je .glyph_backslash
+    cmp eax, 93
+    je .glyph_close_bracket
+    cmp eax, 94
+    je .glyph_caret
+    cmp eax, 96
+    je .glyph_grave
+    cmp eax, 123
+    je .glyph_open_brace
+    cmp eax, 124
+    je .glyph_bar
+    cmp eax, 125
+    je .glyph_close_brace
+    cmp eax, 126
+    je .glyph_tilde
+    mov eax, 36
+    jmp .glyph_index_ready
+.glyph_question:
+    mov eax, 36
+    jmp .glyph_index_ready
+.glyph_period:
+    mov eax, 37
+    jmp .glyph_index_ready
+.glyph_comma:
+    mov eax, 38
+    jmp .glyph_index_ready
+.glyph_colon:
+    mov eax, 39
+    jmp .glyph_index_ready
+.glyph_dash:
+    mov eax, 40
+    jmp .glyph_index_ready
+.glyph_underscore:
+    mov eax, 41
+    jmp .glyph_index_ready
+.glyph_exclamation:
+    mov eax, 42
+    jmp .glyph_index_ready
+.glyph_quote:
+    mov eax, 43
+    jmp .glyph_index_ready
+.glyph_apostrophe:
+    mov eax, 44
+    jmp .glyph_index_ready
+.glyph_open_paren:
+    mov eax, 45
+    jmp .glyph_index_ready
+.glyph_close_paren:
+    mov eax, 46
+    jmp .glyph_index_ready
+.glyph_plus:
+    mov eax, 47
+    jmp .glyph_index_ready
+.glyph_equals:
+    mov eax, 48
+    jmp .glyph_index_ready
+.glyph_slash:
+    mov eax, 49
+    jmp .glyph_index_ready
+.glyph_numbersign:
+    mov eax, 50
+    jmp .glyph_index_ready
+.glyph_dollar:
+    mov eax, 51
+    jmp .glyph_index_ready
+.glyph_percent:
+    mov eax, 52
+    jmp .glyph_index_ready
+.glyph_ampersand:
+    mov eax, 53
+    jmp .glyph_index_ready
+.glyph_asterisk:
+    mov eax, 54
+    jmp .glyph_index_ready
+.glyph_semicolon:
+    mov eax, 55
+    jmp .glyph_index_ready
+.glyph_less:
+    mov eax, 56
+    jmp .glyph_index_ready
+.glyph_greater:
+    mov eax, 57
+    jmp .glyph_index_ready
+.glyph_at:
+    mov eax, 58
+    jmp .glyph_index_ready
+.glyph_open_bracket:
+    mov eax, 59
+    jmp .glyph_index_ready
+.glyph_backslash:
+    mov eax, 60
+    jmp .glyph_index_ready
+.glyph_close_bracket:
+    mov eax, 61
+    jmp .glyph_index_ready
+.glyph_caret:
+    mov eax, 62
+    jmp .glyph_index_ready
+.glyph_grave:
+    mov eax, 63
+    jmp .glyph_index_ready
+.glyph_open_brace:
+    mov eax, 64
+    jmp .glyph_index_ready
+.glyph_bar:
+    mov eax, 65
+    jmp .glyph_index_ready
+.glyph_close_brace:
+    mov eax, 66
+    jmp .glyph_index_ready
+.glyph_tilde:
+    mov eax, 67
+.glyph_index_ready:
+    imul eax, 7
+    lea rbx, [rip + font_5x7]
+    add rbx, rax
+    xor r14d, r14d
+.glyph_row:
+    cmp r14d, 7
+    jae .glyph_done
+    movzx r8d, byte ptr [rbx + r14]
+    xor r15d, r15d
+.glyph_column:
+    cmp r15d, 5
+    jae .glyph_next_row
+    mov eax, 4
+    sub eax, r15d
+    bt r8d, eax
+    jnc .glyph_next_column
+    mov eax, r13d
+    add eax, r14d
+    imul eax, STRIDE
+    mov edx, r12d
+    add edx, r15d
+    shl edx, 2
+    add eax, edx
+    mov rdi, qword ptr [rip + shm_mapping]
+    add rdi, rax
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_next_column:
+    inc r15d
+    jmp .glyph_column
+.glyph_next_row:
+    inc r14d
+    jmp .glyph_row
+.glyph_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_glyph, . - draw_glyph
+
+# Draw a NUL-terminated ASCII label. EDI=x, ESI=y, RDX=string; EAX=next x.
+.type draw_text, @function
+draw_text:
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    mov r13d, esi
+    mov rbx, rdx
+.Lneko_draw_text_loop:
+    movzx edx, byte ptr [rbx]
+    test edx, edx
+    jz .Lneko_draw_text_done
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+    add r12d, CELL_WIDTH
+    inc rbx
+    jmp .Lneko_draw_text_loop
+.Lneko_draw_text_done:
+    mov eax, r12d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_text, . - draw_text
+
+# Draw an unsigned decimal value. EAX=value, EDI=x, ESI=y; returns next x.
+.type draw_decimal, @function
+draw_decimal:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 16
+    mov r13d, edi
+    mov r14d, esi
+    mov ebx, eax
+    lea r12, [rsp + 15]
+    mov byte ptr [r12], 0
+.Lneko_draw_decimal_convert:
+    mov eax, ebx
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    add dl, '0'
+    dec r12
+    mov byte ptr [r12], dl
+    mov ebx, eax
+    test ebx, ebx
+    jnz .Lneko_draw_decimal_convert
+.Lneko_draw_decimal_paint:
+    movzx edx, byte ptr [r12]
+    test edx, edx
+    jz .Lneko_draw_decimal_done
+    mov edi, r13d
+    mov esi, r14d
+    call draw_glyph
+    add r13d, CELL_WIDTH
+    inc r12
+    jmp .Lneko_draw_decimal_paint
+.Lneko_draw_decimal_done:
+    mov eax, r13d
+    add rsp, 16
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size draw_decimal, . - draw_decimal
+
+# Render the live logical line/column and current byte count in the footer.
+# Columns are one-based; tabs advance to the next four-column stop.
+.type render_status_bar, @function
+render_status_bar:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, STATUS_TOP
+    mov ecx, WIDTH
+    mov r8d, HEIGHT - STATUS_TOP
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, STATUS_TOP
+    mov ecx, WIDTH
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+    # Derive logical line and column from the cursor's byte offset.
+    mov ebx, dword ptr [rip + doc_cursor]
+    cmp ebx, dword ptr [rip + doc_length]
+    jbe .Lneko_status_cursor_bounded
+    mov ebx, dword ptr [rip + doc_length]
+.Lneko_status_cursor_bounded:
+    xor r14d, r14d
+    mov r13d, 1
+    mov ebp, 1
+.Lneko_status_scan:
+    cmp r14d, ebx
+    jae .Lneko_status_scan_done
+    mov edi, r14d
+    call doc_byte_at
+    cmp eax, 10
+    je .Lneko_status_newline
+    cmp eax, 9
+    je .Lneko_status_tab
+    inc ebp
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_newline:
+    inc r13d
+    mov ebp, 1
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_tab:
+    dec ebp
+    add ebp, 4
+    and ebp, -4
+    inc ebp
+    inc r14d
+    jmp .Lneko_status_scan
+.Lneko_status_scan_done:
+    mov edi, 16
+    mov esi, 466
+    lea rdx, [rip + ui_label_line]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, r13d
+    call draw_decimal
+    add eax, 4
+    mov edi, eax
+    mov esi, 466
+    lea rdx, [rip + ui_label_column]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, ebp
+    call draw_decimal
+
+    mov edi, 480
+    mov esi, 466
+    lea rdx, [rip + ui_label_bytes]
+    call draw_text
+    mov edi, eax
+    mov esi, 466
+    mov eax, dword ptr [rip + doc_length]
+    call draw_decimal
+    mov edi, 744
+    mov esi, 466
+    lea rdx, [rip + ui_mode_name]
+    call draw_text
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size render_status_bar, . - render_status_bar
+
+.type render_file_menu, @function
+render_file_menu:
+    cmp dword ptr [rip + file_menu_open], 1
+    jne .render_file_menu_done
+    push rbp
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 104
+    mov edx, 32
+    mov ecx, 128
+    mov r8d, 80
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov edi, 116
+    mov esi, 42
+    lea rdx, [rip + ui_menu_open_label]
+    call draw_text
+    mov edi, 116
+    mov esi, 66
+    lea rdx, [rip + ui_menu_save_label]
+    call draw_text
+    mov edi, 116
+    mov esi, 90
+    lea rdx, [rip + ui_menu_save_as_label]
+    call draw_text
+    pop rbp
+.render_file_menu_done:
+    ret
+.size render_file_menu, . - render_file_menu
+
+.type render_path_prompt, @function
+render_path_prompt:
+    cmp dword ptr [rip + path_prompt_mode], 0
+    je .render_path_prompt_done
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, 148
+    mov ecx, 704
+    mov r8d, 176
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, 148
+    mov ecx, 704
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .render_path_prompt_save_title
+    mov edi, 72
+    mov esi, 160
+    lea rdx, [rip + ui_prompt_open_title]
+    call draw_text
+    jmp .render_path_prompt_entry
+.render_path_prompt_save_title:
+    mov edi, 72
+    mov esi, 160
+    lea rdx, [rip + ui_prompt_save_title]
+    call draw_text
+.render_path_prompt_entry:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 72
+    mov edx, 204
+    mov ecx, 656
+    mov r8d, 36
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov r12d, dword ptr [rip + path_prompt_length]
+    xor r14d, r14d
+    cmp r12d, 76
+    jbe .render_path_prompt_start_ready
+    mov r14d, r12d
+    sub r14d, 76
+.render_path_prompt_start_ready:
+    lea rbx, [rip + path_prompt_buffer]
+    add rbx, r14
+    mov r13d, 96
+    xor r12d, r12d
+.render_path_prompt_chars:
+    cmp r12d, 76
+    jae .render_path_prompt_caret
+    movzx edx, byte ptr [rbx]
+    test edx, edx
+    jz .render_path_prompt_caret
+    mov edi, r13d
+    mov esi, 218
+    call draw_glyph
+    inc rbx
+    add r13d, CELL_WIDTH
+    inc r12d
+    jmp .render_path_prompt_chars
+.render_path_prompt_caret:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r13d
+    mov edx, 216
+    mov ecx, 1
+    mov r8d, 12
+    mov r9d, 0xffffffff
+    call draw_rect
+    mov edi, 72
+    mov esi, 264
+    lea rdx, [rip + ui_prompt_help]
+    call draw_text
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+.render_path_prompt_done:
+    ret
+.size render_path_prompt, . - render_path_prompt
+
+
+# Paint selected document cells before glyphs and the caret are rendered.
+.type render_selection, @function
+render_selection:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_render_selection_done
+
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_render_selection_bounds
+    xchg eax, edx
+.Lneko_render_selection_bounds:
+    mov dword ptr [rip + doc_selection_start], eax
+    mov dword ptr [rip + doc_selection_end], edx
+
+    mov r15d, dword ptr [rip + doc_length]
+    mov r12d, DOC_LEFT
+    mov r13d, DOC_TOP
+    mov eax, dword ptr [rip + doc_view_top_row]
+    imul eax, LINE_HEIGHT
+    sub r13d, eax
+    xor r14d, r14d
+.Lneko_render_selection_scan:
+    cmp r14d, r15d
+    jae .Lneko_render_selection_done
+    mov eax, dword ptr [rip + doc_selection_end]
+    cmp r14d, eax
+    jae .Lneko_render_selection_done
+    mov edi, r14d
+    call doc_byte_at
+    cmp eax, 10
+    je .Lneko_render_selection_newline
+    cmp eax, 9
+    je .Lneko_render_selection_tab
+    cmp eax, 32
+    jb .Lneko_render_selection_control
+    cmp eax, 127
+    jb .Lneko_render_selection_character
+
+.Lneko_render_selection_character:
+    cmp r12d, WIDTH - 8
+    jb .Lneko_render_selection_character_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.Lneko_render_selection_character_fit:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_advance_cell
+    cmp r12d, WIDTH - CELL_WIDTH
+    ja .Lneko_render_selection_advance_cell
+    cmp r13d, DOC_TOP
+    jl .Lneko_render_selection_advance_cell
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jae .Lneko_render_selection_advance_cell
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_advance_cell:
+    add r12d, CELL_WIDTH
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_newline:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_newline_advance
+    cmp r12d, WIDTH - CELL_WIDTH
+    jae .Lneko_render_selection_newline_advance
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jae .Lneko_render_selection_newline_advance
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_newline_advance:
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_tab:
+    lea eax, [r12d + CELL_WIDTH * 4]
+    cmp eax, WIDTH - 8
+    jbe .Lneko_render_selection_tab_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.Lneko_render_selection_tab_fit:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_tab_advance
+    cmp r12d, WIDTH - CELL_WIDTH * 4
+    ja .Lneko_render_selection_tab_advance
+    cmp r13d, DOC_TOP
+    jl .Lneko_render_selection_tab_advance
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jae .Lneko_render_selection_tab_advance
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH * 4
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_tab_advance:
+    add r12d, CELL_WIDTH * 4
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_control:
+.Lneko_render_selection_byte_only:
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_selection, . - render_selection
+
+.type render_document, @function
+render_document:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, DOC_LEFT
+    mov r13d, DOC_TOP
+    mov eax, dword ptr [rip + doc_view_top_row]
+    imul eax, LINE_HEIGHT
+    sub r13d, eax
+    xor r14d, r14d
+    mov r15d, dword ptr [rip + doc_length]
+    test r15d, r15d
+    jz .document_draw_cursor
+.document_render_loop:
+    cmp r14d, r15d
+    jae .document_draw_cursor
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jge .document_draw_cursor
+    mov edi, r14d
+    call doc_byte_at
+    mov edx, eax
+    cmp edx, 10
+    je .document_newline
+    cmp edx, 9
+    je .document_tab
+    cmp edx, 32
+    jb .document_control
+    cmp edx, 127
+    jb .document_printable
+.document_control:
+    cmp edx, 128
+    jb .document_next_byte
+    mov edx, '?'
+.document_printable:
+    cmp r12d, WIDTH - 8
+    jb .document_printable_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jge .document_draw_cursor
+.document_printable_fit:
+    cmp r13d, DOC_TOP
+    jl .document_printable_skip_draw
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+.document_printable_skip_draw:
+    add r12d, CELL_WIDTH
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
+    jmp .document_render_loop
+
+.document_tab:
+    lea eax, [r12d + CELL_WIDTH * 4]
+    cmp eax, WIDTH - 8
+    jbe .document_tab_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
+    jge .document_draw_cursor
+.document_tab_fit:
+    add r12d, CELL_WIDTH * 4
+    jmp .document_next_byte
+
+.document_newline:
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.document_next_byte:
+    inc r14d
+    jmp .document_render_loop
+
+.document_draw_cursor:
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov r12d, edx
+    mov r13d, eax
+    sub r13d, dword ptr [rip + doc_view_top_row]
+    test r13d, r13d
+    js .document_render_done
+    cmp r13d, DOC_VISIBLE_ROWS
+    jae .document_render_done
+    imul r12d, CELL_WIDTH
+    add r12d, DOC_LEFT
+    imul r13d, LINE_HEIGHT
+    add r13d, DOC_TOP
+    cmp r12d, WIDTH - 2
+    ja .document_render_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, 1
+    mov r8d, 9
+    mov r9d, 0xffffffff
+    call draw_rect
+.document_render_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_document, . - render_document
+
+# Create input objects after wl_seat advertises their capabilities.
+# Pointer is allocated before keyboard when both appear in the same event.
+.type handle_seat_capabilities, @function
+handle_seat_capabilities:
+    push rbp
+    cmp dword ptr [rip + last_size], 4
+    jb .seat_caps_success
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + seat_capabilities], eax
+
+    test eax, 1
+    jz .seat_caps_keyboard
+    cmp dword ptr [rip + pointer_created], 0
+    jne .seat_caps_keyboard
+    mov eax, dword ptr [rip + next_input_object]
+    mov dword ptr [rip + pointer_object], eax
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 13
+    xor esi, esi                  # wl_seat.get_pointer
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+    mov dword ptr [rip + pointer_created], 1
+    inc dword ptr [rip + next_input_object]
+
+.seat_caps_keyboard:
+    test dword ptr [rip + seat_capabilities], 2
+    jz .seat_caps_success
+    cmp dword ptr [rip + keyboard_created], 0
+    jne .seat_caps_success
+    mov eax, dword ptr [rip + next_input_object]
+    mov dword ptr [rip + keyboard_object], eax
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 13
+    mov esi, 1                    # wl_seat.get_keyboard
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+    mov dword ptr [rip + keyboard_created], 1
+    inc dword ptr [rip + next_input_object]
+
+.seat_caps_success:
+    xor eax, eax
+.seat_caps_done:
+    pop rbp
+    ret
+.size handle_seat_capabilities, . - handle_seat_capabilities
 
 # Answer xdg_wm_base.ping (object 6, opcode 0, serial payload).
 .type handle_xdg_ping, @function

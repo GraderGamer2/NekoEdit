@@ -3,7 +3,8 @@
 **Snapshot date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Latest implementation-code tip:** [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0)  
+**Latest implementation-code tip:** [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) — honor XKB ONE_LEVEL semantics  
+**Latest keyboard-test fixture:** [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b)  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open, targeting `main`  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
 
@@ -13,18 +14,17 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Repository coordination state (verified 2026-11-06)
 
-- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) is open, not draft, with `early-alpha` as head and `main` as base. It provides the current review target after the earlier PR #1 was closed without merging.
-- At PR creation, GitHub compared the branch as 185 commits ahead and 4 behind `main`, with 12 changed files (6,804 additions and 235 deletions). The comparison includes the editor implementation and changelog/documentation changes.
-- GitHub Actions [Build and test #179](https://github.com/GraderGamer2/NekoEdit/actions/runs/42220633279) passed on branch head `108d7df1e024e74c653c5bb4cdbe52fb1d1289bf`. All eight workflow steps succeeded: toolchain inspection, freestanding build/ELF verification, CLI smoke tests, Wayland mock-compositor integration, executable inspection, and artifact upload.
-- After run #179, GitHub reported PR #2 as `mergeable=true` and `mergeable_state=clean`. The PR remains open and **has not been merged**.
-- PR #1 remains closed and unmerged. Its old API metadata still displays the deleted former head name `feat/wayland-socket-error-handling`; PR #2 correctly uses `early-alpha`.
+- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) is open, not draft, with `early-alpha` as head and `main` as base. GitHub reports `mergeable=true` and `mergeable_state=clean`; the PR remains unmerged.
+- The latest PR-triggered GitHub Actions run is [Build and test #186](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121), which passed all eight steps on test-fixture commit `b260457007589469abdb492358b7581558c0cc5b`. The full Wayland suite verified shifted punctuation rows, the twelve shifted number-row symbols, and ONE_LEVEL modifier handling in addition to the existing integration scenarios.
+- Run #185 failed in the new test scenario because the test fixture used evdev codes where XKB keycodes (evdev + 8) were required. The assembly build/ELF checks and CLI smoke tests had passed; the keycode fixture was corrected in `b260457007589469abdb492358b7581558c0cc5b`, and run #186 then passed.
+- PR #1 is closed and unmerged. Its old API metadata still displays the deleted former head name `feat/wayland-socket-error-handling`; PR #2 correctly uses `early-alpha`.
 - `main` still contains the original Wayland prototype, not the editor implementation. No application code has been merged into `main`.
-- The recent-push prompt now has PR #2 associated with the branch. It is the review destination for these pushes; no merge was performed to clear the notification.
 
 ## Latest verified program state
 
-- Latest fully verified **program-code commit:** `776a72c07579ced1e54929946de65cea6271267e` — fixed-capacity 64 KiB gap-buffer document storage.
-- Main-to-feature ancestry synchronization point: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent. Later changes in this session were documentation-only.
+- Latest verified **XKB implementation commit:** [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) — explicitly classify ONE_LEVEL and keep its lookup on Level 1 regardless of Shift/Lock/LevelThree.
+- The test fixture correction is [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b); it uses XKB keycodes rather than raw evdev values for punctuation keys.
+- Main-to-feature ancestry synchronization point: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent. Later feature work remains on `early-alpha`.
 - Main's latest application-code base remains [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); subsequent commits in this branch-rename update changed only `CHANGELOG/` files.
 - PR #2 is the active review for early-alpha; PR #1 is closed and unmerged.
 - GitHub Actions [Build and test #171](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217176741) passed on the synchronized feature branch head. All eight steps succeeded, including the complete Wayland integration suite and artifact upload.
@@ -83,7 +83,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Editor window | 800×480 UI with header, File menu, active document tab, editor area, and live status bar |
 | Document storage | Fixed-capacity 64 KiB byte-oriented gap buffer; cursor/selection offsets remain logical byte offsets; no dynamic growth yet |
 | ASCII rendering | Embedded 5×7 glyphs for printable ASCII, including the full punctuation set |
-| Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, Shift/Caps, physical Right-Alt LevelThree, US fallback |
+| Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, ONE_LEVEL/ALPHABETIC/THREE_LEVEL/FOUR_LEVEL type families, Shift/Caps, physical Right-Alt LevelThree, US fallback |
 | Keyboard editing | ASCII input, Left/Right/Up/Down, Home/End, Backspace, Delete, Enter, four-space Tab |
 | Selection | Mouse drag, reverse/multiline selection, Shift navigation, Ctrl+A, replacement on typing/deletion |
 | Repeat | Compositor-configured repeat when available, legacy fallback otherwise |
@@ -142,6 +142,7 @@ Keep these separate from the automated test results:
 - The user confirmed that typing the previously problematic printable symbol sequence `!@#$%^&*()_+{}|:"<>?` works in the tested Actions build.
 - After the UTF-8 code-point-safe milestone, the user reported that the UTF-8 formatting looked fine and earlier implementations remained usable.
 - Latest user-reported test of a newer Actions build: ordinary letter keys worked again, but most shifted punctuation/symbol keys rendered as `?`; only a subset including `<>`, `:"`, and `()` rendered correctly. The exact run/artifact for this particular report was not identified. Treat this as an outstanding keyboard regression; mock-compositor CI does not establish that it is fixed.
+- The patched ONE_LEVEL/punctuation implementation has passed mock-compositor CI #186, but the user has not yet re-tested that patched artifact in the real GNOME Wayland session. Keep the desktop-symbol regression marked **awaiting manual confirmation**.
 
 When conducting future work, add any new manual test feedback here or to the dated [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md), with the build/commit tested and the exact behavior observed.
 
