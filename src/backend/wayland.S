@@ -2500,6 +2500,382 @@ picker_move_selection:
     ret
 .size picker_move_selection, . - picker_move_selection
 
+
+.type picker_handle_key, @function
+picker_handle_key:
+    push rbx
+    push r12
+    mov ebx, edi
+    cmp dword ptr [rip + picker_overwrite_pending], 0
+    je .picker_key_normal
+    cmp ebx, 1
+    je .picker_key_overwrite_no
+    mov edi, ebx
+    call keycode_to_ascii
+    cmp al, 'y'
+    je .picker_key_overwrite_yes
+    cmp al, 'Y'
+    je .picker_key_overwrite_yes
+    cmp al, 'n'
+    je .picker_key_overwrite_no
+    cmp al, 'N'
+    je .picker_key_overwrite_no
+    jmp .picker_key_done
+.picker_key_overwrite_yes:
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    call picker_confirm_overwrite
+    jmp .picker_key_done
+.picker_key_overwrite_no:
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    mov dword ptr [rip + picker_error], 0
+    jmp .picker_key_done
+
+.picker_key_normal:
+    cmp ebx, 1
+    je .picker_key_cancel
+    cmp ebx, 15
+    je .picker_key_tab
+    cmp ebx, 28
+    je .picker_key_enter
+    cmp ebx, 14
+    je .picker_key_backspace
+    cmp ebx, 111
+    je .picker_key_delete
+    cmp ebx, 103
+    je .picker_key_up
+    cmp ebx, 108
+    je .picker_key_down
+    cmp ebx, 104
+    je .picker_key_page_up
+    cmp ebx, 109
+    je .picker_key_page_down
+    cmp ebx, 102
+    je .picker_key_home
+    cmp ebx, 105
+    je .picker_key_left
+    cmp ebx, 106
+    je .picker_key_right
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .picker_key_done
+    mov edi, ebx
+    call keycode_to_ascii
+    test eax, eax
+    jz .picker_key_done
+    mov r12d, eax
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_append_path
+    # Typing from the list is a convenient shortcut to the filename field.
+    mov dword ptr [rip + picker_focus], 2
+.picker_key_append_name:
+    mov ecx, dword ptr [rip + picker_name_length]
+    cmp ecx, 255
+    jae .picker_key_done
+    lea rdx, [rip + picker_name_buffer]
+    mov byte ptr [rdx + rcx], r12b
+    inc ecx
+    mov dword ptr [rip + picker_name_length], ecx
+    mov byte ptr [rdx + rcx], 0
+    mov dword ptr [rip + picker_error], 0
+    jmp .picker_key_done
+.picker_key_append_path:
+    mov ecx, dword ptr [rip + picker_path_length]
+    cmp ecx, PATH_CAPACITY - 1
+    jae .picker_key_done
+    lea rdx, [rip + picker_path_buffer]
+    mov byte ptr [rdx + rcx], r12b
+    inc ecx
+    mov dword ptr [rip + picker_path_length], ecx
+    mov byte ptr [rdx + rcx], 0
+    mov dword ptr [rip + picker_error], 0
+    jmp .picker_key_done
+
+.picker_key_cancel:
+    call picker_close
+    jmp .picker_key_done
+.picker_key_tab:
+    mov eax, dword ptr [rip + picker_focus]
+    inc eax
+    cmp eax, 3
+    jb .picker_key_tab_store
+    xor eax, eax
+.picker_key_tab_store:
+    mov dword ptr [rip + picker_focus], eax
+    jmp .picker_key_done
+.picker_key_enter:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_enter_path
+    cmp dword ptr [rip + picker_focus], 2
+    je .picker_key_enter_action
+    mov eax, dword ptr [rip + picker_selected]
+    test eax, eax
+    js .picker_key_enter_action
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_key_enter_action
+    imul eax, PICKER_ENTRY_SIZE
+    lea rdx, [rip + picker_entries]
+    add rdx, rax
+    cmp byte ptr [rdx], 1
+    je .picker_key_enter_directory
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_key_enter_action
+    call picker_open_file
+    jmp .picker_key_done
+.picker_key_enter_directory:
+    lea rdi, [rdx + 4]
+    call picker_enter_directory
+    jmp .picker_key_done
+.picker_key_enter_path:
+    call picker_navigate_path
+    jmp .picker_key_done
+.picker_key_enter_action:
+    call picker_confirm_action
+    jmp .picker_key_done
+
+.picker_key_backspace:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_backspace_path
+    cmp dword ptr [rip + picker_focus], 2
+    je .picker_key_backspace_name
+    call picker_go_parent
+    jmp .picker_key_done
+.picker_key_backspace_path:
+    mov ecx, dword ptr [rip + picker_path_length]
+    test ecx, ecx
+    jz .picker_key_done
+    dec ecx
+    mov dword ptr [rip + picker_path_length], ecx
+    lea rdx, [rip + picker_path_buffer]
+    mov byte ptr [rdx + rcx], 0
+    jmp .picker_key_done
+.picker_key_backspace_name:
+    mov ecx, dword ptr [rip + picker_name_length]
+    test ecx, ecx
+    jz .picker_key_done
+    dec ecx
+    mov dword ptr [rip + picker_name_length], ecx
+    lea rdx, [rip + picker_name_buffer]
+    mov byte ptr [rdx + rcx], 0
+    jmp .picker_key_done
+.picker_key_delete:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_clear_path
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_key_done
+    mov dword ptr [rip + picker_name_length], 0
+    mov byte ptr [rip + picker_name_buffer], 0
+    jmp .picker_key_done
+.picker_key_clear_path:
+    mov dword ptr [rip + picker_path_length], 0
+    mov byte ptr [rip + picker_path_buffer], 0
+    jmp .picker_key_done
+.picker_key_up:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    mov edi, -1
+    call picker_move_selection
+    jmp .picker_key_done
+.picker_key_down:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    mov edi, 1
+    call picker_move_selection
+    jmp .picker_key_done
+.picker_key_page_up:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    mov edi, -PICKER_VISIBLE_ROWS
+    call picker_move_selection
+    jmp .picker_key_done
+.picker_key_page_down:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    mov edi, PICKER_VISIBLE_ROWS
+    call picker_move_selection
+    jmp .picker_key_done
+.picker_key_home:
+    call picker_go_home
+    jmp .picker_key_done
+.picker_key_left:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    call picker_go_parent
+    jmp .picker_key_done
+.picker_key_right:
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_done
+    mov eax, dword ptr [rip + picker_selected]
+    test eax, eax
+    js .picker_key_done
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_key_done
+    imul eax, PICKER_ENTRY_SIZE
+    lea rdx, [rip + picker_entries]
+    add rdx, rax
+    cmp byte ptr [rdx], 1
+    jne .picker_key_done
+    lea rdi, [rdx + 4]
+    call picker_enter_directory
+.picker_key_done:
+    pop r12
+    pop rbx
+    ret
+.size picker_handle_key, . - picker_handle_key
+
+.type picker_handle_pointer, @function
+picker_handle_pointer:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, edx
+    cmp dword ptr [rip + picker_overwrite_pending], 0
+    je .picker_pointer_normal
+    # Confirm and cancel zones in the overwrite prompt.
+    cmp r13d, 232
+    jb .picker_pointer_done
+    cmp r13d, 272
+    jae .picker_pointer_done
+    cmp r12d, 600
+    jb .picker_pointer_done
+    cmp r12d, 672
+    jb .picker_pointer_overwrite_no
+    cmp r12d, 752
+    jae .picker_pointer_done
+    jmp .picker_pointer_overwrite_yes
+.picker_pointer_overwrite_no:
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    mov dword ptr [rip + picker_error], 0
+    jmp .picker_pointer_done
+.picker_pointer_overwrite_yes:
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    call picker_confirm_overwrite
+    jmp .picker_pointer_done
+
+.picker_pointer_normal:
+    # Footer actions.
+    cmp r13d, 396
+    jb .picker_pointer_controls
+    cmp r13d, 432
+    jae .picker_pointer_done
+    cmp r12d, 600
+    jb .picker_pointer_done
+    cmp r12d, 672
+    jb .picker_pointer_cancel
+    cmp r12d, 752
+    jae .picker_pointer_done
+    call picker_confirm_action
+    jmp .picker_pointer_done
+.picker_pointer_cancel:
+    call picker_close
+    jmp .picker_pointer_done
+
+.picker_pointer_controls:
+    # Editable location field.
+    cmp r13d, 64
+    jb .picker_pointer_toolbar
+    cmp r13d, 92
+    jae .picker_pointer_toolbar
+    cmp r12d, 56
+    jb .picker_pointer_done
+    cmp r12d, 744
+    jae .picker_pointer_done
+    mov dword ptr [rip + picker_focus], 1
+    jmp .picker_pointer_done
+
+.picker_pointer_toolbar:
+    cmp r13d, 96
+    jb .picker_pointer_list
+    cmp r13d, 124
+    jae .picker_pointer_list
+    cmp r12d, 56
+    jb .picker_pointer_done
+    cmp r12d, 104
+    jb .picker_pointer_up
+    cmp r12d, 160
+    jb .picker_pointer_home
+    cmp r12d, 600
+    jb .picker_pointer_list
+    cmp r12d, 744
+    jae .picker_pointer_list
+    xor dword ptr [rip + picker_show_hidden], 1
+    call picker_scan_directory
+    jmp .picker_pointer_done
+.picker_pointer_up:
+    call picker_go_parent
+    jmp .picker_pointer_done
+.picker_pointer_home:
+    call picker_go_home
+    jmp .picker_pointer_done
+
+.picker_pointer_list:
+    cmp r13d, 128
+    jb .picker_pointer_name
+    cmp r13d, 350
+    jae .picker_pointer_name
+    cmp r12d, 56
+    jb .picker_pointer_done
+    cmp r12d, 744
+    jae .picker_pointer_done
+    mov eax, r13d
+    sub eax, 132
+    xor edx, edx
+    mov ecx, 14
+    div ecx
+    add eax, dword ptr [rip + picker_scroll]
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_pointer_done
+    mov dword ptr [rip + picker_selected], eax
+    mov dword ptr [rip + picker_focus], 0
+    call picker_copy_selected_name
+    # Directories are navigated on double-click only.
+    mov eax, dword ptr [rip + picker_selected]
+    cmp eax, dword ptr [rip + picker_last_click_index]
+    jne .picker_pointer_record_click
+    mov ecx, r14d
+    sub ecx, dword ptr [rip + picker_last_click_time]
+    cmp ecx, 450
+    ja .picker_pointer_record_click
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_pointer_record_click
+    imul eax, PICKER_ENTRY_SIZE
+    lea rdx, [rip + picker_entries]
+    add rdx, rax
+    cmp byte ptr [rdx], 1
+    je .picker_pointer_double_directory
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_pointer_record_click
+    call picker_open_file
+    jmp .picker_pointer_done
+.picker_pointer_double_directory:
+    lea rdi, [rdx + 4]
+    call picker_enter_directory
+    jmp .picker_pointer_done
+.picker_pointer_record_click:
+    mov eax, dword ptr [rip + picker_selected]
+    mov dword ptr [rip + picker_last_click_index], eax
+    mov dword ptr [rip + picker_last_click_time], r14d
+    jmp .picker_pointer_done
+
+.picker_pointer_name:
+    cmp r13d, 360
+    jb .picker_pointer_done
+    cmp r13d, 390
+    jae .picker_pointer_done
+    cmp r12d, 128
+    jb .picker_pointer_done
+    cmp r12d, 608
+    jae .picker_pointer_done
+    mov dword ptr [rip + picker_focus], 2
+.picker_pointer_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_handle_pointer, . - picker_handle_pointer
+
 .type set_active_document_name, @function
 set_active_document_name:
     lea rdi, [rip + active_document_name]
