@@ -477,7 +477,7 @@ def run(
 
                 # Extend the next selection from the end of line one through
                 # the character on line two, covering the selected newline.
-                pointer_drag(24, 170, 24, 182, 1140, "multi-line mouse drag selection")
+                pointer_drag(24, 98, 24, 110, 1140, "multi-line mouse drag selection")
                 newline_highlight = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 24 * 4
                 )[0]
