@@ -187,7 +187,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 )
                 expect_message(client, (1, 0, struct.pack("<I", 14)), "seat sync")
                 client.sendall(
-                    wire_message(13, 0, struct.pack("<I", 1))
+                    wire_message(13, 0, struct.pack("<I", 3))
                     + wire_message(14, 0, struct.pack("<I", 2))
                 )
                 expect_message(
@@ -195,7 +195,12 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     (13, 0, struct.pack("<I", 15)),
                     "get wl_pointer",
                 )
-                observations.append("seat pointer capability and object creation verified")
+                expect_message(
+                    client,
+                    (13, 1, struct.pack("<I", 16)),
+                    "get wl_keyboard",
+                )
+                observations.append("seat pointer and keyboard capability/object creation verified")
 
                 # Release the initial buffer before sending a click. The client
                 # must not rewrite the shared memory while the compositor owns it.
@@ -212,6 +217,34 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 80 * 4)[0] != 0xFF596273:
                     raise AssertionError("the previously selected swatch border was not cleared")
                 observations.append("pointer click changed selection and safely redrew the buffer")
+
+                # A keyboard keymap is delivered with an SCM_RIGHTS file
+                # descriptor. The current milestone detects raw key presses
+                # but deliberately defers XKB symbol translation.
+                client.sendall(wire_message(12, 0))  # wl_buffer.release
+                keymap_data = b"xkb_keymap { };\\0"
+                keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
+                try:
+                    os.write(keymap_fd, keymap_data)
+                    keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
+                    client.sendmsg(
+                        [keymap_event],
+                        [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", keymap_fd))],
+                    )
+                finally:
+                    os.close(keymap_fd)
+                client.sendall(
+                    wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
+                    + wire_message(16, 3, struct.pack("<IIII", 1002, 1001, 30, 1))
+                )
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "keyboard redraw attach")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "keyboard redraw damage")
+                expect_message(client, (8, 6, b""), "keyboard redraw commit")
+                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 240 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("keyboard press did not advance the selected swatch")
+                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 160 * 4)[0] != 0xFF596273:
+                    raise AssertionError("keyboard selection did not clear the previous border")
+                observations.append("keyboard focus/key event changed UI state and safely redrew the buffer")
             finally:
                 if pixels is not None:
                     pixels.close()
