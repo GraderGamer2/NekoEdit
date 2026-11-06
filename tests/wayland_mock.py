@@ -242,11 +242,12 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     key(1002, 30),   # a
                     key(1003, 48),   # b -> "ab"
                     key(1004, 105),  # Left -> cursor before b
-                    key(1005, 14),   # Backspace -> "b"
-                    key(1006, 28),   # Enter -> "b\\n"
-                    key(1007, 3),    # 2 -> "b\\n2"
-                    key(1008, 103),  # Up
-                    key(1009, 108),  # Down
+                    key(1005, 14),   # Backspace -> "b", cursor before b
+                    key(1006, 106),  # Right -> cursor after b
+                    key(1007, 28),   # Enter -> "b\\n"
+                    key(1008, 3),    # 2 -> "b\\n2"
+                    key(1009, 103),  # Up
+                    key(1010, 108),  # Down
                 ]
                 client.sendall(b"".join(keyboard_events) + wire_message(12, 0))
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "document redraw attach")
