@@ -4,6 +4,33 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Strengthen zero-byte Open coverage for a non-first list row
+
+**Purpose:** Investigate the user-reported case where opening an empty text file appeared to select another file. The active branch already contained zero-byte Open/Save tests and the completed scrolling, checkbox, and editable search-field implementation. The existing empty-file fixture, however, placed `empty.txt` at the first regular-file row. This follow-up tests the same operation with ordinary files before and after the empty target.
+
+### Regression fixture change
+
+- Added non-empty `aaa.txt` and `zzz.txt` fixtures around `empty.txt`, while retaining `inside.txt` and the hidden-file fixture.
+- With hidden files disabled, the sorted regular-file order now places `empty.txt` at row 1, after `aaa.txt`; the Open-button test selects that second file row rather than row 0.
+- The double-click route uses the same nonzero row. Both activation paths still verify the exact active path and `doc_length == 0`; the single-click/Open route then inserts one byte, saves with Ctrl+S, and checks that only that byte appears in `empty.txt`.
+- Updated the separate `inside.txt` navigation/save regression to select its new row position after adding the surrounding fixtures.
+- This is deliberately a test-hardening change, not a claim that a new assembly loader defect was found. Inspection of `load_document_from_path` confirmed that a successful zero-byte read sets `doc_length` and the gap-buffer start to zero. The pointer-selection path is now exercised against a nonzero row with neighboring regular files.
+
+### Verification
+
+- GitHub Actions [Build and test #241](https://github.com/GraderGamer2/NekoEdit/actions/runs/42240518677) passed **all eight workflow steps** on test commit [`5e7d2d2158eb`](https://github.com/GraderGamer2/NekoEdit/commit/5e7d2d2158ebe560ab7153556e4e25672039bd3d): freestanding build/ELF checks, CLI smoke tests, complete Wayland mock-compositor integration, executable inspection, and artifact upload.
+- The file-workflow test passed for both single-click/Open and double-click of `empty.txt` from row 1, with the exact active path and zero document length. The same integration sequence passed nested-file Open/Save, mouse-wheel scrolling, scrollbar dragging, editable location/search fields, and prefix matching.
+- The same workflow also exercised the established Wayland, XKB punctuation/ONE_LEVEL, gap-buffer, UTF-8, selection, key-repeat, and protocol tests through both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`.
+- Artifact: `nekoedit-linux-x86_64`, 27,216 bytes, artifact ID `13513782459`, SHA-256 `79a0a6f56a7981ad443f0adaa75c521aa3521f48310d72d272778bb425f195ed`, expires 2026-11-13 15:10:30 UTC. [Download from Actions run #241](https://github.com/GraderGamer2/NekoEdit/actions/runs/42240518677/artifacts/13513782459).
+
+### Scope and remaining validation
+
+- No application source or runtime behavior changed in this follow-up; no runtime dependencies were added. The wheel/scrollbar, checkbox, and editable path/search implementation is already present in the active `early-alpha` source and is rerun by #241.
+- The mock compositor now covers the reported selection shape more closely, but it cannot reproduce every GNOME mouse/compositor interaction. The user's original desktop symptom remains **awaiting manual confirmation** against the #241 artifact.
+- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged; no change was made to `main`.
+
+---
+
 ## 2026-11-06 — Correct empty-file Open, add picker scrolling, and finish editable path/search fields
 
 **Purpose:** Respond to picker testing feedback by verifying zero-byte Open behavior, adding mouse-wheel and scrollbar navigation, converting the hidden-files indicator into a normal checkbox, and making the location and filename/search fields genuinely editable. The implementation remains in the freestanding GNU assembly Wayland backend, with no third-party runtime dependency.

@@ -363,6 +363,10 @@ Actions runs #199–#207 include failed intermediate attempts while the picker r
 
 Actions run #235 passed all eight workflow steps on `d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49`, including zero-byte Open via both UI routes, mouse-axis scrolling, scrollbar drag, editable path navigation and filename prefix search/cursor regression cases. See the Phase K entry in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for artifact and validation details.
 
+| 2026-11-06 15:10:07 UTC | [`5e7d2d2158eb`](https://github.com/GraderGamer2/NekoEdit/commit/5e7d2d2158ebe560ab7153556e4e25672039bd3d) | test: open empty file from nonzero directory-list row |
+
+Actions run [#241](https://github.com/GraderGamer2/NekoEdit/actions/runs/42240518677) passed all eight steps on this commit. The strengthened test selects `empty.txt` at row 1 between non-empty files and verifies both activation routes, the exact active path, zero document length, and the Save round-trip. Artifact ID `13513782459`, 27,216 bytes, SHA-256 `79a0a6f56a7981ad443f0adaa75c521aa3521f48310d72d272778bb425f195ed`, expires 2026-11-13. See the latest development-log entry for details.
+
 ## Editable and scrollable picker milestone documentation
 
 | Date (UTC) | Commit | Subject |
