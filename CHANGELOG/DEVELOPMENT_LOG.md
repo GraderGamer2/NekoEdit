@@ -21,7 +21,9 @@ This is an append-only narrative log. New entries go at the top, with the newest
 ### Verification status
 
 - Source commits: [`10df996a0b51`](https://github.com/GraderGamer2/NekoEdit/commit/10df996a0b51de4b36287d4e78180b52dfd5c4ec), [`1331b49dde84`](https://github.com/GraderGamer2/NekoEdit/commit/1331b49dde8415d0d40dfb2d5326b4e0a3990b97), and [`2ba62dd68161`](https://github.com/GraderGamer2/NekoEdit/commit/2ba62dd681611da09673e1fffc1d81b109ac4abf).
-- Build, automated tests, artifact generation, and a fresh GNOME/Mutter test remain unverified for this diagnostic change. Do not treat Maximize or resize as fixed until the new stderr output is examined and the actual desktop behavior is retested.
+- GitHub Actions [Build and test #261](https://github.com/GraderGamer2/NekoEdit/actions/runs/42266008250) passed all eight workflow steps on branch head [`3752714507b773c2cf07293eb5f12bf85f251f1b`](https://github.com/GraderGamer2/NekoEdit/commit/3752714507b773c2cf07293eb5f12bf85f251f1b): freestanding assembly/link and ELF checks, CLI smoke tests, the complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,146 bytes; SHA-256 `f2572c2aa95b92c80294fdb79406cddd7c5de4d5b107887a0d64fb62df643636`; artifact ID `13527261651`; expires 2026-11-13 17:55:26 UTC. [Download from Actions #261](https://github.com/GraderGamer2/NekoEdit/actions/runs/42266008250/artifacts/13527261651).
+- The user's real GNOME/Mutter retest is still pending. CI verifies the existing mock scenarios and that the diagnostic build compiles; it does not establish why Mutter closes the socket or prove Maximize/resize now work.
 
 ## 2026-11-07 — Correct configured geometry, widen interactive resize, and hide the idle picker scrollbar
 
