@@ -219,8 +219,8 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
 
             if send_protocol_error:
                 message = b"test compositor protocol error"
-                encoded = message + b"\\0"
-                padded = encoded + b"\\0" * (-len(encoded) % 4)
+                encoded = message + b"\0"
+                padded = encoded + b"\0" * (-len(encoded) % 4)
                 payload = struct.pack("<II", 0, 1) + struct.pack("<I", len(encoded)) + padded
                 client.sendall(wire_message(1, 0, payload))
             else:
