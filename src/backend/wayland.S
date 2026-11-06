@@ -1967,6 +1967,539 @@ picker_insert_candidate:
     ret
 .size picker_insert_candidate, . - picker_insert_candidate
 
+
+.type picker_close, @function
+picker_close:
+    mov dword ptr [rip + picker_mode], 0
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    mov eax, dword ptr [rip + picker_dir_fd]
+    cmp eax, 0
+    jl .picker_close_done
+    mov edi, eax
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + picker_dir_fd], -1
+.picker_close_done:
+    ret
+.size picker_close, . - picker_close
+
+.type picker_copy_path_to_field, @function
+picker_copy_path_to_field:
+    lea rsi, [rip + picker_current_path]
+    lea rdi, [rip + picker_path_buffer]
+    mov ecx, dword ptr [rip + picker_path_length]
+    rep movsb
+    mov byte ptr [rdi], 0
+    ret
+.size picker_copy_path_to_field, . - picker_copy_path_to_field
+
+.type picker_enter_directory, @function
+picker_enter_directory:
+    # RDI points to a NUL-terminated name relative to picker_dir_fd.
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    # Validate path capacity before changing the active descriptor.
+    mov ebx, dword ptr [rip + picker_path_length]
+    test ebx, ebx
+    jz .picker_enter_need_slash
+    lea rdx, [rip + picker_current_path]
+    cmp byte ptr [rdx + rbx - 1], '/'
+    je .picker_enter_path_capacity_ready
+.picker_enter_need_slash:
+    inc ebx
+.picker_enter_path_capacity_ready:
+    xor ecx, ecx
+.picker_enter_name_len:
+    cmp ecx, 255
+    jae .picker_enter_path_capacity_ready2
+    cmp byte ptr [r12 + rcx], 0
+    je .picker_enter_path_capacity_ready2
+    inc ecx
+    jmp .picker_enter_name_len
+.picker_enter_path_capacity_ready2:
+    add ebx, ecx
+    cmp ebx, PATH_CAPACITY - 1
+    ja .picker_enter_directory_error
+    mov eax, SYS_openat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    mov rsi, r12
+    mov edx, O_DIRECTORY | O_CLOEXEC
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .picker_enter_directory_error
+    mov r13d, eax
+    # The target was opened successfully; now replace the old descriptor.
+    mov edi, dword ptr [rip + picker_dir_fd]
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + picker_dir_fd], r13d
+    mov ebx, dword ptr [rip + picker_path_length]
+    lea rdi, [rip + picker_current_path]
+    test ebx, ebx
+    jz .picker_enter_append_slash
+    cmp byte ptr [rdi + rbx - 1], '/'
+    je .picker_enter_append_name
+.picker_enter_append_slash:
+    mov byte ptr [rdi + rbx], '/'
+    inc ebx
+.picker_enter_append_name:
+    add rdi, rbx
+    mov rsi, r12
+    xor ecx, ecx
+.picker_enter_copy_name:
+    mov al, byte ptr [rsi + rcx]
+    mov byte ptr [rdi + rcx], al
+    test al, al
+    jz .picker_enter_path_done
+    inc ecx
+    jmp .picker_enter_copy_name
+.picker_enter_path_done:
+    add ebx, ecx
+    mov dword ptr [rip + picker_path_length], ebx
+    call picker_copy_path_to_field
+    call picker_scan_directory
+    test rax, rax
+    js .picker_enter_directory_error
+    xor eax, eax
+    jmp .picker_enter_directory_done
+.picker_enter_directory_error:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_enter_directory_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_enter_directory, . - picker_enter_directory
+
+.type picker_go_parent, @function
+picker_go_parent:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov eax, SYS_openat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    lea rsi, [rip + ui_picker_parent]
+    mov edx, O_DIRECTORY | O_CLOEXEC
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .picker_parent_error
+    mov r12d, eax
+    mov edi, dword ptr [rip + picker_dir_fd]
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + picker_dir_fd], r12d
+    mov ebx, dword ptr [rip + picker_path_length]
+    cmp ebx, 1
+    jbe .picker_parent_root
+    lea rdi, [rip + picker_current_path]
+    dec ebx
+    cmp byte ptr [rdi + rbx], '/'
+    jne .picker_parent_find_slash
+    dec ebx
+.picker_parent_find_slash:
+    cmp ebx, 0
+    je .picker_parent_make_root
+    cmp byte ptr [rdi + rbx], '/'
+    je .picker_parent_truncate
+    dec ebx
+    jmp .picker_parent_find_slash
+.picker_parent_make_root:
+    mov byte ptr [rdi], '/'
+    mov byte ptr [rdi + 1], 0
+    mov dword ptr [rip + picker_path_length], 1
+    jmp .picker_parent_rescan
+.picker_parent_truncate:
+    cmp ebx, 0
+    jne .picker_parent_set_terminator
+.picker_parent_root:
+    lea rdi, [rip + picker_current_path]
+    mov byte ptr [rdi], '/'
+    mov byte ptr [rdi + 1], 0
+    mov dword ptr [rip + picker_path_length], 1
+    jmp .picker_parent_rescan
+.picker_parent_set_terminator:
+    lea rdi, [rip + picker_current_path]
+    mov byte ptr [rdi + rbx], 0
+    mov dword ptr [rip + picker_path_length], ebx
+.picker_parent_rescan:
+    call picker_copy_path_to_field
+    call picker_scan_directory
+    jmp .picker_parent_done
+.picker_parent_error:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_parent_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size picker_go_parent, . - picker_go_parent
+
+.type picker_go_home, @function
+picker_go_home:
+    push rbx
+    push r12
+    sub rsp, 8
+    lea rdi, [rip + ui_picker_home_env]
+    mov esi, 4
+    call env_lookup
+    test rax, rax
+    jz .picker_home_error
+    mov r12, rax
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    mov edx, O_DIRECTORY | O_CLOEXEC
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .picker_home_error
+    mov ebx, eax
+    mov eax, dword ptr [rip + picker_dir_fd]
+    cmp eax, 0
+    jl .picker_home_replace
+    mov edi, eax
+    mov eax, SYS_close
+    syscall
+.picker_home_replace:
+    mov dword ptr [rip + picker_dir_fd], ebx
+    lea rdi, [rip + picker_current_path]
+    mov rsi, r12
+    mov edx, PATH_CAPACITY
+    call copy_cstr
+    test rax, rax
+    js .picker_home_error
+    mov dword ptr [rip + picker_path_length], eax
+    call picker_copy_path_to_field
+    call picker_scan_directory
+    jmp .picker_home_done
+.picker_home_error:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_home_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size picker_go_home, . - picker_go_home
+
+.type picker_navigate_path, @function
+picker_navigate_path:
+    push rbx
+    push r12
+    sub rsp, 8
+    lea r12, [rip + picker_path_buffer]
+    cmp byte ptr [r12], 0
+    je .picker_navigate_path_error
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    mov edx, O_DIRECTORY | O_CLOEXEC
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .picker_navigate_path_error
+    mov ebx, eax
+    mov eax, dword ptr [rip + picker_dir_fd]
+    cmp eax, 0
+    jl .picker_navigate_replace
+    mov edi, eax
+    mov eax, SYS_close
+    syscall
+.picker_navigate_replace:
+    mov dword ptr [rip + picker_dir_fd], ebx
+    lea rdi, [rip + picker_current_path]
+    mov rsi, r12
+    mov edx, PATH_CAPACITY
+    call copy_cstr
+    test rax, rax
+    js .picker_navigate_path_error
+    mov dword ptr [rip + picker_path_length], eax
+    call picker_scan_directory
+    jmp .picker_navigate_done
+.picker_navigate_path_error:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_navigate_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size picker_navigate_path, . - picker_navigate_path
+
+.type picker_copy_selected_name, @function
+picker_copy_selected_name:
+    push rbx
+    mov eax, dword ptr [rip + picker_selected]
+    cmp eax, 0
+    jl .picker_copy_name_empty
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_copy_name_empty
+    imul eax, PICKER_ENTRY_SIZE
+    lea rbx, [rip + picker_entries]
+    add rbx, rax
+    cmp byte ptr [rbx], 0
+    jne .picker_copy_name_empty
+    lea rsi, [rbx + 4]
+    lea rdi, [rip + picker_name_buffer]
+    xor edx, edx
+.picker_copy_name_loop:
+    cmp edx, 255
+    jae .picker_copy_name_done
+    mov al, byte ptr [rsi + rdx]
+    mov byte ptr [rdi + rdx], al
+    test al, al
+    jz .picker_copy_name_done
+    inc edx
+    jmp .picker_copy_name_loop
+.picker_copy_name_done:
+    mov dword ptr [rip + picker_name_length], edx
+    jmp .picker_copy_name_return
+.picker_copy_name_empty:
+    mov dword ptr [rip + picker_name_length], 0
+    mov byte ptr [rip + picker_name_buffer], 0
+.picker_copy_name_return:
+    pop rbx
+    ret
+.size picker_copy_selected_name, . - picker_copy_selected_name
+
+.type picker_build_target, @function
+picker_build_target:
+    push rbx
+    push r12
+    push r13
+    lea r12, [rip + picker_name_buffer]
+    cmp byte ptr [r12], 0
+    je .picker_build_target_error
+    lea rdi, [rip + picker_target_buffer]
+    cmp byte ptr [r12], '/'
+    je .picker_build_absolute
+    lea rsi, [rip + picker_current_path]
+    xor ecx, ecx
+.picker_build_copy_dir:
+    mov al, byte ptr [rsi + rcx]
+    test al, al
+    jz .picker_build_dir_done
+    cmp ecx, PATH_CAPACITY - 2
+    jae .picker_build_target_error
+    mov byte ptr [rdi + rcx], al
+    inc ecx
+    jmp .picker_build_copy_dir
+.picker_build_dir_done:
+    cmp ecx, 0
+    je .picker_build_separator
+    cmp byte ptr [rdi + rcx - 1], '/'
+    je .picker_build_name
+.picker_build_separator:
+    cmp ecx, PATH_CAPACITY - 2
+    jae .picker_build_target_error
+    mov byte ptr [rdi + rcx], '/'
+    inc ecx
+.picker_build_name:
+    mov rsi, r12
+    xor edx, edx
+.picker_build_name_loop:
+    mov al, byte ptr [rsi + rdx]
+    test al, al
+    jz .picker_build_target_done
+    lea r8d, [rcx + rdx]
+    cmp r8d, PATH_CAPACITY - 1
+    jae .picker_build_target_error
+    mov byte ptr [rdi + r8], al
+    inc edx
+    jmp .picker_build_name_loop
+.picker_build_absolute:
+    mov rsi, r12
+    xor ecx, ecx
+.picker_build_absolute_loop:
+    mov al, byte ptr [rsi + rcx]
+    mov byte ptr [rdi + rcx], al
+    test al, al
+    jz .picker_build_target_done
+    inc ecx
+    cmp ecx, PATH_CAPACITY - 1
+    jb .picker_build_absolute_loop
+    jmp .picker_build_target_error
+.picker_build_target_done:
+    lea rax, [rip + picker_target_buffer]
+    jmp .picker_build_target_return
+.picker_build_target_error:
+    xor eax, eax
+.picker_build_target_return:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_build_target, . - picker_build_target
+
+.type picker_commit_active_path, @function
+picker_commit_active_path:
+    push r12
+    lea rsi, [rip + picker_target_buffer]
+    lea rdi, [rip + current_path_buffer]
+    xor ecx, ecx
+.picker_commit_path_copy:
+    mov al, byte ptr [rsi + rcx]
+    mov byte ptr [rdi + rcx], al
+    test al, al
+    jz .picker_commit_path_done
+    inc ecx
+    cmp ecx, PATH_CAPACITY - 1
+    jb .picker_commit_path_copy
+    mov byte ptr [rdi + PATH_CAPACITY - 1], 0
+.picker_commit_path_done:
+    lea r12, [rip + current_path_buffer]
+    mov qword ptr [rip + current_file_path], r12
+    call set_active_document_name
+    pop r12
+    ret
+.size picker_commit_active_path, . - picker_commit_active_path
+
+.type picker_open_file, @function
+picker_open_file:
+    push r12
+    call picker_build_target
+    test rax, rax
+    jz .picker_open_file_error
+    mov r12, rax
+    mov rdi, r12
+    call load_document_from_path
+    test rax, rax
+    js .picker_open_file_error
+    call picker_commit_active_path
+    call picker_close
+    xor eax, eax
+    jmp .picker_open_file_done
+.picker_open_file_error:
+    mov dword ptr [rip + picker_error], 2
+    mov rax, -5
+.picker_open_file_done:
+    pop r12
+    ret
+.size picker_open_file, . - picker_open_file
+
+.type picker_save_file, @function
+picker_save_file:
+    push r12
+    call picker_build_target
+    test rax, rax
+    jz .picker_save_file_error
+    mov r12, rax
+    mov eax, SYS_newfstatat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    lea rsi, [rip + picker_name_buffer]
+    cmp byte ptr [rip + picker_name_buffer], '/'
+    jne .picker_save_stat_relative
+    mov rdi, AT_FDCWD
+.picker_save_stat_relative:
+    lea rdx, [rip + picker_stat_buffer]
+    mov r10d, AT_SYMLINK_NOFOLLOW
+    syscall
+    test rax, rax
+    js .picker_save_new_target
+    mov dword ptr [rip + picker_overwrite_pending], 1
+    xor eax, eax
+    jmp .picker_save_file_done
+.picker_save_new_target:
+    cmp rax, -2
+    jne .picker_save_file_error
+    mov rdi, r12
+    call save_document_to_path
+    test rax, rax
+    js .picker_save_file_error
+    call picker_commit_active_path
+    call picker_close
+    xor eax, eax
+    jmp .picker_save_file_done
+.picker_save_file_error:
+    mov dword ptr [rip + picker_error], 3
+    mov rax, -5
+.picker_save_file_done:
+    pop r12
+    ret
+.size picker_save_file, . - picker_save_file
+
+.type picker_confirm_overwrite, @function
+picker_confirm_overwrite:
+    push r12
+    lea rdi, [rip + picker_target_buffer]
+    call save_document_to_path
+    test rax, rax
+    js .picker_overwrite_error
+    call picker_commit_active_path
+    call picker_close
+    xor eax, eax
+    jmp .picker_overwrite_done
+.picker_overwrite_error:
+    mov dword ptr [rip + picker_error], 3
+    mov rax, -5
+.picker_overwrite_done:
+    pop r12
+    ret
+.size picker_confirm_overwrite, . - picker_confirm_overwrite
+
+.type picker_confirm_action, @function
+picker_confirm_action:
+    cmp dword ptr [rip + picker_name_length], 0
+    jne .picker_confirm_action_ready
+    call picker_copy_selected_name
+.picker_confirm_action_ready:
+    cmp dword ptr [rip + picker_name_length], 0
+    je .picker_confirm_action_error
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_confirm_action_save
+    jmp picker_open_file
+.picker_confirm_action_save:
+    jmp picker_save_file
+.picker_confirm_action_error:
+    mov dword ptr [rip + picker_error], 3
+    mov rax, -2
+    ret
+.size picker_confirm_action, . - picker_confirm_action
+
+.type picker_move_selection, @function
+picker_move_selection:
+    mov eax, dword ptr [rip + picker_entry_count]
+    test eax, eax
+    jz .picker_move_done
+    mov edx, dword ptr [rip + picker_selected]
+    test edx, edx
+    jns .picker_move_existing
+    xor edx, edx
+    jmp .picker_move_store
+.picker_move_existing:
+    add edx, edi
+    cmp edx, 0
+    jge .picker_move_upper
+    xor edx, edx
+    jmp .picker_move_store
+.picker_move_upper:
+    cmp edx, eax
+    jb .picker_move_store
+    lea edx, [rax - 1]
+.picker_move_store:
+    mov dword ptr [rip + picker_selected], edx
+    mov eax, dword ptr [rip + picker_scroll]
+    cmp edx, eax
+    jae .picker_move_check_bottom
+    mov dword ptr [rip + picker_scroll], edx
+    ret
+.picker_move_check_bottom:
+    mov ecx, edx
+    sub ecx, eax
+    cmp ecx, PICKER_VISIBLE_ROWS
+    jb .picker_move_done
+    sub edx, PICKER_VISIBLE_ROWS - 1
+    mov dword ptr [rip + picker_scroll], edx
+.picker_move_done:
+    ret
+.size picker_move_selection, . - picker_move_selection
+
 .type set_active_document_name, @function
 set_active_document_name:
     lea rdi, [rip + active_document_name]
