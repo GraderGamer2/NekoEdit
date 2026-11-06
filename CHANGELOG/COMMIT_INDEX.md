@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **215** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits + 2 branch-rename documentation commits + 4 follow-up branch-rename index/status commits + 2 PR #2 status documentation commits + 2 PR #2 index/log commits + 2 previously unindexed PR #2 index commits + 2 XKB ONE_LEVEL implementation/test commits).
+- Recorded commits: **217** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits + 2 branch-rename documentation commits + 4 follow-up branch-rename index/status commits + 2 PR #2 status documentation commits + 2 PR #2 index/log commits + 2 previously unindexed PR #2 index commits + 2 XKB ONE_LEVEL implementation/test commits + 1 XKB status/log documentation commit + 1 ancestry synchronization merge commit).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -289,6 +289,14 @@ The latest user-reported symbol-keyboard issue is documented in CURRENT_STATUS.m
 | 2026-11-06 13:11:10 UTC | [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b) | test: correct XKB punctuation fixture keycodes |
 
 Actions run [#185](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223115089) failed because the new fixture declared evdev values instead of XKB keycodes for the shifted punctuation keys. After correction, Actions run [#186](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121) passed all eight steps on `b260457007589469abdb492358b7581558c0cc5b`, including the XKB +8/group/modifier assertions, shifted punctuation rows, ONE_LEVEL Shift behavior, and the pre-existing Wayland integration scenarios.
+## XKB ONE_LEVEL validation documentation and ancestry synchronization
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 13:15:36 UTC | [`8fa6e2282703`](https://github.com/GraderGamer2/NekoEdit/commit/8fa6e2282703d164dcab2ecb096b9416523957ac) | docs: record XKB ONE_LEVEL fix and CI verification |
+| 2026-11-06 13:16:24 UTC | [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c) | merge: synchronize main changelog history into early-alpha |
+
+Actions run [#187](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584) passed all eight workflow steps on the ancestry synchronization merge commit. The tree was preserved from the prior `early-alpha` head; the merge adds the `main` history as a parent without bringing the editor implementation into `main`.
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.

@@ -21,7 +21,8 @@ This is an append-only narrative log. New entries go at the top, with the newest
 - Corrected the fixture in [commit `b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b), also removing an accidental duplicate AB09 entry. The physical key events still use evdev keycodes as required by Wayland.
 - The corrected [Build and test #186](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121) passed all eight workflow steps on `b260457007589469abdb492358b7581558c0cc5b`: freestanding build/link, ELF dependency checks, CLI smoke tests, complete Wayland mock integration, executable inspection, and artifact upload.
 - The XKB scenario verified the evdev-to-XKB +8 lookup, group switching, Shift/LevelThree, all twelve shifted number-row symbols, the added shifted punctuation rows, ONE_LEVEL Shift behavior, and the exact saved document bytes. The complete suite also passed the UTF-8, gap-buffer, file-workflow, protocol-error, and sparse-keymap fallback scenarios.
-- Artifact: `nekoedit-linux-x86_64`, 19,009 bytes, SHA-256 `a27b9571cf9752c947ff7700f012320316db4e720bba195773ec8647644a8d7b`, artifact ID `13504771747`, expires 2026-11-13. [Run #186 artifacts](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121/artifacts/13504771747).
+- Artifact from #186: `nekoedit-linux-x86_64`, 19,009 bytes, SHA-256 `a27b9571cf9752c947ff7700f012320316db4e720bba195773ec8647644a8d7b`, artifact ID `13504771747`, expires 2026-11-13. [Run #186 artifacts](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121/artifacts/13504771747).
+- The post-sync [Build and test #187](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584) also passed all eight steps on merge commit `3a1b2bb9bed50e15bbd37da634505fead4f7724c`. Artifact ID `13504384311`, 19,009 bytes, SHA-256 `f0b63d507d2057dc46c8524ffc3e4f15d01dc9b1f09005ffcb3bc700acde98e5`, expires 2026-11-13. [Run #187 artifacts](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584/artifacts/13504384311).
 
 ### Manual verification still needed
 
@@ -32,6 +33,7 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 - No third-party runtime libraries or external dependencies were added. The launch interface and document model are unchanged.
 - PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and mergeable with a clean state at the time of this update.
+- The changelog update was committed as [`8fa6e2282703`](https://github.com/GraderGamer2/NekoEdit/commit/8fa6e2282703d164dcab2ecb096b9416523957ac). Because `main` contained separate changelog-only commits, the PR briefly became dirty. Created synchronization merge [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c), with `main` as first parent and the previous `early-alpha` head as second parent; it preserved the entire development tree and brought the PR back to 0 commits behind / clean mergeability.
 - Commits: [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) (parser + regression test + docs); [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b) (fixture keycode correction).
 
 ---
