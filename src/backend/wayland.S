@@ -294,6 +294,7 @@ seat_global:           .long 0
 seat_version:          .long 0
 pointer_x:             .long 0
 pointer_y:             .long 0
+pointer_serial:        .long 0
 pointer_inside:         .long 0
 pointer_created:        .long 0
 pointer_object:         .long 0
@@ -1094,6 +1095,8 @@ wayland_main:
 .pointer_button_press:
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + pointer_serial], eax
     # The directory picker is modal; pointer input belongs to its controls.
     cmp dword ptr [rip + picker_mode], 0
     jne .picker_pointer
@@ -1103,6 +1106,35 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
+
+    # Edge/corner dragging belongs to the compositor. Send xdg_toplevel.resize
+    # with the serial from this button press rather than resizing locally.
+    xor r12d, r12d
+    cmp eax, 6
+    jae .pointer_resize_check_right
+    or r12d, 4                  # left
+    jmp .pointer_resize_check_vertical
+.pointer_resize_check_right:
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 6
+    cmp eax, ecx
+    jb .pointer_resize_check_vertical
+    or r12d, 8                  # right
+.pointer_resize_check_vertical:
+    cmp edx, 6
+    jae .pointer_resize_check_bottom
+    or r12d, 1                  # top
+    jmp .pointer_resize_send_check
+.pointer_resize_check_bottom:
+    mov ecx, dword ptr [rip + window_height]
+    sub ecx, 6
+    cmp edx, ecx
+    jb .pointer_resize_send_check
+    or r12d, 2                  # bottom
+.pointer_resize_send_check:
+    test r12d, r12d
+    jnz .pointer_window_resize
+
     # Minimize, maximize/restore, and close controls occupy the right edge
     # of the app-drawn title bar; the File button remains on the left.
     cmp edx, 32
@@ -1132,6 +1164,20 @@ wayland_main:
     cmp eax, ecx
     jb .pointer_window_close
     jmp .pointer_header_outside
+.pointer_window_resize:
+    mov dword ptr [rip + payload_buffer], 13
+    mov eax, dword ptr [rip + pointer_serial]
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov dword ptr [rip + payload_buffer + 8], r12d
+    mov edi, 10
+    mov esi, 6                  # xdg_toplevel.resize(seat, serial, edges)
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 12
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+    # The compositor owns the resize interaction and sends configure events.
+    jmp .event_loop
 .pointer_window_minimize:
     mov edi, 10
     mov esi, 13                 # xdg_toplevel.set_minimized
@@ -1140,7 +1186,9 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
-    jmp .keyboard_changed
+    # Avoid committing stale-size content after a state request. The compositor's
+    # configure sequence will schedule the next application frame.
+    jmp .event_loop
 .pointer_window_maximize:
     mov edi, 10
     cmp dword ptr [rip + window_is_maximized], 0
@@ -1155,7 +1203,9 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
-    jmp .keyboard_changed
+    # Wait for xdg_toplevel.configure / xdg_surface.configure before painting
+    # the compositor-selected state and geometry.
+    jmp .event_loop
 .pointer_window_close:
     call application_exit
 .pointer_header_file_menu:
@@ -1167,9 +1217,26 @@ wayland_main:
     jmp .keyboard_changed
 .pointer_header_outside:
     cmp dword ptr [rip + file_menu_open], 0
-    je .pointer_document_click
+    jne .pointer_header_close_menu
+    cmp edx, 32
+    jae .pointer_document_click
+    jmp .pointer_window_move
+.pointer_header_close_menu:
     mov dword ptr [rip + file_menu_open], 0
     jmp .keyboard_changed
+.pointer_window_move:
+    # A drag in blank title-bar space starts an interactive toplevel move.
+    mov dword ptr [rip + payload_buffer], 13
+    mov eax, dword ptr [rip + pointer_serial]
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov edi, 10
+    mov esi, 5                  # xdg_toplevel.move(seat, serial)
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
 .pointer_menu_rows:
     cmp dword ptr [rip + file_menu_open], 1
     jne .pointer_document_click

@@ -740,31 +740,22 @@ xkb_symbols "nekoedit-sparse" {
 
                 def workflow_window_click(
                     x: int, serial: int, request_opcode: int, label: str,
-                    buffer_id: int = 12, width: int = 800, height: int = 480,
+                    y: int = 12, request_payload: bytes = b"",
                 ) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, 12 * 256))
+                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
                     )
                     expect_message(
-                        client, (10, request_opcode, b""), f"{label}: xdg_toplevel request"
+                        client, (10, request_opcode, request_payload),
+                        f"{label}: xdg_toplevel request"
                     )
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", buffer_id, 0, 0)),
-                        f"{label}: attach"
-                    )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, width, height)),
-                        f"{label}: damage"
-                    )
-                    expect_message(client, (8, 6, b""), f"{label}: commit")
                     client.sendall(
                         wire_message(
                             15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
                         )
-                        + wire_message(buffer_id, 0)
                     )
 
                 def workflow_scrollbar_drag(
@@ -1536,8 +1527,12 @@ xkb_symbols "nekoedit-sparse" {
                     # a correctly sized buffer from the retained shm pool, and
                     # repaint it using the new stride.
                     workflow_window_click(740, serial + 20, 9, "maximize")
+                    # Mutter may emit multiple toplevel configures before the
+                    # surface configure; the final width/height/state apply.
                     client.sendall(
-                        wire_message(10, 0, struct.pack("<iiII", 1280, 720, 4, 1))
+                        wire_message(12, 0)
+                        + wire_message(10, 0, struct.pack("<iiIII", 1024, 768, 8, 1, 4))
+                        + wire_message(10, 0, struct.pack("<iiIII", 1280, 720, 8, 1, 4))
                         + wire_message(9, 0, struct.pack("<I", 1235))
                     )
                     expect_message(
@@ -1576,23 +1571,17 @@ xkb_symbols "nekoedit-sparse" {
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
                     )
 
-                    # The compositor still owns the maximized frame. Release it
-                    # before expecting the restore click to trigger another redraw.
-                    client.sendall(wire_message(256, 0))
-
-                    # Restore asks the compositor to leave the maximized state;
-                    # the returned configure replaces the large buffer safely.
-                    workflow_window_click(
-                        1220, serial + 30, 10, "restore",
-                        buffer_id=256, width=1280, height=720,
-                    )
+                    # Restore: deliver the configure while buffer 256 is still
+                    # compositor-owned. The client must ack but defer replacement.
+                    workflow_window_click(1220, serial + 30, 10, "restore")
                     client.sendall(
-                        wire_message(10, 0, struct.pack("<iiI", 800, 480, 0))
+                        wire_message(10, 0, struct.pack("<iiII", 800, 480, 4, 4))
                         + wire_message(9, 0, struct.pack("<I", 1236))
                     )
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1236)), "ack restored configure"
                     )
+                    client.sendall(wire_message(256, 0))
                     expect_message(client, (256, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
@@ -1616,17 +1605,68 @@ xkb_symbols "nekoedit-sparse" {
                         or restored_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
-                    client.sendall(wire_message(257, 0))
                     observations.append(
                         "Restore acknowledges the compositor's normal size and replaces the maximized buffer"
                     )
 
+                    # Blank title-bar dragging uses the serial from the button press.
+                    workflow_window_click(
+                        320, serial + 50, 5, "titlebar move",
+                        request_payload=struct.pack("<II", 13, serial + 51),
+                    )
+
+                    # The left edge requests a compositor-controlled interactive resize.
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 60, 4 * 256, 240 * 256))
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 61, serial + 62, 0x110, 1)
+                        )
+                    )
+                    expect_message(
+                        client, (10, 6, struct.pack("<III", 13, serial + 61, 4)),
+                        "left-edge interactive resize request",
+                    )
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
+                    )
+                    # Deliver a new size while buffer 257 is still busy.
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiIII", 720, 480, 8, 3, 4))
+                        + wire_message(9, 0, struct.pack("<I", 1237))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1237)), "ack interactive-resize configure"
+                    )
+                    client.sendall(wire_message(257, 0))
+                    expect_message(client, (257, 0, b""), "destroy old buffer after edge resize")
+                    expect_message(
+                        client, (11, 0, struct.pack("<6I", 258, 0, 720, 480, 2880, 1)),
+                        "create edge-resized buffer",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 258, 0, 0)), "attach edge-resized buffer"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
+                    )
+                    expect_message(client, (8, 6, b""), "commit edge-resized surface")
+                    edge_state = picker_state()
+                    if (
+                        edge_state.get("window_width") != 720
+                        or edge_state.get("window_height") != 480
+                        or edge_state.get("window_stride") != 2880
+                        or edge_state.get("window_buffer_id") != 258
+                        or edge_state.get("window_is_maximized") != 0
+                    ):
+                        raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
+                    client.sendall(wire_message(258, 0))
+
                     # The app's own Close control exits cleanly; no terminal
                     # shutdown or synthetic xdg_toplevel.close is required.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 40, 772 * 256, 12 * 256))
+                        wire_message(15, 2, struct.pack("<Iii", serial + 70, 692 * 256, 12 * 256))
                         + wire_message(
-                            15, 3, struct.pack("<IIII", serial + 41, serial + 42, 0x110, 1)
+                            15, 3, struct.pack("<IIII", serial + 71, serial + 72, 0x110, 1)
                         )
                     )
                     closed = client.recv(1)
