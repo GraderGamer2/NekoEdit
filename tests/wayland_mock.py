@@ -273,7 +273,6 @@ def run(
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
     maximum = 255;
-    <AE01> = 10;
     <AD01> = 24;
     <AC02> = 39;
 };
@@ -292,13 +291,9 @@ xkb_types "nekoedit-test" {
 };
 xkb_symbols "nekoedit-test" {
     key <AD01> {
-        type = "ALPHABETIC",
-        symbols[Group1] = [ a, A ],
+        type = "FOUR_LEVEL_ALPHABETIC",
+        symbols[Group1] = [ a, A, at, quotedbl ],
         symbols[Group2] = [ q, Q ]
-    };
-    key <AE01> {
-        type = "FOUR_LEVEL",
-        symbols[Group1] = [ ampersand, 1, numbersign, exclam ]
     };
     key <AC02> {
         type = "ALPHABETIC",
@@ -459,7 +454,7 @@ xkb_symbols "nekoedit-test" {
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 1005, 1005, 100, 1))
                     )
-                    key_step(1006, 2, "XKB FOUR_LEVEL LevelThree symbol")
+                    key_step(1006, 16, "XKB FOUR_LEVEL_ALPHABETIC LevelThree symbol")
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
                         + wire_message(12, 0)
@@ -1343,7 +1338,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq#",
+            expected_saved_bytes=b"IaAq@",
             keyboard_layout_test=True,
         )
     finally:
