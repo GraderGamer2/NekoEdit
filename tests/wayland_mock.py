@@ -738,8 +738,9 @@ xkb_symbols "nekoedit-sparse" {
                         ) from error
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
-                        + wire_message(12, 0)
                     )
+                    workflow_redraw(f"{label}: release")
+                    client.sendall(wire_message(12, 0))
 
                 def workflow_shortcut(serial: int, code: int, label: str, shift: bool = False) -> None:
                     events = wire_message(16, 3, struct.pack("<IIII", serial, serial, 29, 1))
