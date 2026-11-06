@@ -1861,7 +1861,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=pointer_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"A\\xc3\\xa9\\xe2\\x82\\xacB",
+            expected_saved_bytes=b"A\xc3\xa9\xe2\x82\xacB",
             utf8_pointer_test=True,
         )
     finally:
