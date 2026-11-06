@@ -48,10 +48,10 @@
     .byte 5
     .ascii "grave"
     .byte 96
-    .byte 8
+    .byte 9
     .ascii "backslash"
     .byte 92
-    .byte 10
+    .byte 11
     .ascii "bracketleft"
     .byte 91
     .byte 12
