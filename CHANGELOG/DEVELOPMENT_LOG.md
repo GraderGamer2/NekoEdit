@@ -31,6 +31,7 @@ This is an append-only narrative log. New entries go at the top, with the newest
 - This is PR creation and repository documentation only; no editor implementation, tests, or build files were changed for this task.
 - PR #2 remains open and unmerged. Further feature development remains paused pending explicit user authorization.
 - The PR-status documentation was committed on `early-alpha` as [`fa4725159a20`](https://github.com/GraderGamer2/NekoEdit/commit/fa4725159a202130c5fdd8d2123d1e10be35cadc) and mirrored to `main` as [`92fa00fca547`](https://github.com/GraderGamer2/NekoEdit/commit/92fa00fca547f4b5d947a645bce345f59046e9f6). Both commits touch only the four CHANGELOG files.
+- The index/log follow-up commits are [`156e0ab2e53f`](https://github.com/GraderGamer2/NekoEdit/commit/156e0ab2e53fcdbcb4c8403154f577e1e41351c5) on `early-alpha` and [`4795856b1713`](https://github.com/GraderGamer2/NekoEdit/commit/4795856b1713c39103f56f3ba944f0723e3b4218) on `main`.
 
 ---
 
