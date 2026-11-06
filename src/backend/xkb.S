@@ -695,16 +695,17 @@ xkb_reset_keymap:
     movzx ecx, byte ptr [rbx]
     test ecx, ecx
     jz .Lxkb_keysym_none
+    mov r12d, ecx                # Preserve the table record length on every path.
     cmp ecx, dword ptr [rip + .Lxkb_token_length]
     jne .Lxkb_ascii_table_next
-    mov r12d, ecx                # CMPSB consumes RCX; preserve record length
     lea rsi, [rbx + 1]
     lea rdi, [rip + .Lxkb_token]
     mov edx, ecx
     repe cmpsb
     je .Lxkb_ascii_table_found
 .Lxkb_ascii_table_next:
-    lea rbx, [rbx + rcx + 2]
+    # REP CMPSB consumes RCX on a partial match; never use it to step records.
+    lea rbx, [rbx + r12 + 2]
     jmp .Lxkb_ascii_table_loop
 .Lxkb_ascii_table_found:
     movzx eax, byte ptr [rbx + r12 + 1]
