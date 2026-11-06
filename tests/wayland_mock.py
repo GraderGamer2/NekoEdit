@@ -2394,6 +2394,11 @@ xkb_symbols "nekoedit-sparse" {
             cwd=runtime_dir if file_workflow else None,
         )
         process_holder.append(process)
+        if use_wayland_socket:
+            # Popen has inherited the descriptor. Drop the parent's duplicate
+            # so the compositor observes EOF when the child closes its socket.
+            client_endpoint.close()
+            client_endpoint = None
         # The expanded XKB and rendered-glyph integration cases inspect
         # child mappings and shared-memory pixels; allow extra scheduler
         # variance on slower CI hosts while keeping a finite upper bound.

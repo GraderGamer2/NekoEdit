@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **219** (217 previously indexed commits + 1 filename-autocomplete implementation + 1 Wayland window-management implementation).
+- Recorded commits: **220** (219 previously indexed commits + 1 maximized-buffer release-ordering test correction).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -400,8 +400,9 @@ Actions run [#243](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224145
 |---|---|---|
 | 2026-11-06 15:43:07 UTC | [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) | feat: show selectable filename autocomplete suggestions |
 | 2026-11-06 15:56:15 UTC | [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) | feat: add Wayland window management controls |
+| 2026-11-06 16:22:39 UTC | [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419) | test: release maximized buffer before window restore |
 
-Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before simulating Restore. The release-ordering regression correction is recorded in the current development entry; see [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before Restore. Commit `93bedb579a89` adds the release event. Actions run [#247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) confirmed the window-control workflow over `WAYLAND_DISPLAY` but exposed a mock-harness EOF wait in the inherited-`WAYLAND_SOCKET` path; the parent descriptor is now closed after the child inherits it. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for the diagnostic and next CI result.
 
 
 ## Maintenance

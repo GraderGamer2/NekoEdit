@@ -2,6 +2,34 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-06 — Close the parent copy of the inherited WAYLAND_SOCKET test descriptor
+
+**Purpose:** Continue from [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419), which corrected the mock compositor's buffer-release ordering before Restore. Actions #247 then verified that the resize/control flow passed through `WAYLAND_DISPLAY`, but exposed a separate lifetime issue in the inherited-`WAYLAND_SOCKET` test.
+
+### Actions #247 result
+
+- [Build and test #247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) used commit [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419).
+- Toolchain setup, freestanding assembly/link/ELF checks, and CLI smoke tests passed.
+- The complete file-workflow run over `WAYLAND_DISPLAY` passed, including app-drawn Minimize, Maximize, Restore, dynamic 1280×720 buffer replacement, restoration to 800×480, and the Close control.
+- The following inherited-`WAYLAND_SOCKET` file-workflow run reached the explicit Close check but the mock compositor did not observe EOF before the test's thread-join deadline.
+
+### Root cause and test correction
+
+- The inherited transport is created with `socket.socketpair()`. The parent passes `client_endpoint.fileno()` to `subprocess.Popen(pass_fds=...)`, so the child inherits that descriptor.
+- The parent previously kept its own `client_endpoint` copy open until the outer `finally`, which executes only after the compositor thread has been joined.
+- The Close assertion in the fake compositor calls `client.recv(1)` and expects EOF after the child exits. An open duplicate of the same socket endpoint prevents EOF, even after NekoEdit closes its own descriptor. This is a test-harness descriptor-lifetime defect, not a failure in the application's Close request.
+- The harness now closes the parent's copy immediately after successful `Popen` and sets `client_endpoint = None`. The child retains its inherited descriptor; when the child exits, the compositor can observe EOF as intended.
+- The earlier buffer-256 release remains in place. No application source or launch behavior was changed.
+
+### Verification and remaining validation
+
+- Actions #247 remains a failed workflow overall because the inherited-socket EOF assertion did not complete, despite the successful `WAYLAND_DISPLAY` path and successful build/CLI checks.
+- The descriptor-lifetime correction is included in the current branch update. A fresh Actions run is required to verify both transport paths.
+- No real GNOME Wayland desktop test has been performed in this session; CI mock-compositor success will still need separate manual confirmation on the target desktop.
+- `./nekoedit --backend=wayland` remains the supported launch form; no runtime dependency was added.
+
+---
+
 ## 2026-11-06 — Add Wayland window controls and repair resize-test buffer release ordering
 
 **Purpose:** Continue from the tested filename-autocomplete milestone on the live `early-alpha` branch. The repository's next implementation commit added app-drawn window controls and compositor-driven resize handling; the latest CI run exposed a missing buffer-release event in the mock workflow rather than a build failure.
