@@ -771,8 +771,25 @@ wayland_main:
     je .keyboard_leave
     cmp dword ptr [rip + last_opcode], 3
     je .keyboard_key
-    # keymap, modifiers, and repeat-info are intentionally ignored until
-    # the self-contained XKB keymap reader is implemented.
+    cmp dword ptr [rip + last_opcode], 4
+    je .keyboard_modifiers
+    # The XKB keymap FD and repeat-info are still deferred. Modifier masks
+    # are consumed below so Shift/Lock state follows the compositor.
+    jmp .event_loop
+.keyboard_modifiers:
+    cmp dword ptr [rip + last_size], 20
+    jb .event_loop
+    # wl_keyboard.modifiers: serial, depressed, latched, locked, group.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    test eax, 1
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + shift_down], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    and eax, 2
+    shr eax, 1
+    mov dword ptr [rip + caps_lock], eax
     jmp .event_loop
 .keyboard_enter:
     cmp dword ptr [rip + last_size], 12
