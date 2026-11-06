@@ -632,6 +632,58 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 observations.append(
                     "keyboard auto-repeat used a 300 ms initial delay and repeated Left, Backspace, and Delete while held"
                 )
+
+                # Insert enough characters to pass the 97-cell line width.
+                # They must wrap onto a second visual row rather than being
+                # silently consumed after the right edge.
+                for index in range(100):
+                    key_step(1300 + index * 2, 30, f"soft-wrap character {index + 1}")
+                wrapped_first = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                )[0]
+                if wrapped_first != 0xFFD8DEE9:
+                    raise AssertionError(
+                        "characters typed beyond the right edge were not rendered on the next row; "
+                        f"pixel={hex(wrapped_first)}"
+                    )
+                wrapped_caret = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 40 * 4
+                )[0]
+                if wrapped_caret != 0xFFFFFFFF:
+                    raise AssertionError("caret did not follow the text onto its soft-wrapped row")
+
+                # A click on the wrapped row must map back to the same visual
+                # insertion point, not to a logical hard-newline-only row.
+                pointer_click(40, 182, 1510, "click within soft-wrapped row")
+                wrapped_click_caret = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 40 * 4
+                )[0]
+                if wrapped_click_caret != 0xFFFFFFFF:
+                    raise AssertionError("mouse hit testing did not account for soft-wrapped rows")
+
+                # Add enough further lines to exceed the viewport. The active
+                # caret row should scroll into view at the bottom instead of
+                # becoming invisible below the window.
+                for index in range(28):
+                    key_step(1600 + index * 4, 28, f"append scroll line {index + 1}")
+                    key_step(1602 + index * 4, 30, f"append scroll text {index + 1}")
+                bottom_row_y = 164 + (25 - 1) * 12
+                scrolled_glyph = struct.unpack_from(
+                    "<I", pixels, bottom_row_y * 800 * 4 + 17 * 4
+                )[0]
+                if scrolled_glyph != 0xFFD8DEE9:
+                    raise AssertionError(
+                        "text/caret did not scroll into the visible bottom row after vertical overflow; "
+                        f"pixel={hex(scrolled_glyph)}"
+                    )
+                bottom_caret = struct.unpack_from(
+                    "<I", pixels, bottom_row_y * 800 * 4 + 24 * 4
+                )[0]
+                if bottom_caret != 0xFFFFFFFF:
+                    raise AssertionError("caret was not kept visible after vertical scrolling")
+                observations.append(
+                    "long text soft-wrapped at the right edge, mouse hit testing followed wrapped rows, and the active line scrolled into view vertically"
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
