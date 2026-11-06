@@ -96,6 +96,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 registry_global(1, "wl_compositor")
                 + registry_global(2, "wl_shm")
                 + registry_global(3, "xdg_wm_base")
+                + registry_global(4, "wl_seat")
                 + wire_message(3, 0, struct.pack("<I", 1))
             )
 
@@ -148,29 +149,73 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
             if (pool_id, buffer_size) != (11, expected_size):
                 raise AssertionError(f"unexpected shm pool args: {(pool_id, buffer_size)!r}")
             shm_fd = pool[3][0]
+            pixels = None
             try:
                 if os.fstat(shm_fd).st_size != expected_size:
                     raise AssertionError("memfd size does not match requested shared buffer size")
-                with mmap.mmap(shm_fd, expected_size, access=mmap.ACCESS_READ) as pixels:
-                    if struct.unpack_from("<I", pixels, 0)[0] != 0xFF343D4B:
-                        raise AssertionError("expected top bar color was not rendered")
-                    if struct.unpack_from("<I", pixels, 36 * 800 * 4)[0] != 0xFF252A33:
-                        raise AssertionError("expected background color was not rendered")
-                    if struct.unpack_from("<I", pixels, 48 * 4)[0] != 0xFF78A9D4:
-                        raise AssertionError("expected accent mark was not rendered")
-            finally:
-                os.close(shm_fd)
+                pixels = mmap.mmap(shm_fd, expected_size, access=mmap.ACCESS_READ)
+                if struct.unpack_from("<I", pixels, 0)[0] != 0xFF343D4B:
+                    raise AssertionError("expected top bar color was not rendered")
+                if struct.unpack_from("<I", pixels, 36 * 800 * 4)[0] != 0xFF252A33:
+                    raise AssertionError("expected background color was not rendered")
+                if struct.unpack_from("<I", pixels, 48 * 4)[0] != 0xFF78A9D4:
+                    raise AssertionError("expected accent mark was not rendered")
 
-            expect_message(
-                client,
-                (11, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
-                "create wl_buffer",
-            )
-            expect_message(client, (11, 1, b""), "destroy shm pool")
-            expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
-            expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
-            expect_message(client, (8, 6, b""), "map surface")
-            observations.append("memfd+SCM_RIGHTS buffer verified")
+                expect_message(
+                    client,
+                    (11, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
+                    "create wl_buffer",
+                )
+                expect_message(client, (11, 1, b""), "destroy shm pool")
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
+                expect_message(client, (8, 6, b""), "initial map surface")
+                observations.append("memfd+SCM_RIGHTS buffer verified")
+
+                # The seat is bound after the existing window objects to keep
+                # the client-side object ID sequence dense.
+                seat_bind = expect_message(
+                    client,
+                    (
+                        2,
+                        0,
+                        struct.pack("<II", 4, 8)
+                        + b"wl_seat\\0"
+                        + struct.pack("<II", 1, 13),
+                    ),
+                    "bind wl_seat",
+                )
+                expect_message(client, (1, 0, struct.pack("<I", 14)), "seat sync")
+                client.sendall(
+                    wire_message(13, 0, struct.pack("<I", 1))
+                    + wire_message(14, 0, struct.pack("<I", 2))
+                )
+                expect_message(
+                    client,
+                    (13, 0, struct.pack("<I", 15)),
+                    "get wl_pointer",
+                )
+                observations.append("seat pointer capability and object creation verified")
+
+                # Release the initial buffer before sending a click. The client
+                # must not rewrite the shared memory while the compositor owns it.
+                client.sendall(
+                    wire_message(12, 0)
+                    + wire_message(15, 0, struct.pack("<IIii", 777, 8, 175 * 256, 110 * 256))
+                    + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
+                )
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
+                expect_message(client, (8, 6, b""), "redraw commit")
+                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 160 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("clicking the second swatch did not move the selected border")
+                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 80 * 4)[0] != 0xFF596273:
+                    raise AssertionError("the previously selected swatch border was not cleared")
+                observations.append("pointer click changed selection and safely redrew the buffer")
+            finally:
+                if pixels is not None:
+                    pixels.close()
+                os.close(shm_fd)
 
             if send_protocol_error:
                 message = b"test compositor protocol error"
