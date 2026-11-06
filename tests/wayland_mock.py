@@ -325,8 +325,13 @@ def run(
                     raise AssertionError("Shift+1 did not render an exclamation mark")
                 if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document caret was not rendered after the shifted character")
+                # The footer tracks the current logical caret position and byte count.
+                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 41 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("status bar did not show logical line 2")
+                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 100 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("status bar did not show logical column 3")
                 observations.append(
-                    "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
+                    "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering, caret and live status verified"
                 )
 
                 def key_step_shift(serial: int, code: int, label: str) -> None:
@@ -682,7 +687,7 @@ def run(
                 for index in range(36):
                     key_step(1600 + index * 4, 28, f"append scroll line {index + 1}")
                     key_step(1602 + index * 4, 30, f"append scroll text {index + 1}")
-                bottom_row_y = 92 + (31 - 1) * 12
+                bottom_row_y = 92 + (30 - 1) * 12
                 scrolled_glyph = struct.unpack_from(
                     "<I", pixels, bottom_row_y * 800 * 4 + 17 * 4
                 )[0]
@@ -725,7 +730,7 @@ def run(
                 )
 
                 def caret_position() -> tuple[int, int]:
-                    for y in range(164, 480 - 9, 12):
+                    for y in range(92, 460 - 9, 12):
                         for x in range(16, 800 - 1, 8):
                             if all(
                                 struct.unpack_from("<I", pixels, (y + dy) * 800 * 4 + x * 4)[0]
