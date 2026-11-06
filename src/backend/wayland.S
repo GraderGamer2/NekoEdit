@@ -5320,6 +5320,329 @@ render_status_bar:
     ret
 .size render_status_bar, . - render_status_bar
 
+
+.type draw_bounded_ascii, @function
+# RDI=x, ESI=y, RDX=NUL-terminated byte string, ECX=maximum bytes.
+# Non-printable and non-ASCII bytes are rendered as '?' while path operations
+# continue to use the untouched original name/path bytes.
+draw_bounded_ascii:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rbx, rdx
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, ecx
+.draw_bounded_ascii_loop:
+    test r14d, r14d
+    jz .draw_bounded_ascii_done
+    movzx edx, byte ptr [rbx]
+    test dl, dl
+    jz .draw_bounded_ascii_done
+    cmp dl, 32
+    jb .draw_bounded_ascii_replacement
+    cmp dl, 126
+    ja .draw_bounded_ascii_replacement
+    jmp .draw_bounded_ascii_glyph
+.draw_bounded_ascii_replacement:
+    mov edx, '?'
+.draw_bounded_ascii_glyph:
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+    add r12d, CELL_WIDTH
+    inc rbx
+    dec r14d
+    jmp .draw_bounded_ascii_loop
+.draw_bounded_ascii_done:
+    mov eax, r12d
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_bounded_ascii, . - draw_bounded_ascii
+
+.type render_picker, @function
+render_picker:
+    cmp dword ptr [rip + picker_mode], 0
+    je .render_picker_done
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+
+    # Modal panel and title strip.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 40
+    mov edx, 36
+    mov ecx, 720
+    mov r8d, 408
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 40
+    mov edx, 36
+    mov ecx, 720
+    mov r8d, 28
+    mov r9d, 0xff343d4b
+    call draw_rect
+    cmp dword ptr [rip + picker_mode], 1
+    jne .render_picker_title_save
+    mov edi, 56
+    mov esi, 46
+    lea rdx, [rip + ui_picker_open_title]
+    call draw_text
+    jmp .render_picker_path
+.render_picker_title_save:
+    mov edi, 56
+    mov esi, 46
+    lea rdx, [rip + ui_picker_save_title]
+    call draw_text
+
+.render_picker_path:
+    mov edi, 56
+    mov esi, 55
+    lea rdx, [rip + ui_picker_path_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 56
+    mov edx, 64
+    mov ecx, 688
+    mov r8d, 28
+    mov r9d, 0xff252a33
+    call draw_rect
+    cmp dword ptr [rip + picker_focus], 1
+    jne .render_picker_path_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 56
+    mov edx, 64
+    mov ecx, 688
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+.render_picker_path_text:
+    lea rdx, [rip + picker_path_buffer]
+    mov edi, 64
+    mov esi, 74
+    mov ecx, 84
+    call draw_bounded_ascii
+
+    # Up, Home, and hidden-file visibility controls.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 56
+    mov edx, 96
+    mov ecx, 44
+    mov r8d, 26
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 68
+    mov esi, 105
+    lea rdx, [rip + ui_picker_up_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 104
+    mov edx, 96
+    mov ecx, 56
+    mov r8d, 26
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 116
+    mov esi, 105
+    lea rdx, [rip + ui_picker_home_label]
+    call draw_text
+    mov edi, 600
+    mov esi, 105
+    lea rdx, [rip + ui_picker_hidden_label]
+    call draw_text
+    cmp dword ptr [rip + picker_show_hidden], 0
+    je .render_picker_list
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 744
+    mov edx, 101
+    mov ecx, 7
+    mov r8d, 7
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+.render_picker_list:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 56
+    mov edx, 128
+    mov ecx, 688
+    mov r8d, 222
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov r12d, dword ptr [rip + picker_scroll]
+    xor r13d, r13d
+.render_picker_rows:
+    cmp r13d, PICKER_VISIBLE_ROWS
+    jae .render_picker_empty_or_name
+    mov r14d, r12d
+    add r14d, r13d
+    cmp r14d, dword ptr [rip + picker_entry_count]
+    jae .render_picker_empty_or_name
+    cmp r14d, dword ptr [rip + picker_selected]
+    jne .render_picker_row_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 58
+    mov eax, r13d
+    imul eax, 14
+    lea edx, [rax + 130]
+    mov ecx, 684
+    mov r8d, 14
+    mov r9d, 0xff414b5a
+    call draw_rect
+.render_picker_row_text:
+    mov eax, r14d
+    imul eax, PICKER_ENTRY_SIZE
+    lea rbx, [rip + picker_entries]
+    add rbx, rax
+    mov edi, 64
+    mov eax, r13d
+    imul eax, 14
+    lea esi, [rax + 133]
+    cmp byte ptr [rbx], 1
+    jne .render_picker_file_marker
+    lea rdx, [rip + ui_picker_dir_marker]
+    call draw_text
+    jmp .render_picker_draw_name
+.render_picker_file_marker:
+    lea rdx, [rip + ui_picker_file_marker]
+    call draw_text
+.render_picker_draw_name:
+    lea rdx, [rbx + 4]
+    mov edi, 96
+    mov eax, r13d
+    imul eax, 14
+    lea esi, [rax + 133]
+    mov ecx, 78
+    call draw_bounded_ascii
+    inc r13d
+    jmp .render_picker_rows
+
+.render_picker_empty_or_name:
+    cmp dword ptr [rip + picker_entry_count], 0
+    jne .render_picker_name
+    mov edi, 72
+    mov esi, 142
+    lea rdx, [rip + ui_picker_empty]
+    call draw_text
+
+.render_picker_name:
+    mov edi, 56
+    mov esi, 363
+    lea rdx, [rip + ui_picker_name_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 128
+    mov edx, 360
+    mov ecx, 480
+    mov r8d, 28
+    mov r9d, 0xff252a33
+    call draw_rect
+    cmp dword ptr [rip + picker_focus], 2
+    jne .render_picker_name_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 128
+    mov edx, 360
+    mov ecx, 480
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+.render_picker_name_text:
+    lea rdx, [rip + picker_name_buffer]
+    mov edi, 136
+    mov esi, 370
+    mov ecx, 72
+    call draw_bounded_ascii
+
+    # Cancel and Open/Save action buttons.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 600
+    mov edx, 396
+    mov ecx, 72
+    mov r8d, 32
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 612
+    mov esi, 407
+    lea rdx, [rip + ui_picker_cancel_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 680
+    mov edx, 396
+    mov ecx, 72
+    mov r8d, 32
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 692
+    mov esi, 407
+    cmp dword ptr [rip + picker_mode], 1
+    jne .render_picker_save_label
+    lea rdx, [rip + ui_picker_open_label]
+    jmp .render_picker_action_label
+.render_picker_save_label:
+    lea rdx, [rip + ui_picker_save_label]
+.render_picker_action_label:
+    call draw_text
+
+    cmp dword ptr [rip + picker_truncated], 0
+    je .render_picker_messages
+    mov edi, 56
+    mov esi, 434
+    lea rdx, [rip + ui_picker_truncated]
+    call draw_text
+.render_picker_messages:
+    cmp dword ptr [rip + picker_error], 0
+    je .render_picker_overwrite
+    mov edi, 352
+    mov esi, 434
+    cmp dword ptr [rip + picker_error], 1
+    jne .render_picker_error_file
+    lea rdx, [rip + ui_picker_error_path]
+    jmp .render_picker_error_draw
+.render_picker_error_file:
+    cmp dword ptr [rip + picker_error], 2
+    jne .render_picker_error_save
+    lea rdx, [rip + ui_picker_error_file]
+    jmp .render_picker_error_draw
+.render_picker_error_save:
+    lea rdx, [rip + ui_picker_error_save]
+.render_picker_error_draw:
+    call draw_text
+
+.render_picker_overwrite:
+    cmp dword ptr [rip + picker_overwrite_pending], 0
+    je .render_picker_done_pop
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 184
+    mov edx, 176
+    mov ecx, 432
+    mov r8d, 80
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov edi, 208
+    mov esi, 190
+    lea rdx, [rip + ui_picker_overwrite]
+    call draw_text
+
+.render_picker_done_pop:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+.render_picker_done:
+    ret
+.size render_picker, . - render_picker
+
 .type render_file_menu, @function
 render_file_menu:
     cmp dword ptr [rip + file_menu_open], 1
