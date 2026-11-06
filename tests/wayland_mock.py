@@ -309,6 +309,23 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
                 )
 
+                def key_step_shift(serial: int, code: int, label: str) -> None:
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", serial, 1, 0, 0, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 1))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+                    client.sendall(
+                        wire_message(12, 0)
+                        + wire_message(16, 4, struct.pack("<IIIII", serial + 2, 0, 0, 0, 0))
+                    )
+
                 def pointer_click(x: int, y: int, serial: int, label: str) -> None:
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
@@ -456,6 +473,62 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("multi-line selection replacement left stale text on the next line")
                 observations.append(
                     "multi-line drag highlighted the newline and replaced the selected range across lines"
+                )
+
+                # The previous replacement leaves the single line "bA" with
+                # the insertion point after A. Shift+Left extends and preserves
+                # the anchor; an unshifted Right collapses to the far edge.
+                key_step_shift(1150, 105, "Shift+Left select A")
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
+                    raise AssertionError("Shift+Left did not highlight the preceding character")
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
+                    raise AssertionError("Shift+Left selected more than one character on its first step")
+
+                key_step_shift(1154, 105, "Shift+Left extend selection")
+                for x in (23, 31):
+                    pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
+                    if pixel != 0xFF5E81AC:
+                        raise AssertionError(
+                            "repeated Shift+Left did not extend from the original anchor; "
+                            f"x={x}, pixel={hex(pixel)}"
+                        )
+
+                key_step(1158, 106, "Right collapse keyboard selection")
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
+                    raise AssertionError("Right did not clear the keyboard selection highlight")
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("Right did not collapse the selection to its far edge")
+
+                # Extend a selection across the newline with Shift+Up and
+                # return to the anchor with Shift+Down.
+                key_step(1162, 28, "append newline for vertical selection")
+                key_step(1163, 46, "append c for vertical selection")
+                key_step(1164, 32, "append d for vertical selection")
+                key_step_shift(1168, 103, "Shift+Up select previous line")
+                vertical_pixels = [
+                    struct.unpack_from("<I", pixels, 164 * 800 * 4 + 39 * 4)[0],
+                    struct.unpack_from("<I", pixels, 176 * 800 * 4 + 23 * 4)[0],
+                    struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0],
+                ]
+                if vertical_pixels != [0xFF5E81AC] * 3:
+                    raise AssertionError(
+                        "Shift+Up did not select across the newline and previous line; "
+                        f"pixels={[hex(x) for x in vertical_pixels]}"
+                    )
+                key_step_shift(1172, 108, "Shift+Down collapse vertical selection")
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 39 * 4)[0] != 0xFF252A33:
+                    raise AssertionError("Shift+Down back to the anchor did not clear selection")
+
+                key_step_shift(1176, 102, "Shift+Home select to line start")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
+                    raise AssertionError("Shift+Home did not select text to the start of the line")
+                key_step_shift(1180, 107, "Shift+End collapse to line end")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0] != 0xFF252A33:
+                    raise AssertionError("Shift+End did not clear selection after returning to its anchor")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("Shift+End did not leave the caret at the line end")
+                observations.append(
+                    "Shift+Arrow and Shift+Home/End selection, extension, collapse, and multi-line highlighting"
                 )
             finally:
                 if pixels is not None:
