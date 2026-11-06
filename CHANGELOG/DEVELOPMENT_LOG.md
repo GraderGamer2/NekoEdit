@@ -4,6 +4,35 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Open replacement pull request #2 for early-alpha
+
+**Purpose:** Attach the renamed development branch to an active review so GitHub's recent-push prompt has a pull-request destination. The user explicitly authorized opening a pull request if required to clear the repository notification.
+
+### Pull request
+
+- Opened [PR #2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2), from `early-alpha` into `main`. It replaces closed, unmerged PR #1 as the active review for this development branch.
+- At creation, GitHub compared the branch as 185 commits ahead and 4 behind main; the PR contained 12 changed files, 6,804 additions, and 235 deletions.
+- PR #2 is open and not draft. No merge was attempted.
+- After creation and its CI run, GitHub reported `mergeable=true` and `mergeable_state=clean`.
+
+### Validation
+
+- PR-triggered GitHub Actions [Build and test #179](https://github.com/GraderGamer2/NekoEdit/actions/runs/42220633279) completed successfully on head commit `108d7df1e024e74c653c5bb4cdbe52fb1d1289bf`. All eight workflow steps passed, including the freestanding x86-64 build/ELF verification, CLI smoke tests, Wayland mock-compositor integration, executable inspection, and artifact upload.
+- No application source or tests changed after implementation-code tip [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0); the tested head contains later changelog-only maintenance commits.
+- The mock compositor does not replace a real GNOME Wayland smoke test.
+
+### Outstanding user-reported keyboard regression
+
+- In the latest user test of a newer Actions build, normal alphabetic keys worked again, but most shifted punctuation/symbol keys displayed `?`. The user reported only a subset (including `<>`, `:"`, and `()`) rendered correctly.
+- The exact Actions run/artifact for that manual report was not identified. Do not claim the regression is fixed because automated mock-compositor tests pass.
+
+### Scope
+
+- This is PR creation and repository documentation only; no editor implementation, tests, or build files were changed for this task.
+- PR #2 remains open and unmerged. Further feature development remains paused pending explicit user authorization.
+
+---
+
 ## 2026-11-06 — Rename the development branch to `early-alpha`
 
 **Purpose:** Replace the overly specific branch name with a concise early-development label while preserving the existing implementation history and keeping the project handoff documentation accurate.
