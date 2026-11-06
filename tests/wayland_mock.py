@@ -286,7 +286,31 @@ xkb_keycodes "nekoedit-test" {
     <AE11> = 20;
     <AE12> = 21;
     <AD01> = 24;
+    <AD02> = 25;
+    <AD03> = 26;
+    <AD04> = 27;
+    <AD05> = 28;
+    <AD06> = 29;
+    <AD07> = 30;
+    <AD08> = 31;
+    <AD09> = 32;
+    <AD10> = 33;
+    <AC01> = 38;
     <AC02> = 39;
+    <AC03> = 40;
+    <AC04> = 41;
+    <AC05> = 42;
+    <AC06> = 43;
+    <AC07> = 44;
+    <AC08> = 45;
+    <AC09> = 46;
+    <AB01> = 52;
+    <AB02> = 53;
+    <AB03> = 54;
+    <AB04> = 55;
+    <AB05> = 56;
+    <AB06> = 57;
+    <AB07> = 58;
     <AB09> = 60;
 };
 xkb_types "nekoedit-test" {
@@ -312,6 +336,30 @@ xkb_symbols "nekoedit-test" {
         type = "ALPHABETIC",
         symbols[Group1] = [ s, S ]
     };
+    key <AD02> { [ w, W ] };
+    key <AD03> { [ e, E ] };
+    key <AD04> { [ r, R ] };
+    key <AD05> { [ t, T ] };
+    key <AD06> { [ y, Y ] };
+    key <AD07> { [ u, U ] };
+    key <AD08> { [ i, I ] };
+    key <AD09> { [ o, O ] };
+    key <AD10> { [ p, P ] };
+    key <AC01> { [ a, A ] };
+    key <AC03> { [ d, D ] };
+    key <AC04> { [ f, F ] };
+    key <AC05> { [ g, G ] };
+    key <AC06> { [ h, H ] };
+    key <AC07> { [ j, J ] };
+    key <AC08> { [ k, K ] };
+    key <AC09> { [ l, L ] };
+    key <AB01> { [ z, Z ] };
+    key <AB02> { [ x, X ] };
+    key <AB03> { [ c, C ] };
+    key <AB04> { [ v, V ] };
+    key <AB05> { [ b, B ] };
+    key <AB06> { [ n, N ] };
+    key <AB07> { [ m, M ] };
     # xkbcomp emits the ordinary number row and several punctuation keys
     # in this shorthand form, with no "symbols[Group1] =" attribute.
     key <AE01> { [ 1, exclam ] };
@@ -549,18 +597,58 @@ xkb_symbols "nekoedit-test" {
                         wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
                         + wire_message(12, 0)
                     )
+                    # Verify every remaining ASCII letter using its evdev
+                    # position and the parsed XKB keycode/symbol entries.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1010, 0, 0, 0, 0))
+                    )
+                    key_step(1020, 17, "XKB letter w")
+                    key_step(1022, 18, "XKB letter e")
+                    key_step(1024, 19, "XKB letter r")
+                    key_step(1026, 20, "XKB letter t")
+                    key_step(1028, 21, "XKB letter y")
+                    key_step(1030, 22, "XKB letter u")
+                    key_step(1032, 23, "XKB letter i")
+                    key_step(1034, 24, "XKB letter o")
+                    key_step(1036, 25, "XKB letter p")
+                    key_step(1038, 30, "XKB letter a")
+                    key_step(1040, 31, "XKB letter s")
+                    key_step(1042, 32, "XKB letter d")
+                    key_step(1044, 33, "XKB letter f")
+                    key_step(1046, 34, "XKB letter g")
+                    key_step(1048, 35, "XKB letter h")
+                    key_step(1050, 36, "XKB letter j")
+                    key_step(1052, 37, "XKB letter k")
+                    key_step(1054, 38, "XKB letter l")
+                    key_step(1056, 44, "XKB letter z")
+                    key_step(1058, 45, "XKB letter x")
+                    key_step(1060, 46, "XKB letter c")
+                    key_step(1062, 47, "XKB letter v")
+                    key_step(1064, 48, "XKB letter b")
+                    key_step(1066, 49, "XKB letter n")
+                    key_step(1068, 50, "XKB letter m")
                     # The normal xkbcomp output uses shorthand arrays for
-                    # number-row keys. Reset to Group1, depress Shift, and
-                    # verify every shifted digit-row punctuation symbol.
+                    # number-row keys. Depress Shift and verify all twelve
+                    # shifted digit-row/punctuation symbols.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1010, 1, 0, 0, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1100, 1, 0, 0, 0))
                     )
-                    for offset, code in enumerate(range(2, 14)):
-                        key_step(1020 + offset * 2, code, f"XKB shifted number-row key {code}")
+                    key_step(1120, 2, "XKB shifted number-row key 2")
+                    key_step(1122, 3, "XKB shifted number-row key 3")
+                    key_step(1124, 4, "XKB shifted number-row key 4")
+                    key_step(1126, 5, "XKB shifted number-row key 5")
+                    key_step(1128, 6, "XKB shifted number-row key 6")
+                    key_step(1130, 7, "XKB shifted number-row key 7")
+                    key_step(1132, 8, "XKB shifted number-row key 8")
+                    key_step(1134, 9, "XKB shifted number-row key 9")
+                    key_step(1136, 10, "XKB shifted number-row key 10")
+                    key_step(1138, 11, "XKB shifted number-row key 11")
+                    key_step(1140, 12, "XKB shifted number-row key 12")
+                    key_step(1142, 13, "XKB shifted number-row key 13")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1050, 0, 0, 0, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1180, 0, 0, 0, 0))
                     )
-                    workflow_shortcut(1100, 31, "Ctrl+S saves XKB-translated text")
+                    workflow_shortcut(1200, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
                     observations.append(
                         "XKB keycode +8 lookup, Group1/Group2, alphabetic Shift, Right-Alt LevelThree, and all twelve shorthand shifted number-row symbols verified"
@@ -1446,7 +1534,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@!@#$%^&*()_+",
+            expected_saved_bytes=b"IaAq@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+",
             keyboard_layout_test=True,
         )
     finally:

@@ -135,6 +135,7 @@
 .Lxkb_type_flags:       .long 0
 .Lxkb_key_block_first:  .long 0
 .Lxkb_symbol_count:     .long 0
+.Lxkb_alpha_key_count:  .long 0
 .Lxkb_number:           .long 0
 .Lxkb_keyname_tmp:      .zero 4
 .Lxkb_keyname_alias:    .zero 4
@@ -168,6 +169,7 @@ xkb_reset_keymap:
     mov dword ptr [rip + xkb_keymap_ready], 0
     mov dword ptr [rip + .Lxkb_key_block_first], 0
     mov dword ptr [rip + .Lxkb_symbol_count], 0
+    mov dword ptr [rip + .Lxkb_alpha_key_count], 0
     pop rcx
     pop rdi
     ret
@@ -885,6 +887,19 @@ xkb_reset_keymap:
     lea rbx, [rip + xkb_key_types]
     mov byte ptr [rbx + r15], 1
 .Lxkb_key_block_success:
+    # Count real Group1 ASCII alphabetic keys. A sparse or malformed parse
+    # must not disable the working US fallback just because punctuation was
+    # understood successfully.
+    lea rbx, [rip + xkb_key_types]
+    test byte ptr [rbx + r15], 1
+    jz .Lxkb_key_block_return
+    lea rbx, [rip + xkb_ascii_levels]
+    mov eax, r15d
+    shl eax, 4
+    cmp byte ptr [rbx + rax], 0
+    je .Lxkb_key_block_return
+    inc dword ptr [rip + .Lxkb_alpha_key_count]
+.Lxkb_key_block_return:
     xor eax, eax
     jmp .Lxkb_key_block_exit
 .Lxkb_key_block_fail:
@@ -970,6 +985,8 @@ xkb_reset_keymap:
     # punctuation key). Require a reasonable ASCII symbol population; normal
     # desktop layouts contain many more entries than this minimum.
     cmp dword ptr [rip + .Lxkb_symbol_count], 16
+    jb .Lxkb_symbols_fail
+    cmp dword ptr [rip + .Lxkb_alpha_key_count], 12
     jb .Lxkb_symbols_fail
     mov dword ptr [rip + xkb_keymap_ready], 1
     xor eax, eax
