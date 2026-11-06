@@ -2451,7 +2451,6 @@ picker_edit_insert_byte:
     push r13
     push r14
     push r15
-    sub rsp, 8
     mov r12d, edi
     cmp dword ptr [rip + picker_focus], 1
     je .picker_edit_insert_path
@@ -2512,7 +2511,6 @@ picker_edit_insert_byte:
     call picker_find_name_prefix
 .picker_edit_insert_done:
     cld
-    add rsp, 8
     pop r15
     pop r14
     pop r13
@@ -2565,12 +2563,8 @@ picker_edit_delete_byte:
     sub ecx, r14d
     # For Backspace, source and destination are both the new cursor.
     # For Delete, source begins one byte beyond the cursor.
-    lea rsi, [rbx + r14]
+    lea rsi, [rbx + r14 + 1]
     lea rdi, [rbx + r14]
-    test r12d, r12d
-    jnz .picker_edit_delete_copy_forward
-    inc rsi
-.picker_edit_delete_copy_forward:
     cld
     rep movsb
     dec r13d
@@ -2803,16 +2797,25 @@ picker_confirm_overwrite:
 
 .type picker_confirm_action, @function
 picker_confirm_action:
-    cmp dword ptr [rip + picker_name_length], 0
-    jne .picker_confirm_action_ready
-    call picker_copy_selected_name
-.picker_confirm_action_ready:
-    cmp dword ptr [rip + picker_name_length], 0
-    je .picker_confirm_action_error
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_confirm_action_save
+    cmp dword ptr [rip + picker_name_length], 0
+    je .picker_confirm_action_open_copy_selection
+    cmp dword ptr [rip + picker_name_match], 1
+    jne .picker_confirm_action_open_ready
+.picker_confirm_action_open_copy_selection:
+    call picker_copy_selected_name
+.picker_confirm_action_open_ready:
+    cmp dword ptr [rip + picker_name_length], 0
+    je .picker_confirm_action_error
     jmp picker_open_file
 .picker_confirm_action_save:
+    cmp dword ptr [rip + picker_name_length], 0
+    jne .picker_confirm_action_save_ready
+    call picker_copy_selected_name
+.picker_confirm_action_save_ready:
+    cmp dword ptr [rip + picker_name_length], 0
+    je .picker_confirm_action_error
     jmp picker_save_file
 .picker_confirm_action_error:
     mov dword ptr [rip + picker_error], 3
@@ -2842,6 +2845,8 @@ picker_move_selection:
     lea edx, [rax - 1]
 .picker_move_store:
     mov dword ptr [rip + picker_selected], edx
+    call picker_copy_selected_name
+    mov edx, dword ptr [rip + picker_selected]
     mov eax, dword ptr [rip + picker_scroll]
     cmp edx, eax
     jae .picker_move_check_bottom
@@ -3048,42 +3053,49 @@ picker_handle_key:
     je .picker_key_page_down
     cmp ebx, 102
     je .picker_key_home
+    cmp ebx, 107
+    je .picker_key_end
     cmp ebx, 105
     je .picker_key_left
     cmp ebx, 106
     je .picker_key_right
     cmp dword ptr [rip + ctrl_down], 0
+    je .picker_key_insert_character
+    # Ctrl+A selects the contents of the currently focused text field.
+    mov edi, ebx
+    call keycode_to_ascii
+    cmp al, 'a'
+    je .picker_key_select_all
+    cmp al, 'A'
+    je .picker_key_select_all
+    jmp .picker_key_done
+.picker_key_select_all:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_select_all_set
+    cmp dword ptr [rip + picker_focus], 2
     jne .picker_key_done
+.picker_key_select_all_set:
+    mov dword ptr [rip + picker_edit_select_all], 1
+    jmp .picker_key_done
+
+.picker_key_insert_character:
     mov edi, ebx
     call keycode_to_ascii
     test eax, eax
     jz .picker_key_done
     mov r12d, eax
-    cmp dword ptr [rip + picker_focus], 1
-    je .picker_key_append_path
-    # Typing from the list is a convenient shortcut to the filename field.
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_insert_dispatch
+    # Typing from the list starts a fresh filename search.
     mov dword ptr [rip + picker_focus], 2
-.picker_key_append_name:
-    mov ecx, dword ptr [rip + picker_name_length]
-    cmp ecx, 255
-    jae .picker_key_done
-    lea rdx, [rip + picker_name_buffer]
-    mov byte ptr [rdx + rcx], r12b
-    inc ecx
-    mov dword ptr [rip + picker_name_length], ecx
-    mov byte ptr [rdx + rcx], 0
-    mov dword ptr [rip + picker_error], 0
-    jmp .picker_key_done
-.picker_key_append_path:
-    mov ecx, dword ptr [rip + picker_path_length]
-    cmp ecx, PATH_CAPACITY - 1
-    jae .picker_key_done
-    lea rdx, [rip + picker_path_buffer]
-    mov byte ptr [rdx + rcx], r12b
-    inc ecx
-    mov dword ptr [rip + picker_path_length], ecx
-    mov byte ptr [rdx + rcx], 0
-    mov dword ptr [rip + picker_error], 0
+    mov dword ptr [rip + picker_name_length], 0
+    mov dword ptr [rip + picker_name_cursor], 0
+    mov dword ptr [rip + picker_name_match], 0
+    mov byte ptr [rip + picker_name_buffer], 0
+    mov dword ptr [rip + picker_selected], -1
+.picker_key_insert_dispatch:
+    mov edi, r12d
+    call picker_edit_insert_byte
     jmp .picker_key_done
 
 .picker_key_cancel:
@@ -3129,41 +3141,19 @@ picker_handle_key:
     jmp .picker_key_done
 
 .picker_key_backspace:
-    cmp dword ptr [rip + picker_focus], 1
-    je .picker_key_backspace_path
-    cmp dword ptr [rip + picker_focus], 2
-    je .picker_key_backspace_name
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_key_backspace_field
     call picker_go_parent
     jmp .picker_key_done
-.picker_key_backspace_path:
-    mov ecx, dword ptr [rip + picker_path_length]
-    test ecx, ecx
-    jz .picker_key_done
-    dec ecx
-    mov dword ptr [rip + picker_path_length], ecx
-    lea rdx, [rip + picker_path_buffer]
-    mov byte ptr [rdx + rcx], 0
-    jmp .picker_key_done
-.picker_key_backspace_name:
-    mov ecx, dword ptr [rip + picker_name_length]
-    test ecx, ecx
-    jz .picker_key_done
-    dec ecx
-    mov dword ptr [rip + picker_name_length], ecx
-    lea rdx, [rip + picker_name_buffer]
-    mov byte ptr [rdx + rcx], 0
+.picker_key_backspace_field:
+    mov edi, 1
+    call picker_edit_delete_byte
     jmp .picker_key_done
 .picker_key_delete:
-    cmp dword ptr [rip + picker_focus], 1
-    je .picker_key_clear_path
-    cmp dword ptr [rip + picker_focus], 2
-    jne .picker_key_done
-    mov dword ptr [rip + picker_name_length], 0
-    mov byte ptr [rip + picker_name_buffer], 0
-    jmp .picker_key_done
-.picker_key_clear_path:
-    mov dword ptr [rip + picker_path_length], 0
-    mov byte ptr [rip + picker_path_buffer], 0
+    cmp dword ptr [rip + picker_focus], 0
+    je .picker_key_done
+    xor edi, edi
+    call picker_edit_delete_byte
     jmp .picker_key_done
 .picker_key_up:
     cmp dword ptr [rip + picker_focus], 0
@@ -3190,16 +3180,58 @@ picker_handle_key:
     call picker_move_selection
     jmp .picker_key_done
 .picker_key_home:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_home_path
+    cmp dword ptr [rip + picker_focus], 2
+    je .picker_key_home_name
     call picker_go_home
+    jmp .picker_key_done
+.picker_key_home_path:
+    mov dword ptr [rip + picker_path_cursor], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_home_name:
+    mov dword ptr [rip + picker_name_cursor], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_end:
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_key_end_path
+    cmp dword ptr [rip + picker_focus], 2
+    je .picker_key_end_name
+    jmp .picker_key_done
+.picker_key_end_path:
+    mov eax, dword ptr [rip + picker_path_length]
+    mov dword ptr [rip + picker_path_cursor], eax
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_end_name:
+    mov eax, dword ptr [rip + picker_name_length]
+    mov dword ptr [rip + picker_name_cursor], eax
+    mov dword ptr [rip + picker_edit_select_all], 0
     jmp .picker_key_done
 .picker_key_left:
     cmp dword ptr [rip + picker_focus], 0
-    jne .picker_key_done
+    je .picker_key_left_list
+    cmp dword ptr [rip + picker_focus], 1
+    jne .picker_key_left_name
+    cmp dword ptr [rip + picker_path_cursor], 0
+    je .picker_key_done
+    dec dword ptr [rip + picker_path_cursor]
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_left_name:
+    cmp dword ptr [rip + picker_name_cursor], 0
+    je .picker_key_done
+    dec dword ptr [rip + picker_name_cursor]
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_left_list:
     call picker_go_parent
     jmp .picker_key_done
 .picker_key_right:
     cmp dword ptr [rip + picker_focus], 0
-    jne .picker_key_done
+    jne .picker_key_right_field
     mov eax, dword ptr [rip + picker_selected]
     test eax, eax
     js .picker_key_done
@@ -3212,6 +3244,22 @@ picker_handle_key:
     jne .picker_key_done
     lea rdi, [rdx + 4]
     call picker_enter_directory
+    jmp .picker_key_done
+.picker_key_right_field:
+    cmp dword ptr [rip + picker_focus], 1
+    jne .picker_key_right_name
+    mov eax, dword ptr [rip + picker_path_cursor]
+    cmp eax, dword ptr [rip + picker_path_length]
+    jae .picker_key_done
+    inc dword ptr [rip + picker_path_cursor]
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_key_done
+.picker_key_right_name:
+    mov eax, dword ptr [rip + picker_name_cursor]
+    cmp eax, dword ptr [rip + picker_name_length]
+    jae .picker_key_done
+    inc dword ptr [rip + picker_name_cursor]
+    mov dword ptr [rip + picker_edit_select_all], 0
 .picker_key_done:
     add rsp, 8
     pop r12
@@ -3281,6 +3329,19 @@ picker_handle_pointer:
     cmp r12d, 744
     jae .picker_pointer_done
     mov dword ptr [rip + picker_focus], 1
+    mov dword ptr [rip + picker_edit_select_all], 0
+    mov eax, r12d
+    sub eax, 64
+    jns .picker_pointer_path_offset
+    xor eax, eax
+.picker_pointer_path_offset:
+    shr eax, 3
+    add eax, dword ptr [rip + picker_path_view_start]
+    cmp eax, dword ptr [rip + picker_path_length]
+    jbe .picker_pointer_path_cursor_store
+    mov eax, dword ptr [rip + picker_path_length]
+.picker_pointer_path_cursor_store:
+    mov dword ptr [rip + picker_path_cursor], eax
     jmp .picker_pointer_done
 
 .picker_pointer_toolbar:
@@ -3369,11 +3430,24 @@ picker_handle_pointer:
     jb .picker_pointer_done
     cmp r13d, 390
     jae .picker_pointer_done
-    cmp r12d, 128
+    cmp r12d, 168
     jb .picker_pointer_done
     cmp r12d, 608
     jae .picker_pointer_done
     mov dword ptr [rip + picker_focus], 2
+    mov dword ptr [rip + picker_edit_select_all], 0
+    mov eax, r12d
+    sub eax, 176
+    jns .picker_pointer_name_offset
+    xor eax, eax
+.picker_pointer_name_offset:
+    shr eax, 3
+    add eax, dword ptr [rip + picker_name_view_start]
+    cmp eax, dword ptr [rip + picker_name_length]
+    jbe .picker_pointer_name_cursor_store
+    mov eax, dword ptr [rip + picker_name_length]
+.picker_pointer_name_cursor_store:
+    mov dword ptr [rip + picker_name_cursor], eax
 .picker_pointer_done:
     add rsp, 8
     pop r14
