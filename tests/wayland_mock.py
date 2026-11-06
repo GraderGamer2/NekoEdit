@@ -693,7 +693,7 @@ xkb_symbols "nekoedit-sparse" {
                         return tuple(rows)
 
                     for index, character in enumerate(punctuation_chars):
-                        bitmap = glyph_bitmap(index)
+                        bitmap = glyph_bitmap(index + 1)
                         if not any(bitmap):
                             raise AssertionError(
                                 f"printable ASCII punctuation {character!r} rendered as a blank cell"
@@ -1696,7 +1696,7 @@ if __name__ == "__main__":
     punctuation_fd, punctuation_path = tempfile.mkstemp(prefix="nekoedit-punctuation-")
     try:
         with os.fdopen(punctuation_fd, "wb") as punctuation_file:
-            punctuation_file.write(b"!\"#$%&'()*+,-./:;<=>?@[\\]^_")
+            punctuation_file.write(b"A!\"#$%&'()*+,-./:;<=>?@[\\]^_")
             punctuation_file.write(bytes([96]) + b"{|}~")
         run(
             sys.argv[1],
