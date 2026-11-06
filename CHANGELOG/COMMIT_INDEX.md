@@ -369,6 +369,13 @@ Actions run #235 passed all eight workflow steps on `d071d832dbbf4c9a8efcf02b495
 |---|---|---|
 | 2026-11-06 15:04:40 UTC | [`2894e07e6511`](https://github.com/GraderGamer2/NekoEdit/commit/2894e07e65113575f57a65d3af54c22f06453b2e) | docs: record editable and scrollable file picker milestone |
 
+
+## Project-history milestone maintenance
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 15:06:00 UTC | [`PENDING`](https://github.com/GraderGamer2/NekoEdit/commits/early-alpha) | docs: add native picker UX milestones to project history |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
