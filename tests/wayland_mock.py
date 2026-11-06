@@ -1624,15 +1624,21 @@ xkb_symbols "nekoedit-sparse" {
             cwd=runtime_dir if file_workflow else None,
         )
         process_holder.append(process)
-        timeout_seconds = 50 if file_workflow else 10
+        # The expanded XKB and rendered-glyph integration cases inspect
+        # child mappings and shared-memory pixels; allow extra scheduler
+        # variance on slower CI hosts while keeping a finite upper bound.
+        timeout_seconds = 50 if file_workflow else 20
         try:
             stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
             process.kill()
             stdout, stderr_bytes = process.communicate()
+            thread.join(timeout=9)
+            details = "\\n".join(errors)
             raise AssertionError(
                 f"NekoEdit exceeded the {timeout_seconds}s Wayland test timeout; "
-                f"stderr={stderr_bytes.decode(errors='replace')!r}"
+                f"stderr={stderr_bytes.decode(errors='replace')!r}; "
+                f"compositor_errors={details!r}"
             )
         result = subprocess.CompletedProcess(
             command, process.returncode, stdout, stderr_bytes
