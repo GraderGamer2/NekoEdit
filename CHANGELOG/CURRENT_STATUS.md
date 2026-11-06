@@ -13,7 +13,7 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 ## Latest verified program state
 
 - Latest fully verified **program-code commit:** `776a72c07579ced1e54929946de65cea6271267e` — fixed-capacity 64 KiB gap-buffer document storage.
-- Current feature branch head: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent.
+- Main-to-feature ancestry synchronization point: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent. Later changes in this session were documentation-only.
 - Current `main` head: [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); changelog files are mirrored on both branches.
 - PR #1 is still open and unmerged; after branch synchronization GitHub reports it mergeable with a clean merge state.
 - GitHub Actions [Build and test #171](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217176741) passed on the synchronized feature branch head. All eight steps succeeded, including the complete Wayland integration suite and artifact upload.
