@@ -1728,9 +1728,12 @@ xkb_symbols "nekoedit-sparse" {
 
     if thread.is_alive():
         raise AssertionError("mock compositor did not finish the protocol exchange")
-    if errors:
-        raise AssertionError("mock compositor failed:\n" + "\n".join(errors))
     stderr = result.stderr.decode(errors="replace")
+    if errors:
+        raise AssertionError(
+            "mock compositor failed:\n" + "\n".join(errors)
+            + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
+        )
     if send_protocol_error:
         if result.returncode == 0 or "test compositor protocol error" not in stderr:
             raise AssertionError(
