@@ -159,6 +159,11 @@ keyboard_focused:       .long 0
 next_input_object:      .long 0
 seat_capabilities:      .long 0
 palette_selection:      .long 0
+pointer_button_down:    .long 0
+doc_selection_active:   .long 0
+doc_selection_anchor:   .long 0
+doc_selection_start:    .long 0
+doc_selection_end:      .long 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
@@ -710,14 +715,50 @@ wayland_main:
     mov eax, dword ptr [rip + event_payload + 8]
     sar eax, 8
     mov dword ptr [rip + pointer_y], eax
-    jmp .event_loop
+    cmp dword ptr [rip + pointer_button_down], 1
+    jne .event_loop
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_y]
+    cmp eax, DOC_TOP
+    jl .event_loop
+    cmp eax, HEIGHT
+    jae .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    test eax, eax
+    js .event_loop
+    cmp eax, WIDTH
+    ja .event_loop
+    mov edi, eax
+    mov esi, dword ptr [rip + pointer_y]
+    call doc_place_cursor_from_pointer
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    cmp eax, dword ptr [rip + doc_cursor]
+    jne .Lneko_pointer_selection_set
+    mov dword ptr [rip + doc_selection_active], 0
+    jmp .keyboard_changed
+.Lneko_pointer_selection_set:
+    mov dword ptr [rip + doc_selection_active], 1
+    jmp .keyboard_changed
 .pointer_button:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
     cmp dword ptr [rip + event_payload + 8], BTN_LEFT
     jne .event_loop
     cmp dword ptr [rip + event_payload + 12], 1
+    je .pointer_button_press
+    cmp dword ptr [rip + event_payload + 12], 0
     jne .event_loop
+    cmp dword ptr [rip + pointer_button_down], 1
+    jne .event_loop
+    mov dword ptr [rip + pointer_button_down], 0
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    cmp eax, dword ptr [rip + doc_cursor]
+    jne .Lneko_pointer_button_released
+    mov dword ptr [rip + doc_selection_active], 0
+.Lneko_pointer_button_released:
+    jmp .event_loop
+.pointer_button_press:
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
@@ -764,9 +805,13 @@ wayland_main:
     js .event_loop
     cmp eax, WIDTH
     ja .event_loop
+    mov dword ptr [rip + pointer_button_down], 1
     mov edi, eax
     mov esi, edx
     call doc_place_cursor_from_pointer
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov dword ptr [rip + doc_selection_active], 0
     jmp .keyboard_changed
 
 .palette_changed:
@@ -868,15 +913,41 @@ wayland_main:
     call keycode_to_ascii
     test eax, eax
     jz .event_loop
-    mov edi, eax
+    mov r12d, eax
+    call doc_delete_selection
+    mov edi, r12d
     call doc_insert_byte
     jmp .keyboard_changed
 .keyboard_left:
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_left_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_keyboard_left_collapse
+    mov eax, edx
+.Lneko_keyboard_left_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_left_plain:
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
     dec dword ptr [rip + doc_cursor]
     jmp .keyboard_changed
 .keyboard_right:
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_right_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jae .Lneko_keyboard_right_collapse
+    mov eax, edx
+.Lneko_keyboard_right_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_right_plain:
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_length]
     jae .event_loop
@@ -885,36 +956,52 @@ wayland_main:
 .keyboard_up:
     xor edi, edi
     call doc_move_vertical
+    call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_down:
     mov edi, 1
     call doc_move_vertical
+    call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_home:
     xor edi, edi
     call doc_move_line_edge
+    call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_end:
     mov edi, 1
     call doc_move_line_edge
+    call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_backspace:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_backspace_selection
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
     dec dword ptr [rip + doc_cursor]
     call doc_delete_at_cursor
     jmp .keyboard_changed
+.Lneko_keyboard_backspace_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
 .keyboard_delete:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_delete_selection
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_length]
     jae .event_loop
     call doc_delete_at_cursor
     jmp .keyboard_changed
+.Lneko_keyboard_delete_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
 .keyboard_enter_key:
+    call doc_delete_selection
     mov edi, 10
     call doc_insert_byte
     jmp .keyboard_changed
 .keyboard_tab:
+    call doc_delete_selection
     mov edi, 32
     call doc_insert_byte
     mov edi, 32
@@ -1533,6 +1620,7 @@ render_surface:
     mov r8d, 48
     mov r9d, 0xff9dc58a
     call draw_rect
+    call render_selection
     call render_document
     pop rbp
     ret
@@ -1643,6 +1731,51 @@ doc_delete_at_cursor:
     pop rbx
     ret
 .size doc_delete_at_cursor, . - doc_delete_at_cursor
+
+# Remove the active byte range and compact the document buffer in place.
+.type doc_delete_selection, @function
+doc_delete_selection:
+    push rbx
+    push r12
+    push r13
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_delete_selection_done
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_delete_selection_bounds
+    xchg eax, edx
+.Lneko_delete_selection_bounds:
+    mov ebx, eax
+    mov r12d, edx
+    lea r13, [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_length]
+    sub ecx, r12d
+    lea rsi, [r13 + r12]
+    lea rdi, [r13 + rbx]
+    cld
+    rep movsb
+    mov eax, r12d
+    sub eax, ebx
+    sub dword ptr [rip + doc_length], eax
+    mov dword ptr [rip + doc_cursor], ebx
+    mov dword ptr [rip + doc_selection_anchor], ebx
+    mov dword ptr [rip + doc_selection_active], 0
+.Lneko_delete_selection_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_delete_selection, . - doc_delete_selection
+
+# Clear selection state while retaining the current insertion point.
+.type doc_clear_selection, @function
+doc_clear_selection:
+    mov dword ptr [rip + doc_selection_active], 0
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    ret
+.size doc_clear_selection, . - doc_clear_selection
 
 # EDI=0 Home, EDI=1 End.
 .type doc_move_line_edge, @function
@@ -2059,6 +2192,126 @@ draw_glyph:
     pop rbx
     ret
 .size draw_glyph, . - draw_glyph
+
+# Paint selected document cells before glyphs and the caret are rendered.
+.type render_selection, @function
+render_selection:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_render_selection_done
+
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_render_selection_bounds
+    xchg eax, edx
+.Lneko_render_selection_bounds:
+    mov dword ptr [rip + doc_selection_start], eax
+    mov dword ptr [rip + doc_selection_end], edx
+
+    lea rbx, [rip + doc_buffer]
+    mov r15d, dword ptr [rip + doc_length]
+    mov r12d, DOC_LEFT
+    mov r13d, DOC_TOP
+    xor r14d, r14d
+.Lneko_render_selection_scan:
+    cmp r14d, r15d
+    jae .Lneko_render_selection_done
+    mov eax, dword ptr [rip + doc_selection_end]
+    cmp r14d, eax
+    jae .Lneko_render_selection_done
+    movzx eax, byte ptr [rbx + r14]
+    cmp eax, 10
+    je .Lneko_render_selection_newline
+    cmp eax, 9
+    je .Lneko_render_selection_tab
+    cmp eax, 32
+    jb .Lneko_render_selection_control
+    cmp eax, 127
+    jb .Lneko_render_selection_character
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    je .Lneko_render_selection_byte_only
+
+.Lneko_render_selection_character:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_advance_cell
+    cmp r12d, WIDTH - CELL_WIDTH
+    ja .Lneko_render_selection_advance_cell
+    cmp r13d, HEIGHT - LINE_HEIGHT
+    jae .Lneko_render_selection_advance_cell
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_advance_cell:
+    add r12d, CELL_WIDTH
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_newline:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_newline_advance
+    cmp r12d, WIDTH - CELL_WIDTH
+    jae .Lneko_render_selection_newline_advance
+    cmp r13d, HEIGHT - LINE_HEIGHT
+    jae .Lneko_render_selection_newline_advance
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_newline_advance:
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_tab:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_tab_advance
+    cmp r12d, WIDTH - CELL_WIDTH * 4
+    ja .Lneko_render_selection_tab_advance
+    cmp r13d, HEIGHT - LINE_HEIGHT
+    jae .Lneko_render_selection_tab_advance
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, CELL_WIDTH * 4
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_tab_advance:
+    add r12d, CELL_WIDTH * 4
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_control:
+.Lneko_render_selection_byte_only:
+    inc r14d
+    jmp .Lneko_render_selection_scan
+
+.Lneko_render_selection_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_selection, . - render_selection
 
 .type render_document, @function
 render_document:
