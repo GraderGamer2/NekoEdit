@@ -14,6 +14,8 @@
 .equ SYS_socket,       41
 .equ SYS_connect,      42
 .equ SYS_sendmsg,      46
+.equ SYS_sendto,       44
+.equ MSG_NOSIGNAL, 0x4000
 .equ SYS_recvmsg,      47
 .equ SYS_munmap,       11
 .equ SYS_ftruncate,    77
@@ -171,6 +173,9 @@ msg_protocol_end:
 newline_text:            .ascii "\n"
 msg_protocol_error_prefix: .ascii "NekoEdit: Wayland compositor protocol error: "
 msg_protocol_error_prefix_end:
+msg_request_failure: .ascii "Wayland send failed: object="
+msg_request_opcode:  .ascii ", opcode="
+msg_request_errno:   .ascii ", errno="
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -389,6 +394,10 @@ temp_pid_digits:        .zero 16
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
+failed_request_object: .long 0
+failed_request_opcode: .long 0
+failed_request_errno:  .long 0
+failed_request_valid:  .long 0
 event_header:          .zero 8
 event_payload:         .zero 4096
 request_buffer:        .zero 8192
@@ -1822,8 +1831,35 @@ wayland_main:
     call linux_write_all
     mov rsi, qword ptr [rip + failure_stage]
     test rsi, rsi
-    jz .protocol_check_display_error
+    jz .protocol_request_diagnostic
     call write_stderr_cstr
+.protocol_request_diagnostic:
+    cmp dword ptr [rip + failed_request_valid], 0
+    je .protocol_check_display_error
+    mov edi, 2
+    lea rsi, [rip + msg_request_failure]
+    mov edx, msg_request_opcode - msg_request_failure
+    call linux_write_all
+    mov edi, dword ptr [rip + failed_request_object]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_request_opcode]
+    mov edx, msg_request_errno - msg_request_opcode
+    call linux_write_all
+    mov edi, dword ptr [rip + failed_request_opcode]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_request_errno]
+    mov edx, newline_text - msg_request_errno
+    call linux_write_all
+    mov eax, dword ptr [rip + failed_request_errno]
+    neg eax
+    mov edi, eax
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
 .protocol_check_display_error:
     # wl_display.error payload: object_id, code, then a length-prefixed
     # Wayland string. Validate both the declared event size and NUL terminator.
@@ -4259,6 +4295,38 @@ write_stderr_cstr:
     ret
 .size write_stderr_cstr, . - write_stderr_cstr
 
+# Print an unsigned 32-bit integer in decimal to stderr. Input: EDI=value.
+.type write_stderr_u32, @function
+write_stderr_u32:
+    push rbx
+    sub rsp, 16                 # aligned scratch space for up to 10 digits
+    lea rbx, [rsp + 15]
+    mov eax, edi
+    test eax, eax
+    jnz .write_stderr_u32_loop
+    dec rbx
+    mov byte ptr [rbx], '0'
+    jmp .write_stderr_u32_ready
+.write_stderr_u32_loop:
+    xor edx, edx
+    mov ecx, 10
+    div ecx
+    add dl, '0'
+    dec rbx
+    mov byte ptr [rbx], dl
+    test eax, eax
+    jnz .write_stderr_u32_loop
+.write_stderr_u32_ready:
+    lea rdx, [rsp + 16]
+    sub rdx, rbx
+    mov edi, 2
+    mov rsi, rbx
+    call linux_write_all
+    add rsp, 16
+    pop rbx
+    ret
+.size write_stderr_u32, . - write_stderr_u32
+
 # env_lookup(key=rdi, key_length=esi) -> rax=value pointer or 0.
 .type env_lookup, @function
 env_lookup:
@@ -4353,6 +4421,50 @@ parse_socket_fd:
     ret
 .size parse_socket_fd, . - parse_socket_fd
 
+# Write all bytes to the Wayland stream with MSG_NOSIGNAL so a closed
+# compositor socket becomes a normal -EPIPE result instead of killing the app.
+# RDI=socket, RSI=buffer, RDX=length. RAX=0 or negative errno.
+.type wl_send_all, @function
+wl_send_all:
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi
+    mov r12, rsi
+    mov r13, rdx
+.wl_send_all_loop:
+    test r13, r13
+    jz .wl_send_all_success
+    mov eax, SYS_sendto
+    mov rdi, rbx
+    mov rsi, r12
+    mov rdx, r13
+    mov r10d, MSG_NOSIGNAL
+    xor r8d, r8d
+    xor r9d, r9d
+    syscall
+    cmp rax, -4                 # retry after EINTR
+    je .wl_send_all_loop
+    test rax, rax
+    jg .wl_send_all_advance
+    je .wl_send_all_zero
+    jmp .wl_send_all_done
+.wl_send_all_advance:
+    add r12, rax
+    sub r13, rax
+    jmp .wl_send_all_loop
+.wl_send_all_zero:
+    mov rax, -5                 # EIO: zero-byte send before completion
+    jmp .wl_send_all_done
+.wl_send_all_success:
+    xor eax, eax
+.wl_send_all_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size wl_send_all, . - wl_send_all
+
 # wl_send_request(object=rdi, opcode=esi, payload=rdx, payload_length=ecx).
 .type wl_send_request, @function
 wl_send_request:
@@ -4378,7 +4490,14 @@ wl_send_request:
     mov edi, dword ptr [rip + socket_fd]
     lea rsi, [rip + request_buffer]
     lea edx, [rbx + 8]
-    call linux_write_all
+    call wl_send_all
+    test rax, rax
+    jns .wl_send_request_done
+    mov dword ptr [rip + failed_request_object], r12d
+    mov dword ptr [rip + failed_request_opcode], r13d
+    mov dword ptr [rip + failed_request_errno], eax
+    mov dword ptr [rip + failed_request_valid], 1
+.wl_send_request_done:
     add rsp, 8
     pop r14
     pop r13
@@ -4434,7 +4553,7 @@ wl_send_request_fd:
     mov eax, SYS_sendmsg
     mov rdi, qword ptr [rip + socket_fd]
     lea rsi, [rip + msg_header]
-    xor edx, edx
+    mov edx, MSG_NOSIGNAL
     syscall
     cmp rax, -4                 # retry sendmsg after EINTR
     je .send_fd_call
@@ -4446,11 +4565,18 @@ wl_send_request_fd:
     sub rdx, rax
     jz .send_fd_success
     mov edi, dword ptr [rip + socket_fd]
-    call linux_write_all
+    call wl_send_all
     jmp .send_fd_done
 .send_fd_success:
     xor eax, eax
 .send_fd_done:
+    test rax, rax
+    jns .send_fd_return
+    mov dword ptr [rip + failed_request_object], r12d
+    mov dword ptr [rip + failed_request_opcode], r13d
+    mov dword ptr [rip + failed_request_errno], eax
+    mov dword ptr [rip + failed_request_valid], 1
+.send_fd_return:
     pop r15
     pop r14
     pop r13
