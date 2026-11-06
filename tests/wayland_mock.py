@@ -1081,7 +1081,7 @@ xkb_symbols "nekoedit-sparse" {
                     # F0 28 8C 28 is malformed UTF-8. Invalid bytes must stay
                     # independently editable rather than swallowing adjacent
                     # printable ASCII bytes into a replacement sequence.
-                    for index, serial in enumerate((1700, 1702, 1704, 1706, 1708)):
+                    for index, serial in enumerate((1700, 1702, 1704, 1706, 1708, 1710)):
                         key_step(serial, 111, f"Delete malformed UTF-8 token {index + 1}")
                     workflow_shortcut(1800, 31, "Ctrl+S saves malformed-byte edits")
                     client.sendall(wire_message(10, 1))
