@@ -75,6 +75,7 @@ def run(
     save_roundtrip: bool = False,
     file_workflow: bool = False,
     keyboard_layout_test: bool = False,
+    punctuation_render_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -668,6 +669,44 @@ xkb_symbols "nekoedit-sparse" {
                     "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
                     ".": 52, "/": 53, "-": 12,
                 }
+
+                if punctuation_render_test:
+                    # Every printable ASCII punctuation character must have
+                    # its own bitmap, rather than silently falling back to '?'.
+                    punctuation_chars = "!\"#$%&'()*+,-./:;<=>?@[\\]^_" + chr(96) + "{|}~"
+                    question_bitmap = (14, 17, 1, 2, 4, 0, 4)
+
+                    def glyph_bitmap(cell_index: int) -> tuple[int, ...]:
+                        rows = []
+                        for row in range(7):
+                            bits = 0
+                            for column in range(5):
+                                pixel = struct.unpack_from(
+                                    "<I",
+                                    pixels,
+                                    (92 + row) * 800 * 4
+                                    + (16 + cell_index * 8 + column) * 4,
+                                )[0]
+                                if pixel == 0xFFD8DEE9:
+                                    bits |= 1 << (4 - column)
+                            rows.append(bits)
+                        return tuple(rows)
+
+                    for index, character in enumerate(punctuation_chars):
+                        bitmap = glyph_bitmap(index)
+                        if not any(bitmap):
+                            raise AssertionError(
+                                f"printable ASCII punctuation {character!r} rendered as a blank cell"
+                            )
+                        if character != "?" and bitmap == question_bitmap:
+                            raise AssertionError(
+                                f"printable ASCII punctuation {character!r} fell back to the '?' glyph"
+                            )
+                    observations.append(
+                        "all 32 printable ASCII punctuation glyphs rendered without question-mark fallback"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if keyboard_layout_test:
                     # XKB keycode 24 is evdev 16. Group 1 maps it to 'a',
@@ -1652,6 +1691,24 @@ if __name__ == "__main__":
             os.unlink(xkb_path)
         except FileNotFoundError:
             pass
+    # The embedded 5x7 renderer must cover every printable ASCII punctuation
+    # character, not replace the unimplemented glyphs with '?'.
+    punctuation_fd, punctuation_path = tempfile.mkstemp(prefix="nekoedit-punctuation-")
+    try:
+        with os.fdopen(punctuation_fd, "wb") as punctuation_file:
+            punctuation_file.write(b"!\"#$%&'()*+,-./:;<=>?@[\\]^_")
+            punctuation_file.write(bytes([96]) + b"{|}~")
+        run(
+            sys.argv[1],
+            initial_file=punctuation_path,
+            punctuation_render_test=True,
+        )
+    finally:
+        try:
+            os.unlink(punctuation_path)
+        except FileNotFoundError:
+            pass
+
     # Full File menu, Open, Save, and Save As interaction tests on both
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)

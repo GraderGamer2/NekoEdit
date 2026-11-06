@@ -182,6 +182,27 @@ font_5x7:
     .byte 0, 4, 4, 31, 4, 4, 0
     .byte 0, 0, 31, 0, 31, 0, 0
     .byte 1, 2, 2, 4, 8, 8, 16
+
+    # Additional printable-ASCII punctuation glyphs (indices 50 through 67).
+    .byte 10, 10, 31, 10, 31, 10, 10       # #
+    .byte 4, 15, 20, 14, 5, 30, 4          # $
+    .byte 24, 25, 1, 2, 4, 19, 3           # %
+    .byte 12, 18, 20, 8, 21, 18, 13        # &
+    .byte 0, 21, 14, 31, 14, 21, 0         # *
+    .byte 0, 12, 12, 0, 12, 12, 8          # ;
+    .byte 2, 4, 8, 16, 8, 4, 2            # <
+    .byte 8, 4, 2, 1, 2, 4, 8              # >
+    .byte 14, 17, 23, 21, 23, 16, 14       # @
+    .byte 14, 8, 8, 8, 8, 8, 14            # [
+    .byte 16, 8, 8, 4, 2, 2, 1             # backslash
+    .byte 14, 2, 2, 2, 2, 2, 14            # ]
+    .byte 4, 10, 17, 0, 0, 0, 0            # ^
+    .byte 8, 4, 2, 0, 0, 0, 0              # grave accent
+    .byte 3, 4, 4, 8, 4, 4, 3              # {
+    .byte 4, 4, 4, 4, 4, 4, 4              # |
+    .byte 24, 4, 4, 2, 4, 4, 24            # }
+    .byte 0, 0, 9, 22, 0, 0, 0             # ~
+
 .section .data
 .balign 4
 repeat_rate:            .long REPEAT_DEFAULT_RATE
@@ -3444,6 +3465,42 @@ draw_glyph:
     je .glyph_equals
     cmp eax, '/'
     je .glyph_slash
+    cmp eax, 35
+    je .glyph_numbersign
+    cmp eax, 36
+    je .glyph_dollar
+    cmp eax, 37
+    je .glyph_percent
+    cmp eax, 38
+    je .glyph_ampersand
+    cmp eax, 42
+    je .glyph_asterisk
+    cmp eax, 59
+    je .glyph_semicolon
+    cmp eax, 60
+    je .glyph_less
+    cmp eax, 62
+    je .glyph_greater
+    cmp eax, 64
+    je .glyph_at
+    cmp eax, 91
+    je .glyph_open_bracket
+    cmp eax, 92
+    je .glyph_backslash
+    cmp eax, 93
+    je .glyph_close_bracket
+    cmp eax, 94
+    je .glyph_caret
+    cmp eax, 96
+    je .glyph_grave
+    cmp eax, 123
+    je .glyph_open_brace
+    cmp eax, 124
+    je .glyph_bar
+    cmp eax, 125
+    je .glyph_close_brace
+    cmp eax, 126
+    je .glyph_tilde
     mov eax, 36
     jmp .glyph_index_ready
 .glyph_question:
@@ -3487,6 +3544,60 @@ draw_glyph:
     jmp .glyph_index_ready
 .glyph_slash:
     mov eax, 49
+    jmp .glyph_index_ready
+.glyph_numbersign:
+    mov eax, 50
+    jmp .glyph_index_ready
+.glyph_dollar:
+    mov eax, 51
+    jmp .glyph_index_ready
+.glyph_percent:
+    mov eax, 52
+    jmp .glyph_index_ready
+.glyph_ampersand:
+    mov eax, 53
+    jmp .glyph_index_ready
+.glyph_asterisk:
+    mov eax, 54
+    jmp .glyph_index_ready
+.glyph_semicolon:
+    mov eax, 55
+    jmp .glyph_index_ready
+.glyph_less:
+    mov eax, 56
+    jmp .glyph_index_ready
+.glyph_greater:
+    mov eax, 57
+    jmp .glyph_index_ready
+.glyph_at:
+    mov eax, 58
+    jmp .glyph_index_ready
+.glyph_open_bracket:
+    mov eax, 59
+    jmp .glyph_index_ready
+.glyph_backslash:
+    mov eax, 60
+    jmp .glyph_index_ready
+.glyph_close_bracket:
+    mov eax, 61
+    jmp .glyph_index_ready
+.glyph_caret:
+    mov eax, 62
+    jmp .glyph_index_ready
+.glyph_grave:
+    mov eax, 63
+    jmp .glyph_index_ready
+.glyph_open_brace:
+    mov eax, 64
+    jmp .glyph_index_ready
+.glyph_bar:
+    mov eax, 65
+    jmp .glyph_index_ready
+.glyph_close_brace:
+    mov eax, 66
+    jmp .glyph_index_ready
+.glyph_tilde:
+    mov eax, 67
 .glyph_index_ready:
     imul eax, 7
     lea rbx, [rip + font_5x7]
