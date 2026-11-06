@@ -3,6 +3,10 @@
 .equ SYS_read,          0
 .equ SYS_write,         1
 .equ SYS_close,         3
+.equ SYS_lseek,          8
+.equ SYS_getcwd,        79
+.equ SYS_getdents64,   217
+.equ SYS_newfstatat,   262
 .equ SYS_openat,      257
 .equ SYS_poll,          7
 .equ SYS_timerfd_create, 283
@@ -27,6 +31,11 @@
 .equ O_WRONLY,             1
 .equ O_CREAT,             64
 .equ O_CLOEXEC,       0x80000
+.equ O_DIRECTORY,    0x10000
+.equ AT_SYMLINK_NOFOLLOW, 0x100
+.equ STAT_S_IFMT,     0xf000
+.equ STAT_S_IFDIR,    0x4000
+.equ STAT_S_IFREG,    0x8000
 .equ SYS_fsync,         74
 .equ SYS_getpid,        39
 .equ SYS_renameat,     264
@@ -51,6 +60,10 @@
 .equ REPEAT_MAX_RATE, 1000
 .equ DOC_CAPACITY,    65536
 .equ PATH_CAPACITY,    4096
+.equ PICKER_MAX_ENTRIES, 128
+.equ PICKER_ENTRY_SIZE, 260
+.equ PICKER_DIR_BYTES, 8192
+.equ PICKER_VISIBLE_ROWS, 15
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
@@ -76,6 +89,27 @@ ui_prompt_open_title:  .asciz "OPEN FILE PATH"
 ui_prompt_save_title:  .asciz "SAVE AS PATH"
 ui_prompt_help:        .asciz "ENTER: CONFIRM   ESC: CANCEL"
 ui_open_error:         .asciz "OPEN ERR"
+ui_picker_open_title:  .asciz "OPEN FILE"
+ui_picker_save_title:  .asciz "SAVE FILE AS"
+ui_picker_path_label:  .asciz "LOCATION"
+ui_picker_name_label:  .asciz "FILE NAME"
+ui_picker_up_label:   .asciz "UP"
+ui_picker_home_label: .asciz "HOME"
+ui_picker_hidden_label: .asciz "SHOW HIDDEN"
+ui_picker_cancel_label: .asciz "CANCEL"
+ui_picker_open_label: .asciz "OPEN"
+ui_picker_save_label: .asciz "SAVE"
+ui_picker_dir_marker: .asciz "[D]"
+ui_picker_file_marker: .asciz "[F]"
+ui_picker_empty: .asciz "(EMPTY DIRECTORY)"
+ui_picker_truncated: .asciz "LIST LIMITED TO FIRST 128 ENTRIES"
+ui_picker_error_path: .asciz "CANNOT OPEN DIRECTORY"
+ui_picker_error_file: .asciz "CANNOT OPEN FILE"
+ui_picker_error_save: .asciz "SAVE FAILED"
+ui_picker_overwrite: .asciz "FILE EXISTS - OVERWRITE?  Y / N"
+ui_picker_home_env: .asciz "HOME"
+ui_picker_dot: .asciz "."
+ui_picker_parent: .asciz ".."
 ui_label_line:         .asciz "Ln "
 ui_label_column:       .asciz ", Col "
 ui_label_bytes:        .asciz "Bytes "
@@ -278,6 +312,28 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
+picker_mode:            .long 0
+picker_focus:           .long 0
+picker_dir_fd:          .long -1
+picker_error:           .long 0
+picker_entry_count:     .long 0
+picker_selected:        .long -1
+picker_scroll:          .long 0
+picker_show_hidden:     .long 0
+picker_truncated:       .long 0
+picker_path_length:     .long 0
+picker_name_length:     .long 0
+picker_last_click_index: .long -1
+picker_last_click_time: .long 0
+picker_overwrite_pending: .long 0
+picker_dirents:         .zero PICKER_DIR_BYTES
+picker_stat_buffer:     .zero 144
+picker_entries:         .zero (PICKER_MAX_ENTRIES * PICKER_ENTRY_SIZE)
+picker_candidate:       .zero PICKER_ENTRY_SIZE
+picker_current_path:    .zero PATH_CAPACITY
+picker_path_buffer:     .zero PATH_CAPACITY
+picker_name_buffer:     .zero 256
+picker_target_buffer:   .zero PATH_CAPACITY
 load_buffer:            .zero DOC_CAPACITY
 temp_path_buffer:       .zero PATH_CAPACITY
 temp_pid_digits:        .zero 16
