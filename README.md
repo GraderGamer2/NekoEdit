@@ -20,7 +20,7 @@ NekoEdit is being built around one constraint: implement the necessary applicati
 
 The first Wayland backend is a freestanding assembly prototype. It:
 
-1. Reads WAYLAND_DISPLAY and XDG_RUNTIME_DIR from the process environment (and supports an absolute WAYLAND_DISPLAY path).
+1. Uses WAYLAND_SOCKET when a launcher supplies an inherited connected descriptor; otherwise reads WAYLAND_DISPLAY and XDG_RUNTIME_DIR (including absolute socket paths).
 2. Connects to the Wayland Unix-domain socket using Linux system calls.
 3. Discovers and binds wl_compositor, wl_shm, and xdg_wm_base.
 4. Creates a wl_surface and an xdg_toplevel, then handles the initial configure/acknowledge sequence.
@@ -88,7 +88,7 @@ The CLI also supports --help and --version.
 ### Tests
 
 - **make test** runs command-line smoke tests.
-- **make test-wayland** runs a small Python 3 mock-compositor test. It validates the Wayland wire messages, shared-memory FD transfer, and rendered pixels without requiring an installed compositor.
+- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both WAYLAND_DISPLAY and inherited WAYLAND_SOCKET connections, the Wayland wire messages, shared-memory FD transfer, rendered pixels, and compositor protocol-error reporting without requiring an installed compositor.
 - **make check** rejects an ELF containing PT_INTERP or DT_NEEDED entries.
 - **make inspect** prints ELF metadata.
 
