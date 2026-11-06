@@ -224,9 +224,9 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("the previously selected swatch border was not cleared")
                 observations.append("pointer click changed selection and safely redrew the buffer")
 
-                # The first editing milestone uses a documented US-QWERTY
-                # evdev mapping. This sequence exercises insertion, cursor-left,
-                # Backspace, newline, digit insertion, and vertical movement.
+                # Exercise the editor with buffer releases between key events.
+                # Each new redraw must wait until the compositor releases the
+                # single wl_buffer; this avoids racing the mock against batching.
                 client.sendall(wire_message(12, 0))  # release after pointer redraw
                 keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
@@ -240,29 +240,36 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 finally:
                     os.close(keymap_fd)
 
-                def key(serial: int, code: int, state: int = 1) -> bytes:
-                    return wire_message(16, 3, struct.pack("<IIII", serial, serial, code, state))
+                client.sendall(wire_message(16, 1, struct.pack("<III", 1001, 8, 0)))
 
-                keyboard_events = [
-                    wire_message(16, 1, struct.pack("<III", 1001, 8, 0)),  # keyboard enter
-                    key(1002, 30),   # a
-                    key(1003, 48),   # b -> "ab"
-                    key(1004, 105),  # Left -> cursor before b
-                    key(1005, 14),   # Backspace -> "b", cursor before b
-                    key(1006, 106),  # Right -> cursor after b
-                    key(1007, 28),   # Enter -> "b\\n"
-                    key(1008, 3),    # 2 -> "b\\n2"
-                    key(1009, 103),  # Up
-                    key(1010, 108),  # Down
-                ]
-                client.sendall(b"".join(keyboard_events) + wire_message(12, 0))
-                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "document redraw attach")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "document redraw damage")
-                expect_message(client, (8, 6, b""), "document redraw commit")
+                def key_step(serial: int, code: int, label: str) -> None:
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", serial, serial, code, 1))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+                    client.sendall(wire_message(12, 0))
 
-                # The remaining document must be "b\\n2": a is gone after
-                # Backspace, the second line contains 2, and the caret is at
-                # the end of that second line.
+                key_step(1002, 30, "insert a")
+                a_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0]
+                if a_pixel != 0xFFD8DEE9:
+                    raise AssertionError(f"first key did not render an A glyph: {hex(a_pixel)}")
+                key_step(1003, 48, "insert b")
+                key_step(1004, 105, "cursor left")
+                key_step(1005, 14, "backspace")
+                key_step(1006, 106, "cursor right")
+                key_step(1007, 28, "insert newline")
+                key_step(1008, 3, "insert digit 2")
+                key_step(1009, 103, "cursor up")
+                key_step(1010, 108, "cursor down")
+
+                # The remaining document must be "b\\n2": Backspace removed
+                # a, then Enter and digit 2 formed a second line.
                 first_line = [
                     struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
                     for x in range(16, 24)
@@ -276,7 +283,9 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("expected digit 2 was not rendered on the second line")
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document caret was not rendered at the second-line cursor")
-                observations.append("US-QWERTY text insertion, cursor movement, Backspace, Enter, digit rendering and caret verified")
+                observations.append(
+                    "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
