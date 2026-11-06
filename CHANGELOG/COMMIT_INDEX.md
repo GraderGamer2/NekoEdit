@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **224** (223 previously indexed commits + 1 follow-up correcting compositor-configured geometry, resize hit targets, and picker scrollbar overflow behavior).
+- Recorded implementation commits: **227** (224 previously indexed implementation commits + 3 commits adding Wayland send diagnostics and SIGPIPE hardening).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -415,6 +415,16 @@ Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224568
 | 2026-11-06 17:17:28 UTC | [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) | fix: honor configured window geometry and repair picker scrollbar |
 
 Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed the full build and Wayland mock suite on this commit. It covers a 1920×1080 configure, exact dimensions, min/max geometry hints, clipped drawing, no-overflow scrollbar suppression, and all resize edges/corners. Artifact [`13524092766`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598/artifacts/13524092766) was uploaded (29,780 bytes). The previous Actions #251 artifact was manually tested by the user: title-bar movement worked, but maximize still exited and interactive resizing did not take effect. Mutter retest of this correction remains pending.
+
+## 2026-11-07 Wayland send failure and SIGPIPE diagnostics
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 17:48:53 UTC | [`10df996a0b51`](https://github.com/GraderGamer2/NekoEdit/commit/10df996a0b51de4b36287d4e78180b52dfd5c4ec) | debug: report failed Wayland sends without SIGPIPE termination |
+| 2026-11-06 17:49:11 UTC | [`1331b49dde84`](https://github.com/GraderGamer2/NekoEdit/commit/1331b49dde8415d0d40dfb2d5326b4e0a3990b97) | fix: bound Wayland request diagnostic string length |
+| 2026-11-06 17:50:46 UTC | [`2ba62dd68161`](https://github.com/GraderGamer2/NekoEdit/commit/2ba62dd681611da09673e1fffc1d81b109ac4abf) | docs: correct Wayland send helper comment |
+
+The source change routes ordinary Wayland requests through `sendto(MSG_NOSIGNAL)`, applies `MSG_NOSIGNAL` to FD-bearing `sendmsg`, and records the client object/opcode/errno when a send fails. This converts a closed-socket SIGPIPE termination into a reportable error. Build and GNOME/Mutter verification remain pending.
 
 ## Maintenance
 
