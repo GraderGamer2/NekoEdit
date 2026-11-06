@@ -314,16 +314,16 @@ path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
 picker_mode:            .long 0
 picker_focus:           .long 0
-picker_dir_fd:          .long -1
+picker_dir_fd:          .long 0
 picker_error:           .long 0
 picker_entry_count:     .long 0
-picker_selected:        .long -1
+picker_selected:        .long 0
 picker_scroll:          .long 0
 picker_show_hidden:     .long 0
 picker_truncated:       .long 0
 picker_path_length:     .long 0
 picker_name_length:     .long 0
-picker_last_click_index: .long -1
+picker_last_click_index: .long 0
 picker_last_click_time: .long 0
 picker_overwrite_pending: .long 0
 picker_dirents:         .zero PICKER_DIR_BYTES
@@ -1693,6 +1693,9 @@ picker_start:
     push r12
     sub rsp, 8
     mov dword ptr [rip + picker_mode], edi
+    mov dword ptr [rip + picker_dir_fd], -1
+    mov dword ptr [rip + picker_selected], -1
+    mov dword ptr [rip + picker_last_click_index], -1
     mov dword ptr [rip + picker_focus], 0
     mov dword ptr [rip + picker_error], 0
     mov dword ptr [rip + picker_overwrite_pending], 0
