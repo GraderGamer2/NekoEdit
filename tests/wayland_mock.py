@@ -161,13 +161,17 @@ def run(
                 if os.fstat(shm_fd).st_size != expected_size:
                     raise AssertionError("memfd size does not match requested shared buffer size")
                 pixels = mmap.mmap(shm_fd, expected_size, access=mmap.ACCESS_READ)
-                if struct.unpack_from("<I", pixels, 0)[0] != 0xFF343D4B:
-                    raise AssertionError("expected top bar color was not rendered")
-                if struct.unpack_from("<I", pixels, 36 * 800 * 4)[0] != 0xFF252A33:
-                    raise AssertionError("expected background color was not rendered")
-                if struct.unpack_from("<I", pixels, 48 * 4)[0] != 0xFF78A9D4:
-                    raise AssertionError("expected accent mark was not rendered")
-                hint_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0]
+                if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
+                    raise AssertionError("expected title-bar background was not rendered")
+                if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
+                    raise AssertionError("expected title-bar accent rail was not rendered")
+                if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
+                    raise AssertionError("active document tab underline was not rendered")
+                if struct.unpack_from("<I", pixels, 460 * 800 * 4)[0] != 0xFF343D4B:
+                    raise AssertionError("status bar background was not rendered")
+                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("logical line status label was not rendered")
+                hint_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if hint_pixel != 0xFFD8DEE9:
                     raise AssertionError(
                         "initial editor hint was not drawn; "
@@ -219,17 +223,15 @@ def run(
                 # must not rewrite the shared memory while the compositor owns it.
                 client.sendall(
                     wire_message(12, 0)
-                    + wire_message(15, 0, struct.pack("<IIii", 777, 8, 175 * 256, 110 * 256))
+                    + wire_message(15, 0, struct.pack("<IIii", 777, 8, 98 * 256, 110 * 256))
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 160 * 4)[0] != 0xFFFFFFFF:
-                    raise AssertionError("clicking the second swatch did not move the selected border")
-                if struct.unpack_from("<I", pixels, 93 * 800 * 4 + 80 * 4)[0] != 0xFF596273:
-                    raise AssertionError("the previously selected swatch border was not cleared")
-                observations.append("pointer click changed selection and safely redrew the buffer")
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("document click did not keep the empty-document caret visible")
+                observations.append("document-area click was routed to the editor and safely redrew the buffer")
 
                 # Exercise the editor with buffer releases between key events.
                 # Each new redraw must wait until the compositor releases the
@@ -237,7 +239,7 @@ def run(
                 client.sendall(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
-                )  # release the palette click and its buffer
+                )  # release the initial document click and its buffer
                 keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
@@ -277,7 +279,7 @@ def run(
                     )
 
                 key_step(1002, 30, "insert a")
-                a_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0]
+                a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if a_pixel != 0xFFD8DEE9:
                     raise AssertionError(f"first key did not render an A glyph: {hex(a_pixel)}")
                 key_step(1003, 48, "insert b")
@@ -309,7 +311,7 @@ def run(
                 # a, Enter and digit 2 formed the second line, and Shift+1
                 # produced the exclamation mark.
                 first_line = [
-                    struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
+                    struct.unpack_from("<I", pixels, 92 * 800 * 4 + x * 4)[0]
                     for x in range(16, 24)
                 ]
                 if first_line[0] != 0xFFD8DEE9:
@@ -317,11 +319,11 @@ def run(
                         "expected B glyph was not rendered at the first line; "
                         f"first pixels={[hex(value) for value in first_line]}"
                     )
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("expected digit 2 was not rendered on the second line")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 26 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 26 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("Shift+1 did not render an exclamation mark")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document caret was not rendered after the shifted character")
                 observations.append(
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
@@ -412,21 +414,21 @@ def run(
                 # insertion boundaries across lines and between characters.
                 pointer_click(22, 170, 1100, "mouse caret first line")
                 first_line_caret = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 24 * 4
+                    "<I", pixels, 92 * 800 * 4 + 24 * 4
                 )[0]
                 if first_line_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret after first-line text")
 
                 pointer_click(18, 182, 1110, "mouse caret second-line start")
                 second_line_start = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 16 * 4
+                    "<I", pixels, 104 * 800 * 4 + 16 * 4
                 )[0]
                 if second_line_start != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret at second-line start")
 
                 pointer_click(26, 182, 1120, "mouse caret between characters")
                 between_chars = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 24 * 4
+                    "<I", pixels, 104 * 800 * 4 + 24 * 4
                 )[0]
                 if between_chars != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret between second-line characters")
@@ -436,12 +438,12 @@ def run(
 
                 # Drag backwards across both characters on line two. Selection
                 # bounds must remain ordered even when the anchor is after the cursor.
-                pointer_drag(32, 182, 16, 182, 1130, "reverse mouse drag selection")
+                pointer_drag(32, 110, 16, 110, 1130, "reverse mouse drag selection")
                 # Inspect each cell's trailing blank column so the
                 # insertion caret and glyph strokes do not mask the highlight.
                 for x in (23, 31):
                     selected_pixel = struct.unpack_from(
-                        "<I", pixels, 176 * 800 * 4 + x * 4
+                        "<I", pixels, 104 * 800 * 4 + x * 4
                     )[0]
                     if selected_pixel != 0xFF5E81AC:
                         raise AssertionError(
@@ -453,12 +455,12 @@ def run(
                 # beside it, and the highlight disappears after replacement.
                 key_step(1136, 30, "replace selected text")
                 replacement_pixel = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                    "<I", pixels, 104 * 800 * 4 + 17 * 4
                 )[0]
                 if replacement_pixel != 0xFFD8DEE9:
                     raise AssertionError("typing did not replace the selected text with an A glyph")
                 cleared_pixel = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 25 * 4
+                    "<I", pixels, 104 * 800 * 4 + 25 * 4
                 )[0]
                 if cleared_pixel != 0xFF252A33:
                     raise AssertionError("selection highlight remained after replacing selected text")
@@ -470,10 +472,10 @@ def run(
                 # the character on line two, covering the selected newline.
                 pointer_drag(24, 170, 24, 182, 1140, "multi-line mouse drag selection")
                 newline_highlight = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 24 * 4
+                    "<I", pixels, 92 * 800 * 4 + 24 * 4
                 )[0]
                 second_line_highlight = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 23 * 4
+                    "<I", pixels, 104 * 800 * 4 + 23 * 4
                 )[0]
                 if newline_highlight != 0xFF5E81AC or second_line_highlight != 0xFF5E81AC:
                     raise AssertionError(
@@ -483,10 +485,10 @@ def run(
 
                 key_step(1146, 30, "replace multi-line selection")
                 merged_line_pixel = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 25 * 4
+                    "<I", pixels, 92 * 800 * 4 + 25 * 4
                 )[0]
                 cleared_second_line = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                    "<I", pixels, 104 * 800 * 4 + 17 * 4
                 )[0]
                 if merged_line_pixel != 0xFFD8DEE9:
                     raise AssertionError("multi-line selection replacement did not join text on one line")
@@ -500,14 +502,14 @@ def run(
                 # the insertion point after A. Shift+Left extends and preserves
                 # the anchor; an unshifted Right collapses to the far edge.
                 key_step_shift(1150, 105, "Shift+Left select A")
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
                     raise AssertionError("Shift+Left did not highlight the preceding character")
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Shift+Left selected more than one character on its first step")
 
                 key_step_shift(1154, 105, "Shift+Left extend selection")
                 for x in (23, 31):
-                    pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
+                    pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + x * 4)[0]
                     if pixel != 0xFF5E81AC:
                         raise AssertionError(
                             "repeated Shift+Left did not extend from the original anchor; "
@@ -515,9 +517,9 @@ def run(
                         )
 
                 key_step(1158, 106, "Right collapse keyboard selection")
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 23 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Right did not clear the keyboard selection highlight")
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("Right did not collapse the selection to its far edge")
 
                 # Extend a selection across the newline with Shift+Up and
@@ -527,9 +529,9 @@ def run(
                 key_step(1164, 32, "append d for vertical selection")
                 key_step_shift(1168, 103, "Shift+Up select previous line")
                 vertical_pixels = [
-                    struct.unpack_from("<I", pixels, 164 * 800 * 4 + 39 * 4)[0],
-                    struct.unpack_from("<I", pixels, 176 * 800 * 4 + 23 * 4)[0],
-                    struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0],
+                    struct.unpack_from("<I", pixels, 92 * 800 * 4 + 39 * 4)[0],
+                    struct.unpack_from("<I", pixels, 104 * 800 * 4 + 23 * 4)[0],
+                    struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0],
                 ]
                 if vertical_pixels != [0xFF5E81AC] * 3:
                     raise AssertionError(
@@ -537,16 +539,16 @@ def run(
                         f"pixels={[hex(x) for x in vertical_pixels]}"
                     )
                 key_step_shift(1172, 108, "Shift+Down collapse vertical selection")
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 39 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 39 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Shift+Down back to the anchor did not clear selection")
 
                 key_step_shift(1176, 102, "Shift+Home select to line start")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
                     raise AssertionError("Shift+Home did not select text to the start of the line")
                 key_step_shift(1180, 107, "Shift+End collapse to line end")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 31 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Shift+End did not clear selection after returning to its anchor")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("Shift+End did not leave the caret at the line end")
                 observations.append(
                     "Shift+Arrow and Shift+Home/End selection, extension, collapse, and multi-line highlighting"
@@ -569,7 +571,7 @@ def run(
                 )
                 expect_redraw("initial held Left")
                 client.sendall(wire_message(12, 0))
-                caret = struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0]
+                caret = struct.unpack_from("<I", pixels, 104 * 800 * 4 + 24 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("initial Left press did not move the caret once")
 
@@ -582,13 +584,13 @@ def run(
                         f"expected={expected_delay:.3f}s elapsed={first_repeat_elapsed:.3f}s"
                     )
                 client.sendall(wire_message(12, 0))
-                caret = struct.unpack_from("<I", pixels, 176 * 800 * 4 + 16 * 4)[0]
+                caret = struct.unpack_from("<I", pixels, 104 * 800 * 4 + 16 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("first repeated Left did not move the caret to line start")
 
                 expect_redraw("second repeated Left")
                 client.sendall(wire_message(12, 0))
-                caret = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 32 * 4)[0]
+                caret = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 32 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("continued Left repeat did not cross to the previous line")
                 client.sendall(
@@ -604,7 +606,7 @@ def run(
                 expect_redraw("initial held Backspace")
                 client.sendall(wire_message(12, 0))
                 first_line_b = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 17 * 4
+                    "<I", pixels, 92 * 800 * 4 + 17 * 4
                 )[0]
                 if first_line_b != 0xFFD8DEE9:
                     raise AssertionError("initial Backspace removed more than one character")
@@ -615,7 +617,7 @@ def run(
                     + wire_message(12, 0)
                 )
                 removed_b = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 17 * 4
+                    "<I", pixels, 92 * 800 * 4 + 17 * 4
                 )[0]
                 if removed_b != 0xFF252A33:
                     raise AssertionError("held Backspace did not repeat after its initial delay")
@@ -626,7 +628,7 @@ def run(
                 expect_redraw("initial held Delete")
                 client.sendall(wire_message(12, 0))
                 first_cell = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 20 * 4
+                    "<I", pixels, 92 * 800 * 4 + 20 * 4
                 )[0]
                 if first_cell != 0xFFD8DEE9:
                     raise AssertionError("initial Delete did not move the first character onto line one")
@@ -637,7 +639,7 @@ def run(
                     + wire_message(12, 0)
                 )
                 next_glyph = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 20 * 4
+                    "<I", pixels, 92 * 800 * 4 + 20 * 4
                 )[0]
                 if next_glyph != 0xFF252A33:
                     raise AssertionError("held Delete did not repeat after its initial delay")
@@ -652,7 +654,7 @@ def run(
                 for index in range(100):
                     key_step(1300 + index * 2, 30, f"soft-wrap character {index + 1}")
                 wrapped_first = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                    "<I", pixels, 104 * 800 * 4 + 17 * 4
                 )[0]
                 if wrapped_first != 0xFFD8DEE9:
                     raise AssertionError(
@@ -660,16 +662,16 @@ def run(
                         f"pixel={hex(wrapped_first)}"
                     )
                 wrapped_caret = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 40 * 4
+                    "<I", pixels, 104 * 800 * 4 + 40 * 4
                 )[0]
                 if wrapped_caret != 0xFFFFFFFF:
                     raise AssertionError("caret did not follow the text onto its soft-wrapped row")
 
                 # A click on the wrapped row must map back to the same visual
                 # insertion point, not to a logical hard-newline-only row.
-                pointer_click(40, 182, 1510, "click within soft-wrapped row")
+                pointer_click(40, 110, 1510, "click within soft-wrapped row")
                 wrapped_click_caret = struct.unpack_from(
-                    "<I", pixels, 176 * 800 * 4 + 40 * 4
+                    "<I", pixels, 104 * 800 * 4 + 40 * 4
                 )[0]
                 if wrapped_click_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse hit testing did not account for soft-wrapped rows")
@@ -677,10 +679,10 @@ def run(
                 # Add enough further lines to exceed the viewport. The active
                 # caret row should scroll into view at the bottom instead of
                 # becoming invisible below the window.
-                for index in range(28):
+                for index in range(36):
                     key_step(1600 + index * 4, 28, f"append scroll line {index + 1}")
                     key_step(1602 + index * 4, 30, f"append scroll text {index + 1}")
-                bottom_row_y = 164 + (25 - 1) * 12
+                bottom_row_y = 92 + (31 - 1) * 12
                 scrolled_glyph = struct.unpack_from(
                     "<I", pixels, bottom_row_y * 800 * 4 + 17 * 4
                 )[0]
@@ -755,7 +757,7 @@ def run(
                         f"held printable key did not repeat into the next cell: "
                         f"after_press={after_press}, after_repeat={after_repeat}"
                     )
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("repeated printable-key test did not render its first glyph")
                 client.sendall(
                     wire_message(16, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
