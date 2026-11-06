@@ -93,6 +93,15 @@ def run(
     observations = []
     errors = []
     process_holder = []
+    absolute_file_path = (
+        f"/tmp/nekoedit-absolute-{os.getpid()}-{time.monotonic_ns()}.txt"
+        if file_workflow else None
+    )
+    if absolute_file_path is not None:
+        try:
+            os.unlink(absolute_file_path)
+        except FileNotFoundError:
+            pass
     if file_workflow:
         with open(os.path.join(runtime_dir, "relative-open.txt"), "wb") as document:
             document.write(b"I")
@@ -479,7 +488,7 @@ def run(
                             raise AssertionError("menu Save As did not change the active destination")
 
                     # Ctrl+Shift+S accepts an absolute path.
-                    absolute_path = os.path.join(runtime_dir, "absolute-save.txt")
+                    absolute_path = absolute_file_path
                     workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S opens Save As", shift=True)
                     serial = workflow_type_path(absolute_path, serial + 20)
                     key_step(serial, 28, "confirm absolute Save As")
@@ -1202,6 +1211,11 @@ def run(
             server.close()
         if client_endpoint is not None:
             client_endpoint.close()
+        if absolute_file_path is not None:
+            try:
+                os.unlink(absolute_file_path)
+            except FileNotFoundError:
+                pass
 
     if thread.is_alive():
         raise AssertionError("mock compositor did not finish the protocol exchange")
