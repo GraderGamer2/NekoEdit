@@ -74,9 +74,13 @@ request_buffer:        .zero 8192
 payload_buffer:        .zero 256
 socket_address:        .zero 110
 socket_path_len:       .long 0
+.balign 8
 mmap_result:           .quad 0
+.balign 8
 msg_iov:               .zero 16
+.balign 8
 msg_header:            .zero 56
+.balign 8
 msg_control:           .zero 24
 
 .section .text
@@ -720,11 +724,14 @@ wl_send_request_fd:
     mov qword ptr [rip + msg_header + 32], rax
     mov qword ptr [rip + msg_header + 40], 24
     mov qword ptr [rip + msg_header + 48], 0
+.send_fd_call:
     mov eax, SYS_sendmsg
     mov rdi, qword ptr [rip + socket_fd]
     lea rsi, [rip + msg_header]
     xor edx, edx
     syscall
+    cmp rax, -4                 # retry sendmsg after EINTR
+    je .send_fd_call
     test rax, rax
     js .send_fd_done
     lea rdi, [rip + request_buffer]
