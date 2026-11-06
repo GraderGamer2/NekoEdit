@@ -1338,12 +1338,12 @@ if __name__ == "__main__":
     xkb_fd, xkb_path = tempfile.mkstemp(prefix="nekoedit-xkb-")
     try:
         with os.fdopen(xkb_fd, "wb") as xkb_document:
-            xkb_document.write(b"")
+            xkb_document.write(b"I")
         run(
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"aAq#",
+            expected_saved_bytes=b"IaAq#",
             keyboard_layout_test=True,
         )
     finally:
