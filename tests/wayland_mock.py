@@ -298,7 +298,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     )
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("expected digit 2 was not rendered on the second line")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 25 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 26 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("Shift+1 did not render an exclamation mark")
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document caret was not rendered after the shifted character")
