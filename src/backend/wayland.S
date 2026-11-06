@@ -170,6 +170,9 @@ debug_pointer_y:        .long 0
 debug_pointer_col:      .long 0
 debug_pointer_line:     .long 0
 debug_pointer_offset:   .long 0
+debug_x_after_sub:       .long 0
+debug_x_after_add:       .long 0
+debug_x_divisor:          .long 0
 doc_buffer:             .zero DOC_CAPACITY
 last_object:           .long 0
 last_opcode:           .long 0
@@ -1557,6 +1560,15 @@ render_surface:
     mov eax, dword ptr [rip + debug_pointer_offset]
     or eax, 0xff000000
     mov dword ptr [r11 + STRIDE * 470 + 704 * 4], eax
+    mov eax, dword ptr [rip + debug_x_after_sub]
+    or eax, 0xff000000
+    mov dword ptr [r11 + STRIDE * 470 + 705 * 4], eax
+    mov eax, dword ptr [rip + debug_x_after_add]
+    or eax, 0xff000000
+    mov dword ptr [r11 + STRIDE * 470 + 706 * 4], eax
+    mov eax, dword ptr [rip + debug_x_divisor]
+    or eax, 0xff000000
+    mov dword ptr [r11 + STRIDE * 470 + 707 * 4], eax
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -1715,13 +1727,16 @@ doc_place_cursor_from_pointer:
 
     # Horizontal pixel position -> nearest insertion column.
     sub edi, DOC_LEFT
+    mov dword ptr [rip + debug_x_after_sub], edi
     test edi, edi
     jns .Lneko_pointer_x_offset_ready
     xor edi, edi
 .Lneko_pointer_x_offset_ready:
     add edi, 4
+    mov dword ptr [rip + debug_x_after_add], edi
     xor edx, edx
     mov ecx, CELL_WIDTH
+    mov dword ptr [rip + debug_x_divisor], ecx
     div ecx
     mov r14d, eax                 # requested visual column
     mov dword ptr [rip + debug_pointer_col], eax
