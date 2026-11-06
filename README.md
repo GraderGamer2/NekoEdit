@@ -141,13 +141,14 @@ See [docs/RENDERING.md](docs/RENDERING.md).
 
 ## Development roadmap
 
-1. Freestanding ELF bootstrap and syscall conventions.
-2. Wayland window and software-buffer proof of concept. (Current milestone.)
-3. Wayland input, resize handling, and X11 protocol backend.
-4. Font discovery, TrueType parsing, glyph rasterization, and text drawing.
-5. UTF-8 document engine and editing commands.
-6. Clipboard interoperability and the simple directory browser.
-7. Complete editor workflow, compatibility tests, and profiling.
+1. Freestanding ELF bootstrap and syscall conventions. (Implemented.)
+2. Native Wayland window, xdg-shell setup, and software-buffer proof of concept. (Implemented prototype.)
+3. Pointer/keyboard events and the initial US-QWERTY ASCII editing prototype. (Current milestone.)
+4. XKB keymap FD parsing, layout-aware keysym translation, and Wayland input-method integration.
+5. UTF-8 gap-buffer document engine, Unicode-aware navigation, selection, undo/redo, and scrolling.
+6. Installed-font discovery, TrueType parsing, glyph rasterization, and text layout.
+7. File open/save, the directory-browser picker, and clipboard interoperability.
+8. Resize/output-scale handling, X11 backend, compatibility testing, and profiling.
 
 Correctness and interoperability take priority over arbitrary binary-size targets.
 
