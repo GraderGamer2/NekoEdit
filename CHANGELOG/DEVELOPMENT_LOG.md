@@ -2,6 +2,34 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-06 — Pass the complete two-transport Wayland and window-control suite
+
+**Purpose:** Verify the inherited-WAYLAND_SOCKET descriptor-lifetime correction from [`69b63767d1bc`](https://github.com/GraderGamer2/NekoEdit/commit/69b63767d1bc3223ac9d300b3be056cc9c36c56f) and record the complete CI result.
+
+### Actions #248 result
+
+- [Build and test #248](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357) completed with **success** on commit `69b63767d1bc3223ac9d300b3be056cc9c36c56f`.
+- All workflow steps passed: toolchain inspection, freestanding x86-64 assembly/link and ELF checks, command-line smoke tests, Wayland protocol mock integration, executable inspection, artifact upload, and job cleanup.
+- The full Wayland mock workflow passed through both connection mechanisms: `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`.
+- Both transport paths now complete the native picker file workflow and the app-drawn Minimize, Maximize, Restore, and Close interactions. The 1280×720 resize, release-gated buffer replacement, return to 800×480, and final Close/EOF checks all completed.
+- The run also confirms the prior mock correction: the compositor releases maximized buffer 256 before the Restore click, so the test respects the client's buffer-ownership rule.
+
+### Artifact
+
+- Name: `nekoedit-linux-x86_64`
+- Size: 29,427 bytes
+- Artifact ID: `13520607975`
+- Expiration: 2026-11-13 16:27:32 UTC
+- [Open Actions #248 and download its artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357/artifacts/13520607975)
+
+### Scope and remaining manual validation
+
+- No application source code or runtime dependency changed in this test-harness correction; the WAYLAND_SOCKET parent descriptor is closed immediately after the child inherits it.
+- This confirms the mock-compositor integration suite, not compatibility with every real compositor. A separate manual run inside GNOME Wayland remains useful.
+- The supported launch command remains `./nekoedit --backend=wayland`.
+
+---
+
 ## 2026-11-06 — Close the parent copy of the inherited WAYLAND_SOCKET test descriptor
 
 **Purpose:** Continue from [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419), which corrected the mock compositor's buffer-release ordering before Restore. Actions #247 then verified that the resize/control flow passed through `WAYLAND_DISPLAY`, but exposed a separate lifetime issue in the inherited-`WAYLAND_SOCKET` test.
