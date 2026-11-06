@@ -74,13 +74,14 @@ No allocator library is required. A small internal allocator may be introduced o
 ## Document model
 
 - Canonical storage: UTF-8 bytes.
-- Editing: gap buffer.
-- Cursor and selection: byte offsets that are always adjusted to valid UTF-8 boundaries.
+- Storage: a byte-oriented gap buffer in a fixed 64 KiB allocation. The current editor moves the gap to the logical cursor for insertion and deletion, while `doc_length`, cursor, and selection offsets remain logical byte offsets. The allocation does not yet grow; files larger than 64 KiB remain unsupported.
+- Cursor and selection: byte offsets kept on valid UTF-8 code-point boundaries. The current navigation, hit-testing, selection, Backspace, and Delete paths use bounded UTF-8 scalar decoding.
+- Invalid UTF-8: retain the original byte sequence unless an edit explicitly removes bytes within it. The current prototype treats each malformed byte as an independent one-byte replacement unit; valid non-ASCII code points and malformed bytes currently render as `?`.
+- Character model: code-point boundaries are implemented, but grapheme clusters (for example, base letters plus combining marks or multi-code-point emoji sequences) are not yet treated as one cursor position.
 - Line index: offsets of line starts, updated incrementally where practical.
 - Line endings: detect and preserve LF or CRLF for existing files; define a consistent default for new files.
-- Invalid UTF-8: preserve original bytes where possible and render replacement glyphs rather than silently rewriting file contents. Editing around invalid sequences needs a deliberate policy before implementation.
 
-A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement must decode UTF-8 safely and must not treat each byte as a visible character.
+A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement must decode UTF-8 safely and must not treat each byte as a visible character. The current implementation has a movable gap but is still bounded by its fixed 64 KiB allocation; dynamic growth and a line-start index remain future work. Unicode glyph lookup, non-ASCII keyboard/IME input, and grapheme-aware navigation are also not implemented.
 
 ## Platform backends
 
