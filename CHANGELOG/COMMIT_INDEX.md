@@ -4,7 +4,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
-- Recorded commits: **196** (20 original main prototype + 169 PR #1 implementation history + 6 changelog bootstrap commits + 1 main-branch changelog installation).
+- Recorded commits: **199** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 3 post-bootstrap documentation/synchronization commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -228,6 +228,16 @@ This docs-only commit copied the changelog directory and its root README link to
 | Date (UTC) | Commit | Subject |
 |---|---|---|
 | 2026-11-06 12:09:42 UTC | [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8) | docs: add project changelog and continuity notes to main |
+
+## Post-bootstrap documentation and branch synchronization
+
+These commits keep the feature milestone, main-branch changelog mirror, and PR branch ancestry aligned after the original six-commit changelog bootstrap.
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 12:19:24 UTC | [d35d54bb8726](https://github.com/GraderGamer2/NekoEdit/commit/d35d54bb8726f1c10cc3c9213ba49916939f06cf) | docs: record gap-buffer milestone and verification |
+| 2026-11-06 12:20:05 UTC | [f31dc4177c78](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d) | docs: sync gap-buffer milestone changelog to main |
+| 2026-11-06 12:22:24 UTC | [379a34981fc6](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d) | merge: sync main changelog into feature branch |
 
 ## Maintenance
 

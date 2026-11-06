@@ -13,13 +13,18 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 ## Latest verified program state
 
 - Latest fully verified **program-code commit:** `776a72c07579ced1e54929946de65cea6271267e` — fixed-capacity 64 KiB gap-buffer document storage.
+- Current feature branch head: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent.
+- Current `main` head: [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); changelog files are mirrored on both branches.
+- PR #1 is still open and unmerged; after branch synchronization GitHub reports it mergeable with a clean merge state.
+- GitHub Actions [Build and test #171](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217176741) passed on the synchronized feature branch head. All eight steps succeeded, including the complete Wayland integration suite and artifact upload.
+- The #171 artifact is `nekoedit-linux-x86_64` (18,978 bytes), SHA-256 `2fa05d8a3b0f2b4422a4d4f81c1ebd3f701ea6d74c97221f467bf1b3ea9dbebf`, expiring 2026-11-13.
 - GitHub Actions [Build and test #169](https://github.com/GraderGamer2/NekoEdit/actions/runs/42216369360) passed for this commit on 2026-11-06.
 - All eight workflow steps passed: toolchain inspection, freestanding x86-64 build/ELF verification, CLI smoke tests, complete Wayland mock-compositor integration, executable inspection, and artifact upload.
 - Uploaded artifact: `nekoedit-linux-x86_64` (18,978 bytes).
 - Artifact SHA-256: `dae27df70c60ae73c4bd45e494b10c7c47c7d0962c86c8876f48ab00965b515a`.
 - Artifact expiration: 2026-11-13 (seven-day retention).
 - The new integration scenario exercised gap movement around a mixed-width UTF-8 prefix, insertion on both sides of the gap, Backspace, Delete, selection deletion, and serialization of the two physical document segments.
-- The changelog was separately installed on `main` by docs-only commit [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8). This copied the changelog and README link without merging the editor implementation; `main` remains the original prototype.
+- The changelog was separately installed on `main` by docs-only commit [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8), then updated to include the gap-buffer milestone by [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d). Main’s changelog sync run #170 passed. Neither commit merges the editor implementation; `main` remains the original prototype.
 - PR #1 remains open and unmerged. Inspect current refs and CI before making claims about later commits.
 
 ## Runtime and build interface
