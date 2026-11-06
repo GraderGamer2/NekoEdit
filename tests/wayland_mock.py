@@ -74,6 +74,8 @@ def run(
     initial_file: str | None = None,
     save_roundtrip: bool = False,
     file_workflow: bool = False,
+    keyboard_layout_test: bool = False,
+    expected_saved_bytes: bytes = b"z",
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
@@ -266,7 +268,47 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                keymap_data = b"xkb_keymap { };\0"
+                if keyboard_layout_test:
+                    keymap_data = b"""xkb_keymap {
+xkb_keycodes "nekoedit-test" {
+    minimum = 8;
+    maximum = 255;
+    <AE01> = 10;
+    <AD01> = 24;
+    <AC02> = 39;
+};
+xkb_types "nekoedit-test" {
+    type "ALPHABETIC" {
+        modifiers = Shift+Lock;
+        map[Shift] = Level2;
+        map[Lock] = Level2;
+    };
+    type "FOUR_LEVEL" {
+        modifiers = Shift+LevelThree;
+        map[Shift] = Level2;
+        map[LevelThree] = Level3;
+        map[Shift+LevelThree] = Level4;
+    };
+};
+xkb_symbols "nekoedit-test" {
+    key <AD01> {
+        type = "ALPHABETIC",
+        symbols[Group1] = [ a, A ],
+        symbols[Group2] = [ q, Q ]
+    };
+    key <AE01> {
+        type = "FOUR_LEVEL",
+        symbols[Group1] = [ ampersand, 1, numbersign, exclam ]
+    };
+    key <AC02> {
+        type = "ALPHABETIC",
+        symbols[Group1] = [ s, S ]
+    };
+};
+};
+\0"""
+                else:
+                    keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
@@ -400,6 +442,34 @@ def run(
                     "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
                     ".": 52, "/": 53, "-": 12,
                 }
+
+                if keyboard_layout_test:
+                    # XKB keycode 24 is evdev 16. Group 1 maps it to 'a',
+                    # Shift maps it to 'A', and Group 2 remaps it to 'q'.
+                    key_step(1000, 16, "XKB group-one base symbol")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1001, 1, 0, 0, 0))
+                    )
+                    key_step(1002, 16, "XKB alphabetic Shift level")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1003, 0, 0, 0, 1))
+                    )
+                    key_step(1004, 16, "XKB second layout group")
+                    # Right Alt is the common physical LevelThree selector.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1005, 1005, 100, 1))
+                    )
+                    key_step(1006, 2, "XKB FOUR_LEVEL LevelThree symbol")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
+                        + wire_message(12, 0)
+                    )
+                    workflow_shortcut(1010, 31, "Ctrl+S saves XKB-translated text")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "XKB keycode +8 lookup, Group1/Group2 selection, alphabetic Shift level, and Right-Alt LevelThree symbol translation verified"
+                    )
+                    return
 
                 def workflow_type_path(value: str, serial: int) -> int:
                     for character in value:
@@ -1235,8 +1305,10 @@ def run(
     if save_roundtrip:
         with open(initial_file, "rb") as saved_file:
             saved_bytes = saved_file.read()
-        if saved_bytes != b"z":
-            raise AssertionError(f"Ctrl+S saved incorrect document bytes: {saved_bytes!r}")
+        if saved_bytes != expected_saved_bytes:
+            raise AssertionError(
+                f"Ctrl+S saved incorrect document bytes: expected {expected_saved_bytes!r}, got {saved_bytes!r}"
+            )
     transport = "WAYLAND_SOCKET" if use_wayland_socket else "WAYLAND_DISPLAY"
     print(f"Wayland mock integration test passed using {transport} (registry, xdg-shell, memfd, pixels, close).")
     print("Verified: " + ", ".join(observations))
@@ -1261,6 +1333,24 @@ if __name__ == "__main__":
     # the 300 ms / 30 Hz compatibility fallback.
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
     run(sys.argv[1], send_protocol_error=True)
+    # Parse a compact compiled-keymap-shaped XKB text-v1 fixture and verify
+    # actual document bytes after group, Shift, and LevelThree translation.
+    xkb_fd, xkb_path = tempfile.mkstemp(prefix="nekoedit-xkb-")
+    try:
+        with os.fdopen(xkb_fd, "wb") as xkb_document:
+            xkb_document.write(b"")
+        run(
+            sys.argv[1],
+            initial_file=xkb_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"aAq#",
+            keyboard_layout_test=True,
+        )
+    finally:
+        try:
+            os.unlink(xkb_path)
+        except FileNotFoundError:
+            pass
     # Full File menu, Open, Save, and Save As interaction tests on both
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)
