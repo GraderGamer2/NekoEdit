@@ -958,8 +958,15 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 10
                     serial = double_click_picker_row(160, 139, serial, "open hidden file")
                     # H's first glyph row lights columns 0 and 4, not column 1.
-                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
-                        raise AssertionError(f"double-clicking a hidden file did not open its document; state={picker_state()!r}")
+                    hidden_state = picker_state()
+                    hidden_path = os.path.join(runtime_dir, "nested-dir", ".hidden-note").encode()
+                    if (
+                        hidden_state.get("active_path") != hidden_path
+                        or hidden_state.get("doc_length") != 1
+                        or hidden_state.get("doc_buffer", b"")[:1] != b"H"
+                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9
+                    ):
+                        raise AssertionError(f"double-clicking a hidden file did not open its document; state={hidden_state!r}")
                     observations.append("directory entry navigation, hidden-file toggle, and double-click Open verified")
 
                     # Open again, enter the directory, go Up, re-enter it, then
@@ -970,9 +977,17 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 10
                     serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
                     serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files visible")
-                    # N also has a lit outer pixel in the first glyph row.
-                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
-                        raise AssertionError("directory picker did not open inside.txt")
+                    # Verify the exact selected document: H and N share the same
+                    # first-row edge pixels, so a pixel-only check is insufficient.
+                    nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
+                    nested_state = picker_state()
+                    if (
+                        nested_state.get("active_path") != nested_file.encode()
+                        or nested_state.get("doc_length") != 1
+                        or nested_state.get("doc_buffer", b"")[:1] != b"N"
+                        or struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9
+                    ):
+                        raise AssertionError(f"directory picker did not open inside.txt; state={nested_state!r}")
                     observations.append("Up navigation and a second nested-file Open verified")
 
                     # Replace the opened document and validate Ctrl+S against
@@ -980,7 +995,6 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(serial, 30, "Ctrl+A before nested-file edit")
                     key_step(serial + 8, evdev["z"], "replace nested document")
                     workflow_shortcut(serial + 10, 31, "Ctrl+S after nested Open")
-                    nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
                     with open(nested_file, "rb") as saved:
                         saved_bytes = saved.read()
                     if saved_bytes != b"z":
