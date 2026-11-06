@@ -1,12 +1,12 @@
 # NekoEdit current status
 
-**Snapshot date:** 2026-11-06  
+**Snapshot date:** 2026-11-07  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Latest window-management fix:** [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969) — wait for compositor configure after state requests; implement serial-correct title-bar move and edge/corner resize  
-**Latest implementation-code tip:** [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969) — configure-driven window-state transitions and interactive Wayland move/resize  
-**Latest picker implementation-code tip:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — selectable filename autocomplete suggestions  
-**Latest picker integration-test commit:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — five-row filename suggestions, keyboard navigation, acceptance, and exact-file opening  
+**Latest window-management fix:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — honor configured geometry, widen interactive resize targets, and suppress the picker scrollbar when no overflow exists  
+**Latest implementation-code tip:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — exact configured dimensions, bounded rendering, and wider Wayland resize hit targets  
+**Latest picker implementation-code tip:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — hide the scrollbar when all directory entries fit in the visible rows  
+**Latest picker integration-test commit:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — non-overflow scrollbar visibility and non-draggable gutter regression coverage  
 **Latest main-history synchronization:** [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c)  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open, targeting `main`  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
@@ -15,13 +15,14 @@
 
 Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md), and [PROJECT_HISTORY.md](PROJECT_HISTORY.md). Use [COMMIT_INDEX.md](COMMIT_INDEX.md) for the complete historic commit list. After that, inspect the current source and run/status of GitHub Actions. Never assume the branch, build, or latest code commit is unchanged.
 
-## Repository coordination state (verified 2026-11-06)
+## Repository coordination state (verified 2026-11-07)
 
 - GitHub Actions [Build and test #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight workflow steps on autocomplete commit [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519). It covers the selectable filename suggestion popup and opening the exact highlighted second match.
 - GitHub Actions [Build and test #246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) built and linked window-controls commit [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) and passed CLI smoke tests, but failed in the Wayland mock workflow because the test did not release maximized buffer 256 before Restore. Commit [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419) added the missing compositor `wl_buffer.release`.
 - GitHub Actions [Build and test #247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) built/linked successfully and passed CLI smoke tests. The complete `WAYLAND_DISPLAY` file workflow passed, including Minimize, Maximize, Restore, and title-bar Close. The inherited-`WAYLAND_SOCKET` workflow exposed a mock-harness EOF wait because the parent retained a duplicate of the client endpoint after passing it to the child.
 - GitHub Actions [Build and test #248](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357) passed all workflow steps on commit [`69b63767d1bc`](https://github.com/GraderGamer2/NekoEdit/commit/69b63767d1bc3223ac9d300b3be056cc9c36c56f), including both Wayland connection transports and the window-control workflow.
 - GitHub Actions [Build and test #251](https://github.com/GraderGamer2/NekoEdit/actions/runs/42255454769) passed **all workflow steps** on [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969): freestanding assembly/link and ELF checks, CLI smoke tests, the complete Wayland mock integration suite through `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`, executable inspection, and artifact upload. The expanded window scenario checks configure-driven Maximize/Restore, no premature stale-size commit, title-bar `xdg_toplevel.move`, left-edge `xdg_toplevel.resize` with the initiating pointer serial, and deferred buffer replacement when configure arrives before `wl_buffer.release`.
+- GitHub Actions [Build and test #253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed on [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7). It verifies the 1920×1080 configure/restore path, exact configured dimensions, the non-overflow picker scrollbar case, 12-pixel resize hit targets on all four edges and corners, and the full mock suite through both Wayland transports. Artifact `13524092766` (29,780 bytes) was uploaded.
 - Artifact: `nekoedit-linux-x86_64`, 29,625 bytes, ZIP SHA-256 `3c3a5563fe033772d46bd9209cbfd9fd31a1ae950a69c5851e6813afba6de2c1`, artifact ID `13521663942`, expires 2026-11-13 16:46:27 UTC. [Actions #251 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42255454769/artifacts/13521663942).
 - PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged, with `early-alpha` as head and `main` as base. GitHub reported `mergeable=true` and `mergeable_state=clean` at the last branch check. PR #1 is closed and unmerged.
 - `main` still contains the original Wayland prototype rather than the editor implementation. The work described here remains on `early-alpha`; no merge into `main` was performed.
@@ -37,7 +38,7 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Latest verified program state
 
-- Latest application/window-management implementation: [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969) — Maximize/Restore/Minimize wait for compositor configure; blank title-bar dragging sends `xdg_toplevel.move`; 6-pixel edges/corners send `xdg_toplevel.resize` with the originating pointer serial; resize configures remain release-gated.
+- Latest application/window-management implementation: [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — Maximize/Restore follows compositor configure; positive configure dimensions are no longer silently clamped; 12-pixel edges/corners send `xdg_toplevel.resize`; software drawing is clipped to active surface dimensions; buffer replacement remains release-gated.
 - Earlier Wayland test-harness corrections: [`93bedb579a89`](https://github.com/GraderGamer2/NekoEdit/commit/93bedb579a89160ee64fe70664fb9f062951a419) releases the maximized frame before Restore; [`69b63767d1bc`](https://github.com/GraderGamer2/NekoEdit/commit/69b63767d1bc3223ac9d300b3be056cc9c36c56f) closes the parent's duplicate inherited socket FD after spawn.
 - Latest picker implementation commit: [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — visible filename autocomplete suggestions with keyboard and mouse selection.
 - Previous picker source-code change: [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) — clear Open-mode search state on listing rebuilds and require a selected row when the directory list has focus.
@@ -93,7 +94,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Wayland connection | `WAYLAND_DISPLAY`, absolute socket path, and inherited `WAYLAND_SOCKET` |
 | Wayland setup | Registry, compositor, shm, xdg-shell, configure, ping/pong, close, protocol-error reporting |
 | Rendering | CPU software rendering into a memfd-backed shared-memory buffer |
-| Editor window | Starts at 800×480; compositor-configured size range 480×360–3840×2160; Maximize/Restore/Minimize wait for configure before repaint; blank title-bar drag requests move; 6-pixel edges/corners request interactive resize; old buffers are replaced only after release |
+| Editor window | Starts at 800×480; advertises 480×360–3840×2160 min/max size hints; honors positive compositor configure sizes exactly within the shared-memory limit; clips drawing to active surface bounds; Maximize/Restore waits for configure; blank title-bar drag requests move; 12-pixel edges/corners request resize; old buffers are replaced only after release |
 | Document storage | Fixed-capacity 64 KiB byte-oriented gap buffer; cursor/selection offsets remain logical byte offsets; no dynamic growth yet |
 | ASCII rendering | Embedded 5×7 glyphs for printable ASCII, including the full punctuation set |
 | Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, ONE_LEVEL/ALPHABETIC/THREE_LEVEL/FOUR_LEVEL type families, Shift/Caps, physical Right-Alt LevelThree, US fallback |
@@ -135,7 +136,7 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 - Symbolic-link navigation is not implemented; the picker navigates directories and opens regular files.
 - Full XKB type/modifier/virtual-modifier/action semantics and broader non-ASCII keysyms.
 - X11 backend.
-- Manual GNOME/Mutter testing of commit `77c8f9884e84` remains pending. The mock tests now cover move/resize requests and configure/buffer-release sequencing, but cannot substitute for running the artifact in the actual GNOME session. Minimize behavior remains compositor policy; the client sends `xdg_toplevel.set_minimized` and does not simulate minimizing itself.
+- Manual GNOME/Mutter retest of [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) is pending. The user tested the preceding #251 artifact on GNOME: title-bar movement worked, but Maximize still terminated the app and interactive resize had no effect. The new mock coverage validates requests/configure handling but cannot prove Mutter behavior. Minimize remains compositor policy.
 
 File-operation limitations: picker path and filename typing is ASCII-only; non-ASCII filename bytes are preserved for filesystem operations but displayed through replacement glyphs. Clipboard paste into picker fields is not implemented. The temporary save file uses mode 0644 subject to umask; existing file permissions/ownership/ACLs/xattrs are not preserved; the parent directory is not fsynced after rename.
 
@@ -161,6 +162,7 @@ Keep these separate from the automated test results:
 - Latest user-reported test of a newer Actions build: ordinary letter keys worked again, but most shifted punctuation/symbol keys rendered as `?`; only a subset including `<>`, `:"`, and `()` rendered correctly. The exact run/artifact for this particular report was not identified. Treat this as an outstanding keyboard regression; mock-compositor CI does not establish that it is fixed.
 - The patched ONE_LEVEL/punctuation implementation passed mock-compositor CI #186 and the subsequent full branch-sync run #187, but the user has not yet re-tested that patched artifact in the real GNOME Wayland session. Keep the desktop-symbol regression marked **awaiting manual confirmation**.
 - The user reported that opening a zero-byte .txt file sometimes activated another file. The code review identified a reproducible stale-search-across-directory-navigation failure mode and Actions #243 now covers/fixes it. The user has not yet manually re-tested the new artifact in GNOME Wayland; do not mark the desktop report as user-confirmed resolved.
+- The user tested the #251 artifact on GNOME Wayland and reported: Maximize still crashes/exits NekoEdit, title-bar dragging works, and edge resizing does not take effect. They also observed the file-picker scrollbar displaced when the list did not overflow. Commit `f990dc0aa9b1` addresses those three code paths; its #253 mock-compositor suite passed, but the artifact still needs manual confirmation on Mutter.
 
 When conducting future work, add any new manual test feedback here or to the dated [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md), with the build/commit tested and the exact behavior observed.
 

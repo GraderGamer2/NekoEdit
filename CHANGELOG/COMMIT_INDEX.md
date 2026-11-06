@@ -1,11 +1,11 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **223** (222 previously indexed commits + 1 GNOME window-state sequencing and interactive resize fix).
+- Recorded commits: **224** (223 previously indexed commits + 1 follow-up correcting compositor-configured geometry, resize hit targets, and picker scrollbar overflow behavior).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -407,6 +407,14 @@ Actions run [#243](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224145
 
 Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before Restore. Commit `93bedb579a89` adds the release event. Actions run [#247](https://github.com/GraderGamer2/NekoEdit/actions/runs/42251823911) verified the `WAYLAND_DISPLAY` path and exposed the inherited-socket test's descriptor-lifetime issue. Commit `69b63767d1bc` closes the parent's duplicate after spawn; Actions run [#248](https://github.com/GraderGamer2/NekoEdit/actions/runs/42252513357) passed the full suite through both transports and uploaded artifact `13520607975`. The GNOME-specific configure sequencing, move/resize requests, and buffer-release regression coverage are implemented in `77c8f9884e84`; Actions #251 passed and uploaded artifact `13521663942`.
 
+
+## 2026-11-07 GNOME configured-geometry and picker scrollbar correction
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 17:17:28 UTC | [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) | fix: honor configured window geometry and repair picker scrollbar |
+
+Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed the full build and Wayland mock suite on this commit. It covers a 1920×1080 configure, exact dimensions, min/max geometry hints, clipped drawing, no-overflow scrollbar suppression, and all resize edges/corners. Artifact [`13524092766`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598/artifacts/13524092766) was uploaded (29,780 bytes). The previous Actions #251 artifact was manually tested by the user: title-bar movement worked, but maximize still exited and interactive resizing did not take effect. Mutter retest of this correction remains pending.
 
 ## Maintenance
 

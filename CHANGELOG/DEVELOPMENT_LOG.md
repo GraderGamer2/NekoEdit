@@ -2,6 +2,33 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-07 — Correct configured geometry, widen interactive resize, and hide the idle picker scrollbar
+
+**Purpose:** Respond to the user's GNOME Wayland retest of Actions #251 and the separate picker observation. The user confirmed that title-bar movement now works, but Maximize still exits the app and edge resizing has no visible effect; the file-picker scrollbar also appeared displaced in directories that fit without scrolling.
+
+### Source changes
+
+- File picker: the scrollbar geometry previously set a full-height thumb but stored a top coordinate of zero when the visible list did not overflow. The picker now sets thumb height to zero, skips both track and thumb rendering, and does not treat the gutter as a scrollbar drag target when the entry count is at most 15.
+- Window geometry: the client advertises its 480×360 minimum and 3840×2160 maximum surface geometry to xdg-shell. Positive compositor configure dimensions are accepted exactly within that backing-store range instead of silently clamping them to those limits. A compositor request beyond the declared pool limit is rejected rather than committing a buffer with geometry that does not match the configure.
+- Renderer: rectangle and glyph writes are clipped against the active window dimensions, preventing fixed-position UI elements from writing outside a smaller configured surface.
+- Interactive resize: the hit band is increased from 6 to 12 pixels. The client still sends compositor-managed `xdg_toplevel.resize` with the initiating pointer serial; no local resize simulation or launch-command change was introduced.
+
+### Regression coverage
+
+- The file-picker test opens a directory with fewer than 15 rows and verifies that no scrollbar thumb or track is rendered and the empty gutter cannot start a drag. The existing overflow fixture continues to exercise wheel scrolling and thumb dragging.
+- The maximize test now applies a 1920×1080 configure and verifies matching buffer dimensions, stride, window controls, acknowledgement, and release-gated replacement.
+- The resize test initiates a real protocol request 10 pixels from the edge (outside the old 6-pixel band), then checks right/top/bottom edges and all four corners with the correct xdg-shell edge flags.
+- Both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET` paths run the expanded suite.
+
+### Verification
+
+- GitHub Actions [Build and test #253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed on [`f990dc0aa9b1d25617e0a385cafe23acbeef84f7`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7). The freestanding assembly/link and ELF checks, CLI smoke tests, complete Wayland mock suite, executable inspection, and artifact upload succeeded.
+- Artifact: `nekoedit-linux-x86_64`, 29,780 bytes; artifact ID `13524092766`; expires 2026-11-13 17:17:47 UTC. [Download from Actions #253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598/artifacts/13524092766).
+- The mock suite does **not** establish that Mutter's real maximize/resize behavior is fixed. The user still needs to test this artifact inside GNOME Wayland; the previous #251 artifact was confirmed to fail Maximize and interactive resize on that desktop.
+
+**Implementation commit:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7).  
+**Branch/PR:** `early-alpha`, PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+
 ## 2026-11-06 — Correct GNOME Wayland window-state sequencing and add interactive move/resize
 
 **Purpose:** Stop all unrelated feature work and address the user's report that the current build exits when Maximize is clicked under GNOME, cannot be edge-resized, and only sends the window behind when Minimize is clicked.

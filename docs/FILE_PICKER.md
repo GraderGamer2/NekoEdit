@@ -10,7 +10,7 @@ The dialog contains:
 - An editable location field with a text cursor and horizontal follow behavior.
 - Up and Home navigation controls.
 - A real Show hidden checkbox; both the checkbox and label toggle it. New picker sessions start with hidden files disabled.
-- A directory-first, then regular-file listing with a proportional scrollbar. The list supports vertical mouse-wheel scrolling, scrollbar track clicks, and thumb dragging.
+- A directory-first, then regular-file listing. A proportional scrollbar appears only when more than 15 entries overflow the visible rows; otherwise both its track and thumb are hidden. The scrollable list supports vertical mouse-wheel scrolling, scrollbar track clicks, and thumb dragging.
 - In Open mode, an editable **Search** field that performs case-insensitive filename-prefix matching against regular files in the current directory listing, with a visible popup containing up to five matching filename suggestions.
 - In Save mode, an editable **File name** field, plus Cancel and Save actions.
 - An overwrite confirmation prompt for an existing regular-file target.
@@ -27,7 +27,7 @@ Keep the dialog visually quiet and predictable. Rows use a compact type marker a
 - Enter opens the selected/matched file, or enters the selected directory when list focus is active.
 - Up moves to the parent directory; Home navigates to the user's home directory.
 - The Show hidden checkbox controls whether dotfiles are listed. The setting resets to unchecked when a new picker session starts.
-- The list scrolls vertically using `wl_pointer.axis`. A visible proportional scrollbar can be dragged or track-clicked.
+- The list scrolls vertically using `wl_pointer.axis`. When entries overflow the 15 visible rows, a proportional scrollbar can be dragged or track-clicked. With 15 or fewer entries, no scrollbar is drawn and the gutter is not treated as a drag target.
 - The current implementation holds at most 128 directory entries and displays 15 rows at a time. It is not an incremental large-directory browser.
 
 ### Location and filename fields
