@@ -4,6 +4,58 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Correct empty-file Open, add picker scrolling, and finish editable path/search fields
+
+**Purpose:** Respond to picker testing feedback by verifying zero-byte Open behavior, adding mouse-wheel and scrollbar navigation, converting the hidden-files indicator into a normal checkbox, and making the location and filename/search fields genuinely editable. The implementation remains in the freestanding GNU assembly Wayland backend, with no third-party runtime dependency.
+
+### Empty-file Open and stale-selection correctness
+
+- Added a zero-byte `nested-dir/empty.txt` fixture and exercised both activation paths: single-click followed by the Open button, and double-click directly on the file.
+- Each route checks the exact active document pathname and verifies `doc_length == 0`. The single-click route then types one byte, presses Ctrl+S, and verifies that the exact empty file now contains only that byte.
+- Strengthened the selection/search state so keyboard movement refreshes the filename field from the newly highlighted regular file. Open confirmation uses the current explicit prefix-match state; when a typed prefix has no match, an older row selection is not silently reused.
+- A successful edited-path navigation returns focus to the directory list. That keeps subsequent typing in the filename/search field rather than unexpectedly extending the location field.
+
+### Mouse scrolling and checkbox interaction
+
+- Routed the core Wayland `wl_pointer.axis` vertical-axis event into the picker. Smooth 24.8 fixed-point deltas are accumulated and converted into list-row movement without discarding fractional remainder.
+- Added a proportional scrollbar thumb, track click/drag behavior, and a drag-state visual. The directory list remains capped at 128 entries with 15 rows visible at a time.
+- Added a regression fixture with more than two viewport pages. It checks wheel-down by three rows, drag-to-bottom, and wheel-up by one row.
+- The first checkbox revision left only the small box clickable; the label is now clickable too. Each new dialog starts with hidden files disabled, and the checkbox has a bordered square with a visible check mark when enabled.
+- The scrollbar test harness was corrected to honor Wayland buffer lifetime: it releases the shared-memory frame after the drag redraw before requesting the separate pointer-release redraw. Earlier timeout/SIGPIPE failures were test-side buffer-release ordering, not a failure of wheel movement or thumb dragging.
+
+### Editable location and filename/search fields
+
+- The location and filename fields now have explicit byte cursors. Clicking positions the cursor at the nearest visible character; the text viewport follows the cursor horizontally when the field is longer than the available width.
+- Both fields support insertion at the cursor, Left/Right, Home/End, Backspace, forward Delete, and Ctrl+A replacement. The UI draws the caret and a field-selection highlight.
+- In Open mode, the filename field is labeled **SEARCH** and performs case-insensitive prefix matching against regular files in the current in-memory directory listing. A match selects and scrolls the first matching file into view. No match clears the previous selection; the text remains available as a literal path/name input rather than reusing an unrelated old row.
+- In Save mode, the field remains **FILE NAME** and retains relative/absolute Save As and overwrite confirmation behavior.
+- The path field can be edited in the middle and committed with Enter to navigate to that directory. The path is still passed directly to filesystem syscalls; no shell command or external file manager is involved.
+
+### Regression tests and verification
+
+- The expanded Wayland workflow verifies both zero-byte activation routes and the exact active path/document length, then checks typing and Ctrl+S against that same file.
+- The same test sequence verifies wheel scrolling, proportional thumb geometry, thumb dragging, location-field mouse-positioned insertion and Backspace, explicit path navigation, filename prefix selection, mid-string insertion and Backspace, Home/End/Left, forward Delete, Ctrl+A replacement, and Enter opening the exact matching empty file.
+- GitHub Actions [Build and test #235](https://github.com/GraderGamer2/NekoEdit/actions/runs/42239055258) passed **all eight workflow steps** on head commit [`d071d832dbbf`](https://github.com/GraderGamer2/NekoEdit/commit/d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49): toolchain inspection, freestanding x86-64 build and ELF checks, CLI smoke tests, the full Wayland mock-compositor integration suite, executable inspection, and artifact upload.
+- Run #235 exercised both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET` test transports. The file-workflow observation confirms zero-byte Open through single-click/Open and double-click, wheel scrolling, scrollbar dragging, editable path navigation, cursor-based filename edits, Ctrl+A replacement, and filename prefix search.
+- Artifact: `nekoedit-linux-x86_64`, 27,216 bytes, artifact ID `13515385312`, SHA-256 `1afeefccb7c594100137e91538d30c0d8e661d026be964c956871c5a9eb64175`, expires 2026-11-13 15:00:57 UTC. [Download from Actions run #235](https://github.com/GraderGamer2/NekoEdit/actions/runs/42239055258/artifacts/13515385312).
+- Intermediate runs #224–#234 include failed or cancelled attempts while the tests were being calibrated. They exposed the BSS zero-initialization requirement, stale hidden-file test state, field-navigation focus handling, and Wayland shared-memory buffer-release ordering. The passing #235 result is the validation for the consolidated state; the intermediate history remains in GitHub Actions.
+
+### Remaining limits and manual validation
+
+- Path and filename editing remains ASCII-only. Non-ASCII filesystem names remain usable as raw filename bytes in the listing and filesystem calls, but non-ASCII typed input and Unicode glyph display are not supported.
+- Clipboard paste is not implemented; it requires the Wayland data-device protocol and belongs in a separate clipboard milestone. There is no Shift-based partial text selection in these picker fields; Ctrl+A selects the whole field.
+- Filename search is a case-insensitive prefix search over the current directory's loaded regular-file entries. It is not recursive, fuzzy, or an on-disk search index. Listings remain capped at 128 entries (15 visible rows).
+- The picker does not follow symbolic links, does not ask before discarding an edited document on Open, and does not yet provide file filters, bookmarks, or incremental large-directory enumeration.
+- CI uses a mock Wayland compositor. No real GNOME Wayland desktop smoke test has been performed for this updated picker. The prior shifted-symbol keyboard report also remains awaiting manual confirmation against a current artifact.
+
+### Scope and commits
+
+- The supported launch form remains `./nekoedit --backend=wayland`; the Makefile build output remains `./build/nekoedit`.
+- The code and tests added no third-party runtime or shared-library dependency. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged; no change was made to `main`.
+- The picker/scroll/edit/test commits from 2026-11-06 14:39–15:00 UTC are individually recorded in [`COMMIT_INDEX.md`](COMMIT_INDEX.md).
+
+---
+
 ## 2026-11-06 — Complete and stabilize the native directory-browser file picker
 
 **Purpose:** Resume NekoEdit development from the repository's existing picker implementation, inspect the active source and regression tests, and bring the native Open/Save directory browser to a fully passing automated integration state without changing the established launch command or adding runtime dependencies.

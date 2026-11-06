@@ -332,6 +332,37 @@ Actions runs #199–#207 include failed intermediate attempts while the picker r
 |---|---|---|
 | 2026-11-06 14:20:00 UTC | [`c9e18b744a14`](https://github.com/GraderGamer2/NekoEdit/commit/c9e18b744a14bd719a4aec838d21b596a5213062) | docs: mark native file picker as implemented |
 
+
+## Empty-file Open, scrollable picker, checkbox and editable path/search fields
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 14:39:48 UTC | [`79761ed700db`](https://github.com/GraderGamer2/NekoEdit/commit/79761ed700dbc9a5bfc4064a3e5cca8e60361b1b) | test: verify Open and Save round-trip for zero-byte files |
+| 2026-11-06 14:41:10 UTC | [`429eef086a9d`](https://github.com/GraderGamer2/NekoEdit/commit/429eef086a9dfb2a91eb40bd043bf539379c575c) | test: account for zero-byte fixture in nested listing |
+| 2026-11-06 14:42:05 UTC | [`4cf865d21fbc`](https://github.com/GraderGamer2/NekoEdit/commit/4cf865d21fbc38f7a9563f2c67001f3d01d16d9b) | feat: add mouse-wheel scrolling and picker scrollbar |
+| 2026-11-06 14:42:40 UTC | [`df575667ea47`](https://github.com/GraderGamer2/NekoEdit/commit/df575667ea4767fa98245fefcc65aff4df25bca5) | fix: zero-initialize picker scrollbar cache in BSS |
+| 2026-11-06 14:43:18 UTC | [`e12bb4dc2e27`](https://github.com/GraderGamer2/NekoEdit/commit/e12bb4dc2e27dd979e9762c5c70971bf0771547f) | test: cover empty-file activation and picker mouse scrolling |
+| 2026-11-06 14:43:48 UTC | [`5d8212440bd0`](https://github.com/GraderGamer2/NekoEdit/commit/5d8212440bd043342fdb623a27b67f1910bbbc6c) | fix: keep show-hidden label clickable with checkbox |
+| 2026-11-06 14:44:44 UTC | [`fe3335d43b1a`](https://github.com/GraderGamer2/NekoEdit/commit/fe3335d43b1ac66878d1fb5f9174824e82f08c4f) | fix: start each picker session with hidden files disabled |
+| 2026-11-06 14:44:51 UTC | [`d044efc0a867`](https://github.com/GraderGamer2/NekoEdit/commit/d044efc0a86701a3eebd9748f10a197c2d055c2c) | test: use per-session hidden-file default in picker workflows |
+| 2026-11-06 14:45:44 UTC | [`4567749452b8`](https://github.com/GraderGamer2/NekoEdit/commit/4567749452b804632acc4a20b6d91f30bf071f1a) | test: restore zero-byte fixture before double-click Open |
+| 2026-11-06 14:48:53 UTC | [`3eb232e3283f`](https://github.com/GraderGamer2/NekoEdit/commit/3eb232e3283ff960e7c913942f1e08467a43fda8) | test: expose pointer state for scrollbar drag diagnostics |
+| 2026-11-06 14:48:58 UTC | [`f0dbce284126`](https://github.com/GraderGamer2/NekoEdit/commit/f0dbce284126f5671c9351957d4d4a1d9825d7fd) | test: diagnose scrollbar thumb press and drag state |
+| 2026-11-06 14:50:00 UTC | [`72705b1518ab`](https://github.com/GraderGamer2/NekoEdit/commit/72705b1518ab4d8189eb2e6bb0a31d133bb4528f) | test: release Wayland buffer between scrollbar drag frames |
+| 2026-11-06 14:52:28 UTC | [`f377fc8b589d`](https://github.com/GraderGamer2/NekoEdit/commit/f377fc8b589dd85056999324f85f54552e887242) | feat: add cursor editing and filename prefix search helpers |
+| 2026-11-06 14:53:25 UTC | [`b9ed6279c693`](https://github.com/GraderGamer2/NekoEdit/commit/b9ed6279c69353af2cd339e897358f7271d13c94) | feat: make picker path and name fields cursor-editable |
+| 2026-11-06 14:54:12 UTC | [`01007757a7e2`](https://github.com/GraderGamer2/NekoEdit/commit/01007757a7e234be30b3f32d232da993589df4fc) | feat: render editable path and filename search fields with carets |
+| 2026-11-06 14:55:15 UTC | [`5854454963ac`](https://github.com/GraderGamer2/NekoEdit/commit/5854454963ac6f901d2b2a06e62dd05d06e087a2) | test: acknowledge scrollbar thumb release redraw |
+| 2026-11-06 14:56:07 UTC | [`47e54b727421`](https://github.com/GraderGamer2/NekoEdit/commit/47e54b72742159d8df213505f73fdcbc71f58bf7) | fix: align picker selection helper stack before filename refresh |
+| 2026-11-06 14:56:40 UTC | [`f48657c2c097`](https://github.com/GraderGamer2/NekoEdit/commit/f48657c2c097d5917df37e90b791e3b8ccf5a8c6) | test: cover editable path and searchable filename fields |
+| 2026-11-06 14:57:16 UTC | [`347d030a5647`](https://github.com/GraderGamer2/NekoEdit/commit/347d030a5647f14a0fb8f9644c9cf0893eecba28) | fix: refresh picker path cursor after explicit navigation |
+| 2026-11-06 14:57:22 UTC | [`c6fa43b22a9f`](https://github.com/GraderGamer2/NekoEdit/commit/c6fa43b22a9f0b60b9b327d0d9d1e821803d32a9) | test: inspect picker current directory after path navigation |
+| 2026-11-06 14:58:07 UTC | [`9b27b4892a4f`](https://github.com/GraderGamer2/NekoEdit/commit/9b27b4892a4fad5900ccfe95c291d643512d7a8a) | test: verify filename Home End and forward Delete editing |
+| 2026-11-06 14:58:36 UTC | [`89038d2ac801`](https://github.com/GraderGamer2/NekoEdit/commit/89038d2ac8017c7cedecd800529a399f68e705ca) | fix: return picker focus to list after path navigation |
+| 2026-11-06 15:00:42 UTC | [`d071d832dbbf`](https://github.com/GraderGamer2/NekoEdit/commit/d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49) | test: release dragged scrollbar frame before pointer-up redraw |
+
+Actions run #235 passed all eight workflow steps on `d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49`, including zero-byte Open via both UI routes, mouse-axis scrolling, scrollbar drag, editable path navigation and filename prefix search/cursor regression cases. See the Phase K entry in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for artifact and validation details.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
