@@ -268,8 +268,25 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 key_step(1009, 103, "cursor up")
                 key_step(1010, 108, "cursor down")
 
-                # The remaining document must be "b\\n2": Backspace removed
-                # a, then Enter and digit 2 formed a second line.
+                # Shift state comes from wl_keyboard.modifiers rather than
+                # depending only on the physical Shift key event.
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1011, 1011, 42, 1))
+                    + wire_message(16, 4, struct.pack("<IIIII", 1012, 1, 0, 0, 0))
+                    + wire_message(16, 3, struct.pack("<IIII", 1013, 1013, 2, 1))
+                )
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "shifted key attach")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "shifted key damage")
+                expect_message(client, (8, 6, b""), "shifted key commit")
+                client.sendall(
+                    wire_message(12, 0)
+                    + wire_message(16, 3, struct.pack("<IIII", 1014, 1014, 42, 0))
+                    + wire_message(16, 4, struct.pack("<IIIII", 1015, 0, 0, 0, 0))
+                )
+
+                # The remaining document must be "b\\n2!": Backspace removed
+                # a, Enter and digit 2 formed the second line, and Shift+1
+                # produced the exclamation mark.
                 first_line = [
                     struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
                     for x in range(16, 24)
@@ -281,8 +298,10 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     )
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("expected digit 2 was not rendered on the second line")
-                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0] != 0xFFFFFFFF:
-                    raise AssertionError("document caret was not rendered at the second-line cursor")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 25 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("Shift+1 did not render an exclamation mark")
+                if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                    raise AssertionError("document caret was not rendered after the shifted character")
                 observations.append(
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
                 )
