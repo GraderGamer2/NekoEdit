@@ -26,6 +26,11 @@
 .equ O_TRUNC,            512
 .equ O_CLOEXEC,       0x80000
 .equ FILE_SAVE_FLAGS, (O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC)
+.equ SYS_fsync,         74
+.equ SYS_getpid,        39
+.equ SYS_renameat,     264
+.equ SYS_unlinkat,     263
+.equ O_EXCL,           128
 .equ SOL_SOCKET,         1
 .equ SCM_RIGHTS,         1
 .equ WIDTH,            800
@@ -41,6 +46,7 @@
 .equ REPEAT_NS_PER_SECOND, 1000000000
 .equ REPEAT_MAX_RATE, 1000
 .equ DOC_CAPACITY,    65536
+.equ PATH_CAPACITY,    4096
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
@@ -58,6 +64,14 @@ ui_app_name:           .asciz "NekoEdit"
 ui_mode_error:         .asciz "SAVE ERR"
 ui_document_name:      .asciz "Untitled"
 ui_mode_name:          .asciz "ASCII"
+ui_file_label:         .asciz "File"
+ui_menu_open_label:    .asciz "Open"
+ui_menu_save_label:    .asciz "Save"
+ui_menu_save_as_label: .asciz "Save As"
+ui_prompt_open_title:  .asciz "OPEN FILE PATH"
+ui_prompt_save_title:  .asciz "SAVE AS PATH"
+ui_prompt_help:        .asciz "ENTER: CONFIRM   ESC: CANCEL"
+ui_open_error:         .asciz "OPEN ERR"
 ui_label_line:         .asciz "Ln "
 ui_label_column:       .asciz ", Col "
 ui_label_bytes:        .asciz "Bytes "
@@ -217,7 +231,19 @@ doc_cursor:             .long 0
 doc_buffer:             .zero DOC_CAPACITY
 current_file_path:      .quad 0
 doc_save_error:         .long 0
+doc_open_error:         .long 0
+file_menu_open:         .long 0
+path_prompt_mode:       .long 0
+path_prompt_length:     .long 0
 file_probe_byte:        .byte 0
+.balign 8
+save_target_path:       .quad 0
+.balign 16
+path_prompt_buffer:     .zero PATH_CAPACITY
+current_path_buffer:    .zero PATH_CAPACITY
+load_buffer:            .zero DOC_CAPACITY
+temp_path_buffer:       .zero PATH_CAPACITY
+temp_pid_digits:        .zero 16
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
@@ -847,8 +873,54 @@ wayland_main:
 .pointer_button_press:
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
+    # A path prompt is modal: clicking through it must never reposition the
+    # document caret or insert text into the document.
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
+    # The File control is part of the application header.
+    cmp edx, 32
+    jae .pointer_menu_rows
+    cmp eax, 104
+    jb .pointer_header_outside
+    cmp eax, 160
+    jae .pointer_header_outside
+    xor dword ptr [rip + file_menu_open], 1
+    jmp .keyboard_changed
+.pointer_header_outside:
+    cmp dword ptr [rip + file_menu_open], 0
+    je .pointer_document_click
+    mov dword ptr [rip + file_menu_open], 0
+    jmp .keyboard_changed
+.pointer_menu_rows:
+    cmp dword ptr [rip + file_menu_open], 1
+    jne .pointer_document_click
+    cmp eax, 104
+    jb .pointer_menu_outside
+    cmp eax, 232
+    jae .pointer_menu_outside
+    cmp edx, 32
+    jb .pointer_menu_outside
+    cmp edx, 112
+    jae .pointer_menu_outside
+    mov dword ptr [rip + file_menu_open], 0
+    cmp edx, 60
+    jb .pointer_menu_open
+    cmp edx, 84
+    jb .pointer_menu_save
+    jmp .pointer_menu_save_as
+.pointer_menu_open:
+    call start_open_prompt
+    jmp .keyboard_changed
+.pointer_menu_save:
+    call save_current_document
+    jmp .keyboard_changed
+.pointer_menu_save_as:
+    call start_save_as_prompt
+    jmp .keyboard_changed
+.pointer_menu_outside:
+    mov dword ptr [rip + file_menu_open], 0
 .pointer_document_click:
     cmp edx, DOC_TOP
     jl .event_loop
@@ -1015,13 +1087,29 @@ wayland_main:
 .keyboard_non_modifier:
     test edx, edx
     jz .event_loop
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .keyboard_path_prompt
     cmp dword ptr [rip + ctrl_down], 0
     je .keyboard_unmodified
+    cmp eax, 24
+    je .keyboard_open_command
     cmp eax, 30
     je .keyboard_select_all
     cmp eax, 31
-    je .keyboard_save
+    jne .event_loop
+    cmp dword ptr [rip + shift_down], 0
+    jne .keyboard_save_as_command
+    cmp qword ptr [rip + current_file_path], 0
+    je .keyboard_save_as_command
+    jmp .keyboard_save
 .keyboard_unmodified:
+    cmp eax, 1
+    jne .keyboard_unmodified_dispatch
+    cmp dword ptr [rip + file_menu_open], 0
+    je .event_loop
+    mov dword ptr [rip + file_menu_open], 0
+    jmp .keyboard_changed
+.keyboard_unmodified_dispatch:
     cmp eax, 105
     je .keyboard_left
     cmp eax, 106
@@ -1051,9 +1139,57 @@ wayland_main:
     mov edi, r12d
     call doc_insert_byte
     jmp .keyboard_changed
+.keyboard_open_command:
+    call start_open_prompt
+    jmp .keyboard_changed
+.keyboard_save_as_command:
+    call start_save_as_prompt
+    jmp .keyboard_changed
 .keyboard_save:
     call save_document_file
     jmp .keyboard_changed
+
+# The path editor owns all non-modifier keys while its prompt is visible.
+.keyboard_path_prompt:
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .event_loop
+    cmp eax, 1
+    je .keyboard_path_escape
+    cmp eax, 28
+    je .keyboard_path_enter
+    cmp eax, 14
+    je .keyboard_path_backspace
+    mov edi, eax
+    call keycode_to_ascii
+    test eax, eax
+    jz .event_loop
+    mov ecx, dword ptr [rip + path_prompt_length]
+    cmp ecx, PATH_CAPACITY - 1
+    jae .event_loop
+    lea rdx, [rip + path_prompt_buffer]
+    mov byte ptr [rdx + rcx], al
+    inc ecx
+    mov dword ptr [rip + path_prompt_length], ecx
+    mov byte ptr [rdx + rcx], 0
+    jmp .keyboard_changed
+.keyboard_path_backspace:
+    mov ecx, dword ptr [rip + path_prompt_length]
+    test ecx, ecx
+    jz .event_loop
+    dec ecx
+    mov dword ptr [rip + path_prompt_length], ecx
+    lea rdx, [rip + path_prompt_buffer]
+    mov byte ptr [rdx + rcx], 0
+    jmp .keyboard_changed
+.keyboard_path_escape:
+    call repeat_cancel
+    call cancel_path_prompt
+    jmp .keyboard_changed
+.keyboard_path_enter:
+    call repeat_cancel
+    call confirm_path_prompt
+    jmp .keyboard_changed
+
 .keyboard_select_all:
     # Ctrl+A selects the full document using the same anchor/cursor model
     # as Shift+navigation and pointer dragging.
@@ -1429,68 +1565,372 @@ set_active_document_name:
     ret
 .size set_active_document_name, . - set_active_document_name
 
-# Save the current byte buffer to its launch-time path. O_TRUNC is deliberately
-# simple for this first file-I/O milestone; atomic replacement comes later.
+# Save the active document. Untitled is routed to the in-window Save As
+# prompt by its caller; this routine deliberately refuses a null path.
 .type save_document_file, @function
 save_document_file:
+    mov rdi, qword ptr [rip + current_file_path]
+    test rdi, rdi
+    jz .save_file_no_path
+    jmp save_document_to_path
+.save_file_no_path:
+    mov dword ptr [rip + doc_save_error], 1
+    mov eax, -2
+    ret
+.size save_document_file, . - save_document_file
+
+# Atomically replace PATH with the current document. The temporary is created
+# in the destination directory (exclusive create), fully written, fsynced,
+# closed, then renamed over the target. A failed write never truncates target.
+.type save_document_to_path, @function
+save_document_to_path:
+    mov qword ptr [rip + save_target_path], rdi
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, rdi
+    test r12, r12
+    jz .save_atomic_error
+    cmp byte ptr [r12], 0
+    je .save_atomic_error
+
+    # Keep the temporary beside the destination so renameat stays on one FS.
+    xor r14d, r14d
+    mov rsi, r12
+.save_atomic_scan_path:
+    mov al, byte ptr [rsi]
+    test al, al
+    jz .save_atomic_path_scanned
+    inc rsi
+    cmp al, '/'
+    jne .save_atomic_scan_path
+    mov r14, rsi
+    sub r14, r12
+    jmp .save_atomic_scan_path
+.save_atomic_path_scanned:
+    cmp r14d, PATH_CAPACITY - 32
+    ja .save_atomic_error
+    lea rdi, [rip + temp_path_buffer]
+    mov rsi, r12
+    mov rcx, r14
+    rep movsb
+    mov r13, rdi
+    lea rsi, [rip + temp_prefix]
+    mov ecx, temp_prefix_end - temp_prefix
+    rep movsb
+    mov r13, rdi
+
+    mov eax, SYS_getpid
+    syscall
+    test rax, rax
+    js .save_atomic_error
+    lea rdi, [rip + temp_pid_digits + 15]
+    mov byte ptr [rdi], 0
+    mov ecx, 10
+.save_atomic_pid_digits:
+    xor edx, edx
+    div ecx
+    add dl, '0'
+    dec rdi
+    mov byte ptr [rdi], dl
+    test eax, eax
+    jnz .save_atomic_pid_digits
+    mov rsi, rdi
+    mov rdi, r13
+    lea rdx, [rip + temp_pid_digits + 15]
+    sub rdx, rsi
+    mov rcx, rdx
+    rep movsb
+    mov r13, rdi
+    lea rsi, [rip + temp_suffix]
+    mov ecx, temp_suffix_end - temp_suffix
+    rep movsb
+    mov byte ptr [rdi], 0
+
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    mov edx, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC
+    mov r10d, 0644
+    syscall
+    test rax, rax
+    js .save_atomic_error
+    mov ebx, eax
+    lea r12, [rip + doc_buffer]
+    mov ebp, dword ptr [rip + doc_length]
+.save_atomic_write:
+    test ebp, ebp
+    jz .save_atomic_fsync
+    mov eax, SYS_write
+    mov edi, ebx
+    mov rsi, r12
+    mov edx, ebp
+    syscall
+    test rax, rax
+    jg .save_atomic_advance
+    cmp rax, -4
+    je .save_atomic_write
+    jmp .save_atomic_close_error
+.save_atomic_advance:
+    add r12, rax
+    sub ebp, eax
+    jmp .save_atomic_write
+.save_atomic_fsync:
+    mov eax, SYS_fsync
+    mov edi, ebx
+    syscall
+    cmp rax, -4
+    je .save_atomic_fsync
+    test rax, rax
+    js .save_atomic_close_error
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+    test rax, rax
+    js .save_atomic_unlink_error
+    mov ebx, -1
+
+    mov eax, SYS_renameat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    mov edx, AT_FDCWD
+    mov r10, qword ptr [rip + save_target_path]
+    syscall
+    test rax, rax
+    js .save_atomic_unlink_error
+    mov dword ptr [rip + doc_save_error], 0
+    xor eax, eax
+    jmp .save_atomic_return
+
+.save_atomic_close_error:
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+    mov ebx, -1
+.save_atomic_unlink_error:
+    mov eax, SYS_unlinkat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + temp_path_buffer]
+    xor edx, edx
+    syscall
+    jmp .save_atomic_error
+.save_atomic_error:
+    mov dword ptr [rip + doc_save_error], 1
+    mov eax, -5
+.save_atomic_return:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size save_document_to_path, . - save_document_to_path
+
+# Open a replacement document into a scratch buffer first. The live document,
+# path, and tab label are changed only after EOF and a successful close.
+.type load_document_from_path, @function
+load_document_from_path:
     push rbx
     push r12
     push r13
     push r14
-    mov r12, qword ptr [rip + current_file_path]
+    mov r12, rdi
     test r12, r12
-    jz .save_file_error
+    jz .load_path_error
+    cmp byte ptr [r12], 0
+    je .load_path_error
     mov eax, SYS_openat
     mov edi, AT_FDCWD
     mov rsi, r12
-    mov edx, FILE_SAVE_FLAGS
-    mov r10d, 0644
+    xor edx, edx
+    xor r10d, r10d
     syscall
     test rax, rax
-    js .save_file_error
+    js .load_path_error
     mov ebx, eax
-    lea r12, [rip + doc_buffer]
-    mov r13d, dword ptr [rip + doc_length]
-.save_file_write:
-    test r13d, r13d
-    jz .save_file_close
-    mov eax, SYS_write
+    xor r13d, r13d
+.load_path_read:
+    cmp r13d, DOC_CAPACITY
+    jae .load_path_probe
+    mov eax, SYS_read
     mov edi, ebx
-    mov rsi, r12
-    mov rdx, r13
+    lea rsi, [rip + load_buffer]
+    add rsi, r13
+    mov edx, DOC_CAPACITY
+    sub edx, r13d
     syscall
     test rax, rax
-    jg .save_file_advance
-    cmp rax, -4                  # EINTR
-    je .save_file_write
-    jmp .save_file_close_error
-.save_file_advance:
-    add r12, rax
-    sub r13, rax
-    jmp .save_file_write
-.save_file_close:
+    jg .load_path_advance
+    je .load_path_close
+    cmp rax, -4
+    je .load_path_read
+    jmp .load_path_close_error
+.load_path_advance:
+    add r13, rax
+    jmp .load_path_read
+.load_path_probe:
+    mov eax, SYS_read
     mov edi, ebx
+    lea rsi, [rip + file_probe_byte]
+    mov edx, 1
+    syscall
+    test rax, rax
+    jg .load_path_close_error
+    je .load_path_close
+    cmp rax, -4
+    je .load_path_probe
+    jmp .load_path_close_error
+.load_path_close:
     mov eax, SYS_close
+    mov edi, ebx
     syscall
     test rax, rax
-    js .save_file_error
+    js .load_path_error
+    lea rsi, [rip + load_buffer]
+    lea rdi, [rip + doc_buffer]
+    mov ecx, r13d
+    rep movsb
+    mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_cursor], 0
+    mov dword ptr [rip + doc_view_top_row], 0
+    mov dword ptr [rip + doc_selection_active], 0
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov dword ptr [rip + doc_selection_start], 0
+    mov dword ptr [rip + doc_selection_end], 0
     mov dword ptr [rip + doc_save_error], 0
+    mov dword ptr [rip + doc_open_error], 0
     xor eax, eax
-    jmp .save_file_return
-.save_file_close_error:
-    mov edi, ebx
+    jmp .load_path_return
+.load_path_close_error:
     mov eax, SYS_close
+    mov edi, ebx
     syscall
-.save_file_error:
-    mov dword ptr [rip + doc_save_error], 1
+.load_path_error:
+    mov dword ptr [rip + doc_open_error], 1
     mov eax, -5
-.save_file_return:
+.load_path_return:
     pop r14
     pop r13
     pop r12
     pop rbx
     ret
-.size save_document_file, . - save_document_file
+.size load_document_from_path, . - load_document_from_path
+
+.type start_open_prompt, @function
+start_open_prompt:
+    mov edi, 1
+    jmp begin_path_prompt
+.size start_open_prompt, . - start_open_prompt
+
+.type start_save_as_prompt, @function
+start_save_as_prompt:
+    mov edi, 2
+    jmp begin_path_prompt
+.size start_save_as_prompt, . - start_save_as_prompt
+
+.type begin_path_prompt, @function
+begin_path_prompt:
+    mov dword ptr [rip + path_prompt_mode], edi
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    ret
+.size begin_path_prompt, . - begin_path_prompt
+
+.type cancel_path_prompt, @function
+cancel_path_prompt:
+    mov dword ptr [rip + path_prompt_mode], 0
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    ret
+.size cancel_path_prompt, . - cancel_path_prompt
+
+# Commit the entered path only after the corresponding file operation succeeds.
+.type commit_path_prompt, @function
+commit_path_prompt:
+    push r12
+    lea rsi, [rip + path_prompt_buffer]
+    lea rdi, [rip + current_path_buffer]
+    mov ecx, dword ptr [rip + path_prompt_length]
+    rep movsb
+    mov byte ptr [rdi], 0
+    lea r12, [rip + current_path_buffer]
+    mov qword ptr [rip + current_file_path], r12
+    call set_active_document_name
+    mov dword ptr [rip + path_prompt_mode], 0
+    mov dword ptr [rip + path_prompt_length], 0
+    mov byte ptr [rip + path_prompt_buffer], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+    pop r12
+    ret
+.size commit_path_prompt, . - commit_path_prompt
+
+.type confirm_path_prompt, @function
+confirm_path_prompt:
+    push rbp
+    cmp dword ptr [rip + path_prompt_length], 0
+    je .confirm_path_error
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .confirm_path_save
+    lea rdi, [rip + path_prompt_buffer]
+    call load_document_from_path
+    test rax, rax
+    js .confirm_path_failed
+    call commit_path_prompt
+    xor eax, eax
+    pop rbp
+    ret
+.confirm_path_save:
+    lea rdi, [rip + path_prompt_buffer]
+    call save_document_to_path
+    test rax, rax
+    js .confirm_path_failed
+    call commit_path_prompt
+    xor eax, eax
+    pop rbp
+    ret
+.confirm_path_error:
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .confirm_path_save_error
+    mov dword ptr [rip + doc_open_error], 1
+    mov eax, -2
+    pop rbp
+    ret
+.confirm_path_save_error:
+    mov dword ptr [rip + doc_save_error], 1
+    mov eax, -2
+    pop rbp
+    ret
+.confirm_path_failed:
+    mov eax, -5
+    pop rbp
+    ret
+.size confirm_path_prompt, . - confirm_path_prompt
+
+.type save_current_document, @function
+save_current_document:
+    cmp qword ptr [rip + current_file_path], 0
+    je .save_current_prompt
+    jmp save_document_file
+.save_current_prompt:
+    jmp start_save_as_prompt
+.size save_current_document, . - save_current_document
+
+.section .rodata
+temp_prefix: .ascii ".nekoedit-"
+temp_prefix_end:
+temp_suffix: .ascii ".tmp"
+temp_suffix_end:
+.section .text
 
 # Print a NUL-terminated string to stderr. Input: RSI = string.
 .type write_stderr_cstr, @function
@@ -1969,15 +2409,38 @@ render_surface:
     call draw_text
     cmp dword ptr [rip + doc_save_error], 0
     jne .render_save_error
+    cmp dword ptr [rip + doc_open_error], 0
+    jne .render_open_error
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_save_error
     mov edi, 744
     mov esi, 12
     lea rdx, [rip + ui_mode_name]
     call draw_text
-    jmp .render_document_tab
+    jmp .render_file_button
+.render_open_error:
+    mov edi, 704
+    mov esi, 12
+    lea rdx, [rip + ui_open_error]
+    call draw_text
+    jmp .render_file_button
 .render_save_error:
     mov edi, 720
     mov esi, 12
     lea rdx, [rip + ui_mode_error]
+    call draw_text
+
+.render_file_button:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 104
+    mov edx, 4
+    mov ecx, 48
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 112
+    mov esi, 12
+    lea rdx, [rip + ui_file_label]
     call draw_text
 
 .render_document_tab:
@@ -2004,6 +2467,8 @@ render_surface:
     call render_selection
     call render_document
     call render_status_bar
+    call render_file_menu
+    call render_path_prompt
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -2936,6 +3401,123 @@ render_status_bar:
     pop rbp
     ret
 .size render_status_bar, . - render_status_bar
+
+.type render_file_menu, @function
+render_file_menu:
+    cmp dword ptr [rip + file_menu_open], 1
+    jne .render_file_menu_done
+    push rbp
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 104
+    mov edx, 32
+    mov ecx, 128
+    mov r8d, 80
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov edi, 116
+    mov esi, 42
+    lea rdx, [rip + ui_menu_open_label]
+    call draw_text
+    mov edi, 116
+    mov esi, 66
+    lea rdx, [rip + ui_menu_save_label]
+    call draw_text
+    mov edi, 116
+    mov esi, 90
+    lea rdx, [rip + ui_menu_save_as_label]
+    call draw_text
+    pop rbp
+.render_file_menu_done:
+    ret
+.size render_file_menu, . - render_file_menu
+
+.type render_path_prompt, @function
+render_path_prompt:
+    cmp dword ptr [rip + path_prompt_mode], 0
+    je .render_path_prompt_done
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, 148
+    mov ecx, 704
+    mov r8d, 176
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, 148
+    mov ecx, 704
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
+    cmp dword ptr [rip + path_prompt_mode], 1
+    jne .render_path_prompt_save_title
+    mov edi, 72
+    mov esi, 160
+    lea rdx, [rip + ui_prompt_open_title]
+    call draw_text
+    jmp .render_path_prompt_entry
+.render_path_prompt_save_title:
+    mov edi, 72
+    mov esi, 160
+    lea rdx, [rip + ui_prompt_save_title]
+    call draw_text
+.render_path_prompt_entry:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 72
+    mov edx, 204
+    mov ecx, 656
+    mov r8d, 36
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov r12d, dword ptr [rip + path_prompt_length]
+    xor r14d, r14d
+    cmp r12d, 76
+    jbe .render_path_prompt_start_ready
+    mov r14d, r12d
+    sub r14d, 76
+.render_path_prompt_start_ready:
+    lea rbx, [rip + path_prompt_buffer]
+    add rbx, r14
+    mov r13d, 96
+    xor r12d, r12d
+.render_path_prompt_chars:
+    cmp r12d, 76
+    jae .render_path_prompt_caret
+    movzx edx, byte ptr [rbx]
+    test edx, edx
+    jz .render_path_prompt_caret
+    mov edi, r13d
+    mov esi, 218
+    call draw_glyph
+    inc rbx
+    add r13d, CELL_WIDTH
+    inc r12d
+    jmp .render_path_prompt_chars
+.render_path_prompt_caret:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r13d
+    mov edx, 216
+    mov ecx, 1
+    mov r8d, 12
+    mov r9d, 0xffffffff
+    call draw_rect
+    mov edi, 72
+    mov esi, 264
+    lea rdx, [rip + ui_prompt_help]
+    call draw_text
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+.render_path_prompt_done:
+    ret
+.size render_path_prompt, . - render_path_prompt
 
 
 # Paint selected document cells before glyphs and the caret are rendered.

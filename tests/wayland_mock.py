@@ -73,6 +73,7 @@ def run(
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
+    file_workflow: bool = False,
 ) -> None:
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
@@ -89,6 +90,11 @@ def run(
         server.settimeout(8)
     observations = []
     errors = []
+    if file_workflow:
+        with open(os.path.join(runtime_dir, "relative-open.txt"), "wb") as document:
+            document.write(b"I")
+        with open(os.path.join(runtime_dir, "oversized.txt"), "wb") as document:
+            document.write(b"x" * 65537)
 
     def fake_compositor():
         client = None
@@ -97,7 +103,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(8)
+            client.settimeout(20 if file_workflow else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -285,6 +291,199 @@ def run(
                         )
                         + wire_message(12, 0)
                     )
+
+                def workflow_redraw(label: str) -> None:
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+
+                def workflow_click(x: int, y: int, serial: int, label: str) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
+                        )
+                    )
+                    workflow_redraw(label)
+                    client.sendall(
+                        wire_message(
+                            15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
+                        )
+                        + wire_message(12, 0)
+                    )
+
+                def workflow_shortcut(serial: int, code: int, label: str, shift: bool = False) -> None:
+                    events = wire_message(16, 3, struct.pack("<IIII", serial, serial, 29, 1))
+                    if shift:
+                        events += wire_message(
+                            16, 3, struct.pack("<IIII", serial + 1, serial + 1, 42, 1)
+                        )
+                    events += wire_message(
+                        16, 3,
+                        struct.pack("<IIII", serial + (2 if shift else 1),
+                                    serial + (2 if shift else 1), code, 1)
+                    )
+                    client.sendall(events)
+                    workflow_redraw(label)
+                    releases = wire_message(
+                        16, 3,
+                        struct.pack("<IIII", serial + 3, serial + 3, code, 0)
+                    )
+                    if shift:
+                        releases += wire_message(
+                            16, 3, struct.pack("<IIII", serial + 4, serial + 4, 42, 0)
+                        )
+                    releases += wire_message(
+                        16, 3,
+                        struct.pack("<IIII", serial + 5, serial + 5, 29, 0)
+                    )
+                    client.sendall(releases + wire_message(12, 0))
+
+                evdev = {
+                    "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33,
+                    "g": 34, "h": 35, "i": 23, "j": 36, "k": 37, "l": 38,
+                    "m": 50, "n": 49, "o": 24, "p": 25, "q": 16, "r": 19,
+                    "s": 31, "t": 20, "u": 22, "v": 47, "w": 17, "x": 45,
+                    "y": 21, "z": 44, "0": 11, "1": 2, "2": 3, "3": 4,
+                    "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
+                    ".": 52, "/": 53, "-": 12,
+                }
+
+                def workflow_type_path(value: str, serial: int) -> int:
+                    for character in value:
+                        if character not in evdev:
+                            raise AssertionError(f"test path uses unsupported key: {character!r}")
+                        key_step(serial, evdev[character], f"path character {character!r}")
+                        serial += 2
+                    return serial
+
+                if file_workflow:
+                    # The File control must be visible even when the process
+                    # starts with --backend=wayland and no document path.
+                    file_pixels = [
+                        struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                        for y in range(12, 20) for x in range(112, 144)
+                    ]
+                    if 0xFFD8DEE9 not in file_pixels:
+                        raise AssertionError("the File menu control was not rendered in the header")
+                    observations.append("visible File menu header control")
+
+                    # Ctrl+S on Untitled opens Save As. Correct a mistyped final
+                    # character with Backspace, then confirm a relative path.
+                    key_step(2000, evdev["h"], "type first Untitled character")
+                    key_step(2002, evdev["i"], "type second Untitled character")
+                    workflow_shortcut(2010, 31, "Ctrl+S opens Save As for Untitled")
+                    serial = workflow_type_path("created.txz", 2020)
+                    key_step(serial, 14, "path prompt Backspace")
+                    key_step(serial + 2, evdev["t"], "correct Save As path")
+                    key_step(serial + 4, 28, "confirm Untitled Save As")
+                    with open(os.path.join(runtime_dir, "created.txt"), "rb") as saved:
+                        if saved.read() != b"hi":
+                            raise AssertionError("Ctrl+S on Untitled did not create the selected file")
+                    observations.append("Ctrl+S on Untitled opened Save As; relative path and Backspace worked")
+
+                    # The now-named document saves in place with Ctrl+S.
+                    key_step(serial + 6, evdev["c"], "edit named document")
+                    workflow_shortcut(serial + 8, 31, "Ctrl+S saves named document")
+                    with open(os.path.join(runtime_dir, "created.txt"), "rb") as saved:
+                        if saved.read() != b"hic":
+                            raise AssertionError("Ctrl+S did not update the active named file")
+
+                    # Open is available from the pointer-operated File menu.
+                    workflow_click(120, 12, 2100, "open File menu")
+                    workflow_click(120, 44, 2110, "select File > Open")
+                    serial = workflow_type_path("relative-open.txz", 2120)
+                    key_step(serial, 14, "Open path Backspace")
+                    key_step(serial + 2, evdev["t"], "correct Open path")
+                    key_step(serial + 4, 28, "confirm Open")
+                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                        raise AssertionError("Open did not render the selected file's first character")
+                    observations.append("File > Open loaded a real relative-path document without restarting")
+
+                    # Replace the opened one-character document and save it.
+                    workflow_shortcut(serial + 6, 30, "Ctrl+A before named-file edit")
+                    key_step(serial + 14, evdev["z"], "replace opened document")
+                    workflow_shortcut(serial + 16, 31, "Ctrl+S after Open")
+                    with open(os.path.join(runtime_dir, "relative-open.txt"), "rb") as saved:
+                        if saved.read() != b"z":
+                            raise AssertionError("Ctrl+S after Open did not target the opened file")
+
+                    # Exercise Save from the clickable menu as well.
+                    key_step(serial + 22, evdev["a"], "append before menu Save")
+                    workflow_click(120, 12, 2200, "reopen File menu")
+                    workflow_click(120, 68, 2210, "select File > Save")
+                    with open(os.path.join(runtime_dir, "relative-open.txt"), "rb") as saved:
+                        if saved.read() != b"za":
+                            raise AssertionError("File > Save did not write the active document")
+
+                    # Menu Save As changes the active path only after success.
+                    workflow_click(120, 12, 2220, "open File menu for Save As")
+                    workflow_click(120, 92, 2230, "select File > Save As")
+                    serial = workflow_type_path("menu-saveas.txt", serial + 30)
+                    key_step(serial, 28, "confirm menu Save As")
+                    key_step(serial + 2, evdev["b"], "edit after menu Save As")
+                    workflow_shortcut(serial + 4, 31, "Ctrl+S after menu Save As")
+                    with open(os.path.join(runtime_dir, "menu-saveas.txt"), "rb") as saved:
+                        if saved.read() != b"zab":
+                            raise AssertionError("menu Save As did not change the active destination")
+
+                    # Ctrl+Shift+S accepts an absolute path.
+                    absolute_path = os.path.join(runtime_dir, "absolute-save.txt")
+                    workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S opens Save As", shift=True)
+                    serial = workflow_type_path(absolute_path, serial + 20)
+                    key_step(serial, 28, "confirm absolute Save As")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zab":
+                            raise AssertionError("Save As did not create the selected absolute path")
+                    key_step(serial + 2, evdev["c"], "edit absolute-path document")
+                    workflow_shortcut(serial + 4, 31, "Ctrl+S after absolute Save As")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zabc":
+                            raise AssertionError("Ctrl+S did not use the absolute Save As path")
+                    observations.append("File > Save, File > Save As, Ctrl+Shift+S, and absolute paths verified")
+
+                    # A failed Open and an over-limit Open must leave the active
+                    # bytes/path untouched; Escape dismisses either prompt.
+                    workflow_shortcut(serial + 10, 24, "Ctrl+O opens path prompt")
+                    serial = workflow_type_path("missing-file.txt", serial + 20)
+                    key_step(serial, 28, "confirm missing-file Open")
+                    key_step(serial + 2, 1, "Escape failed Open prompt")
+                    key_step(serial + 4, evdev["d"], "edit after failed Open")
+                    workflow_shortcut(serial + 6, 31, "save after failed Open")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zabcd":
+                            raise AssertionError("failed Open changed the active document or its save path")
+
+                    workflow_shortcut(serial + 12, 24, "Ctrl+O before oversized file")
+                    serial = workflow_type_path("oversized.txt", serial + 22)
+                    key_step(serial, 28, "reject file larger than 64 KiB")
+                    key_step(serial + 2, 1, "Escape oversized Open prompt")
+                    key_step(serial + 4, evdev["e"], "edit after oversized Open")
+                    workflow_shortcut(serial + 6, 31, "save after oversized Open")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zabcde":
+                            raise AssertionError("oversized Open damaged the active document")
+
+                    # Cancel Save As after entering a path; the active destination
+                    # must remain the absolute path from the prior successful save.
+                    workflow_shortcut(serial + 12, 31, "Ctrl+Shift+S before cancellation", shift=True)
+                    serial = workflow_type_path("cancelled.txt", serial + 22)
+                    key_step(serial, 1, "Escape cancels Save As")
+                    key_step(serial + 2, evdev["f"], "edit after cancelling Save As")
+                    workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zabcdef":
+                            raise AssertionError("cancelled Save As changed the active destination")
+                    if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
+                        raise AssertionError("Escape unexpectedly created the cancelled Save As path")
+                    observations.append("failed/oversized Open preservation and Escape cancellation verified")
+
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if save_roundtrip:
                     # Keep this path-specific test independent from the full
@@ -921,7 +1120,8 @@ def run(
             pass_fds=pass_fds,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=10,
+            timeout=24 if file_workflow else 10,
+            cwd=runtime_dir if file_workflow else None,
             check=False,
         )
     finally:
@@ -975,3 +1175,7 @@ if __name__ == "__main__":
     # the 300 ms / 30 Hz compatibility fallback.
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
     run(sys.argv[1], send_protocol_error=True)
+    # Full File menu, Open, Save, and Save As interaction tests on both
+    # supported connection transports. The subprocess CWD is the fixture dir.
+    run(sys.argv[1], file_workflow=True)
+    run(sys.argv[1], use_wayland_socket=True, file_workflow=True)
