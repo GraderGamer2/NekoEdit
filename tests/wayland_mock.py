@@ -1277,6 +1277,13 @@ xkb_symbols "nekoedit-test" {
                 client.sendall(wire_message(10, 1))  # xdg_toplevel.close
         except Exception:
             errors.append(traceback.format_exc())
+            # Do not leave the client blocked in poll() after the mock has
+            # already failed; terminate it so the original compositor-side
+            # assertion is reported instead of a misleading subprocess timeout.
+            if process_holder:
+                child = process_holder[0]
+                if child.poll() is None:
+                    child.terminate()
         finally:
             if client is not None:
                 client.close()
