@@ -306,9 +306,22 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
                 )
 
-                def pointer_click(x: int, y: int, serial: int, label: str) -> None:
+                def pointer_click(
+                    x: int, y: int, serial: int, label: str, *, reenter: bool = False
+                ) -> None:
+                    if reenter:
+                        pointer_position = wire_message(
+                            15, 0, struct.pack("<IIii", serial, 8, x * 256, y * 256)
+                        )
+                        pointer_prefix = wire_message(15, 1, struct.pack("<II", serial - 1, 8))
+                    else:
+                        pointer_position = wire_message(
+                            15, 2, struct.pack("<Iii", serial, x * 256, y * 256)
+                        )
+                        pointer_prefix = b""
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        pointer_prefix
+                        + pointer_position
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
@@ -332,7 +345,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 if first_line_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret after first-line text")
 
-                pointer_click(18, 182, 1110, "mouse caret second-line start")
+                pointer_click(18, 182, 1110, "mouse caret second-line start", reenter=True)
                 second_line_start = struct.unpack_from(
                     "<I", pixels, 176 * 800 * 4 + 16 * 4
                 )[0]
@@ -355,7 +368,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                         f"column_pixels={{{", ".join(f"{x}: {[hex(v) for v in values]}" for x, values in second_line_probe.items())}}}, candidates={{{", ".join(f"{key}: {hex(value)}" for key, value in row_caret_candidates.items())}}}"
                     )
 
-                pointer_click(26, 182, 1120, "mouse caret between characters")
+                pointer_click(26, 182, 1120, "mouse caret between characters", reenter=True)
                 between_chars = struct.unpack_from(
                     "<I", pixels, 176 * 800 * 4 + 24 * 4
                 )[0]
