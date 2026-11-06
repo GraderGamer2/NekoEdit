@@ -1306,11 +1306,27 @@ xkb_symbols "nekoedit-sparse" {
                         or name_state.get("picker_selected") < 0
                     ):
                         raise AssertionError(f"filename Backspace did not restore the prefix match: {name_state!r}")
-                    workflow_shortcut(serial + 34, 30, "Ctrl+A selects filename search text")
+                    key_step(serial + 34, 102, "Home moves filename cursor to the start")
+                    key_step(serial + 36, 106, "Right moves filename cursor forward")
+                    key_step(serial + 38, 107, "End moves filename cursor to the end")
+                    key_step(serial + 40, 105, "Left moves filename cursor back one")
+                    name_state = picker_state()
+                    if name_state.get("picker_name_cursor") != 4:
+                        raise AssertionError(f"Home/End/Left did not position the filename cursor: {name_state!r}")
+                    key_step(serial + 42, 102, "Home before forward Delete")
+                    key_step(serial + 44, 111, "Delete removes the character at the filename cursor")
+                    name_state = picker_state()
+                    if (
+                        name_state.get("picker_name_buffer") != b"mpty"
+                        or name_state.get("picker_name_match") != 0
+                        or name_state.get("picker_selected") != -1
+                    ):
+                        raise AssertionError(f"forward Delete did not update filename search state: {name_state!r}")
+                    workflow_shortcut(serial + 46, 30, "Ctrl+A selects filename search text")
                     name_state = picker_state()
                     if name_state.get("picker_edit_select_all") != 1:
                         raise AssertionError(f"Ctrl+A did not select the filename field: {name_state!r}")
-                    serial = workflow_type_path("empty", serial + 44)
+                    serial = workflow_type_path("empty", serial + 56)
                     name_state = picker_state()
                     if (
                         name_state.get("picker_name_buffer") != b"empty"
