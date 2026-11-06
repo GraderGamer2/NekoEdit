@@ -1676,7 +1676,9 @@ registry_capture_global:
     mov eax, dword ptr [rip + event_payload + 4]
     add eax, 3
     and eax, -4
-    mov edx, dword ptr [rip + event_payload + 8 + rax]
+    lea rdi, [rip + event_payload + 8]
+    add rdi, rax
+    mov edx, dword ptr [rdi]
     cmp edx, 4
     jbe .Lneko_seat_version_ready
     mov edx, 4
