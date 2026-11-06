@@ -249,10 +249,10 @@ def run(
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
                 keymap_data = b"xkb_keymap { };\0"
-                keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
+                    keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
                     client.sendmsg(
                         [keymap_event],
                         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", keymap_fd))],
