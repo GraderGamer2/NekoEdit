@@ -740,17 +740,23 @@ def run(
                 expect_redraw("initial held printable key")
                 client.sendall(wire_message(12, 0))
                 after_press = caret_position()
-                if after_press != (before[0] + 8, before[1]):
+                # Ctrl+A left the complete document selected, so this first
+                # character must replace it and restart at the document origin.
+                if after_press != (24, 164):
                     raise AssertionError(
-                        f"initial printable press did not advance one cell: before={before}, after={after_press}"
+                        f"initial printable press did not replace the selection at document start: "
+                        f"before={before}, after={after_press}"
                     )
                 expect_redraw("first repeated printable key")
                 client.sendall(wire_message(12, 0))
                 after_repeat = caret_position()
-                if after_repeat != (after_press[0] + 8, after_press[1]):
+                if after_repeat != (32, 164):
                     raise AssertionError(
-                        f"held printable key did not repeat: after_press={after_press}, after_repeat={after_repeat}"
+                        f"held printable key did not repeat into the next cell: "
+                        f"after_press={after_press}, after_repeat={after_repeat}"
                     )
+                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                    raise AssertionError("repeated printable-key test did not render its first glyph")
                 client.sendall(
                     wire_message(16, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
                     + wire_message(12, 0)
