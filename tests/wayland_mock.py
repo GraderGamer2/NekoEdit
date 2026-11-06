@@ -886,7 +886,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -894,9 +894,13 @@ xkb_symbols "nekoedit-sparse" {
                             fd = memory.fileno()
                             result: dict[str, object] = {}
                             for name, address in picker_symbols.items():
-                                if name in {"picker_name_buffer", "doc_buffer"}:
-                                    size = 64 if name == "picker_name_buffer" else 8
-                                    result[name] = os.pread(fd, size, address)
+                                if name in {"picker_name_buffer", "doc_buffer", "current_path_buffer", "picker_target_buffer"}:
+                                    size = 64 if name in {"picker_name_buffer", "doc_buffer"} else 256
+                                    result[name] = os.pread(fd, size, address).split(b"\\0", 1)[0]
+                                elif name == "current_file_path":
+                                    pointer = struct.unpack("<Q", os.pread(fd, 8, address))[0]
+                                    result[name] = pointer
+                                    result["active_path"] = os.pread(fd, 4096, pointer).split(b"\\0", 1)[0] if pointer else b""
                                 else:
                                     result[name] = struct.unpack("<i", os.pread(fd, 4, address))[0]
                             return result
@@ -978,8 +982,12 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(serial + 10, 31, "Ctrl+S after nested Open")
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
                     with open(nested_file, "rb") as saved:
-                        if saved.read() != b"z":
-                            raise AssertionError("Ctrl+S after picker Open did not save the nested file")
+                        saved_bytes = saved.read()
+                    if saved_bytes != b"z":
+                        raise AssertionError(
+                            "Ctrl+S after picker Open did not save the nested file; "
+                            f"disk={saved_bytes!r}, state={picker_state()!r}"
+                        )
 
                     # Exercise File > Save as well.
                     key_step(serial + 16, evdev["a"], "append before File > Save")
