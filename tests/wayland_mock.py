@@ -364,7 +364,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     }
                     pointer_debug = [
                         struct.unpack_from("<I", pixels, 470 * 800 * 4 + x * 4)[0] & 0x00FFFFFF
-                        for x in range(700, 705)
+                        for x in range(700, 708)
                     ]
                     raise AssertionError(
                         "mouse click did not place caret at second-line start; "
