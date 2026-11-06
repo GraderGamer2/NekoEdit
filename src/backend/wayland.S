@@ -3027,10 +3027,11 @@ picker_handle_pointer:
     jb .picker_pointer_up
     cmp r12d, 160
     jb .picker_pointer_home
-    cmp r12d, 710
+    cmp r12d, 600
     jb .picker_pointer_list
     cmp r12d, 740
     jae .picker_pointer_list
+    # Both the checkbox and its label are clickable.
     xor dword ptr [rip + picker_show_hidden], 1
     call picker_scan_directory
     jmp .picker_pointer_done
