@@ -993,7 +993,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
-                if save_roundtrip:
+                if save_roundtrip and not (utf8_edit_test or utf8_delete_test or utf8_invalid_test):
                     # Keep this path-specific test independent from the full
                     # empty-document editor interaction suite below.
                     client.sendall(
