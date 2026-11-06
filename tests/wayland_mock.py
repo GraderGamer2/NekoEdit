@@ -694,9 +694,26 @@ def run(
                     "<I", pixels, bottom_row_y * 800 * 4 + 17 * 4
                 )[0]
                 if scrolled_glyph != 0xFFD8DEE9:
+                    visible_carets = []
+                    for candidate_y in range(92, 460 - 9, 12):
+                        for candidate_x in range(16, 800 - 1, 8):
+                            if all(
+                                struct.unpack_from(
+                                    "<I", pixels, (candidate_y + dy) * 800 * 4 + candidate_x * 4
+                                )[0] == 0xFFFFFFFF
+                                for dy in range(9)
+                            ):
+                                visible_carets.append((candidate_x, candidate_y))
+                    sampled_rows = [
+                        (candidate_y, hex(struct.unpack_from(
+                            "<I", pixels, candidate_y * 800 * 4 + 17 * 4
+                        )[0]))
+                        for candidate_y in range(92, 460, 12)
+                    ]
                     raise AssertionError(
                         "text/caret did not scroll into the visible bottom row after vertical overflow; "
-                        f"pixel={hex(scrolled_glyph)}"
+                        f"pixel={hex(scrolled_glyph)}, visible_carets={visible_carets}, "
+                        f"row_samples={sampled_rows}"
                     )
                 bottom_caret = struct.unpack_from(
                     "<I", pixels, bottom_row_y * 800 * 4 + 24 * 4
