@@ -1170,6 +1170,9 @@ xkb_symbols "nekoedit-sparse" {
                         "zero-byte file Open reset the document, activated the exact path, and saved back to that file"
                     )
 
+                    # Restore a zero-byte on-disk fixture before repeating Open.
+                    with open(empty_file, "wb") as empty_document:
+                        empty_document.write(b"")
                     # Repeat the zero-byte Open through the double-click route.
                     workflow_shortcut(serial + 30, 24, "Ctrl+O before double-click empty file")
                     open_picker_from_menu(serial + 40, "double-click empty-file picker")
