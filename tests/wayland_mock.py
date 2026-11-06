@@ -121,6 +121,8 @@ def run(
             document.write(b"N")
         with open(os.path.join(runtime_dir, "nested-dir", ".hidden-note"), "wb") as document:
             document.write(b"H")
+        with open(os.path.join(runtime_dir, "nested-dir", "empty.txt"), "wb") as document:
+            document.write(b"")
 
     def fake_compositor():
         client = None
@@ -1107,6 +1109,40 @@ xkb_symbols "nekoedit-sparse" {
                     if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
                         raise AssertionError("Escape unexpectedly created the cancelled Save As path")
                     observations.append("missing/oversized Open rollback, failed Save As rollback, and Escape cancellation verified")
+
+                    # A zero-byte text file must replace the current document
+                    # with an actually empty buffer and commit its own exact path.
+                    workflow_shortcut(serial + 10, 24, "Ctrl+O before zero-byte file")
+                    open_picker_from_menu(serial + 20, "zero-byte file picker")
+                    serial = double_click_picker_row(120, 139, serial + 40, "enter directory for zero-byte file")
+                    # Hidden files remain visible across picker sessions; turn
+                    # them off so empty.txt is the first regular-file row.
+                    workflow_click(720, 110, serial, "hide dotfiles before zero-byte Open")
+                    serial += 10
+                    workflow_click(160, 139, serial, "select zero-byte empty.txt")
+                    workflow_click(716, 410, serial + 10, "Open selected zero-byte empty.txt")
+                    empty_file = os.path.join(runtime_dir, "nested-dir", "empty.txt")
+                    empty_state = picker_state()
+                    if (
+                        empty_state.get("active_path") != empty_file.encode()
+                        or empty_state.get("doc_length") != 0
+                        or empty_state.get("doc_save_error") != 0
+                    ):
+                        raise AssertionError(
+                            "opening a zero-byte file did not activate an empty document; "
+                            f"state={empty_state!r}"
+                        )
+                    key_step(serial + 20, evdev["e"], "type into opened zero-byte document")
+                    workflow_shortcut(serial + 22, 31, "Ctrl+S saves zero-byte file after typing")
+                    with open(empty_file, "rb") as saved:
+                        if saved.read() != b"e":
+                            raise AssertionError(
+                                "saving after opening a zero-byte file wrote to the wrong target "
+                                "or retained stale document bytes"
+                            )
+                    observations.append(
+                        "zero-byte file Open reset the document, activated the exact path, and saved back to that file"
+                    )
 
                     client.sendall(wire_message(10, 1))
                     return
