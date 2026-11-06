@@ -114,22 +114,22 @@ def run(binary: str) -> None:
                     raise AssertionError(f"unexpected bind arguments: {message!r}")
                 observations.append(f"bind:{interface.decode()}")
 
-            expect_message(client, (1, 0, struct.pack("<I", 11)), "bind sync")
-            client.sendall(wire_message(11, 0, struct.pack("<I", 2)))
+            expect_message(client, (1, 0, struct.pack("<I", 7)), "bind sync")
+            client.sendall(wire_message(7, 0, struct.pack("<I", 2)))
 
-            expect_message(client, (4, 0, struct.pack("<I", 7)), "create wl_surface")
-            expect_message(client, (6, 2, struct.pack("<II", 8, 7)), "get_xdg_surface")
-            expect_message(client, (8, 1, struct.pack("<I", 9)), "get_toplevel")
+            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
+            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
+            expect_message(client, (9, 1, struct.pack("<I", 10)), "get_toplevel")
             title = recv_wayland_message(client)
-            if title[0:2] != (9, 2) or title[3]:
+            if title[0:2] != (10, 2) or title[3]:
                 raise AssertionError(f"unexpected set_title request: {title!r}")
             title_len = struct.unpack_from("<I", title[2])[0]
             if title[2][4 : 4 + title_len] != b"NekoEdit - development window\0":
                 raise AssertionError("window title was not serialized as a Wayland string")
-            expect_message(client, (7, 6, b""), "initial surface commit")
+            expect_message(client, (8, 6, b""), "initial surface commit")
 
-            client.sendall(wire_message(8, 0, struct.pack("<I", 1234)))
-            expect_message(client, (8, 4, struct.pack("<I", 1234)), "ack_configure")
+            client.sendall(wire_message(9, 0, struct.pack("<I", 1234)))
+            expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
 
             pool = recv_wayland_message(client)
             if pool[0:2] != (5, 0) or len(pool[3]) != 1:
@@ -158,12 +158,12 @@ def run(binary: str) -> None:
                 "create wl_buffer",
             )
             expect_message(client, (10, 1, b""), "destroy shm pool")
-            expect_message(client, (7, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
-            expect_message(client, (7, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
-            expect_message(client, (7, 6, b""), "map surface")
+            expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
+            expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
+            expect_message(client, (8, 6, b""), "map surface")
             observations.append("memfd+SCM_RIGHTS buffer verified")
 
-            client.sendall(wire_message(9, 1))  # xdg_toplevel.close
+            client.sendall(wire_message(10, 1))  # xdg_toplevel.close
         except Exception:
             errors.append(traceback.format_exc())
         finally:
