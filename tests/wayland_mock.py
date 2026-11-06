@@ -252,16 +252,25 @@ def run(
                 keymap_data = b"xkb_keymap { };\0"
                 keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
                 if send_invalid_keymap:
-                    # XKB_V1 without its required SCM_RIGHTS descriptor must
-                    # be rejected instead of silently falling back to read().
-                    client.sendall(keymap_event)
-                    previous_timeout = client.gettimeout()
-                    client.settimeout(1.0)
+                    # XKB_V1 with an impossible zero-byte map must be rejected.
+                    # If the client ignores it, close the window so the test
+                    # exits normally and can report the missing rejection.
+                    invalid_fd = os.memfd_create("nekoedit-invalid-keymap", 0)
                     try:
-                        if client.recv(1) != b"":
+                        client.sendmsg(
+                            [wire_message(16, 0, struct.pack("<II", 1, 0))],
+                            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", invalid_fd))],
+                        )
+                    finally:
+                        os.close(invalid_fd)
+                    previous_timeout = client.gettimeout()
+                    client.settimeout(0.5)
+                    try:
+                        received = client.recv(1)
+                        if received:
                             raise AssertionError("NekoEdit unexpectedly wrote data for a malformed keymap")
-                    except socket.timeout as error:
-                        raise AssertionError("NekoEdit did not reject an XKB keymap event without its FD") from error
+                    except socket.timeout:
+                        client.sendall(wire_message(10, 1))
                     finally:
                         client.settimeout(previous_timeout)
                     return
