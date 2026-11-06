@@ -133,6 +133,7 @@
 .Lxkb_group:            .long 0
 .Lxkb_level:            .long 0
 .Lxkb_type_flags:       .long 0
+.Lxkb_key_block_first:  .long 0
 .Lxkb_symbol_count:     .long 0
 .Lxkb_number:           .long 0
 .Lxkb_keyname_tmp:      .zero 4
@@ -165,6 +166,7 @@ xkb_reset_keymap:
     mov ecx, 256
     rep stosb
     mov dword ptr [rip + xkb_keymap_ready], 0
+    mov dword ptr [rip + .Lxkb_key_block_first], 0
     mov dword ptr [rip + .Lxkb_symbol_count], 0
     pop rcx
     pop rdi
@@ -784,6 +786,20 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_parse_symbol_array, . - .Lxkb_parse_symbol_array
 
+# Parse the shorthand XKB form: key <NAME> { [ symbol, shifted_symbol ] }.
+# The opening '[' has already been consumed. Reuse the same bounded symbol
+# array parser with Group1 and level zero as the starting position.
+.type .Lxkb_parse_inline_symbol_array, @function
+.Lxkb_parse_inline_symbol_array:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov dword ptr [rip + .Lxkb_group], 0
+    mov dword ptr [rip + .Lxkb_level], 0
+    jmp .Lxkb_symbol_array_loop
+.size .Lxkb_parse_inline_symbol_array, . - .Lxkb_parse_inline_symbol_array
+
 # Parse attributes inside one key <NAME> { ... } block.
 .type .Lxkb_parse_key_block, @function
 .Lxkb_parse_key_block:
@@ -792,12 +808,22 @@ xkb_reset_keymap:
     push r13
     push r14
     push r15
+    mov dword ptr [rip + .Lxkb_key_block_first], 1
 .Lxkb_key_block_loop:
     call .Lxkb_next_token
     test eax, eax
     jz .Lxkb_key_block_fail
     cmp eax, '}'
     je .Lxkb_key_block_done
+    # xkbcomp emits common two-level keys in shorthand form:
+    # key <AE01> { [ 1, exclam ] };. Only treat '[' as symbols when it is
+    # the first token in the key block; later arrays may describe actions.
+    cmp dword ptr [rip + .Lxkb_key_block_first], 1
+    jne .Lxkb_key_block_not_first
+    mov dword ptr [rip + .Lxkb_key_block_first], 0
+    cmp eax, '['
+    je .Lxkb_key_block_inline_symbols
+.Lxkb_key_block_not_first:
     lea rdi, [rip + .Lxkb_word_type]
     call .Lxkb_token_is
     test eax, eax
@@ -824,6 +850,11 @@ xkb_reset_keymap:
     jmp .Lxkb_key_block_loop
 .Lxkb_key_block_symbols:
     call .Lxkb_parse_symbol_array
+    test eax, eax
+    js .Lxkb_key_block_fail
+    jmp .Lxkb_key_block_loop
+.Lxkb_key_block_inline_symbols:
+    call .Lxkb_parse_inline_symbol_array
     test eax, eax
     js .Lxkb_key_block_fail
     jmp .Lxkb_key_block_loop
@@ -934,8 +965,11 @@ xkb_reset_keymap:
     jne .Lxkb_symbols_skip_key_body
     jmp .Lxkb_symbols_loop
 .Lxkb_symbols_done:
-    cmp dword ptr [rip + .Lxkb_symbol_count], 0
-    je .Lxkb_symbols_fail
+    # Do not activate a partially understood map (for example one isolated
+    # punctuation key). Require a reasonable ASCII symbol population; normal
+    # desktop layouts contain many more entries than this minimum.
+    cmp dword ptr [rip + .Lxkb_symbol_count], 16
+    jb .Lxkb_symbols_fail
     mov dword ptr [rip + xkb_keymap_ready], 1
     xor eax, eax
     jmp .Lxkb_symbols_exit
