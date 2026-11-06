@@ -1688,115 +1688,111 @@ doc_place_cursor_from_pointer:
     push r14
     push r15
 
-    # Clamp the horizontal coordinate to the document's left edge and convert
-    # pixels to the nearest insertion column (one cell is eight pixels).
+    # Horizontal pixel position -> nearest insertion column.
     cmp edi, DOC_LEFT
-    jae .pointer_x_clamped
+    jae .pointer_x_ready
     mov edi, DOC_LEFT
-.pointer_x_clamped:
+.pointer_x_ready:
     sub edi, DOC_LEFT
     add edi, CELL_WIDTH / 2
     xor edx, edx
     mov ecx, CELL_WIDTH
     div ecx
-    mov r14d, eax                 # target visual column
+    mov r14d, eax                 # requested visual column
 
-    # Snap the vertical coordinate to the nearest 12-pixel line baseline.
+    # Vertical coordinate selects the row band containing the click.
     mov eax, esi
     sub eax, DOC_TOP
-    # Each rendered row owns its full 12-pixel band; do not round at the
-    # midpoint, which would send a normal center-of-glyph click to the next row.
     xor edx, edx
     mov ecx, LINE_HEIGHT
     div ecx
-    mov r15d, eax                 # target line
+    mov r15d, eax                 # requested line number
 
     lea r12, [rip + doc_buffer]
     mov r13d, dword ptr [rip + doc_length]
-    xor ebx, ebx                  # document byte offset
-    xor r8d, r8d                  # current line
+    xor ebx, ebx                  # byte offset
+    xor r10d, r10d                # current line
 
-.pointer_find_line:
-    cmp r8d, r15d
-    je .pointer_scan_line
+.pointer_line_search:
+    cmp r10d, r15d
+    je .pointer_line_found
     cmp ebx, r13d
-    jae .pointer_to_document_end
-    cmp byte ptr [r12 + rbx], 10
-    jne .pointer_find_line_next
-    inc r8d
-.pointer_find_line_next:
+    jae .pointer_end_of_document
+    movzx eax, byte ptr [r12 + rbx]
     inc ebx
-    jmp .pointer_find_line
+    cmp eax, 10
+    jne .pointer_line_search
+    inc r10d
+    jmp .pointer_line_search
 
-.pointer_scan_line:
-    xor r9d, r9d                  # visual column on this line
-.pointer_scan_character:
+.pointer_line_found:
+    xor r11d, r11d                # current visual column
+.pointer_character_scan:
     cmp ebx, r13d
-    jae .pointer_place_cursor
+    jae .pointer_store_cursor
     movzx eax, byte ptr [r12 + rbx]
     cmp eax, 10
-    je .pointer_place_cursor      # never place the caret past a newline
+    je .pointer_store_cursor     # line end: place before newline
     cmp eax, 9
-    je .pointer_tab
+    je .pointer_tab_character
     cmp eax, 32
     jb .pointer_skip_control
     cmp eax, 128
-    jb .pointer_ascii
+    jb .pointer_ascii_character
 
-    # Treat a UTF-8 leading byte as one display cell and skip its continuation
-    # bytes together so the cursor remains on valid code-point boundaries.
+    # UTF-8 leading byte: one display cell; skip any continuation bytes too.
     mov ecx, eax
     and ecx, 0xc0
     cmp ecx, 0x80
     je .pointer_skip_continuation
-    cmp r14d, r9d
-    jbe .pointer_place_cursor
-    inc r9d
+    cmp r14d, r11d
+    jbe .pointer_store_cursor
+    inc r11d
     inc ebx
-.pointer_skip_utf8_tail:
+.pointer_utf8_tail:
     cmp ebx, r13d
-    jae .pointer_check_column
+    jae .pointer_column_check
     movzx eax, byte ptr [r12 + rbx]
     and eax, 0xc0
     cmp eax, 0x80
-    jne .pointer_check_column
+    jne .pointer_column_check
     inc ebx
-    jmp .pointer_skip_utf8_tail
+    jmp .pointer_utf8_tail
 
-.pointer_ascii:
-    cmp r14d, r9d
-    jbe .pointer_place_cursor
-    inc r9d
+.pointer_ascii_character:
+    cmp r14d, r11d
+    jbe .pointer_store_cursor
+    inc r11d
     inc ebx
-    jmp .pointer_check_column
+    jmp .pointer_column_check
 
-.pointer_tab:
-    # A tab is four cells wide; choose the nearest edge of its span.
-    lea eax, [r9d + 2]
+.pointer_tab_character:
+    # A tab occupies four cells. Choose the nearest side of its full span.
+    lea eax, [r11d + 2]
     cmp r14d, eax
-    jb .pointer_place_cursor
-    add r9d, 4
+    jb .pointer_store_cursor
+    add r11d, 4
     inc ebx
-    jmp .pointer_check_column
+    jmp .pointer_column_check
 
 .pointer_skip_continuation:
     inc ebx
-    jmp .pointer_scan_character
+    jmp .pointer_character_scan
 .pointer_skip_control:
     inc ebx
-    jmp .pointer_scan_character
+    jmp .pointer_character_scan
 
-.pointer_check_column:
-    cmp r9d, r14d
-    jae .pointer_place_cursor
-    jmp .pointer_scan_character
+.pointer_column_check:
+    cmp r11d, r14d
+    jae .pointer_store_cursor
+    jmp .pointer_character_scan
 
-.pointer_place_cursor:
+.pointer_store_cursor:
     mov dword ptr [rip + doc_cursor], ebx
-    jmp .pointer_cursor_done
-.pointer_to_document_end:
+    jmp .pointer_done
+.pointer_end_of_document:
     mov dword ptr [rip + doc_cursor], r13d
-.pointer_cursor_done:
+.pointer_done:
     pop r15
     pop r14
     pop r13
