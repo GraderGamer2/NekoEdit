@@ -606,8 +606,31 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 )[0]
                 if removed_b != 0xFF252A33:
                     raise AssertionError("held Backspace did not repeat after its initial delay")
+                # Delete-forward uses the same delayed repeat path.
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1220, 1220, 111, 1))
+                )
+                expect_redraw("initial held Delete")
+                client.sendall(wire_message(12, 0))
+                first_cell = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 16 * 4
+                )[0]
+                if first_cell != 0xFF252A33:
+                    raise AssertionError("initial Delete did not remove the leading newline")
+
+                expect_redraw("repeated Delete")
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
+                    + wire_message(12, 0)
+                )
+                next_glyph = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 16 * 4
+                )[0]
+                if next_glyph != 0xFFD8DEE9:
+                    raise AssertionError("held Delete did not repeat after its initial delay")
+
                 observations.append(
-                    "keyboard auto-repeat used a 300 ms initial delay and repeated Left/Backspace while held"
+                    "keyboard auto-repeat used a 300 ms initial delay and repeated Left, Backspace, and Delete while held"
                 )
             finally:
                 if pixels is not None:
