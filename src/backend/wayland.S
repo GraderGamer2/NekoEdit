@@ -2315,13 +2315,18 @@ picker_build_target:
 .picker_build_name_loop:
     mov al, byte ptr [rsi + rdx]
     test al, al
-    jz .picker_build_target_done
+    jz .picker_build_name_done
     lea r8d, [rcx + rdx]
     cmp r8d, PATH_CAPACITY - 1
     jae .picker_build_target_error
     mov byte ptr [rdi + r8], al
     inc edx
     jmp .picker_build_name_loop
+.picker_build_name_done:
+    # The old target may have been longer; always terminate the new path.
+    lea r8d, [rcx + rdx]
+    mov byte ptr [rdi + r8], 0
+    jmp .picker_build_target_done
 .picker_build_absolute:
     mov rsi, r12
     xor ecx, ecx
