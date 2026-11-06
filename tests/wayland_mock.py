@@ -474,6 +474,7 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_ascii_levels",
                         "xkb_key_types",
                         "xkb_keymap_ready",
+                        "keymap_processing_complete",
                     }
                     for line in nm_text.splitlines():
                         fields = line.split()
@@ -490,6 +491,17 @@ xkb_symbols "nekoedit-sparse" {
                             return os.pread(
                                 mem_fd, size, symbol_addresses[name] + offset
                             )
+                        complete_deadline = time.monotonic() + 3.0
+                        complete = struct.unpack(
+                            "<I", child_memory("keymap_processing_complete", 0, 4)
+                        )[0]
+                        while complete != 1 and time.monotonic() < complete_deadline:
+                            time.sleep(0.001)
+                            complete = struct.unpack(
+                                "<I", child_memory("keymap_processing_complete", 0, 4)
+                            )[0]
+                        if complete != 1:
+                            raise AssertionError("XKB keymap parser did not finish processing")
                         ready = struct.unpack("<I", child_memory("xkb_keymap_ready", 0, 4))[0]
                         key_name = child_memory("xkb_key_names", 24 * 4, 4)
                         key_type = child_memory("xkb_key_types", 24, 1)
@@ -528,15 +540,31 @@ xkb_symbols "nekoedit-sparse" {
                         ["nm", "-n", binary], text=True
                     )
                     ready_address = None
+                    ready_address = None
+                    complete_address = None
                     for line in nm_text.splitlines():
                         fields = line.split()
-                        if len(fields) == 3 and fields[2] == "xkb_keymap_ready":
+                        if len(fields) != 3:
+                            continue
+                        if fields[2] == "xkb_keymap_ready":
                             ready_address = int(fields[0], 16)
-                            break
-                    if ready_address is None:
-                        raise AssertionError("xkb_keymap_ready symbol missing")
+                        elif fields[2] == "keymap_processing_complete":
+                            complete_address = int(fields[0], 16)
+                    if ready_address is None or complete_address is None:
+                        raise AssertionError("XKB parser state symbols missing")
                     mem_fd = os.open(f"/proc/{child.pid}/mem", os.O_RDONLY)
                     try:
+                        complete_deadline = time.monotonic() + 3.0
+                        parser_complete = struct.unpack(
+                            "<I", os.pread(mem_fd, 4, complete_address)
+                        )[0]
+                        while parser_complete != 1 and time.monotonic() < complete_deadline:
+                            time.sleep(0.001)
+                            parser_complete = struct.unpack(
+                                "<I", os.pread(mem_fd, 4, complete_address)
+                            )[0]
+                        if parser_complete != 1:
+                            raise AssertionError("sparse XKB parser did not finish processing")
                         parser_ready = struct.unpack(
                             "<I", os.pread(mem_fd, 4, ready_address)
                         )[0]

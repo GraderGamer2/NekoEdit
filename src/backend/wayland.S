@@ -218,6 +218,7 @@ level3_down:            .long 0
 event_fd:               .long 0       # initialized to -1 in wayland_main
 keymap_format:          .long 0
 keymap_size:            .long 0
+keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
 next_input_object:      .long 0
@@ -2366,6 +2367,7 @@ keyboard_keymap_update:
     push r12
     push r13
     push r14
+    mov dword ptr [rip + keymap_processing_complete], 0
     mov ebx, dword ptr [rip + event_fd]
     mov dword ptr [rip + event_fd], -1
     cmp ebx, 0
@@ -2426,10 +2428,12 @@ keyboard_keymap_update:
     test rax, rax
     js .keyboard_keymap_parser_fallback
     mov dword ptr [rip + keymap_format], 1
+    mov dword ptr [rip + keymap_processing_complete], 1
     xor eax, eax
     jmp .keyboard_keymap_done
 .keyboard_keymap_parser_fallback:
     mov dword ptr [rip + keymap_format], 0
+    mov dword ptr [rip + keymap_processing_complete], 1
     xor eax, eax
     jmp .keyboard_keymap_done
 
@@ -2439,6 +2443,7 @@ keyboard_keymap_update:
     mov eax, SYS_close
     syscall
     call xkb_reset_keymap
+    mov dword ptr [rip + keymap_processing_complete], 1
     xor eax, eax
     jmp .keyboard_keymap_done
 .keyboard_keymap_unmap_bad:
