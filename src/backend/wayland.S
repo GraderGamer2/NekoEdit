@@ -846,6 +846,339 @@ wayland_main:
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
     jmp .keyboard_changed
+.check_keyboard_event:
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .check_toplevel_close
+    cmp dword ptr [rip + last_object], eax
+    jne .check_toplevel_close
+    cmp dword ptr [rip + last_opcode], 1
+    je .keyboard_enter
+    cmp dword ptr [rip + last_opcode], 2
+    je .keyboard_leave
+    cmp dword ptr [rip + last_opcode], 3
+    je .keyboard_key
+    cmp dword ptr [rip + last_opcode], 4
+    je .keyboard_modifiers
+    cmp dword ptr [rip + last_opcode], 5
+    je .keyboard_repeat_info
+    # The XKB keymap FD is still deferred; modifier and repeat settings are
+    # consumed below so input follows the compositor's active configuration.
+    jmp .event_loop
+.event_repeat_timer:
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    lea rsi, [rip + repeat_timer_read]
+    mov edx, 8
+    call linux_read_exact
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + repeat_keycode], 0
+    je .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_repeat_cancel
+    mov eax, dword ptr [rip + repeat_keycode]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.event_repeat_cancel:
+    call repeat_cancel
+    jmp .event_loop
+
+.keyboard_repeat_info:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    # wl_keyboard.repeat_info(rate, delay). Negative values violate the
+    # protocol; a zero rate disables client-side repetition.
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    js .protocol_error
+    mov edx, dword ptr [rip + event_payload + 4]
+    test edx, edx
+    js .protocol_error
+    # Defend the timerfd path against pathological rates while preserving
+    # practical compositor settings (the normal desktop range is far lower).
+    cmp eax, REPEAT_MAX_RATE
+    jbe .Lneko_repeat_rate_capped
+    mov eax, REPEAT_MAX_RATE
+.Lneko_repeat_rate_capped:
+    mov dword ptr [rip + repeat_rate], eax
+    mov dword ptr [rip + repeat_delay_ms], edx
+    test eax, eax
+    jnz .Lneko_repeat_info_reconfigure
+    call repeat_cancel
+    jmp .event_loop
+.Lneko_repeat_info_reconfigure:
+    mov eax, dword ptr [rip + repeat_keycode]
+    test eax, eax
+    jz .event_loop
+    # A changed rate/delay takes effect for the currently held key too.
+    call repeat_start_if_supported
+    jmp .event_loop
+
+.keyboard_modifiers:
+    cmp dword ptr [rip + last_size], 20
+    jb .event_loop
+    # wl_keyboard.modifiers: serial, depressed, latched, locked, group.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    test eax, 1
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + shift_down], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    and eax, 2
+    shr eax, 1
+    mov dword ptr [rip + caps_lock], eax
+    # The standard XKB Control modifier is bit 2. Physical Ctrl key
+    # transitions below are also tracked so this works before a modifier
+    # update is delivered and when a compositor omits modifier events.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    and eax, 4
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + ctrl_down], eax
+    jmp .event_loop
+.keyboard_enter:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 4], 8
+    jne .event_loop
+    mov dword ptr [rip + keyboard_focused], 1
+    jmp .event_loop
+.keyboard_leave:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    mov dword ptr [rip + keyboard_focused], 0
+    mov dword ptr [rip + ctrl_down], 0
+    call repeat_cancel
+    jmp .event_loop
+.keyboard_key:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_loop
+    mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
+    mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
+    cmp eax, 29
+    je .keyboard_control
+    cmp eax, 97
+    je .keyboard_control
+    cmp eax, 42
+    je .keyboard_shift
+    cmp eax, 54
+    je .keyboard_shift
+    test edx, edx
+    jz .keyboard_key_release
+    cmp eax, 58
+    jne .keyboard_key_pressed
+    xor dword ptr [rip + caps_lock], 1
+    jmp .keyboard_changed
+.keyboard_key_pressed:
+    call repeat_start_if_supported
+    mov eax, dword ptr [rip + event_payload + 8]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.keyboard_key_release:
+    cmp eax, dword ptr [rip + repeat_keycode]
+    jne .event_loop
+    call repeat_cancel
+    jmp .event_loop
+.keyboard_shift:
+    mov dword ptr [rip + shift_down], edx
+    jmp .event_loop
+.keyboard_control:
+    mov dword ptr [rip + ctrl_down], edx
+    jmp .event_loop
+.keyboard_non_modifier:
+    test edx, edx
+    jz .event_loop
+    cmp dword ptr [rip + ctrl_down], 0
+    je .keyboard_unmodified
+    cmp eax, 30
+    je .keyboard_select_all
+.keyboard_unmodified:
+    cmp eax, 105
+    je .keyboard_left
+    cmp eax, 106
+    je .keyboard_right
+    cmp eax, 103
+    je .keyboard_up
+    cmp eax, 108
+    je .keyboard_down
+    cmp eax, 102
+    je .keyboard_home
+    cmp eax, 107
+    je .keyboard_end
+    cmp eax, 14
+    je .keyboard_backspace
+    cmp eax, 111
+    je .keyboard_delete
+    cmp eax, 28
+    je .keyboard_enter_key
+    cmp eax, 15
+    je .keyboard_tab
+    mov edi, eax
+    call keycode_to_ascii
+    test eax, eax
+    jz .event_loop
+    mov r12d, eax
+    call doc_delete_selection
+    mov edi, r12d
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_select_all:
+    # Ctrl+A selects the full document using the same anchor/cursor model
+    # as Shift+navigation and pointer dragging.
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_left:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_left_extend
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_left_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lneko_keyboard_left_collapse
+    mov eax, edx
+.Lneko_keyboard_left_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_left_plain:
+    cmp dword ptr [rip + doc_cursor], 0
+    je .event_loop
+    dec dword ptr [rip + doc_cursor]
+    jmp .keyboard_changed
+.Lneko_keyboard_left_extend:
+    call doc_begin_keyboard_selection
+    cmp dword ptr [rip + doc_cursor], 0
+    je .Lneko_keyboard_left_extend_finish
+    dec dword ptr [rip + doc_cursor]
+.Lneko_keyboard_left_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_right:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_right_extend
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lneko_keyboard_right_plain
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jae .Lneko_keyboard_right_collapse
+    mov eax, edx
+.Lneko_keyboard_right_collapse:
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_right_plain:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    inc dword ptr [rip + doc_cursor]
+    jmp .keyboard_changed
+.Lneko_keyboard_right_extend:
+    call doc_begin_keyboard_selection
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lneko_keyboard_right_extend_finish
+    inc dword ptr [rip + doc_cursor]
+.Lneko_keyboard_right_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.keyboard_up:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_up_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_up_plain:
+    xor edi, edi
+    call doc_move_vertical
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_down:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_down_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_down_plain:
+    mov edi, 1
+    call doc_move_vertical
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_home:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_home_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_home_plain:
+    xor edi, edi
+    call doc_move_line_edge
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_end:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_end_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_end_plain:
+    mov edi, 1
+    call doc_move_line_edge
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_backspace:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_backspace_selection
+    cmp dword ptr [rip + doc_cursor], 0
+    je .event_loop
+    dec dword ptr [rip + doc_cursor]
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.Lneko_keyboard_backspace_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
+.keyboard_delete:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_delete_selection
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.Lneko_keyboard_delete_selection:
+    call doc_delete_selection
+    jmp .keyboard_changed
+.keyboard_enter_key:
+    call doc_delete_selection
+    mov edi, 10
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_tab:
+    call doc_delete_selection
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
 .keyboard_changed:
     call doc_ensure_cursor_visible
     mov dword ptr [rip + redraw_pending], 1
