@@ -83,7 +83,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Editor window | 800×480 UI with header, File menu, active document tab, editor area, and live status bar |
 | Document storage | Fixed-capacity 64 KiB byte-oriented gap buffer; cursor/selection offsets remain logical byte offsets; no dynamic growth yet |
 | ASCII rendering | Embedded 5×7 glyphs for printable ASCII, including the full punctuation set |
-| Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, Shift/Caps, physical Right-Alt LevelThree, US fallback |
+| Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, ONE_LEVEL/ALPHABETIC/THREE_LEVEL/FOUR_LEVEL type families, Shift/Caps, physical Right-Alt LevelThree, US fallback |
 | Keyboard editing | ASCII input, Left/Right/Up/Down, Home/End, Backspace, Delete, Enter, four-space Tab |
 | Selection | Mouse drag, reverse/multiline selection, Shift navigation, Ctrl+A, replacement on typing/deletion |
 | Repeat | Compositor-configured repeat when available, legacy fallback otherwise |

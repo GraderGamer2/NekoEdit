@@ -13,6 +13,7 @@
 .Lxkb_word_key:         .asciz "key"
 .Lxkb_word_type:        .asciz "type"
 .Lxkb_word_symbols:     .asciz "symbols"
+.Lxkb_type_one_level:    .asciz "ONE_LEVEL"
 .Lxkb_type_alphabetic:  .asciz "ALPHABETIC"
 .Lxkb_type_four_level:  .asciz "FOUR_LEVEL"
 .Lxkb_type_eight_level: .asciz "EIGHT_LEVEL"
@@ -646,6 +647,15 @@ xkb_reset_keymap:
 .Lxkb_classify_type:
     push rbx
     xor ebx, ebx
+    # ONE_LEVEL key types ignore Shift, Lock, and LevelThree. Keep this
+    # distinction instead of treating every non-alphabetic type as TWO_LEVEL.
+    lea rdi, [rip + .Lxkb_type_one_level]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_type_check_alpha
+    mov ebx, 4
+    jmp .Lxkb_type_done
+.Lxkb_type_check_alpha:
     lea rdi, [rip + .Lxkb_type_alphabetic]
     call .Lxkb_token_contains
     test eax, eax
@@ -1064,6 +1074,10 @@ xkb_lookup_ascii:
 .Lxkb_group_in_range:
     lea rax, [rip + xkb_key_types]
     movzx eax, byte ptr [rax + r12]
+    # ONE_LEVEL has no modifier-selected alternatives. Do not try to read
+    # Level 2 when Shift or Caps Lock is active on a one-symbol key.
+    test eax, 4
+    jnz .Lxkb_level_one
     test eax, 1
     jz .Lxkb_caps_done
     xor r13d, r14d
@@ -1074,7 +1088,11 @@ xkb_lookup_ascii:
     test r15d, r15d
     jz .Lxkb_level_done
     add r13d, 2
+    jmp .Lxkb_level_ready
+.Lxkb_level_one:
+    xor r13d, r13d
 .Lxkb_level_done:
+.Lxkb_level_ready:
     mov eax, r12d
     shl eax, 4
     lea rdx, [rip + xkb_ascii_levels]

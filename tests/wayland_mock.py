@@ -329,6 +329,15 @@ xkb_keycodes "nekoedit-test" {
     <AE10> = 19;
     <AE11> = 20;
     <AE12> = 21;
+    <TLDE> = 49;
+    <AD11> = 26;
+    <AD12> = 27;
+    <AC10> = 39;
+    <AC11> = 40;
+    <AB08> = 51;
+    <AB09> = 52;
+    <AB10> = 53;
+    <KPDL> = 91;
     <AD01> = 24;
     <AD02> = 25;
     <AD03> = 26;
@@ -418,6 +427,18 @@ xkb_symbols "nekoedit-test" {
     key <AE10> { [ 0, parenright ] };
     key <AE11> { [ minus, underscore ] };
     key <AE12> { [ equal, plus ] };
+    key <TLDE> { [ grave, asciitilde ] };
+    key <AD11> { [ bracketleft, braceleft ] };
+    key <AD12> { [ bracketright, braceright ] };
+    key <AC10> { [ semicolon, colon ] };
+    key <AC11> { [ apostrophe, quotedbl ] };
+    key <AB08> { [ comma, less ] };
+    key <AB09> { [ period, greater ] };
+    key <AB10> { [ slash, question ] };
+    key <KPDL> {
+        type = "ONE_LEVEL",
+        symbols[Group1] = [ comma ]
+    };
     key <AB09> { [ period, greater ] };
 };
 };
@@ -819,13 +840,24 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1138, 11, "XKB shifted number-row key 11")
                     key_step(1140, 12, "XKB shifted number-row key 12")
                     key_step(1142, 13, "XKB shifted number-row key 13")
+                    # Cover the shifted punctuation rows as real key events,
+                    # not just the embedded glyph table. Shift remains active.
+                    key_step(1144, 41, "XKB shifted grave/tilde key")
+                    key_step(1146, 26, "XKB shifted bracket-left/brace-left key")
+                    key_step(1148, 27, "XKB shifted bracket-right/brace-right key")
+                    key_step(1150, 39, "XKB shifted semicolon/colon key")
+                    key_step(1152, 40, "XKB shifted apostrophe/quote key")
+                    key_step(1154, 51, "XKB shifted comma/less-than key")
+                    key_step(1156, 52, "XKB shifted period/greater-than key")
+                    key_step(1158, 53, "XKB shifted slash/question key")
+                    key_step(1160, 83, "XKB ONE_LEVEL keypad key ignores Shift")
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", 1180, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1200, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "XKB keycode +8 lookup, Group1/Group2, alphabetic Shift, Right-Alt LevelThree, and all twelve shorthand shifted number-row symbols verified"
+                        "XKB keycode +8 lookup, Group1/Group2, Shift/LevelThree, all twelve shifted number-row symbols, shifted punctuation rows, and ONE_LEVEL Shift handling verified"
                     )
                     return
 
@@ -1832,7 +1864,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+",
+            expected_saved_bytes=b"IaAq@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,",
             keyboard_layout_test=True,
         )
     finally:
