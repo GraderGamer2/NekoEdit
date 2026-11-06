@@ -76,6 +76,9 @@ def run(
     file_workflow: bool = False,
     keyboard_layout_test: bool = False,
     punctuation_render_test: bool = False,
+    utf8_edit_test: bool = False,
+    utf8_delete_test: bool = False,
+    utf8_invalid_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -252,13 +255,23 @@ def run(
                 # must not rewrite the shared memory while the compositor owns it.
                 client.sendall(
                     wire_message(12, 0)
-                    + wire_message(15, 0, struct.pack("<IIii", 777, 8, 98 * 256, 110 * 256))
+                    + wire_message(
+                        15, 0,
+                        struct.pack(
+                            "<IIii", 777, 8,
+                            (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98) * 256,
+                            110 * 256,
+                        ),
+                    )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                if not (sparse_keymap_test or punctuation_render_test):
+                if not (
+                    sparse_keymap_test or punctuation_render_test
+                    or utf8_edit_test or utf8_delete_test or utf8_invalid_test
+                ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
                         clicked_caret_x = 16 + clicked_caret_column * 8
@@ -1020,6 +1033,52 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if utf8_edit_test:
+                    # UTF-8 fixture: A + U+00E9 (2 bytes) + U+20AC (3 bytes)
+                    # + U+1F600 (4 bytes) + B. All cursor/edit operations must
+                    # preserve complete scalar boundaries.
+                    key_step(1300, 106, "Right over ASCII A")
+                    key_step(1302, 106, "Right over two-byte UTF-8 character")
+                    key_step(1304, 106, "Right over three-byte UTF-8 character")
+                    key_step(1306, 106, "Right over four-byte UTF-8 character")
+                    key_step(1310, 105, "Left over four-byte UTF-8 character")
+                    key_step(1312, 14, "Backspace removes previous three-byte character")
+                    key_step(1314, 106, "Right over remaining four-byte character")
+                    key_step(1316, 14, "Backspace removes four-byte character")
+                    key_step(1318, 105, "Left over two-byte UTF-8 character")
+                    key_step(1320, 106, "Right over two-byte UTF-8 character")
+                    key_step(1322, 14, "Backspace removes two-byte character")
+                    workflow_shortcut(1400, 31, "Ctrl+S saves UTF-8 boundary edits")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "Right/Left and Backspace handled 2-, 3-, and 4-byte UTF-8 scalars without splitting them"
+                    )
+                    return
+
+                if utf8_delete_test:
+                    # Delete-forward must remove one complete scalar at a time.
+                    for index, serial in enumerate((1500, 1502, 1504, 1506)):
+                        key_step(serial, 111, f"Delete-forward UTF-8 token {index + 1}")
+                    workflow_shortcut(1600, 31, "Ctrl+S saves UTF-8 forward deletions")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "Delete-forward removed ASCII, 2-byte, 3-byte, and 4-byte UTF-8 scalars as complete units"
+                    )
+                    return
+
+                if utf8_invalid_test:
+                    # F0 28 8C 28 is malformed UTF-8. Invalid bytes must stay
+                    # independently editable rather than swallowing adjacent
+                    # printable ASCII bytes into a replacement sequence.
+                    for index, serial in enumerate((1700, 1702, 1704, 1706, 1708)):
+                        key_step(serial, 111, f"Delete malformed UTF-8 token {index + 1}")
+                    workflow_shortcut(1800, 31, "Ctrl+S saves malformed-byte edits")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "malformed UTF-8 bytes remained individually editable and adjacent ASCII bytes were preserved"
+                    )
+                    return
+
                 key_step(1002, 30, "insert a")
                 a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if a_pixel != 0xFFD8DEE9:
@@ -1738,6 +1797,49 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(punctuation_path)
+        except FileNotFoundError:
+            pass
+
+    # UTF-8 code-point navigation/editing tests operate on files containing
+    # two-, three-, and four-byte sequences and assert exact saved bytes.
+    utf8_fixture = b"A\\xc3\\xa9\\xe2\\x82\\xac\\xf0\\x9f\\x98\\x80B"
+    for flag, expected in (
+        ("utf8_edit_test", b"AB"),
+        ("utf8_delete_test", b"B"),
+    ):
+        fd, utf8_path = tempfile.mkstemp(prefix="nekoedit-utf8-")
+        try:
+            with os.fdopen(fd, "wb") as document:
+                document.write(utf8_fixture)
+            run(
+                sys.argv[1],
+                initial_file=utf8_path,
+                save_roundtrip=True,
+                expected_saved_bytes=expected,
+                **{flag: True},
+            )
+        finally:
+            try:
+                os.unlink(utf8_path)
+            except FileNotFoundError:
+                pass
+
+    # Malformed sequences are treated as one-byte replacement units; editing
+    # must not consume adjacent valid ASCII characters.
+    invalid_fd, invalid_path = tempfile.mkstemp(prefix="nekoedit-invalid-utf8-")
+    try:
+        with os.fdopen(invalid_fd, "wb") as document:
+            document.write(b"A\\xf0(B\\x8c(B")
+        run(
+            sys.argv[1],
+            initial_file=invalid_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"B",
+            utf8_invalid_test=True,
+        )
+    finally:
+        try:
+            os.unlink(invalid_path)
         except FileNotFoundError:
             pass
 
