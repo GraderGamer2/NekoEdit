@@ -273,8 +273,21 @@ def run(
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
     maximum = 255;
+    <AE01> = 10;
+    <AE02> = 11;
+    <AE03> = 12;
+    <AE04> = 13;
+    <AE05> = 14;
+    <AE06> = 15;
+    <AE07> = 16;
+    <AE08> = 17;
+    <AE09> = 18;
+    <AE10> = 19;
+    <AE11> = 20;
+    <AE12> = 21;
     <AD01> = 24;
     <AC02> = 39;
+    <AB09> = 60;
 };
 xkb_types "nekoedit-test" {
     type "ALPHABETIC" {
@@ -299,6 +312,21 @@ xkb_symbols "nekoedit-test" {
         type = "ALPHABETIC",
         symbols[Group1] = [ s, S ]
     };
+    # xkbcomp emits the ordinary number row and several punctuation keys
+    # in this shorthand form, with no "symbols[Group1] =" attribute.
+    key <AE01> { [ 1, exclam ] };
+    key <AE02> { [ 2, at ] };
+    key <AE03> { [ 3, numbersign ] };
+    key <AE04> { [ 4, dollar ] };
+    key <AE05> { [ 5, percent ] };
+    key <AE06> { [ 6, asciicircum ] };
+    key <AE07> { [ 7, ampersand ] };
+    key <AE08> { [ 8, asterisk ] };
+    key <AE09> { [ 9, parenleft ] };
+    key <AE10> { [ 0, parenright ] };
+    key <AE11> { [ minus, underscore ] };
+    key <AE12> { [ equal, plus ] };
+    key <AB09> { [ period, greater ] };
 };
 };
 \0"""
@@ -507,10 +535,21 @@ xkb_symbols "nekoedit-test" {
                         wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
                         + wire_message(12, 0)
                     )
-                    workflow_shortcut(1010, 31, "Ctrl+S saves XKB-translated text")
+                    # The normal xkbcomp output uses shorthand arrays for
+                    # number-row keys. Reset to Group1, depress Shift, and
+                    # verify every shifted digit-row punctuation symbol.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1010, 1, 0, 0, 0))
+                    )
+                    for offset, code in enumerate(range(2, 14)):
+                        key_step(1020 + offset * 2, code, f"XKB shifted number-row key {code}")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1050, 0, 0, 0, 0))
+                    )
+                    workflow_shortcut(1100, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "XKB keycode +8 lookup, Group1/Group2 selection, alphabetic Shift level, and Right-Alt LevelThree symbol translation verified"
+                        "XKB keycode +8 lookup, Group1/Group2, alphabetic Shift, Right-Alt LevelThree, and all twelve shorthand shifted number-row symbols verified"
                     )
                     return
 
@@ -1393,7 +1432,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@",
+            expected_saved_bytes=b"IaAq@!@#$%^&*()_+",
             keyboard_layout_test=True,
         )
     finally:
