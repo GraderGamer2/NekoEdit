@@ -1915,12 +1915,17 @@ wl_read_event:
 .read_event_done:
     test eax, eax
     jns .read_event_return
+    # Preserve the protocol/read error while closing any descriptor received
+    # with the malformed event. close(2)'s return value must not mask it.
+    mov dword ptr [rip + event_recv_bytes], eax
     mov edi, dword ptr [rip + last_event_fd]
     test edi, edi
-    js .read_event_return
+    js .read_event_restore_error
     mov eax, SYS_close
     syscall
     mov dword ptr [rip + last_event_fd], -1
+.read_event_restore_error:
+    mov eax, dword ptr [rip + event_recv_bytes]
 .read_event_return:
     pop rbp
     ret
