@@ -4473,7 +4473,7 @@ wl_send_request:
     push r12
     push r13
     push r14
-    sub rsp, 8                  # align stack before calling linux_write_all
+    sub rsp, 8                  # align stack before calling wl_send_all
     mov r12d, edi
     mov r13d, esi
     mov r14, rdx
