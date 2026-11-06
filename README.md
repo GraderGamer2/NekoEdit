@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered editor window with an active Untitled document tab, a live line/column/byte-count status bar, and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Ctrl+A select-all, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Long lines soft-wrap at the right edge, and the document scrolls vertically to keep the active caret visible. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, horizontal scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
+> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered editor window with an active document tab, a live line/column/byte-count status bar, and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Ctrl+A select-all, Ctrl+S save, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, mouse caret placement, left-button drag selection, and Shift+Arrow/Home/End keyboard selection. Pass a file path as the first argument to load it; a nonexistent path starts a new document that Ctrl+S creates. Long lines soft-wrap at the right edge, and the document scrolls vertically to keep the active caret visible. Typing or pressing Backspace/Delete removes the selected byte range before editing. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. The file writer currently truncates the destination before writing and is not yet an atomic replacement. XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, undo, Save As/Open prompts, horizontal scrolling, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
 
 ## Project principles
 
@@ -31,7 +31,7 @@ The first Wayland backend is a freestanding assembly prototype. It:
 9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
 10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
 
-The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The `wl_keyboard.keymap` FD is not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. All ordinary non-modifier/non-lock keys repeat while held. The client uses the compositor's `wl_keyboard.repeat_info` rate and delay when the bound `wl_seat` version supports it, with a 300 ms / 30 Hz fallback for older compositors. Unicode input/rendering, IME and dead-key composition, undo/redo, file operations, clipboard, resizing, and the X11 backend remain unfinished. Vertical cursor-follow scrolling is implemented; horizontal scrolling and more complete viewport controls remain future work.
+The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. A path supplied on the command line is read at startup (up to 64 KiB), and Ctrl+S writes back to that same path; Save As and an in-app open prompt are not implemented. The first save implementation truncates the destination before writing rather than using an atomic temporary-file replacement. The `wl_keyboard.keymap` FD is not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. All ordinary non-modifier/non-lock keys repeat while held. The client uses the compositor's `wl_keyboard.repeat_info` rate and delay when the bound `wl_seat` version supports it, with a 300 ms / 30 Hz fallback for older compositors. Unicode input/rendering, IME and dead-key composition, undo/redo, file operations, clipboard, resizing, and the X11 backend remain unfinished. Vertical cursor-follow scrolling is implemented; horizontal scrolling and more complete viewport controls remain future work.
 
 See [docs/WAYLAND_BACKEND.md](docs/WAYLAND_BACKEND.md) for protocol details.
 
@@ -79,7 +79,7 @@ Run inside a Wayland desktop session:
 ./build/nekoedit --backend=wayland
 ~~~
 
-The current window shows an Untitled document tab, an editor area, and a status bar with logical line, column, byte count, and ASCII mode. Click within the document area to place the caret or drag with the left mouse button to select text. Hold Shift while using the arrow keys or Home/End to extend a keyboard selection. Typing or Backspace/Delete removes the selected range. Focus the window and type basic US-QWERTY ASCII text. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Long lines wrap automatically, and the view follows the caret as it moves down through the document. Use the compositor's normal close button to exit.
+The current window shows an active document tab, an editor area, and a status bar with logical line, column, byte count, and ASCII mode. Launch `nekoedit FILE` to load a file; Ctrl+S saves changes to that launch-time path. Click within the document area to place the caret or drag with the left mouse button to select text. Hold Shift while using the arrow keys or Home/End to extend a keyboard selection. Typing or Backspace/Delete removes the selected range. Focus the window and type basic US-QWERTY ASCII text. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Long lines wrap automatically, and the view follows the caret as it moves down through the document. Use the compositor's normal close button to exit.
 
 The X11 backend is not ready. The explicit selector currently reports this rather than silently trying to use Wayland:
 
@@ -112,7 +112,7 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 - Undo and redo.
 - Horizontal scrolling and viewport controls.
 - Cut, copy, and paste with ordinary desktop applications.
-- Keyboard shortcuts: Ctrl+A (select all; implemented), Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+Z/Ctrl+Y (undo/redo), Ctrl+S (save), Ctrl+Shift+S (save as), Ctrl+O (open), and Ctrl+F (find).
+- Keyboard shortcuts: Ctrl+A (select all; implemented), Ctrl+S (save to launch-time path; implemented), Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+Z/Ctrl+Y (undo/redo), Ctrl+Shift+S (save as), Ctrl+O (open), and Ctrl+F (find).
 - Find and replace.
 - Glyph/font-metric-aware wrapping and advanced view preferences.
 - A system-font software renderer.

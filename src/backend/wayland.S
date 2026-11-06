@@ -1,7 +1,9 @@
 .intel_syntax noprefix
 
 .equ SYS_read,          0
+.equ SYS_write,         1
 .equ SYS_close,         3
+.equ SYS_openat,      257
 .equ SYS_poll,          7
 .equ SYS_timerfd_create, 283
 .equ SYS_timerfd_settime, 286
@@ -18,6 +20,12 @@
 .equ PROT_WRITE,         2
 .equ MAP_SHARED,         1
 .equ MFD_CLOEXEC,        1
+.equ AT_FDCWD,          -100
+.equ O_WRONLY,             1
+.equ O_CREAT,             64
+.equ O_TRUNC,            512
+.equ O_CLOEXEC,       0x80000
+.equ FILE_SAVE_FLAGS, (O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC)
 .equ SOL_SOCKET,         1
 .equ SCM_RIGHTS,         1
 .equ WIDTH,            800
@@ -46,8 +54,8 @@ wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
 wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
-empty_document_hint:   .asciz "TYPE HERE..."
 ui_app_name:           .asciz "NekoEdit"
+ui_mode_error:         .asciz "SAVE ERR"
 ui_document_name:      .asciz "Untitled"
 ui_mode_name:          .asciz "ASCII"
 ui_label_line:         .asciz "Ln "
@@ -81,6 +89,8 @@ msg_no_env:            .ascii "NekoEdit: XDG_RUNTIME_DIR is not set; cannot loca
 msg_no_env_end:
 msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display using WAYLAND_SOCKET or its socket path.\n"
 msg_connect_end:
+msg_file_error:        .ascii "NekoEdit: could not open file or file exceeds the 64 KiB document limit.\n"
+msg_file_error_end:
 msg_globals:           .ascii "NekoEdit: compositor, wl_shm, or xdg_wm_base is unavailable.\n"
 msg_globals_end:
 msg_protocol:          .ascii "NekoEdit: Wayland protocol or shared-memory setup failed.\n"
@@ -157,6 +167,9 @@ font_5x7:
 .balign 4
 repeat_rate:            .long REPEAT_DEFAULT_RATE
 repeat_delay_ms:        .long REPEAT_DEFAULT_DELAY_MS
+active_document_name:   .ascii "Untitled"
+                        .byte 0
+                        .zero 24
 
 .section .bss
 .balign 16
@@ -202,6 +215,9 @@ ctrl_down:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
 doc_buffer:             .zero DOC_CAPACITY
+current_file_path:      .quad 0
+doc_save_error:         .long 0
+file_probe_byte:        .byte 0
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
@@ -224,10 +240,14 @@ msg_control:           .zero 24
 .extern linux_write_all
 .extern linux_read_exact
 .extern linux_exit
+.extern initial_file_path
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
     push rbp                    # keep 16-byte call-site stack alignment
+    call load_initial_document
+    test rax, rax
+    js .initial_file_error
     # WAYLAND_SOCKET is an inherited, already-connected descriptor. It takes
     # precedence over WAYLAND_DISPLAY when supplied by a session launcher.
     lea rdi, [rip + wayland_socket_env_key]
@@ -974,7 +994,10 @@ wayland_main:
     xor dword ptr [rip + caps_lock], 1
     jmp .keyboard_changed
 .keyboard_key_pressed:
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .keyboard_key_no_repeat
     call repeat_start_if_supported
+.keyboard_key_no_repeat:
     mov eax, dword ptr [rip + event_payload + 8]
     mov edx, 1
     jmp .keyboard_non_modifier
@@ -996,6 +1019,8 @@ wayland_main:
     je .keyboard_unmodified
     cmp eax, 30
     je .keyboard_select_all
+    cmp eax, 31
+    je .keyboard_save
 .keyboard_unmodified:
     cmp eax, 105
     je .keyboard_left
@@ -1025,6 +1050,9 @@ wayland_main:
     call doc_delete_selection
     mov edi, r12d
     call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_save:
+    call save_document_file
     jmp .keyboard_changed
 .keyboard_select_all:
     # Ctrl+A selects the full document using the same anchor/cursor model
@@ -1199,6 +1227,14 @@ wayland_main:
     xor edi, edi
     jmp linux_exit
 
+.initial_file_error:
+    mov edi, 2
+    lea rsi, [rip + msg_file_error]
+    mov edx, msg_file_error_end - msg_file_error
+    call linux_write_all
+    mov edi, 1
+    jmp linux_exit
+
 .missing_runtime_dir:
     mov edi, 2
     lea rsi, [rip + msg_no_env]
@@ -1271,6 +1307,190 @@ wayland_main:
     mov edi, 1
     jmp linux_exit
 .size wayland_main, . - wayland_main
+
+# Load an optional initial file. A nonexistent path is a new, empty document;
+# existing files larger than the bounded document buffer are rejected.
+.type load_initial_document, @function
+load_initial_document:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, qword ptr [rip + initial_file_path]
+    test r12, r12
+    jz .load_file_empty
+    mov qword ptr [rip + current_file_path], r12
+    call set_active_document_name
+
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    xor edx, edx                 # O_RDONLY
+    xor r10d, r10d
+    syscall
+    cmp rax, -2                  # ENOENT: retain path for a later Ctrl+S
+    je .load_file_empty
+    test rax, rax
+    js .load_file_error
+    mov r14d, eax
+    xor r13d, r13d
+.load_file_read:
+    cmp r13d, DOC_CAPACITY
+    jae .load_file_probe
+    mov eax, SYS_read
+    mov edi, r14d
+    lea rsi, [rip + doc_buffer]
+    add rsi, r13
+    mov edx, DOC_CAPACITY
+    sub edx, r13d
+    syscall
+    test rax, rax
+    jg .load_file_advance
+    je .load_file_done
+    cmp rax, -4                  # EINTR
+    je .load_file_read
+    jmp .load_file_close_error
+.load_file_advance:
+    add r13, rax
+    jmp .load_file_read
+.load_file_probe:
+    # Read one extra byte to distinguish an exactly-full file from truncation.
+    mov eax, SYS_read
+    mov edi, r14d
+    lea rsi, [rip + file_probe_byte]
+    mov edx, 1
+    syscall
+    test rax, rax
+    jg .load_file_close_error
+    je .load_file_done
+    cmp rax, -4
+    je .load_file_probe
+    jmp .load_file_close_error
+.load_file_done:
+    mov edi, r14d
+    mov eax, SYS_close
+    syscall
+    test rax, rax
+    js .load_file_error
+    mov dword ptr [rip + doc_length], r13d
+    jmp .load_file_reset
+.load_file_close_error:
+    mov edi, r14d
+    mov eax, SYS_close
+    syscall
+.load_file_error:
+    mov eax, -5
+    jmp .load_file_return
+.load_file_empty:
+    mov dword ptr [rip + doc_length], 0
+.load_file_reset:
+    mov dword ptr [rip + doc_cursor], 0
+    mov dword ptr [rip + doc_view_top_row], 0
+    mov dword ptr [rip + doc_selection_active], 0
+    mov dword ptr [rip + doc_save_error], 0
+    xor eax, eax
+.load_file_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size load_initial_document, . - load_initial_document
+
+# Copy the basename into the tab label without retaining or rewriting argv.
+.type set_active_document_name, @function
+set_active_document_name:
+    lea rdi, [rip + active_document_name]
+    mov rsi, r12
+    mov r8, r12
+.set_name_find_end:
+    mov al, byte ptr [rsi]
+    test al, al
+    jz .set_name_copy
+    cmp al, '/'
+    jne .set_name_next
+    lea r8, [rsi + 1]
+.set_name_next:
+    inc rsi
+    jmp .set_name_find_end
+.set_name_copy:
+    xor ecx, ecx
+.set_name_copy_loop:
+    cmp ecx, 15
+    jae .set_name_done
+    mov al, byte ptr [r8 + rcx]
+    test al, al
+    jz .set_name_done
+    mov byte ptr [rdi + rcx], al
+    inc ecx
+    jmp .set_name_copy_loop
+.set_name_done:
+    mov byte ptr [rdi + rcx], 0
+    ret
+.size set_active_document_name, . - set_active_document_name
+
+# Save the current byte buffer to its launch-time path. O_TRUNC is deliberately
+# simple for this first file-I/O milestone; atomic replacement comes later.
+.type save_document_file, @function
+save_document_file:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, qword ptr [rip + current_file_path]
+    test r12, r12
+    jz .save_file_error
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    mov edx, FILE_SAVE_FLAGS
+    mov r10d, 0644
+    syscall
+    test rax, rax
+    js .save_file_error
+    mov ebx, eax
+    lea r12, [rip + doc_buffer]
+    mov r13d, dword ptr [rip + doc_length]
+.save_file_write:
+    test r13d, r13d
+    jz .save_file_close
+    mov eax, SYS_write
+    mov edi, ebx
+    mov rsi, r12
+    mov rdx, r13
+    syscall
+    test rax, rax
+    jg .save_file_advance
+    cmp rax, -4                  # EINTR
+    je .save_file_write
+    jmp .save_file_close_error
+.save_file_advance:
+    add r12, rax
+    sub r13, rax
+    jmp .save_file_write
+.save_file_close:
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+    test rax, rax
+    js .save_file_error
+    mov dword ptr [rip + doc_save_error], 0
+    xor eax, eax
+    jmp .save_file_return
+.save_file_close_error:
+    mov edi, ebx
+    mov eax, SYS_close
+    syscall
+.save_file_error:
+    mov dword ptr [rip + doc_save_error], 1
+    mov eax, -5
+.save_file_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size save_document_file, . - save_document_file
 
 # Print a NUL-terminated string to stderr. Input: RSI = string.
 .type write_stderr_cstr, @function
@@ -1715,7 +1935,7 @@ draw_rect:
     ret
 .size draw_rect, . - draw_rect
 
-# Repaint the small input demo: clicking a swatch changes the selected border.
+# Repaint the editor surface, including document chrome and status information.
 .type render_surface, @function
 render_surface:
     push rbp
@@ -1747,12 +1967,21 @@ render_surface:
     mov esi, 12
     lea rdx, [rip + ui_app_name]
     call draw_text
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_save_error
     mov edi, 744
     mov esi, 12
     lea rdx, [rip + ui_mode_name]
     call draw_text
+    jmp .render_document_tab
+.render_save_error:
+    mov edi, 720
+    mov esi, 12
+    lea rdx, [rip + ui_mode_error]
+    call draw_text
 
-    # A single active scratch-document tab replaces the temporary palette.
+.render_document_tab:
+    # A single active document tab; the launch-time basename replaces Untitled.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 8
     mov edx, 40
@@ -1769,7 +1998,7 @@ render_surface:
     call draw_rect
     mov edi, 24
     mov esi, 54
-    lea rdx, [rip + ui_document_name]
+    lea rdx, [rip + active_document_name]
     call draw_text
 
     call render_selection
@@ -2862,30 +3091,7 @@ render_document:
     xor r14d, r14d
     mov r15d, dword ptr [rip + doc_length]
     test r15d, r15d
-    jnz .document_have_text
-    lea rbx, [rip + empty_document_hint]
-.document_hint_loop:
-    movzx edx, byte ptr [rbx]
-    test edx, edx
     jz .document_draw_cursor
-    cmp r12d, WIDTH - 8
-    jb .document_hint_fit
-    mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
-.document_hint_fit:
-    cmp r13d, DOC_TOP
-    jl .document_hint_skip_draw
-    cmp r13d, STATUS_TOP - LINE_HEIGHT
-    jge .document_draw_cursor
-    mov edi, r12d
-    mov esi, r13d
-    call draw_glyph
-.document_hint_skip_draw:
-    add r12d, CELL_WIDTH
-    inc rbx
-    jmp .document_hint_loop
-
-.document_have_text:
     lea rbx, [rip + doc_buffer]
 .document_render_loop:
     cmp r14d, r15d

@@ -71,6 +71,8 @@ def run(
     use_wayland_socket: bool = False,
     send_protocol_error: bool = False,
     advertised_seat_version: int = 7,
+    initial_file: str | None = None,
+    save_roundtrip: bool = False,
 ) -> None:
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
@@ -173,12 +175,15 @@ def run(
                     raise AssertionError("status bar background was not rendered")
                 if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("logical line status label was not rendered")
-                hint_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
-                if hint_pixel != 0xFFD8DEE9:
-                    raise AssertionError(
-                        "initial editor hint was not drawn; "
-                        f"pixel={hex(hint_pixel)}"
-                    )
+                editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
+                if initial_file is None:
+                    if editor_origin_pixel != 0xFF252A33:
+                        raise AssertionError(
+                            "empty document area should not draw a placeholder; "
+                            f"pixel={hex(editor_origin_pixel)}"
+                        )
+                elif editor_origin_pixel != 0xFFD8DEE9:
+                    raise AssertionError("launch-time file content was not rendered at the document origin")
 
                 expect_message(
                     client,
@@ -834,6 +839,32 @@ def run(
                 observations.append(
                     "printable characters, Enter, and Tab repeated while held; compositor repeat_info and legacy fallback were exercised"
                 )
+
+                if save_roundtrip:
+                    # Replace the loaded document with one byte and save it via
+                    # Ctrl+S, covering launch-time file loading and writing.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1800, 1800, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1801, 1801, 30, 1))
+                    )
+                    expect_redraw("Ctrl+A before save roundtrip")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1802, 1802, 30, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    key_step(1810, 44, "replace with z before save")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
+                    )
+                    expect_redraw("Ctrl+S save")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    observations.append("launch-time file load and Ctrl+S save round-trip verified")
             finally:
                 if pixels is not None:
                     pixels.close()
@@ -867,8 +898,9 @@ def run(
         environment["WAYLAND_DISPLAY"] = display_name
         environment.pop("WAYLAND_SOCKET", None)
     try:
+        command = [binary, initial_file] if initial_file is not None else [binary, "--backend=wayland"]
         result = subprocess.run(
-            [binary, "--backend=wayland"],
+            command,
             env=environment,
             pass_fds=pass_fds,
             stdout=subprocess.PIPE,
@@ -898,6 +930,11 @@ def run(
         return
     if result.returncode != 0:
         raise AssertionError(f"NekoEdit exited {result.returncode}: {stderr}")
+    if save_roundtrip:
+        with open(initial_file, "rb") as saved_file:
+            saved_bytes = saved_file.read()
+        if saved_bytes != b"z":
+            raise AssertionError(f"Ctrl+S saved incorrect document bytes: {saved_bytes!r}")
     transport = "WAYLAND_SOCKET" if use_wayland_socket else "WAYLAND_DISPLAY"
     print(f"Wayland mock integration test passed using {transport} (registry, xdg-shell, memfd, pixels, close).")
     print("Verified: " + ", ".join(observations))
@@ -907,6 +944,17 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
+    # Test positional file loading and Ctrl+S using a temporary document.
+    file_descriptor, file_path = tempfile.mkstemp(prefix="nekoedit-file-")
+    try:
+        with os.fdopen(file_descriptor, "wb") as initial_document:
+            initial_document.write(b"I")
+        run(sys.argv[1], initial_file=file_path, save_roundtrip=True)
+    finally:
+        try:
+            os.unlink(file_path)
+        except FileNotFoundError:
+            pass
     # Older wl_seat versions cannot send repeat_info; the client must retain
     # the 300 ms / 30 Hz compatibility fallback.
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
