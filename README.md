@@ -31,7 +31,7 @@ The first Wayland backend is a freestanding assembly prototype. It:
 9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
 10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
 
-The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The wl_keyboard.keymap FD and repeat-info event are not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. Unicode input/rendering, IME and dead-key composition, undo/redo, scrolling, file operations, clipboard, resizing, and the X11 backend remain unfinished.
+The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The wl_keyboard.keymap FD and repeat-info event are not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. Navigation arrows, Backspace, and Delete use a local 300 ms initial repeat delay at approximately 30 actions per second rather than desktop-configured repeat settings. Unicode input/rendering, IME and dead-key composition, undo/redo, scrolling, file operations, clipboard, resizing, and the X11 backend remain unfinished.
 
 See [docs/WAYLAND_BACKEND.md](docs/WAYLAND_BACKEND.md) for protocol details.
 
@@ -112,6 +112,7 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 - Undo and redo.
 - Scrolling and line/column status.
 - Cut, copy, and paste with ordinary desktop applications.
+- Keyboard shortcuts: Ctrl+A (select all), Ctrl+C (copy), Ctrl+X (cut), Ctrl+V (paste), Ctrl+Z/Ctrl+Y (undo/redo), Ctrl+S (save), Ctrl+Shift+S (save as), Ctrl+O (open), and Ctrl+F (find).
 - Find and replace.
 - Word wrapping and basic view preferences.
 - A system-font software renderer.
