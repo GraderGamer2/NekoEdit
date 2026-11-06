@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: interactive backend prototype.** The Wayland build opens an 800×480 software-rendered window and handles pointer and keyboard focus/events through `wl_seat`, `wl_pointer`, and `wl_keyboard`. A temporary three-swatch palette demonstrates click- and key-driven redraws. It is still not a usable text editor: XKB keymap translation, UTF-8 text editing/rendering, file operations, clipboard, the directory-browser picker, and X11 are under development.
+> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered window with a small clickable palette and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Enter, Tab, Backspace, Delete, arrow navigation, Home, and End. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, selection, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
 
 ## Project principles
 
@@ -25,12 +25,13 @@ The first Wayland backend is a freestanding assembly prototype. It:
 3. Discovers wl_compositor, wl_shm, xdg_wm_base, and an optional wl_seat.
 4. Creates a wl_surface and an xdg_toplevel, then handles the initial configure/acknowledge sequence.
 5. Allocates a memfd-backed pixel buffer, passes its descriptor to the compositor with SCM_RIGHTS, and draws a simple test surface in software.
-6. Handles seat pointer and keyboard capabilities, pointer enter/leave/motion/button events, and keyboard enter/leave/key events.
-7. Makes pointer clicks select a palette swatch and makes a focused raw key press advance the selection.
-8. Waits for wl_buffer.release before modifying and recommitting the single shared-memory buffer.
-9. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
+6. Handles seat pointer and keyboard capabilities, pointer enter/leave/motion/button events, and keyboard focus, key, and modifier events.
+7. Lets pointer clicks select a palette swatch. Focused keyboard input edits the document through a built-in US-QWERTY evdev table; Shift and Caps state are synchronized from physical key transitions and Wayland modifier events.
+8. Implements bounded byte insertion/deletion, Enter, four-space Tab, Backspace, Delete, Left/Right/Up/Down, Home, and End.
+9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
+10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
 
-XKB keymap parsing and key-symbol translation, UTF-8 document editing, text rendering, resizing, and file operations are not implemented yet. Raw key events are currently used only by the temporary input demo. The X11 backend is not implemented.
+The current document storage is a fixed 64 KiB byte array, not yet a gap buffer. The wl_keyboard.keymap FD and repeat-info event are not parsed, so keyboard layouts other than the built-in US-QWERTY mapping are unsupported. Unicode input/rendering, IME and dead-key composition, selection, undo/redo, scrolling, file operations, clipboard, resizing, and the X11 backend remain unfinished.
 
 See [docs/WAYLAND_BACKEND.md](docs/WAYLAND_BACKEND.md) for protocol details.
 
@@ -78,7 +79,7 @@ Run inside a Wayland desktop session:
 ./build/nekoedit --backend=wayland
 ~~~
 
-The current window shows three color swatches; click one or focus the window and press a key to change the selected border. Use the compositor's normal close button to exit.
+The current window shows three color swatches above a simple text area. Click a swatch to change its border, then focus the window and type basic US-QWERTY ASCII text in the document area. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Use the compositor's normal close button to exit.
 
 The X11 backend is not ready. The explicit selector currently reports this rather than silently trying to use Wayland:
 
@@ -91,7 +92,7 @@ The CLI also supports --help and --version.
 ### Tests
 
 - **make test** runs command-line smoke tests.
-- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, click- and key-driven selection changes, buffer-release-safe redraws, shared-memory FD transfer, rendered pixels, and compositor protocol-error reporting without requiring an installed compositor.
+- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, palette clicks, US-QWERTY text insertion, navigation, Backspace, Enter, Shift/modifier state, glyph/caret pixels, buffer-release-safe redraws, shared-memory FD transfer, and compositor protocol-error reporting without requiring an installed compositor.
 - **make check** rejects an ELF containing PT_INTERP or DT_NEEDED entries.
 - **make inspect** prints ELF metadata.
 
@@ -105,9 +106,11 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 
 - New, open, save, and save as.
 - A simple built-in directory-browser file picker.
-- UTF-8 text editing with a gap buffer.
+- XKB keymap parsing and layout-aware symbol translation.
+- UTF-8 text editing with a gap buffer and Unicode-aware cursor movement.
+- IME/dead-key composition through the appropriate Wayland text-input protocol.
 - Undo and redo.
-- Cursor movement, keyboard and mouse selection, and line/column status.
+- Keyboard and mouse selection, scrolling, and line/column status.
 - Cut, copy, and paste with ordinary desktop applications.
 - Find and replace.
 - Word wrapping and basic view preferences.
