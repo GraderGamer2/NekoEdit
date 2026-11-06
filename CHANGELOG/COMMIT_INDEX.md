@@ -4,7 +4,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
-- Recorded commits: **188** (20 main + 168 PR #1)
+- Recorded commits: **194** (20 original main + 168 source-development PR #1 + 6 changelog bootstrap commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -205,6 +205,19 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 | 2026-11-06 11:47:58 UTC | [`b71fa066fd3a`](https://github.com/GraderGamer2/NekoEdit/commit/b71fa066fd3afc65f42b0d6b5f245a5d2e945c6f) | test: verify pointer mapping across UTF-8 code points |
 | 2026-11-06 11:48:18 UTC | [`5c8b0aea3ed9`](https://github.com/GraderGamer2/NekoEdit/commit/5c8b0aea3ed9a39ed30f7cae03366f5c062ad471) | test: fix expected UTF-8 pointer fixture bytes |
 | 2026-11-06 11:49:03 UTC | [`6cd9e08fada0`](https://github.com/GraderGamer2/NekoEdit/commit/6cd9e08fada059ae3e24c9cdab7cf86762b24414) | test: route UTF-8 pointer case through its own edit scenario |
+
+## Changelog bootstrap commits
+
+These six commits created the changelog system after the 188-commit source-history snapshot above. They are included here so the repository's new history mechanism starts with its own setup work accounted for.
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 11:57:39 UTC | [`eb9497a49e8b`](https://github.com/GraderGamer2/NekoEdit/commit/eb9497a49e8bda601bba91ce8b5f6111133d1e74) | \\|d\\|o\\|c\\|s\\|:\\| \\|a\\|d\\|d\\| \\|c\\|o\\|m\\|p\\|l\\|e\\|t\\|e\\| \\|N\\|e\\|k\\|o\\|E\\|d\\|i\\|t\\| \\|c\\|o\\|m\\|m\\|i\\|t\\| \\|i\\|n\\|d\\|e\\|x\\| |
+| 2026-11-06 11:58:06 UTC | [`29191c9011a8`](https://github.com/GraderGamer2/NekoEdit/commit/29191c9011a83d8ef2ad14afe498126ea78865fd) | \\|d\\|o\\|c\\|s\\|:\\| \\|d\\|e\\|f\\|i\\|n\\|e\\| \\|m\\|a\\|n\\|d\\|a\\|t\\|o\\|r\\|y\\| \\|c\\|h\\|a\\|n\\|g\\|e\\|l\\|o\\|g\\| \\|w\\|o\\|r\\|k\\|f\\|l\\|o\\|w\\| |
+| 2026-11-06 11:58:35 UTC | [`35cc73903529`](https://github.com/GraderGamer2/NekoEdit/commit/35cc7390352970ccc25ba4b5b9b3de12da4869d2) | \\|d\\|o\\|c\\|s\\|:\\| \\|r\\|e\\|c\\|o\\|r\\|d\\| \\|N\\|e\\|k\\|o\\|E\\|d\\|i\\|t\\| \\|d\\|e\\|v\\|e\\|l\\|o\\|p\\|m\\|e\\|n\\|t\\| \\|h\\|i\\|s\\|t\\|o\\|r\\|y\\| |
+| 2026-11-06 11:58:51 UTC | [`8401ae5f3997`](https://github.com/GraderGamer2/NekoEdit/commit/8401ae5f399797f3ac818a3ddcf4eddbaa0940e2) | \\|d\\|o\\|c\\|s\\|:\\| \\|a\\|d\\|d\\| \\|i\\|n\\|i\\|t\\|i\\|a\\|l\\| \\|d\\|e\\|v\\|e\\|l\\|o\\|p\\|m\\|e\\|n\\|t\\| \\|l\\|o\\|g\\| \\|e\\|n\\|t\\|r\\|y\\| |
+| 2026-11-06 11:59:21 UTC | [`7815e253ae38`](https://github.com/GraderGamer2/NekoEdit/commit/7815e253ae38fe544a69d15fe54b1e2a4c58fc2d) | \\|d\\|o\\|c\\|s\\|:\\| \\|a\\|d\\|d\\| \\|c\\|u\\|r\\|r\\|e\\|n\\|t\\| \\|N\\|e\\|k\\|o\\|E\\|d\\|i\\|t\\| \\|i\\|m\\|p\\|l\\|e\\|m\\|e\\|n\\|t\\|a\\|t\\|i\\|o\\|n\\| \\|s\\|t\\|a\\|t\\|u\\|s\\| |
+| 2026-11-06 11:59:30 UTC | [`1754d426a945`](https://github.com/GraderGamer2/NekoEdit/commit/1754d426a945580d3c9ae5372d1bb876d89b90be) | \\|d\\|o\\|c\\|s\\|:\\| \\|l\\|i\\|n\\|k\\| \\|p\\|r\\|o\\|j\\|e\\|c\\|t\\| \\|c\\|h\\|a\\|n\\|g\\|e\\|l\\|o\\|g\\| \\|f\\|r\\|o\\|m\\| \\|R\\|E\\|A\\|D\\|M\\|E\\| |
 
 ## Maintenance
 
