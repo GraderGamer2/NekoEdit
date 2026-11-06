@@ -386,6 +386,14 @@ Actions run [#241](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224051
 |---|---|---|
 | 2026-11-06 15:06:34 UTC | [`dc33a7bec5a0`](https://github.com/GraderGamer2/NekoEdit/commit/dc33a7bec5a000fed2d9859fe88bc0e7a9d0b91d) | docs: index picker project-history milestone |
 
+## Open-mode search scope and empty-file selection hardening
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 15:15:58 UTC | [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) | fix: scope file picker search to current directory |
+
+Actions run [#243](https://github.com/GraderGamer2/NekoEdit/actions/runs/42241453789) passed all eight workflow steps on this commit. It adds a regression for stale unmatched Search text surviving a directory change, enforces selected-row-only Open when list focus is active, and preserves literal path/name opening only while Search has focus. Artifact ID `13515965431`; 27,249 bytes; SHA-256 `d5549748f2e58f95da6cc176d630c087af15efd4b7b298ce6106dce5c484c664`; expires 2026-11-13. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exact implementation and validation notes.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.

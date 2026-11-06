@@ -314,3 +314,39 @@ Related code/test/docs commits (all individual entries are in [COMMIT_INDEX.md](
 This task changes documentation only; it does not intentionally modify editor code or the launch interface. The existing Wayland launch form remains supported: `./nekoedit --backend=wayland` (or `./build/nekoedit --backend=wayland` when running the Makefile output).
 
 No feature development is being started in this entry. The next development task should begin only after reading the changelog directory and inspecting the current source/branch/CI state.
+
+
+---
+
+## 2026-11-06 — Scope Open-mode search to the current directory
+
+**Purpose:** Correct a file-picker state leak reported during manual use, where opening an empty text file could appear to activate a different file. Preserve the existing scrollable picker, checkbox, and editable path/search interaction.
+
+### Diagnosis and implementation
+
+- Inspection found that picker_scan_directory reset the selected row but did not clear the Open-mode Search field when rebuilding the listing. A no-match query could therefore survive a location change. Since Open previously allowed an unmatched field value to be treated as a literal path/name regardless of which control had focus, pressing the footer Open button after navigation could open a same-named file from the new directory even though no row was selected.
+- Open-mode directory scans now clear the scoped search text, caret/view state, match flag, and select-all state. Save-mode filename text is deliberately preserved during directory scans.
+- picker_confirm_action now distinguishes list focus from Search-field focus. With list focus, Open can only use the explicitly selected regular-file row. A literal path/name remains supported only while the Search field has focus.
+- Updated docs/FILE_PICKER.md to make the search scope, explicit-selection rule, and executable-file behavior clear. The picker lists regular files without filtering by extension or execute permission; it treats a selected executable-bit file as document bytes and never executes it.
+
+### Regression coverage
+
+- Added a stale.txt fixture inside the nested directory. The regression test enters stale.txt as an unmatched search in the parent directory, navigates into the directory that actually contains that file, and clicks Open with no selected row.
+- The test asserts that directory navigation clears the old query, Open leaves the picker open without changing the active document, and an explicit row-1 selection then opens the exact zero-byte empty.txt.
+- The earlier row-1 zero-byte Open checks remain in place for both single-click-plus-Open and double-click activation, including the exact active path and empty document length.
+
+### Verification
+
+- GitHub Actions [Build and test #243](https://github.com/GraderGamer2/NekoEdit/actions/runs/42241453789) passed all eight workflow steps on [51a9b4d491665406ccc695d9724889bc6834ff66](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66).
+- Passed: toolchain inspection, freestanding x86-64 build/ELF checks, command-line smoke tests, the complete Wayland mock-compositor suite (including the new stale-query regression), executable inspection, and artifact upload.
+- Artifact: nekoedit-linux-x86_64, 27,249 bytes; SHA-256 d5549748f2e58f95da6cc176d630c087af15efd4b7b298ce6106dce5c484c664; artifact ID 13515965431; expires 2026-11-13 15:16:20 UTC.
+- A local build was not run in this runtime because outbound DNS access to GitHub was unavailable; CI built and tested the exact pushed commit.
+
+### Remaining validation and constraints
+
+- The user has not yet re-tested this patch in the real GNOME Wayland desktop. The mock-compositor regression is automated evidence for the specific stale-query failure mode, not a claim that the user's manual symptom has been confirmed fixed on their machine.
+- Existing picker constraints remain: 128 entries maximum, 15 visible rows, ASCII-only path/name typing, no clipboard paste or partial Shift selection, and no symbolic-link traversal. Search remains a case-insensitive prefix match over the current directory's loaded regular-file entries.
+- Mouse-wheel scrolling, the proportional draggable scrollbar, the bordered Show hidden checkbox, and editable location/name fields were already implemented and remain unchanged. No runtime dependencies or launch-interface changes were introduced.
+
+**Source/test/documentation commit:** [51a9b4d49166](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66).  
+**Branch/PR:** early-alpha, PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
