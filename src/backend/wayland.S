@@ -229,7 +229,7 @@ last_opcode:           .long 0
 last_size:             .long 0
 event_header:          .zero 8
 event_payload:         .zero 4096
-last_event_fd:         .long -1
+last_event_fd:         .long 0
 event_recv_bytes:      .long 0
 xkb_keymap_ptr:        .quad 0
 xkb_keymap_size:       .quad 0
