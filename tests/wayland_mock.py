@@ -260,7 +260,7 @@ def run(
                         struct.pack(
                             "<IIii", 777, 8,
                             (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98) * 256,
-                            110 * 256,
+                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 110) * 256,
                         ),
                     )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
