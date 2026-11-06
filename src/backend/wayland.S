@@ -1547,16 +1547,16 @@ render_surface:
     mov dword ptr [r11 + STRIDE * 470 + 700 * 4], eax
     mov eax, dword ptr [rip + debug_pointer_y]
     or eax, 0xff000000
-    mov dword ptr [rbx + STRIDE * 470 + 701 * 4], eax
+    mov dword ptr [r11 + STRIDE * 470 + 701 * 4], eax
     mov eax, dword ptr [rip + debug_pointer_col]
     or eax, 0xff000000
-    mov dword ptr [rbx + STRIDE * 470 + 702 * 4], eax
+    mov dword ptr [r11 + STRIDE * 470 + 702 * 4], eax
     mov eax, dword ptr [rip + debug_pointer_line]
     or eax, 0xff000000
-    mov dword ptr [rbx + STRIDE * 470 + 703 * 4], eax
+    mov dword ptr [r11 + STRIDE * 470 + 703 * 4], eax
     mov eax, dword ptr [rip + debug_pointer_offset]
     or eax, 0xff000000
-    mov dword ptr [rbx + STRIDE * 470 + 704 * 4], eax
+    mov dword ptr [r11 + STRIDE * 470 + 704 * 4], eax
     pop rbp
     ret
 .size render_surface, . - render_surface
