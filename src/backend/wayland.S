@@ -75,6 +75,12 @@ pointer_x:             .long 0
 pointer_y:             .long 0
 pointer_inside:         .long 0
 pointer_created:        .long 0
+pointer_object:         .long 0
+keyboard_created:       .long 0
+keyboard_object:        .long 0
+keyboard_focused:       .long 0
+next_input_object:      .long 15
+seat_capabilities:      .long 0
 palette_selection:      .long 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
@@ -508,6 +514,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    # Input objects are allocated from 15 onward, in capability order.
+    mov dword ptr [rip + next_input_object], 15
     # Roundtrip so the compositor can announce seat capabilities.
     mov dword ptr [rip + payload_buffer], 14
     mov edi, 1
@@ -583,8 +591,11 @@ wayland_main:
     js .protocol_error
     jmp .event_loop
 .check_pointer_event:
-    cmp dword ptr [rip + last_object], 15
-    jne .check_toplevel_close
+    mov eax, dword ptr [rip + pointer_object]
+    test eax, eax
+    jz .check_keyboard_event
+    cmp dword ptr [rip + last_object], eax
+    jne .check_keyboard_event
     cmp dword ptr [rip + last_opcode], 0
     je .pointer_enter
     cmp dword ptr [rip + last_opcode], 1
@@ -666,6 +677,50 @@ wayland_main:
     test rax, rax
     js .protocol_error
     jmp .event_loop
+.check_keyboard_event:
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .check_toplevel_close
+    cmp dword ptr [rip + last_object], eax
+    jne .check_toplevel_close
+    cmp dword ptr [rip + last_opcode], 1
+    je .keyboard_enter
+    cmp dword ptr [rip + last_opcode], 2
+    je .keyboard_leave
+    cmp dword ptr [rip + last_opcode], 3
+    je .keyboard_key
+    # keymap, modifiers, and repeat-info are intentionally ignored until
+    # the self-contained XKB keymap reader is implemented.
+    jmp .event_loop
+.keyboard_enter:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 4], 8
+    jne .event_loop
+    mov dword ptr [rip + keyboard_focused], 1
+    jmp .event_loop
+.keyboard_leave:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    mov dword ptr [rip + keyboard_focused], 0
+    jmp .event_loop
+.keyboard_key:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_loop
+    cmp dword ptr [rip + event_payload + 12], 0
+    je .event_loop
+    # Raw key presses cycle the temporary palette. Text/key-symbol mapping
+    # will replace this demonstration behavior in the editor input layer.
+    mov eax, dword ptr [rip + palette_selection]
+    inc eax
+    cmp eax, 3
+    jb .keyboard_selection_ready
+    xor eax, eax
+.keyboard_selection_ready:
+    mov dword ptr [rip + palette_selection], eax
+    jmp .palette_changed
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
     jne .event_loop
@@ -1317,25 +1372,55 @@ present_buffer:
     ret
 .size present_buffer, . - present_buffer
 
-# Create wl_pointer object 15 once the seat advertises pointer capability.
+# Create input objects after wl_seat advertises their capabilities.
+# Pointer is allocated before keyboard when both appear in the same event.
 .type handle_seat_capabilities, @function
 handle_seat_capabilities:
+    push rbp
     cmp dword ptr [rip + last_size], 4
-    jb .seat_caps_done
-    test dword ptr [rip + event_payload], 1
-    jz .seat_caps_done
+    jb .seat_caps_success
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + seat_capabilities], eax
+
+    test eax, 1
+    jz .seat_caps_keyboard
     cmp dword ptr [rip + pointer_created], 0
-    jne .seat_caps_done
-    mov dword ptr [rip + payload_buffer], 15
+    jne .seat_caps_keyboard
+    mov eax, dword ptr [rip + next_input_object]
+    mov dword ptr [rip + pointer_object], eax
+    mov dword ptr [rip + payload_buffer], eax
     mov edi, 13
-    xor esi, esi
+    xor esi, esi                  # wl_seat.get_pointer
     lea rdx, [rip + payload_buffer]
     mov ecx, 4
     call wl_send_request
     test rax, rax
     js .seat_caps_done
     mov dword ptr [rip + pointer_created], 1
+    inc dword ptr [rip + next_input_object]
+
+.seat_caps_keyboard:
+    test dword ptr [rip + seat_capabilities], 2
+    jz .seat_caps_success
+    cmp dword ptr [rip + keyboard_created], 0
+    jne .seat_caps_success
+    mov eax, dword ptr [rip + next_input_object]
+    mov dword ptr [rip + keyboard_object], eax
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 13
+    mov esi, 1                    # wl_seat.get_keyboard
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+    mov dword ptr [rip + keyboard_created], 1
+    inc dword ptr [rip + next_input_object]
+
+.seat_caps_success:
+    xor eax, eax
 .seat_caps_done:
+    pop rbp
     ret
 .size handle_seat_capabilities, . - handle_seat_capabilities
 
