@@ -897,7 +897,7 @@ xkb_symbols "nekoedit-sparse" {
                             }
 
                     def assert_picker(label: str) -> None:
-                        panel_pixel = struct.unpack_from("<I", pixels, 36 * 800 * 4 + 40 * 4)[0]
+                        panel_pixel = struct.unpack_from("<I", pixels, 70 * 800 * 4 + 40 * 4)[0]
                         path_pixel = struct.unpack_from("<I", pixels, 64 * 800 * 4 + 56 * 4)[0]
                         if panel_pixel != 0xFF1F242D or path_pixel != 0xFF252A33:
                             raise AssertionError(
