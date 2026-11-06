@@ -262,6 +262,9 @@ caps_lock:              .long 0
 ctrl_down:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
+# Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
+doc_gap_start:          .long 0
+doc_gap_end:            .long 0
 doc_buffer:             .zero DOC_CAPACITY
 current_file_path:      .quad 0
 doc_save_error:         .long 0
@@ -1591,6 +1594,11 @@ load_initial_document:
 .load_file_empty:
     mov dword ptr [rip + doc_length], 0
 .load_file_reset:
+    # The file was read contiguously at the start of the allocation. Put the
+    # initial gap after its bytes; the unused tail becomes the insertion space.
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_gap_start], eax
+    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
     mov dword ptr [rip + doc_cursor], 0
     mov dword ptr [rip + doc_view_top_row], 0
     mov dword ptr [rip + doc_selection_active], 0
@@ -1730,11 +1738,24 @@ save_document_to_path:
     test rax, rax
     js .save_atomic_error
     mov ebx, eax
+    # Write the prefix before the gap, then the suffix after it. The physical
+    # gap is never serialized into the file.
     lea r12, [rip + doc_buffer]
-    mov ebp, dword ptr [rip + doc_length]
+    mov ebp, dword ptr [rip + doc_gap_start]
+    xor r15d, r15d
 .save_atomic_write:
     test ebp, ebp
-    jz .save_atomic_fsync
+    jnz .save_atomic_issue_write
+    test r15d, r15d
+    jnz .save_atomic_fsync
+    mov r15d, 1
+    lea r12, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add r12, rax
+    mov ebp, dword ptr [rip + doc_length]
+    sub ebp, dword ptr [rip + doc_gap_start]
+    jmp .save_atomic_write
+.save_atomic_issue_write:
     mov eax, SYS_write
     mov edi, ebx
     mov rsi, r12
@@ -1743,7 +1764,7 @@ save_document_to_path:
     test rax, rax
     jg .save_atomic_advance
     cmp rax, -4
-    je .save_atomic_write
+    je .save_atomic_issue_write
     jmp .save_atomic_close_error
 .save_atomic_advance:
     add r12, rax
@@ -1866,6 +1887,8 @@ load_document_from_path:
     mov ecx, r13d
     rep movsb
     mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_gap_start], r13d
+    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
     mov dword ptr [rip + doc_cursor], 0
     mov dword ptr [rip + doc_view_top_row], 0
     mov dword ptr [rip + doc_selection_active], 0
@@ -2832,14 +2855,106 @@ present_buffer:
 # Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
 # as single-byte replacement units so the original file bytes remain editable.
 # EDI=byte offset; EAX=next byte offset.
+.type doc_byte_at, @function
+# Read one logical document byte, translating around the movable gap.
+# EDI=logical byte offset; EAX=byte value (zero for an out-of-range offset).
+doc_byte_at:
+    mov eax, edi
+    cmp eax, dword ptr [rip + doc_length]
+    jae .doc_byte_at_out_of_range
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .doc_byte_at_physical
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add eax, edx
+.doc_byte_at_physical:
+    lea rdx, [rip + doc_buffer]
+    movzx eax, byte ptr [rdx + rax]
+    ret
+.doc_byte_at_out_of_range:
+    xor eax, eax
+    ret
+.size doc_byte_at, . - doc_byte_at
+
+# Move the gap to a logical byte offset. EDI is clamped to doc_length.
+# The gap is [doc_gap_start, doc_gap_end); bytes outside it stay in order.
+.type doc_move_gap, @function
+doc_move_gap:
+    push rbx
+    push r12
+    push r13
+    mov ebx, edi
+    mov eax, dword ptr [rip + doc_length]
+    cmp ebx, eax
+    jbe .doc_move_gap_target_valid
+    mov ebx, eax
+.doc_move_gap_target_valid:
+    mov r12d, dword ptr [rip + doc_gap_start]
+    cmp ebx, r12d
+    jb .doc_move_gap_left
+    ja .doc_move_gap_right
+    jmp .doc_move_gap_done
+
+.doc_move_gap_left:
+    # Move the prefix tail backwards into the end of the current gap.
+    mov r13d, r12d
+    sub r13d, ebx
+    test r13d, r13d
+    jz .doc_move_gap_done
+    lea rsi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_start]
+    add rsi, rax
+    dec rsi
+    lea rdi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rdi, rax
+    dec rdi
+    mov ecx, r13d
+    std
+    rep movsb
+    cld
+    mov dword ptr [rip + doc_gap_start], ebx
+    sub dword ptr [rip + doc_gap_end], r13d
+    jmp .doc_move_gap_done
+
+.doc_move_gap_right:
+    # Move the suffix head forwards into the beginning of the current gap.
+    mov r13d, ebx
+    sub r13d, r12d
+    test r13d, r13d
+    jz .doc_move_gap_done
+    lea rsi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rsi, rax
+    lea rdi, [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_start]
+    add rdi, rax
+    mov ecx, r13d
+    cld
+    rep movsb
+    add dword ptr [rip + doc_gap_start], r13d
+    add dword ptr [rip + doc_gap_end], r13d
+.doc_move_gap_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_move_gap, . - doc_move_gap
+
+# Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
+# as single-byte replacement units so the original file bytes remain editable.
+# EDI=logical byte offset; EAX=next logical byte offset.
 .type doc_utf8_next, @function
 doc_utf8_next:
-    mov eax, edi
+    push rbx
+    mov r8d, edi
     mov r9d, dword ptr [rip + doc_length]
-    cmp eax, r9d
+    mov eax, r8d
+    cmp r8d, r9d
     jae .Lneko_utf8_next_done
-    lea rdx, [rip + doc_buffer]
-    movzx r11d, byte ptr [rdx + rax]
+    mov edi, r8d
+    call doc_byte_at
+    mov r11d, eax
     cmp r11d, 0xc2
     jb .Lneko_utf8_next_single
     cmp r11d, 0xdf
@@ -2851,21 +2966,23 @@ doc_utf8_next:
     jmp .Lneko_utf8_next_single
 
 .Lneko_utf8_next_two:
-    lea edi, [eax + 1]
+    lea edi, [r8d + 1]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     and r10d, 0xc0
     cmp r10d, 0x80
     jne .Lneko_utf8_next_single
-    add eax, 2
-    ret
+    lea eax, [r8d + 2]
+    jmp .Lneko_utf8_next_done
 
 .Lneko_utf8_next_three:
-    lea edi, [eax + 1]
+    lea edi, [r8d + 1]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     cmp r10d, 0x80
     jb .Lneko_utf8_next_single
     cmp r10d, 0xbf
@@ -2881,21 +2998,23 @@ doc_utf8_next:
     cmp r10d, 0x9f
     ja .Lneko_utf8_next_single
 .Lneko_utf8_next_three_second_ok:
-    lea edi, [eax + 2]
+    lea edi, [r8d + 2]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     and r10d, 0xc0
     cmp r10d, 0x80
     jne .Lneko_utf8_next_single
-    add eax, 3
-    ret
+    lea eax, [r8d + 3]
+    jmp .Lneko_utf8_next_done
 
 .Lneko_utf8_next_four:
-    lea edi, [eax + 1]
+    lea edi, [r8d + 1]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     cmp r10d, 0x80
     jb .Lneko_utf8_next_single
     cmp r10d, 0xbf
@@ -2911,26 +3030,29 @@ doc_utf8_next:
     cmp r10d, 0x8f
     ja .Lneko_utf8_next_single
 .Lneko_utf8_next_four_second_ok:
-    lea edi, [eax + 2]
+    lea edi, [r8d + 2]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     and r10d, 0xc0
     cmp r10d, 0x80
     jne .Lneko_utf8_next_single
-    lea edi, [eax + 3]
+    lea edi, [r8d + 3]
     cmp edi, r9d
     jae .Lneko_utf8_next_single
-    movzx r10d, byte ptr [rdx + rdi]
+    call doc_byte_at
+    mov r10d, eax
     and r10d, 0xc0
     cmp r10d, 0x80
     jne .Lneko_utf8_next_single
-    add eax, 4
-    ret
+    lea eax, [r8d + 4]
+    jmp .Lneko_utf8_next_done
 
 .Lneko_utf8_next_single:
-    inc eax
+    lea eax, [r8d + 1]
 .Lneko_utf8_next_done:
+    pop rbx
     ret
 .size doc_utf8_next, . - doc_utf8_next
 
@@ -2980,25 +3102,20 @@ doc_utf8_prev:
 
 # Insert one byte at the cursor. The bounded buffer never writes past its allocation.
 .type doc_insert_byte, @function
+# Insert a byte at the logical cursor by consuming one byte from the gap.
 doc_insert_byte:
     push rbx
     push r12
     push r13
     mov r13d, edi
-    mov eax, dword ptr [rip + doc_length]
-    cmp eax, DOC_CAPACITY
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_move_gap
+    mov eax, dword ptr [rip + doc_gap_start]
+    cmp eax, dword ptr [rip + doc_gap_end]
     jae .doc_insert_done
-    mov edx, dword ptr [rip + doc_cursor]
     lea r12, [rip + doc_buffer]
-.doc_insert_shift:
-    cmp eax, edx
-    jbe .doc_insert_store
-    mov bl, byte ptr [r12 + rax - 1]
-    mov byte ptr [r12 + rax], bl
-    dec eax
-    jmp .doc_insert_shift
-.doc_insert_store:
-    mov byte ptr [r12 + rdx], r13b
+    mov byte ptr [r12 + rax], r13b
+    inc dword ptr [rip + doc_gap_start]
     inc dword ptr [rip + doc_length]
     inc dword ptr [rip + doc_cursor]
 .doc_insert_done:
@@ -3014,22 +3131,16 @@ doc_delete_at_cursor:
     push r12
     push r13
     mov r12d, dword ptr [rip + doc_cursor]
-    mov eax, dword ptr [rip + doc_length]
-    cmp r12d, eax
+    cmp r12d, dword ptr [rip + doc_length]
     jae .doc_delete_done
     mov edi, r12d
     call doc_utf8_next
     mov r13d, eax
-    mov ecx, dword ptr [rip + doc_length]
-    sub ecx, r13d
-    lea rsi, [rip + doc_buffer]
-    add rsi, r13
-    lea rdi, [rip + doc_buffer]
-    add rdi, r12
-    cld
-    rep movsb
+    mov edi, r12d
+    call doc_move_gap
     mov eax, r13d
     sub eax, r12d
+    add dword ptr [rip + doc_gap_end], eax
     sub dword ptr [rip + doc_length], eax
 .doc_delete_done:
     pop r13
@@ -3038,8 +3149,8 @@ doc_delete_at_cursor:
     ret
 .size doc_delete_at_cursor, . - doc_delete_at_cursor
 
-# Remove the active byte range and compact the document buffer in place.
 .type doc_delete_selection, @function
+# Remove a logical selection by extending the gap over its selected bytes.
 doc_delete_selection:
     push rbx
     push r12
@@ -3054,16 +3165,12 @@ doc_delete_selection:
 .Lneko_delete_selection_bounds:
     mov ebx, eax
     mov r12d, edx
-    lea r13, [rip + doc_buffer]
-    mov ecx, dword ptr [rip + doc_length]
-    sub ecx, r12d
-    lea rsi, [r13 + r12]
-    lea rdi, [r13 + rbx]
-    cld
-    rep movsb
-    mov eax, r12d
-    sub eax, ebx
-    sub dword ptr [rip + doc_length], eax
+    mov edi, ebx
+    call doc_move_gap
+    mov r13d, r12d
+    sub r13d, ebx
+    add dword ptr [rip + doc_gap_end], r13d
+    sub dword ptr [rip + doc_length], r13d
     mov dword ptr [rip + doc_cursor], ebx
     mov dword ptr [rip + doc_selection_anchor], ebx
     mov dword ptr [rip + doc_selection_active], 0
@@ -3213,10 +3320,14 @@ doc_move_line_edge:
     jz .Lneko_visual_edge_store
     test eax, eax
     jz .Lneko_visual_edge_store
-    lea rbx, [rip + doc_buffer]
-    cmp byte ptr [rbx + rax - 1], 10
-    jne .Lneko_visual_edge_store
-    dec eax
+    mov ebx, eax
+    lea edi, [rbx - 1]
+    call doc_byte_at
+    cmp eax, 10
+    jne .Lneko_visual_edge_store_ebx
+    dec ebx
+.Lneko_visual_edge_store_ebx:
+    mov eax, ebx
 .Lneko_visual_edge_store:
     mov dword ptr [rip + doc_cursor], eax
     pop r12
@@ -3239,14 +3350,14 @@ doc_offset_to_visual:
     mov r13d, dword ptr [rip + doc_length]
     cmp r12d, r13d
     cmova r12d, r13d
-    lea r8, [rip + doc_buffer]
     xor r14d, r14d
     xor ebx, ebx
     xor ecx, ecx
 .Lneko_offset_visual_scan:
     cmp ecx, r12d
     jae .Lneko_offset_visual_boundary
-    movzx eax, byte ptr [r8 + rcx]
+    mov edi, ecx
+    call doc_byte_at
     cmp eax, 10
     je .Lneko_offset_visual_newline
     cmp eax, 9
@@ -3289,7 +3400,8 @@ doc_offset_to_visual:
     # at the start of the next visual row, not just beyond the right edge.
     cmp r12d, r13d
     jae .Lneko_offset_visual_done
-    movzx eax, byte ptr [r8 + r12]
+    mov edi, r12d
+    call doc_byte_at
     cmp eax, 10
     je .Lneko_offset_visual_done
     cmp eax, 9
@@ -3332,7 +3444,6 @@ doc_visual_to_offset:
     mov r12d, edi
     mov r13d, esi
     mov r15d, dword ptr [rip + doc_length]
-    lea r8, [rip + doc_buffer]
     xor r14d, r14d
     xor ebx, ebx
     xor ecx, ecx
@@ -3341,7 +3452,8 @@ doc_visual_to_offset:
     jae .Lneko_visual_offset_end
     cmp ebx, r12d
     ja .Lneko_visual_offset_end
-    movzx eax, byte ptr [r8 + r14]
+    mov edi, r14d
+    call doc_byte_at
     cmp eax, 10
     je .Lneko_visual_offset_newline
     cmp eax, 9
@@ -3878,14 +3990,14 @@ render_status_bar:
     jbe .Lneko_status_cursor_bounded
     mov ebx, dword ptr [rip + doc_length]
 .Lneko_status_cursor_bounded:
-    lea r12, [rip + doc_buffer]
     xor r14d, r14d
     mov r13d, 1
     mov ebp, 1
 .Lneko_status_scan:
     cmp r14d, ebx
     jae .Lneko_status_scan_done
-    movzx eax, byte ptr [r12 + r14]
+    mov edi, r14d
+    call doc_byte_at
     cmp eax, 10
     je .Lneko_status_newline
     cmp eax, 9
@@ -4082,7 +4194,6 @@ render_selection:
     mov dword ptr [rip + doc_selection_start], eax
     mov dword ptr [rip + doc_selection_end], edx
 
-    lea rbx, [rip + doc_buffer]
     mov r15d, dword ptr [rip + doc_length]
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
@@ -4096,7 +4207,8 @@ render_selection:
     mov eax, dword ptr [rip + doc_selection_end]
     cmp r14d, eax
     jae .Lneko_render_selection_done
-    movzx eax, byte ptr [rbx + r14]
+    mov edi, r14d
+    call doc_byte_at
     cmp eax, 10
     je .Lneko_render_selection_newline
     cmp eax, 9
@@ -4214,13 +4326,14 @@ render_document:
     mov r15d, dword ptr [rip + doc_length]
     test r15d, r15d
     jz .document_draw_cursor
-    lea rbx, [rip + doc_buffer]
 .document_render_loop:
     cmp r14d, r15d
     jae .document_draw_cursor
     cmp r13d, STATUS_TOP - LINE_HEIGHT
     jge .document_draw_cursor
-    movzx edx, byte ptr [rbx + r14]
+    mov edi, r14d
+    call doc_byte_at
+    mov edx, eax
     cmp edx, 10
     je .document_newline
     cmp edx, 9

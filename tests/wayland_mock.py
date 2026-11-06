@@ -80,6 +80,7 @@ def run(
     utf8_delete_test: bool = False,
     utf8_invalid_test: bool = False,
     utf8_pointer_test: bool = False,
+    gap_buffer_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -260,8 +261,8 @@ def run(
                         15, 0,
                         struct.pack(
                             "<IIii", 777, 8,
-                            (50 if utf8_pointer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98)) * 256,
-                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test) else 110) * 256,
+                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98))) * 256,
+                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test) else 110) * 256,
                         ),
                     )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
@@ -272,6 +273,7 @@ def run(
                 if not (
                     sparse_keymap_test or punctuation_render_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
+                    or gap_buffer_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -994,7 +996,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
-                if save_roundtrip and not (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test):
+                if save_roundtrip and not (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test):
                     # Keep this path-specific test independent from the full
                     # empty-document editor interaction suite below.
                     client.sendall(
@@ -1032,6 +1034,35 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     observations.append("launch-time load, selection replacement, and Ctrl+S write verified")
                     client.sendall(wire_message(10, 1))
+                    return
+
+                if gap_buffer_test:
+                    # Start after A + the two-byte é, then alternate the gap
+                    # across a UTF-8 prefix and ASCII suffix. Insertions, cursor
+                    # motion, Backspace, Delete, and selection deletion must all
+                    # preserve the logical byte stream while storage is split.
+                    key_step(1250, 45, "insert x after UTF-8 prefix")
+                    key_step(1252, 105, "move left before inserted x")
+                    key_step(1254, 21, "insert y before x and move the gap left")
+                    key_step(1256, 106, "move right across x")
+                    key_step(1258, 14, "Backspace deletes x from the suffix")
+                    key_step(1260, 111, "Delete removes B after the gap")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1262, 1262, 42, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1263, 1263, 105, 1))
+                    )
+                    workflow_redraw("Shift+Left selects y across the gap")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1264, 1264, 105, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1265, 1265, 42, 0))
+                        + wire_message(12, 0)
+                    )
+                    key_step(1266, 14, "Backspace removes the selected y")
+                    workflow_shortcut(1270, 31, "Ctrl+S saves split gap-buffer segments")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "gap movement, insertion, Backspace, Delete, UTF-8 prefix reads, selection deletion, and two-segment save"
+                    )
                     return
 
                 if utf8_edit_test:
@@ -1867,6 +1898,25 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(pointer_path)
+        except FileNotFoundError:
+            pass
+
+    # Move the gap between a mixed-width UTF-8 prefix and an ASCII suffix.
+    # The final bytes verify both the logical editor view and two-segment save.
+    gap_fd, gap_path = tempfile.mkstemp(prefix="nekoedit-gap-")
+    try:
+        with os.fdopen(gap_fd, "wb") as document:
+            document.write(b"A\xc3\xa9BC")
+        run(
+            sys.argv[1],
+            initial_file=gap_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"A\xc3\xa9C",
+            gap_buffer_test=True,
+        )
+    finally:
+        try:
+            os.unlink(gap_path)
         except FileNotFoundError:
             pass
 
