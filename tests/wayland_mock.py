@@ -180,7 +180,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                         2,
                         0,
                         struct.pack("<II", 4, 8)
-                        + b"wl_seat\\0"
+                        + b"wl_seat\0"
                         + struct.pack("<II", 1, 13),
                     ),
                     "bind wl_seat",
