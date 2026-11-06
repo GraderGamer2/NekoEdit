@@ -39,9 +39,22 @@ msg_globals:           .ascii "NekoEdit: compositor, wl_shm, or xdg_wm_base is u
 msg_globals_end:
 msg_protocol:          .ascii "NekoEdit: Wayland protocol or shared-memory setup failed.\n"
 msg_protocol_end:
+newline_text:            .ascii "\n"
+stage_registry:       .asciz "Wayland stage: registry discovery"
+stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
+stage_bind:           .asciz "Wayland stage: bind globals"
+stage_bind_roundtrip: .asciz "Wayland stage: bind roundtrip"
+stage_xdg_create:     .asciz "Wayland stage: create xdg window"
+stage_xdg_configure:  .asciz "Wayland stage: wait for xdg configure"
+stage_memfd:          .asciz "Wayland stage: allocate shared memory"
+stage_pool:           .asciz "Wayland stage: send shm pool"
+stage_buffer:         .asciz "Wayland stage: create wl_buffer"
+stage_attach:         .asciz "Wayland stage: attach and commit"
+stage_event_loop:     .asciz "Wayland stage: event loop"
 
 .section .bss
 .balign 16
+failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
 runtime_dir_ptr:       .quad 0
@@ -148,6 +161,8 @@ wayland_main:
     test rax, rax
     js .connect_error
 
+    lea rax, [rip + stage_registry]
+    mov qword ptr [rip + failure_stage], rax
     # wl_display.get_registry(new_id=2)
     mov dword ptr [rip + payload_buffer], 2
     mov edi, 1
@@ -170,6 +185,8 @@ wayland_main:
 
     # Process registry.global events until callback 3 completes.
 .registry_roundtrip:
+    lea rax, [rip + stage_registry_read]
+    mov qword ptr [rip + failure_stage], rax
     call wl_read_event
     test rax, rax
     js .protocol_error
@@ -192,6 +209,8 @@ wayland_main:
     cmp dword ptr [rip + xdg_global], 0
     je .missing_globals
 
+    lea rax, [rip + stage_bind]
+    mov qword ptr [rip + failure_stage], rax
     # Bind compositor as object 4, wl_shm as 5, xdg_wm_base as 6.
     mov edi, dword ptr [rip + compositor_global]
     lea rsi, [rip + iface_compositor]
@@ -220,6 +239,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    lea rax, [rip + stage_bind_roundtrip]
+    mov qword ptr [rip + failure_stage], rax
     # Roundtrip callback 11 ensures bind requests have been processed.
     mov dword ptr [rip + payload_buffer], 11
     mov edi, 1
@@ -244,6 +265,8 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .bind_roundtrip
 
+    lea rax, [rip + stage_xdg_create]
+    mov qword ptr [rip + failure_stage], rax
     # wl_compositor.create_surface(new_id=7)
     mov dword ptr [rip + payload_buffer], 7
     mov edi, 4
@@ -299,6 +322,8 @@ wayland_main:
     js .protocol_error
 
 .wait_configure:
+    lea rax, [rip + stage_xdg_configure]
+    mov qword ptr [rip + failure_stage], rax
     call wl_read_event
     test rax, rax
     js .protocol_error
@@ -324,6 +349,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    lea rax, [rip + stage_memfd]
+    mov qword ptr [rip + failure_stage], rax
     # Allocate a memfd-backed wl_shm buffer.
     mov eax, SYS_memfd_create
     lea rdi, [rip + memfd_label]
@@ -368,6 +395,8 @@ wayland_main:
     mov eax, 0xff78a9d4
     rep stosd
 
+    lea rax, [rip + stage_pool]
+    mov qword ptr [rip + failure_stage], rax
     # wl_shm.create_pool(new_id=10, fd, size=BUFFER_SIZE)
     mov dword ptr [rip + payload_buffer], 10
     mov dword ptr [rip + payload_buffer + 4], BUFFER_SIZE
@@ -380,6 +409,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    lea rax, [rip + stage_buffer]
+    mov qword ptr [rip + failure_stage], rax
     # wl_shm_pool.create_buffer(new_id=12, offset=0, width, height, stride, XRGB8888=1)
     mov dword ptr [rip + payload_buffer], 12
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -404,6 +435,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
+    lea rax, [rip + stage_attach]
+    mov qword ptr [rip + failure_stage], rax
     # wl_surface.attach(buffer=12, x=0, y=0)
     mov dword ptr [rip + payload_buffer], 12
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -440,6 +473,8 @@ wayland_main:
 
     # Minimal event loop: answer shell pings and honor the compositor close event.
 .event_loop:
+    lea rax, [rip + stage_event_loop]
+    mov qword ptr [rip + failure_stage], rax
     call wl_read_event
     test rax, rax
     js .protocol_error
@@ -486,9 +521,63 @@ wayland_main:
     lea rsi, [rip + msg_protocol]
     mov edx, msg_protocol_end - msg_protocol
     call linux_write_all
+    mov rsi, qword ptr [rip + failure_stage]
+    test rsi, rsi
+    jz .protocol_check_display_error
+    call write_stderr_cstr
+.protocol_check_display_error:
+    # wl_display.error is event object 1/opcode 0:
+    # object_id, code, and a Wayland string.
+    cmp dword ptr [rip + last_object], 1
+    jne .protocol_exit
+    cmp dword ptr [rip + last_opcode], 0
+    jne .protocol_exit
+    mov eax, dword ptr [rip + event_payload + 8]
+    cmp eax, 1
+    jb .protocol_exit
+    cmp eax, 4000
+    ja .protocol_exit
+    sub eax, 1
+    mov edx, eax
+    mov edi, 2
+    lea rsi, [rip + event_payload + 12]
+    call linux_write_all
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
+.protocol_exit:
     mov edi, 1
     jmp linux_exit
 .size wayland_main, . - wayland_main
+
+# Print a NUL-terminated string to stderr. Input: RSI = string.
+.type write_stderr_cstr, @function
+write_stderr_cstr:
+    push rbx
+    push r12
+    push r13
+    mov r12, rsi
+    mov rdi, rsi
+    xor eax, eax
+    mov rcx, -1
+    repne scasb
+    not rcx
+    dec rcx
+    mov r13, rcx
+    mov edi, 2
+    mov rsi, r12
+    mov rdx, r13
+    call linux_write_all
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size write_stderr_cstr, . - write_stderr_cstr
 
 # env_lookup(key=rdi, key_length=esi) -> rax=value pointer or 0.
 .type env_lookup, @function
