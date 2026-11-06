@@ -1035,7 +1035,9 @@ xkb_lookup_ascii:
     test ebx, ebx
     jz .Lxkb_lookup_done
     lea rdx, [rip + xkb_ascii_levels]
-    lea rdx, [rdx + r12*16]
+    mov eax, r12d
+    shl eax, 4
+    add rdx, rax
     movzx eax, byte ptr [rdx + r13]
     jmp .Lxkb_lookup_done
 .Lxkb_lookup_none:
