@@ -2825,6 +2825,7 @@ picker_confirm_action:
 
 .type picker_move_selection, @function
 picker_move_selection:
+    sub rsp, 8
     mov eax, dword ptr [rip + picker_entry_count]
     test eax, eax
     jz .picker_move_done
@@ -2851,6 +2852,7 @@ picker_move_selection:
     cmp edx, eax
     jae .picker_move_check_bottom
     mov dword ptr [rip + picker_scroll], edx
+    add rsp, 8
     ret
 .picker_move_check_bottom:
     mov ecx, edx
@@ -2860,6 +2862,7 @@ picker_move_selection:
     sub edx, PICKER_VISIBLE_ROWS - 1
     mov dword ptr [rip + picker_scroll], edx
 .picker_move_done:
+    add rsp, 8
     ret
 .size picker_move_selection, . - picker_move_selection
 
