@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nekoedit-ci-\${{ github.ref }}
+  group: nekoedit-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
