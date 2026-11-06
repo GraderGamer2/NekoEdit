@@ -105,7 +105,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(20 if file_workflow else 8)
+            client.settimeout(45 if file_workflow else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -379,6 +379,10 @@ def run(
                     key_step(2000, evdev["h"], "type first Untitled character")
                     key_step(2002, evdev["i"], "type second Untitled character")
                     workflow_shortcut(2010, 31, "Ctrl+S opens Save As for Untitled")
+                    if struct.unpack_from("<I", pixels, 148 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
+                        raise AssertionError("Untitled Ctrl+S did not render the Save As path prompt")
+                    if struct.unpack_from("<I", pixels, 204 * 800 * 4 + 72 * 4)[0] != 0xFF252A33:
+                        raise AssertionError("Save As path-entry field was not rendered")
                     serial = workflow_type_path("created.txz", 2020)
                     key_step(serial, 14, "path prompt Backspace")
                     key_step(serial + 2, evdev["t"], "correct Save As path")
@@ -397,7 +401,11 @@ def run(
 
                     # Open is available from the pointer-operated File menu.
                     workflow_click(120, 12, 2100, "open File menu")
+                    if struct.unpack_from("<I", pixels, 35 * 800 * 4 + 108 * 4)[0] != 0xFF1F242D:
+                        raise AssertionError("File dropdown background was not rendered")
                     workflow_click(120, 44, 2110, "select File > Open")
+                    if struct.unpack_from("<I", pixels, 148 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
+                        raise AssertionError("File > Open did not render its path prompt")
                     serial = workflow_type_path("relative-open.txz", 2120)
                     key_step(serial, 14, "Open path Backspace")
                     key_step(serial + 2, evdev["t"], "correct Open path")
@@ -446,7 +454,20 @@ def run(
                     with open(absolute_path, "rb") as saved:
                         if saved.read() != b"zabc":
                             raise AssertionError("Ctrl+S did not use the absolute Save As path")
-                    observations.append("File > Save, File > Save As, Ctrl+Shift+S, and absolute paths verified")
+                    # A failed Save As must leave the previously active path
+                    # intact, so a subsequent Ctrl+S still writes that path.
+                    workflow_shortcut(serial + 10, 31, "Ctrl+Shift+S before failed Save As", shift=True)
+                    serial = workflow_type_path("/no-such-nekoedit-directory/save.txt", serial + 20)
+                    key_step(serial, 28, "confirm failed Save As")
+                    key_step(serial + 2, 1, "Escape failed Save As prompt")
+                    key_step(serial + 4, evdev["d"], "edit after failed Save As")
+                    workflow_shortcut(serial + 6, 31, "save to prior path after failed Save As")
+                    with open(absolute_path, "rb") as saved:
+                        if saved.read() != b"zabcd":
+                            raise AssertionError("failed Save As changed the active document path")
+                    if os.path.exists("/no-such-nekoedit-directory/save.txt"):
+                        raise AssertionError("failed Save As unexpectedly created its destination")
+                    observations.append("File > Save, File > Save As, Ctrl+Shift+S, absolute paths, and failed Save As rollback verified")
 
                     # A failed Open and an over-limit Open must leave the active
                     # bytes/path untouched; Escape dismisses either prompt.
@@ -1122,7 +1143,7 @@ def run(
             pass_fds=pass_fds,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=24 if file_workflow else 10,
+            timeout=50 if file_workflow else 10,
             cwd=runtime_dir if file_workflow else None,
             check=False,
         )

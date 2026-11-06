@@ -23,9 +23,7 @@
 .equ AT_FDCWD,          -100
 .equ O_WRONLY,             1
 .equ O_CREAT,             64
-.equ O_TRUNC,            512
 .equ O_CLOEXEC,       0x80000
-.equ FILE_SAVE_FLAGS, (O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC)
 .equ SYS_fsync,         74
 .equ SYS_getpid,        39
 .equ SYS_renameat,     264
@@ -1515,7 +1513,7 @@ load_initial_document:
     mov eax, SYS_close
     syscall
 .load_file_error:
-    mov eax, -5
+    mov rax, -5
     jmp .load_file_return
 .load_file_empty:
     mov dword ptr [rip + doc_length], 0
@@ -1575,7 +1573,7 @@ save_document_file:
     jmp save_document_to_path
 .save_file_no_path:
     mov dword ptr [rip + doc_save_error], 1
-    mov eax, -2
+    mov rax, -2
     ret
 .size save_document_file, . - save_document_file
 
@@ -1719,7 +1717,7 @@ save_document_to_path:
     jmp .save_atomic_error
 .save_atomic_error:
     mov dword ptr [rip + doc_save_error], 1
-    mov eax, -5
+    mov rax, -5
 .save_atomic_return:
     pop r15
     pop r14
@@ -1811,7 +1809,7 @@ load_document_from_path:
     syscall
 .load_path_error:
     mov dword ptr [rip + doc_open_error], 1
-    mov eax, -5
+    mov rax, -5
 .load_path_return:
     pop r14
     pop r13
@@ -1902,16 +1900,16 @@ confirm_path_prompt:
     cmp dword ptr [rip + path_prompt_mode], 1
     jne .confirm_path_save_error
     mov dword ptr [rip + doc_open_error], 1
-    mov eax, -2
+    mov rax, -2
     pop rbp
     ret
 .confirm_path_save_error:
     mov dword ptr [rip + doc_save_error], 1
-    mov eax, -2
+    mov rax, -2
     pop rbp
     ret
 .confirm_path_failed:
-    mov eax, -5
+    mov rax, -5
     pop rbp
     ret
 .size confirm_path_prompt, . - confirm_path_prompt
@@ -2020,7 +2018,7 @@ copy_cstr:
     mov eax, ecx
     ret
 .copy_fail:
-    mov eax, -1
+    mov rax, -1
     ret
 .size copy_cstr, . - copy_cstr
 
@@ -2244,7 +2242,7 @@ wl_read_event:
     jne .read_event_success
     cmp dword ptr [rip + last_opcode], 0
     jne .read_event_success
-    mov eax, -71                 # EPROTO
+    mov rax, -71                 # EPROTO
     jmp .read_event_done
 .read_event_success:
     xor eax, eax
@@ -2252,7 +2250,7 @@ wl_read_event:
     pop rbp
     ret
 .read_event_bad:
-    mov eax, -71
+    mov rax, -71
     jmp .read_event_done
 .size wl_read_event, . - wl_read_event
 
@@ -2515,7 +2513,7 @@ present_buffer:
     add rsp, 8
     ret
 .present_buffer_busy:
-    mov eax, -16
+    mov rax, -16
 .present_buffer_done:
     add rsp, 8
     ret
