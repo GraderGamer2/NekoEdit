@@ -1777,6 +1777,11 @@ picker_scan_directory:
     mov dword ptr [rip + picker_entry_count], 0
     mov dword ptr [rip + picker_selected], -1
     mov dword ptr [rip + picker_scroll], 0
+    # A rebuilt listing invalidates the previous row identity and click timing.
+    # Without this, a click on row 0 after navigation can be mistaken for the
+    # second half of a double-click from the directory we just left.
+    mov dword ptr [rip + picker_last_click_index], -1
+    mov dword ptr [rip + picker_last_click_time], 0
     mov dword ptr [rip + picker_truncated], 0
     mov dword ptr [rip + picker_error], 0
     mov eax, SYS_lseek
