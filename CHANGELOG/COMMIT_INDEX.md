@@ -326,6 +326,12 @@ Actions runs #199–#207 include failed intermediate attempts while the picker r
 
 | 2026-11-06 14:17:55 UTC | [`251e29029362`](https://github.com/GraderGamer2/NekoEdit/commit/251e290293623ec8f2ef4e4ec01d9d61ec267ff1) | docs: record native directory picker milestone and verification |
 
+## Picker milestone status-snapshot maintenance
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 14:20:00 UTC | [`c9e18b744a14`](https://github.com/GraderGamer2/NekoEdit/commit/c9e18b744a14bd719a4aec838d21b596a5213062) | docs: mark native file picker as implemented |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
