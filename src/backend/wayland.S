@@ -2308,6 +2308,7 @@ picker_navigate_path:
     test rax, rax
     js .picker_navigate_path_error
     mov dword ptr [rip + picker_path_length], eax
+    call picker_copy_path_to_field
     call picker_scan_directory
     jmp .picker_navigate_done
 .picker_navigate_path_error:
