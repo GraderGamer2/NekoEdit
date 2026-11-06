@@ -376,6 +376,12 @@ Actions run #235 passed all eight workflow steps on `d071d832dbbf4c9a8efcf02b495
 |---|---|---|
 | 2026-11-06 15:06:22 UTC | [`8ab945baaea3`](https://github.com/GraderGamer2/NekoEdit/commit/8ab945baaea3f64c8ba49d3052504d07ca96e17c) | docs: add native picker UX milestones to project history |
 
+## Project-history index maintenance
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 15:06:34 UTC | [`dc33a7bec5a0`](https://github.com/GraderGamer2/NekoEdit/commit/dc33a7bec5a000fed2d9859fe88bc0e7a9d0b91d) | docs: index picker project-history milestone |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
