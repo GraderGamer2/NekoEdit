@@ -176,6 +176,7 @@ msg_protocol_error_prefix_end:
 msg_request_failure: .ascii "Wayland send failed: object="
 msg_request_opcode:  .ascii ", opcode="
 msg_request_errno:   .ascii ", errno="
+msg_request_errno_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -1850,7 +1851,7 @@ wayland_main:
     call write_stderr_u32
     mov edi, 2
     lea rsi, [rip + msg_request_errno]
-    mov edx, newline_text - msg_request_errno
+    mov edx, msg_request_errno_end - msg_request_errno
     call linux_write_all
     mov eax, dword ptr [rip + failed_request_errno]
     neg eax
