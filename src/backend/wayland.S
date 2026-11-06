@@ -165,14 +165,6 @@ shift_down:             .long 0
 caps_lock:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
-debug_pointer_x:        .long 0
-debug_pointer_y:        .long 0
-debug_pointer_col:      .long 0
-debug_pointer_line:     .long 0
-debug_pointer_offset:   .long 0
-debug_x_after_sub:       .long 0
-debug_x_after_add:       .long 0
-debug_x_divisor:          .long 0
 doc_buffer:             .zero DOC_CAPACITY
 last_object:           .long 0
 last_opcode:           .long 0
@@ -1542,33 +1534,6 @@ render_surface:
     mov r9d, 0xff9dc58a
     call draw_rect
     call render_document
-    # Temporary diagnostic words in the bottom-right corner; removed after
-    # pointer hit-testing is verified by the mock compositor.
-    mov r11, qword ptr [rip + shm_mapping]
-    mov eax, dword ptr [rip + debug_pointer_x]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 700 * 4], eax
-    mov eax, dword ptr [rip + debug_pointer_y]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 701 * 4], eax
-    mov eax, dword ptr [rip + debug_pointer_col]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 702 * 4], eax
-    mov eax, dword ptr [rip + debug_pointer_line]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 703 * 4], eax
-    mov eax, dword ptr [rip + debug_pointer_offset]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 704 * 4], eax
-    mov eax, dword ptr [rip + debug_x_after_sub]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 705 * 4], eax
-    mov eax, dword ptr [rip + debug_x_after_add]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 706 * 4], eax
-    mov eax, dword ptr [rip + debug_x_divisor]
-    or eax, 0xff000000
-    mov dword ptr [r11 + STRIDE * 470 + 707 * 4], eax
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -1717,8 +1682,6 @@ doc_move_line_edge:
 # tabs occupy four cells and UTF-8 continuation bytes are never cursor stops.
 .type doc_place_cursor_from_pointer, @function
 doc_place_cursor_from_pointer:
-    mov dword ptr [rip + debug_pointer_x], edi
-    mov dword ptr [rip + debug_pointer_y], esi
     push rbx
     push r12
     push r13
@@ -1727,19 +1690,16 @@ doc_place_cursor_from_pointer:
 
     # Horizontal pixel position -> nearest insertion column.
     sub edi, DOC_LEFT
-    mov dword ptr [rip + debug_x_after_sub], edi
     test edi, edi
     jns .Lneko_pointer_x_offset_ready
     xor edi, edi
 .Lneko_pointer_x_offset_ready:
     add edi, 4
-    mov dword ptr [rip + debug_x_after_add], edi
+    mov eax, edi                 # DIV consumes EDX:EAX, not EDI
     xor edx, edx
     mov ecx, CELL_WIDTH
-    mov dword ptr [rip + debug_x_divisor], ecx
     div ecx
     mov r14d, eax                 # requested visual column
-    mov dword ptr [rip + debug_pointer_col], eax
 
     # Vertical coordinate selects the row band containing the click.
     mov eax, esi
@@ -1748,7 +1708,6 @@ doc_place_cursor_from_pointer:
     mov ecx, LINE_HEIGHT
     div ecx
     mov r15d, eax                 # requested line number
-    mov dword ptr [rip + debug_pointer_line], eax
 
     lea r12, [rip + doc_buffer]
     mov r13d, dword ptr [rip + doc_length]
@@ -1831,11 +1790,9 @@ doc_place_cursor_from_pointer:
 
 .pointer_store_cursor:
     mov dword ptr [rip + doc_cursor], ebx
-    mov dword ptr [rip + debug_pointer_offset], ebx
     jmp .pointer_done
 .pointer_end_of_document:
     mov dword ptr [rip + doc_cursor], r13d
-    mov dword ptr [rip + debug_pointer_offset], r13d
 .pointer_done:
     pop r15
     pop r14
