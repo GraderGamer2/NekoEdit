@@ -36,7 +36,7 @@
     .byte 5
     .ascii "equal"
     .byte 61
-    .byte 7
+    .byte 4
     .ascii "plus"
     .byte 43
     .byte 10
@@ -54,7 +54,7 @@
     .byte 10
     .ascii "bracketleft"
     .byte 91
-    .byte 11
+    .byte 12
     .ascii "bracketright"
     .byte 93
     .byte 9
@@ -87,7 +87,7 @@
     .byte 7
     .ascii "percent"
     .byte 37
-    .byte 12
+    .byte 11
     .ascii "asciicircum"
     .byte 94
     .byte 9
@@ -105,7 +105,7 @@
     .byte 9
     .ascii "underscore"
     .byte 95
-    .byte 9
+    .byte 8
     .ascii "quotedbl"
     .byte 34
     .byte 5
@@ -114,15 +114,12 @@
     .byte 3
     .ascii "bar"
     .byte 124
-    .byte 9
+    .byte 10
     .ascii "asciitilde"
     .byte 126
     .byte 5
     .ascii "space"
     .byte 32
-    .byte 6
-    .ascii "exclam"
-    .byte 33
     .byte 0
 
 .section .bss
@@ -563,7 +560,6 @@ xkb_reset_keymap:
     lea rbx, [rbx + r12*4]
     mov eax, dword ptr [rip + .Lxkb_keyname_tmp]
     mov dword ptr [rbx], eax
-    inc dword ptr [rip + .Lxkb_symbol_count] # confirms usable keycode data
     jmp .Lxkb_keycodes_loop
 .Lxkb_keycodes_alias:
     mov eax, dword ptr [rip + .Lxkb_token]
@@ -603,26 +599,65 @@ xkb_reset_keymap:
 .size .Lxkb_parse_keycodes, . - .Lxkb_parse_keycodes
 
 # Return type flags for the current type token in EAX.
+# Search the current token for a case-sensitive NUL-terminated substring.
+# RDI=needle; EAX=1 when found.
+.type .Lxkb_token_contains, @function
+.Lxkb_token_contains:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    lea rbx, [rip + .Lxkb_token]
+.Lxkb_contains_outer:
+    mov al, byte ptr [rbx]
+    test al, al
+    jz .Lxkb_contains_no
+    mov r13, rbx
+    mov rdi, r12
+.Lxkb_contains_inner:
+    mov dl, byte ptr [rdi]
+    test dl, dl
+    jz .Lxkb_contains_yes
+    cmp dl, byte ptr [r13]
+    jne .Lxkb_contains_next
+    inc rdi
+    inc r13
+    jmp .Lxkb_contains_inner
+.Lxkb_contains_next:
+    inc rbx
+    jmp .Lxkb_contains_outer
+.Lxkb_contains_yes:
+    mov eax, 1
+    jmp .Lxkb_contains_done
+.Lxkb_contains_no:
+    xor eax, eax
+.Lxkb_contains_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_token_contains, . - .Lxkb_token_contains
+
 .type .Lxkb_classify_type, @function
 .Lxkb_classify_type:
     push rbx
     xor ebx, ebx
     lea rdi, [rip + .Lxkb_type_alphabetic]
-    call .Lxkb_token_is
+    call .Lxkb_token_contains
     test eax, eax
-    jz .Lxkb_type_four
+    jz .Lxkb_type_check_level3
     or ebx, 1
-.Lxkb_type_four:
+.Lxkb_type_check_level3:
     lea rdi, [rip + .Lxkb_type_four_level]
-    call .Lxkb_token_is
+    call .Lxkb_token_contains
     test eax, eax
     jnz .Lxkb_type_level3
     lea rdi, [rip + .Lxkb_type_eight_level]
-    call .Lxkb_token_is
+    call .Lxkb_token_contains
     test eax, eax
     jnz .Lxkb_type_level3
     lea rdi, [rip + .Lxkb_type_three_level]
-    call .Lxkb_token_is
+    call .Lxkb_token_contains
     test eax, eax
     jnz .Lxkb_type_level3
     lea rdi, [rip + .Lxkb_type_separate]
@@ -794,12 +829,12 @@ xkb_reset_keymap:
 .Lxkb_key_block_done:
     # If the key has no explicit type, infer the common alphabetic two-level
     # case from [lowercase, uppercase]. Other unspecified keys use Shift.
-    mov eax, dword ptr [rip + .Lxkb_keycode]
+    mov r15d, dword ptr [rip + .Lxkb_keycode]
     lea rbx, [rip + xkb_key_types]
-    cmp byte ptr [rbx + rax], 0
+    cmp byte ptr [rbx + r15], 0
     jne .Lxkb_key_block_success
-    mov ecx, dword ptr [rip + xkb_ascii_levels]
     lea rbx, [rip + xkb_ascii_levels]
+    mov eax, r15d
     shl eax, 4
     lea rbx, [rbx + rax]
     movzx eax, byte ptr [rbx]
@@ -814,7 +849,8 @@ xkb_reset_keymap:
     sub edx, 'A'
     cmp eax, edx
     jne .Lxkb_key_block_success
-    mov byte ptr [rip + xkb_key_types + rax], 1
+    lea rbx, [rip + xkb_key_types]
+    mov byte ptr [rbx + r15], 1
 .Lxkb_key_block_success:
     xor eax, eax
     jmp .Lxkb_key_block_exit
