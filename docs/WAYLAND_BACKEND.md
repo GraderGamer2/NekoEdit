@@ -12,13 +12,14 @@ The prototype currently:
 - Allocates an 800×480 XRGB8888 software buffer.
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
-- Binds wl_seat when advertised, creates wl_pointer after the seat reports pointer capability, and handles pointer enter, leave, motion, and button events.
-- Provides a temporary three-swatch click target to verify pointer-driven UI state changes.
+- Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard enter, leave, and key events.
+- Provides a temporary three-swatch target: pointer clicks select a swatch and a focused raw key press advances the selection.
+- Ignores the XKB keymap and modifiers for now; a key press is not yet translated into text or a keysym.
 - Waits for wl_buffer.release before rewriting and recommitting the single shared buffer.
 - Answers xdg_wm_base ping requests.
 - Exits on xdg_toplevel.close.
 
-It does not yet implement keyboard input/keymap translation, window resizing, text, fonts, clipboard, frame scheduling, output scale changes, or X11.
+It does not yet implement XKB keymap parsing, text input/editing, window resizing, fonts, clipboard, frame scheduling, output scale changes, or X11.
 
 ## Protocol flow
 
@@ -52,7 +53,7 @@ The memfd is sized before mapping. The request uses sendmsg with a SOL_SOCKET/SC
 
 ## Event handling
 
-The current blocking read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping, tracks wl_buffer.release, and dispatches wl_pointer enter, leave, motion, and button events. Left-clicking one of the three palette swatches changes the selected border color and schedules a redraw. Pointer coordinates are fixed-point surface-local values; they are converted from 24.8 fixed point before hit testing. The process exits when xdg_toplevel.close arrives.
+The current blocking read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping, tracks wl_buffer.release, and dispatches wl_pointer enter, leave, motion, and button events plus wl_keyboard enter, leave, and key events. Left-clicking one of the three palette swatches selects it; a key press while keyboard focus is active advances the selection. The keymap, modifiers, and repeat-info events are currently ignored, so key events are not yet converted to text. Pointer coordinates are fixed-point surface-local values; they are converted from 24.8 fixed point before hit testing. The process exits when xdg_toplevel.close arrives.
 
 The current loop is intentionally blocking. Before keyboard input or clipboard transfers are introduced, replace it with a nonblocking poll-based loop that monitors the Wayland socket and pending data-transfer descriptors. All event payloads must be length-checked before parsing; the prototype currently applies a fixed upper bound to event payload size.
 
@@ -72,15 +73,17 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - memfd size and SCM_RIGHTS descriptor transfer.
 - Buffer dimensions, stride, format, and selected pixel colors.
 - Surface attach, damage, commit, and compositor close event.
-- Optional seat binding, pointer capability, pointer object creation, and left-click hit testing.
-- Releasing the first buffer before the test click, followed by a second attach/damage/commit and pixel checks for the changed selection border.
+- Optional seat binding and pointer/keyboard capability handling with dense client object IDs.
+- Pointer object creation, pointer focus, and left-click hit testing.
+- Keyboard object creation, keyboard focus enter/leave, keymap FD delivery, and raw key press handling.
+- Releasing the first buffer before the test click and before the test key press, followed by separate redraw commits and pixel checks for the changed selection border.
 
 This verifies the client-side wire serialization and basic shared-memory mechanics. It does **not** prove compatibility with every real compositor. Run the binary inside the target GNOME Wayland session as a separate integration test.
 
 ## Known limitations and next work
 
-1. Add keyboard capability handling, wl_keyboard focus/keymap events, and a bounds-checked keymap-to-keysym path without libxkbcommon.
-2. Implement UTF-8 document input, cursor movement, selection, and editing commands.
+1. Parse XKB keymap strings and produce keysyms/UTF-8 text without libxkbcommon; handle modifiers and repeat-info.
+2. Implement the UTF-8 document gap buffer, cursor movement, selection, undo, and editing commands.
 3. Add the system-font parser, glyph rasterizer, and text layout pipeline.
 4. Recreate buffers after configure/resize and output scale changes; use a small release-tracked buffer set.
 5. Replace the blocking loop with poll and nonblocking I/O.
