@@ -1507,6 +1507,7 @@ render_surface:
 # RAX = 0 on success, negative on failure.
 .type present_buffer, @function
 present_buffer:
+    sub rsp, 8                  # maintain 16-byte alignment for nested calls
     cmp dword ptr [rip + buffer_busy], 0
     jne .present_buffer_busy
     call render_surface
@@ -1541,10 +1542,12 @@ present_buffer:
     mov dword ptr [rip + buffer_busy], 1
     mov dword ptr [rip + redraw_pending], 0
     xor eax, eax
+    add rsp, 8
     ret
 .present_buffer_busy:
     mov eax, -16
 .present_buffer_done:
+    add rsp, 8
     ret
 .size present_buffer, . - present_buffer
 
