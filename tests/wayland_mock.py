@@ -117,8 +117,14 @@ def run(
             document.write(b"I")
         with open(os.path.join(runtime_dir, "oversized.txt"), "wb") as document:
             document.write(b"x" * 65537)
+        # Surround the zero-byte target with ordinary files so its Open test
+        # exercises a nonzero list row rather than only row zero.
+        with open(os.path.join(runtime_dir, "nested-dir", "aaa.txt"), "wb") as document:
+            document.write(b"A")
         with open(os.path.join(runtime_dir, "nested-dir", "inside.txt"), "wb") as document:
             document.write(b"N")
+        with open(os.path.join(runtime_dir, "nested-dir", "zzz.txt"), "wb") as document:
+            document.write(b"Z")
         with open(os.path.join(runtime_dir, "nested-dir", ".hidden-note"), "wb") as document:
             document.write(b"H")
         with open(os.path.join(runtime_dir, "nested-dir", "empty.txt"), "wb") as document:
@@ -1021,7 +1027,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(78, 108, serial, "navigate Up to parent directory")
                     serial += 10
                     serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
-                    serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files hidden")
+                    serial = double_click_picker_row(160, 167, serial, "open inside.txt with hidden files hidden after two earlier entries")
                     # Verify the exact selected document: H and N share the same
                     # first-row edge pixels, and the caret overlays column 0.
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
@@ -1158,9 +1164,9 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(serial + 10, 24, "Ctrl+O before zero-byte file")
                     open_picker_from_menu(serial + 20, "zero-byte file picker")
                     serial = double_click_picker_row(120, 139, serial + 40, "enter directory for zero-byte file")
-                    # New picker sessions start with dotfiles hidden, so
-                    # empty.txt is the first regular-file row.
-                    workflow_click(160, 139, serial, "select zero-byte empty.txt")
+                    # With dotfiles hidden, aaa.txt sorts before empty.txt;
+                    # select row 1 to catch accidental row-zero/stale selection.
+                    workflow_click(160, 153, serial, "select zero-byte empty.txt from second file row")
                     workflow_click(716, 410, serial + 10, "Open selected zero-byte empty.txt")
                     empty_file = os.path.join(runtime_dir, "nested-dir", "empty.txt")
                     empty_state = picker_state()
@@ -1192,7 +1198,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(serial + 30, 24, "Ctrl+O before double-click empty file")
                     open_picker_from_menu(serial + 40, "double-click empty-file picker")
                     serial = double_click_picker_row(120, 139, serial + 60, "enter nested directory for double-click empty file")
-                    serial = double_click_picker_row(160, 139, serial, "double-click empty.txt")
+                    serial = double_click_picker_row(160, 153, serial, "double-click empty.txt from second file row")
                     empty_state = picker_state()
                     if (
                         empty_state.get("active_path") != empty_file.encode()
