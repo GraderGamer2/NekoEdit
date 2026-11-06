@@ -919,6 +919,8 @@ wayland_main:
     call doc_insert_byte
     jmp .keyboard_changed
 .keyboard_left:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_left_extend
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lneko_keyboard_left_plain
     mov eax, dword ptr [rip + doc_selection_anchor]
@@ -935,7 +937,17 @@ wayland_main:
     je .event_loop
     dec dword ptr [rip + doc_cursor]
     jmp .keyboard_changed
+.Lneko_keyboard_left_extend:
+    call doc_begin_keyboard_selection
+    cmp dword ptr [rip + doc_cursor], 0
+    je .Lneko_keyboard_left_extend_finish
+    dec dword ptr [rip + doc_cursor]
+.Lneko_keyboard_left_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
 .keyboard_right:
+    cmp dword ptr [rip + shift_down], 0
+    jne .Lneko_keyboard_right_extend
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lneko_keyboard_right_plain
     mov eax, dword ptr [rip + doc_selection_anchor]
@@ -953,22 +965,63 @@ wayland_main:
     jae .event_loop
     inc dword ptr [rip + doc_cursor]
     jmp .keyboard_changed
+.Lneko_keyboard_right_extend:
+    call doc_begin_keyboard_selection
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lneko_keyboard_right_extend_finish
+    inc dword ptr [rip + doc_cursor]
+.Lneko_keyboard_right_extend_finish:
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
 .keyboard_up:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_up_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_up_plain:
     xor edi, edi
     call doc_move_vertical
     call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_down:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_down_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_vertical
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_down_plain:
     mov edi, 1
     call doc_move_vertical
     call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_home:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_home_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_home_plain:
     xor edi, edi
     call doc_move_line_edge
     call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_end:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lneko_keyboard_end_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_line_edge
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lneko_keyboard_end_plain:
     mov edi, 1
     call doc_move_line_edge
     call doc_clear_selection
@@ -1776,6 +1829,29 @@ doc_clear_selection:
     mov dword ptr [rip + doc_selection_anchor], eax
     ret
 .size doc_clear_selection, . - doc_clear_selection
+
+# Begin or update a selection driven by Shift+navigation.
+.type doc_begin_keyboard_selection, @function
+doc_begin_keyboard_selection:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_begin_keyboard_selection_done
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+.Lneko_begin_keyboard_selection_done:
+    ret
+.size doc_begin_keyboard_selection, . - doc_begin_keyboard_selection
+
+.type doc_finish_keyboard_selection, @function
+doc_finish_keyboard_selection:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_selection_anchor]
+    je .Lneko_finish_keyboard_selection_clear
+    mov dword ptr [rip + doc_selection_active], 1
+    ret
+.Lneko_finish_keyboard_selection_clear:
+    mov dword ptr [rip + doc_selection_active], 0
+    ret
+.size doc_finish_keyboard_selection, . - doc_finish_keyboard_selection
 
 # EDI=0 Home, EDI=1 End.
 .type doc_move_line_edge, @function
