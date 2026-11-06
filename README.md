@@ -145,7 +145,7 @@ See [docs/RENDERING.md](docs/RENDERING.md).
 1. Freestanding ELF bootstrap and syscall conventions. (Implemented.)
 2. Native Wayland window, xdg-shell setup, and software-buffer proof of concept. (Implemented prototype.)
 3. Pointer/keyboard events and the initial US-QWERTY ASCII editing prototype. (Current milestone.)
-4. XKB keymap FD parsing, layout-aware keysym translation, and Wayland input-method integration.
+4. XKB keycode/keysym/group/modifier parsing and layout-aware symbol translation (keymap FD receipt and read-only mapping implemented); then Wayland input-method integration.
 5. UTF-8 gap-buffer document engine, Unicode-aware navigation, selection-aware editing, undo/redo, and scrolling.
 6. Installed-font discovery, TrueType parsing, glyph rasterization, and text layout.
 7. File open/save, the directory-browser picker, and clipboard interoperability.
