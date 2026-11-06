@@ -123,6 +123,9 @@ def run(
             document.write(b"H")
         with open(os.path.join(runtime_dir, "nested-dir", "empty.txt"), "wb") as document:
             document.write(b"")
+        for index in range(32):
+            with open(os.path.join(runtime_dir, f"scroll-entry-{index:02d}.txt"), "wb") as document:
+                document.write(b"S")
 
     def fake_compositor():
         client = None
@@ -702,6 +705,31 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(12, 0)
                     )
 
+                def workflow_axis(axis: int, value: int, serial: int, label: str) -> None:
+                    client.sendall(
+                        wire_message(15, 4, struct.pack("<IIi", serial, axis, value))
+                    )
+                    workflow_redraw(label)
+                    client.sendall(wire_message(12, 0))
+
+                def workflow_scrollbar_drag(
+                    start_x: int, start_y: int, end_x: int, end_y: int,
+                    serial: int, label: str
+                ) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                    )
+                    workflow_redraw(f"{label}: press")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                    )
+                    workflow_redraw(f"{label}: drag")
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                        + wire_message(12, 0)
+                    )
+
                 def workflow_shortcut(serial: int, code: int, label: str, shift: bool = False) -> None:
                     events = wire_message(16, 3, struct.pack("<IIII", serial, serial, 29, 1))
                     if shift:
@@ -888,7 +916,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -1142,6 +1170,63 @@ xkb_symbols "nekoedit-sparse" {
                             )
                     observations.append(
                         "zero-byte file Open reset the document, activated the exact path, and saved back to that file"
+                    )
+
+                    # Repeat the zero-byte Open through the double-click route.
+                    workflow_shortcut(serial + 30, 24, "Ctrl+O before double-click empty file")
+                    open_picker_from_menu(serial + 40, "double-click empty-file picker")
+                    serial = double_click_picker_row(120, 139, serial + 60, "enter nested directory for double-click empty file")
+                    workflow_click(720, 110, serial, "hide hidden files for double-click empty file")
+                    serial += 10
+                    serial = double_click_picker_row(160, 139, serial, "double-click empty.txt")
+                    empty_state = picker_state()
+                    if (
+                        empty_state.get("active_path") != empty_file.encode()
+                        or empty_state.get("doc_length") != 0
+                    ):
+                        raise AssertionError(
+                            "double-clicking a zero-byte file opened the wrong document; "
+                            f"state={empty_state!r}"
+                        )
+                    observations.append(
+                        "double-click Open of a zero-byte file also activated the exact empty document"
+                    )
+
+                    # Exercise mouse-wheel scrolling and the draggable scrollbar
+                    # in a directory with more than two viewport pages.
+                    open_picker_from_menu(serial + 10, "scrollable directory picker")
+                    scroll_state = picker_state()
+                    if scroll_state.get("picker_entry_count", 0) < 30:
+                        raise AssertionError(
+                            f"scroll fixture did not create enough entries: {scroll_state!r}"
+                        )
+                    workflow_axis(0, 42 * 256, serial + 30, "mouse wheel scroll down three rows")
+                    scroll_state = picker_state()
+                    if scroll_state.get("picker_scroll") != 3:
+                        raise AssertionError(
+                            f"vertical mouse wheel did not advance the picker by three rows: {scroll_state!r}"
+                        )
+                    thumb_top = scroll_state["picker_scroll_thumb_top"]
+                    thumb_height = scroll_state["picker_scroll_thumb_height"]
+                    thumb_center = thumb_top + thumb_height // 2
+                    workflow_scrollbar_drag(
+                        730, thumb_center, 730, 339, serial + 40,
+                        "drag picker scrollbar thumb to bottom"
+                    )
+                    scroll_state = picker_state()
+                    expected_max_scroll = scroll_state["picker_entry_count"] - 15
+                    if scroll_state.get("picker_scroll") != expected_max_scroll:
+                        raise AssertionError(
+                            f"dragging the picker scrollbar did not reach the last rows: {scroll_state!r}"
+                        )
+                    workflow_axis(0, -14 * 256, serial + 50, "mouse wheel scroll up one row")
+                    scroll_state = picker_state()
+                    if scroll_state.get("picker_scroll") != expected_max_scroll - 1:
+                        raise AssertionError(
+                            f"mouse wheel up did not move the picker toward earlier rows: {scroll_state!r}"
+                        )
+                    observations.append(
+                        "Wayland vertical-axis wheel scrolling, proportional scrollbar, and thumb dragging verified"
                     )
 
                     client.sendall(wire_message(10, 1))
