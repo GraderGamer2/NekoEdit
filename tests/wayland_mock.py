@@ -883,11 +883,27 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("the File menu control was not rendered in the header")
                     observations.append("visible File menu header control")
 
+                    picker_symbols = {}
+                    for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count"}:
+                            picker_symbols[fields[2]] = int(fields[0], 16)
+
+                    def picker_state() -> dict[str, int]:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            return {
+                                name: struct.unpack("<i", os.pread(memory.fileno(), 4, address))[0]
+                                for name, address in picker_symbols.items()
+                            }
+
                     def assert_picker(label: str) -> None:
-                        if struct.unpack_from("<I", pixels, 36 * 800 * 4 + 40 * 4)[0] != 0xFF1F242D:
-                            raise AssertionError(f"{label}: native picker panel was not rendered")
-                        if struct.unpack_from("<I", pixels, 64 * 800 * 4 + 56 * 4)[0] != 0xFF252A33:
-                            raise AssertionError(f"{label}: location field was not rendered")
+                        panel_pixel = struct.unpack_from("<I", pixels, 36 * 800 * 4 + 40 * 4)[0]
+                        path_pixel = struct.unpack_from("<I", pixels, 64 * 800 * 4 + 56 * 4)[0]
+                        if panel_pixel != 0xFF1F242D or path_pixel != 0xFF252A33:
+                            raise AssertionError(
+                                f"{label}: native picker not rendered; pixels="
+                                f"{hex(panel_pixel)}/{hex(path_pixel)}, state={picker_state()!r}"
+                            )
 
                     def open_picker_from_menu(serial: int, label: str) -> None:
                         workflow_click(120, 12, serial, f"{label}: open File menu")
