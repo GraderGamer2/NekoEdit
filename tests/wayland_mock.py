@@ -978,7 +978,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(78, 108, serial, "navigate Up to parent directory")
                     serial += 10
                     serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
-                    serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files visible")
+                    serial = double_click_picker_row(160, 167, serial, "open inside.txt with hidden files visible")
                     # Verify the exact selected document: H and N share the same
                     # first-row edge pixels, and the caret overlays column 0.
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
