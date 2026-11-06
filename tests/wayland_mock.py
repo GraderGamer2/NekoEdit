@@ -736,6 +736,9 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"{label}: pointer motion did not redraw; state={picker_state()!r}"
                         ) from error
+                    # Release the frame drawn after motion before requesting the
+                    # second redraw caused by releasing the scrollbar grab.
+                    client.sendall(wire_message(12, 0))
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
                     )
