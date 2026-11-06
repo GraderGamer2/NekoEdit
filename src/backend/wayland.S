@@ -329,8 +329,8 @@ picker_selected:        .long 0
 picker_scroll:          .long 0
 picker_scroll_drag:     .long 0
 picker_scroll_drag_offset: .long 0
-picker_scroll_thumb_top: .long PICKER_TRACK_TOP
-picker_scroll_thumb_height: .long PICKER_TRACK_HEIGHT
+picker_scroll_thumb_top: .long 0
+picker_scroll_thumb_height: .long 0
 picker_wheel_remainder: .long 0
 picker_show_hidden:     .long 0
 picker_truncated:       .long 0
