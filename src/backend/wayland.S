@@ -1879,6 +1879,15 @@ wl_read_event:
     mov eax, dword ptr [rip + last_event_fd]
     test eax, eax
     jns .read_event_dispatch_keymap
+    # A malformed XKB_V1 event without its FD is also routed to the validator,
+    # even if its object ID is wrong, so it cannot be silently ignored.
+    cmp dword ptr [rip + last_opcode], 0
+    jne .read_event_check_display_error
+    cmp dword ptr [rip + last_size], 8
+    jb .read_event_check_keyboard_object
+    cmp dword ptr [rip + event_payload], 1
+    je .read_event_dispatch_keymap
+.read_event_check_keyboard_object:
     mov eax, dword ptr [rip + keyboard_object]
     test eax, eax
     jz .read_event_check_display_error
