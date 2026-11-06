@@ -697,19 +697,6 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_sync
     mov dword ptr [rip + buffer_busy], 0
-.seat_check_keymap:
-    # A compositor may send wl_keyboard.keymap immediately after get_keyboard,
-    # before the seat roundtrip callback completes.
-    mov eax, dword ptr [rip + keyboard_object]
-    test eax, eax
-    jz .seat_check_sync
-    cmp dword ptr [rip + last_object], eax
-    jne .seat_check_sync
-    cmp dword ptr [rip + last_opcode], 0
-    jne .seat_check_sync
-    call handle_keyboard_keymap
-    test rax, rax
-    js .protocol_error
 .seat_check_sync:
     cmp dword ptr [rip + last_object], 14
     jne .seat_roundtrip
@@ -895,8 +882,6 @@ wayland_main:
     jz .check_toplevel_close
     cmp dword ptr [rip + last_object], eax
     jne .check_toplevel_close
-    cmp dword ptr [rip + last_opcode], 0
-    je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
     je .keyboard_enter
     cmp dword ptr [rip + last_opcode], 2
@@ -907,10 +892,6 @@ wayland_main:
     je .keyboard_modifiers
     cmp dword ptr [rip + last_opcode], 5
     je .keyboard_repeat_info
-.keyboard_keymap:
-    call handle_keyboard_keymap
-    test rax, rax
-    js .protocol_error
     jmp .event_loop
 .event_repeat_timer:
     mov edi, dword ptr [rip + repeat_timer_fd]
@@ -1892,6 +1873,26 @@ wl_read_event:
     test rax, rax
     js .read_event_done
 .read_event_ok:
+    # Consume keymap events here, while the ancillary descriptor is still
+    # associated with the event. This also covers events received during the
+    # initial seat roundtrip, before the normal event dispatcher is active.
+    mov eax, dword ptr [rip + last_event_fd]
+    test eax, eax
+    jns .read_event_dispatch_keymap
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .read_event_check_display_error
+    cmp dword ptr [rip + last_object], eax
+    jne .read_event_check_display_error
+    cmp dword ptr [rip + last_opcode], 0
+    jne .read_event_check_display_error
+.read_event_dispatch_keymap:
+    cmp dword ptr [rip + last_opcode], 0
+    jne .read_event_bad
+    call handle_keyboard_keymap
+    test rax, rax
+    js .read_event_done
+.read_event_check_display_error:
     # wl_display.error is fatal; return an error while preserving its payload
     # so the caller can print the compositor-provided diagnostic safely.
     cmp dword ptr [rip + last_object], 1
@@ -1901,22 +1902,6 @@ wl_read_event:
     mov eax, -71                 # EPROTO
     jmp .read_event_done
 .read_event_success:
-    # Only wl_keyboard.keymap consumes a descriptor in the current protocol
-    # subset. Close any received FD attached to an unrelated event.
-    mov eax, dword ptr [rip + last_event_fd]
-    test eax, eax
-    js .read_event_success_no_fd
-    mov edx, dword ptr [rip + keyboard_object]
-    cmp edx, dword ptr [rip + last_object]
-    jne .read_event_close_unexpected_fd
-    cmp dword ptr [rip + last_opcode], 0
-    je .read_event_success_no_fd
-.read_event_close_unexpected_fd:
-    mov edi, eax
-    mov eax, SYS_close
-    syscall
-    mov dword ptr [rip + last_event_fd], -1
-.read_event_success_no_fd:
     xor eax, eax
 .read_event_done:
     test eax, eax
