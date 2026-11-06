@@ -1860,6 +1860,18 @@ picker_scan_directory:
     mov dword ptr [rip + picker_last_click_time], 0
     mov dword ptr [rip + picker_truncated], 0
     mov dword ptr [rip + picker_error], 0
+    # An Open-mode search is scoped to the directory that produced its listing.
+    # A previous query must not become a literal target after navigation or a
+    # Show-hidden rescan, especially when that name exists in the new directory.
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_scan_keep_name_field
+    mov dword ptr [rip + picker_name_length], 0
+    mov dword ptr [rip + picker_name_cursor], 0
+    mov dword ptr [rip + picker_name_view_start], 0
+    mov dword ptr [rip + picker_name_match], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+    mov byte ptr [rip + picker_name_buffer], 0
+.picker_scan_keep_name_field:
     mov eax, SYS_lseek
     mov edi, dword ptr [rip + picker_dir_fd]
     xor esi, esi
@@ -2806,8 +2818,15 @@ picker_confirm_overwrite:
 picker_confirm_action:
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_confirm_action_save
-    cmp dword ptr [rip + picker_name_length], 0
+    # When the directory list has focus, Open must operate on the explicitly
+    # selected regular-file row. Never fall back to an old search-field value.
+    cmp dword ptr [rip + picker_focus], 0
     je .picker_confirm_action_open_copy_selection
+    # A literal name/path is allowed only while the Search field has focus.
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_confirm_action_error
+    cmp dword ptr [rip + picker_name_length], 0
+    je .picker_confirm_action_error
     cmp dword ptr [rip + picker_name_match], 1
     jne .picker_confirm_action_open_ready
 .picker_confirm_action_open_copy_selection:

@@ -123,6 +123,8 @@ def run(
             document.write(b"A")
         with open(os.path.join(runtime_dir, "nested-dir", "inside.txt"), "wb") as document:
             document.write(b"N")
+        with open(os.path.join(runtime_dir, "nested-dir", "stale.txt"), "wb") as document:
+            document.write(b"W")
         with open(os.path.join(runtime_dir, "nested-dir", "zzz.txt"), "wb") as document:
             document.write(b"Z")
         with open(os.path.join(runtime_dir, "nested-dir", ".hidden-note"), "wb") as document:
@@ -1210,6 +1212,65 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     observations.append(
                         "double-click Open of a zero-byte file also activated the exact empty document"
+                    )
+
+                    # A no-match query belongs to its original directory. If it
+                    # survives navigation, Open can mistake it for a literal name
+                    # and load a same-named file from the newly opened directory.
+                    open_picker_from_menu(serial + 10, "directory-scoped search regression")
+                    serial = workflow_type_path("stale.txt", serial + 30)
+                    stale_search_state = picker_state()
+                    if (
+                        stale_search_state.get("picker_name_buffer") != b"stale.txt"
+                        or stale_search_state.get("picker_name_match") != 0
+                        or stale_search_state.get("picker_selected") != -1
+                    ):
+                        raise AssertionError(
+                            f"stale-query fixture did not begin as an unmatched root search: {stale_search_state!r}"
+                        )
+                    original_path = os.fsencode(runtime_dir)
+                    path_end_x = 64 + min(len(original_path), 82) * 8
+                    workflow_click(path_end_x, 76, serial + 10, "focus location before directory-scoped search check")
+                    serial = workflow_type_path("/nested-dir", serial + 20)
+                    key_step(serial, 28, "navigate after unmatched search query")
+                    serial += 2
+                    stale_path_state = picker_state()
+                    if (
+                        stale_path_state.get("picker_current_path")
+                        != os.path.join(runtime_dir, "nested-dir").encode()
+                        or stale_path_state.get("picker_name_length") != 0
+                        or stale_path_state.get("picker_name_buffer") != b""
+                        or stale_path_state.get("picker_name_match") != 0
+                        or stale_path_state.get("picker_selected") != -1
+                    ):
+                        raise AssertionError(
+                            f"directory navigation retained a stale search query/selection: {stale_path_state!r}"
+                        )
+                    workflow_click(716, 410, serial + 10, "Open with no selected row after search navigation")
+                    no_selection_state = picker_state()
+                    if (
+                        no_selection_state.get("picker_mode") != 1
+                        or no_selection_state.get("active_path") != empty_file.encode()
+                        or no_selection_state.get("doc_length") != 0
+                    ):
+                        raise AssertionError(
+                            "Open without a selected row loaded a stale literal filename instead of "
+                            f"leaving the picker active: {no_selection_state!r}"
+                        )
+                    workflow_click(160, 153, serial + 20, "select empty.txt after stale-query rejection")
+                    workflow_click(716, 410, serial + 30, "Open exact empty.txt after stale-query rejection")
+                    recovered_empty_state = picker_state()
+                    if (
+                        recovered_empty_state.get("picker_mode") != 0
+                        or recovered_empty_state.get("active_path") != empty_file.encode()
+                        or recovered_empty_state.get("doc_length") != 0
+                    ):
+                        raise AssertionError(
+                            f"explicit selection after stale-query rejection opened the wrong file: {recovered_empty_state!r}"
+                        )
+                    serial += 40
+                    observations.append(
+                        "directory navigation clears Open-mode search state; list-focused Open rejects stale/literal query text and only opens an explicitly selected row"
                     )
 
                     # Exercise mouse-wheel scrolling and the draggable scrollbar

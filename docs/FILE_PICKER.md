@@ -38,7 +38,9 @@ Keep the dialog visually quiet and predictable. Rows use a compact type marker a
 - Ctrl+A selects the entire focused field; typing replaces the full field contents.
 - The visible text follows the caret horizontally when the field is longer than its viewport.
 - Pressing Enter in the location field attempts to open that directory and, on success, returns focus to the listing.
-- In Open mode, the Search field selects the first regular file in the current listing whose name begins with the typed prefix (ASCII case-insensitive). A query with no match clears the selected row; Open does not silently reuse a previous selection. If the search field contains a complete literal path/name with no listing prefix match, Open attempts that entered target.
+- In Open mode, the Search field selects the first regular file in the current listing whose name begins with the typed prefix (ASCII case-insensitive). A query with no match clears the selected row; Open does not silently reuse a previous selection.
+- Search text is scoped to the current directory listing and is cleared when navigation or a Show hidden rescan rebuilds that listing. When the directory list has focus, Open accepts only the explicitly selected regular-file row; it never treats leftover search text as a fallback filename. A complete literal path/name with no prefix match can be opened only while the Search field itself has focus.
+- The listing includes every regular file regardless of extension or executable permission. A file with its execute bit set is still handled as plain document bytes; the picker does not execute files.
 - In Save mode, the File name field accepts a relative filename or an absolute path and uses the existing overwrite-confirmation flow.
 
 Clipboard paste, Shift-based partial field selection, and non-ASCII typed filename/path input are not implemented yet. These require separate work; the picker does not introduce a clipboard library or text-input runtime dependency.
