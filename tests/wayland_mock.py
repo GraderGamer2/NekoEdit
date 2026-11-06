@@ -305,6 +305,49 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 observations.append(
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering and caret verified"
                 )
+
+                def pointer_click(x: int, y: int, serial: int, label: str) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
+                        )
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+                    client.sendall(wire_message(12, 0))
+
+                # Mouse clicks snap to character insertion boundaries. Click
+                # after the first-line b, at the start of line two, then
+                # between 2 and ! to cover multiple lines and columns.
+                pointer_click(22, 170, 1100, "mouse caret first line")
+                first_line_caret = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 24 * 4
+                )[0]
+                if first_line_caret != 0xFFFFFFFF:
+                    raise AssertionError("mouse click did not place caret after first-line text")
+
+                pointer_click(18, 182, 1110, "mouse caret second-line start")
+                second_line_start = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 16 * 4
+                )[0]
+                if second_line_start != 0xFFFFFFFF:
+                    raise AssertionError("mouse click did not place caret at second-line start")
+
+                pointer_click(26, 182, 1120, "mouse caret between characters")
+                between_chars = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 24 * 4
+                )[0]
+                if between_chars != 0xFFFFFFFF:
+                    raise AssertionError("mouse click did not place caret between second-line characters")
+                observations.append(
+                    "mouse clicks placed the document caret on multiple lines and between characters"
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
