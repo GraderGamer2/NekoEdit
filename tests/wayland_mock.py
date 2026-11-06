@@ -382,18 +382,18 @@ xkb_symbols "nekoedit-test" {
                         levels = child_memory("xkb_ascii_levels", 24 * 16, 16)
                     finally:
                         os.close(mem_fd)
-                    if ready != 1 or key_name != b"AD01" or key_type != b"\\x03":
+                    if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
                         raise AssertionError(
                             "XKB parser did not build the expected AD01 metadata: "
                             f"ready={ready}, key_name={key_name!r}, key_type={key_type!r}"
                         )
-                    if levels[:6] != b"aA@\\\"qQ":
+                    if levels[:6] != b'aA@"qQ':
                         raise AssertionError(
                             "XKB parser produced incorrect Group1/Group2 levels: "
                             f"{levels!r}"
                         )
                     observations.append(
-                        "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and [a,A,@,\"; q,Q] group symbols"
+                        "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and the expected Group1/Group2 symbols"
                     )
                 observations.append(
                     "wl_keyboard.keymap SCM_RIGHTS FD was received, validated, and mapped read-only with MAP_PRIVATE"
