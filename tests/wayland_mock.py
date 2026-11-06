@@ -1041,13 +1041,24 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1302, 106, "Right over two-byte UTF-8 character")
                     key_step(1304, 106, "Right over three-byte UTF-8 character")
                     key_step(1306, 106, "Right over four-byte UTF-8 character")
-                    key_step(1310, 105, "Left over four-byte UTF-8 character")
-                    key_step(1312, 14, "Backspace removes previous three-byte character")
-                    key_step(1314, 106, "Right over remaining four-byte character")
-                    key_step(1316, 14, "Backspace removes four-byte character")
-                    key_step(1318, 105, "Left over two-byte UTF-8 character")
-                    key_step(1320, 106, "Right over two-byte UTF-8 character")
-                    key_step(1322, 14, "Backspace removes two-byte character")
+                    # Select the complete four-byte character with Shift+Left.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1308, 1308, 42, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1309, 1309, 105, 1))
+                    )
+                    workflow_redraw("Shift+Left selects complete four-byte character")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1310, 1310, 105, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1311, 1311, 42, 0))
+                        + wire_message(12, 0)
+                    )
+                    key_step(1312, 14, "Backspace removes selected four-byte character")
+                    key_step(1314, 105, "Left over three-byte UTF-8 character")
+                    key_step(1316, 106, "Right over three-byte UTF-8 character")
+                    key_step(1318, 14, "Backspace removes three-byte character")
+                    key_step(1320, 105, "Left over two-byte UTF-8 character")
+                    key_step(1322, 106, "Right over two-byte UTF-8 character")
+                    key_step(1324, 14, "Backspace removes two-byte character")
                     workflow_shortcut(1400, 31, "Ctrl+S saves UTF-8 boundary edits")
                     client.sendall(wire_message(10, 1))
                     observations.append(
@@ -1802,7 +1813,7 @@ if __name__ == "__main__":
 
     # UTF-8 code-point navigation/editing tests operate on files containing
     # two-, three-, and four-byte sequences and assert exact saved bytes.
-    utf8_fixture = b"A\\xc3\\xa9\\xe2\\x82\\xac\\xf0\\x9f\\x98\\x80B"
+    utf8_fixture = b"A\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80B"
     for flag, expected in (
         ("utf8_edit_test", b"AB"),
         ("utf8_delete_test", b"B"),
@@ -1829,7 +1840,7 @@ if __name__ == "__main__":
     invalid_fd, invalid_path = tempfile.mkstemp(prefix="nekoedit-invalid-utf8-")
     try:
         with os.fdopen(invalid_fd, "wb") as document:
-            document.write(b"A\\xf0(B\\x8c(B")
+            document.write(b"A\xf0(B\x8c(B")
         run(
             sys.argv[1],
             initial_file=invalid_path,
