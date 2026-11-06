@@ -20,6 +20,7 @@ This is an append-only narrative log. New entries go at the top, with the newest
 ### Scope
 
 - Refreshed the status, development log, project history, and commit index so the renamed branch and current PR state are clear in future handoffs.
+- The documentation update was committed on `early-alpha` as [`4d3786b206db`](https://github.com/GraderGamer2/NekoEdit/commit/4d3786b206dbdb6dc86ca4a2d140e57fe78ed459) (12:41:33 UTC), then mirrored to `main` as [`6f50ea994362`](https://github.com/GraderGamer2/NekoEdit/commit/6f50ea994362178dc7a34320263d00b3d7244158) (12:41:35 UTC). Both commits change only the four CHANGELOG files.
 - Mirrored the documentation-only update to `main`; no application source, tests, Makefile, workflow, or binary changed.
 - No feature development was performed. Further NekoEdit development remains paused until the user explicitly authorizes it.
 
