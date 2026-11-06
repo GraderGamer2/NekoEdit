@@ -160,7 +160,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("expected background color was not rendered")
                 if struct.unpack_from("<I", pixels, 48 * 4)[0] != 0xFF78A9D4:
                     raise AssertionError("expected accent mark was not rendered")
-                hint_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 16 * 4)[0]
+                hint_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0]
                 if hint_pixel != 0xFFD8DEE9:
                     raise AssertionError(
                         "initial editor hint was not drawn; "
