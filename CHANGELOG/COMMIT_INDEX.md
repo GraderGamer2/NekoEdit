@@ -297,6 +297,31 @@ Actions run [#185](https://github.com/GraderGamer2/NekoEdit/actions/runs/4222311
 | 2026-11-06 13:16:24 UTC | [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c) | merge: synchronize main changelog history into early-alpha |
 
 Actions run [#187](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584) passed all eight workflow steps on the ancestry synchronization merge commit. The tree was preserved from the prior `early-alpha` head; the merge adds the `main` history as a parent without bringing the editor implementation into `main`.
+
+## Native directory-browser file picker and regression fixes
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 13:39:22 UTC | [`2164a327b310`](https://github.com/GraderGamer2/NekoEdit/commit/2164a327b3101478635cb0f0131fdf5b812d1c61) | feat: navigate directories and open selected files |
+| 2026-11-06 13:43:33 UTC | [`c1442c0f13a5`](https://github.com/GraderGamer2/NekoEdit/commit/c1442c0f13a5c810d5c2d3c42ab1621d2982cce5) | feat: add picker keyboard and pointer interaction |
+| 2026-11-06 13:45:17 UTC | [`94b916d90a8b`](https://github.com/GraderGamer2/NekoEdit/commit/94b916d90a8b26d237cd114d5ce6075048a4f5bd) | feat: render native directory picker interface |
+| 2026-11-06 13:46:34 UTC | [`1921dd498b8e`](https://github.com/GraderGamer2/NekoEdit/commit/1921dd498b8eb2cc5c2bd26670182b79b976f5c6) | fix: initialize picker sentinels outside bss |
+| 2026-11-06 13:50:34 UTC | [`00850e851bbd`](https://github.com/GraderGamer2/NekoEdit/commit/00850e851bbddd32769b92c670247c132af72a11) | fix: align picker calls and validate file targets |
+| 2026-11-06 13:54:10 UTC | [`91391781a168`](https://github.com/GraderGamer2/NekoEdit/commit/91391781a1686d32c4dfa78fb35d782f1ba907d1) | test: exercise directory picker workflows |
+| 2026-11-06 13:57:36 UTC | [`812dfae38acf`](https://github.com/GraderGamer2/NekoEdit/commit/812dfae38acf3149bb9b912adb8f887ec3b67c3a) | test: inspect picker state when opening dialog |
+| 2026-11-06 13:58:43 UTC | [`5cd0be789e5e`](https://github.com/GraderGamer2/NekoEdit/commit/5cd0be789e5e343fa63d7498b8fc1b78e53dd865) | test: sample picker panel below title strip |
+| 2026-11-06 14:01:16 UTC | [`d6f125574fdb`](https://github.com/GraderGamer2/NekoEdit/commit/d6f125574fdbedb6d4e39af35be6b56a3a324dd5) | test: inspect selected picker item and open state |
+| 2026-11-06 14:02:27 UTC | [`df8a03feab76`](https://github.com/GraderGamer2/NekoEdit/commit/df8a03feab76368439fb52b5662a1661fb0366e8) | test: sample lit pixels in picker file glyphs |
+| 2026-11-06 14:07:41 UTC | [`017a6317c920`](https://github.com/GraderGamer2/NekoEdit/commit/017a6317c92068894e00e35175d91f6db59ed4b2) | test: expose picker save-path diagnostics |
+| 2026-11-06 14:08:15 UTC | [`3d04215258b0`](https://github.com/GraderGamer2/NekoEdit/commit/3d04215258b005a27011d75e9500243f8b7873ce) | test: report active path on picker save failure |
+| 2026-11-06 14:09:08 UTC | [`f3189b1bbe6e`](https://github.com/GraderGamer2/NekoEdit/commit/f3189b1bbe6e73060fa8a47ffd23a56984e70b82) | fix: reset picker double-click state on directory scan |
+| 2026-11-06 14:09:21 UTC | [`f5cd03b87e1b`](https://github.com/GraderGamer2/NekoEdit/commit/f5cd03b87e1bcd9a649f008883d472b8ae8892e2) | test: verify exact picker selection after navigation |
+| 2026-11-06 14:10:41 UTC | [`0dc40ca75061`](https://github.com/GraderGamer2/NekoEdit/commit/0dc40ca750610288b3dcd042519abe83336b79d5) | test: split picker diagnostics at NUL bytes |
+| 2026-11-06 14:11:33 UTC | [`5f3199593694`](https://github.com/GraderGamer2/NekoEdit/commit/5f31995936943493116dc51045bf933fa9492627) | test: sample unobscured picker document glyph pixels |
+| 2026-11-06 14:12:39 UTC | [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd) | fix: terminate picker target paths after filename copy |
+
+Actions runs #199–#207 include failed intermediate attempts while the picker regression tests were being calibrated and then used to identify two real code defects. The corrected implementation was verified by [Build and test #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800), which passed all eight workflow steps and uploaded the Linux x86-64 artifact. See the dated entry in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for the failure/correction chronology and artifact details.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.

@@ -4,6 +4,46 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Complete and stabilize the native directory-browser file picker
+
+**Purpose:** Resume NekoEdit development from the repository's existing picker implementation, inspect the active source and regression tests, and bring the native Open/Save directory browser to a fully passing automated integration state without changing the established launch command or adding runtime dependencies.
+
+### Implementation brought to a verified state
+
+- The active `early-alpha` source already contained the native in-window picker work: a modal Open/Save browser rendered by the Wayland software renderer, with a path field, Up and Home navigation, a hidden-files toggle, directory-first/file-second listing, filename field, and Cancel/Open actions.
+- The picker uses direct Linux filesystem syscalls and keeps the file workflow inside the freestanding assembly application. No GTK, Qt, portal, D-Bus, external file manager, C runtime, or third-party shared-library dependency was added.
+- Open mode supports listing selection, double-click directory entry, double-click regular-file opening, and keyboard activation/navigation. Save mode uses the same browser, supports relative and absolute destinations, and asks before replacing an existing target.
+- The existing mock-compositor workflow covers Untitled Save, named Save, Open, nested-directory navigation, hidden-file visibility, Save As, overwrite confirmation/cancellation, missing/oversized Open rollback, failed Save As rollback, and Escape cancellation.
+
+### Defects found and corrected
+
+- Early picker tests sampled an unlit column in the first row of the H/N glyphs. The final assertions sample an unobscured lit glyph column and, more importantly, also inspect the actual active path and loaded document byte. This avoids treating a pixel coincidence as proof that the correct file opened.
+- Re-entering a directory could carry the previous directory's double-click row index and timestamp into the new listing. A first click on row zero could then be treated as a second click from the prior directory. `picker_scan_directory` now resets both click-history fields every time it rebuilds a listing. This is implemented in [`f3189b1bbe6e`](https://github.com/GraderGamer2/NekoEdit/commit/f3189b1bbe6e73060fa8a47ffd23a56984e70b82).
+- The strengthened test exposed stale bytes in `picker_target_buffer`: the relative filename-copy loop stopped at the source NUL but failed to write a new NUL into the destination. Opening a shorter name after a longer one could therefore generate a target such as `inside.txtte`. The loop now explicitly terminates the new target path. This is implemented in [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd).
+- Test-only process-memory diagnostics were added to report the current document path, target path, picker selection, and loaded bytes when an integration assertion fails. The fixture also correctly trims those values at actual NUL bytes. These diagnostics made the mis-navigation and stale-path failures distinguishable from rendering assertions.
+
+### Regression history and verification
+
+- Intermediate Actions runs **#199–#207** failed during test development. The failures exposed invalid glyph-pixel samples, stale double-click state across directory scans, and the missing target-path terminator; a diagnostic-fixture NUL-escaping mistake was also corrected. Those failed runs are retained in GitHub history rather than being represented as successful validation.
+- GitHub Actions [Build and test #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800) passed **all eight workflow steps** on implementation commit [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd): toolchain inspection, freestanding x86-64 build and ELF checks, CLI smoke tests, Wayland mock-compositor integration, executable inspection, and artifact upload.
+- The file-workflow scenario specifically verified opening the hidden file, navigating Up and re-entering the nested directory, opening the exact `inside.txt` path, replacing its document contents, and saving the exact nested file with Ctrl+S. It also verified Save As overwrite confirmation/cancellation and rollback on failed or oversized operations.
+- Artifact: `nekoedit-linux-x86_64`, 24,492 bytes, artifact ID `13511065251`, SHA-256 `f157014623b7beb16b954a67a7cdcdc70304371cdeefb36f4615e0df35a62782`, expires 2026-11-13 14:13:07 UTC. [Download from Actions run #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800/artifacts/13511065251).
+
+### Remaining limits and manual validation
+
+- The picker currently stores at most 128 entries per directory listing and displays 15 rows at a time. It is a document Open/Save utility, not a general-purpose file manager.
+- Path and filename input is currently ASCII-only and supports simple append/backspace/clear behavior; caret repositioning, in-field insertion, and clipboard paste are not implemented. Non-ASCII filename bytes remain available to filesystem operations but render through the safe replacement glyph path.
+- Unsaved-document confirmation, richer path/name editing, symlink navigation, file filters, and clipboard integration remain unfinished.
+- CI uses a mock Wayland compositor. No real GNOME Wayland desktop smoke test has been performed for this picker build. The previously reported shifted-symbol keyboard regression also remains awaiting confirmation against a current artifact in the user's desktop session.
+
+### Scope and commits
+
+- The supported launch form remains `./nekoedit --backend=wayland`; the Makefile build output remains `./build/nekoedit`.
+- The picker and regression work added no runtime dependency and did not merge PR #2. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, targeting `main`.
+- The individual picker implementation, regression-test, diagnostic, and correction commits are indexed in [`COMMIT_INDEX.md`](COMMIT_INDEX.md), including the final click-state fix and target-path termination fix.
+
+---
+
 ## 2026-11-06 — Correct XKB ONE_LEVEL handling and expand shifted-punctuation tests
 
 **Purpose:** Address the reported case where ordinary keys worked but many shifted punctuation keys displayed `?`. Inspection found that the bounded XKB type classifier collapsed ONE_LEVEL into the generic non-alphabetic path, so a one-symbol key could select an empty Level 2 slot while Shift was held.
