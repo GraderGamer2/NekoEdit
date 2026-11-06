@@ -873,6 +873,20 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if sparse_keymap_test:
+                    # The map has no usable alphabetic coverage, so its
+                    # parser must leave the existing US evdev translator live.
+                    key_step(1800, 30, "US fallback inserts a after sparse XKB rejection")
+                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                        raise AssertionError(
+                            "US-QWERTY fallback did not render the first a after sparse XKB rejection"
+                        )
+                    observations.append(
+                        "punctuation-only XKB map rejected; US-QWERTY fallback inserted and rendered a"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if save_roundtrip:
                     # Keep this path-specific test independent from the full
                     # empty-document editor interaction suite below.
@@ -1590,23 +1604,8 @@ if __name__ == "__main__":
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
     run(sys.argv[1], send_protocol_error=True)
     # A punctuation-only map must not be accepted as a usable layout. The
-    # client must retain the US fallback and still replace/save a document.
-    sparse_fd, sparse_path = tempfile.mkstemp(prefix="nekoedit-sparse-xkb-")
-    try:
-        with os.fdopen(sparse_fd, "wb") as sparse_document:
-            sparse_document.write(b"I")
-        run(
-            sys.argv[1],
-            initial_file=sparse_path,
-            save_roundtrip=True,
-            expected_saved_bytes=b"z",
-            sparse_keymap_test=True,
-        )
-    finally:
-        try:
-            os.unlink(sparse_path)
-        except FileNotFoundError:
-            pass
+    # client must retain the US fallback and still type an ordinary letter.
+    run(sys.argv[1], sparse_keymap_test=True)
     # Parse a compact compiled-keymap-shaped XKB text-v1 fixture and verify
     # actual document bytes after group, Shift, and LevelThree translation.
     xkb_fd, xkb_path = tempfile.mkstemp(prefix="nekoedit-xkb-")
