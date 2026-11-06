@@ -1714,12 +1714,12 @@ doc_place_cursor_from_pointer:
     push r15
 
     # Horizontal pixel position -> nearest insertion column.
-    cmp edi, DOC_LEFT
-    jae .pointer_x_ready
-    mov edi, DOC_LEFT
-.pointer_x_ready:
     sub edi, DOC_LEFT
-    add edi, CELL_WIDTH / 2
+    test edi, edi
+    jns .Lneko_pointer_x_offset_ready
+    xor edi, edi
+.Lneko_pointer_x_offset_ready:
+    add edi, 4
     xor edx, edx
     mov ecx, CELL_WIDTH
     div ecx
