@@ -976,6 +976,9 @@ wayland_main:
 .pointer_button_press:
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
+    # The directory picker is modal; pointer input belongs to its controls.
+    cmp dword ptr [rip + picker_mode], 0
+    jne .picker_pointer
     # A path prompt is modal: clicking through it must never reposition the
     # document caret or insert text into the document.
     cmp dword ptr [rip + path_prompt_mode], 0
@@ -1207,6 +1210,8 @@ wayland_main:
 .keyboard_non_modifier:
     test edx, edx
     jz .event_loop
+    cmp dword ptr [rip + picker_mode], 0
+    jne .keyboard_picker
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .keyboard_path_prompt
     cmp dword ptr [rip + ctrl_down], 0
@@ -1270,6 +1275,18 @@ wayland_main:
     jmp .keyboard_changed
 
 # The path editor owns all non-modifier keys while its prompt is visible.
+.picker_pointer:
+    mov edi, dword ptr [rip + pointer_x]
+    mov esi, dword ptr [rip + pointer_y]
+    mov edx, dword ptr [rip + event_payload + 4]
+    call picker_handle_pointer
+    jmp .keyboard_changed
+
+.keyboard_picker:
+    mov edi, eax
+    call picker_handle_key
+    jmp .keyboard_changed
+
 .keyboard_path_prompt:
     cmp dword ptr [rip + ctrl_down], 0
     jne .event_loop
@@ -1973,13 +1990,13 @@ load_document_from_path:
 .type start_open_prompt, @function
 start_open_prompt:
     mov edi, 1
-    jmp begin_path_prompt
+    jmp picker_start
 .size start_open_prompt, . - start_open_prompt
 
 .type start_save_as_prompt, @function
 start_save_as_prompt:
     mov edi, 2
-    jmp begin_path_prompt
+    jmp picker_start
 .size start_save_as_prompt, . - start_save_as_prompt
 
 .type begin_path_prompt, @function
@@ -2856,6 +2873,7 @@ render_surface:
     call render_status_bar
     call render_file_menu
     call render_path_prompt
+    call render_picker
     pop rbp
     ret
 .size render_surface, . - render_surface
