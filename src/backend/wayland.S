@@ -1686,6 +1686,287 @@ load_initial_document:
 .size load_initial_document, . - load_initial_document
 
 # Copy the basename into the tab label without retaining or rewriting argv.
+
+.type picker_start, @function
+picker_start:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov dword ptr [rip + picker_mode], edi
+    mov dword ptr [rip + picker_focus], 0
+    mov dword ptr [rip + picker_error], 0
+    mov dword ptr [rip + picker_overwrite_pending], 0
+    mov dword ptr [rip + picker_last_click_index], -1
+    mov dword ptr [rip + picker_name_length], 0
+    mov byte ptr [rip + picker_name_buffer], 0
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + path_prompt_mode], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_save_error], 0
+
+    # Begin in the process working directory and keep an absolute display path.
+    mov eax, SYS_getcwd
+    lea rdi, [rip + picker_current_path]
+    mov esi, PATH_CAPACITY
+    syscall
+    test rax, rax
+    js .picker_start_path_failed
+    mov r12d, eax
+    lea rdi, [rip + picker_path_buffer]
+    lea rsi, [rip + picker_current_path]
+    mov ecx, r12d
+    rep movsb
+    dec r12d
+    mov dword ptr [rip + picker_path_length], r12d
+    jmp .picker_start_open_directory
+
+.picker_start_path_failed:
+    lea rdi, [rip + picker_current_path]
+    mov byte ptr [rdi], '/'
+    mov byte ptr [rdi + 1], 0
+    lea rdi, [rip + picker_path_buffer]
+    mov byte ptr [rdi], '/'
+    mov byte ptr [rdi + 1], 0
+    mov dword ptr [rip + picker_path_length], 1
+
+.picker_start_open_directory:
+    mov eax, SYS_openat
+    mov edi, AT_FDCWD
+    lea rsi, [rip + ui_picker_dot]
+    mov edx, O_DIRECTORY | O_CLOEXEC
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .picker_start_failed
+    mov ebx, dword ptr [rip + picker_dir_fd]
+    mov dword ptr [rip + picker_dir_fd], eax
+    cmp ebx, 0
+    jl .picker_start_scan
+    mov eax, SYS_close
+    mov edi, ebx
+    syscall
+.picker_start_scan:
+    call picker_scan_directory
+    test rax, rax
+    js .picker_start_failed
+    xor eax, eax
+    jmp .picker_start_done
+.picker_start_failed:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_start_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size picker_start, . - picker_start
+
+.type picker_scan_directory, @function
+picker_scan_directory:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov dword ptr [rip + picker_entry_count], 0
+    mov dword ptr [rip + picker_selected], -1
+    mov dword ptr [rip + picker_scroll], 0
+    mov dword ptr [rip + picker_truncated], 0
+    mov dword ptr [rip + picker_error], 0
+    mov eax, SYS_lseek
+    mov edi, dword ptr [rip + picker_dir_fd]
+    xor esi, esi
+    xor edx, edx
+    syscall
+    test rax, rax
+    js .picker_scan_error
+.picker_scan_read:
+    mov eax, SYS_getdents64
+    mov edi, dword ptr [rip + picker_dir_fd]
+    lea rsi, [rip + picker_dirents]
+    mov edx, PICKER_DIR_BYTES
+    syscall
+    test rax, rax
+    js .picker_scan_error
+    jz .picker_scan_done
+    mov r13, rax
+    lea r12, [rip + picker_dirents]
+.picker_scan_record:
+    test r13, r13
+    jz .picker_scan_read
+    cmp r13, 20
+    jb .picker_scan_error
+    movzx ebp, word ptr [r12 + 16]
+    cmp ebp, 20
+    jb .picker_scan_error
+    mov eax, ebp
+    cmp rax, r13
+    ja .picker_scan_error
+    lea r14, [r12 + 19]
+    movzx eax, byte ptr [r14]
+    test al, al
+    jz .picker_scan_advance
+    cmp al, '.'
+    jne .picker_scan_hidden_check
+    cmp byte ptr [r14 + 1], 0
+    je .picker_scan_advance
+    cmp byte ptr [r14 + 1], '.'
+    jne .picker_scan_hidden_check
+    cmp byte ptr [r14 + 2], 0
+    je .picker_scan_advance
+.picker_scan_hidden_check:
+    cmp dword ptr [rip + picker_show_hidden], 0
+    jne .picker_scan_stat
+    cmp byte ptr [r14], '.'
+    je .picker_scan_advance
+.picker_scan_stat:
+    # Do not rely on dirent.d_type: query the entry without following symlinks.
+    mov eax, SYS_newfstatat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    mov rsi, r14
+    lea rdx, [rip + picker_stat_buffer]
+    mov r10d, AT_SYMLINK_NOFOLLOW
+    syscall
+    test rax, rax
+    js .picker_scan_advance
+    mov eax, dword ptr [rip + picker_stat_buffer + 24]
+    and eax, STAT_S_IFMT
+    cmp eax, STAT_S_IFDIR
+    je .picker_scan_is_directory
+    cmp eax, STAT_S_IFREG
+    jne .picker_scan_advance
+    mov byte ptr [rip + picker_candidate], 0
+    jmp .picker_scan_name
+.picker_scan_is_directory:
+    mov byte ptr [rip + picker_candidate], 1
+.picker_scan_name:
+    mov ecx, ebp
+    sub ecx, 19
+    cmp ecx, 255
+    jbe .picker_scan_name_limit
+    mov ecx, 255
+.picker_scan_name_limit:
+    xor ebx, ebx
+.picker_scan_name_length:
+    cmp ebx, ecx
+    jae .picker_scan_advance
+    cmp byte ptr [r14 + rbx], 0
+    je .picker_scan_name_ready
+    inc ebx
+    jmp .picker_scan_name_length
+.picker_scan_name_ready:
+    test ebx, ebx
+    jz .picker_scan_advance
+    lea rdi, [rip + picker_candidate + 4]
+    mov rsi, r14
+    mov ecx, ebx
+    rep movsb
+    mov byte ptr [rdi], 0
+    call picker_insert_candidate
+.picker_scan_advance:
+    add r12, rbp
+    sub r13, rbp
+    jmp .picker_scan_record
+.picker_scan_done:
+    xor eax, eax
+    jmp .picker_scan_return
+.picker_scan_error:
+    mov dword ptr [rip + picker_error], 1
+    mov rax, -5
+.picker_scan_return:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size picker_scan_directory, . - picker_scan_directory
+
+.type picker_insert_candidate, @function
+picker_insert_candidate:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, dword ptr [rip + picker_entry_count]
+    cmp r12d, PICKER_MAX_ENTRIES
+    jb .picker_insert_find
+    mov dword ptr [rip + picker_truncated], 1
+    jmp .picker_insert_done
+.picker_insert_find:
+    xor r13d, r13d
+.picker_insert_compare:
+    cmp r13d, r12d
+    jae .picker_insert_at_end
+    mov eax, r13d
+    imul eax, PICKER_ENTRY_SIZE
+    lea r14, [rip + picker_entries]
+    add r14, rax
+    movzx eax, byte ptr [rip + picker_candidate]
+    movzx edx, byte ptr [r14]
+    cmp eax, edx
+    ja .picker_insert_found
+    jb .picker_insert_next
+    lea rbx, [rip + picker_candidate + 4]
+    lea r15, [r14 + 4]
+.picker_insert_name_compare:
+    movzx eax, byte ptr [rbx]
+    movzx edx, byte ptr [r15]
+    cmp eax, edx
+    jb .picker_insert_found
+    ja .picker_insert_next
+    test eax, eax
+    jz .picker_insert_next
+    inc rbx
+    inc r15
+    jmp .picker_insert_name_compare
+.picker_insert_next:
+    inc r13d
+    jmp .picker_insert_compare
+.picker_insert_at_end:
+    mov r13d, r12d
+    jmp .picker_insert_copy
+.picker_insert_found:
+.picker_insert_copy:
+    cmp r13d, r12d
+    je .picker_insert_copy_candidate
+    mov eax, r12d
+    imul eax, PICKER_ENTRY_SIZE
+    lea rsi, [rip + picker_entries]
+    add rsi, rax
+    dec rsi
+    lea rdi, [rsi + PICKER_ENTRY_SIZE]
+    mov eax, r12d
+    sub eax, r13d
+    imul eax, PICKER_ENTRY_SIZE
+    mov ecx, eax
+    std
+    rep movsb
+    cld
+.picker_insert_copy_candidate:
+    mov eax, r13d
+    imul eax, PICKER_ENTRY_SIZE
+    lea rdi, [rip + picker_entries]
+    add rdi, rax
+    lea rsi, [rip + picker_candidate]
+    mov ecx, PICKER_ENTRY_SIZE
+    rep movsb
+    inc dword ptr [rip + picker_entry_count]
+.picker_insert_done:
+    cld
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_insert_candidate, . - picker_insert_candidate
+
 .type set_active_document_name, @function
 set_active_document_name:
     lea rdi, [rip + active_document_name]
