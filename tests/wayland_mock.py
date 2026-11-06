@@ -408,6 +408,10 @@ xkb_symbols "nekoedit-test" {
                         key_name = child_memory("xkb_key_names", 24 * 4, 4)
                         key_type = child_memory("xkb_key_types", 24, 1)
                         levels = child_memory("xkb_ascii_levels", 24 * 16, 16)
+                        ae01_name = child_memory("xkb_key_names", 10 * 4, 4)
+                        ae01_levels = child_memory("xkb_ascii_levels", 10 * 16, 16)
+                        ae02_name = child_memory("xkb_key_names", 11 * 4, 4)
+                        ae02_levels = child_memory("xkb_ascii_levels", 11 * 16, 16)
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -419,6 +423,16 @@ xkb_symbols "nekoedit-test" {
                         raise AssertionError(
                             "XKB parser produced incorrect Group1/Group2 levels: "
                             f"{levels!r}"
+                        )
+                    if ae01_name != b"AE01" or ae01_levels[:2] != b"1!":
+                        raise AssertionError(
+                            "XKB shorthand number-row parse failed: "
+                            f"name={ae01_name!r}, levels={ae01_levels!r}"
+                        )
+                    if ae02_name != b"AE02" or ae02_levels[:2] != b"2@":
+                        raise AssertionError(
+                            "XKB shorthand AE02 parse failed: "
+                            f"name={ae02_name!r}, levels={ae02_levels!r}"
                         )
                     observations.append(
                         "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and the expected Group1/Group2 symbols"
