@@ -79,6 +79,7 @@ def run(
     utf8_edit_test: bool = False,
     utf8_delete_test: bool = False,
     utf8_invalid_test: bool = False,
+    utf8_pointer_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -259,8 +260,8 @@ def run(
                         15, 0,
                         struct.pack(
                             "<IIii", 777, 8,
-                            (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98) * 256,
-                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 110) * 256,
+                            (50 if utf8_pointer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98)) * 256,
+                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test) else 110) * 256,
                         ),
                     )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
@@ -270,7 +271,7 @@ def run(
                 expect_message(client, (8, 6, b""), "redraw commit")
                 if not (
                     sparse_keymap_test or punctuation_render_test
-                    or utf8_edit_test or utf8_delete_test or utf8_invalid_test
+                    or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -1077,6 +1078,18 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     return
 
+                if utf8_pointer_test:
+                    # The visual column after A, é, €, and 😀 is byte offset
+                    # 10, not offset 4. Pointer hit-testing must map that cell
+                    # back to the byte boundary before B.
+                    key_step(1900, 14, "Backspace at pointer-selected UTF-8 boundary")
+                    workflow_shortcut(1910, 31, "Ctrl+S saves pointer-selected UTF-8 edit")
+                    client.sendall(wire_message(10, 1))
+                    observations.append(
+                        "pointer hit-testing mapped the visual cell after mixed-width UTF-8 code points to the correct byte boundary"
+                    )
+                    return
+
                 if utf8_invalid_test:
                     # F0 28 8C 28 is malformed UTF-8. Invalid bytes must stay
                     # independently editable rather than swallowing adjacent
@@ -1837,6 +1850,25 @@ if __name__ == "__main__":
                 os.unlink(utf8_path)
             except FileNotFoundError:
                 pass
+
+    # Pointer hit-testing must translate visual code-point columns back to
+    # byte offsets rather than assuming one byte per visible character.
+    pointer_fd, pointer_path = tempfile.mkstemp(prefix="nekoedit-utf8-pointer-")
+    try:
+        with os.fdopen(pointer_fd, "wb") as document:
+            document.write(utf8_fixture)
+        run(
+            sys.argv[1],
+            initial_file=pointer_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"A\\xc3\\xa9\\xe2\\x82\\xacB",
+            utf8_pointer_test=True,
+        )
+    finally:
+        try:
+            os.unlink(pointer_path)
+        except FileNotFoundError:
+            pass
 
     # Malformed sequences are treated as one-byte replacement units; editing
     # must not consume adjacent valid ASCII characters.
