@@ -22,18 +22,42 @@
 .equ STRIDE,           (WIDTH * 4)
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
 .equ BTN_LEFT,          0x110
+.equ DOC_CAPACITY,    65536
+.equ DOC_LEFT,           16
+.equ DOC_TOP,           164
+.equ CELL_WIDTH,          8
+.equ LINE_HEIGHT,        12
 
 .section .rodata
 wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
 wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
+empty_document_hint:   .asciz "TYPE HERE..."
 wayland_title:         .asciz "NekoEdit - development window"
 memfd_label:           .asciz "nekoedit-shm"
 iface_compositor:      .asciz "wl_compositor"
 iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
 iface_seat:            .asciz "wl_seat"
+keymap_base:
+    .byte 0, 0, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 45, 61, 0, 0
+    .byte 113, 119, 101, 114, 116, 121, 117, 105, 111, 112, 91, 93, 0, 0, 97, 115
+    .byte 100, 102, 103, 104, 106, 107, 108, 59, 39, 96, 0, 92, 122, 120, 99, 118
+    .byte 98, 110, 109, 44, 46, 47, 0, 0, 0, 32, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+keymap_shift:
+    .byte 0, 0, 33, 64, 35, 36, 37, 94, 38, 42, 40, 41, 95, 43, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123, 125, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 58, 34, 126, 0, 124, 0, 0, 0, 0
+    .byte 0, 0, 0, 60, 62, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 msg_no_env:            .ascii "NekoEdit: XDG_RUNTIME_DIR is not set; cannot locate the Wayland socket.\n"
 msg_no_env_end:
 msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display using WAYLAND_SOCKET or its socket path.\n"
@@ -57,6 +81,59 @@ stage_buffer:         .asciz "Wayland stage: create wl_buffer"
 stage_attach:         .asciz "Wayland stage: attach and commit"
 stage_event_loop:     .asciz "Wayland stage: event loop"
 
+.section .rodata
+.balign 1
+font_5x7:
+    .byte 14, 17, 17, 31, 17, 17, 17
+    .byte 30, 17, 17, 30, 17, 17, 30
+    .byte 15, 16, 16, 16, 16, 16, 15
+    .byte 30, 17, 17, 17, 17, 17, 30
+    .byte 31, 16, 16, 30, 16, 16, 31
+    .byte 31, 16, 16, 30, 16, 16, 16
+    .byte 15, 16, 16, 23, 17, 17, 15
+    .byte 17, 17, 17, 31, 17, 17, 17
+    .byte 14, 4, 4, 4, 4, 4, 14
+    .byte 7, 2, 2, 2, 18, 18, 12
+    .byte 17, 18, 20, 24, 20, 18, 17
+    .byte 16, 16, 16, 16, 16, 16, 31
+    .byte 17, 27, 21, 21, 17, 17, 17
+    .byte 17, 25, 21, 19, 17, 17, 17
+    .byte 14, 17, 17, 17, 17, 17, 14
+    .byte 30, 17, 17, 30, 16, 16, 16
+    .byte 14, 17, 17, 17, 21, 18, 13
+    .byte 30, 17, 17, 30, 20, 18, 17
+    .byte 15, 16, 16, 14, 1, 1, 30
+    .byte 31, 4, 4, 4, 4, 4, 4
+    .byte 17, 17, 17, 17, 17, 17, 14
+    .byte 17, 17, 17, 17, 17, 10, 4
+    .byte 17, 17, 17, 21, 21, 21, 10
+    .byte 17, 17, 10, 4, 10, 17, 17
+    .byte 17, 17, 10, 4, 4, 4, 4
+    .byte 31, 1, 2, 4, 8, 16, 31
+    .byte 14, 17, 19, 21, 25, 17, 14
+    .byte 4, 12, 4, 4, 4, 4, 14
+    .byte 14, 17, 1, 2, 4, 8, 31
+    .byte 30, 1, 1, 14, 1, 1, 30
+    .byte 2, 6, 10, 18, 31, 2, 2
+    .byte 31, 16, 16, 30, 1, 1, 30
+    .byte 14, 16, 16, 30, 17, 17, 14
+    .byte 31, 1, 2, 4, 8, 8, 8
+    .byte 14, 17, 17, 14, 17, 17, 14
+    .byte 14, 17, 17, 15, 1, 1, 14
+    .byte 14, 17, 1, 2, 4, 0, 4
+    .byte 0, 0, 0, 0, 0, 12, 12
+    .byte 0, 0, 0, 0, 12, 12, 8
+    .byte 0, 0, 12, 12, 0, 12, 12
+    .byte 0, 0, 0, 31, 0, 0, 0
+    .byte 0, 0, 0, 0, 0, 0, 31
+    .byte 4, 4, 4, 4, 4, 0, 4
+    .byte 10, 10, 0, 0, 0, 0, 0
+    .byte 4, 4, 8, 0, 0, 0, 0
+    .byte 2, 4, 8, 8, 8, 4, 2
+    .byte 8, 4, 2, 2, 2, 4, 8
+    .byte 0, 4, 4, 31, 4, 4, 0
+    .byte 0, 0, 31, 0, 31, 0, 0
+    .byte 1, 2, 2, 4, 8, 8, 16
 .section .bss
 .balign 16
 failure_stage:         .quad 0
@@ -84,6 +161,11 @@ seat_capabilities:      .long 0
 palette_selection:      .long 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
+shift_down:             .long 0
+caps_lock:              .long 0
+doc_length:             .long 0
+doc_cursor:             .long 0
+doc_buffer:             .zero DOC_CAPACITY
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
@@ -709,18 +791,111 @@ wayland_main:
     jb .event_loop
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
-    cmp dword ptr [rip + event_payload + 12], 0
+    mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
+    mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
+    cmp eax, 42
+    je .keyboard_shift
+    cmp eax, 54
+    je .keyboard_shift
+    cmp eax, 58
+    jne .keyboard_non_modifier
+    test edx, edx
+    jz .event_loop
+    xor dword ptr [rip + caps_lock], 1
+    jmp .keyboard_changed
+.keyboard_shift:
+    mov dword ptr [rip + shift_down], edx
+    jmp .event_loop
+.keyboard_non_modifier:
+    test edx, edx
+    jz .event_loop
+    cmp eax, 105
+    je .keyboard_left
+    cmp eax, 106
+    je .keyboard_right
+    cmp eax, 103
+    je .keyboard_up
+    cmp eax, 108
+    je .keyboard_down
+    cmp eax, 102
+    je .keyboard_home
+    cmp eax, 107
+    je .keyboard_end
+    cmp eax, 14
+    je .keyboard_backspace
+    cmp eax, 111
+    je .keyboard_delete
+    cmp eax, 28
+    je .keyboard_enter_key
+    cmp eax, 15
+    je .keyboard_tab
+    mov edi, eax
+    call keycode_to_ascii
+    test eax, eax
+    jz .event_loop
+    mov edi, eax
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_left:
+    cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
-    # Raw key presses cycle the temporary palette. Text/key-symbol mapping
-    # will replace this demonstration behavior in the editor input layer.
-    mov eax, dword ptr [rip + palette_selection]
-    inc eax
-    cmp eax, 3
-    jb .keyboard_selection_ready
-    xor eax, eax
-.keyboard_selection_ready:
-    mov dword ptr [rip + palette_selection], eax
-    jmp .palette_changed
+    dec dword ptr [rip + doc_cursor]
+    jmp .keyboard_changed
+.keyboard_right:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    inc dword ptr [rip + doc_cursor]
+    jmp .keyboard_changed
+.keyboard_up:
+    xor edi, edi
+    call doc_move_vertical
+    jmp .keyboard_changed
+.keyboard_down:
+    mov edi, 1
+    call doc_move_vertical
+    jmp .keyboard_changed
+.keyboard_home:
+    xor edi, edi
+    call doc_move_line_edge
+    jmp .keyboard_changed
+.keyboard_end:
+    mov edi, 1
+    call doc_move_line_edge
+    jmp .keyboard_changed
+.keyboard_backspace:
+    cmp dword ptr [rip + doc_cursor], 0
+    je .event_loop
+    dec dword ptr [rip + doc_cursor]
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.keyboard_delete:
+    mov eax, dword ptr [rip + doc_cursor]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .event_loop
+    call doc_delete_at_cursor
+    jmp .keyboard_changed
+.keyboard_enter_key:
+    mov edi, 10
+    call doc_insert_byte
+    jmp .keyboard_changed
+.keyboard_tab:
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+    mov edi, 32
+    call doc_insert_byte
+.keyboard_changed:
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
     jne .event_loop
@@ -1323,6 +1498,7 @@ render_surface:
     mov r8d, 48
     mov r9d, 0xff9dc58a
     call draw_rect
+    call render_document
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -1371,6 +1547,476 @@ present_buffer:
 .present_buffer_done:
     ret
 .size present_buffer, . - present_buffer
+
+# Insert one byte at the cursor. The bounded buffer never writes past its allocation.
+.type doc_insert_byte, @function
+doc_insert_byte:
+    push rbx
+    push r12
+    push r13
+    mov r13d, edi
+    mov eax, dword ptr [rip + doc_length]
+    cmp eax, DOC_CAPACITY
+    jae .doc_insert_done
+    mov edx, dword ptr [rip + doc_cursor]
+    lea r12, [rip + doc_buffer]
+.doc_insert_shift:
+    cmp eax, edx
+    jbe .doc_insert_store
+    mov bl, byte ptr [r12 + rax - 1]
+    mov byte ptr [r12 + rax], bl
+    dec eax
+    jmp .doc_insert_shift
+.doc_insert_store:
+    mov byte ptr [r12 + rdx], r13b
+    inc dword ptr [rip + doc_length]
+    inc dword ptr [rip + doc_cursor]
+.doc_insert_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_insert_byte, . - doc_insert_byte
+
+.type doc_delete_at_cursor, @function
+doc_delete_at_cursor:
+    push rbx
+    push r12
+    push r13
+    mov edx, dword ptr [rip + doc_cursor]
+    mov eax, dword ptr [rip + doc_length]
+    cmp edx, eax
+    jae .doc_delete_done
+    lea r12, [rip + doc_buffer]
+    mov ecx, edx
+.doc_delete_shift:
+    lea r13d, [rcx + 1]
+    cmp r13d, eax
+    jae .doc_delete_finish
+    mov bl, byte ptr [r12 + r13]
+    mov byte ptr [r12 + rcx], bl
+    inc ecx
+    jmp .doc_delete_shift
+.doc_delete_finish:
+    dec dword ptr [rip + doc_length]
+.doc_delete_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_delete_at_cursor, . - doc_delete_at_cursor
+
+# EDI=0 Home, EDI=1 End.
+.type doc_move_line_edge, @function
+doc_move_line_edge:
+    push rbx
+    push r12
+    mov ebx, dword ptr [rip + doc_cursor]
+    lea r12, [rip + doc_buffer]
+    test edi, edi
+    jnz .doc_edge_end
+.doc_edge_home:
+    test ebx, ebx
+    jz .doc_edge_store
+    dec ebx
+    cmp byte ptr [r12 + rbx], 10
+    jne .doc_edge_home
+    inc ebx
+    jmp .doc_edge_store
+.doc_edge_end:
+    mov eax, dword ptr [rip + doc_length]
+.doc_edge_end_scan:
+    cmp ebx, eax
+    jae .doc_edge_store
+    cmp byte ptr [r12 + rbx], 10
+    je .doc_edge_store
+    inc ebx
+    jmp .doc_edge_end_scan
+.doc_edge_store:
+    mov dword ptr [rip + doc_cursor], ebx
+    pop r12
+    pop rbx
+    ret
+.size doc_move_line_edge, . - doc_move_line_edge
+
+# EDI=0 moves up; EDI=1 moves down, preserving the byte column when possible.
+.type doc_move_vertical, @function
+doc_move_vertical:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov ebx, dword ptr [rip + doc_cursor]
+    lea r12, [rip + doc_buffer]
+    mov r13d, ebx
+.doc_vertical_find_start:
+    test r13d, r13d
+    jz .doc_vertical_column
+    dec r13d
+    cmp byte ptr [r12 + r13], 10
+    jne .doc_vertical_find_start
+    inc r13d
+.doc_vertical_column:
+    mov r14d, ebx
+    sub r14d, r13d
+    test edi, edi
+    jnz .doc_vertical_down
+    test r13d, r13d
+    jz .doc_vertical_done
+    lea r15d, [r13d - 1]
+    mov eax, r15d
+.doc_vertical_up_start:
+    test eax, eax
+    jz .doc_vertical_up_ready
+    dec eax
+    cmp byte ptr [r12 + rax], 10
+    jne .doc_vertical_up_start
+    inc eax
+.doc_vertical_up_ready:
+    mov ecx, r15d
+    sub ecx, eax
+    cmp r14d, ecx
+    cmova r14d, ecx
+    add eax, r14d
+    mov dword ptr [rip + doc_cursor], eax
+    jmp .doc_vertical_done
+.doc_vertical_down:
+    mov eax, ebx
+    mov ecx, dword ptr [rip + doc_length]
+.doc_vertical_find_end:
+    cmp eax, ecx
+    jae .doc_vertical_done
+    cmp byte ptr [r12 + rax], 10
+    je .doc_vertical_next_start
+    inc eax
+    jmp .doc_vertical_find_end
+.doc_vertical_next_start:
+    inc eax
+    mov r15d, eax
+.doc_vertical_next_end:
+    cmp eax, ecx
+    jae .doc_vertical_down_ready
+    cmp byte ptr [r12 + rax], 10
+    je .doc_vertical_down_ready
+    inc eax
+    jmp .doc_vertical_next_end
+.doc_vertical_down_ready:
+    sub eax, r15d
+    cmp r14d, eax
+    cmova r14d, eax
+    lea eax, [r15d + r14d]
+    mov dword ptr [rip + doc_cursor], eax
+.doc_vertical_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_move_vertical, . - doc_move_vertical
+
+# Temporary US-QWERTY evdev mapping. XKB parsing is a separate next milestone.
+.type keycode_to_ascii, @function
+keycode_to_ascii:
+    cmp edi, 128
+    jae .keymap_unknown
+    mov ecx, edi
+    lea r8, [rip + keymap_base]
+    movzx eax, byte ptr [r8 + rcx]
+    test eax, eax
+    jz .keymap_unknown
+    cmp eax, 'a'
+    jb .keymap_shift_punctuation
+    cmp eax, 'z'
+    ja .keymap_shift_punctuation
+    mov edx, dword ptr [rip + shift_down]
+    xor edx, dword ptr [rip + caps_lock]
+    test edx, edx
+    jz .keymap_done
+    sub eax, 32
+    ret
+.keymap_shift_punctuation:
+    cmp dword ptr [rip + shift_down], 0
+    je .keymap_done
+    lea r8, [rip + keymap_shift]
+    movzx edx, byte ptr [r8 + rcx]
+    test edx, edx
+    jz .keymap_done
+    mov eax, edx
+.keymap_done:
+    ret
+.keymap_unknown:
+    xor eax, eax
+    ret
+.size keycode_to_ascii, . - keycode_to_ascii
+
+.type draw_glyph, @function
+draw_glyph:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, esi
+    mov eax, edx
+    cmp eax, ' '
+    je .glyph_done
+    cmp eax, 'a'
+    jb .glyph_upper
+    cmp eax, 'z'
+    ja .glyph_upper
+    sub eax, 32
+.glyph_upper:
+    cmp eax, 'A'
+    jb .glyph_digit
+    cmp eax, 'Z'
+    ja .glyph_digit
+    sub eax, 'A'
+    jmp .glyph_index_ready
+.glyph_digit:
+    cmp eax, '0'
+    jb .glyph_punctuation
+    cmp eax, '9'
+    ja .glyph_punctuation
+    sub eax, '0'
+    add eax, 26
+    jmp .glyph_index_ready
+.glyph_punctuation:
+    cmp eax, '?'
+    je .glyph_question
+    cmp eax, '.'
+    je .glyph_period
+    cmp eax, ','
+    je .glyph_comma
+    cmp eax, ':'
+    je .glyph_colon
+    cmp eax, '-'
+    je .glyph_dash
+    cmp eax, '_'
+    je .glyph_underscore
+    cmp eax, '!'
+    je .glyph_exclamation
+    cmp eax, '"'
+    je .glyph_quote
+    cmp eax, 39
+    je .glyph_apostrophe
+    cmp eax, '('
+    je .glyph_open_paren
+    cmp eax, ')'
+    je .glyph_close_paren
+    cmp eax, '+'
+    je .glyph_plus
+    cmp eax, '='
+    je .glyph_equals
+    cmp eax, '/'
+    je .glyph_slash
+    mov eax, 36
+    jmp .glyph_index_ready
+.glyph_question:
+    mov eax, 36
+    jmp .glyph_index_ready
+.glyph_period:
+    mov eax, 37
+    jmp .glyph_index_ready
+.glyph_comma:
+    mov eax, 38
+    jmp .glyph_index_ready
+.glyph_colon:
+    mov eax, 39
+    jmp .glyph_index_ready
+.glyph_dash:
+    mov eax, 40
+    jmp .glyph_index_ready
+.glyph_underscore:
+    mov eax, 41
+    jmp .glyph_index_ready
+.glyph_exclamation:
+    mov eax, 42
+    jmp .glyph_index_ready
+.glyph_quote:
+    mov eax, 43
+    jmp .glyph_index_ready
+.glyph_apostrophe:
+    mov eax, 44
+    jmp .glyph_index_ready
+.glyph_open_paren:
+    mov eax, 45
+    jmp .glyph_index_ready
+.glyph_close_paren:
+    mov eax, 46
+    jmp .glyph_index_ready
+.glyph_plus:
+    mov eax, 47
+    jmp .glyph_index_ready
+.glyph_equals:
+    mov eax, 48
+    jmp .glyph_index_ready
+.glyph_slash:
+    mov eax, 49
+.glyph_index_ready:
+    imul eax, 7
+    lea rbx, [rip + font_5x7]
+    add rbx, rax
+    xor r14d, r14d
+.glyph_row:
+    cmp r14d, 7
+    jae .glyph_done
+    movzx r8d, byte ptr [rbx + r14]
+    xor r15d, r15d
+.glyph_column:
+    cmp r15d, 5
+    jae .glyph_next_row
+    mov eax, 4
+    sub eax, r15d
+    bt r8d, eax
+    jnc .glyph_next_column
+    mov eax, r13d
+    add eax, r14d
+    imul eax, STRIDE
+    mov edx, r12d
+    add edx, r15d
+    shl edx, 2
+    add eax, edx
+    mov rdi, qword ptr [rip + shm_mapping]
+    add rdi, rax
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_next_column:
+    inc r15d
+    jmp .glyph_column
+.glyph_next_row:
+    inc r14d
+    jmp .glyph_row
+.glyph_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_glyph, . - draw_glyph
+
+.type render_document, @function
+render_document:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, DOC_LEFT
+    mov r13d, DOC_TOP
+    mov r14d, 0
+    mov r15d, dword ptr [rip + doc_length]
+    test r15d, r15d
+    jnz .document_have_text
+    lea rbx, [rip + empty_document_hint]
+.document_hint_loop:
+    movzx edx, byte ptr [rbx]
+    test edx, edx
+    jz .document_draw_cursor
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+    add r12d, CELL_WIDTH
+    inc rbx
+    jmp .document_hint_loop
+.document_have_text:
+    lea rbx, [rip + doc_buffer]
+.document_render_loop:
+    cmp r14d, r15d
+    jae .document_draw_cursor
+    cmp r13d, HEIGHT - 10
+    ja .document_draw_cursor
+    cmp r12d, WIDTH - 8
+    jae .document_next_byte
+    movzx edx, byte ptr [rbx + r14]
+    cmp edx, 10
+    je .document_newline
+    cmp edx, 9
+    je .document_tab
+    cmp edx, 32
+    jb .document_control
+    cmp edx, 127
+    jb .document_printable
+.document_control:
+    cmp edx, 128
+    jb .document_next_byte
+    mov eax, edx
+    and eax, 0xc0
+    cmp eax, 0x80
+    je .document_next_byte
+    mov edx, '?'
+.document_printable:
+    mov edi, r12d
+    mov esi, r13d
+    call draw_glyph
+    add r12d, CELL_WIDTH
+    jmp .document_next_byte
+.document_tab:
+    add r12d, CELL_WIDTH * 4
+    jmp .document_next_byte
+.document_newline:
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.document_next_byte:
+    inc r14d
+    jmp .document_render_loop
+.document_draw_cursor:
+    xor r14d, r14d
+    xor r12d, r12d
+    xor r13d, r13d
+.document_cursor_scan:
+    cmp r14d, dword ptr [rip + doc_cursor]
+    jae .document_cursor_ready
+    lea rbx, [rip + doc_buffer]
+    movzx eax, byte ptr [rbx + r14]
+    cmp eax, 10
+    je .document_cursor_newline
+    cmp eax, 9
+    je .document_cursor_tab
+    cmp eax, 32
+    jb .document_cursor_next
+    cmp eax, 127
+    jbe .document_cursor_column
+    cmp eax, 0xc0
+    jb .document_cursor_next
+.document_cursor_column:
+    inc r12d
+    jmp .document_cursor_next
+.document_cursor_tab:
+    add r12d, 4
+    jmp .document_cursor_next
+.document_cursor_newline:
+    xor r12d, r12d
+    inc r13d
+.document_cursor_next:
+    inc r14d
+    jmp .document_cursor_scan
+.document_cursor_ready:
+    imul r12d, CELL_WIDTH
+    add r12d, DOC_LEFT
+    imul r13d, LINE_HEIGHT
+    add r13d, DOC_TOP
+    cmp r12d, WIDTH - 2
+    ja .document_render_done
+    cmp r13d, HEIGHT - 10
+    ja .document_render_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, 1
+    mov r8d, 9
+    mov r9d, 0xffffffff
+    call draw_rect
+.document_render_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_document, . - render_document
 
 # Create input objects after wl_seat advertises their capabilities.
 # Pointer is allocated before keyboard when both appear in the same event.
