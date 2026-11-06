@@ -379,7 +379,7 @@ def run(
                     key_step(2000, evdev["h"], "type first Untitled character")
                     key_step(2002, evdev["i"], "type second Untitled character")
                     workflow_shortcut(2010, 31, "Ctrl+S opens Save As for Untitled")
-                    if struct.unpack_from("<I", pixels, 148 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
+                    if struct.unpack_from("<I", pixels, 184 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
                         raise AssertionError("Untitled Ctrl+S did not render the Save As path prompt")
                     if struct.unpack_from("<I", pixels, 204 * 800 * 4 + 72 * 4)[0] != 0xFF252A33:
                         raise AssertionError("Save As path-entry field was not rendered")
@@ -404,7 +404,7 @@ def run(
                     if struct.unpack_from("<I", pixels, 35 * 800 * 4 + 108 * 4)[0] != 0xFF1F242D:
                         raise AssertionError("File dropdown background was not rendered")
                     workflow_click(120, 44, 2110, "select File > Open")
-                    if struct.unpack_from("<I", pixels, 148 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
+                    if struct.unpack_from("<I", pixels, 184 * 800 * 4 + 48 * 4)[0] != 0xFF1F242D:
                         raise AssertionError("File > Open did not render its path prompt")
                     serial = workflow_type_path("relative-open.txz", 2120)
                     key_step(serial, 14, "Open path Backspace")
