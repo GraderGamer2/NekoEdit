@@ -721,10 +721,20 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                     )
                     workflow_redraw(f"{label}: press")
+                    press_state = picker_state()
+                    if press_state.get("picker_scroll_drag") != 1:
+                        raise AssertionError(
+                            f"{label}: scrollbar press did not start a drag; state={press_state!r}"
+                        )
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
                     )
-                    workflow_redraw(f"{label}: drag")
+                    try:
+                        workflow_redraw(f"{label}: drag")
+                    except Exception as error:
+                        raise AssertionError(
+                            f"{label}: pointer motion did not redraw; state={picker_state()!r}"
+                        ) from error
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
                         + wire_message(12, 0)
@@ -916,7 +926,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
