@@ -1827,7 +1827,8 @@ wl_read_event:
     cmp rax, -4                 # EINTR
     je .read_event_recvmsg
     test rax, rax
-    jle .read_event_done
+    js .read_event_done
+    jz .read_event_eof
     mov dword ptr [rip + event_recv_bytes], eax
 
     # Extract the single SCM_RIGHTS descriptor when one was attached to this
@@ -1838,6 +1839,8 @@ wl_read_event:
     jz .read_event_no_fd
     cmp eax, 20
     jb .read_event_bad
+    cmp eax, 24
+    ja .read_event_bad
     cmp qword ptr [rip + msg_control], 20
     jne .read_event_bad
     cmp dword ptr [rip + msg_control + 8], SOL_SOCKET
@@ -1927,6 +1930,9 @@ wl_read_event:
 .read_event_return:
     pop rbp
     ret
+.read_event_eof:
+    mov eax, -5
+    jmp .read_event_done
 .read_event_bad:
     mov eax, -71
     jmp .read_event_done
@@ -3392,6 +3398,7 @@ handle_keyboard_keymap:
     mov eax, SYS_close
     syscall
     mov dword ptr [rip + last_event_fd], -1
+    mov r12d, -1
 
     # The wire size includes the final NUL byte. Reject malformed or truncated
     # maps before exposing the pointer to a future XKB text scanner.
