@@ -722,10 +722,12 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
+    # Palette occupies its own hit-test band. A click elsewhere is routed
+    # to the document area below rather than silently discarded.
     cmp edx, 96
-    jl .event_loop
+    jl .pointer_document_click
     cmp edx, 144
-    jge .event_loop
+    jge .pointer_document_click
     cmp eax, 80
     jl .palette_second
     cmp eax, 128
@@ -751,6 +753,22 @@ wayland_main:
     cmp dword ptr [rip + palette_selection], 2
     je .event_loop
     mov dword ptr [rip + palette_selection], 2
+    jmp .palette_changed
+
+.pointer_document_click:
+    cmp edx, DOC_TOP
+    jl .event_loop
+    cmp edx, HEIGHT
+    jae .event_loop
+    test eax, eax
+    js .event_loop
+    cmp eax, WIDTH
+    ja .event_loop
+    mov edi, eax
+    mov esi, edx
+    call doc_place_cursor_from_pointer
+    jmp .keyboard_changed
+
 .palette_changed:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
@@ -1658,6 +1676,133 @@ doc_move_line_edge:
     pop rbx
     ret
 .size doc_move_line_edge, . - doc_move_line_edge
+
+# Place the document cursor from surface-local pixel coordinates.
+# EDI=x, ESI=y. Clicks snap to the nearest character insertion boundary;
+# tabs occupy four cells and UTF-8 continuation bytes are never cursor stops.
+.type doc_place_cursor_from_pointer, @function
+doc_place_cursor_from_pointer:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+
+    # Clamp the horizontal coordinate to the document's left edge and convert
+    # pixels to the nearest insertion column (one cell is eight pixels).
+    cmp edi, DOC_LEFT
+    jae .pointer_x_clamped
+    mov edi, DOC_LEFT
+.pointer_x_clamped:
+    sub edi, DOC_LEFT
+    add edi, CELL_WIDTH / 2
+    xor edx, edx
+    mov ecx, CELL_WIDTH
+    div ecx
+    mov r14d, eax                 # target visual column
+
+    # Snap the vertical coordinate to the nearest 12-pixel line baseline.
+    mov eax, esi
+    sub eax, DOC_TOP
+    add eax, LINE_HEIGHT / 2
+    xor edx, edx
+    mov ecx, LINE_HEIGHT
+    div ecx
+    mov r15d, eax                 # target line
+
+    lea r12, [rip + doc_buffer]
+    mov r13d, dword ptr [rip + doc_length]
+    xor ebx, ebx                  # document byte offset
+    xor r8d, r8d                  # current line
+
+.pointer_find_line:
+    cmp r8d, r15d
+    je .pointer_scan_line
+    cmp ebx, r13d
+    jae .pointer_to_document_end
+    cmp byte ptr [r12 + rbx], 10
+    jne .pointer_find_line_next
+    inc r8d
+.pointer_find_line_next:
+    inc ebx
+    jmp .pointer_find_line
+
+.pointer_scan_line:
+    xor r9d, r9d                  # visual column on this line
+.pointer_scan_character:
+    cmp ebx, r13d
+    jae .pointer_place_cursor
+    movzx eax, byte ptr [r12 + rbx]
+    cmp eax, 10
+    je .pointer_place_cursor      # never place the caret past a newline
+    cmp eax, 9
+    je .pointer_tab
+    cmp eax, 32
+    jb .pointer_skip_control
+    cmp eax, 128
+    jb .pointer_ascii
+
+    # Treat a UTF-8 leading byte as one display cell and skip its continuation
+    # bytes together so the cursor remains on valid code-point boundaries.
+    mov ecx, eax
+    and ecx, 0xc0
+    cmp ecx, 0x80
+    je .pointer_skip_continuation
+    cmp r14d, r9d
+    jbe .pointer_place_cursor
+    inc r9d
+    inc ebx
+.pointer_skip_utf8_tail:
+    cmp ebx, r13d
+    jae .pointer_check_column
+    movzx eax, byte ptr [r12 + rbx]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .pointer_check_column
+    inc ebx
+    jmp .pointer_skip_utf8_tail
+
+.pointer_ascii:
+    cmp r14d, r9d
+    jbe .pointer_place_cursor
+    inc r9d
+    inc ebx
+    jmp .pointer_check_column
+
+.pointer_tab:
+    # A tab is four cells wide; choose the nearest edge of its span.
+    lea eax, [r9d + 2]
+    cmp r14d, eax
+    jb .pointer_place_cursor
+    add r9d, 4
+    inc ebx
+    jmp .pointer_check_column
+
+.pointer_skip_continuation:
+    inc ebx
+    jmp .pointer_scan_character
+.pointer_skip_control:
+    inc ebx
+    jmp .pointer_scan_character
+
+.pointer_check_column:
+    cmp r9d, r14d
+    jae .pointer_place_cursor
+    jmp .pointer_scan_character
+
+.pointer_place_cursor:
+    mov dword ptr [rip + doc_cursor], ebx
+    jmp .pointer_cursor_done
+.pointer_to_document_end:
+    mov dword ptr [rip + doc_cursor], r13d
+.pointer_cursor_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_place_cursor_from_pointer, . - doc_place_cursor_from_pointer
 
 # EDI=0 moves up; EDI=1 moves down, preserving the byte column when possible.
 .type doc_move_vertical, @function
