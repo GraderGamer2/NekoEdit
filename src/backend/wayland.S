@@ -28,8 +28,10 @@
 .equ CLOCK_MONOTONIC,      1
 .equ TFD_CLOEXEC,     0x80000
 .equ POLLIN,              1
-.equ REPEAT_DELAY_NS, 300000000
-.equ REPEAT_INTERVAL_NS, 33333333
+.equ REPEAT_DEFAULT_DELAY_MS, 300
+.equ REPEAT_DEFAULT_RATE, 30
+.equ REPEAT_NS_PER_SECOND, 1000000000
+.equ REPEAT_MAX_RATE, 1000
 .equ DOC_CAPACITY,    65536
 .equ DOC_LEFT,           16
 .equ DOC_TOP,           164
@@ -144,6 +146,11 @@ font_5x7:
     .byte 0, 4, 4, 31, 4, 4, 0
     .byte 0, 0, 31, 0, 31, 0, 0
     .byte 1, 2, 2, 4, 8, 8, 16
+.section .data
+.balign 4
+repeat_rate:            .long REPEAT_DEFAULT_RATE
+repeat_delay_ms:        .long REPEAT_DEFAULT_DELAY_MS
+
 .section .bss
 .balign 16
 failure_stage:         .quad 0
@@ -158,6 +165,7 @@ compositor_global:     .long 0
 shm_global:            .long 0
 xdg_global:            .long 0
 seat_global:           .long 0
+seat_version:          .long 0
 pointer_x:             .long 0
 pointer_y:             .long 0
 pointer_inside:         .long 0
@@ -612,7 +620,7 @@ wayland_main:
     mov edi, dword ptr [rip + seat_global]
     lea rsi, [rip + iface_seat]
     mov edx, 8
-    mov ecx, 1
+    mov ecx, dword ptr [rip + seat_version]
     mov r8d, 13
     call wl_registry_bind
     test rax, rax
@@ -888,8 +896,10 @@ wayland_main:
     je .keyboard_key
     cmp dword ptr [rip + last_opcode], 4
     je .keyboard_modifiers
-    # The XKB keymap FD and repeat-info are still deferred. Modifier masks
-    # are consumed below so Shift/Lock state follows the compositor.
+    cmp dword ptr [rip + last_opcode], 5
+    je .keyboard_repeat_info
+    # The XKB keymap FD is still deferred; modifier and repeat settings are
+    # consumed below so input follows the compositor's active configuration.
     jmp .event_loop
 .event_repeat_timer:
     mov edi, dword ptr [rip + repeat_timer_fd]
@@ -907,6 +917,37 @@ wayland_main:
     jmp .keyboard_non_modifier
 .event_repeat_cancel:
     call repeat_cancel
+    jmp .event_loop
+
+.keyboard_repeat_info:
+    cmp dword ptr [rip + last_size], 8
+    jb .event_loop
+    # wl_keyboard.repeat_info(rate, delay). Negative values violate the
+    # protocol; a zero rate disables client-side repetition.
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    js .protocol_error
+    mov edx, dword ptr [rip + event_payload + 4]
+    test edx, edx
+    js .protocol_error
+    # Defend the timerfd path against pathological rates while preserving
+    # practical compositor settings (the normal desktop range is far lower).
+    cmp eax, REPEAT_MAX_RATE
+    jbe .Lneko_repeat_rate_capped
+    mov eax, REPEAT_MAX_RATE
+.Lneko_repeat_rate_capped:
+    mov dword ptr [rip + repeat_rate], eax
+    mov dword ptr [rip + repeat_delay_ms], edx
+    test eax, eax
+    jnz .Lneko_repeat_info_reconfigure
+    call repeat_cancel
+    jmp .event_loop
+.Lneko_repeat_info_reconfigure:
+    mov eax, dword ptr [rip + repeat_keycode]
+    test eax, eax
+    jz .event_loop
+    # A changed rate/delay takes effect for the currently held key too.
+    call repeat_start_if_supported
     jmp .event_loop
 
 .keyboard_modifiers:
@@ -1630,6 +1671,17 @@ registry_capture_global:
     jz .registry_done
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + seat_global], eax
+    # Request at most wl_seat version 4, which exposes wl_keyboard.repeat_info.
+    # Keep older compositor versions working with the local default timings.
+    mov eax, dword ptr [rip + event_payload + 4]
+    add eax, 3
+    and eax, -4
+    mov edx, dword ptr [rip + event_payload + 8 + rax]
+    cmp edx, 4
+    jbe .Lneko_seat_version_ready
+    mov edx, 4
+.Lneko_seat_version_ready:
+    mov dword ptr [rip + seat_version], edx
 .registry_done:
     pop rbp
     ret
@@ -1942,28 +1994,64 @@ doc_clear_selection:
     ret
 .size doc_clear_selection, . - doc_clear_selection
 
-# Start a 300 ms initial delay followed by approximately 30 repeats/second
-# for arrows, Backspace, and Delete. EAX=evdev keycode.
+# Start compositor-configured repeat for ordinary keys. Modifier and lock
+# keys are intentionally excluded. EAX=Linux evdev keycode.
 .type repeat_start_if_supported, @function
 repeat_start_if_supported:
-    cmp eax, 105
-    je .Lneko_repeat_start
-    cmp eax, 106
-    je .Lneko_repeat_start
-    cmp eax, 103
-    je .Lneko_repeat_start
-    cmp eax, 108
-    je .Lneko_repeat_start
-    cmp eax, 14
-    je .Lneko_repeat_start
-    cmp eax, 111
-    jne .Lneko_repeat_start_done
-.Lneko_repeat_start:
+    # Shift, Ctrl, Alt, Meta/Super, Caps/Num/Scroll Lock and Compose do not repeat.
+    cmp eax, 42
+    je .Lneko_repeat_start_done
+    cmp eax, 54
+    je .Lneko_repeat_start_done
+    cmp eax, 29
+    je .Lneko_repeat_start_done
+    cmp eax, 97
+    je .Lneko_repeat_start_done
+    cmp eax, 56
+    je .Lneko_repeat_start_done
+    cmp eax, 100
+    je .Lneko_repeat_start_done
+    cmp eax, 125
+    je .Lneko_repeat_start_done
+    cmp eax, 126
+    je .Lneko_repeat_start_done
+    cmp eax, 58
+    je .Lneko_repeat_start_done
+    cmp eax, 69
+    je .Lneko_repeat_start_done
+    cmp eax, 70
+    je .Lneko_repeat_start_done
+    cmp eax, 127
+    je .Lneko_repeat_start_done
+    cmp dword ptr [rip + repeat_rate], 0
+    je .Lneko_repeat_start_done
     mov dword ptr [rip + repeat_keycode], eax
+    # itimerspec.it_interval = 1 second / repeat_rate.
     mov qword ptr [rip + repeat_timer_spec], 0
-    mov qword ptr [rip + repeat_timer_spec + 8], REPEAT_INTERVAL_NS
-    mov qword ptr [rip + repeat_timer_spec + 16], 0
-    mov qword ptr [rip + repeat_timer_spec + 24], REPEAT_DELAY_NS
+    mov qword ptr [rip + repeat_timer_spec + 8], 0
+    mov rax, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    mov ecx, dword ptr [rip + repeat_rate]
+    div rcx
+    mov rcx, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    div rcx
+    mov qword ptr [rip + repeat_timer_spec], rax
+    mov qword ptr [rip + repeat_timer_spec + 8], rdx
+    # itimerspec.it_value = configured initial delay in milliseconds.
+    mov eax, dword ptr [rip + repeat_delay_ms]
+    imul rax, rax, 1000000
+    mov rcx, REPEAT_NS_PER_SECOND
+    xor edx, edx
+    div rcx
+    mov qword ptr [rip + repeat_timer_spec + 16], rax
+    mov qword ptr [rip + repeat_timer_spec + 24], rdx
+    # timerfd interprets a zero it_value as disarmed; represent a zero-delay
+    # repeat with the smallest non-zero expiration.
+    cmp dword ptr [rip + repeat_delay_ms], 0
+    jne .Lneko_repeat_timer_arm
+    mov qword ptr [rip + repeat_timer_spec + 24], 1
+.Lneko_repeat_timer_arm:
     mov eax, SYS_timerfd_settime
     mov edi, dword ptr [rip + repeat_timer_fd]
     xor esi, esi
