@@ -213,7 +213,7 @@ pointer_object:         .long 0
 keyboard_created:       .long 0
 keyboard_object:        .long 0
 keyboard_focused:       .long 0
-event_fd:               .long -1
+event_fd:               .long 0       # initialized to -1 in wayland_main
 keymap_format:          .long 0
 keymap_size:            .long 0
 .balign 8
