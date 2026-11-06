@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-binary=\${1:-build/nekoedit}
+binary=build/nekoedit
+if [ "$#" -gt 0 ]; then binary=$1; fi
 
 help_output=$("$binary" --help)
 printf '%s\n' "$help_output" | grep -q 'NekoEdit'
