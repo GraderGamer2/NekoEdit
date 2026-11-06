@@ -4,6 +4,27 @@ This is an append-only narrative log. New entries go at the top, with the newest
 
 ---
 
+## 2026-11-06 — Rename the development branch to `early-alpha`
+
+**Purpose:** Replace the overly specific branch name with a concise early-development label while preserving the existing implementation history and keeping the project handoff documentation accurate.
+
+### Branch and PR verification
+
+- The user renamed `feat/wayland-socket-error-handling` to `early-alpha` in GitHub.
+- Verified that GitHub's branch endpoint returns `early-alpha` at commit [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0). Searching for the former branch name returns no branch.
+- The branch rename preserved the implementation tip; it did not modify source history or create a new implementation commit.
+- PR [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) is currently closed and unmerged. The GitHub API still returns the former name in the PR's `head.ref`, despite the old branch ref no longer being present. The reason for closure is not inferred here; no PR action was taken.
+- GitHub Actions [Build and test #174](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217617434) passed on the exact implementation tip before the rename. All eight workflow steps succeeded. This is validation of the unchanged code commit, not a new run triggered by the branch rename.
+- At verification, `main` remained at [`f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); it still contains the original prototype rather than the editor implementation.
+
+### Scope
+
+- Refreshed the status, development log, project history, and commit index so the renamed branch and current PR state are clear in future handoffs.
+- Mirrored the documentation-only update to `main`; no application source, tests, Makefile, workflow, or binary changed.
+- No feature development was performed. Further NekoEdit development remains paused until the user explicitly authorizes it.
+
+---
+
 ## 2026-11-06 — Put the changelog on main and synchronize the development branch
 
 **Purpose:** Make the project continuity record available from main as requested, while keeping PR #1 based on main without merging the editor implementation prematurely.
