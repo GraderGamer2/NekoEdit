@@ -1276,13 +1276,17 @@ wayland_main:
 .Lneko_keyboard_left_plain:
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
-    dec dword ptr [rip + doc_cursor]
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
     jmp .keyboard_changed
 .Lneko_keyboard_left_extend:
     call doc_begin_keyboard_selection
     cmp dword ptr [rip + doc_cursor], 0
     je .Lneko_keyboard_left_extend_finish
-    dec dword ptr [rip + doc_cursor]
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
 .Lneko_keyboard_left_extend_finish:
     call doc_finish_keyboard_selection
     jmp .keyboard_changed
@@ -1304,14 +1308,18 @@ wayland_main:
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_length]
     jae .event_loop
-    inc dword ptr [rip + doc_cursor]
+    mov edi, eax
+    call doc_utf8_next
+    mov dword ptr [rip + doc_cursor], eax
     jmp .keyboard_changed
 .Lneko_keyboard_right_extend:
     call doc_begin_keyboard_selection
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_length]
     jae .Lneko_keyboard_right_extend_finish
-    inc dword ptr [rip + doc_cursor]
+    mov edi, eax
+    call doc_utf8_next
+    mov dword ptr [rip + doc_cursor], eax
 .Lneko_keyboard_right_extend_finish:
     call doc_finish_keyboard_selection
     jmp .keyboard_changed
@@ -1372,7 +1380,9 @@ wayland_main:
     jne .Lneko_keyboard_backspace_selection
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
-    dec dword ptr [rip + doc_cursor]
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_utf8_prev
+    mov dword ptr [rip + doc_cursor], eax
     call doc_delete_at_cursor
     jmp .keyboard_changed
 .Lneko_keyboard_backspace_selection:
@@ -2819,6 +2829,155 @@ present_buffer:
     ret
 .size present_buffer, . - present_buffer
 
+# Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
+# as single-byte replacement units so the original file bytes remain editable.
+# EDI=byte offset; EAX=next byte offset.
+.type doc_utf8_next, @function
+doc_utf8_next:
+    mov eax, edi
+    mov r9d, dword ptr [rip + doc_length]
+    cmp eax, r9d
+    jae .Lneko_utf8_next_done
+    lea rdx, [rip + doc_buffer]
+    movzx r11d, byte ptr [rdx + rax]
+    cmp r11d, 0xc2
+    jb .Lneko_utf8_next_single
+    cmp r11d, 0xdf
+    jbe .Lneko_utf8_next_two
+    cmp r11d, 0xef
+    jbe .Lneko_utf8_next_three
+    cmp r11d, 0xf4
+    jbe .Lneko_utf8_next_four
+    jmp .Lneko_utf8_next_single
+
+.Lneko_utf8_next_two:
+    lea edi, [eax + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    add eax, 2
+    ret
+
+.Lneko_utf8_next_three:
+    lea edi, [eax + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    cmp r10d, 0x80
+    jb .Lneko_utf8_next_single
+    cmp r10d, 0xbf
+    ja .Lneko_utf8_next_single
+    cmp r11d, 0xe0
+    jne .Lneko_utf8_next_three_check_ed
+    cmp r10d, 0xa0
+    jb .Lneko_utf8_next_single
+    jmp .Lneko_utf8_next_three_second_ok
+.Lneko_utf8_next_three_check_ed:
+    cmp r11d, 0xed
+    jne .Lneko_utf8_next_three_second_ok
+    cmp r10d, 0x9f
+    ja .Lneko_utf8_next_single
+.Lneko_utf8_next_three_second_ok:
+    lea edi, [eax + 2]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    add eax, 3
+    ret
+
+.Lneko_utf8_next_four:
+    lea edi, [eax + 1]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    cmp r10d, 0x80
+    jb .Lneko_utf8_next_single
+    cmp r10d, 0xbf
+    ja .Lneko_utf8_next_single
+    cmp r11d, 0xf0
+    jne .Lneko_utf8_next_four_check_f4
+    cmp r10d, 0x90
+    jb .Lneko_utf8_next_single
+    jmp .Lneko_utf8_next_four_second_ok
+.Lneko_utf8_next_four_check_f4:
+    cmp r11d, 0xf4
+    jne .Lneko_utf8_next_four_second_ok
+    cmp r10d, 0x8f
+    ja .Lneko_utf8_next_single
+.Lneko_utf8_next_four_second_ok:
+    lea edi, [eax + 2]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    lea edi, [eax + 3]
+    cmp edi, r9d
+    jae .Lneko_utf8_next_single
+    movzx r10d, byte ptr [rdx + rdi]
+    and r10d, 0xc0
+    cmp r10d, 0x80
+    jne .Lneko_utf8_next_single
+    add eax, 4
+    ret
+
+.Lneko_utf8_next_single:
+    inc eax
+.Lneko_utf8_next_done:
+    ret
+.size doc_utf8_next, . - doc_utf8_next
+
+# Return the start of the valid UTF-8 scalar ending at EDI. Invalid trailing
+# bytes remain individually addressable. EDI=byte offset; EAX=previous offset.
+.type doc_utf8_prev, @function
+doc_utf8_prev:
+    push rbx
+    push r12
+    mov r12d, edi
+    test r12d, r12d
+    jz .Lneko_utf8_prev_zero
+    cmp r12d, 2
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 2]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+    cmp r12d, 3
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 3]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+    cmp r12d, 4
+    jb .Lneko_utf8_prev_fallback
+    lea ebx, [r12d - 4]
+    mov edi, ebx
+    call doc_utf8_next
+    cmp eax, r12d
+    je .Lneko_utf8_prev_found
+.Lneko_utf8_prev_fallback:
+    lea eax, [r12d - 1]
+    jmp .Lneko_utf8_prev_done
+.Lneko_utf8_prev_found:
+    mov eax, ebx
+    jmp .Lneko_utf8_prev_done
+.Lneko_utf8_prev_zero:
+    xor eax, eax
+.Lneko_utf8_prev_done:
+    pop r12
+    pop rbx
+    ret
+.size doc_utf8_prev, . - doc_utf8_prev
+
 # Insert one byte at the cursor. The bounded buffer never writes past its allocation.
 .type doc_insert_byte, @function
 doc_insert_byte:
@@ -2854,22 +3013,24 @@ doc_delete_at_cursor:
     push rbx
     push r12
     push r13
-    mov edx, dword ptr [rip + doc_cursor]
+    mov r12d, dword ptr [rip + doc_cursor]
     mov eax, dword ptr [rip + doc_length]
-    cmp edx, eax
+    cmp r12d, eax
     jae .doc_delete_done
-    lea r12, [rip + doc_buffer]
-    mov ecx, edx
-.doc_delete_shift:
-    lea r13d, [rcx + 1]
-    cmp r13d, eax
-    jae .doc_delete_finish
-    mov bl, byte ptr [r12 + r13]
-    mov byte ptr [r12 + rcx], bl
-    inc ecx
-    jmp .doc_delete_shift
-.doc_delete_finish:
-    dec dword ptr [rip + doc_length]
+    mov edi, r12d
+    call doc_utf8_next
+    mov r13d, eax
+    mov ecx, dword ptr [rip + doc_length]
+    sub ecx, r13d
+    lea rsi, [rip + doc_buffer]
+    add rsi, r13
+    lea rdi, [rip + doc_buffer]
+    add rdi, r12
+    cld
+    rep movsb
+    mov eax, r13d
+    sub eax, r12d
+    sub dword ptr [rip + doc_length], eax
 .doc_delete_done:
     pop r13
     pop r12
@@ -3094,10 +3255,6 @@ doc_offset_to_visual:
     jb .Lneko_offset_visual_skip
     cmp eax, 128
     jb .Lneko_offset_visual_glyph
-    mov edx, eax
-    and edx, 0xc0
-    cmp edx, 0x80
-    je .Lneko_offset_visual_skip
 .Lneko_offset_visual_glyph:
     cmp ebx, DOC_COLUMNS
     jb .Lneko_offset_visual_glyph_fit
@@ -3105,8 +3262,10 @@ doc_offset_to_visual:
     xor ebx, ebx
 .Lneko_offset_visual_glyph_fit:
     inc ebx
-    inc ecx
-    jmp .Lneko_offset_visual_utf8_tail
+    mov edi, ecx
+    call doc_utf8_next
+    mov ecx, eax
+    jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_newline:
     inc r14d
     xor ebx, ebx
@@ -3125,15 +3284,6 @@ doc_offset_to_visual:
 .Lneko_offset_visual_skip:
     inc ecx
     jmp .Lneko_offset_visual_scan
-.Lneko_offset_visual_utf8_tail:
-    cmp ecx, r12d
-    jae .Lneko_offset_visual_scan
-    movzx eax, byte ptr [r8 + rcx]
-    and eax, 0xc0
-    cmp eax, 0x80
-    jne .Lneko_offset_visual_scan
-    inc ecx
-    jmp .Lneko_offset_visual_utf8_tail
 .Lneko_offset_visual_boundary:
     # An insertion boundary immediately before a token that would wrap belongs
     # at the start of the next visual row, not just beyond the right edge.
@@ -3148,10 +3298,6 @@ doc_offset_to_visual:
     jb .Lneko_offset_visual_done
     cmp eax, 128
     jb .Lneko_offset_visual_boundary_glyph
-    mov edx, eax
-    and edx, 0xc0
-    cmp edx, 0x80
-    je .Lneko_offset_visual_done
 .Lneko_offset_visual_boundary_glyph:
     cmp ebx, DOC_COLUMNS
     jb .Lneko_offset_visual_done
@@ -3204,10 +3350,6 @@ doc_visual_to_offset:
     jb .Lneko_visual_offset_skip
     cmp eax, 128
     jb .Lneko_visual_offset_glyph
-    mov edx, eax
-    and edx, 0xc0
-    cmp edx, 0x80
-    je .Lneko_visual_offset_skip
 .Lneko_visual_offset_glyph:
     cmp ecx, DOC_COLUMNS
     jb .Lneko_visual_offset_glyph_row_ready
@@ -3222,8 +3364,10 @@ doc_visual_to_offset:
     jae .Lneko_visual_offset_end
 .Lneko_visual_offset_consume_glyph:
     inc ecx
-    inc r14d
-    jmp .Lneko_visual_offset_utf8_tail
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
+    jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_newline:
     cmp ebx, r12d
     je .Lneko_visual_offset_end
@@ -3252,15 +3396,6 @@ doc_visual_to_offset:
 .Lneko_visual_offset_skip:
     inc r14d
     jmp .Lneko_visual_offset_scan
-.Lneko_visual_offset_utf8_tail:
-    cmp r14d, r15d
-    jae .Lneko_visual_offset_scan
-    movzx eax, byte ptr [r8 + r14]
-    and eax, 0xc0
-    cmp eax, 0x80
-    jne .Lneko_visual_offset_scan
-    inc r14d
-    jmp .Lneko_visual_offset_utf8_tail
 .Lneko_visual_offset_end:
     mov eax, r14d
     pop r15
@@ -3970,10 +4105,6 @@ render_selection:
     jb .Lneko_render_selection_control
     cmp eax, 127
     jb .Lneko_render_selection_character
-    mov edx, eax
-    and edx, 0xc0
-    cmp edx, 0x80
-    je .Lneko_render_selection_byte_only
 
 .Lneko_render_selection_character:
     cmp r12d, WIDTH - 8
@@ -3999,7 +4130,9 @@ render_selection:
     call draw_rect
 .Lneko_render_selection_advance_cell:
     add r12d, CELL_WIDTH
-    inc r14d
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_newline:
@@ -4099,10 +4232,6 @@ render_document:
 .document_control:
     cmp edx, 128
     jb .document_next_byte
-    mov eax, edx
-    and eax, 0xc0
-    cmp eax, 0x80
-    je .document_next_byte
     mov edx, '?'
 .document_printable:
     cmp r12d, WIDTH - 8
@@ -4119,7 +4248,10 @@ render_document:
     call draw_glyph
 .document_printable_skip_draw:
     add r12d, CELL_WIDTH
-    jmp .document_next_byte
+    mov edi, r14d
+    call doc_utf8_next
+    mov r14d, eax
+    jmp .document_render_loop
 
 .document_tab:
     lea eax, [r12d + CELL_WIDTH * 4]
