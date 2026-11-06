@@ -39,7 +39,7 @@
 .equ CELL_WIDTH,          8
 .equ LINE_HEIGHT,        12
 .equ DOC_COLUMNS,        ((WIDTH - DOC_LEFT - 8) / CELL_WIDTH)
-.equ DOC_VISIBLE_ROWS,   ((HEIGHT - DOC_TOP - 10) / LINE_HEIGHT)
+.equ DOC_VISIBLE_ROWS,   ((STATUS_TOP - DOC_TOP) / LINE_HEIGHT)
 
 .section .rodata
 wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
@@ -673,7 +673,7 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_roundtrip
 
-    # Main event loop: pointer input selects a palette swatch. The single
+    # Main event loop: pointer input edits the document. The single
     # wl_buffer is only rewritten after wl_buffer.release.
 .event_loop:
     lea rax, [rip + stage_event_loop]
@@ -2770,7 +2770,7 @@ render_selection:
     ja .Lneko_render_selection_advance_cell
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_advance_cell
-    cmp r13d, HEIGHT - LINE_HEIGHT
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .Lneko_render_selection_advance_cell
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -2790,7 +2790,7 @@ render_selection:
     jb .Lneko_render_selection_newline_advance
     cmp r12d, WIDTH - CELL_WIDTH
     jae .Lneko_render_selection_newline_advance
-    cmp r13d, HEIGHT - LINE_HEIGHT
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .Lneko_render_selection_newline_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -2819,7 +2819,7 @@ render_selection:
     ja .Lneko_render_selection_tab_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_tab_advance
-    cmp r13d, HEIGHT - LINE_HEIGHT
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .Lneko_render_selection_tab_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
@@ -2875,7 +2875,7 @@ render_document:
 .document_hint_fit:
     cmp r13d, DOC_TOP
     jl .document_hint_skip_draw
-    cmp r13d, HEIGHT - 10
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .document_draw_cursor
     mov edi, r12d
     mov esi, r13d
@@ -2890,7 +2890,7 @@ render_document:
 .document_render_loop:
     cmp r14d, r15d
     jae .document_draw_cursor
-    cmp r13d, HEIGHT - 10
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .document_draw_cursor
     movzx edx, byte ptr [rbx + r14]
     cmp edx, 10
@@ -2914,7 +2914,7 @@ render_document:
     jb .document_printable_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
-    cmp r13d, HEIGHT - 10
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .document_draw_cursor
 .document_printable_fit:
     cmp r13d, DOC_TOP
@@ -2932,7 +2932,7 @@ render_document:
     jbe .document_tab_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
-    cmp r13d, HEIGHT - 10
+    cmp r13d, STATUS_TOP - LINE_HEIGHT
     jae .document_draw_cursor
 .document_tab_fit:
     add r12d, CELL_WIDTH * 4
