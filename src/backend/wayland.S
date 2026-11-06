@@ -3091,6 +3091,7 @@ picker_handle_key:
     mov dword ptr [rip + picker_name_length], 0
     mov dword ptr [rip + picker_name_cursor], 0
     mov dword ptr [rip + picker_name_match], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
     mov byte ptr [rip + picker_name_buffer], 0
     mov dword ptr [rip + picker_selected], -1
 .picker_key_insert_dispatch:
@@ -6007,11 +6008,49 @@ render_picker:
     mov r9d, 0xff78a9d4
     call draw_rect
 .render_picker_path_text:
+    cmp dword ptr [rip + picker_focus], 1
+    jne .render_picker_path_window
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    je .render_picker_path_window
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 64
+    mov edx, 68
+    mov ecx, 672
+    mov r8d, 16
+    mov r9d, 0xff414b5a
+    call draw_rect
+.render_picker_path_window:
+    mov eax, dword ptr [rip + picker_path_cursor]
+    cmp eax, PICKER_PATH_VISIBLE_CHARS
+    jbe .render_picker_path_window_start
+    sub eax, PICKER_PATH_VISIBLE_CHARS
+    jmp .render_picker_path_window_store
+.render_picker_path_window_start:
+    xor eax, eax
+.render_picker_path_window_store:
+    mov dword ptr [rip + picker_path_view_start], eax
     lea rdx, [rip + picker_path_buffer]
+    add rdx, rax
     mov edi, 64
     mov esi, 74
-    mov ecx, 84
+    mov ecx, PICKER_PATH_VISIBLE_CHARS
     call draw_bounded_ascii
+    cmp dword ptr [rip + picker_focus], 1
+    jne .render_picker_path_done
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    jne .render_picker_path_done
+    mov eax, dword ptr [rip + picker_path_cursor]
+    sub eax, dword ptr [rip + picker_path_view_start]
+    shl eax, 3
+    add eax, 64
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, eax
+    mov edx, 68
+    mov ecx, 1
+    mov r8d, 18
+    mov r9d, 0xfff0f3f7
+    call draw_rect
+.render_picker_path_done:
 
     # Up, Home, and hidden-file visibility controls.
     mov rdi, qword ptr [rip + shm_mapping]
@@ -6158,30 +6197,71 @@ render_picker:
 .render_picker_name:
     mov edi, 56
     mov esi, 363
+    cmp dword ptr [rip + picker_mode], 1
+    jne .render_picker_name_label_file
+    lea rdx, [rip + ui_picker_search_label]
+    jmp .render_picker_name_label_draw
+.render_picker_name_label_file:
     lea rdx, [rip + ui_picker_name_label]
+.render_picker_name_label_draw:
     call draw_text
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 128
+    mov esi, 168
     mov edx, 360
-    mov ecx, 480
+    mov ecx, 440
     mov r8d, 28
     mov r9d, 0xff252a33
     call draw_rect
     cmp dword ptr [rip + picker_focus], 2
-    jne .render_picker_name_text
+    jne .render_picker_name_window
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 128
+    mov esi, 168
     mov edx, 360
-    mov ecx, 480
+    mov ecx, 440
     mov r8d, 1
     mov r9d, 0xff78a9d4
     call draw_rect
-.render_picker_name_text:
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    je .render_picker_name_window
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 176
+    mov edx, 366
+    mov ecx, 424
+    mov r8d, 16
+    mov r9d, 0xff414b5a
+    call draw_rect
+.render_picker_name_window:
+    mov eax, dword ptr [rip + picker_name_cursor]
+    cmp eax, PICKER_NAME_VISIBLE_CHARS
+    jbe .render_picker_name_window_start
+    sub eax, PICKER_NAME_VISIBLE_CHARS
+    jmp .render_picker_name_window_store
+.render_picker_name_window_start:
+    xor eax, eax
+.render_picker_name_window_store:
+    mov dword ptr [rip + picker_name_view_start], eax
     lea rdx, [rip + picker_name_buffer]
-    mov edi, 136
+    add rdx, rax
+    mov edi, 176
     mov esi, 370
-    mov ecx, 72
+    mov ecx, PICKER_NAME_VISIBLE_CHARS
     call draw_bounded_ascii
+    cmp dword ptr [rip + picker_focus], 2
+    jne .render_picker_name_text_done
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    jne .render_picker_name_text_done
+    mov eax, dword ptr [rip + picker_name_cursor]
+    sub eax, dword ptr [rip + picker_name_view_start]
+    shl eax, 3
+    add eax, 176
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, eax
+    mov edx, 365
+    mov ecx, 1
+    mov r8d, 18
+    mov r9d, 0xfff0f3f7
+    call draw_rect
+.render_picker_name_text_done:
 
     # Cancel and Open/Save action buttons.
     mov rdi, qword ptr [rip + shm_mapping]
