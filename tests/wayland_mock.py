@@ -92,6 +92,7 @@ def run(
         server.settimeout(8)
     observations = []
     errors = []
+    process_holder = []
     if file_workflow:
         with open(os.path.join(runtime_dir, "relative-open.txt"), "wb") as document:
             document.write(b"I")
@@ -267,6 +268,42 @@ def run(
                     )
                 finally:
                     os.close(keymap_fd)
+
+                # The received descriptor must outlive the recvmsg call as a
+                # read-only MAP_PRIVATE mapping, even after the sender closes
+                # its copy. Check the child mapping rather than trusting that
+                # the connection merely survived the event.
+                if not process_holder:
+                    raise AssertionError("child process handle was not published to the mock")
+                child = process_holder[0]
+                maps_path = f"/proc/{child.pid}/maps"
+                map_deadline = time.monotonic() + 3.0
+                keymap_mapping_lines = []
+                while time.monotonic() < map_deadline:
+                    try:
+                        with open(maps_path, "r", encoding="ascii") as maps_file:
+                            keymap_mapping_lines = [
+                                line.strip()
+                                for line in maps_file
+                                if "nekoedit-test-keymap" in line
+                            ]
+                    except FileNotFoundError:
+                        keymap_mapping_lines = []
+                    if any(
+                        len(line.split()) > 1
+                        and line.split()[1] == "r--p"
+                        for line in keymap_mapping_lines
+                    ):
+                        break
+                    time.sleep(0.01)
+                else:
+                    raise AssertionError(
+                        "wl_keyboard.keymap FD was not retained as a read-only "
+                        f"MAP_PRIVATE mapping: {keymap_mapping_lines!r}"
+                    )
+                observations.append(
+                    "wl_keyboard.keymap SCM_RIGHTS FD was received, validated, and mapped read-only with MAP_PRIVATE"
+                )
 
                 keyboard_events = b""
                 if advertised_seat_version >= 4:
@@ -1137,15 +1174,27 @@ def run(
         environment.pop("WAYLAND_SOCKET", None)
     try:
         command = [binary, initial_file] if initial_file is not None else [binary, "--backend=wayland"]
-        result = subprocess.run(
+        process = subprocess.Popen(
             command,
             env=environment,
             pass_fds=pass_fds,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=50 if file_workflow else 10,
             cwd=runtime_dir if file_workflow else None,
-            check=False,
+        )
+        process_holder.append(process)
+        timeout_seconds = 50 if file_workflow else 10
+        try:
+            stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr_bytes = process.communicate()
+            raise AssertionError(
+                f"NekoEdit exceeded the {timeout_seconds}s Wayland test timeout; "
+                f"stderr={stderr_bytes.decode(errors='replace')!r}"
+            )
+        result = subprocess.CompletedProcess(
+            command, process.returncode, stdout, stderr_bytes
         )
     finally:
         thread.join(timeout=9)
