@@ -556,21 +556,20 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .protocol_exit
     mov ecx, dword ptr [rip + last_size]
-    cmp ecx, 13
+    cmp ecx, 12
     jb .protocol_exit
     mov eax, dword ptr [rip + event_payload + 8]
     cmp eax, 1
     jb .protocol_exit
     cmp eax, 4000
     ja .protocol_exit
-    sub ecx, 12
-    cmp eax, ecx
-    ja .protocol_exit
-    lea rdx, [rip + event_payload + 12]
-    lea r8, [rdx + rax - 1]
-    cmp byte ptr [r8], 0
-    jne .protocol_exit
+    # The declared string may be shorter than the remaining padded payload.
+    # Clamp output to bytes actually received; never read beyond last_size.
     dec eax
+    mov edx, ecx
+    sub edx, 12
+    cmp eax, edx
+    cmova eax, edx
     mov r12d, eax
     mov edi, 2
     lea rsi, [rip + msg_protocol_error_prefix]
