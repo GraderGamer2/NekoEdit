@@ -475,20 +475,20 @@ def run(
                     serial = workflow_type_path("missing-file.txt", serial + 20)
                     key_step(serial, 28, "confirm missing-file Open")
                     key_step(serial + 2, 1, "Escape failed Open prompt")
-                    key_step(serial + 4, evdev["d"], "edit after failed Open")
+                    key_step(serial + 4, evdev["e"], "edit after failed Open")
                     workflow_shortcut(serial + 6, 31, "save after failed Open")
                     with open(absolute_path, "rb") as saved:
-                        if saved.read() != b"zabcd":
+                        if saved.read() != b"zabcde":
                             raise AssertionError("failed Open changed the active document or its save path")
 
                     workflow_shortcut(serial + 12, 24, "Ctrl+O before oversized file")
                     serial = workflow_type_path("oversized.txt", serial + 22)
                     key_step(serial, 28, "reject file larger than 64 KiB")
                     key_step(serial + 2, 1, "Escape oversized Open prompt")
-                    key_step(serial + 4, evdev["e"], "edit after oversized Open")
+                    key_step(serial + 4, evdev["f"], "edit after oversized Open")
                     workflow_shortcut(serial + 6, 31, "save after oversized Open")
                     with open(absolute_path, "rb") as saved:
-                        if saved.read() != b"zabcde":
+                        if saved.read() != b"zabcdef":
                             raise AssertionError("oversized Open damaged the active document")
 
                     # Cancel Save As after entering a path; the active destination
@@ -496,10 +496,10 @@ def run(
                     workflow_shortcut(serial + 12, 31, "Ctrl+Shift+S before cancellation", shift=True)
                     serial = workflow_type_path("cancelled.txt", serial + 22)
                     key_step(serial, 1, "Escape cancels Save As")
-                    key_step(serial + 2, evdev["f"], "edit after cancelling Save As")
+                    key_step(serial + 2, evdev["g"], "edit after cancelling Save As")
                     workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
                     with open(absolute_path, "rb") as saved:
-                        if saved.read() != b"zabcdef":
+                        if saved.read() != b"zabcdefg":
                             raise AssertionError("cancelled Save As changed the active destination")
                     if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
                         raise AssertionError("Escape unexpectedly created the cancelled Save As path")
