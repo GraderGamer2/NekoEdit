@@ -64,6 +64,8 @@
 .equ PICKER_ENTRY_SIZE, 260
 .equ PICKER_DIR_BYTES, 8192
 .equ PICKER_VISIBLE_ROWS, 15
+.equ PICKER_PATH_VISIBLE_CHARS, 82
+.equ PICKER_NAME_VISIBLE_CHARS, 52
 .equ PICKER_TRACK_TOP, 130
 .equ PICKER_TRACK_HEIGHT, 210
 .equ PICKER_TRACK_X, 724
@@ -99,6 +101,7 @@ ui_picker_open_title:  .asciz "OPEN FILE"
 ui_picker_save_title:  .asciz "SAVE FILE AS"
 ui_picker_path_label:  .asciz "LOCATION"
 ui_picker_name_label:  .asciz "FILE NAME"
+ui_picker_search_label: .asciz "SEARCH"
 ui_picker_up_label:   .asciz "UP"
 ui_picker_home_label: .asciz "HOME"
 ui_picker_hidden_label: .asciz "SHOW HIDDEN"
@@ -319,7 +322,7 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
-.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
+.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_path_cursor, picker_name_cursor, picker_name_match, picker_edit_select_all, picker_path_buffer, picker_current_path, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
 picker_mode:            .long 0
 picker_focus:           .long 0
 picker_dir_fd:          .long 0
@@ -335,7 +338,13 @@ picker_wheel_remainder: .long 0
 picker_show_hidden:     .long 0
 picker_truncated:       .long 0
 picker_path_length:     .long 0
+picker_path_cursor:     .long 0
+picker_path_view_start: .long 0
 picker_name_length:     .long 0
+picker_name_cursor:     .long 0
+picker_name_view_start: .long 0
+picker_name_match:      .long 0
+picker_edit_select_all: .long 0
 picker_last_click_index: .long 0
 picker_last_click_time: .long 0
 picker_overwrite_pending: .long 0
@@ -1757,6 +1766,9 @@ picker_start:
     mov dword ptr [rip + picker_overwrite_pending], 0
     mov dword ptr [rip + picker_last_click_index], -1
     mov dword ptr [rip + picker_name_length], 0
+    mov dword ptr [rip + picker_name_cursor], 0
+    mov dword ptr [rip + picker_name_match], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
     mov byte ptr [rip + picker_name_buffer], 0
     # Each new dialog starts with dotfiles hidden; the user's toggle applies
     # only to the current browsing session.
@@ -1782,6 +1794,8 @@ picker_start:
     rep movsb
     dec r12d
     mov dword ptr [rip + picker_path_length], r12d
+    mov dword ptr [rip + picker_path_cursor], r12d
+    mov dword ptr [rip + picker_path_view_start], 0
     jmp .picker_start_open_directory
 
 .picker_start_path_failed:
@@ -1792,6 +1806,8 @@ picker_start:
     mov byte ptr [rdi], '/'
     mov byte ptr [rdi + 1], 0
     mov dword ptr [rip + picker_path_length], 1
+    mov dword ptr [rip + picker_path_cursor], 1
+    mov dword ptr [rip + picker_path_view_start], 0
 
 .picker_start_open_directory:
     mov eax, SYS_openat
@@ -2059,6 +2075,9 @@ picker_copy_path_to_field:
     mov ecx, dword ptr [rip + picker_path_length]
     rep movsb
     mov byte ptr [rdi], 0
+    mov eax, dword ptr [rip + picker_path_length]
+    mov dword ptr [rip + picker_path_cursor], eax
+    mov dword ptr [rip + picker_path_view_start], 0
     ret
 .size picker_copy_path_to_field, . - picker_copy_path_to_field
 
@@ -2314,6 +2333,7 @@ picker_copy_selected_name:
     add rbx, rax
     cmp byte ptr [rbx], 0
     jne .picker_copy_name_empty
+    mov dword ptr [rip + picker_name_match], 1
     lea rsi, [rbx + 4]
     lea rdi, [rip + picker_name_buffer]
     xor edx, edx
@@ -2328,14 +2348,256 @@ picker_copy_selected_name:
     jmp .picker_copy_name_loop
 .picker_copy_name_done:
     mov dword ptr [rip + picker_name_length], edx
+    mov dword ptr [rip + picker_name_cursor], edx
+    mov dword ptr [rip + picker_name_view_start], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
     jmp .picker_copy_name_return
 .picker_copy_name_empty:
     mov dword ptr [rip + picker_name_length], 0
+    mov dword ptr [rip + picker_name_cursor], 0
+    mov dword ptr [rip + picker_name_view_start], 0
+    mov dword ptr [rip + picker_name_match], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
     mov byte ptr [rip + picker_name_buffer], 0
 .picker_copy_name_return:
     pop rbx
     ret
 .size picker_copy_selected_name, . - picker_copy_selected_name
+
+# Case-insensitive ASCII filename-prefix search. On a match, select the first
+# regular file and scroll it into view; on no match, clear the stale selection.
+.type picker_find_name_prefix, @function
+picker_find_name_prefix:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12d, dword ptr [rip + picker_name_length]
+    test r12d, r12d
+    jz .picker_find_name_no_match
+    xor r13d, r13d
+.picker_find_name_entry:
+    cmp r13d, dword ptr [rip + picker_entry_count]
+    jae .picker_find_name_no_match
+    mov eax, r13d
+    imul eax, PICKER_ENTRY_SIZE
+    lea rbx, [rip + picker_entries]
+    add rbx, rax
+    cmp byte ptr [rbx], 0
+    jne .picker_find_name_next
+    lea r14, [rbx + 4]
+    lea r15, [rip + picker_name_buffer]
+    xor ecx, ecx
+.picker_find_name_compare:
+    cmp ecx, r12d
+    jae .picker_find_name_match
+    movzx eax, byte ptr [r14 + rcx]
+    movzx edx, byte ptr [r15 + rcx]
+    cmp al, 'A'
+    jb .picker_find_name_left_folded
+    cmp al, 'Z'
+    ja .picker_find_name_left_folded
+    or al, 0x20
+.picker_find_name_left_folded:
+    cmp dl, 'A'
+    jb .picker_find_name_right_folded
+    cmp dl, 'Z'
+    ja .picker_find_name_right_folded
+    or dl, 0x20
+.picker_find_name_right_folded:
+    cmp al, dl
+    jne .picker_find_name_next
+    inc ecx
+    jmp .picker_find_name_compare
+.picker_find_name_match:
+    mov dword ptr [rip + picker_selected], r13d
+    mov dword ptr [rip + picker_name_match], 1
+    mov eax, dword ptr [rip + picker_scroll]
+    cmp r13d, eax
+    jae .picker_find_name_check_bottom
+    mov dword ptr [rip + picker_scroll], r13d
+    jmp .picker_find_name_done
+.picker_find_name_check_bottom:
+    mov edx, r13d
+    sub edx, eax
+    cmp edx, PICKER_VISIBLE_ROWS
+    jb .picker_find_name_done
+    sub r13d, PICKER_VISIBLE_ROWS - 1
+    mov dword ptr [rip + picker_scroll], r13d
+    jmp .picker_find_name_done
+.picker_find_name_next:
+    inc r13d
+    jmp .picker_find_name_entry
+.picker_find_name_no_match:
+    mov dword ptr [rip + picker_selected], -1
+    mov dword ptr [rip + picker_name_match], 0
+.picker_find_name_done:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_find_name_prefix, . - picker_find_name_prefix
+
+# Insert AL at the current field cursor, replacing the field first after Ctrl+A.
+.type picker_edit_insert_byte, @function
+picker_edit_insert_byte:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12d, edi
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_edit_insert_path
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_edit_insert_done
+    lea rbx, [rip + picker_name_buffer]
+    mov r13d, dword ptr [rip + picker_name_length]
+    mov r14d, dword ptr [rip + picker_name_cursor]
+    mov r15d, 255
+    jmp .picker_edit_insert_ready
+.picker_edit_insert_path:
+    lea rbx, [rip + picker_path_buffer]
+    mov r13d, dword ptr [rip + picker_path_length]
+    mov r14d, dword ptr [rip + picker_path_cursor]
+    mov r15d, PATH_CAPACITY - 1
+.picker_edit_insert_ready:
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    je .picker_edit_insert_clamp
+    mov r13d, 0
+    mov r14d, 0
+    mov byte ptr [rbx], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+.picker_edit_insert_clamp:
+    cmp r14d, r13d
+    jbe .picker_edit_insert_cursor_ready
+    mov r14d, r13d
+.picker_edit_insert_cursor_ready:
+    cmp r13d, r15d
+    jae .picker_edit_insert_done
+    # Shift the suffix, including its NUL terminator, one byte to the right.
+    mov ecx, r13d
+    sub ecx, r14d
+    inc ecx
+    lea rsi, [rbx + r13]
+    lea rdi, [rbx + r13 + 1]
+    std
+    rep movsb
+    cld
+    mov byte ptr [rbx + r14], r12b
+    inc r13d
+    inc r14d
+    mov byte ptr [rbx + r13], 0
+    cmp dword ptr [rip + picker_focus], 1
+    jne .picker_edit_insert_name_store
+    mov dword ptr [rip + picker_path_length], r13d
+    mov dword ptr [rip + picker_path_cursor], r14d
+    jmp .picker_edit_insert_changed
+.picker_edit_insert_name_store:
+    mov dword ptr [rip + picker_name_length], r13d
+    mov dword ptr [rip + picker_name_cursor], r14d
+    mov dword ptr [rip + picker_name_match], 0
+.picker_edit_insert_changed:
+    mov dword ptr [rip + picker_error], 0
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_edit_insert_done
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_edit_insert_done
+    call picker_find_name_prefix
+.picker_edit_insert_done:
+    cld
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_edit_insert_byte, . - picker_edit_insert_byte
+
+# EDI=1 removes the byte before the cursor; EDI=0 removes the byte at it.
+.type picker_edit_delete_byte, @function
+picker_edit_delete_byte:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12d, edi
+    cmp dword ptr [rip + picker_focus], 1
+    je .picker_edit_delete_path
+    cmp dword ptr [rip + picker_focus], 2
+    jne .picker_edit_delete_done
+    lea rbx, [rip + picker_name_buffer]
+    mov r13d, dword ptr [rip + picker_name_length]
+    mov r14d, dword ptr [rip + picker_name_cursor]
+    jmp .picker_edit_delete_ready
+.picker_edit_delete_path:
+    lea rbx, [rip + picker_path_buffer]
+    mov r13d, dword ptr [rip + picker_path_length]
+    mov r14d, dword ptr [rip + picker_path_cursor]
+.picker_edit_delete_ready:
+    cmp dword ptr [rip + picker_edit_select_all], 0
+    je .picker_edit_delete_single
+    xor r13d, r13d
+    xor r14d, r14d
+    mov byte ptr [rbx], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+    jmp .picker_edit_delete_store
+.picker_edit_delete_single:
+    cmp r12d, 0
+    je .picker_edit_delete_forward
+    test r14d, r14d
+    jz .picker_edit_delete_done
+    dec r14d
+    jmp .picker_edit_delete_copy
+.picker_edit_delete_forward:
+    cmp r14d, r13d
+    jae .picker_edit_delete_done
+.picker_edit_delete_copy:
+    mov ecx, r13d
+    sub ecx, r14d
+    # For Backspace, source and destination are both the new cursor.
+    # For Delete, source begins one byte beyond the cursor.
+    lea rsi, [rbx + r14]
+    lea rdi, [rbx + r14]
+    test r12d, r12d
+    jnz .picker_edit_delete_copy_forward
+    inc rsi
+.picker_edit_delete_copy_forward:
+    cld
+    rep movsb
+    dec r13d
+.picker_edit_delete_store:
+    mov byte ptr [rbx + r13], 0
+    cmp dword ptr [rip + picker_focus], 1
+    jne .picker_edit_delete_name_store
+    mov dword ptr [rip + picker_path_length], r13d
+    mov dword ptr [rip + picker_path_cursor], r14d
+    jmp .picker_edit_delete_done
+.picker_edit_delete_name_store:
+    mov dword ptr [rip + picker_name_length], r13d
+    mov dword ptr [rip + picker_name_cursor], r14d
+    mov dword ptr [rip + picker_name_match], 0
+    cmp dword ptr [rip + picker_mode], 1
+    jne .picker_edit_delete_done
+    call picker_find_name_prefix
+.picker_edit_delete_done:
+    cld
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_edit_delete_byte, . - picker_edit_delete_byte
+
 
 .type picker_build_target, @function
 picker_build_target:
