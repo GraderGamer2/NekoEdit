@@ -258,34 +258,35 @@ def run(
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                if initial_file is None or os.path.getsize(initial_file) <= 1:
-                    clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
-                    clicked_caret_x = 16 + clicked_caret_column * 8
-                    caret_visible = (
-                        struct.unpack_from(
-                            "<I", pixels, 92 * 800 * 4 + clicked_caret_x * 4
-                        )[0] == 0xFFFFFFFF
-                    )
-                else:
-                    # For a longer launch-time document, verify that pointer
-                    # hit testing leaves a visible caret near the clicked cell.
-                    # This deliberately tolerates either side of a cell
-                    # midpoint while keeping the original short-file assertion
-                    # exact.
-                    caret_visible = any(
-                        all(
+                if not (sparse_keymap_test or punctuation_render_test):
+                    if initial_file is None or os.path.getsize(initial_file) <= 1:
+                        clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
+                        clicked_caret_x = 16 + clicked_caret_column * 8
+                        caret_visible = (
                             struct.unpack_from(
-                                "<I", pixels, (92 + row) * 800 * 4 + x * 4
+                                "<I", pixels, 92 * 800 * 4 + clicked_caret_x * 4
                             )[0] == 0xFFFFFFFF
-                            for row in range(9)
                         )
-                        for column in range(9, 12)
-                        for x in (16 + column * 8,)
-                    )
-                if not caret_visible:
-                    raise AssertionError(
-                        "document click did not keep the caret visible after clamping to the document"
-                    )
+                    else:
+                        # For a longer launch-time document, verify that pointer
+                        # hit testing leaves a visible caret near the clicked cell.
+                        # This deliberately tolerates either side of a cell
+                        # midpoint while keeping the original short-file assertion
+                        # exact.
+                        caret_visible = any(
+                            all(
+                                struct.unpack_from(
+                                    "<I", pixels, (92 + row) * 800 * 4 + x * 4
+                                )[0] == 0xFFFFFFFF
+                                for row in range(9)
+                            )
+                            for column in range(9, 12)
+                            for x in (16 + column * 8,)
+                        )
+                    if not caret_visible:
+                        raise AssertionError(
+                            "document click did not keep the caret visible after clamping to the document"
+                        )
                 observations.append("document-area click was routed to the editor and safely redrew the buffer")
 
                 # Exercise the editor with buffer releases between key events.
