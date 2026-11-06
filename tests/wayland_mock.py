@@ -75,6 +75,8 @@ def run(
     save_roundtrip: bool = False,
     file_workflow: bool = False,
 ) -> None:
+    # Resolve before file-workflow tests change the child process CWD.
+    binary = os.path.abspath(binary)
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
     if use_wayland_socket:
