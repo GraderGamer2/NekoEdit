@@ -896,11 +896,11 @@ xkb_symbols "nekoedit-sparse" {
                             for name, address in picker_symbols.items():
                                 if name in {"picker_name_buffer", "doc_buffer", "current_path_buffer", "picker_target_buffer"}:
                                     size = 64 if name in {"picker_name_buffer", "doc_buffer"} else 256
-                                    result[name] = os.pread(fd, size, address).split(b"\\0", 1)[0]
+                                    result[name] = os.pread(fd, size, address).split(b"\0", 1)[0]
                                 elif name == "current_file_path":
                                     pointer = struct.unpack("<Q", os.pread(fd, 8, address))[0]
                                     result[name] = pointer
-                                    result["active_path"] = os.pread(fd, 4096, pointer).split(b"\\0", 1)[0] if pointer else b""
+                                    result["active_path"] = os.pread(fd, 4096, pointer).split(b"\0", 1)[0] if pointer else b""
                                 else:
                                     result[name] = struct.unpack("<i", os.pread(fd, 4, address))[0]
                             return result
