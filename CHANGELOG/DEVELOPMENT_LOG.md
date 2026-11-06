@@ -2,6 +2,27 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-07 — Report failed Wayland sends instead of terminating on SIGPIPE
+
+**Purpose:** Continue diagnosing the user's GNOME Wayland Maximize/resize failure without asking them to enable system logging. The user confirmed the picker scrollbar correction works, while Maximize still exits NekoEdit and edge resizing still has no effect. Their original terminal run returned status 141; temporarily ignoring SIGPIPE changed this to the program's generic event-loop error and status 1.
+
+### Diagnosis
+
+- Exit status 141 is consistent with termination by SIGPIPE (signal 13). NekoEdit's Wayland request path previously used `write()` on the compositor socket; writing after the peer has closed that socket can raise SIGPIPE before the program's own error handler reports useful detail.
+- With SIGPIPE ignored by the shell, the write can instead return a negative `EPIPE` error, but the existing error handler only printed the broad `Wayland stage: event loop` label.
+- These outputs establish a broken/closed socket write path, but they do **not** yet establish why Mutter closed the connection or which request was the first trigger.
+
+### Source changes
+
+- Added a Wayland-specific send loop using `sendto(..., MSG_NOSIGNAL)`, including partial-send and `EINTR` handling. The `sendmsg` path used for shared-memory FD transfer also passes `MSG_NOSIGNAL`.
+- A failed request now preserves its client object ID, opcode, and negative Linux errno. The common error handler prints those values to stderr, so the next manual test can identify the request that could not be sent.
+- No logfile, journal, extra package, dependency, launch flag, or persistent system setting is needed. The normal launch command remains `./nekoedit --backend=wayland`.
+
+### Verification status
+
+- Source commits: [`10df996a0b51`](https://github.com/GraderGamer2/NekoEdit/commit/10df996a0b51de4b36287d4e78180b52dfd5c4ec), [`1331b49dde84`](https://github.com/GraderGamer2/NekoEdit/commit/1331b49dde8415d0d40dfb2d5326b4e0a3990b97), and [`2ba62dd68161`](https://github.com/GraderGamer2/NekoEdit/commit/2ba62dd681611da09673e1fffc1d81b109ac4abf).
+- Build, automated tests, artifact generation, and a fresh GNOME/Mutter test remain unverified for this diagnostic change. Do not treat Maximize or resize as fixed until the new stderr output is examined and the actual desktop behavior is retested.
+
 ## 2026-11-07 — Correct configured geometry, widen interactive resize, and hide the idle picker scrollbar
 
 **Purpose:** Respond to the user's GNOME Wayland retest of Actions #251 and the separate picker observation. The user confirmed that title-bar movement now works, but Maximize still exits the app and edge resizing has no visible effect; the file-picker scrollbar also appeared displaced in directories that fit without scrolling.
