@@ -721,6 +721,7 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                     )
                     workflow_redraw(f"{label}: press")
+                    client.sendall(wire_message(12, 0))
                     press_state = picker_state()
                     if press_state.get("picker_scroll_drag") != 1:
                         raise AssertionError(
