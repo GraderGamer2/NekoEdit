@@ -6,6 +6,8 @@ NekoEdit is being built around one constraint: implement the necessary applicati
 
 > **Development status: early prototype.** The current build opens a minimal Wayland toplevel and displays a software-rendered 800×480 test surface. It can be closed through the compositor's normal window controls. This is a graphics/windowing proof of concept, not a usable text editor yet. Text editing, keyboard input, system fonts, clipboard, the directory-browser picker, and X11 are still under development.
 
+> **Project history:** See [CHANGELOG/](CHANGELOG/README.md) for the complete development history, current implementation status, and continuity notes for future development.
+
 ## Project principles
 
 - **Plain text first.** No rich-text model, syntax engine, plugin host, or IDE features.

@@ -1,0 +1,61 @@
+# NekoEdit changelog and continuity notes
+
+This directory is the project's durable development history and handoff source. It exists so work can continue in a new ChatGPT conversation without relying on the context length or availability of an older chat.
+
+## Read this first in every new development chat
+
+Before changing NekoEdit, inspect these files in this order:
+
+1. `CHANGELOG/CURRENT_STATUS.md` — verified current implementation, build/test state, known limitations, and latest source commit.
+2. `CHANGELOG/DEVELOPMENT_LOG.md` — recent development entries and the latest work performed.
+3. `CHANGELOG/PROJECT_HISTORY.md` — the complete milestone narrative from the original prototype to the current implementation.
+4. `CHANGELOG/COMMIT_INDEX.md` — the commit-by-commit audit trail, including intermediate fixes, tests, documentation, debugging, and reverts.
+5. Then inspect the actual source, tests, build files, and the active GitHub branch/PR. The changelog is a navigation and continuity aid; source code and current CI results remain authoritative.
+
+Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
+
+## Files in this directory
+
+- **PROJECT_HISTORY.md** — retroactive chronological explanation of the project's development from its original freestanding Wayland prototype.
+- **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
+- **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
+- **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
+
+## Mandatory rule for future NekoEdit development
+
+**Every time NekoEdit is developed, the changelog must be updated as part of that same work. Do not treat changelog updates as optional or postpone them to a later session.**
+
+For each feature, bug fix, refactor, or meaningful test change:
+
+1. Read this directory and inspect the current repository state before coding.
+2. Implement the change and add/update regression tests where practical.
+3. Run the relevant local checks or GitHub Actions. Record exactly what passed, failed, or was not run. Never report an unverified test as passing.
+4. Append an entry to `DEVELOPMENT_LOG.md` describing:
+   - the date and purpose of the work;
+   - files/modules changed and the behavior added or corrected;
+   - implementation decisions and important constraints;
+   - tests added/changed and their exact results;
+   - manual test results reported by the user, clearly distinguished from automated tests;
+   - remaining defects, limitations, or follow-up work;
+   - resulting commit SHA(s), PR, CI run, and build artifact when available.
+5. Update `CURRENT_STATUS.md` if the current implementation, verified build, branch/commit, or limitations changed.
+6. Update `PROJECT_HISTORY.md` when a new development milestone is completed. Do not rewrite history to conceal failed approaches or regressions; record noteworthy reversions and corrections in the development log.
+7. Add each new commit to `COMMIT_INDEX.md`. Keep the index chronological and preserve all prior entries.
+
+A small typo or truly documentation-only correction still receives a commit entry in `COMMIT_INDEX.md`; group minor edits into a concise development-log note where appropriate. A multi-commit feature must be recorded as one coherent work entry plus the individual commit-index rows.
+
+## Accuracy and continuity rules
+
+- Do not rely on a previous ChatGPT conversation when the repository contains newer information.
+- Do not assume a previous build is still the latest build. Query the current branch, PR, and Actions run before claiming status.
+- Keep user-confirmed behavior separate from mock-compositor/integration-test results.
+- Explicitly state what is implemented, partially implemented, planned, and unsupported.
+- Do not call code "full Unicode support" merely because UTF-8 byte sequences are preserved or code-point boundaries are respected. Record grapheme handling, Unicode rendering, text input, and IME separately.
+- Preserve the project's design constraints: Linux x86-64, GNU assembly, direct syscalls, no third-party runtime/shared-library dependency, and native Wayland/X11 protocols. Do not introduce dependencies or change the established launch interface without an explicit reason and a documented decision.
+- Keep the executable's supported launch command working. Current user-validated Wayland launch form: `./nekoedit --backend=wayland` (the Makefile build output is `./build/nekoedit`).
+
+## Historical coverage
+
+The initial history was reconstructed from GitHub on 2026-11-06 and includes **188 commits**: 20 commits from the original `main` prototype history and 168 commits in development PR #1. See `COMMIT_INDEX.md` for the exact commit-by-commit record and `PROJECT_HISTORY.md` for the functional narrative.
+
+The project state in these files must be refreshed with every future development change.
