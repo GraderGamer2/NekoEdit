@@ -10,8 +10,10 @@
 .equ SYS_socket,       41
 .equ SYS_connect,      42
 .equ SYS_sendmsg,      46
+.equ SYS_recvmsg,      47
 .equ SYS_ftruncate,    77
 .equ SYS_mmap,          9
+.equ SYS_munmap,       11
 .equ SYS_memfd_create, 319
 .equ AF_UNIX,            1
 .equ SOCK_STREAM,       1
@@ -19,6 +21,10 @@
 .equ PROT_READ,          1
 .equ PROT_WRITE,         2
 .equ MAP_SHARED,         1
+.equ MAP_PRIVATE,        2
+.equ MSG_CMSG_CLOEXEC, 0x40000000
+.equ MSG_CTRUNC,         8
+.equ KEYMAP_MAX_SIZE, 262144
 .equ MFD_CLOEXEC,        1
 .equ AT_FDCWD,          -100
 .equ O_WRONLY,             1
@@ -223,6 +229,10 @@ last_opcode:           .long 0
 last_size:             .long 0
 event_header:          .zero 8
 event_payload:         .zero 4096
+last_event_fd:         .long -1
+event_recv_bytes:      .long 0
+xkb_keymap_ptr:        .quad 0
+xkb_keymap_size:       .quad 0
 request_buffer:        .zero 8192
 payload_buffer:        .zero 256
 socket_address:        .zero 110
@@ -687,6 +697,19 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_sync
     mov dword ptr [rip + buffer_busy], 0
+.seat_check_keymap:
+    # A compositor may send wl_keyboard.keymap immediately after get_keyboard,
+    # before the seat roundtrip callback completes.
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .seat_check_sync
+    cmp dword ptr [rip + last_object], eax
+    jne .seat_check_sync
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_sync
+    call handle_keyboard_keymap
+    test rax, rax
+    js .protocol_error
 .seat_check_sync:
     cmp dword ptr [rip + last_object], 14
     jne .seat_roundtrip
@@ -872,6 +895,8 @@ wayland_main:
     jz .check_toplevel_close
     cmp dword ptr [rip + last_object], eax
     jne .check_toplevel_close
+    cmp dword ptr [rip + last_opcode], 0
+    je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
     je .keyboard_enter
     cmp dword ptr [rip + last_opcode], 2
@@ -882,8 +907,10 @@ wayland_main:
     je .keyboard_modifiers
     cmp dword ptr [rip + last_opcode], 5
     je .keyboard_repeat_info
-    # The XKB keymap FD is still deferred; modifier and repeat settings are
-    # consumed below so input follows the compositor's active configuration.
+.keyboard_keymap:
+    call handle_keyboard_keymap
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .event_repeat_timer:
     mov edi, dword ptr [rip + repeat_timer_fd]
@@ -1766,16 +1793,80 @@ wl_registry_bind:
     ret
 .size wl_registry_bind, . - wl_registry_bind
 
-# Read one complete Wayland event; records last_object/opcode/size and payload.
+# Read one complete Wayland event and preserve any SCM_RIGHTS descriptor.
+# recvmsg is required for wl_keyboard.keymap: a plain read() discards its FD.
 .type wl_read_event, @function
 wl_read_event:
     push rbp
+    mov dword ptr [rip + last_event_fd], -1
+
+    # Prepare an iovec for the fixed 8-byte Wayland message header and reserve
+    # one cmsghdr plus one descriptor (CMSG_SPACE(sizeof(int)) = 24).
+    lea rax, [rip + event_header]
+    mov qword ptr [rip + msg_iov], rax
+    mov qword ptr [rip + msg_iov + 8], 8
+    mov qword ptr [rip + msg_header], 0
+    mov qword ptr [rip + msg_header + 8], 0
+    lea rax, [rip + msg_iov]
+    mov qword ptr [rip + msg_header + 16], rax
+    mov qword ptr [rip + msg_header + 24], 1
+    lea rax, [rip + msg_control]
+    mov qword ptr [rip + msg_header + 32], rax
+    mov qword ptr [rip + msg_header + 40], 24
+    mov qword ptr [rip + msg_header + 48], 0
+    mov qword ptr [rip + msg_control], 0
+    mov qword ptr [rip + msg_control + 8], 0
+    mov qword ptr [rip + msg_control + 16], 0
+
+.read_event_recvmsg:
+    mov eax, SYS_recvmsg
+    mov edi, dword ptr [rip + socket_fd]
+    lea rsi, [rip + msg_header]
+    mov edx, MSG_CMSG_CLOEXEC
+    syscall
+    cmp rax, -4                 # EINTR
+    je .read_event_recvmsg
+    test rax, rax
+    jle .read_event_done
+    mov dword ptr [rip + event_recv_bytes], eax
+
+    # Extract the single SCM_RIGHTS descriptor when one was attached to this
+    # event. The descriptor remains owned by NekoEdit until the event handler
+    # maps or closes it.
+    mov eax, dword ptr [rip + msg_header + 40]
+    test eax, eax
+    jz .read_event_no_fd
+    cmp eax, 20
+    jb .read_event_bad
+    cmp qword ptr [rip + msg_control], 20
+    jne .read_event_bad
+    cmp dword ptr [rip + msg_control + 8], SOL_SOCKET
+    jne .read_event_bad
+    cmp dword ptr [rip + msg_control + 12], SCM_RIGHTS
+    jne .read_event_bad
+    mov eax, dword ptr [rip + msg_control + 16]
+    mov dword ptr [rip + last_event_fd], eax
+    mov eax, dword ptr [rip + msg_header + 48]
+    test eax, MSG_CTRUNC
+    jnz .read_event_bad
+
+.read_event_no_fd:
+    # SOCK_STREAM recvmsg may return a short header. Complete the remainder
+    # with read_exact only after ancillary data on the first byte was captured.
+    mov eax, dword ptr [rip + event_recv_bytes]
+    cmp eax, 8
+    ja .read_event_bad
+    je .read_event_header_ready
     mov edi, dword ptr [rip + socket_fd]
     lea rsi, [rip + event_header]
+    add rsi, rax
     mov edx, 8
+    sub edx, eax
     call linux_read_exact
     test rax, rax
     js .read_event_done
+
+.read_event_header_ready:
     mov eax, dword ptr [rip + event_header]
     mov dword ptr [rip + last_object], eax
     mov eax, dword ptr [rip + event_header + 4]
@@ -1807,8 +1898,33 @@ wl_read_event:
     mov eax, -71                 # EPROTO
     jmp .read_event_done
 .read_event_success:
+    # Only wl_keyboard.keymap consumes a descriptor in the current protocol
+    # subset. Close any received FD attached to an unrelated event.
+    mov eax, dword ptr [rip + last_event_fd]
+    test eax, eax
+    js .read_event_success_no_fd
+    mov edx, dword ptr [rip + keyboard_object]
+    cmp edx, dword ptr [rip + last_object]
+    jne .read_event_close_unexpected_fd
+    cmp dword ptr [rip + last_opcode], 0
+    je .read_event_success_no_fd
+.read_event_close_unexpected_fd:
+    mov edi, eax
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + last_event_fd], -1
+.read_event_success_no_fd:
     xor eax, eax
 .read_event_done:
+    test eax, eax
+    jns .read_event_return
+    mov edi, dword ptr [rip + last_event_fd]
+    test edi, edi
+    js .read_event_return
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + last_event_fd], -1
+.read_event_return:
     pop rbp
     ret
 .read_event_bad:
@@ -3234,6 +3350,106 @@ handle_seat_capabilities:
     pop rbp
     ret
 .size handle_seat_capabilities, . - handle_seat_capabilities
+
+# Consume wl_keyboard.keymap(format, fd, size). XKB_V1 maps are kept as a
+# read-only private mapping; NO_KEYMAP clears any previous map. Symbol lookup
+# is intentionally a separate next step; the US fallback remains active.
+.type handle_keyboard_keymap, @function
+handle_keyboard_keymap:
+    push rbx
+    push r12
+    push r13
+    mov r12d, dword ptr [rip + last_event_fd]
+    cmp dword ptr [rip + last_size], 8
+    jb .keyboard_keymap_error
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jz .keyboard_keymap_none
+    cmp eax, 1                    # WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1
+    jne .keyboard_keymap_error
+    test r12d, r12d
+    js .keyboard_keymap_error
+    mov ebx, dword ptr [rip + event_payload + 4]
+    test ebx, ebx
+    jz .keyboard_keymap_error
+    cmp ebx, KEYMAP_MAX_SIZE
+    ja .keyboard_keymap_error
+
+    # mmap(fd, size, PROT_READ, MAP_PRIVATE, 0); the received descriptor is
+    # marked close-on-exec by recvmsg and closed once the mapping succeeds.
+    mov eax, SYS_mmap
+    xor edi, edi
+    mov esi, ebx
+    mov edx, PROT_READ
+    mov r10d, MAP_PRIVATE
+    mov r8d, r12d
+    xor r9d, r9d
+    syscall
+    test rax, rax
+    js .keyboard_keymap_error
+    mov r13, rax
+    mov edi, r12d
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + last_event_fd], -1
+
+    # The wire size includes the final NUL byte. Reject malformed or truncated
+    # maps before exposing the pointer to a future XKB text scanner.
+    cmp byte ptr [r13 + rbx - 1], 0
+    jne .keyboard_keymap_unmap_error
+    mov rdi, qword ptr [rip + xkb_keymap_ptr]
+    test rdi, rdi
+    jz .keyboard_keymap_store
+    mov rsi, qword ptr [rip + xkb_keymap_size]
+    mov eax, SYS_munmap
+    syscall
+.keyboard_keymap_store:
+    mov qword ptr [rip + xkb_keymap_ptr], r13
+    mov qword ptr [rip + xkb_keymap_size], rbx
+    xor eax, eax
+    jmp .keyboard_keymap_done
+
+.keyboard_keymap_none:
+    # FORMAT_NO_KEYMAP carries no useful descriptor; close it defensively.
+    test r12d, r12d
+    js .keyboard_keymap_clear
+    mov edi, r12d
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + last_event_fd], -1
+.keyboard_keymap_clear:
+    mov rdi, qword ptr [rip + xkb_keymap_ptr]
+    test rdi, rdi
+    jz .keyboard_keymap_clear_state
+    mov rsi, qword ptr [rip + xkb_keymap_size]
+    mov eax, SYS_munmap
+    syscall
+.keyboard_keymap_clear_state:
+    mov qword ptr [rip + xkb_keymap_ptr], 0
+    mov qword ptr [rip + xkb_keymap_size], 0
+    xor eax, eax
+    jmp .keyboard_keymap_done
+
+.keyboard_keymap_unmap_error:
+    mov rdi, r13
+    mov esi, ebx
+    mov eax, SYS_munmap
+    syscall
+.keyboard_keymap_error:
+    test r12d, r12d
+    js .keyboard_keymap_error_return
+    mov edi, r12d
+    mov eax, SYS_close
+    syscall
+    mov dword ptr [rip + last_event_fd], -1
+.keyboard_keymap_error_return:
+    mov eax, -71                 # EPROTO
+.keyboard_keymap_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size handle_keyboard_keymap, . - handle_keyboard_keymap
 
 # Answer xdg_wm_base.ping (object 6, opcode 0, serial payload).
 .type handle_xdg_ping, @function

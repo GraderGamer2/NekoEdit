@@ -73,6 +73,7 @@ def run(
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
+    send_invalid_keymap: bool = False,
 ) -> None:
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
@@ -249,10 +250,25 @@ def run(
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
                 keymap_data = b"xkb_keymap { };\0"
+                keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
+                if send_invalid_keymap:
+                    # XKB_V1 without its required SCM_RIGHTS descriptor must
+                    # be rejected instead of silently falling back to read().
+                    client.sendall(keymap_event)
+                    previous_timeout = client.gettimeout()
+                    client.settimeout(1.0)
+                    try:
+                        if client.recv(1) != b"":
+                            raise AssertionError("NekoEdit unexpectedly wrote data for a malformed keymap")
+                    except socket.timeout as error:
+                        raise AssertionError("NekoEdit did not reject an XKB keymap event without its FD") from error
+                    finally:
+                        client.settimeout(previous_timeout)
+                    return
+
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
-                    keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
                     client.sendmsg(
                         [keymap_event],
                         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", keymap_fd))],
@@ -936,6 +952,14 @@ def run(
     if errors:
         raise AssertionError("mock compositor failed:\n" + "\n".join(errors))
     stderr = result.stderr.decode(errors="replace")
+    if send_invalid_keymap:
+        if result.returncode == 0 or "Wayland protocol or shared-memory setup failed" not in stderr:
+            raise AssertionError(
+                "NekoEdit did not reject XKB_V1 without an SCM_RIGHTS descriptor: "
+                f"status={result.returncode}, stderr={stderr!r}"
+            )
+        print("Wayland invalid XKB keymap descriptor rejection test passed.")
+        return
     if send_protocol_error:
         if result.returncode == 0 or "test compositor protocol error" not in stderr:
             raise AssertionError(
@@ -971,6 +995,7 @@ if __name__ == "__main__":
             os.unlink(file_path)
         except FileNotFoundError:
             pass
+    run(sys.argv[1], send_invalid_keymap=True)
     # Older wl_seat versions cannot send repeat_info; the client must retain
     # the 300 ms / 30 Hz compatibility fallback.
     run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
