@@ -613,10 +613,10 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 expect_redraw("initial held Delete")
                 client.sendall(wire_message(12, 0))
                 first_cell = struct.unpack_from(
-                    "<I", pixels, 164 * 800 * 4 + 16 * 4
+                    "<I", pixels, 164 * 800 * 4 + 17 * 4
                 )[0]
-                if first_cell != 0xFF252A33:
-                    raise AssertionError("initial Delete did not remove the leading newline")
+                if first_cell != 0xFFD8DEE9:
+                    raise AssertionError("initial Delete did not move the first character onto line one")
 
                 expect_redraw("repeated Delete")
                 client.sendall(
