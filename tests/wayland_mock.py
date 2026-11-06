@@ -256,8 +256,15 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 # The remaining document must be "b\\n2": a is gone after
                 # Backspace, the second line contains 2, and the caret is at
                 # the end of that second line.
-                if struct.unpack_from("<I", pixels, 164 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
-                    raise AssertionError("expected B glyph was not rendered at the first line")
+                first_line = [
+                    struct.unpack_from("<I", pixels, 164 * 800 * 4 + x * 4)[0]
+                    for x in range(16, 24)
+                ]
+                if first_line[0] != 0xFFD8DEE9:
+                    raise AssertionError(
+                        "expected B glyph was not rendered at the first line; "
+                        f"first pixels={[hex(value) for value in first_line]}"
+                    )
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("expected digit 2 was not rendered on the second line")
                 if struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0] != 0xFFFFFFFF:
