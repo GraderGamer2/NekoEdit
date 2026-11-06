@@ -3,8 +3,8 @@
 **Snapshot date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Latest implementation-code tip:** [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) — honor XKB ONE_LEVEL semantics  
-**Latest keyboard-test fixture:** [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b)  
+**Latest implementation-code tip:** [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd) — terminate relative picker target paths  
+**Latest picker regression-test fixture:** [`5f3199593694`](https://github.com/GraderGamer2/NekoEdit/commit/5f31995936943493116dc51045bf933fa9492627)  
 **Latest main-history synchronization:** [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c)  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open, targeting `main`  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
@@ -15,31 +15,22 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Repository coordination state (verified 2026-11-06)
 
-- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) is open, not draft, with `early-alpha` as head and `main` as base. After ancestry synchronization, GitHub reports `mergeable=true` and `mergeable_state=clean`; the PR remains unmerged. The comparison is 193 commits ahead and 0 behind `main`.
-- GitHub Actions [Build and test #186](https://github.com/GraderGamer2/NekoEdit/actions/runs/42223470121) passed all eight steps on test-fixture commit `b260457007589469abdb492358b7581558c0cc5b`. The full Wayland suite verified shifted punctuation rows, the twelve shifted number-row symbols, and ONE_LEVEL modifier handling.
-- After synchronizing main's changelog history, [Build and test #187](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584) passed all eight steps on merge commit `3a1b2bb9bed50e15bbd37da634505fead4f7724c`. It reran the same keyboard assertions and all existing integration scenarios, then uploaded the Linux x86-64 artifact.
-- Run #185 failed in the new test scenario because the test fixture used evdev codes where XKB keycodes (evdev + 8) were required. The assembly build/ELF checks and CLI smoke tests had passed; the keycode fixture was corrected in `b260457007589469abdb492358b7581558c0cc5b`, and run #186 then passed.
-- PR #1 is closed and unmerged. Its old API metadata still displays the deleted former head name `feat/wayland-socket-error-handling`; PR #2 correctly uses `early-alpha`.
-- `main` still contains the original Wayland prototype, not the editor implementation. The merge commit on `early-alpha` uses `main` as its first parent and the prior `early-alpha` head as its second parent; it synchronizes ancestry without changing the development tree or merging the editor into `main`.
+- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) is open and unmerged, with `early-alpha` as head and `main` as base. GitHub has reported `mergeable=true` and a clean merge state after the passing picker implementation run. PR #1 is closed and unmerged.
+- `main` still contains the original Wayland prototype rather than the editor implementation. The active editor work remains on `early-alpha`; no merge into `main` was performed.
+- GitHub Actions [Build and test #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800) passed all eight workflow steps on implementation commit [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd).
+- Run #208 passed the freestanding x86-64 build/ELF checks, CLI smoke tests, complete Wayland mock-compositor integration suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 24,492 bytes; ZIP SHA-256 `f157014623b7beb16b954a67a7cdcdc70304371cdeefb36f4615e0df35a62782`; artifact ID `13511065251`; expires 2026-11-13 14:13:07 UTC. [Run #208 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800/artifacts/13511065251).
+- Intermediate picker runs #199–#207 failed while exposing and correcting test-pixel mistakes, stale double-click history after directory navigation, diagnostic string trimming, and a missing NUL terminator in relative target paths. The #208 run is the current passing verification; earlier failures remain visible in Actions history.
 
 ## Latest verified program state
 
-- Latest verified **XKB implementation commit:** [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f) — explicitly classify ONE_LEVEL and keep its lookup on Level 1 regardless of Shift/Lock/LevelThree.
-- The test fixture correction is [`b26045700758`](https://github.com/GraderGamer2/NekoEdit/commit/b260457007589469abdb492358b7581558c0cc5b); it uses XKB keycodes rather than raw evdev values for punctuation keys.
-- Latest PR-integrated full test run: [Build and test #187](https://github.com/GraderGamer2/NekoEdit/actions/runs/42224183584) passed all eight workflow steps on merge commit `3a1b2bb9bed50e15bbd37da634505fead4f7724c`.
-- Main-to-feature ancestry synchronization point: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent. Later feature work remains on `early-alpha`.
-- Main's latest application-code base remains [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); subsequent commits in this branch-rename update changed only `CHANGELOG/` files.
-- PR #2 is the active review for early-alpha; PR #1 is closed and unmerged. PR #2 is clean/mergeable and 193 commits ahead, 0 behind `main` after the ancestry sync.
-- GitHub Actions [Build and test #171](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217176741) passed on the synchronized feature branch head. All eight steps succeeded, including the complete Wayland integration suite and artifact upload.
-- The #171 artifact is `nekoedit-linux-x86_64` (18,978 bytes), SHA-256 `2fa05d8a3b0f2b4422a4d4f81c1ebd3f701ea6d74c97221f467bf1b3ea9dbebf`, expiring 2026-11-13.
-- GitHub Actions [Build and test #169](https://github.com/GraderGamer2/NekoEdit/actions/runs/42216369360) passed for this commit on 2026-11-06.
-- All eight workflow steps passed: toolchain inspection, freestanding x86-64 build/ELF verification, CLI smoke tests, complete Wayland mock-compositor integration, executable inspection, and artifact upload.
-- Uploaded artifact: `nekoedit-linux-x86_64` (18,978 bytes).
-- Artifact SHA-256: `dae27df70c60ae73c4bd45e494b10c7c47c7d0962c86c8876f48ab00965b515a`.
-- Artifact expiration: 2026-11-13 (seven-day retention).
-- The new integration scenario exercised gap movement around a mixed-width UTF-8 prefix, insertion on both sides of the gap, Backspace, Delete, selection deletion, and serialization of the two physical document segments.
-- The changelog was separately installed on `main` by docs-only commit [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8), then updated to include the gap-buffer milestone by [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d). Main’s changelog sync run #170 passed. Neither commit merges the editor implementation; `main` remains the original prototype.
-- PR #2 is open against main, has a clean mergeability state after passing CI #179, and remains unmerged. PR #1 is historical and closed.
+- Latest picker implementation-code commit: [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd) — explicitly terminate relative target paths after copying filenames, preventing stale suffix bytes from a previous longer target.
+- Picker navigation regression fix: [`f3189b1bbe6e`](https://github.com/GraderGamer2/NekoEdit/commit/f3189b1bbe6e73060fa8a47ffd23a56984e70b82) — reset prior row/time double-click state whenever the directory listing is rebuilt.
+- Latest strengthened picker test commit: [`5f3199593694`](https://github.com/GraderGamer2/NekoEdit/commit/5f31995936943493116dc51045bf933fa9492627) — checks the exact active path and loaded document byte after nested navigation, along with an unobscured glyph pixel.
+- Latest full verification: [Actions run #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800), all eight steps passed on `07bc16d71ac5940d206d31a792e46ec6f130c7fd`.
+- The same #208 integration suite reran the established XKB ONE_LEVEL/shifted-punctuation, gap-buffer, UTF-8, selection, repeat, protocol, startup-load, and file-workflow scenarios. The XKB implementation fix remains [`267ef0557b8e`](https://github.com/GraderGamer2/NekoEdit/commit/267ef0557b8e00bd01eae004ed346dde16977e3f).
+- PR #2 remains the active review for `early-alpha`, open and unmerged. PR #1 is historical, closed, and unmerged.
+- The branch ancestry synchronization commit [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c) still has `main` as its first parent and preserves the earlier development history as its second parent; editor implementation has not been merged into `main`.
 
 ## Runtime and build interface
 
@@ -91,9 +82,10 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Selection | Mouse drag, reverse/multiline selection, Shift navigation, Ctrl+A, replacement on typing/deletion |
 | Repeat | Compositor-configured repeat when available, legacy fallback otherwise |
 | Viewport | Soft wrapping and vertical caret-follow scrolling |
-| File loading | Positional startup path; staged Open with 64 KiB limit and rollback on failure |
-| File saving | Save/Save As, same-directory temporary file, write loop, fsync, close, atomic rename |
+| File loading | Positional startup path; staged picker Open with 64 KiB limit and rollback on failure |
+| File saving | Save/Save As, same-directory temporary file, write loop, fsync, close, atomic rename; picker overwrite confirmation |
 | Shortcuts | Ctrl+A, Ctrl+O, Ctrl+S, Ctrl+Shift+S |
+| Native file picker | In-process Open/Save browser; path/name fields; Up/Home; hidden-file toggle; directory-first list; single-click selection and double-click activation; keyboard navigation; overwrite confirmation |
 | UTF-8 document operations | Valid code-point-aware cursor movement, pointer hit-testing, selection, Backspace and Delete; malformed bytes remain individually editable |
 
 ## Important UTF-8 boundary
@@ -118,12 +110,15 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 - Clipboard copy/cut/paste using the Wayland data-device protocol and immutable snapshots.
 - Horizontal scrolling and fuller viewport controls.
 - Window resize/reconfigure and output scale handling.
-- Graphical directory-browser/file picker, file filters, and unsaved-changes confirmation.
+- Unsaved-document confirmation before Open replaces an edited document.
+- More complete path/filename editing: caret repositioning, in-field insertion, and clipboard paste are not implemented; current entry is ASCII-only with append/backspace/clear behavior.
+- Directory listings are capped at 128 entries (15 visible rows); no filters, bookmarks, search, or incremental large-directory browsing.
+- Symbolic-link navigation is not implemented; the picker navigates directories and opens regular files.
 - Full XKB type/modifier/virtual-modifier/action semantics and broader non-ASCII keysyms.
 - X11 backend.
 - Further real-compositor testing. The mock Wayland compositor is valuable regression coverage but does not replace a GNOME Wayland smoke test.
 
-File-operation limitations: the in-window path prompt is ASCII-only; the temporary save file uses mode 0644 subject to umask; existing file permissions/ownership/ACLs/xattrs are not preserved; the parent directory is not fsynced after rename.
+File-operation limitations: picker path and filename entry is ASCII-only; non-ASCII filename bytes are preserved for filesystem operations but displayed through replacement glyphs. The temporary save file uses mode 0644 subject to umask; existing file permissions/ownership/ACLs/xattrs are not preserved; the parent directory is not fsynced after rename.
 
 ## Current source layout
 
