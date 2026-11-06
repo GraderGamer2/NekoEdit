@@ -1758,6 +1758,11 @@ picker_start:
     mov dword ptr [rip + picker_last_click_index], -1
     mov dword ptr [rip + picker_name_length], 0
     mov byte ptr [rip + picker_name_buffer], 0
+    # Each new dialog starts with dotfiles hidden; the user's toggle applies
+    # only to the current browsing session.
+    mov dword ptr [rip + picker_show_hidden], 0
+    mov dword ptr [rip + picker_scroll_drag], 0
+    mov dword ptr [rip + picker_wheel_remainder], 0
     mov dword ptr [rip + file_menu_open], 0
     mov dword ptr [rip + path_prompt_mode], 0
     mov dword ptr [rip + doc_open_error], 0
