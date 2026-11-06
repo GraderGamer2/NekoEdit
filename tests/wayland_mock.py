@@ -953,7 +953,8 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(650, 110, serial, "show hidden files")
                     serial += 10
                     serial = double_click_picker_row(160, 139, serial, "open hidden file")
-                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                    # H's first glyph row lights columns 0 and 4, not column 1.
+                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
                         raise AssertionError(f"double-clicking a hidden file did not open its document; state={picker_state()!r}")
                     observations.append("directory entry navigation, hidden-file toggle, and double-click Open verified")
 
@@ -965,7 +966,8 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 10
                     serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
                     serial = double_click_picker_row(160, 153, serial, "open inside.txt with hidden files visible")
-                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                    # N also has a lit outer pixel in the first glyph row.
+                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
                         raise AssertionError("directory picker did not open inside.txt")
                     observations.append("Up navigation and a second nested-file Open verified")
 
