@@ -928,7 +928,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_last_click_index", "picker_last_click_time", "picker_name_length", "picker_name_buffer", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -936,7 +936,7 @@ xkb_symbols "nekoedit-sparse" {
                             fd = memory.fileno()
                             result: dict[str, object] = {}
                             for name, address in picker_symbols.items():
-                                if name in {"picker_name_buffer", "doc_buffer", "current_path_buffer", "picker_target_buffer"}:
+                                if name in {"picker_name_buffer", "doc_buffer", "picker_path_buffer", "current_path_buffer", "picker_target_buffer"}:
                                     size = 64 if name in {"picker_name_buffer", "doc_buffer"} else 256
                                     result[name] = os.pread(fd, size, address).split(b"\0", 1)[0]
                                 elif name == "current_file_path":
@@ -1238,6 +1238,97 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     observations.append(
                         "Wayland vertical-axis wheel scrolling, proportional scrollbar, and thumb dragging verified"
+                    )
+
+                    # Editable path field: insert in the middle, remove it again,
+                    # then append a subdirectory and navigate using the edited path.
+                    open_picker_from_menu(serial + 60, "editable path field")
+                    original_path = os.fsencode(runtime_dir)
+                    workflow_click(96, 76, serial + 80, "place path caret in the middle")
+                    key_step(serial + 90, evdev["x"], "insert into middle of path")
+                    path_state = picker_state()
+                    expected_inserted_path = original_path[:4] + b"x" + original_path[4:]
+                    if (
+                        path_state.get("picker_path_buffer") != expected_inserted_path
+                        or path_state.get("picker_path_cursor") != 5
+                    ):
+                        raise AssertionError(
+                            f"path insertion did not occur at the mouse cursor: {path_state!r}"
+                        )
+                    key_step(serial + 92, 14, "Backspace removes middle path insertion")
+                    path_state = picker_state()
+                    if path_state.get("picker_path_buffer") != original_path:
+                        raise AssertionError(
+                            f"Backspace at the path cursor did not restore the path: {path_state!r}"
+                        )
+                    # Click at the visible end of the path, append /nested-dir,
+                    # and commit with Enter.
+                    path_end_x = 64 + min(len(original_path), 82) * 8
+                    workflow_click(path_end_x, 76, serial + 100, "place path caret at the end")
+                    serial = workflow_type_path("/nested-dir", serial + 110)
+                    key_step(serial, 28, "navigate using edited path field")
+                    nested_path_state = picker_state()
+                    expected_nested_path = os.path.join(runtime_dir, "nested-dir").encode()
+                    if nested_path_state.get("current_path_buffer") != expected_nested_path:
+                        raise AssertionError(
+                            f"edited path field did not navigate to nested-dir: {nested_path_state!r}"
+                        )
+                    observations.append(
+                        "path field supports mouse-positioned insertion, Backspace, and Enter navigation"
+                    )
+
+                    # Filename prefix search selects a matching regular file.
+                    # Clicking inside the name field moves the cursor; insertion
+                    # and Backspace must preserve the match after restoring text.
+                    for offset, character in enumerate("empty"):
+                        key_step(serial + 2 + offset * 2, evdev[character], f"filename prefix search {character!r}")
+                    name_state = picker_state()
+                    if (
+                        name_state.get("picker_name_buffer") != b"empty"
+                        or name_state.get("picker_name_match") != 1
+                        or name_state.get("picker_selected") < 0
+                    ):
+                        raise AssertionError(f"filename prefix search did not select empty.txt: {name_state!r}")
+                    workflow_click(192, 374, serial + 20, "place search-field cursor after two characters")
+                    key_step(serial + 30, evdev["x"], "insert inside filename search")
+                    name_state = picker_state()
+                    if (
+                        name_state.get("picker_name_buffer") != b"emxpty"
+                        or name_state.get("picker_name_match") != 0
+                        or name_state.get("picker_selected") != -1
+                    ):
+                        raise AssertionError(f"filename insertion did not invalidate the stale match: {name_state!r}")
+                    key_step(serial + 32, 14, "Backspace restores filename prefix")
+                    name_state = picker_state()
+                    if (
+                        name_state.get("picker_name_buffer") != b"empty"
+                        or name_state.get("picker_name_match") != 1
+                        or name_state.get("picker_selected") < 0
+                    ):
+                        raise AssertionError(f"filename Backspace did not restore the prefix match: {name_state!r}")
+                    workflow_shortcut(serial + 34, 30, "Ctrl+A selects filename search text")
+                    name_state = picker_state()
+                    if name_state.get("picker_edit_select_all") != 1:
+                        raise AssertionError(f"Ctrl+A did not select the filename field: {name_state!r}")
+                    serial = workflow_type_path("empty", serial + 44)
+                    name_state = picker_state()
+                    if (
+                        name_state.get("picker_name_buffer") != b"empty"
+                        or name_state.get("picker_name_match") != 1
+                        or name_state.get("picker_selected") < 0
+                    ):
+                        raise AssertionError(f"typing after Ctrl+A did not replace and rematch the text: {name_state!r}")
+                    key_step(serial, 28, "Enter opens the matched empty.txt search result")
+                    search_open_state = picker_state()
+                    if (
+                        search_open_state.get("active_path") != empty_file.encode()
+                        or search_open_state.get("doc_length") != 0
+                    ):
+                        raise AssertionError(
+                            f"filename search opened the wrong file: {search_open_state!r}"
+                        )
+                    observations.append(
+                        "path/name fields support cursor placement, middle insertion, Backspace, Home/End-ready editing, Ctrl+A replacement, and filename prefix search"
                     )
 
                     client.sendall(wire_message(10, 1))
