@@ -2876,7 +2876,7 @@ render_document:
     cmp r13d, DOC_TOP
     jl .document_hint_skip_draw
     cmp r13d, STATUS_TOP - LINE_HEIGHT
-    jae .document_draw_cursor
+    jge .document_draw_cursor
     mov edi, r12d
     mov esi, r13d
     call draw_glyph
@@ -2891,7 +2891,7 @@ render_document:
     cmp r14d, r15d
     jae .document_draw_cursor
     cmp r13d, STATUS_TOP - LINE_HEIGHT
-    jae .document_draw_cursor
+    jge .document_draw_cursor
     movzx edx, byte ptr [rbx + r14]
     cmp edx, 10
     je .document_newline
@@ -2915,7 +2915,7 @@ render_document:
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
     cmp r13d, STATUS_TOP - LINE_HEIGHT
-    jae .document_draw_cursor
+    jge .document_draw_cursor
 .document_printable_fit:
     cmp r13d, DOC_TOP
     jl .document_printable_skip_draw
@@ -2933,7 +2933,7 @@ render_document:
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
     cmp r13d, STATUS_TOP - LINE_HEIGHT
-    jae .document_draw_cursor
+    jge .document_draw_cursor
 .document_tab_fit:
     add r12d, CELL_WIDTH * 4
     jmp .document_next_byte
