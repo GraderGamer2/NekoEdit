@@ -427,6 +427,36 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 observations.append(
                     "mouse drag selection highlighted text in reverse direction and typing replaced the selection"
                 )
+
+                # Extend the next selection from the end of line one through
+                # the character on line two, covering the selected newline.
+                pointer_drag(24, 170, 24, 182, 1140, "multi-line mouse drag selection")
+                newline_highlight = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 24 * 4
+                )[0]
+                second_line_highlight = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 23 * 4
+                )[0]
+                if newline_highlight != 0xFF5E81AC or second_line_highlight != 0xFF5E81AC:
+                    raise AssertionError(
+                        "multi-line drag did not highlight the newline and second-line text; "
+                        f"newline={hex(newline_highlight)}, text={hex(second_line_highlight)}"
+                    )
+
+                key_step(1146, 30, "replace multi-line selection")
+                merged_line_pixel = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 25 * 4
+                )[0]
+                cleared_second_line = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                )[0]
+                if merged_line_pixel != 0xFFD8DEE9:
+                    raise AssertionError("multi-line selection replacement did not join text on one line")
+                if cleared_second_line != 0xFF252A33:
+                    raise AssertionError("multi-line selection replacement left stale text on the next line")
+                observations.append(
+                    "multi-line drag highlighted the newline and replaced the selected range across lines"
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
