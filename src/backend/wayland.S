@@ -21,6 +21,7 @@
 .equ HEIGHT,           480
 .equ STRIDE,           (WIDTH * 4)
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
+.equ BTN_LEFT,          0x110
 
 .section .rodata
 wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
@@ -32,6 +33,7 @@ memfd_label:           .asciz "nekoedit-shm"
 iface_compositor:      .asciz "wl_compositor"
 iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
+iface_seat:            .asciz "wl_seat"
 msg_no_env:            .ascii "NekoEdit: XDG_RUNTIME_DIR is not set; cannot locate the Wayland socket.\n"
 msg_no_env_end:
 msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display using WAYLAND_SOCKET or its socket path.\n"
@@ -68,6 +70,14 @@ shm_mapping:           .quad 0
 compositor_global:     .long 0
 shm_global:            .long 0
 xdg_global:            .long 0
+seat_global:           .long 0
+pointer_x:             .long 0
+pointer_y:             .long 0
+pointer_inside:         .long 0
+pointer_created:        .long 0
+palette_selection:      .long 0
+buffer_busy:            .long 0
+redraw_pending:         .long 0
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
@@ -403,20 +413,8 @@ wayland_main:
     mov qword ptr [rip + mmap_result], rax
     mov qword ptr [rip + shm_mapping], rax
 
-    # Paint a simple dark surface with an accent header bar (XRGB8888).
-    mov rdi, rax
-    mov ecx, (WIDTH * HEIGHT)
-    mov eax, 0xff252a33
-    rep stosd
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov ecx, (WIDTH * 36)
-    mov eax, 0xff343d4b
-    rep stosd
-    mov rdi, qword ptr [rip + shm_mapping]
-    add rdi, (48 * 4)
-    mov ecx, (4 * 4)
-    mov eax, 0xff78a9d4
-    rep stosd
+    # Draw the initial software-rendered palette surface.
+    call render_surface
 
     lea rax, [rip + stage_pool]
     mov qword ptr [rip + failure_stage], rax
@@ -493,8 +491,64 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
+    mov dword ptr [rip + buffer_busy], 1
 
-    # Minimal event loop: answer shell pings and honor the compositor close event.
+    # Bind the optional wl_seat after the window objects so IDs 13-15 remain
+    # dense: seat=13, roundtrip callback=14, pointer=15.
+    cmp dword ptr [rip + seat_global], 0
+    je .event_loop
+    lea rax, [rip + stage_bind_roundtrip]
+    mov qword ptr [rip + failure_stage], rax
+    mov edi, dword ptr [rip + seat_global]
+    lea rsi, [rip + iface_seat]
+    mov edx, 8
+    mov ecx, 1
+    mov r8d, 13
+    call wl_registry_bind
+    test rax, rax
+    js .protocol_error
+
+    # Roundtrip so the compositor can announce seat capabilities.
+    mov dword ptr [rip + payload_buffer], 14
+    mov edi, 1
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .protocol_error
+.seat_roundtrip:
+    call wl_read_event
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + last_object], 6
+    jne .seat_check_capabilities
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_capabilities
+    call handle_xdg_ping
+.seat_check_capabilities:
+    cmp dword ptr [rip + last_object], 13
+    jne .seat_check_buffer_release
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_buffer_release
+    call handle_seat_capabilities
+    test rax, rax
+    js .protocol_error
+    jmp .seat_check_sync
+.seat_check_buffer_release:
+    cmp dword ptr [rip + last_object], 12
+    jne .seat_check_sync
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_sync
+    mov dword ptr [rip + buffer_busy], 0
+.seat_check_sync:
+    cmp dword ptr [rip + last_object], 14
+    jne .seat_roundtrip
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_roundtrip
+
+    # Main event loop: pointer input selects a palette swatch. The single
+    # wl_buffer is only rewritten after wl_buffer.release.
 .event_loop:
     lea rax, [rip + stage_event_loop]
     mov qword ptr [rip + failure_stage], rax
@@ -502,10 +556,115 @@ wayland_main:
     test rax, rax
     js .protocol_error
     cmp dword ptr [rip + last_object], 6
+    jne .check_buffer_release
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_buffer_release
+    call handle_xdg_ping
+    jmp .event_loop
+.check_buffer_release:
+    cmp dword ptr [rip + last_object], 12
+    jne .check_seat_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_seat_event
+    mov dword ptr [rip + buffer_busy], 0
+    cmp dword ptr [rip + redraw_pending], 0
+    je .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.check_seat_event:
+    cmp dword ptr [rip + last_object], 13
+    jne .check_pointer_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_pointer_event
+    call handle_seat_capabilities
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.check_pointer_event:
+    cmp dword ptr [rip + last_object], 15
     jne .check_toplevel_close
     cmp dword ptr [rip + last_opcode], 0
-    jne .check_toplevel_close
-    call handle_xdg_ping
+    je .pointer_enter
+    cmp dword ptr [rip + last_opcode], 1
+    je .pointer_leave
+    cmp dword ptr [rip + last_opcode], 2
+    je .pointer_motion
+    cmp dword ptr [rip + last_opcode], 3
+    je .pointer_button
+    jmp .event_loop
+.pointer_enter:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+    mov dword ptr [rip + pointer_inside], 1
+    jmp .event_loop
+.pointer_leave:
+    mov dword ptr [rip + pointer_inside], 0
+    jmp .event_loop
+.pointer_motion:
+    cmp dword ptr [rip + last_size], 12
+    jb .event_loop
+    mov eax, dword ptr [rip + event_payload + 4]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+    jmp .event_loop
+.pointer_button:
+    cmp dword ptr [rip + last_size], 16
+    jb .event_loop
+    cmp dword ptr [rip + event_payload + 8], BTN_LEFT
+    jne .event_loop
+    cmp dword ptr [rip + event_payload + 12], 1
+    jne .event_loop
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    mov edx, dword ptr [rip + pointer_y]
+    cmp edx, 96
+    jl .event_loop
+    cmp edx, 144
+    jge .event_loop
+    cmp eax, 80
+    jl .palette_second
+    cmp eax, 128
+    jge .palette_second
+    cmp dword ptr [rip + palette_selection], 0
+    je .event_loop
+    mov dword ptr [rip + palette_selection], 0
+    jmp .palette_changed
+.palette_second:
+    cmp eax, 160
+    jl .palette_third
+    cmp eax, 208
+    jge .palette_third
+    cmp dword ptr [rip + palette_selection], 1
+    je .event_loop
+    mov dword ptr [rip + palette_selection], 1
+    jmp .palette_changed
+.palette_third:
+    cmp eax, 240
+    jl .event_loop
+    cmp eax, 288
+    jge .event_loop
+    cmp dword ptr [rip + palette_selection], 2
+    je .event_loop
+    mov dword ptr [rip + palette_selection], 2
+.palette_changed:
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
@@ -942,9 +1101,18 @@ registry_capture_global:
     lea rsi, [rip + iface_xdg_wm_base]
     call string_equal
     test eax, eax
-    jz .registry_done
+    jz .registry_try_seat
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + xdg_global], eax
+    jmp .registry_done
+.registry_try_seat:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_seat]
+    call string_equal
+    test eax, eax
+    jz .registry_done
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + seat_global], eax
 .registry_done:
     pop rbp
     ret
@@ -970,6 +1138,206 @@ string_equal:
     xor eax, eax
     ret
 .size string_equal, . - string_equal
+
+# Draw a filled rectangle.
+# Inputs: RDI=base, ESI=x, EDX=y, ECX=width, R8D=height, R9D=XRGB8888.
+.type draw_rect, @function
+draw_rect:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rbx, rdi
+    mov r12d, esi
+    mov r13d, edx
+    mov r14d, ecx
+    mov r15d, r8d
+    mov r11d, r9d
+    xor r10d, r10d
+.draw_rect_row:
+    cmp r10d, r15d
+    jae .draw_rect_done
+    mov eax, r13d
+    add eax, r10d
+    imul rax, STRIDE
+    mov edx, r12d
+    shl edx, 2
+    add rax, rdx
+    add rax, rbx
+    mov rdi, rax
+    mov ecx, r14d
+    mov eax, r11d
+    rep stosd
+    inc r10d
+    jmp .draw_rect_row
+.draw_rect_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size draw_rect, . - draw_rect
+
+# Repaint the small input demo: clicking a swatch changes the selected border.
+.type render_surface, @function
+render_surface:
+    push rbp
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, WIDTH
+    mov r8d, HEIGHT
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, WIDTH
+    mov r8d, 36
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    xor edx, edx
+    mov ecx, 4
+    mov r8d, 4
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+    cmp dword ptr [rip + palette_selection], 0
+    jne .render_tile0_idle
+    mov r9d, 0xffffffff
+    jmp .render_tile0_border
+.render_tile0_idle:
+    mov r9d, 0xff596273
+.render_tile0_border:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 77
+    mov edx, 93
+    mov ecx, 54
+    mov r8d, 54
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 80
+    mov edx, 96
+    mov ecx, 48
+    mov r8d, 48
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+    cmp dword ptr [rip + palette_selection], 1
+    jne .render_tile1_idle
+    mov r9d, 0xffffffff
+    jmp .render_tile1_border
+.render_tile1_idle:
+    mov r9d, 0xff596273
+.render_tile1_border:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 157
+    mov edx, 93
+    mov ecx, 54
+    mov r8d, 54
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 160
+    mov edx, 96
+    mov ecx, 48
+    mov r8d, 48
+    mov r9d, 0xffe09f7d
+    call draw_rect
+
+    cmp dword ptr [rip + palette_selection], 2
+    jne .render_tile2_idle
+    mov r9d, 0xffffffff
+    jmp .render_tile2_border
+.render_tile2_idle:
+    mov r9d, 0xff596273
+.render_tile2_border:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 237
+    mov edx, 93
+    mov ecx, 54
+    mov r8d, 54
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 240
+    mov edx, 96
+    mov ecx, 48
+    mov r8d, 48
+    mov r9d, 0xff9dc58a
+    call draw_rect
+    pop rbp
+    ret
+.size render_surface, . - render_surface
+
+# Attach and repaint the one buffer, but only after wl_buffer.release.
+# RAX = 0 on success, negative on failure.
+.type present_buffer, @function
+present_buffer:
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .present_buffer_busy
+    call render_surface
+    mov dword ptr [rip + payload_buffer], 12
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], 0
+    mov edi, 8
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 12
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov dword ptr [rip + payload_buffer], 0
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], WIDTH
+    mov dword ptr [rip + payload_buffer + 12], HEIGHT
+    mov edi, 8
+    mov esi, 2
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov edi, 8
+    mov esi, 6
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov dword ptr [rip + buffer_busy], 1
+    mov dword ptr [rip + redraw_pending], 0
+    xor eax, eax
+    ret
+.present_buffer_busy:
+    mov eax, -16
+.present_buffer_done:
+    ret
+.size present_buffer, . - present_buffer
+
+# Create wl_pointer object 15 once the seat advertises pointer capability.
+.type handle_seat_capabilities, @function
+handle_seat_capabilities:
+    cmp dword ptr [rip + last_size], 4
+    jb .seat_caps_done
+    test dword ptr [rip + event_payload], 1
+    jz .seat_caps_done
+    cmp dword ptr [rip + pointer_created], 0
+    jne .seat_caps_done
+    mov dword ptr [rip + payload_buffer], 15
+    mov edi, 13
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+    mov dword ptr [rip + pointer_created], 1
+.seat_caps_done:
+    ret
+.size handle_seat_capabilities, . - handle_seat_capabilities
 
 # Answer xdg_wm_base.ping (object 6, opcode 0, serial payload).
 .type handle_xdg_ping, @function
