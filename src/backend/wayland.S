@@ -2310,6 +2310,12 @@ picker_navigate_path:
     mov dword ptr [rip + picker_path_length], eax
     call picker_copy_path_to_field
     call picker_scan_directory
+    test rax, rax
+    js .picker_navigate_path_error
+    # A committed location change returns keyboard focus to the directory list.
+    mov dword ptr [rip + picker_focus], 0
+    mov dword ptr [rip + picker_edit_select_all], 0
+    xor eax, eax
     jmp .picker_navigate_done
 .picker_navigate_path_error:
     mov dword ptr [rip + picker_error], 1
