@@ -322,6 +322,10 @@ Actions run [#187](https://github.com/GraderGamer2/NekoEdit/actions/runs/4222418
 
 Actions runs #199–#207 include failed intermediate attempts while the picker regression tests were being calibrated and then used to identify two real code defects. The corrected implementation was verified by [Build and test #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800), which passed all eight workflow steps and uploaded the Linux x86-64 artifact. See the dated entry in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for the failure/correction chronology and artifact details.
 
+## Picker milestone documentation checkpoint
+
+| 2026-11-06 14:17:55 UTC | [`251e29029362`](https://github.com/GraderGamer2/NekoEdit/commit/251e290293623ec8f2ef4e4ec01d9d61ec267ff1) | docs: record native directory picker milestone and verification |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
