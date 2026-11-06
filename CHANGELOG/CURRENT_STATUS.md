@@ -3,9 +3,9 @@
 **Snapshot date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Implementation tip preserved by the rename:** [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0)  
-**Base branch:** `main`  
-**Development PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged (verified 2026-11-06)
+**Latest implementation-code tip:** [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0)  
+**Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open, targeting `main`  
+**Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
 
 ## Start here when continuing development
 
@@ -13,18 +13,20 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Repository coordination state (verified 2026-11-06)
 
-- GitHub now lists `early-alpha`; a branch search for the former name `feat/wayland-socket-error-handling` returns no branch. The rename preserved the implementation tip at `6f9d17a3a09eaabf1393db214868fe57716ac7c0`.
-- GitHub Actions [Build and test #174](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217617434) passed against that exact commit before the branch rename. All eight workflow steps succeeded, including the freestanding build/ELF checks, CLI smoke tests, Wayland mock-compositor integration, executable inspection, and artifact upload. The workflow correctly records the branch name that existed when it ran.
-- PR #1 is currently **closed and unmerged**. The GitHub Pull Requests API still reports its `head.ref` as the former branch name, even though that branch ref no longer exists. This record does not infer why the PR was closed. No PR state or metadata was changed during this documentation update.
-- At verification, `main` pointed to `f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d`. The main branch remains the original Wayland prototype; these changelog updates do not merge the editor implementation.
-- This is repository administration and documentation only. No editor source, tests, build files, or runtime behavior were changed.
+- PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) is open, not draft, with `early-alpha` as head and `main` as base. It provides the current review target after the earlier PR #1 was closed without merging.
+- At PR creation, GitHub compared the branch as 185 commits ahead and 4 behind `main`, with 12 changed files (6,804 additions and 235 deletions). The comparison includes the editor implementation and changelog/documentation changes.
+- GitHub Actions [Build and test #179](https://github.com/GraderGamer2/NekoEdit/actions/runs/42220633279) passed on branch head `108d7df1e024e74c653c5bb4cdbe52fb1d1289bf`. All eight workflow steps succeeded: toolchain inspection, freestanding build/ELF verification, CLI smoke tests, Wayland mock-compositor integration, executable inspection, and artifact upload.
+- After run #179, GitHub reported PR #2 as `mergeable=true` and `mergeable_state=clean`. The PR remains open and **has not been merged**.
+- PR #1 remains closed and unmerged. Its old API metadata still displays the deleted former head name `feat/wayland-socket-error-handling`; PR #2 correctly uses `early-alpha`.
+- `main` still contains the original Wayland prototype, not the editor implementation. No application code has been merged into `main`.
+- The recent-push prompt now has PR #2 associated with the branch. It is the review destination for these pushes; no merge was performed to clear the notification.
 
 ## Latest verified program state
 
 - Latest fully verified **program-code commit:** `776a72c07579ced1e54929946de65cea6271267e` — fixed-capacity 64 KiB gap-buffer document storage.
 - Main-to-feature ancestry synchronization point: [merge commit `379a34981fc6`](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d), with `main` as first parent and prior development history as second parent. Later changes in this session were documentation-only.
 - Main's latest application-code base remains [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d); subsequent commits in this branch-rename update changed only `CHANGELOG/` files.
-- PR #1 is closed and unmerged as of the 2026-11-06 API check; its returned head ref still uses the former branch name.
+- PR #2 is the active review for early-alpha; PR #1 is closed and unmerged.
 - GitHub Actions [Build and test #171](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217176741) passed on the synchronized feature branch head. All eight steps succeeded, including the complete Wayland integration suite and artifact upload.
 - The #171 artifact is `nekoedit-linux-x86_64` (18,978 bytes), SHA-256 `2fa05d8a3b0f2b4422a4d4f81c1ebd3f701ea6d74c97221f467bf1b3ea9dbebf`, expiring 2026-11-13.
 - GitHub Actions [Build and test #169](https://github.com/GraderGamer2/NekoEdit/actions/runs/42216369360) passed for this commit on 2026-11-06.
@@ -34,7 +36,7 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 - Artifact expiration: 2026-11-13 (seven-day retention).
 - The new integration scenario exercised gap movement around a mixed-width UTF-8 prefix, insertion on both sides of the gap, Backspace, Delete, selection deletion, and serialization of the two physical document segments.
 - The changelog was separately installed on `main` by docs-only commit [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8), then updated to include the gap-buffer milestone by [`f31dc4177c78`](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d). Main’s changelog sync run #170 passed. Neither commit merges the editor implementation; `main` remains the original prototype.
-- PR #1 is closed and unmerged; GitHub still reports the former head ref in PR metadata. Recheck live refs and PR state before any future development.
+- PR #2 is open against main, has a clean mergeability state after passing CI #179, and remains unmerged. PR #1 is historical and closed.
 
 ## Runtime and build interface
 
@@ -139,6 +141,7 @@ Keep these separate from the automated test results:
 
 - The user confirmed that typing the previously problematic printable symbol sequence `!@#$%^&*()_+{}|:"<>?` works in the tested Actions build.
 - After the UTF-8 code-point-safe milestone, the user reported that the UTF-8 formatting looked fine and earlier implementations remained usable.
+- Latest user-reported test of a newer Actions build: ordinary letter keys worked again, but most shifted punctuation/symbol keys rendered as `?`; only a subset including `<>`, `:"`, and `()` rendered correctly. The exact run/artifact for this particular report was not identified. Treat this as an outstanding keyboard regression; mock-compositor CI does not establish that it is fixed.
 
 When conducting future work, add any new manual test feedback here or to the dated [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md), with the build/commit tested and the exact behavior observed.
 

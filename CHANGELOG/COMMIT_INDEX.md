@@ -3,7 +3,8 @@
 This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
-- Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
+- Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
+- Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
 - Recorded commits: **207** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits + 2 branch-rename documentation commits + 4 follow-up branch-rename index/status commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
@@ -261,6 +262,11 @@ Actions run [#174](https://github.com/GraderGamer2/NekoEdit/actions/runs/4221761
 | 2026-11-06 12:41:33 UTC | [`4d3786b206db`](https://github.com/GraderGamer2/NekoEdit/commit/4d3786b206dbdb6dc86ca4a2d140e57fe78ed459) | docs: record early-alpha branch rename and PR status |
 | 2026-11-06 12:41:35 UTC | [`6f50ea994362`](https://github.com/GraderGamer2/NekoEdit/commit/6f50ea994362178dc7a34320263d00b3d7244158) | docs: sync early-alpha branch rename status to main |
 
+## Replacement review PR #2
+
+[PR #2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) was opened on 2026-11-06 from early-alpha into main. It re-proposes the existing development-branch implementation for review after PR #1 was closed without merging. At creation it contained 185 commits ahead / 4 behind, and changed 12 files (6,804 additions, 235 deletions). GitHub Actions [#179](https://github.com/GraderGamer2/NekoEdit/actions/runs/42220633279) passed all eight steps on head `108d7df1e024e74c653c5bb4cdbe52fb1d1289bf`; the PR was subsequently reported mergeable with a clean state. It remains open and unmerged.
+
+The latest user-reported symbol-keyboard issue is documented in CURRENT_STATUS.md and DEVELOPMENT_LOG.md; passing automated tests do not imply that manual regression is resolved.
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.

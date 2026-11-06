@@ -3,7 +3,8 @@
 **Historical reconstruction date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Development PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged as of 2026-11-06
+**Current development PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open against main  
+**Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
 
 This document reconstructs the development of NekoEdit from the first repository prototype through the fixed-capacity gap-buffer milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
@@ -275,3 +276,15 @@ At the time of verification, PR [#1](https://github.com/GraderGamer2/NekoEdit/pu
 
 This administrative milestone changed no editor source, tests, build configuration, or runtime behavior. The project remains at the early interactive Wayland-editor milestone described above. Future implementation work remains paused pending explicit user authorization.
 
+
+---
+
+## 14. Review continuation — replacement PR #2
+
+On 2026-11-06, [PR #2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) was opened from early-alpha into main. It provides a current review target for the renamed branch after PR #1 was closed without merging.
+
+At creation, GitHub compared 185 commits ahead and 4 behind the target branch, with 12 changed files (6,804 additions and 235 deletions). PR-triggered Actions run [#179](https://github.com/GraderGamer2/NekoEdit/actions/runs/42220633279) passed all eight steps on head `108d7df1e024e74c653c5bb4cdbe52fb1d1289bf`. After CI, GitHub reported the PR mergeable with a clean merge state. The PR remains open and unmerged.
+
+The PR description records the implementation, limitations, and the latest user-reported punctuation-key regression. The user's latest manual test reported that alphabetic input worked again but most shifted symbols produced `?`; this remains unresolved and is not negated by mock-compositor CI.
+
+No source or test code was changed as part of opening the PR. Future implementation work remains paused pending explicit authorization.
