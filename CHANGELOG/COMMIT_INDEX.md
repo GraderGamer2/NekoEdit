@@ -363,6 +363,12 @@ Actions runs #199–#207 include failed intermediate attempts while the picker r
 
 Actions run #235 passed all eight workflow steps on `d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49`, including zero-byte Open via both UI routes, mouse-axis scrolling, scrollbar drag, editable path navigation and filename prefix search/cursor regression cases. See the Phase K entry in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for artifact and validation details.
 
+## Editable and scrollable picker milestone documentation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 15:04:40 UTC | [`2894e07e6511`](https://github.com/GraderGamer2/NekoEdit/commit/2894e07e65113575f57a65d3af54c22f06453b2e) | docs: record editable and scrollable file picker milestone |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
