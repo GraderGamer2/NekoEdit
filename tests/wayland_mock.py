@@ -167,7 +167,9 @@ def run(
                     raise AssertionError("expected title-bar accent rail was not rendered")
                 if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
                     raise AssertionError("active document tab underline was not rendered")
-                if struct.unpack_from("<I", pixels, 460 * 800 * 4)[0] != 0xFF343D4B:
+                if struct.unpack_from("<I", pixels, 460 * 800 * 4)[0] != 0xFF78A9D4:
+                    raise AssertionError("status bar accent separator was not rendered")
+                if struct.unpack_from("<I", pixels, 461 * 800 * 4)[0] != 0xFF343D4B:
                     raise AssertionError("status bar background was not rendered")
                 if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("logical line status label was not rendered")
