@@ -1877,8 +1877,8 @@ wl_read_event:
     mov edx, msg_keymap_header_trace_end - msg_keymap_header_trace
     call linux_write_all
 .read_event_no_header_trace:
-    test eax, eax
-    jz .read_event_ok
+    cmp dword ptr [rip + last_size], 0
+    je .read_event_ok
     mov edi, dword ptr [rip + socket_fd]
     lea rsi, [rip + event_payload]
     mov edx, eax
