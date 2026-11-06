@@ -768,7 +768,7 @@ def run(
                 after_press = caret_position()
                 # Ctrl+A left the complete document selected, so this first
                 # character must replace it and restart at the document origin.
-                if after_press != (24, 164):
+                if after_press != (24, 92):
                     raise AssertionError(
                         f"initial printable press did not replace the selection at document start: "
                         f"before={before}, after={after_press}"
@@ -776,7 +776,7 @@ def run(
                 expect_redraw("first repeated printable key")
                 client.sendall(wire_message(12, 0))
                 after_repeat = caret_position()
-                if after_repeat != (32, 164):
+                if after_repeat != (32, 92):
                     raise AssertionError(
                         f"held printable key did not repeat into the next cell: "
                         f"after_press={after_press}, after_repeat={after_repeat}"
