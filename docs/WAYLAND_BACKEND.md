@@ -13,13 +13,13 @@ The prototype currently:
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
 - Binds wl_seat when advertised, creates wl_pointer and wl_keyboard after the seat reports the corresponding capabilities, and handles pointer enter, leave, motion, and button events plus keyboard focus, key, and modifier events.
-- Provides a compact title bar, an Untitled document tab, a document area, and a live status bar. Pointer clicks place the caret at the nearest character insertion boundary. Holding the left button and dragging selects the byte range between the anchor and current caret, including reverse-direction and multi-line drags; the renderer paints selected character cells, tabs, and newline cells. Typing or Backspace/Delete removes the selected range before applying the requested edit. Focused key events otherwise insert US-QWERTY ASCII characters and execute basic editing/navigation commands, including Ctrl+A to select the complete document.
-- Uses a fixed 64 KiB byte array, a built-in US-QWERTY evdev lookup table, and an embedded 5×7 bitmap font. Shift and Caps state are synchronized from Wayland modifier events, with physical Shift/Caps key transitions as fallback.
+- Provides a compact title bar, an Untitled document tab, a document area, and a live status bar. Pointer clicks place the caret at the nearest character insertion boundary. Holding the left button and dragging selects the byte range between the anchor and current caret, including reverse-direction and multi-line drags; the renderer paints selected character cells, tabs, and newline cells. Typing or Backspace/Delete removes the selected range before applying the requested edit. Focused key events use the parsed XKB text-v1 subset for common ASCII symbols and execute basic editing/navigation commands, including Ctrl+A to select the complete document. An unparseable keymap falls back to the built-in US-QWERTY table.
+- Uses a fixed 64 KiB byte array and an embedded 5×7 bitmap font. The bounded XKB parser extracts key names, XKB keycodes, common ASCII keysyms, symbols for up to four groups/four levels, and simplified alphabetic/four-level type flags. Translation uses the active Wayland group, Shift/Caps, and physical Right-Alt LevelThree. An unparseable/unsupported keymap falls back to a built-in US-QWERTY table.
 - Waits for wl_buffer.release before rewriting and recommitting the single shared buffer.
 - Answers xdg_wm_base ping requests.
 - Exits on xdg_toplevel.close.
 
-The wl_keyboard.keymap FD is received with recvmsg/SCM_RIGHTS, validated as a bounded NUL-terminated xkb_v1 keymap, and mapped read-only with MAP_PRIVATE. The symbols, groups, and modifier levels are not parsed yet, so the built-in US-QWERTY translator remains active. It also lacks Unicode input/rendering, IME/dead-key composition, a gap buffer, keyboard-extended selection, undo/redo, text scrolling, window resizing, installed-font parsing, clipboard, frame scheduling, output scale changes, and X11. The current keyboard path is physical key-event handling, not the separate Wayland text-input protocol used by input methods. Ctrl+A selects the whole document; Control state is tracked from physical left/right Ctrl transitions and the standard XKB Control modifier bit.
+The wl_keyboard.keymap FD is received with recvmsg/SCM_RIGHTS, validated as a bounded NUL-terminated xkb_v1 keymap, and mapped read-only with MAP_PRIVATE. The assembly parser handles compiled keycodes and aliases, common ASCII keysyms, up to four symbol groups and four levels, and simplified `ALPHABETIC`/`FOUR_LEVEL` type families. The current translator applies Shift/Caps to alphabetic keys, uses the active layout group from `wl_keyboard.modifiers`, and treats physical Right Alt as LevelThree. Keymaps outside this subset fall back to the built-in US-QWERTY table. This is not full XKB semantics: arbitrary custom type maps, virtual-modifier resolution, modifier actions, non-ASCII keysyms, keypad behavior, compose/dead keys, and Unicode text input remain unsupported. The editor also lacks IME integration, a gap buffer, keyboard-extended selection, undo/redo, text scrolling, window resizing, installed-font parsing, clipboard, frame scheduling, output scale changes, and X11. The current keyboard path is physical key-event handling, not the separate Wayland text-input protocol used by input methods. Ctrl+A selects the whole document; Control state is tracked from physical left/right Ctrl transitions and the standard XKB Control modifier bit.
 
 ## Protocol flow
 
@@ -81,6 +81,7 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - Pointer object creation, pointer focus, and left-click hit testing.
 - Keyboard object creation, focus handling, physical key events, and Wayland modifier-mask synchronization.
 - A synthetic wl_keyboard.keymap event carrying an XKB_V1 memfd over SCM_RIGHTS; the test checks that the client retains it as a read-only MAP_PRIVATE mapping after the sender closes its descriptor.
+- Parser-table inspection in the child process: XKB keycode 24 is resolved to `<AD01>`, the expected alphabetic/LevelThree type flags and Group1/Group2 ASCII symbol levels are populated, and integration input verifies XKB's +8 keycode offset, group switching, Shift, Right-Alt LevelThree, and saved output bytes.
 - US-QWERTY text insertion, cursor movement, Backspace, Enter, Shift+1, and pixel checks for the rendered glyphs and caret.
 - Pointer-motion/button sequences that place the caret after first-line text, at the start of the second line, and between two characters on that line.
 - Reverse-direction and multi-line pointer drag selection with highlight-pixel checks, including selected newline cells, and typing to replace selected text.
@@ -94,7 +95,7 @@ This verifies the client-side wire serialization and basic shared-memory mechani
 
 ## Known limitations and next work
 
-1. Parse the retained XKB_V1 text into keycode, keysym, group, and modifier-level tables; translate input according to the compositor's active layout without libxkbcommon.
+1. Extend the current XKB subset toward full XKB behavior: interpret custom type maps and modifier indices/virtual modifiers, actions, keypad symbols, and broader keysym values; add non-ASCII/Unicode text input and compose/dead-key handling.
 2. Implement Unicode input and UTF-8-aware document operations with a gap buffer, selection-aware editing, undo, and redo.
 3. Add Wayland text-input integration for IME preedit/commit and dead-key composition.
 4. Add the system-font parser, glyph rasterizer, and text layout pipeline.
