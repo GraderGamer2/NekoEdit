@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
 
-binary=${1:-build/nekoedit}
+binary=\${1:-build/nekoedit}
 
 help_output=$("$binary" --help)
 printf '%s\n' "$help_output" | grep -q 'NekoEdit'
-printf '%s\n' "$help_output" | grep -q -- '--help'
+printf '%s\n' "$help_output" | grep -q -- '--backend=wayland'
 
 version_output=$("$binary" --version)
-printf '%s\n' "$version_output" | grep -q '0.0.1-dev'
+printf '%s\n' "$version_output" | grep -q '0.1.0-dev'
 
 set +e
 unknown_output=$("$binary" --definitely-unknown 2>&1)
@@ -18,10 +18,10 @@ set -e
 printf '%s\n' "$unknown_output" | grep -q 'unknown argument'
 
 set +e
-startup_output=$("$binary" 2>&1)
-startup_status=$?
+x11_output=$("$binary" --backend=x11 2>&1)
+x11_status=$?
 set -e
-[ "$startup_status" -eq 2 ]
-printf '%s\n' "$startup_output" | grep -q 'no graphical backend yet'
+[ "$x11_status" -eq 69 ]
+printf '%s\n' "$x11_output" | grep -q 'X11 backend is not implemented yet'
 
 echo 'Smoke tests passed.'

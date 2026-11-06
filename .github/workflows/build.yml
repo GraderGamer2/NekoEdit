@@ -1,0 +1,54 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nekoedit-ci-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Freestanding x86-64 build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: |
+          as --version | head -n 1
+          ld --version | head -n 1
+          readelf --version | head -n 1
+          make --version | head -n 1
+          python3 --version
+
+      - name: Build and verify ELF
+        run: make clean all
+
+      - name: Run command-line smoke tests
+        run: make test
+
+      - name: Run Wayland protocol mock test
+        run: make test-wayland
+
+      - name: Inspect executable
+        run: make inspect
+
+      - name: Upload Linux x86-64 executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: nekoedit-linux-x86_64
+          path: build/nekoedit
+          if-no-files-found: error
+          retention-days: 7

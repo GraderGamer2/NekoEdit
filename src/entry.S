@@ -1,40 +1,48 @@
 .intel_syntax noprefix
 
 .section .rodata
-arg_help:
-    .asciz "--help"
-arg_version:
-    .asciz "--version"
+arg_help:             .asciz "--help"
+arg_version:          .asciz "--version"
+arg_backend_wayland:  .asciz "--backend=wayland"
+arg_backend_x11:      .asciz "--backend=x11"
 
 help_text:
     .ascii "NekoEdit - a tiny native Linux text editor\n"
     .ascii "\n"
-    .ascii "Usage: nekoedit [--help|--version]\n"
+    .ascii "Usage: nekoedit [--help|--version|--backend=wayland|--backend=x11]\n"
     .ascii "\n"
-    .ascii "This repository is an early development scaffold.\n"
-    .ascii "The graphical Wayland and X11 backends are not implemented yet.\n"
+    .ascii "The current development build opens a minimal Wayland test window.\n"
+    .ascii "The X11 backend and text editor UI are still under development.\n"
 help_text_end:
 
 version_text:
-    .ascii "NekoEdit 0.0.1-dev\n"
+    .ascii "NekoEdit 0.1.0-dev\n"
 version_text_end:
 
-not_ready_text:
-    .ascii "NekoEdit: this development build has no graphical backend yet.\n"
-    .ascii "Run 'nekoedit --help' for information.\n"
-not_ready_text_end:
+x11_todo_text:
+    .ascii "NekoEdit: the X11 backend is not implemented yet.\n"
+    .ascii "Use a Wayland session for the current development build.\n"
+x11_todo_text_end:
 
 unknown_text:
     .ascii "NekoEdit: unknown argument. Try 'nekoedit --help'.\n"
 unknown_text_end:
 
 .section .text
+.extern process_envp
+.extern wayland_main
+.extern linux_write_all
+.extern linux_exit
 .global _start
 .type _start, @function
 _start:
+    # Preserve envp for the freestanding backend: envp = &argv[argc + 1].
     mov rax, qword ptr [rsp]
+    lea rdi, [rsp + rax*8 + 16]
+    mov qword ptr [rip + process_envp], rdi
+
     cmp rax, 1
-    je .no_arguments
+    je .start_wayland
     cmp rax, 2
     jne .unknown_argument
 
@@ -50,14 +58,23 @@ _start:
     test eax, eax
     jnz .show_version
 
+    mov rsi, qword ptr [rsp + 16]
+    lea rdi, [rip + arg_backend_wayland]
+    call string_equal
+    test eax, eax
+    jnz .start_wayland
+
+    mov rsi, qword ptr [rsp + 16]
+    lea rdi, [rip + arg_backend_x11]
+    call string_equal
+    test eax, eax
+    jnz .x11_not_ready
+
     jmp .unknown_argument
 
-.no_arguments:
-    mov edi, 2
-    lea rsi, [rip + not_ready_text]
-    mov edx, not_ready_text_end - not_ready_text
-    call linux_write_all
-    mov edi, 2
+.start_wayland:
+    call wayland_main
+    mov edi, 1
     jmp linux_exit
 
 .show_help:
@@ -74,6 +91,14 @@ _start:
     mov edx, version_text_end - version_text
     call linux_write_all
     xor edi, edi
+    jmp linux_exit
+
+.x11_not_ready:
+    mov edi, 2
+    lea rsi, [rip + x11_todo_text]
+    mov edx, x11_todo_text_end - x11_todo_text
+    call linux_write_all
+    mov edi, 69
     jmp linux_exit
 
 .unknown_argument:
@@ -105,5 +130,6 @@ string_equal:
 .string_equal_no:
     xor eax, eax
     ret
+.size string_equal, . - string_equal
 
 .section .note.GNU-stack,"",@progbits

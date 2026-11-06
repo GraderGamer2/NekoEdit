@@ -1,16 +1,17 @@
 AS       ?= as
 LD       ?= ld
 READELF  ?= readelf
+PYTHON   ?= python3
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 
 ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
 
-SOURCES  := src/entry.S src/linux/syscall.S
+SOURCES  := src/entry.S src/linux/syscall.S src/backend/wayland.S
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES))
 
-.PHONY: all clean test check inspect
+.PHONY: all clean test test-wayland check inspect
 
 all: $(APP_BINARY) check
 
@@ -38,6 +39,9 @@ inspect: $(APP_BINARY)
 
 test: $(APP_BINARY)
 	sh tests/smoke.sh ./$(APP_BINARY)
+
+test-wayland: $(APP_BINARY)
+	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
 
 clean:
 	rm -rf $(BUILD_DIR)
