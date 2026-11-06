@@ -35,6 +35,8 @@
 .equ DOC_TOP,           164
 .equ CELL_WIDTH,          8
 .equ LINE_HEIGHT,        12
+.equ DOC_COLUMNS,        ((WIDTH - DOC_LEFT - 8) / CELL_WIDTH)
+.equ DOC_VISIBLE_ROWS,   ((HEIGHT - DOC_TOP - 10) / LINE_HEIGHT)
 
 .section .rodata
 wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
@@ -172,6 +174,7 @@ doc_selection_active:   .long 0
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
+doc_view_top_row:       .long 0
 repeat_timer_fd:         .long 0
 repeat_keycode:          .long 0
 poll_fds:               .zero 16
@@ -1141,6 +1144,7 @@ wayland_main:
     mov edi, 32
     call doc_insert_byte
 .keyboard_changed:
+    call doc_ensure_cursor_visible
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
@@ -1986,29 +1990,27 @@ doc_finish_keyboard_selection:
 doc_move_line_edge:
     push rbx
     push r12
-    mov ebx, dword ptr [rip + doc_cursor]
-    lea r12, [rip + doc_buffer]
-    test edi, edi
-    jnz .doc_edge_end
-.doc_edge_home:
-    test ebx, ebx
-    jz .doc_edge_store
-    dec ebx
-    cmp byte ptr [r12 + rbx], 10
-    jne .doc_edge_home
-    inc ebx
-    jmp .doc_edge_store
-.doc_edge_end:
-    mov eax, dword ptr [rip + doc_length]
-.doc_edge_end_scan:
-    cmp ebx, eax
-    jae .doc_edge_store
-    cmp byte ptr [r12 + rbx], 10
-    je .doc_edge_store
-    inc ebx
-    jmp .doc_edge_end_scan
-.doc_edge_store:
-    mov dword ptr [rip + doc_cursor], ebx
+    mov r12d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov ebx, eax
+    mov edi, ebx
+    xor esi, esi
+    test r12d, r12d
+    jz .Lneko_visual_edge_lookup
+    inc edi
+.Lneko_visual_edge_lookup:
+    call doc_visual_to_offset
+    test r12d, r12d
+    jz .Lneko_visual_edge_store
+    test eax, eax
+    jz .Lneko_visual_edge_store
+    lea rbx, [rip + doc_buffer]
+    cmp byte ptr [rbx + rax - 1], 10
+    jne .Lneko_visual_edge_store
+    dec eax
+.Lneko_visual_edge_store:
+    mov dword ptr [rip + doc_cursor], eax
     pop r12
     pop rbx
     ret
@@ -2017,200 +2019,285 @@ doc_move_line_edge:
 # Place the document cursor from surface-local pixel coordinates.
 # EDI=x, ESI=y. Clicks snap to the nearest character insertion boundary;
 # tabs occupy four cells and UTF-8 continuation bytes are never cursor stops.
-.type doc_place_cursor_from_pointer, @function
-doc_place_cursor_from_pointer:
+# Map a document byte offset to its soft-wrapped visual row and column.
+# EDI=byte offset; returns EAX=row and EDX=column.
+.type doc_offset_to_visual, @function
+doc_offset_to_visual:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, edi
+    mov r13d, dword ptr [rip + doc_length]
+    cmp r12d, r13d
+    cmova r12d, r13d
+    lea r8, [rip + doc_buffer]
+    xor r14d, r14d
+    xor ebx, ebx
+    xor ecx, ecx
+.Lneko_offset_visual_scan:
+    cmp ecx, r12d
+    jae .Lneko_offset_visual_boundary
+    movzx eax, byte ptr [r8 + rcx]
+    cmp eax, 10
+    je .Lneko_offset_visual_newline
+    cmp eax, 9
+    je .Lneko_offset_visual_tab
+    cmp eax, 32
+    jb .Lneko_offset_visual_skip
+    cmp eax, 128
+    jb .Lneko_offset_visual_glyph
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    je .Lneko_offset_visual_skip
+.Lneko_offset_visual_glyph:
+    cmp ebx, DOC_COLUMNS
+    jb .Lneko_offset_visual_glyph_fit
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_glyph_fit:
+    inc ebx
+    inc ecx
+    jmp .Lneko_offset_visual_utf8_tail
+.Lneko_offset_visual_newline:
+    inc r14d
+    xor ebx, ebx
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_tab:
+    lea edx, [rbx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_offset_visual_tab_fit
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_tab_fit:
+    add ebx, 4
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_skip:
+    inc ecx
+    jmp .Lneko_offset_visual_scan
+.Lneko_offset_visual_utf8_tail:
+    cmp ecx, r12d
+    jae .Lneko_offset_visual_scan
+    movzx eax, byte ptr [r8 + rcx]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .Lneko_offset_visual_scan
+    inc ecx
+    jmp .Lneko_offset_visual_utf8_tail
+.Lneko_offset_visual_boundary:
+    # An insertion boundary immediately before a token that would wrap belongs
+    # at the start of the next visual row, not just beyond the right edge.
+    cmp r12d, r13d
+    jae .Lneko_offset_visual_done
+    movzx eax, byte ptr [r8 + r12]
+    cmp eax, 10
+    je .Lneko_offset_visual_done
+    cmp eax, 9
+    je .Lneko_offset_visual_boundary_tab
+    cmp eax, 32
+    jb .Lneko_offset_visual_done
+    cmp eax, 128
+    jb .Lneko_offset_visual_boundary_glyph
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    je .Lneko_offset_visual_done
+.Lneko_offset_visual_boundary_glyph:
+    cmp ebx, DOC_COLUMNS
+    jb .Lneko_offset_visual_done
+    inc r14d
+    xor ebx, ebx
+    jmp .Lneko_offset_visual_done
+.Lneko_offset_visual_boundary_tab:
+    lea edx, [rbx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_offset_visual_done
+    inc r14d
+    xor ebx, ebx
+.Lneko_offset_visual_done:
+    mov eax, r14d
+    mov edx, ebx
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_offset_to_visual, . - doc_offset_to_visual
+
+# Map a visual row/column to the nearest byte insertion boundary.
+# EDI=visual row, ESI=visual column; returns EAX=byte offset.
+.type doc_visual_to_offset, @function
+doc_visual_to_offset:
     push rbx
     push r12
     push r13
     push r14
     push r15
-
-    # Horizontal pixel position -> nearest insertion column.
-    sub edi, DOC_LEFT
-    test edi, edi
-    jns .Lneko_pointer_x_offset_ready
-    xor edi, edi
-.Lneko_pointer_x_offset_ready:
-    add edi, 4
-    mov eax, edi                 # DIV consumes EDX:EAX, not EDI
-    xor edx, edx
-    mov ecx, CELL_WIDTH
-    div ecx
-    mov r14d, eax                 # requested visual column
-
-    # Vertical coordinate selects the row band containing the click.
-    mov eax, esi
-    sub eax, DOC_TOP
-    xor edx, edx
-    mov ecx, LINE_HEIGHT
-    div ecx
-    mov r15d, eax                 # requested line number
-
-    lea r12, [rip + doc_buffer]
-    mov r13d, dword ptr [rip + doc_length]
-    xor ebx, ebx                  # byte offset
-    xor r10d, r10d                # current line
-
-.pointer_line_search:
-    cmp r10d, r15d
-    je .pointer_line_found
-    cmp ebx, r13d
-    jae .pointer_end_of_document
-    movzx eax, byte ptr [r12 + rbx]
-    inc ebx
+    mov r12d, edi
+    mov r13d, esi
+    mov r15d, dword ptr [rip + doc_length]
+    lea r8, [rip + doc_buffer]
+    xor r14d, r14d
+    xor ebx, ebx
+    xor ecx, ecx
+.Lneko_visual_offset_scan:
+    cmp r14d, r15d
+    jae .Lneko_visual_offset_end
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    movzx eax, byte ptr [r8 + r14]
     cmp eax, 10
-    jne .pointer_line_search
-    inc r10d
-    jmp .pointer_line_search
-
-.pointer_line_found:
-    xor r11d, r11d                # current visual column
-.pointer_character_scan:
-    cmp ebx, r13d
-    jae .pointer_store_cursor
-    movzx eax, byte ptr [r12 + rbx]
-    cmp eax, 10
-    je .pointer_store_cursor     # line end: place before newline
+    je .Lneko_visual_offset_newline
     cmp eax, 9
-    je .pointer_tab_character
+    je .Lneko_visual_offset_tab
     cmp eax, 32
-    jb .pointer_skip_control
+    jb .Lneko_visual_offset_skip
     cmp eax, 128
-    jb .pointer_ascii_character
-
-    # UTF-8 leading byte: one display cell; skip any continuation bytes too.
-    mov ecx, eax
-    and ecx, 0xc0
-    cmp ecx, 0x80
-    je .pointer_skip_continuation
-    cmp r14d, r11d
-    jbe .pointer_store_cursor
-    inc r11d
+    jb .Lneko_visual_offset_glyph
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    je .Lneko_visual_offset_skip
+.Lneko_visual_offset_glyph:
+    cmp ecx, DOC_COLUMNS
+    jb .Lneko_visual_offset_glyph_row_ready
     inc ebx
-.pointer_utf8_tail:
-    cmp ebx, r13d
-    jae .pointer_column_check
-    movzx eax, byte ptr [r12 + rbx]
+    xor ecx, ecx
+.Lneko_visual_offset_glyph_row_ready:
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    cmp ebx, r12d
+    jne .Lneko_visual_offset_consume_glyph
+    cmp ecx, r13d
+    jae .Lneko_visual_offset_end
+.Lneko_visual_offset_consume_glyph:
+    inc ecx
+    inc r14d
+    jmp .Lneko_visual_offset_utf8_tail
+.Lneko_visual_offset_newline:
+    cmp ebx, r12d
+    je .Lneko_visual_offset_end
+    inc ebx
+    xor ecx, ecx
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_tab:
+    lea edx, [rcx + 4]
+    cmp edx, DOC_COLUMNS
+    jbe .Lneko_visual_offset_tab_row_ready
+    inc ebx
+    xor ecx, ecx
+.Lneko_visual_offset_tab_row_ready:
+    cmp ebx, r12d
+    ja .Lneko_visual_offset_end
+    cmp ebx, r12d
+    jne .Lneko_visual_offset_consume_tab
+    lea edx, [rcx + 2]
+    cmp r13d, edx
+    jb .Lneko_visual_offset_end
+.Lneko_visual_offset_consume_tab:
+    add ecx, 4
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_skip:
+    inc r14d
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_utf8_tail:
+    cmp r14d, r15d
+    jae .Lneko_visual_offset_scan
+    movzx eax, byte ptr [r8 + r14]
     and eax, 0xc0
     cmp eax, 0x80
-    jne .pointer_column_check
-    inc ebx
-    jmp .pointer_utf8_tail
-
-.pointer_ascii_character:
-    cmp r14d, r11d
-    jbe .pointer_store_cursor
-    inc r11d
-    inc ebx
-    jmp .pointer_column_check
-
-.pointer_tab_character:
-    # A tab occupies four cells. Choose the nearest side of its full span.
-    lea eax, [r11d + 2]
-    cmp r14d, eax
-    jb .pointer_store_cursor
-    add r11d, 4
-    inc ebx
-    jmp .pointer_column_check
-
-.pointer_skip_continuation:
-    inc ebx
-    jmp .pointer_character_scan
-.pointer_skip_control:
-    inc ebx
-    jmp .pointer_character_scan
-
-.pointer_column_check:
-    cmp r11d, r14d
-    jae .pointer_store_cursor
-    jmp .pointer_character_scan
-
-.pointer_store_cursor:
-    mov dword ptr [rip + doc_cursor], ebx
-    jmp .pointer_done
-.pointer_end_of_document:
-    mov dword ptr [rip + doc_cursor], r13d
-.pointer_done:
+    jne .Lneko_visual_offset_scan
+    inc r14d
+    jmp .Lneko_visual_offset_utf8_tail
+.Lneko_visual_offset_end:
+    mov eax, r14d
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
     ret
+.size doc_visual_to_offset, . - doc_visual_to_offset
+
+# Keep the active insertion point within the vertically visible document rows.
+.type doc_ensure_cursor_visible, @function
+doc_ensure_cursor_visible:
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov edx, dword ptr [rip + doc_view_top_row]
+    cmp eax, edx
+    jae .Lneko_ensure_cursor_lower
+    mov dword ptr [rip + doc_view_top_row], eax
+    ret
+.Lneko_ensure_cursor_lower:
+    lea ecx, [edx + DOC_VISIBLE_ROWS]
+    cmp eax, ecx
+    jb .Lneko_ensure_cursor_done
+    sub eax, DOC_VISIBLE_ROWS - 1
+    mov dword ptr [rip + doc_view_top_row], eax
+.Lneko_ensure_cursor_done:
+    ret
+.size doc_ensure_cursor_visible, . - doc_ensure_cursor_visible
+
+# Place cursor from surface-local coordinates; rows include the current scroll.
+.type doc_place_cursor_from_pointer, @function
+doc_place_cursor_from_pointer:
+    mov r8d, edi
+    mov eax, edi
+    sub eax, DOC_LEFT
+    test eax, eax
+    jns .Lneko_pointer_x_nonnegative
+    xor eax, eax
+.Lneko_pointer_x_nonnegative:
+    add eax, CELL_WIDTH / 2
+    xor edx, edx
+    mov ecx, CELL_WIDTH
+    div ecx
+    mov esi, eax
+    mov eax, dword ptr [rip + pointer_y]
+    sub eax, DOC_TOP
+    test eax, eax
+    jns .Lneko_pointer_y_nonnegative
+    xor eax, eax
+.Lneko_pointer_y_nonnegative:
+    xor edx, edx
+    mov ecx, LINE_HEIGHT
+    div ecx
+    add eax, dword ptr [rip + doc_view_top_row]
+    mov edi, eax
+    call doc_visual_to_offset
+    mov dword ptr [rip + doc_cursor], eax
+    ret
 .size doc_place_cursor_from_pointer, . - doc_place_cursor_from_pointer
 
-# EDI=0 moves up; EDI=1 moves down, preserving the byte column when possible.
+# EDI=0 moves up; EDI=1 moves down by one visual row.
 .type doc_move_vertical, @function
 doc_move_vertical:
     push rbx
     push r12
-    push r13
-    push r14
-    push r15
-    mov ebx, dword ptr [rip + doc_cursor]
-    lea r12, [rip + doc_buffer]
-    mov r13d, ebx
-.doc_vertical_find_start:
-    test r13d, r13d
-    jz .doc_vertical_column
-    dec r13d
-    cmp byte ptr [r12 + r13], 10
-    jne .doc_vertical_find_start
-    inc r13d
-.doc_vertical_column:
-    mov r14d, ebx
-    sub r14d, r13d
-    test edi, edi
-    jnz .doc_vertical_down
-    test r13d, r13d
-    jz .doc_vertical_done
-    lea r15d, [r13d - 1]
-    mov eax, r15d
-.doc_vertical_up_start:
-    test eax, eax
-    jz .doc_vertical_up_ready
-    dec eax
-    cmp byte ptr [r12 + rax], 10
-    jne .doc_vertical_up_start
-    inc eax
-.doc_vertical_up_ready:
-    mov ecx, r15d
-    sub ecx, eax
-    cmp r14d, ecx
-    cmova r14d, ecx
-    add eax, r14d
+    mov r12d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov ebx, eax
+    test r12d, r12d
+    jnz .Lneko_vertical_move_down
+    test ebx, ebx
+    jz .Lneko_vertical_move_done
+    dec ebx
+    jmp .Lneko_vertical_move_lookup
+.Lneko_vertical_move_down:
+    inc ebx
+.Lneko_vertical_move_lookup:
+    mov edi, ebx
+    mov esi, edx
+    call doc_visual_to_offset
     mov dword ptr [rip + doc_cursor], eax
-    jmp .doc_vertical_done
-.doc_vertical_down:
-    mov eax, ebx
-    mov ecx, dword ptr [rip + doc_length]
-.doc_vertical_find_end:
-    cmp eax, ecx
-    jae .doc_vertical_done
-    cmp byte ptr [r12 + rax], 10
-    je .doc_vertical_next_start
-    inc eax
-    jmp .doc_vertical_find_end
-.doc_vertical_next_start:
-    inc eax
-    mov r15d, eax
-.doc_vertical_next_end:
-    cmp eax, ecx
-    jae .doc_vertical_down_ready
-    cmp byte ptr [r12 + rax], 10
-    je .doc_vertical_down_ready
-    inc eax
-    jmp .doc_vertical_next_end
-.doc_vertical_down_ready:
-    sub eax, r15d
-    cmp r14d, eax
-    cmova r14d, eax
-    lea eax, [r15d + r14d]
-    mov dword ptr [rip + doc_cursor], eax
-.doc_vertical_done:
-    pop r15
-    pop r14
-    pop r13
+.Lneko_vertical_move_done:
     pop r12
     pop rbx
     ret
@@ -2421,6 +2508,9 @@ render_selection:
     mov r15d, dword ptr [rip + doc_length]
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
+    mov eax, dword ptr [rip + doc_view_top_row]
+    imul eax, LINE_HEIGHT
+    sub r13d, eax
     xor r14d, r14d
 .Lneko_render_selection_scan:
     cmp r14d, r15d
@@ -2443,11 +2533,18 @@ render_selection:
     je .Lneko_render_selection_byte_only
 
 .Lneko_render_selection_character:
+    cmp r12d, WIDTH - 8
+    jb .Lneko_render_selection_character_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.Lneko_render_selection_character_fit:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_advance_cell
     cmp r12d, WIDTH - CELL_WIDTH
     ja .Lneko_render_selection_advance_cell
+    cmp r13d, DOC_TOP
+    jl .Lneko_render_selection_advance_cell
     cmp r13d, HEIGHT - LINE_HEIGHT
     jae .Lneko_render_selection_advance_cell
     mov rdi, qword ptr [rip + shm_mapping]
@@ -2484,11 +2581,19 @@ render_selection:
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_tab:
+    lea eax, [r12d + CELL_WIDTH * 4]
+    cmp eax, WIDTH - 8
+    jbe .Lneko_render_selection_tab_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.Lneko_render_selection_tab_fit:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_tab_advance
     cmp r12d, WIDTH - CELL_WIDTH * 4
     ja .Lneko_render_selection_tab_advance
+    cmp r13d, DOC_TOP
+    jl .Lneko_render_selection_tab_advance
     cmp r13d, HEIGHT - LINE_HEIGHT
     jae .Lneko_render_selection_tab_advance
     mov rdi, qword ptr [rip + shm_mapping]
@@ -2526,7 +2631,10 @@ render_document:
     push r15
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
-    mov r14d, 0
+    mov eax, dword ptr [rip + doc_view_top_row]
+    imul eax, LINE_HEIGHT
+    sub r13d, eax
+    xor r14d, r14d
     mov r15d, dword ptr [rip + doc_length]
     test r15d, r15d
     jnz .document_have_text
@@ -2535,21 +2643,30 @@ render_document:
     movzx edx, byte ptr [rbx]
     test edx, edx
     jz .document_draw_cursor
+    cmp r12d, WIDTH - 8
+    jb .document_hint_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+.document_hint_fit:
+    cmp r13d, DOC_TOP
+    jl .document_hint_skip_draw
+    cmp r13d, HEIGHT - 10
+    jae .document_draw_cursor
     mov edi, r12d
     mov esi, r13d
     call draw_glyph
+.document_hint_skip_draw:
     add r12d, CELL_WIDTH
     inc rbx
     jmp .document_hint_loop
+
 .document_have_text:
     lea rbx, [rip + doc_buffer]
 .document_render_loop:
     cmp r14d, r15d
     jae .document_draw_cursor
     cmp r13d, HEIGHT - 10
-    ja .document_draw_cursor
-    cmp r12d, WIDTH - 8
-    jae .document_next_byte
+    jae .document_draw_cursor
     movzx edx, byte ptr [rbx + r14]
     cmp edx, 10
     je .document_newline
@@ -2568,59 +2685,56 @@ render_document:
     je .document_next_byte
     mov edx, '?'
 .document_printable:
+    cmp r12d, WIDTH - 8
+    jb .document_printable_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    cmp r13d, HEIGHT - 10
+    jae .document_draw_cursor
+.document_printable_fit:
+    cmp r13d, DOC_TOP
+    jl .document_printable_skip_draw
     mov edi, r12d
     mov esi, r13d
     call draw_glyph
+.document_printable_skip_draw:
     add r12d, CELL_WIDTH
     jmp .document_next_byte
+
 .document_tab:
+    lea eax, [r12d + CELL_WIDTH * 4]
+    cmp eax, WIDTH - 8
+    jbe .document_tab_fit
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    cmp r13d, HEIGHT - 10
+    jae .document_draw_cursor
+.document_tab_fit:
     add r12d, CELL_WIDTH * 4
     jmp .document_next_byte
+
 .document_newline:
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
 .document_next_byte:
     inc r14d
     jmp .document_render_loop
+
 .document_draw_cursor:
-    xor r14d, r14d
-    xor r12d, r12d
-    xor r13d, r13d
-.document_cursor_scan:
-    cmp r14d, dword ptr [rip + doc_cursor]
-    jae .document_cursor_ready
-    lea rbx, [rip + doc_buffer]
-    movzx eax, byte ptr [rbx + r14]
-    cmp eax, 10
-    je .document_cursor_newline
-    cmp eax, 9
-    je .document_cursor_tab
-    cmp eax, 32
-    jb .document_cursor_next
-    cmp eax, 127
-    jbe .document_cursor_column
-    cmp eax, 0xc0
-    jb .document_cursor_next
-.document_cursor_column:
-    inc r12d
-    jmp .document_cursor_next
-.document_cursor_tab:
-    add r12d, 4
-    jmp .document_cursor_next
-.document_cursor_newline:
-    xor r12d, r12d
-    inc r13d
-.document_cursor_next:
-    inc r14d
-    jmp .document_cursor_scan
-.document_cursor_ready:
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov r12d, edx
+    mov r13d, eax
+    sub r13d, dword ptr [rip + doc_view_top_row]
+    test r13d, r13d
+    js .document_render_done
+    cmp r13d, DOC_VISIBLE_ROWS
+    jae .document_render_done
     imul r12d, CELL_WIDTH
     add r12d, DOC_LEFT
     imul r13d, LINE_HEIGHT
     add r13d, DOC_TOP
     cmp r12d, WIDTH - 2
-    ja .document_render_done
-    cmp r13d, HEIGHT - 10
     ja .document_render_done
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
