@@ -65,7 +65,13 @@ def expect_message(connection, expected, label: str):
     return actual
 
 
-def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: bool = False) -> None:
+def run(
+    binary: str,
+    *,
+    use_wayland_socket: bool = False,
+    send_protocol_error: bool = False,
+    advertised_seat_version: int = 7,
+) -> None:
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     display_name = "wayland-mock"
     if use_wayland_socket:
@@ -97,7 +103,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 registry_global(1, "wl_compositor")
                 + registry_global(2, "wl_shm")
                 + registry_global(3, "xdg_wm_base")
-                + registry_global(4, "wl_seat")
+                + registry_global(4, "wl_seat", version=advertised_seat_version)
                 + wire_message(3, 0, struct.pack("<I", 1))
             )
 
@@ -188,7 +194,7 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                         0,
                         struct.pack("<II", 4, 8)
                         + b"wl_seat\0"
-                        + struct.pack("<II", 1, 13),
+                        + struct.pack("<II", min(advertised_seat_version, 4), 13),
                     ),
                     "bind wl_seat",
                 )
@@ -244,7 +250,13 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 finally:
                     os.close(keymap_fd)
 
-                client.sendall(wire_message(16, 1, struct.pack("<III", 1001, 8, 0)))
+                keyboard_events = b""
+                if advertised_seat_version >= 4:
+                    # Use a non-default compositor policy to prove the client
+                    # consumes wl_keyboard.repeat_info rather than constants.
+                    keyboard_events += wire_message(16, 5, struct.pack("<ii", 10, 180))
+                keyboard_events += wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
+                client.sendall(keyboard_events)
 
                 def key_step(serial: int, code: int, label: str) -> None:
                     client.sendall(
@@ -563,10 +575,11 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
 
                 expect_redraw("first repeated Left")
                 first_repeat_elapsed = time.monotonic() - repeat_started
-                if first_repeat_elapsed < 0.25:
+                expected_delay = 0.18 if advertised_seat_version >= 4 else 0.30
+                if first_repeat_elapsed < expected_delay - 0.04:
                     raise AssertionError(
-                        "keyboard repeat started before the requested ~300 ms delay; "
-                        f"elapsed={first_repeat_elapsed:.3f}s"
+                        "keyboard repeat started before the compositor/fallback delay; "
+                        f"expected={expected_delay:.3f}s elapsed={first_repeat_elapsed:.3f}s"
                     )
                 client.sendall(wire_message(12, 0))
                 caret = struct.unpack_from("<I", pixels, 176 * 800 * 4 + 16 * 4)[0]
@@ -708,6 +721,87 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     + wire_message(16, 3, struct.pack("<IIII", 1704, 1704, 29, 0))
                     + wire_message(16, 4, struct.pack("<IIIII", 1705, 0, 0, 0, 0))
                 )
+
+                def caret_position() -> tuple[int, int]:
+                    for y in range(164, 480 - 9, 12):
+                        for x in range(16, 800 - 1, 8):
+                            if all(
+                                struct.unpack_from("<I", pixels, (y + dy) * 800 * 4 + x * 4)[0]
+                                == 0xFFFFFFFF
+                                for dy in range(9)
+                            ):
+                                return x, y
+                    raise AssertionError("visible document caret could not be located")
+
+                # A held printable key must insert the initial character and
+                # then additional characters at the compositor's configured rate.
+                before = caret_position()
+                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1710, 1710, 30, 1)))
+                expect_redraw("initial held printable key")
+                client.sendall(wire_message(12, 0))
+                after_press = caret_position()
+                if after_press != (before[0] + 8, before[1]):
+                    raise AssertionError(
+                        f"initial printable press did not advance one cell: before={before}, after={after_press}"
+                    )
+                expect_redraw("first repeated printable key")
+                client.sendall(wire_message(12, 0))
+                after_repeat = caret_position()
+                if after_repeat != (after_press[0] + 8, after_press[1]):
+                    raise AssertionError(
+                        f"held printable key did not repeat: after_press={after_press}, after_repeat={after_repeat}"
+                    )
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
+                    + wire_message(12, 0)
+                )
+
+                # Enter repeats as well; each timer tick advances one visual row.
+                before_enter = caret_position()
+                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1720, 1720, 28, 1)))
+                expect_redraw("initial held Enter")
+                client.sendall(wire_message(12, 0))
+                after_enter = caret_position()
+                if after_enter != (16, before_enter[1] + 12):
+                    raise AssertionError(
+                        f"initial Enter did not move to the next row: before={before_enter}, after={after_enter}"
+                    )
+                expect_redraw("first repeated Enter")
+                client.sendall(wire_message(12, 0))
+                after_enter_repeat = caret_position()
+                if after_enter_repeat != (16, after_enter[1] + 12):
+                    raise AssertionError(
+                        f"held Enter did not repeat: after_press={after_enter}, after_repeat={after_enter_repeat}"
+                    )
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
+                    + wire_message(12, 0)
+                )
+
+                # Tab inserts four spaces per action, both on initial press and repeat.
+                before_tab = caret_position()
+                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1730, 1730, 15, 1)))
+                expect_redraw("initial held Tab")
+                client.sendall(wire_message(12, 0))
+                after_tab = caret_position()
+                if after_tab != (before_tab[0] + 32, before_tab[1]):
+                    raise AssertionError(
+                        f"initial Tab did not insert four spaces: before={before_tab}, after={after_tab}"
+                    )
+                expect_redraw("first repeated Tab")
+                client.sendall(wire_message(12, 0))
+                after_tab_repeat = caret_position()
+                if after_tab_repeat != (after_tab[0] + 32, after_tab[1]):
+                    raise AssertionError(
+                        f"held Tab did not repeat: after_press={after_tab}, after_repeat={after_tab_repeat}"
+                    )
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
+                    + wire_message(12, 0)
+                )
+                observations.append(
+                    "printable characters, Enter, and Tab repeated while held; compositor repeat_info and legacy fallback were exercised"
+                )
             finally:
                 if pixels is not None:
                     pixels.close()
@@ -781,5 +875,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
-    run(sys.argv[1], use_wayland_socket=True)
+    # Older wl_seat versions cannot send repeat_info; the client must retain
+    # the 300 ms / 30 Hz compatibility fallback.
+    run(sys.argv[1], use_wayland_socket=True, advertised_seat_version=3)
     run(sys.argv[1], send_protocol_error=True)
