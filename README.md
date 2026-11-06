@@ -4,7 +4,7 @@
 
 NekoEdit is being built around one constraint: implement the necessary application machinery ourselves and avoid third-party runtime libraries. The first target is x86-64 Linux, independent of desktop environment, with native Wayland and X11 backends planned.
 
-> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered window with a small clickable palette and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Enter, Tab, Backspace, Delete, arrow navigation, Home, and End. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, selection, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
+> **Development status: early interactive text-editor prototype.** The Wayland build opens an 800×480 software-rendered window with a small clickable palette and a keyboard-editable document area. It supports basic ASCII entry using a built-in US-QWERTY evdev mapping, Shift/Caps state, Enter, Tab, Backspace, Delete, arrow navigation, Home, End, and mouse clicks that position the caret at the nearest text insertion point. A fixed 64 KiB byte buffer and built-in 5×7 bitmap font are used for this stage. It is not yet a complete editor: compositor XKB keymap parsing, non-US layouts, UTF-8 text input/rendering, IME/dead-key composition, selection, undo, scrolling, file operations, clipboard, resizing, the directory-browser picker, and X11 remain unfinished.
 
 ## Project principles
 
@@ -26,7 +26,7 @@ The first Wayland backend is a freestanding assembly prototype. It:
 4. Creates a wl_surface and an xdg_toplevel, then handles the initial configure/acknowledge sequence.
 5. Allocates a memfd-backed pixel buffer, passes its descriptor to the compositor with SCM_RIGHTS, and draws a simple test surface in software.
 6. Handles seat pointer and keyboard capabilities, pointer enter/leave/motion/button events, and keyboard focus, key, and modifier events.
-7. Lets pointer clicks select a palette swatch. Focused keyboard input edits the document through a built-in US-QWERTY evdev table; Shift and Caps state are synchronized from physical key transitions and Wayland modifier events.
+7. Lets pointer clicks select a palette swatch or position the document caret at the nearest character insertion boundary on the clicked row. Focused keyboard input edits the document through a built-in US-QWERTY evdev table; Shift and Caps state are synchronized from physical key transitions and Wayland modifier events.
 8. Implements bounded byte insertion/deletion, Enter, four-space Tab, Backspace, Delete, Left/Right/Up/Down, Home, and End.
 9. Draws ASCII text and a caret with an embedded 5×7 bitmap font, repainting only after wl_buffer.release.
 10. Responds to xdg_wm_base ping events and exits when the compositor sends xdg_toplevel.close.
@@ -79,7 +79,7 @@ Run inside a Wayland desktop session:
 ./build/nekoedit --backend=wayland
 ~~~
 
-The current window shows three color swatches above a simple text area. Click a swatch to change its border, then focus the window and type basic US-QWERTY ASCII text in the document area. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Use the compositor's normal close button to exit.
+The current window shows three color swatches above a simple text area. Click a swatch to change its border, then click within the document area to place the caret before, between, or after characters. Focus the window and type basic US-QWERTY ASCII text. The arrow keys, Home/End, Backspace/Delete, Enter, and Tab are supported. Use the compositor's normal close button to exit.
 
 The X11 backend is not ready. The explicit selector currently reports this rather than silently trying to use Wayland:
 
@@ -92,7 +92,7 @@ The CLI also supports --help and --version.
 ### Tests
 
 - **make test** runs command-line smoke tests.
-- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, palette clicks, US-QWERTY text insertion, navigation, Backspace, Enter, Shift/modifier state, glyph/caret pixels, buffer-release-safe redraws, shared-memory FD transfer, and compositor protocol-error reporting without requiring an installed compositor.
+- **make test-wayland** runs a small Python 3 mock-compositor test. It validates both connection methods, seat/pointer/keyboard setup, palette clicks, US-QWERTY text insertion, navigation, Backspace, Enter, Shift/modifier state, mouse-based caret placement across lines and between characters, glyph/caret pixels, buffer-release-safe redraws, shared-memory FD transfer, and compositor protocol-error reporting without requiring an installed compositor.
 - **make check** rejects an ELF containing PT_INTERP or DT_NEEDED entries.
 - **make inspect** prints ELF metadata.
 
