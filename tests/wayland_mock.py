@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import traceback
 
 
@@ -256,7 +257,12 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
-                    client.sendall(wire_message(12, 0))
+                    client.sendall(
+                        wire_message(
+                            16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
+                        )
+                        + wire_message(12, 0)
+                    )
 
                 key_step(1002, 30, "insert a")
                 a_pixel = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 17 * 4)[0]
@@ -322,8 +328,11 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(
-                        wire_message(12, 0)
-                        + wire_message(16, 4, struct.pack("<IIIII", serial + 2, 0, 0, 0, 0))
+                        wire_message(
+                            16, 3, struct.pack("<IIII", serial + 2, serial + 2, code, 0)
+                        )
+                        + wire_message(12, 0)
+                        + wire_message(16, 4, struct.pack("<IIIII", serial + 3, 0, 0, 0, 0))
                     )
 
                 def pointer_click(x: int, y: int, serial: int, label: str) -> None:
@@ -529,6 +538,76 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("Shift+End did not leave the caret at the line end")
                 observations.append(
                     "Shift+Arrow and Shift+Home/End selection, extension, collapse, and multi-line highlighting"
+                )
+
+                def expect_redraw(label: str) -> None:
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+
+                # Hold Left: the initial press acts immediately, then repeat
+                # begins after ~300 ms and continues at roughly 30 Hz.
+                repeat_started = time.monotonic()
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1200, 1200, 105, 1))
+                )
+                expect_redraw("initial held Left")
+                client.sendall(wire_message(12, 0))
+                caret = struct.unpack_from("<I", pixels, 176 * 800 * 4 + 24 * 4)[0]
+                if caret != 0xFFFFFFFF:
+                    raise AssertionError("initial Left press did not move the caret once")
+
+                expect_redraw("first repeated Left")
+                first_repeat_elapsed = time.monotonic() - repeat_started
+                if first_repeat_elapsed < 0.25:
+                    raise AssertionError(
+                        "keyboard repeat started before the requested ~300 ms delay; "
+                        f"elapsed={first_repeat_elapsed:.3f}s"
+                    )
+                client.sendall(wire_message(12, 0))
+                caret = struct.unpack_from("<I", pixels, 176 * 800 * 4 + 16 * 4)[0]
+                if caret != 0xFFFFFFFF:
+                    raise AssertionError("first repeated Left did not move the caret to line start")
+
+                expect_redraw("second repeated Left")
+                client.sendall(wire_message(12, 0))
+                caret = struct.unpack_from("<I", pixels, 164 * 800 * 4 + 32 * 4)[0]
+                if caret != 0xFFFFFFFF:
+                    raise AssertionError("continued Left repeat did not cross to the previous line")
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1201, 1201, 105, 0))
+                    + wire_message(12, 0)
+                )
+
+                # Backspace is repeatable too: after its immediate deletion,
+                # the held key should delete the preceding character again.
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
+                )
+                expect_redraw("initial held Backspace")
+                client.sendall(wire_message(12, 0))
+                first_line_b = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 17 * 4
+                )[0]
+                if first_line_b != 0xFFD8DEE9:
+                    raise AssertionError("initial Backspace removed more than one character")
+
+                expect_redraw("repeated Backspace")
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
+                    + wire_message(12, 0)
+                )
+                removed_b = struct.unpack_from(
+                    "<I", pixels, 164 * 800 * 4 + 17 * 4
+                )[0]
+                if removed_b != 0xFF252A33:
+                    raise AssertionError("held Backspace did not repeat after its initial delay")
+                observations.append(
+                    "keyboard auto-repeat used a 300 ms initial delay and repeated Left/Backspace while held"
                 )
             finally:
                 if pixels is not None:
