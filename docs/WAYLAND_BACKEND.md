@@ -7,15 +7,18 @@ This document describes the first native Wayland slice. It is deliberately not a
 The prototype currently:
 
 - Uses WAYLAND_SOCKET when a launcher supplies an inherited, already-connected socket descriptor. Otherwise connects to WAYLAND_DISPLAY (defaulting to wayland-0 under XDG_RUNTIME_DIR); an absolute WAYLAND_DISPLAY path is also accepted.
-- Discovers and binds wl_compositor, wl_shm, and xdg_wm_base.
+- Discovers and binds wl_compositor, wl_shm, and xdg_wm_base; an optional wl_seat is bound after the initial window objects.
 - Creates one top-level window with the title “NekoEdit - development window”.
 - Allocates an 800×480 XRGB8888 software buffer.
 - Passes the backing memfd to the compositor with SCM_RIGHTS.
 - Handles the initial xdg configure/acknowledge handshake.
+- Binds wl_seat when advertised, creates wl_pointer after the seat reports pointer capability, and handles pointer enter, leave, motion, and button events.
+- Provides a temporary three-swatch click target to verify pointer-driven UI state changes.
+- Waits for wl_buffer.release before rewriting and recommitting the single shared buffer.
 - Answers xdg_wm_base ping requests.
 - Exits on xdg_toplevel.close.
 
-It does not yet implement keyboard/pointer input, window resizing, text, fonts, clipboard, frame scheduling, output scale changes, or X11.
+It does not yet implement keyboard input/keymap translation, window resizing, text, fonts, clipboard, frame scheduling, output scale changes, or X11.
 
 ## Protocol flow
 
@@ -25,7 +28,7 @@ The implementation sends and receives the Wayland protocol directly over an AF_U
 2. Send wl_display.get_registry and wl_display.sync.
 2. Process wl_registry.global events and remember the registry names for wl_compositor, wl_shm, and xdg_wm_base.
 3. Bind those globals to client object IDs 4, 5, and 6.
-4. Allocate every subsequent client object ID densely: the second sync callback is ID 7, followed by wl_surface 8, xdg_surface 9, xdg_toplevel 10, wl_shm_pool 11, and wl_buffer 12. Skipped IDs are a protocol error on strict compositors.
+4. Allocate subsequent client object IDs densely: the second sync callback is ID 7, wl_surface 8, xdg_surface 9, xdg_toplevel 10, wl_shm_pool 11, and wl_buffer 12. If wl_seat is advertised, it is bound as object 13, a sync callback uses object 14, and wl_pointer is object 15 when pointer capability is present. Skipped IDs are a protocol error on strict compositors.
 5. Send a second wl_display.sync to ensure the bindings have been processed.
 6. Create a wl_surface using wl_compositor.
 7. Create its xdg_surface role and xdg_toplevel using xdg_wm_base.
@@ -45,11 +48,11 @@ The prototype uses a single 800×480 buffer with a 3200-byte stride and WL_SHM_F
 - Header band: 0xFF343D4B.
 - Small accent mark: 0xFF78A9D4.
 
-The memfd is sized before mapping. The request uses sendmsg with a SOL_SOCKET/SCM_RIGHTS control message to transfer the descriptor to the compositor. A static buffer is sufficient for this proof of concept because it is not modified after the initial commit. A real editor renderer must use buffer-release tracking and at least a safe double-buffering strategy before drawing into a buffer again.
+The memfd is sized before mapping. The request uses sendmsg with a SOL_SOCKET/SCM_RIGHTS control message to transfer the descriptor to the compositor. The current prototype reuses one buffer and waits for wl_buffer.release before modifying its pixels; a production editor renderer should move to a small release-tracked buffer set to avoid stalls under frequent redraws.
 
 ## Event handling
 
-The current read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping by sending xdg_wm_base.pong with the supplied serial. It exits when the xdg_toplevel.close event arrives.
+The current blocking read loop reads a complete Wayland message header and payload. It answers xdg_wm_base.ping, tracks wl_buffer.release, and dispatches wl_pointer enter, leave, motion, and button events. Left-clicking one of the three palette swatches changes the selected border color and schedules a redraw. Pointer coordinates are fixed-point surface-local values; they are converted from 24.8 fixed point before hit testing. The process exits when xdg_toplevel.close arrives.
 
 The current loop is intentionally blocking. Before keyboard input or clipboard transfers are introduced, replace it with a nonblocking poll-based loop that monitors the Wayland socket and pending data-transfer descriptors. All event payloads must be length-checked before parsing; the prototype currently applies a fixed upper bound to event payload size.
 
@@ -69,15 +72,17 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - memfd size and SCM_RIGHTS descriptor transfer.
 - Buffer dimensions, stride, format, and selected pixel colors.
 - Surface attach, damage, commit, and compositor close event.
+- Optional seat binding, pointer capability, pointer object creation, and left-click hit testing.
+- Releasing the first buffer before the test click, followed by a second attach/damage/commit and pixel checks for the changed selection border.
 
 This verifies the client-side wire serialization and basic shared-memory mechanics. It does **not** prove compatibility with every real compositor. Run the binary inside the target GNOME Wayland session as a separate integration test.
 
 ## Known limitations and next work
 
-1. Handle seat capabilities, keyboard and pointer objects, and focus.
-2. Implement keymap translation without libxkbcommon; do not assume physical keycodes equal text characters.
-3. Recreate buffers after configure/resize and output scale changes.
-4. Replace the blocking loop with poll and nonblocking I/O.
-5. Add frame callbacks and buffer-release tracking.
+1. Add keyboard capability handling, wl_keyboard focus/keymap events, and a bounds-checked keymap-to-keysym path without libxkbcommon.
+2. Implement UTF-8 document input, cursor movement, selection, and editing commands.
+3. Add the system-font parser, glyph rasterizer, and text layout pipeline.
+4. Recreate buffers after configure/resize and output scale changes; use a small release-tracked buffer set.
+5. Replace the blocking loop with poll and nonblocking I/O.
 6. Add wl_data_device clipboard support, with immutable copy snapshots independent of the document gap buffer.
 7. Connect the backend-neutral renderer and editor event model.
