@@ -1,10 +1,10 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main`, all 169 implementation-history commits in the active `feat/wayland-socket-error-handling` / PR #1 branch through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Development PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
-- Recorded commits: **196** (20 original main prototype + 169 PR #1 implementation history + 6 changelog bootstrap commits + 1 main-branch changelog installation).
+- Recorded commits: **201** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -228,6 +228,26 @@ This docs-only commit copied the changelog directory and its root README link to
 | Date (UTC) | Commit | Subject |
 |---|---|---|
 | 2026-11-06 12:09:42 UTC | [`9377c5c9c4bf`](https://github.com/GraderGamer2/NekoEdit/commit/9377c5c9c4bfee8a6a6ea4b8f27be451e85bf6e8) | docs: add project changelog and continuity notes to main |
+
+## Post-bootstrap documentation and branch synchronization
+
+These commits keep the feature milestone, main-branch changelog mirror, and PR branch ancestry aligned after the original six-commit changelog bootstrap.
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 12:19:24 UTC | [d35d54bb8726](https://github.com/GraderGamer2/NekoEdit/commit/d35d54bb8726f1c10cc3c9213ba49916939f06cf) | docs: record gap-buffer milestone and verification |
+| 2026-11-06 12:20:05 UTC | [f31dc4177c78](https://github.com/GraderGamer2/NekoEdit/commit/f31dc4177c784a75da7edfc5bcfcaa9f419cfa1d) | docs: sync gap-buffer milestone changelog to main |
+| 2026-11-06 12:22:24 UTC | [379a34981fc6](https://github.com/GraderGamer2/NekoEdit/commit/379a34981fc697be322063458b44ff4dd9a1e72d) | merge: sync main changelog into feature branch |
+| 2026-11-06 12:23:48 UTC | [dd5176adf27d](https://github.com/GraderGamer2/NekoEdit/commit/dd5176adf27dec5b282b3ec565c51f5c34dcf83c) | docs: record main changelog sync and clean PR ancestry |
+| 2026-11-06 12:25:00 UTC | [48861e43aac8](https://github.com/GraderGamer2/NekoEdit/commit/48861e43aac8cc20a70465b35e504d1a996c45d9) | docs: clarify feature branch synchronization status |
+
+## 2026-11-06 branch rename and current PR state
+
+The development branch was renamed from `feat/wayland-socket-error-handling` to `early-alpha`. GitHub reports the renamed branch at the preserved implementation tip [`6f9d17a3a09eaabf1393db214868fe57716ac7c0`](https://github.com/GraderGamer2/NekoEdit/commit/6f9d17a3a09eaabf1393db214868fe57716ac7c0); the former branch ref is no longer listed. The rename itself is a GitHub ref rename, not a source commit, so it has no commit row.
+
+At the same verification, PR [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) was closed and unmerged. Its API metadata still returned the former branch name as its head ref. This is recorded as observed repository state, not as an inferred cause or a merge.
+
+Actions run [#174](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217617434) passed on the preserved implementation tip before the rename; all eight workflow steps succeeded. No application code or tests changed as part of this administrative event.
 
 ## Maintenance
 

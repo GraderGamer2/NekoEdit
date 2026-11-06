@@ -2,8 +2,8 @@
 
 **Historical reconstruction date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
-**Development branch:** `feat/wayland-socket-error-handling`  
-**Active development PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1)
+**Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
+**Development PR:** [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged as of 2026-11-06
 
 This document reconstructs the development of NekoEdit from the first repository prototype through the fixed-capacity gap-buffer milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
@@ -261,3 +261,17 @@ Important items still on the roadmap include:
 - Continue real-desktop smoke testing in addition to mock-compositor CI.
 
 See [CURRENT_STATUS.md](CURRENT_STATUS.md) for the concise state to use before any further coding.
+
+
+---
+
+## 13. Repository administration — development branch renamed to `early-alpha`
+
+On 2026-11-06, the development branch was renamed in GitHub from `feat/wayland-socket-error-handling` to `early-alpha`. The rename preserved the existing implementation tip, `6f9d17a3a09eaabf1393db214868fe57716ac7c0`; the former branch ref no longer appears in GitHub's branch search. No application implementation was changed by the rename.
+
+GitHub Actions run [#174](https://github.com/GraderGamer2/NekoEdit/actions/runs/42217617434) had already passed against that exact commit before the rename. Its eight workflow steps completed successfully. This is the last verified test result for the unchanged implementation tip, not a post-rename test run.
+
+At the time of verification, PR [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) was closed and unmerged. Its API metadata still reported the former branch name in `head.ref`; this document records the observed metadata without assuming the reason for closure or treating the PR as merged. The rename and this documentation refresh did not merge editor code into `main`.
+
+This administrative milestone changed no editor source, tests, build configuration, or runtime behavior. The project remains at the early interactive Wayland-editor milestone described above. Future implementation work remains paused pending explicit user authorization.
+
