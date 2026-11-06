@@ -2,6 +2,9 @@
 
 .equ SYS_read,          0
 .equ SYS_close,         3
+.equ SYS_poll,          7
+.equ SYS_timerfd_create, 283
+.equ SYS_timerfd_settime, 286
 .equ SYS_socket,       41
 .equ SYS_connect,      42
 .equ SYS_sendmsg,      46
@@ -22,6 +25,11 @@
 .equ STRIDE,           (WIDTH * 4)
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
 .equ BTN_LEFT,          0x110
+.equ CLOCK_MONOTONIC,      1
+.equ TFD_CLOEXEC,     0x80000
+.equ POLLIN,              1
+.equ REPEAT_DELAY_NS, 300000000
+.equ REPEAT_INTERVAL_NS, 33333333
 .equ DOC_CAPACITY,    65536
 .equ DOC_LEFT,           16
 .equ DOC_TOP,           164
@@ -164,6 +172,11 @@ doc_selection_active:   .long 0
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
+repeat_timer_fd:         .long 0
+repeat_keycode:          .long 0
+poll_fds:               .zero 16
+repeat_timer_spec:      .zero 32
+repeat_timer_read:      .quad 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
@@ -647,6 +660,41 @@ wayland_main:
 .event_loop:
     lea rax, [rip + stage_event_loop]
     mov qword ptr [rip + failure_stage], rax
+    cmp dword ptr [rip + repeat_timer_fd], 0
+    jne .event_poll_prepare
+    # A monotonic timerfd lets key repetition proceed while the Wayland
+    # socket is otherwise idle, without introducing a userspace runtime.
+    mov eax, SYS_timerfd_create
+    mov edi, CLOCK_MONOTONIC
+    mov esi, TFD_CLOEXEC
+    syscall
+    test rax, rax
+    js .protocol_error
+    mov dword ptr [rip + repeat_timer_fd], eax
+.event_poll_prepare:
+    mov eax, dword ptr [rip + socket_fd]
+    mov dword ptr [rip + poll_fds], eax
+    mov word ptr [rip + poll_fds + 4], POLLIN
+    mov eax, dword ptr [rip + repeat_timer_fd]
+    mov dword ptr [rip + poll_fds + 8], eax
+    mov word ptr [rip + poll_fds + 12], POLLIN
+    mov eax, SYS_poll
+    lea rdi, [rip + poll_fds]
+    mov esi, 2
+    mov edx, -1
+    syscall
+    test rax, rax
+    js .protocol_error
+    # Drain compositor events before a simultaneous repeat timeout so key
+    # releases always get a chance to cancel repetition first.
+    movzx eax, word ptr [rip + poll_fds + 6]
+    test eax, eax
+    jnz .event_read_wayland
+    movzx eax, word ptr [rip + poll_fds + 14]
+    test eax, eax
+    jnz .event_repeat_timer
+    jmp .event_loop
+.event_read_wayland:
     call wl_read_event
     test rax, rax
     js .protocol_error
@@ -839,6 +887,24 @@ wayland_main:
     # The XKB keymap FD and repeat-info are still deferred. Modifier masks
     # are consumed below so Shift/Lock state follows the compositor.
     jmp .event_loop
+.event_repeat_timer:
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    lea rsi, [rip + repeat_timer_read]
+    mov edx, 8
+    call linux_read_exact
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + repeat_keycode], 0
+    je .event_loop
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .event_repeat_cancel
+    mov eax, dword ptr [rip + repeat_keycode]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.event_repeat_cancel:
+    call repeat_cancel
+    jmp .event_loop
+
 .keyboard_modifiers:
     cmp dword ptr [rip + last_size], 20
     jb .event_loop
@@ -865,6 +931,7 @@ wayland_main:
     cmp dword ptr [rip + last_size], 8
     jb .event_loop
     mov dword ptr [rip + keyboard_focused], 0
+    call repeat_cancel
     jmp .event_loop
 .keyboard_key:
     cmp dword ptr [rip + last_size], 16
@@ -877,12 +944,22 @@ wayland_main:
     je .keyboard_shift
     cmp eax, 54
     je .keyboard_shift
-    cmp eax, 58
-    jne .keyboard_non_modifier
     test edx, edx
-    jz .event_loop
+    jz .keyboard_key_release
+    cmp eax, 58
+    jne .keyboard_key_pressed
     xor dword ptr [rip + caps_lock], 1
     jmp .keyboard_changed
+.keyboard_key_pressed:
+    call repeat_start_if_supported
+    mov eax, dword ptr [rip + event_payload + 8]
+    mov edx, 1
+    jmp .keyboard_non_modifier
+.keyboard_key_release:
+    cmp eax, dword ptr [rip + repeat_keycode]
+    jne .event_loop
+    call repeat_cancel
+    jmp .event_loop
 .keyboard_shift:
     mov dword ptr [rip + shift_down], edx
     jmp .event_loop
@@ -1829,6 +1906,57 @@ doc_clear_selection:
     mov dword ptr [rip + doc_selection_anchor], eax
     ret
 .size doc_clear_selection, . - doc_clear_selection
+
+# Start a 300 ms initial delay followed by approximately 30 repeats/second
+# for arrows, Backspace, and Delete. EAX=evdev keycode.
+.type repeat_start_if_supported, @function
+repeat_start_if_supported:
+    cmp eax, 105
+    je .Lneko_repeat_start
+    cmp eax, 106
+    je .Lneko_repeat_start
+    cmp eax, 103
+    je .Lneko_repeat_start
+    cmp eax, 108
+    je .Lneko_repeat_start
+    cmp eax, 14
+    je .Lneko_repeat_start
+    cmp eax, 111
+    jne .Lneko_repeat_start_done
+.Lneko_repeat_start:
+    mov dword ptr [rip + repeat_keycode], eax
+    mov qword ptr [rip + repeat_timer_spec], 0
+    mov qword ptr [rip + repeat_timer_spec + 8], REPEAT_INTERVAL_NS
+    mov qword ptr [rip + repeat_timer_spec + 16], 0
+    mov qword ptr [rip + repeat_timer_spec + 24], REPEAT_DELAY_NS
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + repeat_timer_spec]
+    xor r10d, r10d
+    syscall
+.Lneko_repeat_start_done:
+    ret
+.size repeat_start_if_supported, . - repeat_start_if_supported
+
+.type repeat_cancel, @function
+repeat_cancel:
+    mov dword ptr [rip + repeat_keycode], 0
+    cmp dword ptr [rip + repeat_timer_fd], 0
+    je .Lneko_repeat_cancel_done
+    mov qword ptr [rip + repeat_timer_spec], 0
+    mov qword ptr [rip + repeat_timer_spec + 8], 0
+    mov qword ptr [rip + repeat_timer_spec + 16], 0
+    mov qword ptr [rip + repeat_timer_spec + 24], 0
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + repeat_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + repeat_timer_spec]
+    xor r10d, r10d
+    syscall
+.Lneko_repeat_cancel_done:
+    ret
+.size repeat_cancel, . - repeat_cancel
 
 # Begin or update a selection driven by Shift+navigation.
 .type doc_begin_keyboard_selection, @function
