@@ -227,7 +227,10 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                 # Exercise the editor with buffer releases between key events.
                 # Each new redraw must wait until the compositor releases the
                 # single wl_buffer; this avoids racing the mock against batching.
-                client.sendall(wire_message(12, 0))  # release after pointer redraw
+                client.sendall(
+                    wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
+                    + wire_message(12, 0)
+                )  # release the palette click and its buffer
                 keymap_data = b"xkb_keymap { };\0"
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
@@ -320,7 +323,52 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
+                    client.sendall(
+                        wire_message(
+                            15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
+                        )
+                        + wire_message(12, 0)
+                    )
+
+                def pointer_drag(
+                    start_x: int, start_y: int, end_x: int, end_y: int,
+                    serial: int, label: str
+                ) -> None:
+                    client.sendall(
+                        wire_message(
+                            15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256)
+                        )
+                        + wire_message(
+                            15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
+                        )
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} press attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} press damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} press commit")
                     client.sendall(wire_message(12, 0))
+
+                    client.sendall(
+                        wire_message(
+                            15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256)
+                        )
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} motion attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} motion damage"
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} motion commit")
+                    client.sendall(
+                        wire_message(
+                            15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0)
+                        )
+                        + wire_message(12, 0)
+                    )
 
                 # Mouse movement followed by a click snaps to character
                 # insertion boundaries across lines and between characters.
@@ -346,6 +394,36 @@ def run(binary: str, *, use_wayland_socket: bool = False, send_protocol_error: b
                     raise AssertionError("mouse click did not place caret between second-line characters")
                 observations.append(
                     "mouse clicks placed the document caret on multiple lines and between characters"
+                )
+
+                # Drag backwards across both characters on line two. Selection
+                # bounds must remain ordered even when the anchor is after the cursor.
+                pointer_drag(32, 182, 16, 182, 1130, "reverse mouse drag selection")
+                for x in (16, 24):
+                    selected_pixel = struct.unpack_from(
+                        "<I", pixels, 176 * 800 * 4 + x * 4
+                    )[0]
+                    if selected_pixel != 0xFF5E81AC:
+                        raise AssertionError(
+                            "drag selection did not highlight both selected characters; "
+                            f"x={x}, pixel={hex(selected_pixel)}"
+                        )
+
+                # Typing replaces the selected byte range rather than inserting
+                # beside it, and the highlight disappears after replacement.
+                key_step(1136, 30, "replace selected text")
+                replacement_pixel = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 17 * 4
+                )[0]
+                if replacement_pixel != 0xFFD8DEE9:
+                    raise AssertionError("typing did not replace the selected text with an A glyph")
+                cleared_pixel = struct.unpack_from(
+                    "<I", pixels, 176 * 800 * 4 + 25 * 4
+                )[0]
+                if cleared_pixel != 0xFF252A33:
+                    raise AssertionError("selection highlight remained after replacing selected text")
+                observations.append(
+                    "mouse drag selection highlighted text in reverse direction and typing replaced the selection"
                 )
             finally:
                 if pixels is not None:
