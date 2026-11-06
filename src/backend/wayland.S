@@ -23,6 +23,7 @@
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
 
 .section .rodata
+wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
 wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
@@ -33,13 +34,15 @@ iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
 msg_no_env:            .ascii "NekoEdit: XDG_RUNTIME_DIR is not set; cannot locate the Wayland socket.\n"
 msg_no_env_end:
-msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display socket.\n"
+msg_connect:           .ascii "NekoEdit: could not connect to the Wayland display using WAYLAND_SOCKET or its socket path.\n"
 msg_connect_end:
 msg_globals:           .ascii "NekoEdit: compositor, wl_shm, or xdg_wm_base is unavailable.\n"
 msg_globals_end:
 msg_protocol:          .ascii "NekoEdit: Wayland protocol or shared-memory setup failed.\n"
 msg_protocol_end:
 newline_text:            .ascii "\n"
+msg_protocol_error_prefix: .ascii "NekoEdit: Wayland compositor protocol error: "
+msg_protocol_error_prefix_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -91,6 +94,21 @@ msg_control:           .zero 24
 .type wayland_main, @function
 wayland_main:
     push rbp                    # keep 16-byte call-site stack alignment
+    # WAYLAND_SOCKET is an inherited, already-connected descriptor. It takes
+    # precedence over WAYLAND_DISPLAY when supplied by a session launcher.
+    lea rdi, [rip + wayland_socket_env_key]
+    mov esi, 14
+    call env_lookup
+    test rax, rax
+    jz .connect_using_display_name
+    mov rsi, rax
+    call parse_socket_fd
+    test rax, rax
+    js .connect_error
+    mov qword ptr [rip + socket_fd], rax
+    jmp .socket_connected
+
+.connect_using_display_name:
     # Resolve WAYLAND_DISPLAY (default wayland-0) and XDG_RUNTIME_DIR.
     lea rdi, [rip + wayland_env_key]
     mov esi, 15
@@ -165,6 +183,7 @@ wayland_main:
     test rax, rax
     js .connect_error
 
+.socket_connected:
     lea rax, [rip + stage_registry]
     mov qword ptr [rip + failure_stage], rax
     # wl_display.get_registry(new_id=2)
@@ -530,22 +549,40 @@ wayland_main:
     jz .protocol_check_display_error
     call write_stderr_cstr
 .protocol_check_display_error:
-    # wl_display.error is event object 1/opcode 0:
-    # object_id, code, and a Wayland string.
+    # wl_display.error payload: object_id, code, then a length-prefixed
+    # Wayland string. Validate both the declared event size and NUL terminator.
     cmp dword ptr [rip + last_object], 1
     jne .protocol_exit
     cmp dword ptr [rip + last_opcode], 0
     jne .protocol_exit
+    mov ecx, dword ptr [rip + last_size]
+    cmp ecx, 13
+    jb .protocol_exit
     mov eax, dword ptr [rip + event_payload + 8]
     cmp eax, 1
     jb .protocol_exit
     cmp eax, 4000
     ja .protocol_exit
-    sub eax, 1
-    mov edx, eax
+    sub ecx, 12
+    cmp eax, ecx
+    ja .protocol_exit
+    lea rdx, [rip + event_payload + 12]
+    lea r8, [rdx + rax - 1]
+    cmp byte ptr [r8], 0
+    jne .protocol_exit
+    dec eax
+    mov r12d, eax
+    mov edi, 2
+    lea rsi, [rip + msg_protocol_error_prefix]
+    mov edx, msg_protocol_error_prefix_end - msg_protocol_error_prefix
+    call linux_write_all
+    test r12d, r12d
+    jz .protocol_error_message_newline
     mov edi, 2
     lea rsi, [rip + event_payload + 12]
+    mov edx, r12d
     call linux_write_all
+.protocol_error_message_newline:
     mov edi, 2
     lea rsi, [rip + newline_text]
     mov edx, 1
@@ -646,6 +683,36 @@ copy_cstr:
     mov eax, -1
     ret
 .size copy_cstr, . - copy_cstr
+
+# Parse WAYLAND_SOCKET as a non-negative decimal file descriptor.
+# RSI = NUL-terminated decimal string. RAX = fd or -EINVAL.
+.type parse_socket_fd, @function
+parse_socket_fd:
+    xor eax, eax
+    xor ecx, ecx
+.parse_socket_fd_loop:
+    movzx edx, byte ptr [rsi + rcx]
+    test edx, edx
+    jz .parse_socket_fd_done
+    cmp edx, '0'
+    jb .parse_socket_fd_invalid
+    cmp edx, '9'
+    ja .parse_socket_fd_invalid
+    sub edx, '0'
+    imul rax, rax, 10
+    add rax, rdx
+    cmp rax, 0x7fffffff
+    ja .parse_socket_fd_invalid
+    inc ecx
+    jmp .parse_socket_fd_loop
+.parse_socket_fd_done:
+    test ecx, ecx
+    jz .parse_socket_fd_invalid
+    ret
+.parse_socket_fd_invalid:
+    mov rax, -22
+    ret
+.size parse_socket_fd, . - parse_socket_fd
 
 # wl_send_request(object=rdi, opcode=esi, payload=rdx, payload_length=ecx).
 .type wl_send_request, @function
@@ -831,6 +898,15 @@ wl_read_event:
     test rax, rax
     js .read_event_done
 .read_event_ok:
+    # wl_display.error is fatal; return an error while preserving its payload
+    # so the caller can print the compositor-provided diagnostic safely.
+    cmp dword ptr [rip + last_object], 1
+    jne .read_event_success
+    cmp dword ptr [rip + last_opcode], 0
+    jne .read_event_success
+    mov eax, -71                 # EPROTO
+    jmp .read_event_done
+.read_event_success:
     xor eax, eax
 .read_event_done:
     pop rbp
