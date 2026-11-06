@@ -213,6 +213,8 @@ pointer_object:         .long 0
 keyboard_created:       .long 0
 keyboard_object:        .long 0
 keyboard_focused:       .long 0
+keyboard_group:         .long 0
+level3_down:            .long 0
 event_fd:               .long 0       # initialized to -1 in wayland_main
 keymap_format:          .long 0
 keymap_size:            .long 0
@@ -283,6 +285,9 @@ recv_msg_control:      .zero 64
 .extern linux_read_exact
 .extern linux_exit
 .extern initial_file_path
+.extern xkb_parse_keymap
+.extern xkb_reset_keymap
+.extern xkb_lookup_ascii
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
@@ -1046,6 +1051,8 @@ wayland_main:
     and eax, 2
     shr eax, 1
     mov dword ptr [rip + caps_lock], eax
+    mov eax, dword ptr [rip + event_payload + 16]
+    mov dword ptr [rip + keyboard_group], eax
     # The standard XKB Control modifier is bit 2. Physical Ctrl key
     # transitions below are also tracked so this works before a modifier
     # update is delivered and when a compositor omits modifier events.
@@ -1068,6 +1075,7 @@ wayland_main:
     jb .event_loop
     mov dword ptr [rip + keyboard_focused], 0
     mov dword ptr [rip + ctrl_down], 0
+    mov dword ptr [rip + level3_down], 0
     call repeat_cancel
     jmp .event_loop
 .keyboard_key:
@@ -1085,6 +1093,8 @@ wayland_main:
     je .keyboard_shift
     cmp eax, 54
     je .keyboard_shift
+    cmp eax, 100                # Right Alt / common LevelThree key
+    je .keyboard_level3
     test edx, edx
     jz .keyboard_key_release
     cmp eax, 58
@@ -1106,6 +1116,9 @@ wayland_main:
     jmp .event_loop
 .keyboard_shift:
     mov dword ptr [rip + shift_down], edx
+    jmp .event_loop
+.keyboard_level3:
+    mov dword ptr [rip + level3_down], edx
     jmp .event_loop
 .keyboard_control:
     mov dword ptr [rip + ctrl_down], edx
@@ -2369,6 +2382,7 @@ keyboard_keymap_update:
     mov qword ptr [rip + keymap_mapping], 0
     mov dword ptr [rip + keymap_size], 0
     mov dword ptr [rip + keymap_format], 0
+    call xkb_reset_keymap
 
     mov r14d, dword ptr [rip + event_payload]
     mov r12d, dword ptr [rip + event_payload + 4]
@@ -2402,10 +2416,20 @@ keyboard_keymap_update:
 
     mov qword ptr [rip + keymap_mapping], r13
     mov dword ptr [rip + keymap_size], r12d
-    mov dword ptr [rip + keymap_format], 1
     mov edi, ebx
     mov eax, SYS_close
     syscall
+    # Keep the mapped file only when the supported XKB text subset parsed.
+    mov rdi, r13
+    mov esi, r12d
+    call xkb_parse_keymap
+    test rax, rax
+    js .keyboard_keymap_parser_fallback
+    mov dword ptr [rip + keymap_format], 1
+    xor eax, eax
+    jmp .keyboard_keymap_done
+.keyboard_keymap_parser_fallback:
+    mov dword ptr [rip + keymap_format], 0
     xor eax, eax
     jmp .keyboard_keymap_done
 
@@ -2414,6 +2438,7 @@ keyboard_keymap_update:
     mov edi, ebx
     mov eax, SYS_close
     syscall
+    call xkb_reset_keymap
     xor eax, eax
     jmp .keyboard_keymap_done
 .keyboard_keymap_unmap_bad:
@@ -3299,9 +3324,25 @@ doc_move_vertical:
     ret
 .size doc_move_vertical, . - doc_move_vertical
 
-# Temporary US-QWERTY evdev mapping. XKB parsing is a separate next milestone.
+# Translate printable input from the active XKB keymap when the supported
+# text-v1 subset was parsed. A parsed map's non-ASCII keys are deliberately
+# ignored rather than silently producing an unrelated US-QWERTY character.
 .type keycode_to_ascii, @function
 keycode_to_ascii:
+    push rbx
+    mov ebx, edi
+    cmp dword ptr [rip + keymap_format], 1
+    jne .Lneko_keymap_fallback
+    mov edi, ebx
+    mov esi, dword ptr [rip + shift_down]
+    mov edx, dword ptr [rip + caps_lock]
+    mov ecx, dword ptr [rip + level3_down]
+    mov r8d, dword ptr [rip + keyboard_group]
+    call xkb_lookup_ascii
+    pop rbx
+    ret
+.Lneko_keymap_fallback:
+    mov edi, ebx
     cmp edi, 128
     jae .keymap_unknown
     mov ecx, edi
@@ -3318,6 +3359,7 @@ keycode_to_ascii:
     test edx, edx
     jz .keymap_done
     sub eax, 32
+    pop rbx
     ret
 .keymap_shift_punctuation:
     cmp dword ptr [rip + shift_down], 0
@@ -3328,9 +3370,11 @@ keycode_to_ascii:
     jz .keymap_done
     mov eax, edx
 .keymap_done:
+    pop rbx
     ret
 .keymap_unknown:
     xor eax, eax
+    pop rbx
     ret
 .size keycode_to_ascii, . - keycode_to_ascii
 
