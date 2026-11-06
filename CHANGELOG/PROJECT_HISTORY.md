@@ -6,7 +6,7 @@
 **Current development PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open against main  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
 
-This document reconstructs the development of NekoEdit from the first repository prototype through the fixed-capacity gap-buffer milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
+This document reconstructs the development of NekoEdit from the first repository prototype through the current Wayland window-management and picker milestones. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
 ---
 
@@ -324,3 +324,20 @@ The integration suite covers zero-byte Open by both routes, exact path and docum
 Actions run #235 passed all eight steps and uploaded `nekoedit-linux-x86_64` (27,216 bytes; SHA-256 `1afeefccb7c594100137e91538d30c0d8e661d026be964c956871c5a9eb64175`; artifact ID `13515385312`; expires 2026-11-13). Path/name input remains ASCII-only; clipboard paste and partial Shift selection are future work. Prefix search is limited to the current loaded directory listing, and the 128-entry limit remains. No third-party runtime library was added, and the launch form remains `./nekoedit --backend=wayland`.
 
 Real GNOME Wayland desktop validation is still distinct from the passing mock-compositor suite. The user's previous report about shifted punctuation keys also remains awaiting manual confirmation against a recent artifact.
+
+---
+
+## 17. Phase L — filename autocomplete and native Wayland window management
+
+**Autocomplete implementation:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519), validated by [Actions #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431), all eight workflow steps successful.
+
+The Open-mode filename Search field now renders up to five matching filenames as a visible suggestion popup. Suggestions update while typing, Up/Down changes the highlighted result, Tab accepts the selected suggestion, and mouse selection is supported. Enter opens the highlighted entry. The integration fixture includes two similarly named files and checks that choosing the second result opens that exact path and contents rather than defaulting to the first prefix match.
+
+**Window-management implementation:** [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02).
+
+The Wayland window now draws Minimize, Maximize/Restore, and Close controls in its title bar. The initial size remains 800×480, but the renderer, hit testing, status area, and editor viewport use active window geometry. The client captures compositor toplevel configure dimensions and maximized state, acknowledges surface configure events, and safely replaces its shared-memory buffer after the compositor releases the previous one. The memfd mapping is bounded for a maximum 3840×2160 XRGB8888 surface; configured dimensions are clamped to a 480×360 minimum and 3840×2160 maximum. The shared-memory pool stays alive to allocate new buffers without introducing another runtime dependency.
+
+Actions [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) confirmed that the build and CLI smoke tests passed, but the Wayland integration run initially failed because the mock compositor did not release maximized buffer 256 before it simulated Restore. The application correctly deferred repaint while that buffer remained busy. The test harness now sends the missing release event before the Restore click; full CI validation of this correction is pending. Real GNOME Wayland testing remains a separate requirement.
+
+The one-active-buffer rendering model remains release-safe but can stall redraws while the compositor owns the buffer. Output-scale handling, fractional scaling, and a multi-buffer/frame-scheduling strategy remain future work. The supported launch command and freestanding/no-third-party-runtime design are unchanged.
+

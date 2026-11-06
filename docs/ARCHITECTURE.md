@@ -96,16 +96,18 @@ The current prototype implements a deliberately small part of the stable core pr
 - Set the window title and perform the initial empty surface commit.
 - Receive xdg_surface.configure and acknowledge its serial before attaching a buffer.
 - Create a memfd, size it with ftruncate, map it with mmap, and pass its descriptor to wl_shm.create_pool using sendmsg + SCM_RIGHTS.
-- Create one XRGB8888 wl_buffer, destroy the pool object, attach the buffer, damage the surface, and commit.
+- Keep the wl_shm_pool alive after creating the initial 800×480 XRGB8888 wl_buffer; the pool backs subsequent buffers after compositor-requested resizes.
+- Handle xdg_toplevel.configure width/height/maximized state and xdg_surface.configure acknowledgement. Recompute active geometry/stride, wait for the previous wl_buffer.release, destroy the old buffer, and allocate a replacement from the retained pool. The memfd mapping is bounded for 3840×2160 XRGB8888.
+- Draw Minimize, Maximize/Restore, and Close controls in the application title bar and serialize the corresponding xdg_toplevel requests or clean client shutdown.
 - Answer xdg_wm_base.ping and exit on xdg_toplevel.close.
 
-This prototype has one static buffer and a blocking event loop. It does not yet implement seat discovery, keyboard or pointer input, frame callbacks, resize/reconfigure handling, buffer recreation, clipboard, or text rendering. It intentionally binds protocol version 1 to keep the initial request/event surface small.
+The Wayland prototype now has a single active release-tracked buffer rather than a static-size buffer set; configure-driven resizing is implemented but output-scale changes and multi-buffer/frame scheduling are not. The event loop waits in poll for socket or repeat-timer activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
 
 See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
 ### Wayland: next steps
 
-Add seat discovery and keyboard/pointer objects, keymap interpretation without libxkbcommon, input event normalization, resize and scale handling, release-safe multiple buffers, and a nonblocking poll-based event loop. The clipboard data-device protocol will be added as a separate service with immutable snapshot ownership.
+Further work: complete output-scale/fractional-scale handling, replace the single active buffer with a small release-tracked buffer set, add frame scheduling, and continue protocol interoperability testing. The app-drawn window controls and configure-driven resizing are implemented. Clipboard data-device support will be added as a separate service with immutable snapshot ownership.
 
 ### X11
 

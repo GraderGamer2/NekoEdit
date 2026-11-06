@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-06**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded commits: **217** (20 original main prototype + 169 PR #1 implementation-history commits + 6 changelog bootstrap commits + 1 initial main changelog installation + 5 post-bootstrap documentation/synchronization commits + 2 branch-rename documentation commits + 4 follow-up branch-rename index/status commits + 2 PR #2 status documentation commits + 2 PR #2 index/log commits + 2 previously unindexed PR #2 index commits + 2 XKB ONE_LEVEL implementation/test commits + 1 XKB status/log documentation commit + 1 ancestry synchronization merge commit).
+- Recorded commits: **219** (217 previously indexed commits + 1 filename-autocomplete implementation + 1 Wayland window-management implementation).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -393,6 +393,16 @@ Actions run [#241](https://github.com/GraderGamer2/NekoEdit/actions/runs/4224051
 | 2026-11-06 15:15:58 UTC | [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) | fix: scope file picker search to current directory |
 
 Actions run [#243](https://github.com/GraderGamer2/NekoEdit/actions/runs/42241453789) passed all eight workflow steps on this commit. It adds a regression for stale unmatched Search text surviving a directory change, enforces selected-row-only Open when list focus is active, and preserves literal path/name opening only while Search has focus. Artifact ID `13515965431`; 27,249 bytes; SHA-256 `d5549748f2e58f95da6cc176d630c087af15efd4b7b298ce6106dce5c484c664`; expires 2026-11-13. See [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md) for exact implementation and validation notes.
+
+## Filename autocomplete and Wayland window-management implementation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-06 15:43:07 UTC | [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) | feat: show selectable filename autocomplete suggestions |
+| 2026-11-06 15:56:15 UTC | [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) | feat: add Wayland window management controls |
+
+Actions run [#245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight steps on the autocomplete commit. Actions run [#246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) passed assembly/link and CLI smoke checks for the window-management commit but failed in the mock test because it omitted the compositor release for maximized buffer 256 before simulating Restore. The release-ordering regression correction is recorded in the current development entry; see [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+
 
 ## Maintenance
 

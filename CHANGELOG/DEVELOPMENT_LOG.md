@@ -2,6 +2,38 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-06 — Add Wayland window controls and repair resize-test buffer release ordering
+
+**Purpose:** Continue from the tested filename-autocomplete milestone on the live `early-alpha` branch. The repository's next implementation commit added app-drawn window controls and compositor-driven resize handling; the latest CI run exposed a missing buffer-release event in the mock workflow rather than a build failure.
+
+### Repository state checked before the change
+
+- Development branch: `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged into `main`.
+- Autocomplete implementation [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) was validated by [Actions #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431), which passed all eight workflow steps.
+- The branch then advanced to [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02), adding Wayland title-bar controls and resize/reconfigure handling. [Actions #246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) compiled/linked successfully and passed CLI smoke tests, but the mock Wayland integration test failed in the Restore sequence.
+
+### Window-management implementation now present
+
+- The initial surface remains 800×480. The renderer derives stride and editor/status geometry from the active window dimensions.
+- The memfd mapping is bounded for a maximum 3840×2160 XRGB8888 surface; compositor-provided dimensions are clamped to 480×360 minimum and 3840×2160 maximum.
+- The client captures `xdg_toplevel.configure` width, height, and maximized state, acknowledges `xdg_surface.configure`, and replaces the old `wl_buffer` only after the compositor releases it. The `wl_shm_pool` remains alive so the client can allocate replacement buffers from the same bounded mapping.
+- The app-drawn title bar now exposes Minimize, Maximize/Restore, and Close controls using the corresponding xdg_toplevel requests or clean client shutdown.
+- The integration scenario exercises each control, a 1280×720 maximize configure, buffer recreation/stride, restored 800×480 geometry, and close behavior.
+
+### CI failure diagnosis and correction
+
+- Actions #246 did not fail during assembly, linking, ELF checks, or CLI smoke tests. It timed out in `workflow_window_click(..., "restore")` while waiting for a surface attach.
+- The mock had sent a 1280×720 configure and verified the new frame in buffer 256, but it did not send `wl_buffer.release` for that frame before simulating the Restore click. The client correctly kept the shared buffer busy and deferred repaint; the test incorrectly expected an immediate attach.
+- Added the missing compositor-side `wl_buffer.release` event for buffer 256 before Restore. This makes the test respect the same buffer-ownership rule already followed by the application and the earlier picker-scrollbar test.
+- No application-source workaround was added: the production release gate is the correct behavior and was not bypassed.
+
+### Verification and remaining validation
+
+- Actions #245 remains the passing validation for filename autocomplete.
+- Actions #246 remains recorded as failed because of the mock-test sequencing defect described above. The corrected workflow is submitted with this change; its result and artifact must be recorded after GitHub Actions completes.
+- No real GNOME Wayland desktop test was performed in this session. Mock-compositor success, when confirmed, will still not replace a manual desktop test.
+- No third-party runtime dependency or launch-command change is introduced. `./nekoedit --backend=wayland` remains supported.
+
 ---
 
 ## 2026-11-06 — Strengthen zero-byte Open coverage for a non-first list row

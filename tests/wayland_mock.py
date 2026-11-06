@@ -1576,6 +1576,10 @@ xkb_symbols "nekoedit-sparse" {
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
                     )
 
+                    # The compositor still owns the maximized frame. Release it
+                    # before expecting the restore click to trigger another redraw.
+                    client.sendall(wire_message(256, 0))
+
                     # Restore asks the compositor to leave the maximized state;
                     # the returned configure replaces the large buffer safely.
                     workflow_window_click(

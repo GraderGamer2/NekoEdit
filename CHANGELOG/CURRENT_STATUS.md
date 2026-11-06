@@ -3,8 +3,9 @@
 **Snapshot date:** 2026-11-06  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
-**Latest picker implementation-code tip:** [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) — scope Open-mode search to the current directory and require explicit list selection  
-**Latest picker integration-test commit:** [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) — reject stale search values after directory navigation  
+**Latest implementation-code tip:** [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) — app-drawn Wayland window controls and compositor-configured resizing  
+**Latest picker implementation-code tip:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — selectable filename autocomplete suggestions  
+**Latest picker integration-test commit:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — five-row filename suggestions, keyboard navigation, acceptance, and exact-file opening  
 **Latest main-history synchronization:** [`3a1b2bb9bed5`](https://github.com/GraderGamer2/NekoEdit/commit/3a1b2bb9bed50e15bbd37da634505fead4f7724c)  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open, targeting `main`  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
@@ -15,6 +16,8 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Repository coordination state (verified 2026-11-06)
 
+- GitHub Actions [Build and test #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431) passed all eight workflow steps on autocomplete commit [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519). It covers the selectable filename suggestion popup and opening the exact highlighted second match.
+- GitHub Actions [Build and test #246](https://github.com/GraderGamer2/NekoEdit/actions/runs/42247690288) built and linked window-controls commit [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) and passed CLI smoke tests, but failed in the Wayland mock workflow: the test did not release maximized buffer 256 before clicking Restore, so it incorrectly expected an immediate redraw while the compositor still owned that buffer. The mock test now sends the missing `wl_buffer.release`; a fresh CI run is required before marking the full scenario verified.
 - PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged, with `early-alpha` as head and `main` as base. GitHub reported `mergeable=true` and `mergeable_state=clean` at the last branch check. PR #1 is closed and unmerged.
 - `main` still contains the original Wayland prototype rather than the editor implementation. The work described here remains on `early-alpha`; no merge into `main` was performed.
 - GitHub Actions [Build and test #241](https://github.com/GraderGamer2/NekoEdit/actions/runs/42240518677) passed all eight workflow steps on test commit [`5e7d2d2158eb`](https://github.com/GraderGamer2/NekoEdit/commit/5e7d2d2158ebe560ab7153556e4e25672039bd3d).
@@ -29,11 +32,13 @@ Read [CHANGELOG/README.md](README.md), then this file, [DEVELOPMENT_LOG.md](DEVE
 
 ## Latest verified program state
 
-- Latest picker source-code change: [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) — clear Open-mode search state on listing rebuilds and require a selected row when the directory list has focus.
+- Latest application implementation commit: [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02) — dynamic geometry, configure/ack handling, release-safe buffer replacement, and app-drawn Minimize, Maximize/Restore, and Close controls.
+- Latest picker implementation commit: [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519) — visible filename autocomplete suggestions with keyboard and mouse selection.
+- Previous picker source-code change: [`51a9b4d49166`](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66) — clear Open-mode search state on listing rebuilds and require a selected row when the directory list has focus.
 - Editable path/name fields: [`01007757a7e2`](https://github.com/GraderGamer2/NekoEdit/commit/01007757a7e234be30b3f32d232da993589df4fc) renders horizontally following text fields and carets; [`b9ed6279c693`](https://github.com/GraderGamer2/NekoEdit/commit/b9ed6279c69353af2cd339e897358f7271d13c94) adds cursor-based keyboard editing; [`f377fc8b589d`](https://github.com/GraderGamer2/NekoEdit/commit/f377fc8b589dd85056999324f85f54552e887242) adds edit helpers and case-insensitive filename-prefix search.
 - Empty-file correctness: [`79761ed700db`](https://github.com/GraderGamer2/NekoEdit/commit/79761ed700dbc9a5bfc4064a3e5cca8e60361b1b) added zero-byte Open/Save coverage; [`5e7d2d2158eb`](https://github.com/GraderGamer2/NekoEdit/commit/5e7d2d2158ebe560ab7153556e4e25672039bd3d) strengthens it by placing `empty.txt` at row 1 between ordinary files and checking both activation routes plus a save round-trip.
 - Mouse-wheel and scrollbar implementation: [`4cf865d21fbc`](https://github.com/GraderGamer2/NekoEdit/commit/4cf865d21fbc38f7a9563f2c67001f3d01d16d9b) adds vertical `wl_pointer.axis` scrolling and a proportional draggable scrollbar. The hidden-files checkbox and per-session default were corrected in [`5d8212440bd0`](https://github.com/GraderGamer2/NekoEdit/commit/5d8212440bd043342fdb623a27b67f1910bbbc6c) and [`fe3335d43b1a`](https://github.com/GraderGamer2/NekoEdit/commit/fe3335d43b1ac66878d1fb5f9174824e82f08c4f).
-- Latest integration verification: [Actions run #243](https://github.com/GraderGamer2/NekoEdit/actions/runs/42241453789), all eight steps passed on code/test commit `51a9b4d491665406ccc695d9724889bc6834ff66`.
+- Latest passing integration verification before window controls: [Actions run #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431), all eight steps passed on autocomplete commit `019113014bd6eaf9ba1355c9f7e37b13ae0e0519`. Run #246 is the latest result but failed in the mock test because the compositor-side test omitted a release event before Restore; the corrected test is awaiting a new run.
 - The #241 file-workflow scenario covered zero-byte Open from the second regular-file row (with non-empty files before and after it) via both activation methods; exact active-path and empty-document assertions; and saving back to that exact empty-file path. It also covered wheel scrolling, scrollbar thumb dragging, cursor-positioned path insertion and Backspace, explicit path navigation, filename-prefix search, middle insertion, Backspace, Home/End/Left, forward Delete, and Ctrl+A replacement.
 - The same #241 suite reran existing editor, Wayland protocol, XKB punctuation/ONE_LEVEL, gap-buffer, UTF-8, selection, auto-repeat, startup-load, and save regression scenarios through both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`.
 - The #243 test additionally verifies query clearing after navigation into a directory where the unmatched old query would otherwise be an exact filename; no-selection Open must not activate it.
@@ -81,7 +86,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | Wayland connection | `WAYLAND_DISPLAY`, absolute socket path, and inherited `WAYLAND_SOCKET` |
 | Wayland setup | Registry, compositor, shm, xdg-shell, configure, ping/pong, close, protocol-error reporting |
 | Rendering | CPU software rendering into a memfd-backed shared-memory buffer |
-| Editor window | 800×480 UI with header, File menu, active document tab, editor area, and live status bar |
+| Editor window | Starts at 800×480; handles compositor-requested resize/configure up to 3840×2160, recalculates geometry/stride, and replaces its wl_buffer after release; app-drawn Minimize, Maximize/Restore, and Close controls |
 | Document storage | Fixed-capacity 64 KiB byte-oriented gap buffer; cursor/selection offsets remain logical byte offsets; no dynamic growth yet |
 | ASCII rendering | Embedded 5×7 glyphs for printable ASCII, including the full punctuation set |
 | Keyboard layout | Bounded XKB text-v1 subset; common ASCII symbols, groups/levels, ONE_LEVEL/ALPHABETIC/THREE_LEVEL/FOUR_LEVEL type families, Shift/Caps, physical Right-Alt LevelThree, US fallback |
@@ -92,7 +97,7 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | File loading | Positional startup path; staged picker Open with 64 KiB limit and rollback on failure |
 | File saving | Save/Save As, same-directory temporary file, write loop, fsync, close, atomic rename; picker overwrite confirmation |
 | Shortcuts | Ctrl+A, Ctrl+O, Ctrl+S, Ctrl+Shift+S |
-| Native file picker | In-process Open/Save browser; vertical wheel scrolling and draggable scrollbar; real Show hidden checkbox; directory-first list; single/double-click activation; editable location and filename/search fields with caret, Home/End, Left/Right, Backspace/Delete, Ctrl+A; case-insensitive filename-prefix search; overwrite confirmation |
+| Native file picker | In-process Open/Save browser; vertical wheel scrolling and draggable scrollbar; real Show hidden checkbox; directory-first list; single/double-click activation; editable location and filename/search fields with caret, Home/End, Left/Right, Backspace/Delete, Ctrl+A; case-insensitive filename-prefix search; up to five selectable autocomplete suggestions (Up/Down, Tab, mouse, Enter); overwrite confirmation |
 | UTF-8 document operations | Valid code-point-aware cursor movement, pointer hit-testing, selection, Backspace and Delete; malformed bytes remain individually editable |
 
 ## Important UTF-8 boundary
@@ -116,7 +121,7 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 - Undo/redo.
 - Clipboard copy/cut/paste using the Wayland data-device protocol and immutable snapshots.
 - Horizontal scrolling and fuller viewport controls.
-- Window resize/reconfigure and output scale handling.
+- Output scale handling, fractional scaling, and multi-buffer/frame scheduling. Window resize/reconfigure and dynamic wl_buffer replacement are now implemented; the current renderer keeps one active buffer and waits for release before reusing or replacing it.
 - Unsaved-document confirmation before Open replaces an edited document.
 - Clipboard paste and Shift-based partial selection in picker fields are not implemented. Path and filename fields now support mouse-positioned cursors, insertion, Left/Right, Home/End, Backspace/Delete, Ctrl+A replacement, and horizontal cursor-follow rendering.
 - Directory listings are capped at 128 entries (15 visible rows). Open-mode filename search is a case-insensitive prefix match over the currently loaded regular-file entries; there is no recursive/fuzzy search, bookmarks, filters, or incremental large-directory browsing.
