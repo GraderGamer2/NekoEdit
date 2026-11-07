@@ -769,12 +769,22 @@ xkb_symbols "nekoedit-test" {
                             b"key <AC04> { [ f, F ] };",
                             b'key <AC04> { type = "ONE_LEVEL", symbols[Group1] = [ dead_acute ] };',
                         )
+                        keymap_data = keymap_data.replace(
+                            b"key <AB01> { [ z, Z ] };",
+                            b"key <AB01> { [ Greek_alpha ] };",
+                        )
+                        keymap_data = keymap_data.replace(
+                            b"key <AB02> { [ x, X ] };",
+                            b"key <AB02> { [ Cyrillic_ya ] };",
+                        )
                         if (
                             b"EuroSign, eacute" not in keymap_data
                             or b"[ emdash ]" not in keymap_data
                             or b"[ dead_acute ]" not in keymap_data
+                            or b"[ Greek_alpha ]" not in keymap_data
+                            or b"[ Cyrillic_ya ]" not in keymap_data
                         ):
-                            raise AssertionError("named Unicode/dead-key test substitutions did not apply")
+                            raise AssertionError("named Unicode/dead-key/Greek/Cyrillic test substitutions did not apply")
                 elif sparse_keymap_test:
                     # This map has enough punctuation symbols to pass the
                     # old symbol-count test, but no alphabetic keys. It must
@@ -2479,10 +2489,12 @@ xkb_symbols "nekoedit-sparse" {
                         child_u32_at("xkb_unicode_levels", 39 * 64 + 4),
                         child_u32_at("xkb_unicode_levels", 40 * 64),
                         child_u32_at("xkb_unicode_levels", 41 * 64),
+                        child_u32_at("xkb_unicode_levels", 52 * 64),
+                        child_u32_at("xkb_unicode_levels", 53 * 64),
                     )
-                    if alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002):
+                    if alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002, 0x03B1, 0x044F):
                         raise AssertionError(
-                            "named XKB Unicode keysyms were not loaded into the scalar table: "
+                            "named XKB Unicode/Greek/Cyrillic keysyms were not loaded into the scalar table: "
                             + repr(alias_scalars)
                         )
                     # AC01 is XKB keycode 38 (evdev 30). The first level
@@ -2504,12 +2516,14 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 4, struct.pack("<IIIII", 1560, 0, 0, 0, 0))
                     )
                     key_step(1570, 32, "named emdash inserts U+2014")
+                    key_step(1572, 44, "Greek_alpha inserts U+03B1")
+                    key_step(1574, 45, "Cyrillic_ya inserts U+044F")
                     client.sendall(wire_message(12, 0))
                     unicode_state = read_document_state()
                     expected_unicode = (
                         b"\xc3\xa9\xf0\x9f\x98\x80"
                         b"\xe2\x82\xac\xc3\xa9\xe2\x80\x94"
-                        b"\xc3\xa9g\xcc\x81"
+                        b"\xce\xb1\xd1\x8f\xc3\xa9g\xcc\x81"
                     )
                     before_dead_key = child_u32("doc_length")
                     key_step(1580, 33, "named dead_acute arms an acute accent")
@@ -2538,7 +2552,7 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape changed document text instead of canceling the pending accent")
                     observations.append(
-                        "XKB explicit scalars, named Unicode aliases, dead_acute composition, combining fallback, and Backspace cancellation verified"
+                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
