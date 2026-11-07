@@ -290,7 +290,6 @@ window_status_top:      .long 0
 window_doc_columns:     .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
-window_next_buffer_id:  .long 0
 window_pending_width:   .long 0
 window_pending_height:  .long 0
 window_resize_pending:  .long 0
@@ -328,7 +327,7 @@ keymap_size:            .long 0
 keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
-next_input_object:      .long 0
+next_client_object_id:  .long 0
 seat_capabilities:      .long 0
 pointer_button_down:    .long 0
 doc_selection_active:   .long 0
@@ -451,7 +450,6 @@ wayland_main:
     mov dword ptr [rip + window_width], WIDTH
     mov dword ptr [rip + window_height], HEIGHT
     mov dword ptr [rip + window_buffer_id], 12
-    mov dword ptr [rip + window_next_buffer_id], 256
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
@@ -900,8 +898,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
-    # Input objects are allocated from 15 onward, in capability order.
-    mov dword ptr [rip + next_input_object], 15
+    # IDs 2–14 are already allocated; all later client objects share this dense counter.
+    mov dword ptr [rip + next_client_object_id], 15
     # Roundtrip so the compositor can announce seat capabilities.
     mov dword ptr [rip + payload_buffer], 14
     mov edi, 1
@@ -5468,9 +5466,9 @@ window_apply_pending_resize:
     call wl_send_request
     test rax, rax
     js .window_resize_done
-    mov r14d, dword ptr [rip + window_next_buffer_id]
+    mov r14d, dword ptr [rip + next_client_object_id]
     lea eax, [r14 + 1]
-    mov dword ptr [rip + window_next_buffer_id], eax
+    mov dword ptr [rip + next_client_object_id], eax
     mov dword ptr [rip + payload_buffer], r14d
     mov dword ptr [rip + payload_buffer + 4], 0
     mov dword ptr [rip + payload_buffer + 8], r12d
@@ -5494,9 +5492,9 @@ window_apply_pending_resize:
     # has processed wl_shm_pool.create_buffer. A wl_display.error can then be
     # read and reported before the subsequent wl_surface.attach obscures it.
     # The sync callback gets the next unused client object ID.
-    mov r15d, dword ptr [rip + window_next_buffer_id]
+    mov r15d, dword ptr [rip + next_client_object_id]
     lea eax, [r15 + 1]
-    mov dword ptr [rip + window_next_buffer_id], eax
+    mov dword ptr [rip + next_client_object_id], eax
     mov dword ptr [rip + window_sync_callback_id], r15d
     mov dword ptr [rip + payload_buffer], r15d
     mov edi, 1
@@ -7798,7 +7796,7 @@ handle_seat_capabilities:
     jz .seat_caps_keyboard
     cmp dword ptr [rip + pointer_created], 0
     jne .seat_caps_keyboard
-    mov eax, dword ptr [rip + next_input_object]
+    mov eax, dword ptr [rip + next_client_object_id]
     mov dword ptr [rip + pointer_object], eax
     mov dword ptr [rip + payload_buffer], eax
     mov edi, 13
@@ -7809,14 +7807,14 @@ handle_seat_capabilities:
     test rax, rax
     js .seat_caps_done
     mov dword ptr [rip + pointer_created], 1
-    inc dword ptr [rip + next_input_object]
+    inc dword ptr [rip + next_client_object_id]
 
 .seat_caps_keyboard:
     test dword ptr [rip + seat_capabilities], 2
     jz .seat_caps_success
     cmp dword ptr [rip + keyboard_created], 0
     jne .seat_caps_success
-    mov eax, dword ptr [rip + next_input_object]
+    mov eax, dword ptr [rip + next_client_object_id]
     mov dword ptr [rip + keyboard_object], eax
     mov dword ptr [rip + payload_buffer], eax
     mov edi, 13
@@ -7827,7 +7825,7 @@ handle_seat_capabilities:
     test rax, rax
     js .seat_caps_done
     mov dword ptr [rip + keyboard_created], 1
-    inc dword ptr [rip + next_input_object]
+    inc dword ptr [rip + next_client_object_id]
 
 .seat_caps_success:
     xor eax, eax
