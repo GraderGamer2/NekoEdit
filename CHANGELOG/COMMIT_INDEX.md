@@ -5,9 +5,27 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **322** (295 previously indexed commits + 27 responsive-layout, horizontal-scrollbar, selection/navigation, Find/Replace implementation and test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **333** (322 previously indexed commits + 11 whole-word drag-selection, edge-auto-scroll, named-XKB-alias implementation and regression commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Whole-word drag selection, edge auto-scroll, and named XKB Unicode aliases
+
+| Commit | Subject |
+|---|---|
+| [a720df36f483](https://github.com/GraderGamer2/NekoEdit/commit/a720df36f48394c2952d3d473357f1d960758ada) | feat: support word drag selection and edge auto-scroll |
+| [91c8ca52c253](https://github.com/GraderGamer2/NekoEdit/commit/91c8ca52c2533a48e0bfa0bb1f4973926759c0bf) | test: cover pointer word dragging and edge auto-scroll |
+| [28f80d61ad7b](https://github.com/GraderGamer2/NekoEdit/commit/28f80d61ad7ba8820eb10bc3e5dcb58f4f4a453b) | test: synchronize buffer frames during pointer drags |
+| [9fda4ee49e0a](https://github.com/GraderGamer2/NekoEdit/commit/9fda4ee49e0a49eacc8dfe26e3c1ce688063fbaf) | test: exempt dedicated drag fixture from startup caret check |
+| [25c10f912036](https://github.com/GraderGamer2/NekoEdit/commit/25c10f912036e216c041c612079f8151de02048e) | test: await asynchronous pointer release state |
+| [e924157fec68](https://github.com/GraderGamer2/NekoEdit/commit/e924157fec680f3473adb9579c918c9838fb7d3e) | test: close persistent Settings before horizontal drag |
+| [a1785b25a125](https://github.com/GraderGamer2/NekoEdit/commit/a1785b25a125c098dda1414bd54fdca6bd4647b1) | feat: resolve common named Unicode keysyms |
+| [9b0585f7556c](https://github.com/GraderGamer2/NekoEdit/commit/9b0585f7556cb31ffe6297607eff7c293dace5e6) | test: verify named Unicode XKB keysyms |
+| [6e4629c195d8](https://github.com/GraderGamer2/NekoEdit/commit/6e4629c195d84801aef0d6537c1367382c535924) | fix: preserve pointer offset for reverse word drag |
+| [cfae9f1b1797](https://github.com/GraderGamer2/NekoEdit/commit/cfae9f1b1797eca8cd4ccd5bb3086b081ab5e1a7) | test: inspect parsed Unicode XKB alias scalars |
+| [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a) | test: replace the actual multiline XKB key block |
+
+Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed the full workflow on e9bbc7a6ff04, including forward/reverse word drags, stationary edge auto-scroll, no-wrap horizontal auto-scroll, named Unicode alias parsing, UTF-8 insertion, ELF inspection, and artifact upload. Artifact [13583613881](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881) is 72,303 bytes, SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`. Automated compositor verification passed; manual GNOME/Mutter interaction testing is still pending.
 
 ## Horizontal viewport and soft-wrap control
 
