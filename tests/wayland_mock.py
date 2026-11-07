@@ -1579,6 +1579,11 @@ xkb_symbols "nekoedit-sparse" {
                         "create maximized buffer",
                     )
                     expect_message(
+                        client, (1, 0, struct.pack("<I", 257)),
+                        "sync after maximized buffer creation",
+                    )
+                    client.sendall(wire_message(257, 0, struct.pack("<I", 1)))
+                    expect_message(
                         client, (8, 1, struct.pack("<III", 256, 0, 0)),
                         "attach maximized buffer",
                     )
@@ -1619,11 +1624,16 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (256, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", 257, 0, 800, 480, 3200, 1)),
+                        (11, 0, struct.pack("<6I", 258, 0, 800, 480, 3200, 1)),
                         "create restored buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 257, 0, 0)),
+                        client, (1, 0, struct.pack("<I", 259)),
+                        "sync after restored buffer creation",
+                    )
+                    client.sendall(wire_message(259, 0, struct.pack("<I", 2)))
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 258, 0, 0)),
                         "attach restored buffer",
                     )
                     expect_message(
@@ -1635,7 +1645,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         restored_state.get("window_width") != 800
                         or restored_state.get("window_height") != 480
-                        or restored_state.get("window_buffer_id") != 257
+                        or restored_state.get("window_buffer_id") != 258
                         or restored_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
@@ -1663,7 +1673,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
                     )
-                    # Deliver a new size while buffer 257 is still busy.
+                    # Deliver a new size while buffer 258 is still busy.
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiIII", 720, 480, 8, 3, 4))
                         + wire_message(9, 0, struct.pack("<I", 1237))
@@ -1671,14 +1681,19 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1237)), "ack interactive-resize configure"
                     )
-                    client.sendall(wire_message(257, 0))
-                    expect_message(client, (257, 0, b""), "destroy old buffer after edge resize")
+                    client.sendall(wire_message(258, 0))
+                    expect_message(client, (258, 0, b""), "destroy old buffer after edge resize")
                     expect_message(
-                        client, (11, 0, struct.pack("<6I", 258, 0, 720, 480, 2880, 1)),
+                        client, (11, 0, struct.pack("<6I", 260, 0, 720, 480, 2880, 1)),
                         "create edge-resized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 258, 0, 0)), "attach edge-resized buffer"
+                        client, (1, 0, struct.pack("<I", 261)),
+                        "sync after edge-resized buffer creation",
+                    )
+                    client.sendall(wire_message(261, 0, struct.pack("<I", 3)))
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 260, 0, 0)), "attach edge-resized buffer"
                     )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
@@ -1689,11 +1704,11 @@ xkb_symbols "nekoedit-sparse" {
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
                         or edge_state.get("window_stride") != 2880
-                        or edge_state.get("window_buffer_id") != 258
+                        or edge_state.get("window_buffer_id") != 260
                         or edge_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
-                    client.sendall(wire_message(258, 0))
+                    client.sendall(wire_message(260, 0))
 
                     # Probe every remaining edge and corner with coordinates
                     # deliberately inside the new 12-pixel grab band.
