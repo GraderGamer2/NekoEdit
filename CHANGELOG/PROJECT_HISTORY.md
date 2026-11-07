@@ -15,6 +15,13 @@ The bounded XKB named-symbol table now resolves 273 case-sensitive non-ASCII ali
 
 The new entries reuse the existing scalar table and UTF-8 insertion path. Mock-compositor coverage reads U+03B1 from `Greek_alpha` and U+044F from `Cyrillic_ya`, then verifies the inserted document bytes as part of the full Unicode/dead-key fixture. This expands named alias coverage; it does not make the parser fully xkbcommon-compatible. General custom key types, virtual modifiers and actions, other unlisted scripts/aliases, general Compose tables, and Wayland text-input/IME remain future work.
 
+
+## 2026-11-08 — Add bounded XKB Multi_key Compose input
+
+NekoEdit now recognizes the XKB `Multi_key` symbol as an editor-side Compose action. After it is pressed, the next two printable symbols are buffered and matched against a curated 20-pair table. Covered pairs include `oe/OE` → œ/Œ, `ae/AE` → æ/Æ, `ss` → ß, common accent-letter pairs, plus/minus, right arrow, guillemets, one-half, and cedilla-c. Successful matches insert a single Unicode scalar. Unsupported pairs are inserted unchanged as two literal characters.
+
+Compose state is transient: Backspace and Escape cancel an unfinished sequence without deleting document text, and losing keyboard focus clears the pending sequence. Mock-compositor tests verify successful composition, literal fallback, and both cancellation keys. This is not general Compose support: multi-stage/longer sequences, locale-provided Compose tables, full XKB type/modifier/action semantics, and Wayland text-input/IME are still future work.
+
 ---
 
 ## 1. Original project goals and constraints
