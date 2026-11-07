@@ -3649,6 +3649,10 @@ wayland_main:
     je .keyboard_ctrl_home
     cmp eax, 107
     je .keyboard_ctrl_end
+    cmp eax, 103
+    je .keyboard_ctrl_up
+    cmp eax, 108
+    je .keyboard_ctrl_down
     cmp eax, 14
     je .keyboard_ctrl_backspace
     cmp eax, 111
@@ -3727,6 +3731,33 @@ wayland_main:
     call doc_move_word
     call doc_clear_selection
     jmp .keyboard_changed
+.keyboard_ctrl_up:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_up_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_line
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_up_plain:
+    xor edi, edi
+    call doc_move_line
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_down:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_down_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_line
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_down_plain:
+    mov edi, 1
+    call doc_move_line
+    call doc_clear_selection
+    jmp .keyboard_changed
+
 .keyboard_ctrl_home:
     cmp dword ptr [rip + shift_down], 0
     je .Lkeyboard_ctrl_home_plain
@@ -14992,6 +15023,68 @@ doc_move_word:
     pop rbx
     ret
 .size doc_move_word, . - doc_move_word
+
+# EDI=0 previous logical line start; EDI=1 next logical line start.
+# This is a paragraph-style move: wrapped visual rows are not treated as lines.
+.type doc_move_line, @function
+doc_move_line:
+    push rbx
+    push r12
+    push r13
+    mov r12d, dword ptr [rip + doc_cursor]
+    mov r13d, edi
+    test r13d, r13d
+    jz .Ldoc_move_line_previous
+.Ldoc_move_line_next:
+    cmp r12d, dword ptr [rip + doc_length]
+    jae .Ldoc_move_line_store
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 10
+    je .Ldoc_move_line_next_found
+    inc r12d
+    jmp .Ldoc_move_line_next
+.Ldoc_move_line_next_found:
+    inc r12d
+    jmp .Ldoc_move_line_store
+.Ldoc_move_line_previous:
+    test r12d, r12d
+    jz .Ldoc_move_line_store
+    dec r12d
+.Ldoc_move_line_find_current_start:
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 10
+    je .Ldoc_move_line_current_start_found
+    test r12d, r12d
+    jz .Ldoc_move_line_at_document_start
+    dec r12d
+    jmp .Ldoc_move_line_find_current_start
+.Ldoc_move_line_current_start_found:
+    test r12d, r12d
+    jz .Ldoc_move_line_at_document_start
+    dec r12d
+.Ldoc_move_line_find_previous_start:
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 10
+    je .Ldoc_move_line_previous_start_found
+    test r12d, r12d
+    jz .Ldoc_move_line_at_document_start
+    dec r12d
+    jmp .Ldoc_move_line_find_previous_start
+.Ldoc_move_line_previous_start_found:
+    inc r12d
+    jmp .Ldoc_move_line_store
+.Ldoc_move_line_at_document_start:
+    xor r12d, r12d
+.Ldoc_move_line_store:
+    mov dword ptr [rip + doc_cursor], r12d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_move_line, . - doc_move_line
 
 # Double-click word selection. A click landing just after a word is associated
 # with the preceding word, matching the pointer's nearest-boundary hit test.
