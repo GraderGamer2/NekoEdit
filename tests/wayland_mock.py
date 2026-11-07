@@ -949,7 +949,7 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_pointer_debug_input_x", "doc_pointer_debug_output",
                         "doc_pointer_debug_map_x", "doc_pointer_debug_midpoint",
                         "doc_pointer_debug_codepoint", "doc_pointer_debug_advance",
-                        "doc_pointer_debug_target_x",
+                        "doc_pointer_debug_target_x", "doc_pointer_debug_actual_x",
                         "doc_line_index_valid", "doc_line_index_columns",
                     }
                     for symbol_line in nm_text.splitlines():
@@ -981,6 +981,7 @@ xkb_symbols "nekoedit-sparse" {
                         "pointer_y": 110,
                         "window_doc_pixel_width": 760,
                         "doc_pointer_debug_target_x": 11,
+                        "doc_pointer_debug_actual_x": 11,
                         "doc_line_index_valid": 1,
                         "doc_line_index_columns": 760,
                         "doc_pointer_debug_input_x": 11,
