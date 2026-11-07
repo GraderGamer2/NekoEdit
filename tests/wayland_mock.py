@@ -3013,6 +3013,7 @@ xkb_symbols "nekoedit-sparse" {
                     suggestion_state = picker_state()
                     if (
                         suggestion_state.get("picker_name_buffer") != b"prefill-"
+                        or suggestion_state.get("picker_focus") != 2
                         or suggestion_state.get("picker_suggestion_count") != 2
                         or suggestion_state.get("picker_suggestion_selected") != 0
                         or suggestion_state.get("picker_selected") != suggestion_state.get("picker_suggestion_indices", ())[0]
@@ -3022,8 +3023,11 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     # The dropdown overlays the lower list area and is rendered
                     # with a distinct dark panel above the Search field.
+                    # The panel's two-pixel left border remains visible
+                    # beside the highlighted first suggestion. Probe it in
+                    # surface coordinates after the picker transform.
                     popup_pixel = struct.unpack_from(
-                        "<I", pixels, 272 * 800 * 4 + 168 * 4
+                        "<I", pixels, 272 * 800 * 4 + 160 * 4
                     )[0]
                     if popup_pixel != 0xFF171C24:
                         raise AssertionError(
