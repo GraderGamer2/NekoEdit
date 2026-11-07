@@ -134,6 +134,7 @@ ui_menu_ui_font_size_label: .asciz "UI FONT"
 ui_menu_minus_label:   .asciz "-"
 ui_menu_plus_label:    .asciz "+"
 ui_menu_px_label:      .asciz "px"
+iface_data_device_manager: .asciz "wl_data_device_manager"
 ui_save_confirm_title: .asciz "CONFIRM SAVE"
 ui_save_confirm_message: .asciz "SAVE THIS DOCUMENT?"
 ui_save_confirm_save_label: .asciz "SAVE"
@@ -1963,6 +1964,8 @@ shm_mapping:           .quad 0
 compositor_global:     .long 0
 shm_global:            .long 0
 xdg_global:            .long 0
+.global clipboard_manager_global
+clipboard_manager_global: .long 0
 seat_global:           .long 0
 seat_version:          .long 0
 cursor_shape_global:   .long 0
@@ -1980,18 +1983,24 @@ pointer_object:         .long 0
 keyboard_created:       .long 0
 keyboard_object:        .long 0
 keyboard_focused:       .long 0
+.global keyboard_serial
+keyboard_serial:        .long 0
 keyboard_group:         .long 0
 level3_down:            .long 0
+.global event_fd
 event_fd:               .long 0       # initialized to -1 in wayland_main
 keymap_format:          .long 0
 keymap_size:            .long 0
 keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
+.global next_client_object_id
 next_client_object_id:  .long 0
 seat_capabilities:      .long 0
 pointer_button_down:    .long 0
+.global doc_selection_active
 doc_selection_active:   .long 0
+.global doc_selection_anchor
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
@@ -2011,7 +2020,7 @@ doc_line_index_valid:   .long 0
 doc_line_index_columns: .long 0
 repeat_timer_fd:         .long 0
 repeat_keycode:          .long 0
-poll_fds:               .zero 16
+poll_fds:               .zero 56
 repeat_timer_spec:      .zero 32
 repeat_timer_read:      .quad 0
 buffer_busy:            .long 0
@@ -2019,18 +2028,25 @@ redraw_pending:         .long 0
 shift_down:             .long 0
 caps_lock:              .long 0
 ctrl_down:              .long 0
+.global doc_length
 doc_length:             .long 0
+.global doc_cursor
 doc_cursor:             .long 0
 .global doc_font_size
  doc_font_size:         .long 0
 .global ui_font_size
 ui_font_size:           .long 0
 # Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
+.global doc_gap_start
 doc_gap_start:          .long 0
+.global doc_gap_end
 doc_gap_end:            .long 0
 .balign 8
+.global doc_buffer
 doc_buffer:             .quad 0
+.global doc_capacity
 doc_capacity:           .long 0
+.global doc_storage_error
 doc_storage_error:      .long 0
 current_file_path:      .quad 0
 doc_save_error:         .long 0
@@ -2107,10 +2123,14 @@ load_buffer:            .quad 0
 load_capacity:          .long 0
 temp_path_buffer:       .zero PATH_CAPACITY
 temp_pid_digits:        .zero 16
+.global last_object
 last_object:           .long 0
+.global last_opcode
 last_opcode:           .long 0
+.global last_size
 last_size:             .long 0
 event_header:          .zero 8
+.global event_payload
 event_payload:         .zero 4096
 request_buffer:        .zero 8192
 payload_buffer:        .zero 256
@@ -2677,6 +2697,10 @@ wayland_main:
     call cursor_shape_setup
     test rax, rax
     js .protocol_error
+    # Bind the optional text clipboard only after seat/pointer IDs are set.
+    call clipboard_setup
+    test rax, rax
+    js .protocol_error
 
     # Main event loop: pointer input edits the document. The single
     # wl_buffer is only rewritten after wl_buffer.release.
@@ -2701,9 +2725,11 @@ wayland_main:
     mov eax, dword ptr [rip + repeat_timer_fd]
     mov dword ptr [rip + poll_fds + 8], eax
     mov word ptr [rip + poll_fds + 12], POLLIN
+    lea rdi, [rip + poll_fds]
+    call clipboard_poll_prepare
     mov eax, SYS_poll
     lea rdi, [rip + poll_fds]
-    mov esi, 2
+    mov esi, 7
     mov edx, -1
     syscall
     test rax, rax
@@ -2716,6 +2742,10 @@ wayland_main:
     movzx eax, word ptr [rip + poll_fds + 14]
     test eax, eax
     jnz .event_repeat_timer
+    lea rdi, [rip + poll_fds]
+    call clipboard_poll_dispatch
+    test eax, eax
+    jnz .keyboard_changed
     jmp .event_loop
 .event_read_wayland:
     call wl_read_event
@@ -3371,6 +3401,8 @@ wayland_main:
     jb .event_loop
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
+    mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
+    mov dword ptr [rip + keyboard_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
     mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
     cmp eax, 29
@@ -3427,12 +3459,37 @@ wayland_main:
     cmp eax, 30
     je .keyboard_select_all
     cmp eax, 31
-    jne .event_loop
+    jne .keyboard_ctrl_clipboard
     cmp dword ptr [rip + shift_down], 0
     jne .keyboard_save_as_command
     cmp qword ptr [rip + current_file_path], 0
     je .keyboard_save_as_command
     jmp .keyboard_save
+.keyboard_ctrl_clipboard:
+    cmp eax, 46
+    je .keyboard_clipboard_copy
+    cmp eax, 45
+    je .keyboard_clipboard_cut
+    cmp eax, 47
+    je .keyboard_clipboard_paste
+    jmp .event_loop
+.keyboard_clipboard_copy:
+    mov edi, 1
+    call clipboard_key_command
+    jmp .event_loop
+.keyboard_clipboard_cut:
+    mov edi, 2
+    call clipboard_key_command
+    test eax, eax
+    jnz .keyboard_changed
+    jmp .event_loop
+.keyboard_clipboard_paste:
+    mov edi, 3
+    call clipboard_key_command
+    test eax, eax
+    jnz .keyboard_changed
+    jmp .event_loop
+
 .keyboard_unmodified:
     cmp eax, 1
     jne .keyboard_unmodified_dispatch
@@ -3743,6 +3800,15 @@ wayland_main:
     js .protocol_error
     jmp .event_loop
 
+.check_clipboard_event:
+    mov edi, dword ptr [rip + last_object]
+    mov esi, dword ptr [rip + last_opcode]
+    lea rdx, [rip + event_payload]
+    mov ecx, dword ptr [rip + last_size]
+    mov r8d, dword ptr [rip + event_fd]
+    call clipboard_handle_event
+    test eax, eax
+    jnz .event_loop
 .check_toplevel_close:
     cmp dword ptr [rip + last_object], 10
     jne .check_xdg_surface_configure
@@ -3906,6 +3972,7 @@ doc_storage_init:
 # Grow the live gap buffer geometrically. Existing suffix bytes are relocated
 # to the end of the enlarged mapping; logical byte offsets remain unchanged.
 # RAX=0 on success, negative errno on failure.
+.global doc_buffer_grow
 .type doc_buffer_grow, @function
 doc_buffer_grow:
     push rbx
@@ -6731,6 +6798,7 @@ wl_send_all:
 .size wl_send_all, . - wl_send_all
 
 # wl_send_request(object=rdi, opcode=esi, payload=rdx, payload_length=ecx).
+.global wl_send_request
 .type wl_send_request, @function
 wl_send_request:
     push rbx
@@ -6765,6 +6833,7 @@ wl_send_request:
 .size wl_send_request, . - wl_send_request
 
 # wl_send_request_fd(object=rdi, opcode=esi, payload=rdx, payload_length=ecx, fd=r8).
+.global wl_send_request_fd
 .type wl_send_request_fd, @function
 wl_send_request_fd:
     push rbx
@@ -6838,6 +6907,7 @@ wl_send_request_fd:
 
 # Bind global: rdi=name, rsi=interface string, edx=string bytes including NUL,
 # ecx=version, r8d=new object id.
+.global wl_registry_bind
 .type wl_registry_bind, @function
 wl_registry_bind:
     push rbx
@@ -7205,7 +7275,7 @@ registry_capture_global:
     lea rsi, [rip + iface_seat]
     call string_equal
     test eax, eax
-    jz .registry_try_cursor_shape
+    jz .registry_try_data_device_manager
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + seat_global], eax
     # Request at most wl_seat version 4, which exposes wl_keyboard.repeat_info.
@@ -7221,6 +7291,15 @@ registry_capture_global:
     mov edx, 4
 .Lneko_seat_version_ready:
     mov dword ptr [rip + seat_version], edx
+    jmp .registry_done
+.registry_try_data_device_manager:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_data_device_manager]
+    call string_equal
+    test eax, eax
+    jz .registry_try_cursor_shape
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + clipboard_manager_global], eax
     jmp .registry_done
 .registry_try_cursor_shape:
     lea rdi, [rip + event_payload + 8]
@@ -8144,6 +8223,7 @@ present_buffer:
 # Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
 # as single-byte replacement units so the original file bytes remain editable.
 # EDI=byte offset; EAX=next byte offset.
+.global doc_byte_at
 .type doc_byte_at, @function
 # Read one logical document byte, translating around the movable gap.
 # EDI=logical byte offset; EAX=byte value (zero for an out-of-range offset).
@@ -9587,6 +9667,7 @@ doc_line_index_apply_delete:
 
 
 # Insert one byte at the logical cursor. Grow the mapping when its gap is empty.
+.global doc_insert_byte
 .type doc_insert_byte, @function
 # Insert a byte at the logical cursor by consuming one byte from the gap.
 doc_insert_byte:
@@ -9677,6 +9758,7 @@ doc_delete_at_cursor:
     ret
 .size doc_delete_at_cursor, . - doc_delete_at_cursor
 
+.global doc_delete_selection
 .type doc_delete_selection, @function
 # Remove a logical selection by extending the gap over its selected bytes.
 doc_delete_selection:
@@ -9711,6 +9793,7 @@ doc_delete_selection:
 .size doc_delete_selection, . - doc_delete_selection
 
 # Clear selection state while retaining the current insertion point.
+.global doc_clear_selection
 .type doc_clear_selection, @function
 doc_clear_selection:
     mov dword ptr [rip + doc_selection_active], 0
@@ -10617,6 +10700,7 @@ render_document_scrollbar:
 .size render_document_scrollbar, . - render_document_scrollbar
 
 # Keep the active insertion point within the vertically visible document rows.
+.global doc_ensure_cursor_visible
 .type doc_ensure_cursor_visible, @function
 doc_ensure_cursor_visible:
     mov edi, dword ptr [rip + doc_cursor]
