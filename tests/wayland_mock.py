@@ -1728,6 +1728,7 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(15, 3, struct.pack("<IIII", 3003, 3004, 0x110, 1))
                     )
                     workflow_redraw("begin selection before leaving the window")
+                    client.sendall(wire_message(12, 0))
                     if child_u32("pointer_button_down") != 1:
                         raise AssertionError("document press did not begin a selection drag")
                     client.sendall(
@@ -1755,9 +1756,17 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", 3010, 3011, 0x110, 0))
+                        + wire_message(12, 0)
                     )
                     if child_u32("pointer_button_down") != 0:
                         raise AssertionError("selection drag did not stop when the mouse button was released")
+                    # The timer's last coalesced frame is delivered after the
+                    # released buffer is returned. Drain it before interacting
+                    # with Settings so the test never confuses two commits.
+                    ready, _, _ = select.select([client], [], [], 0.2)
+                    if ready:
+                        workflow_redraw("flush final auto-scroll frame")
+                        client.sendall(wire_message(12, 0))
 
                     # Return pointer focus, turn wrapping off, then drag past the
                     # right edge. The horizontal viewport must follow the drag.
@@ -1770,13 +1779,14 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("Settings did not disable Wrap Lines for horizontal drag test")
 
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 3052, 20 * 256, 98 * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", 3053, 3054, 0x110, 1))
+                        wire_message(15, 2, struct.pack("<Iii", 4002, 20 * 256, 98 * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", 4003, 4004, 0x110, 1))
                     )
                     workflow_redraw("begin horizontal selection drag")
+                    client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 1, struct.pack("<II", 3055, 8))
-                        + wire_message(15, 2, struct.pack("<Iii", 3056, 900 * 256, 98 * 256))
+                        wire_message(15, 1, struct.pack("<II", 4005, 8))
+                        + wire_message(15, 2, struct.pack("<Iii", 4006, 900 * 256, 98 * 256))
                     )
                     workflow_redraw("drag beyond the right edge with Wrap Lines disabled")
                     horizontal_left = child_u32("doc_view_left_px")
@@ -1844,6 +1854,7 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(15, 3, struct.pack("<IIII", 1833, 1834, 0x110, 1))
                     )
                     workflow_redraw("word-drag double-click press")
+                    client.sendall(wire_message(12, 0))
                     if child_u32("pointer_button_down") != 1 or child_u32("doc_word_drag_active") != 1:
                         raise AssertionError("double-click did not retain the pointer grab for word dragging")
                     client.sendall(
@@ -1871,6 +1882,7 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(15, 3, struct.pack("<IIII", 1863, 1864, 0x110, 1))
                     )
                     workflow_redraw("reverse word-drag double-click press")
+                    client.sendall(wire_message(12, 0))
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", 1870, 20 * 256, 98 * 256))
                     )
