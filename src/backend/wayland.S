@@ -11945,7 +11945,7 @@ render_selection:
     mov dword ptr [rip + doc_selection_start], eax
     mov dword ptr [rip + doc_selection_end], edx
 
-    mov r15d, dword ptr [rip + doc_length]
+    # Render in the same pixel coordinate space used by hmtx layout and hit-testing.
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
     mov eax, dword ptr [rip + doc_view_top_row]
@@ -11953,98 +11953,86 @@ render_selection:
     sub r13d, eax
     xor r14d, r14d
 .Lneko_render_selection_scan:
-    cmp r14d, r15d
+    cmp r14d, dword ptr [rip + doc_length]
     jae .Lneko_render_selection_done
     mov eax, dword ptr [rip + doc_selection_end]
     cmp r14d, eax
     jae .Lneko_render_selection_done
+
     mov edi, r14d
+    call doc_byte_at
+    mov ebx, eax
+    cmp ebx, 10
+    je .Lneko_render_selection_newline
+    cmp ebx, 13
+    jne .Lneko_render_selection_not_cr
+    lea edi, [r14d + 1]
     call doc_byte_at
     cmp eax, 10
     je .Lneko_render_selection_newline
-    cmp eax, 9
+.Lneko_render_selection_not_cr:
+    cmp ebx, 9
     je .Lneko_render_selection_tab
-    cmp eax, 32
+    cmp ebx, 32
     jb .Lneko_render_selection_control
-    cmp eax, 127
+    cmp ebx, 128
     jb .Lneko_render_selection_character
-
+    mov edi, r14d
+    call doc_utf8_decode_at
+    mov ebx, eax
 .Lneko_render_selection_character:
-    mov eax, dword ptr [rip + window_width]
-    sub eax, DOC_SCROLL_TRACK_X_OFFSET
-    cmp r12d, eax
-    jb .Lneko_render_selection_character_fit
+    mov edi, ebx
+    call font_codepoint_advance_pixels
+    mov r15d, eax
+    mov eax, r12d
+    sub eax, DOC_LEFT
+    add eax, r15d
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lneko_render_selection_character_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
 .Lneko_render_selection_character_fit:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
-    jb .Lneko_render_selection_advance_cell
-    mov eax, dword ptr [rip + window_width]
-    sub eax, CELL_WIDTH + DOC_SCROLL_TRACK_X_OFFSET
-    cmp r12d, eax
-    ja .Lneko_render_selection_advance_cell
+    jb .Lneko_render_selection_character_advance
     cmp r13d, DOC_TOP
-    jl .Lneko_render_selection_advance_cell
+    jl .Lneko_render_selection_character_advance
     mov eax, dword ptr [rip + window_status_top]
     sub eax, LINE_HEIGHT
     cmp r13d, eax
-    jae .Lneko_render_selection_advance_cell
+    jae .Lneko_render_selection_character_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
-    mov ecx, CELL_WIDTH
+    mov ecx, r15d
     mov r8d, LINE_HEIGHT
     mov r9d, 0xff5e81ac
     call draw_rect
-.Lneko_render_selection_advance_cell:
-    add r12d, CELL_WIDTH
+.Lneko_render_selection_character_advance:
+    add r12d, r15d
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
     jmp .Lneko_render_selection_scan
 
-.Lneko_render_selection_newline:
-    mov eax, dword ptr [rip + doc_selection_start]
-    cmp r14d, eax
-    jb .Lneko_render_selection_newline_advance
-    mov eax, dword ptr [rip + window_width]
-    sub eax, CELL_WIDTH + DOC_SCROLL_TRACK_X_OFFSET
-    cmp r12d, eax
-    jae .Lneko_render_selection_newline_advance
-    mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
-    cmp r13d, eax
-    jae .Lneko_render_selection_newline_advance
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, r12d
-    mov edx, r13d
-    mov ecx, CELL_WIDTH
-    mov r8d, LINE_HEIGHT
-    mov r9d, 0xff5e81ac
-    call draw_rect
-.Lneko_render_selection_newline_advance:
-    mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
-    inc r14d
-    jmp .Lneko_render_selection_scan
-
 .Lneko_render_selection_tab:
-    lea eax, [r12d + CELL_WIDTH * 4]
-    mov edx, dword ptr [rip + window_width]
-    sub edx, DOC_SCROLL_TRACK_X_OFFSET
-    cmp eax, edx
+    # Tabs advance to the next 32-pixel stop, wrapping as one visual token.
+    mov eax, r12d
+    sub eax, DOC_LEFT
+    lea edx, [eax + 32]
+    and edx, -32
+    sub edx, eax
+    mov r15d, edx
+    add eax, r15d
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_render_selection_tab_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
+    mov r15d, 32
 .Lneko_render_selection_tab_fit:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
     jb .Lneko_render_selection_tab_advance
-    mov eax, dword ptr [rip + window_width]
-    sub eax, (CELL_WIDTH * 4) + DOC_SCROLL_TRACK_X_OFFSET
-    cmp r12d, eax
-    ja .Lneko_render_selection_tab_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_tab_advance
     mov eax, dword ptr [rip + window_status_top]
@@ -12054,18 +12042,54 @@ render_selection:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
-    mov ecx, CELL_WIDTH * 4
+    mov ecx, r15d
     mov r8d, LINE_HEIGHT
     mov r9d, 0xff5e81ac
     call draw_rect
 .Lneko_render_selection_tab_advance:
-    add r12d, CELL_WIDTH * 4
+    add r12d, r15d
     inc r14d
     jmp .Lneko_render_selection_scan
 
+.Lneko_render_selection_newline:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r14d, eax
+    jb .Lneko_render_selection_newline_advance
+    cmp r13d, DOC_TOP
+    jl .Lneko_render_selection_newline_advance
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, LINE_HEIGHT
+    cmp r13d, eax
+    jae .Lneko_render_selection_newline_advance
+    mov eax, r12d
+    sub eax, DOC_LEFT
+    mov edx, dword ptr [rip + window_doc_pixel_width]
+    sub edx, eax
+    test edx, edx
+    jle .Lneko_render_selection_newline_advance
+    cmp edx, 8
+    jbe .Lneko_render_selection_newline_width_ready
+    mov edx, 8
+.Lneko_render_selection_newline_width_ready:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov ecx, edx
+    mov edx, r13d
+    mov r8d, LINE_HEIGHT
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lneko_render_selection_newline_advance:
+    mov r12d, DOC_LEFT
+    add r13d, LINE_HEIGHT
+    mov edi, r14d
+    call doc_grapheme_next
+    mov r14d, eax
+    jmp .Lneko_render_selection_scan
+
 .Lneko_render_selection_control:
-.Lneko_render_selection_byte_only:
-    inc r14d
+    mov edi, r14d
+    call doc_grapheme_next
+    mov r14d, eax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_done:
@@ -12075,7 +12099,6 @@ render_selection:
     pop r12
     pop rbx
     ret
-.size render_selection, . - render_selection
 
 # Decode one validated UTF-8 scalar at a logical document byte offset.
 # EDI=offset; EAX=Unicode scalar, or '?' for malformed/truncated input.
