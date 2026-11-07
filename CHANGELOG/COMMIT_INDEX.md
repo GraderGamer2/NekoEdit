@@ -5,9 +5,23 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **333** (322 previously indexed commits + 11 whole-word drag-selection, edge-auto-scroll, named-XKB-alias implementation and regression commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **340** (333 previously indexed commits + seven dead-key recognition/composition and regression/fix commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Bounded XKB dead-key composition
+
+| Commit | Subject |
+|---|---|
+| [a2c2f573c923](https://github.com/GraderGamer2/NekoEdit/commit/a2c2f573c923b80695bfcc2aca14685c04f0af1e) | feat: recognize common XKB dead-key symbols |
+| [ad226f6d06db](https://github.com/GraderGamer2/NekoEdit/commit/ad226f6d06db0c1eda8723ef68a3428c7a4ed3aa) | feat: compose common XKB dead keys into UTF-8 |
+| [67a4dd19f112](https://github.com/GraderGamer2/NekoEdit/commit/67a4dd19f112de3d8981e509ec00027859efd05a) | test: verify XKB dead-key composition and fallback |
+| [c87c6510abb4](https://github.com/GraderGamer2/NekoEdit/commit/c87c6510abb461fc33c6df05ba89b9fba0b6f1cb) | fix: cancel pending dead keys on Escape and expose compose state for tests |
+| [72e94a006aee](https://github.com/GraderGamer2/NekoEdit/commit/72e94a006aeee0f7c5e5d195c6460c7c7d360a19) | test: assert dead-key composition result and UTF-8 insertion |
+| [e243d01730f7](https://github.com/GraderGamer2/NekoEdit/commit/e243d01730f7a9ed22ffbac418e3cc7673849e4b) | refactor: remove temporary dead-key test instrumentation |
+| [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad) | test: validate complete dead-key bytes and Escape cancellation |
+
+Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the complete workflow on cb469d616f8b, including six dead-key token parsing, Latin-1 acute+e composition, base+combining fallback, Backspace/Escape cancellation, existing word-drag and auto-scroll regressions, ELF inspection, and artifact upload. Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes; SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8.
 
 ## Whole-word drag selection, edge auto-scroll, and named XKB Unicode aliases
 
