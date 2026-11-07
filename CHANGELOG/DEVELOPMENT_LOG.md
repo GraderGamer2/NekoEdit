@@ -1308,3 +1308,36 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 - Ctrl+Left/Right currently moves by word and Ctrl+Up/Down by logical line; sentence-boundary navigation is not implemented. Keyboard text entry and Find/Replace query editing remain within the supported ASCII XKB subset.
 - The preference file currently stores the documented font/view/save options only; caret position, horizontal/vertical scroll positions, window geometry, and recent-file history are not persisted.
 - Continue with non-ASCII keyboard input and compose/dead keys, Wayland text-input/IME, more complete shaping/bidi, output/fractional scale and multi-buffer scheduling, then X11.
+
+
+---
+
+## 2026-11-07 — home-level settings, fixed typography panels, all-match search, and Unicode XKB input
+
+### Requested refinements
+
+- Moved preference storage to `$HOME/.nekoedit/preferences` (normally `~/.nekoedit/preferences`). `XDG_CONFIG_HOME` is deliberately ignored. The preferences test now places a temporary directory in HOME, sets XDG_CONFIG_HOME to that same root, verifies only the hidden `.nekoedit` directory is created, and checks directory/file modes 0700/0600.
+- Changed Settings and Find/Replace geometry so their panel dimensions are fixed (256×168 and 448×192 design units respectively), centered and fitted to the window. The selected UI font now changes glyph size rather than enlarging the entire panel. The mock test checks both panel dimensions remain fixed with the UI font at 16px and checks both overlay glyph-size state values are 16.
+- Added a document-wide literal-match painting pass. Every occurrence, including overlapping matches, gets an amber highlight; the currently selected result is painted afterward and remains visually distinct. The Find integration test checks the non-active occurrence in the framebuffer.
+- Updated the README, architecture notes, Wayland backend guide, current status, project history, and this development log to describe the current behavior rather than the older XDG/session-only/ASCII-only state.
+
+### Roadmap continuation: direct XKB Unicode keysyms
+
+- Added a parallel per-key/group/level Unicode scalar table to the XKB text-v1 parser. It accepts explicit XKB Unicode keysym spellings `Uxxxx`, `Uxxxxx`, and `Uxxxxxx`, validates scalar range/surrogates/control characters, and retains the existing ASCII table for current layout heuristics and ASCII consumers.
+- Added a document input lookup path that preserves the US-QWERTY fallback and uses the active XKB group/modifier levels when a parsed keymap is available. Valid scalars are encoded as 1–4 byte UTF-8 and inserted through the existing document insertion/index machinery.
+- Added a mock keyboard integration case that maps AC01 to U+00E9 and Shift+AC01 to U+1F600, then checks the exact UTF-8 byte sequence in the document. Existing ASCII layout tests still cover Group1/Group2, Shift, LevelThree, punctuation, and the US fallback.
+- This is a first Unicode-input slice, not complete international text input. Named non-ASCII XKB aliases, complete modifier/type/action semantics, compose/dead keys, and Wayland text-input/IME remain unimplemented. Find/Replace field editing also remains in the ASCII XKB subset.
+
+### Build iterations and verification
+
+- The UI/preferences/search refinements passed GitHub Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393599670) on `98320fc9c3ad`; this run includes the `~/.nekoedit` path, fixed panel-size/glyph-size assertions, and the all-match framebuffer highlight assertion.
+- The initial Unicode parser/insertion attempts exposed two assembler operand-size errors in the new scalar lookup. The instructions were corrected to 32-bit moves. The next complete build then caught an incorrect Group 2 offset in the new dword scalar table: existing Group2/LevelThree input returned the wrong scalar. The lookup was corrected to use the same keycode×16 + group×4 + level logical index as the ASCII table.
+- GitHub Actions [Build and test #523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784) passed all workflow stages on application/test tip [`72695a3d9f3d`](https://github.com/GraderGamer2/NekoEdit/commit/72695a3d9f3dd7a714c5f80bf014b9e1d7fd28e6): freestanding build and ELF checks, CLI smoke tests, persistent-preferences unit tests, the complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784/artifacts/13582597118) is 70,702 bytes (artifact ID 13582597118; uploaded ZIP digest SHA-256 `d8e36e359141aa71251f24b18330463f41c7a0db06f8d24cb5c9422a8f6468e3`; expires 2026-11-14).
+- The user has manually confirmed runtime TTF selection. The newest .nekoedit restore behavior, fixed panels, all-match search and Unicode keyboard input are mock-compositor tested but still need manual GNOME/Mutter testing.
+
+### Remaining limitations and next work
+
+- XKB Unicode input currently requires explicit Uxxxx/Uxxxxx/Uxxxxxx keysym tokens; named aliases such as eacute/EuroSign are not yet translated. Full modifier/type/action maps and virtual modifiers remain a broader parser task.
+- Add compose/dead-key processing and Wayland text-input/IME integration, then improve shaping (kerning, ligatures, mark positioning and bidi).
+- Continue with fractional/output scaling, release-tracked multi-buffer scheduling, and the X11 backend/clipboard.
