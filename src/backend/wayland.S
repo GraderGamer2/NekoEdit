@@ -12353,6 +12353,65 @@ find_replace_handle_pointer:
 # Translate printable input from the active XKB keymap when the supported
 # text-v1 subset was parsed. A parsed map's non-ASCII keys are deliberately
 # ignored rather than silently producing an unrelated US-QWERTY character.
+# Find/Replace field measurements share the same active overlay font transform.
+.type find_measure_ascii_prefix, @function
+find_measure_ascii_prefix:
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi
+    mov r12d, esi
+    xor r13d, r13d
+.Lfind_measure_prefix_loop:
+    test r12d, r12d
+    jz .Lfind_measure_prefix_done
+    movzx edi, byte ptr [rbx]
+    call ui_font_advance_pixels
+    add r13d, eax
+    inc rbx
+    dec r12d
+    jmp .Lfind_measure_prefix_loop
+.Lfind_measure_prefix_done:
+    mov eax, r13d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size find_measure_ascii_prefix, . - find_measure_ascii_prefix
+
+# RDI=field buffer, ESI=cursor, EDX=visible width; keep the caret in the viewport.
+.type find_field_view_start, @function
+find_field_view_start:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rbx, rdi
+    mov r13d, esi
+    mov r14d, edx
+    xor ebp, ebp
+.Lfind_field_view_start_loop:
+    test r13d, r13d
+    jz .Lfind_field_view_start_done
+    movzx edi, byte ptr [rbx + r13 - 1]
+    call ui_font_advance_pixels
+    lea ecx, [rbp + rax]
+    cmp ecx, r14d
+    ja .Lfind_field_view_start_done
+    mov ebp, ecx
+    dec r13d
+    jmp .Lfind_field_view_start_loop
+.Lfind_field_view_start_done:
+    mov eax, r13d
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size find_field_view_start, . - find_field_view_start
+
 .type keycode_to_ascii, @function
 keycode_to_ascii:
     push rbx
@@ -14146,10 +14205,35 @@ render_find_replace:
     mov r9d, 0xff5e81ac
     call draw_rect
 .render_find_text:
+    lea rdi, [rip + find_query_buffer]
+    mov esi, dword ptr [rip + find_query_cursor]
+    mov edx, 332
+    call find_field_view_start
+    mov r12d, eax
+    lea rdi, [rip + find_query_buffer]
+    add rdi, r12
+    mov esi, dword ptr [rip + find_query_cursor]
+    sub esi, r12d
+    call find_measure_ascii_prefix
+    mov r13d, eax
+    lea rdx, [rip + find_query_buffer]
+    add rdx, r12
     mov edi, 92
     mov esi, 52
-    lea rdx, [rip + find_query_buffer]
-    call draw_text
+    mov ecx, 332
+    call draw_bounded_ascii_width
+    cmp dword ptr [rip + find_field_select_all], 0
+    jne .render_find_query_caret_done
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .render_find_query_caret_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    lea esi, [r13d + 92]
+    mov edx, 48
+    mov ecx, 1
+    mov r8d, 20
+    mov r9d, 0xffd8dee9
+    call draw_rect
+.render_find_query_caret_done:
     cmp dword ptr [rip + find_replace_mode], 2
     jne .render_find_status
     mov edi, 20
@@ -14188,10 +14272,35 @@ render_find_replace:
     mov r9d, 0xff5e81ac
     call draw_rect
 .render_replace_text:
+    lea rdi, [rip + find_replacement_buffer]
+    mov esi, dword ptr [rip + find_replacement_cursor]
+    mov edx, 332
+    call find_field_view_start
+    mov r12d, eax
+    lea rdi, [rip + find_replacement_buffer]
+    add rdi, r12
+    mov esi, dword ptr [rip + find_replacement_cursor]
+    sub esi, r12d
+    call find_measure_ascii_prefix
+    mov r13d, eax
+    lea rdx, [rip + find_replacement_buffer]
+    add rdx, r12
     mov edi, 92
     mov esi, 96
-    lea rdx, [rip + find_replacement_buffer]
-    call draw_text
+    mov ecx, 332
+    call draw_bounded_ascii_width
+    cmp dword ptr [rip + find_field_select_all], 0
+    jne .render_find_replace_caret_done
+    cmp dword ptr [rip + find_replace_focus], 1
+    jne .render_find_replace_caret_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    lea esi, [r13d + 92]
+    mov edx, 92
+    mov ecx, 1
+    mov r8d, 20
+    mov r9d, 0xffd8dee9
+    call draw_rect
+.render_find_replace_caret_done:
 .render_find_status:
     mov eax, dword ptr [rip + find_status]
     test eax, eax
