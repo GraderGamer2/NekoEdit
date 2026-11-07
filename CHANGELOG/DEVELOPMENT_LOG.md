@@ -926,3 +926,21 @@ No feature development is being started in this entry. The next development task
 
 **Source/test/documentation commit:** [51a9b4d49166](https://github.com/GraderGamer2/NekoEdit/commit/51a9b4d491665406ccc695d9724889bc6834ff66).  
 **Branch/PR:** early-alpha, PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+
+
+---
+
+## 2026-11-07 — Render parsed TrueType glyphs in the Wayland surface
+
+**Implementation**
+- Added `src/font/rasterizer.c` to the freestanding build. It consumes the SFNT decoder's fixed outline arrays and converts TrueType contours into bounded polylines.
+- Correctly handles cyclic contour starts, on-curve points, quadratic controls, and implicit on-curve midpoints between successive off-curve points. Quadratic segments use four deterministic subdivisions; flattened paths are limited to 16,384 points.
+- Added non-zero winding rasterization with 4×4 subpixel coverage and a 32×32 maximum bitmap. A 128-entry glyph-ID LRU cache avoids repeated decoding during whole-surface repaints.
+- Routed Wayland's glyph painting through the TrueType bitmap renderer when a font is loaded; pixels are alpha blended into the SHM framebuffer. Kept the embedded 5×7 bitmap as a safe fallback.
+- Added default font attempts for common Debian font paths and retained `NEKOEDIT_FONT` as an explicit override. Document text now passes the first UTF-8 scalar of each grapheme to cmap lookup/rasterization.
+- Extended the deterministic fixture with a two-control quadratic outline and startup probes for both line-only and curved glyphs.
+
+**Current boundary**
+- This enables real font glyphs to become visible, but layout is intentionally still fixed at 8×12 cells and the rasterizer currently uses a 12-pixel em. Variable-width advances, kerning, shaping, combining-mark placement, Settings font selection, and Settings font-size controls remain later steps.
+- The embedded bitmap remains available if no supported system font is found, or the requested outline cannot be rasterized.
+- CI still must validate the exact source commit before this milestone is considered complete.

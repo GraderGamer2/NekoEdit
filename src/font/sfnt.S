@@ -1992,11 +1992,44 @@ font_init:
     jmp .Lfont_env_next
 
 .Lfont_try_defaults:
-    # Automatic directory discovery is added after explicit-path parsing is
-    # independently validated. Until then a missing/invalid override preserves
-    # the embedded bitmap fallback without probing unrelated host files.
-    jmp .Lfont_init_failed
+    # Deterministic fallback discovery; NEKOEDIT_FONT has already been tried.
+    lea rbx, [rip + font_default_candidates]
+.Lfont_default_candidate_loop:
+    mov rdi, qword ptr [rbx]
+    test rdi, rdi
+    jz .Lfont_init_failed
+    call font_try_path
+    test rax, rax
+    jz .Lfont_init_success
+    add rbx, 8
+    jmp .Lfont_default_candidate_loop
 .Lfont_init_success:
+    mov edi, 1
+    mov esi, 12
+    call font_rasterize_glyph
+    mov dword ptr [rip + font_probe_raster_result], eax
+    mov eax, dword ptr [rip + font_bitmap_width]
+    mov dword ptr [rip + font_probe_raster_width], eax
+    mov eax, dword ptr [rip + font_bitmap_height]
+    mov dword ptr [rip + font_probe_raster_height], eax
+    mov eax, dword ptr [rip + font_bitmap_pixel_count]
+    mov dword ptr [rip + font_probe_raster_pixels], eax
+    cmp dword ptr [rip + font_num_glyphs], 10
+    jb .Lfont_init_no_curve_probe
+    mov edi, 9
+    mov esi, 12
+    call font_rasterize_glyph
+    mov dword ptr [rip + font_probe_curve_result], eax
+    mov eax, dword ptr [rip + font_bitmap_width]
+    mov dword ptr [rip + font_probe_curve_width], eax
+    mov eax, dword ptr [rip + font_bitmap_height]
+    mov dword ptr [rip + font_probe_curve_height], eax
+    mov eax, dword ptr [rip + font_bitmap_pixel_count]
+    mov dword ptr [rip + font_probe_curve_pixels], eax
+    jmp .Lfont_init_success_done
+.Lfont_init_no_curve_probe:
+    mov dword ptr [rip + font_probe_curve_result], -1
+.Lfont_init_success_done:
     xor eax, eax
     jmp .Lfont_init_return
 .Lfont_init_failed:

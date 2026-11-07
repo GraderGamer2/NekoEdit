@@ -10508,6 +10508,24 @@ draw_glyph:
     jae .glyph_done
     cmp r13d, dword ptr [rip + window_height]
     jae .glyph_done
+    # Render parsed TrueType glyphs when a font is active; retain the compact
+    # 5x7 bitmap only for missing/unsupported fonts or individual glyphs.
+    cmp dword ptr [rip + font_loaded], 0
+    je .glyph_bitmap_fallback
+    mov edi, r15d
+    mov esi, r12d
+    mov edx, r13d
+    mov rcx, qword ptr [rip + shm_mapping]
+    mov r8d, dword ptr [rip + window_width]
+    mov r9d, dword ptr [rip + window_height]
+    sub rsp, 16
+    mov eax, dword ptr [rip + window_stride]
+    mov dword ptr [rsp], eax
+    call font_draw_codepoint
+    add rsp, 16
+    test eax, eax
+    jnz .glyph_done
+.glyph_bitmap_fallback:
     mov eax, r15d
     cmp eax, ' '
     je .glyph_done
@@ -11921,6 +11939,135 @@ render_selection:
     ret
 .size render_selection, . - render_selection
 
+# Decode one validated UTF-8 scalar at a logical document byte offset.
+# EDI=offset; EAX=Unicode scalar, or '?' for malformed/truncated input.
+.type doc_utf8_decode_at, @function
+doc_utf8_decode_at:
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    call doc_byte_at
+    mov r13d, eax
+    cmp eax, 0x80
+    jb .Lutf8_decode_return
+    cmp eax, 0xc2
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xe0
+    jb .Lutf8_decode_two
+    cmp eax, 0xf0
+    jb .Lutf8_decode_three
+    cmp eax, 0xf4
+    ja .Lutf8_decode_invalid
+
+    # Four-byte sequence, with the Unicode scalar upper/lower bounds.
+    mov edi, r12d
+    inc edi
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    cmp r13d, 0xf0
+    jne .Lutf8_decode_four_f4
+    cmp eax, 0x90
+    jb .Lutf8_decode_invalid
+    jmp .Lutf8_decode_four_more
+.Lutf8_decode_four_f4:
+    cmp r13d, 0xf4
+    jne .Lutf8_decode_four_more
+    cmp eax, 0x8f
+    ja .Lutf8_decode_invalid
+.Lutf8_decode_four_more:
+    and eax, 0x3f
+    mov ebx, r13d
+    and ebx, 7
+    shl ebx, 6
+    or ebx, eax
+    mov edi, r12d
+    add edi, 2
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    and eax, 0x3f
+    shl ebx, 6
+    or ebx, eax
+    mov edi, r12d
+    add edi, 3
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    and eax, 0x3f
+    shl ebx, 6
+    or ebx, eax
+    mov eax, ebx
+    jmp .Lutf8_decode_return
+
+.Lutf8_decode_three:
+    mov edi, r12d
+    inc edi
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    cmp r13d, 0xe0
+    jne .Lutf8_decode_three_ed
+    cmp eax, 0xa0
+    jb .Lutf8_decode_invalid
+    jmp .Lutf8_decode_three_more
+.Lutf8_decode_three_ed:
+    cmp r13d, 0xed
+    jne .Lutf8_decode_three_more
+    cmp eax, 0x9f
+    ja .Lutf8_decode_invalid
+.Lutf8_decode_three_more:
+    and eax, 0x3f
+    mov ebx, r13d
+    and ebx, 0x0f
+    shl ebx, 6
+    or ebx, eax
+    mov edi, r12d
+    add edi, 2
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    and eax, 0x3f
+    shl ebx, 6
+    or ebx, eax
+    mov eax, ebx
+    jmp .Lutf8_decode_return
+
+.Lutf8_decode_two:
+    mov edi, r12d
+    inc edi
+    call doc_byte_at
+    cmp eax, 0x80
+    jb .Lutf8_decode_invalid
+    cmp eax, 0xbf
+    ja .Lutf8_decode_invalid
+    and eax, 0x3f
+    mov ebx, r13d
+    and ebx, 0x1f
+    shl ebx, 6
+    or ebx, eax
+    mov eax, ebx
+    jmp .Lutf8_decode_return
+.Lutf8_decode_invalid:
+    mov eax, '?'
+.Lutf8_decode_return:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_utf8_decode_at, . - doc_utf8_decode_at
+
 .type render_document, @function
 render_document:
     push rbx
@@ -11958,7 +12105,9 @@ render_document:
 .document_control:
     cmp edx, 128
     jb .document_next_byte
-    mov edx, '?'
+    mov edi, r14d
+    call doc_utf8_decode_at
+    mov edx, eax
 .document_printable:
     mov eax, dword ptr [rip + window_width]
     sub eax, DOC_SCROLL_TRACK_X_OFFSET

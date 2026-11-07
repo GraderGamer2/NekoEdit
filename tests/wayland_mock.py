@@ -70,10 +70,10 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">I", hhea, 0, 0x00010000)
     struct.pack_into(">h", hhea, 4, 800)
     struct.pack_into(">h", hhea, 6, -200)
-    struct.pack_into(">H", hhea, 34, 9)
+    struct.pack_into(">H", hhea, 34, 10)
 
-    maxp = struct.pack(">IH", 0x00005000, 9)
-    hmtx = struct.pack(">18H", *([600, 0, 650, 0] + [600, 0] * 7))
+    maxp = struct.pack(">IH", 0x00005000, 10)
+    hmtx = struct.pack(">20H", *([600, 0, 650, 0] + [600, 0] * 8))
     # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
     glyph_a = (
         struct.pack(">5h", 1, 0, 0, 500, 700)
@@ -120,9 +120,18 @@ def synthetic_true_type_font() -> bytes:
         struct.pack(">5h", -1, -10, 5, 490, 705)
         + struct.pack(">HHbb", 0x0002, 1, -10, 5)
     )
+    # Glyph 9 has two consecutive off-curve controls. The rasterizer must
+    # insert their implied midpoint and flatten both quadratic sections.
+    quadratic_glyph = (
+        struct.pack(">5h", 1, 100, 0, 300, 400)
+        + struct.pack(">2H", 3, 0)
+        + bytes((0x31, 0x30, 0x30, 0x21))
+        + struct.pack(">4h", 100, 200, 0, -200)
+        + struct.pack(">4h", 0, 0, 400, 0)
+    )
     glyphs = (b"", glyph_a, composite_xy, composite_scaled,
               composite_point_match, composite_cycle, composite_anisotropic,
-              composite_matrix, composite_byte_args)
+              composite_matrix, composite_byte_args, quadratic_glyph)
     glyf = bytearray()
     loca_offsets = [0]
     for glyph in glyphs:
@@ -130,7 +139,7 @@ def synthetic_true_type_font() -> bytes:
         if len(glyf) & 1:
             glyf.append(0)
         loca_offsets.append(len(glyf) // 2)
-    loca = struct.pack(">10H", *loca_offsets)
+    loca = struct.pack(">11H", *loca_offsets)
 
     format4 = (
         struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
@@ -930,7 +939,7 @@ xkb_symbols "nekoedit-sparse" {
                     expected = {
                         "font_loaded": 1,
                         "font_units_per_em": 1000,
-                        "font_num_glyphs": 9,
+                        "font_num_glyphs": 10,
                         "font_ascent": 800,
                         "font_descent": -200,
                         "font_num_hmetrics": 9,
@@ -988,13 +997,26 @@ xkb_symbols "nekoedit-sparse" {
                         for name, value in expected.items()
                         if values.get(name) != value
                     }
-                    if not values["font_file_map"] or not values["font_file_size"] or mismatch:
+                    raster_errors = {}
+                    for name in (
+                        "font_probe_raster_width", "font_probe_raster_height",
+                        "font_probe_raster_pixels", "font_probe_curve_width",
+                        "font_probe_curve_height", "font_probe_curve_pixels",
+                    ):
+                        if values.get(name, 0) <= 0:
+                            raster_errors[name] = values.get(name)
+                    if values.get("font_probe_raster_result") != 0 or values.get("font_probe_curve_result") != 0:
+                        raster_errors["results"] = (
+                            values.get("font_probe_raster_result"),
+                            values.get("font_probe_curve_result"),
+                        )
+                    if not values["font_file_map"] or not values["font_file_size"] or mismatch or raster_errors:
                         raise AssertionError(
-                            "synthetic TrueType metadata/cmap/metrics validation failed: "
+                            "synthetic TrueType outline/rasterization validation failed: "
                             + repr({"mismatch": mismatch, "state": values})
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT tables and cmap format 4; decoded the simple A outline, XY-offset and nested composites, point matching, anisotropic scaling, 2×2 rotation, signed byte offsets, and safely rejected a recursive glyph cycle"
+                        "explicit NEKOEDIT_FONT path validated SFNT tables/cmap/metrics, simple and transformed composite outlines, cycle rejection, straight-edge rasterization, and quadratic flattening with implicit off-curve midpoints"
                     )
                     client.sendall(wire_message(10, 1))
                     return
