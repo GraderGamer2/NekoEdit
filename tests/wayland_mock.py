@@ -1049,9 +1049,11 @@ xkb_symbols "nekoedit-sparse" {
                     index_errors = {}
                     line_record = None
                     if values.get("doc_line_index_base"):
-                        line_record = struct.unpack(
-                            "<4I", os.pread(fd, 16, values["doc_line_index_base"])
-                        )
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as index_memory:
+                            line_record = struct.unpack(
+                                "<4I",
+                                os.pread(index_memory.fileno(), 16, values["doc_line_index_base"])
+                            )
                     if line_record is None or line_record != (96, 2, 96, 2):
                         index_errors["single_line_pixel_wrap_record"] = line_record
                     raster_errors = {}
