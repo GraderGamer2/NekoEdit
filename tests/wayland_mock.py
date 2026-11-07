@@ -1597,6 +1597,20 @@ xkb_symbols "nekoedit-sparse" {
                             f"Find did not select the first fish: range=({start},{end}), "
                             f"status={child_u32('find_status')}"
                         )
+                    # The selected result stays blue; every other literal
+                    # occurrence must also receive the amber search highlight.
+                    highlight_color = 0xFF8F7834
+                    other_match_pixels = sum(
+                        1
+                        for y in range(90, 116)
+                        for x in range(85, 260)
+                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] == highlight_color
+                    )
+                    if other_match_pixels < 4:
+                        raise AssertionError(
+                            "Find selected the first match but did not paint the other occurrence: "
+                            f"visible amber pixels={other_match_pixels}"
+                        )
                     key_step(1910, 61, "F3 selects the next Find match")
                     start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
                     end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
@@ -2645,12 +2659,21 @@ xkb_symbols "nekoedit-sparse" {
                             raise AssertionError("UI font-size increase unexpectedly closed Settings")
                     if picker_u32("ui_font_size") != 16 or picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font size did not reach 16px independently of document size")
-                    if picker_u32("settings_panel_width") <= 256 or picker_u32("settings_panel_height") <= 168:
-                        raise AssertionError("Settings panel did not grow with the selected UI font")
-                    if picker_u32("settings_ui_font_size") != 10 or picker_u32("find_ui_font_size") != 10:
+                    if (
+                        picker_u32("settings_panel_width") != 256
+                        or picker_u32("settings_panel_height") != 168
+                        or picker_u32("find_panel_width") != 448
+                        or picker_u32("find_panel_height") != 192
+                    ):
                         raise AssertionError(
-                            "scaled overlays must preserve the requested 16px physical UI font "
-                            f"through their uniform transform: settings={picker_u32('settings_ui_font_size')}, "
+                            "Settings and Find panels must retain their design dimensions when UI text grows: "
+                            f"settings=({picker_u32('settings_panel_width')}, {picker_u32('settings_panel_height')}), "
+                            f"find=({picker_u32('find_panel_width')}, {picker_u32('find_panel_height')})"
+                        )
+                    if picker_u32("settings_ui_font_size") != 16 or picker_u32("find_ui_font_size") != 16:
+                        raise AssertionError(
+                            "both overlay glyph sizes must follow the selected 16px UI font without enlarging panels: "
+                            f"settings={picker_u32('settings_ui_font_size')}, "
                             f"find={picker_u32('find_ui_font_size')}"
                         )
                     for name in ("settings_panel", "find_panel"):
