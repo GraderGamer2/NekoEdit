@@ -30,7 +30,7 @@ The normal event loop uses the same capture helpers. A leave clears pointer focu
 
 The resize hit band is 16 logical surface units on each edge. Corner hits combine the corresponding horizontal and vertical edge bits. The top-edge hit band preserves the app-drawn File menu and window-control slots; the outermost top-right corner remains resizable. The same edge-calculation routine is used for both the button press and hover feedback, so the indicated resize direction matches the request that will be sent.
 
-When the compositor advertises the optional `wp_cursor_shape_manager_v1` extension, NekoEdit requests horizontal, vertical, and diagonal resize cursors. The extension is only a visual affordance: resizing still uses `xdg_toplevel.resize`. Its `set_shape` request must use the serial from the latest pointer-enter event, not the button-press serial or motion timestamp.
+When the compositor advertises the optional `wp_cursor_shape_manager_v1` extension, NekoEdit obtains a cursor-shape device with `get_pointer`. That request carries two arguments in order: the newly allocated `wp_cursor_shape_device_v1` object ID, followed by the existing `wl_pointer` object ID. NekoEdit then requests horizontal, vertical, and diagonal resize cursors. The extension is only a visual affordance: resizing still uses `xdg_toplevel.resize`. Its `set_shape` request must use the serial from the latest pointer-enter event, not the button-press serial or motion timestamp.
 
 Protocol reference: [cursor-shape-v1](https://wayland.app/protocols/cursor-shape-v1), especially `get_pointer`, `set_shape`, and the resize shape enum.
 
@@ -38,4 +38,4 @@ If the compositor does not advertise the cursor-shape extension, NekoEdit skips 
 
 ## Regression coverage
 
-`tests/wayland_mock.py` verifies the startup pointer-enter ordering, button-press serial and edge mask, all four edges and four corners, cursor-shape mapping and refreshed enter serials, plus the no-extension fallback. The mock verifies protocol sequencing; a real GNOME/Mutter session is still required to confirm the interactive drag behavior end to end.
+`tests/wayland_mock.py` verifies the exact eight-byte `get_pointer` payload (new device ID followed by the existing `wl_pointer` ID), startup pointer-enter ordering, button-press serial and edge mask, all four edges and four corners, cursor-shape mapping and refreshed enter serials, plus the no-extension fallback. The mock verifies protocol sequencing; a real GNOME/Mutter session is still required to confirm the interactive drag behavior end to end.

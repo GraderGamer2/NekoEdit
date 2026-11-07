@@ -1,5 +1,34 @@
 # NekoEdit development log
 
+## 2026-11-07 — Correct cursor-shape get_pointer argument marshalling
+
+**User report:** The Actions #297 binary exited during Wayland startup with:
+
+```text
+NekoEdit: Wayland protocol or shared-memory setup failed.
+Wayland stage: event loop
+NekoEdit: Wayland compositor protocol error: invalid arguments for wp_cursor_shape_manager_v1#17.get_pointer
+```
+
+### Root cause
+
+- The cursor-shape protocol defines `get_pointer` arguments in this order: a new `wp_cursor_shape_device_v1` object ID, then the existing `wl_pointer` object ID.
+- NekoEdit had allocated cursor-device ID 18 but sent only the four-byte pointer ID 15. The compositor received a malformed request and rejected it before any edge-resize drag began.
+- The mock test repeated the implementation's mistake: it expected the four-byte pointer-only payload. It therefore passed while asserting invalid protocol behavior.
+
+### Fix
+
+- Marshal the full eight-byte payload as `(cursor_shape_device, pointer_object)` and set the request payload length to eight bytes.
+- Correct the mock-compositor expectation to require `(18, 15)`, making omission or reordering of either argument a regression failure.
+- Keep the optional cursor-shape extension limited to hover feedback. The actual interactive resize continues to use `xdg_toplevel.resize` with the serial from the user's button press. Compositors that do not advertise the extension continue through the no-cursor fallback.
+
+### Verification and artifact
+
+- Source/test fix: [`a440fd2683a8`](https://github.com/GraderGamer2/NekoEdit/commit/a440fd2683a821bf1535924b932be55b05ab58f7) (`fix: marshal cursor-shape get_pointer arguments`).
+- GitHub Actions [Build and test #298](https://github.com/GraderGamer2/NekoEdit/actions/runs/42327663095) passed all eight workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,625 bytes; SHA-256 `91538137f998925ed72cd9d47604380be85906a17eb8af1d7dd1aaa885f49300`; artifact ID `13555438576`; expires 2026-11-14 02:08:02 UTC. [Download Actions #298 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42327663095/artifacts/13555438576).
+- This validates the wire format against the mock compositor, not against the user's live GNOME/Mutter session. The corrected artifact still needs manual launch and edge-drag testing.
+
 ## 2026-11-07 — Restore edge-drag window resizing and resize cursor feedback
 
 **User report:** The newest build no longer crashes when Maximize is clicked, but manually dragging the window edges still does not resize the window. The Maximize fix is confirmed; edge dragging is the remaining window-management defect.

@@ -5,9 +5,17 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **249** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits).
+- Recorded implementation commits: **250** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Cursor-shape get_pointer argument marshalling
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 02:07:45 UTC | [`a440fd2683a8`](https://github.com/GraderGamer2/NekoEdit/commit/a440fd2683a821bf1535924b932be55b05ab58f7) | fix: marshal cursor-shape get_pointer arguments |
+
+Actions [#298](https://github.com/GraderGamer2/NekoEdit/actions/runs/42327663095) passed all eight workflow steps. The source now sends the required new cursor-device ID and existing `wl_pointer` ID in the eight-byte request payload; the mock test asserts both arguments. Artifact [`13555438576`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42327663095/artifacts/13555438576) is 30,625 bytes with SHA-256 `91538137f998925ed72cd9d47604380be85906a17eb8af1d7dd1aaa885f49300`, expiring 2026-11-14.
 
 ## Original `main` prototype history
 
