@@ -1014,7 +1014,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_ascent": 850,
                         "font_descent": -250,
                         "font_line_gap": 100,
-                        "font_num_hmetrics": 10,
+                        "font_num_hmetrics": 11,
                         "font_probe_advance_A": 8,
                         "font_probe_advance_B": 5,
                         "font_probe_advance_space": 3,
