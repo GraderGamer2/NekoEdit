@@ -53,13 +53,13 @@ The document layout now consumes the same TrueType metrics that the renderer use
 - **Vertical line box:** the parser uses OS/2 sTypoAscender/sTypoDescender/sTypoLineGap when a version 4+ OS/2 table sets `USE_TYPO_METRICS`; otherwise it uses hhea ascent, descent, and line gap. The combined line box (`ascent - descent + lineGap`) is scaled to the 12-pixel em, rounded upward, and clamped to 12–32 pixels. One runtime row-pitch value drives visible-row calculations, pointer Y mapping, line movement geometry, document/selection painting, and caret placement. Without a loaded font, the row pitch remains 12 pixels.
 - **Tabs:** document tabs retain 32-pixel stops; they are not shaped glyph runs.
 
-The em size itself is currently fixed at 12 pixels. Font-size changes are not exposed, and runtime font switching/cache invalidation has not been implemented. The line pitch may vary with the selected font's hhea metrics even though the em size is fixed.
+The document em defaults to 12 pixels and can be changed during the session from Settings in the 8–24px range, in two-pixel steps. A size change updates hmtx advances, raster glyph size, OS/2/hhea-derived line pitch, and rebuilds the visual-row index before repainting. Glyph cache entries are keyed by both glyph ID and raster size, so sizes can coexist safely in the bounded cache. Font-family switching and persistent font preferences remain unimplemented.
 
 ## Preferences and unfinished font controls
 
 The Settings menu currently exposes **Confirm before saving**, which is enabled by default and can be changed for the running session. Its value is not yet persisted across launches.
 
-The planned **Font…** and **Font size…** controls are not exposed yet. Before adding runtime font changes, the application needs to connect selection to a validated font-loading path, invalidate glyph-cache entries, recompute horizontal and vertical metrics, reflow wrapped lines, rebuild the visual-row index, and refresh caret/hit-test/scrollbar geometry as one operation. The current `NEKOEDIT_FONT` environment variable is the available font override.
+The planned **Font…** and **Font size…** controls are not exposed yet. Before adding runtime font-family changes, the application needs to connect selection to a validated font-loading path, replace the mapped SFNT state, and refresh cmap/metrics/outline-cache state as one operation. Runtime font-size changes are now exposed from Settings and recompute horizontal and vertical metrics, reflow wrapped lines, rebuild the visual-row index, and refresh caret/hit-test/scrollbar geometry. The current `NEKOEDIT_FONT` environment variable remains the font-file override.
 
 ## Text-rendering limits
 

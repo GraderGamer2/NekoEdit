@@ -1,3 +1,15 @@
+## 2026-11-07 — Add runtime document font-size controls
+
+Settings now provides minus/plus controls for the active document em size, from 8px to 24px in two-pixel steps. The default remains 12px.
+
+A font-size change updates the shared hmtx advance size used by document layout and pointer mapping, rasterizes document glyphs at the same em size, derives the vertical line pitch from the active OS/2/hhea metrics at that size, and rebuilds the visual-row index before bringing the caret back into view. Glyph cache entries already include raster size in their key, so switching sizes does not reuse masks from the wrong em.
+
+The synthetic-font Wayland integration exercises six increases from 12px to 24px, checks the 29px line pitch and a three-row line-index record, then decreases back to 12px and confirms the 15px pitch and two-row record are restored. The control is enabled only when a supported TrueType font is loaded; the embedded bitmap fallback remains at its legacy size.
+
+Font-family selection and persistent typography preferences remain the next rendering follow-ups.
+
+---
+
 ## 2026-11-07 — Give picker titles and byte-count values more room
 
 The latest GNOME/Mutter test confirmed that the Open/Save picker selection and field typography are now aligned, but identified two remaining small spacing issues.

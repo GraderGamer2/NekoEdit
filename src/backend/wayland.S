@@ -129,6 +129,10 @@ ui_menu_save_as_label: .asciz "Save As"
 ui_menu_confirm_save_label: .asciz "Confirm before saving"
 ui_menu_state_on:      .asciz "ON"
 ui_menu_state_off:     .asciz "OFF"
+ui_menu_font_size_label: .asciz "FONT SIZE"
+ui_menu_minus_label:   .asciz "-"
+ui_menu_plus_label:    .asciz "+"
+ui_menu_px_label:      .asciz "px"
 ui_save_confirm_title: .asciz "CONFIRM SAVE"
 ui_save_confirm_message: .asciz "SAVE THIS DOCUMENT?"
 ui_save_confirm_save_label: .asciz "SAVE"
@@ -2016,6 +2020,8 @@ caps_lock:              .long 0
 ctrl_down:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
+.global doc_font_size
+doc_font_size:          .long 0
 # Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
 doc_gap_start:          .long 0
 doc_gap_end:            .long 0
@@ -2138,6 +2144,7 @@ wayland_main:
     mov dword ptr [rip + event_fd], -1
     mov dword ptr [rip + window_width], WIDTH
     mov dword ptr [rip + window_height], HEIGHT
+    mov dword ptr [rip + doc_font_size], 12
     mov dword ptr [rip + window_buffer_id], 12
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -3128,9 +3135,50 @@ wayland_main:
     jae .pointer_menu_outside
     cmp edx, 32
     jb .pointer_menu_outside
-    cmp edx, 88
+    cmp edx, 56
+    jb .pointer_settings_confirm_toggle
+    cmp edx, 80
     jae .pointer_menu_outside
+    cmp dword ptr [rip + font_loaded], 0
+    je .pointer_menu_outside
+    cmp eax, 344
+    jb .pointer_menu_outside
+    cmp eax, 376
+    jb .pointer_settings_font_decrease
+    cmp eax, 384
+    jb .pointer_menu_outside
+    cmp eax, 416
+    jae .pointer_menu_outside
+    jmp .pointer_settings_font_increase
+
+.pointer_settings_confirm_toggle:
     xor dword ptr [rip + save_confirm_enabled], 1
+    mov dword ptr [rip + settings_menu_open], 0
+    jmp .keyboard_changed
+
+.pointer_settings_font_decrease:
+    mov eax, dword ptr [rip + doc_font_size]
+    cmp eax, 8
+    jbe .pointer_settings_font_close
+    sub eax, 2
+    jmp .pointer_settings_font_apply
+
+.pointer_settings_font_increase:
+    mov eax, dword ptr [rip + doc_font_size]
+    cmp eax, 24
+    jae .pointer_settings_font_close
+    add eax, 2
+
+.pointer_settings_font_apply:
+    mov dword ptr [rip + doc_font_size], eax
+    # Recompute line pitch and visual-row weights for the new hmtx em.
+    mov dword ptr [rip + doc_line_index_valid], 0
+    call window_update_geometry
+    call doc_line_index_rebuild
+    mov dword ptr [rip + doc_view_top_row], 0
+    call doc_ensure_cursor_visible
+
+.pointer_settings_font_close:
     mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .pointer_menu_open:
@@ -7633,7 +7681,11 @@ window_update_geometry:
     mov eax, 1
 .window_geometry_pixel_width_ready:
     mov dword ptr [rip + window_doc_pixel_width], eax
+    mov eax, dword ptr [rip + doc_font_size]
+    test eax, eax
+    jnz .window_geometry_em_ready
     mov eax, LINE_HEIGHT
+.window_geometry_em_ready:
     cmp dword ptr [rip + font_loaded], 0
     je .window_geometry_line_height_ready
     mov eax, dword ptr [rip + font_ascent]
@@ -7641,7 +7693,7 @@ window_update_geometry:
     add eax, dword ptr [rip + font_line_gap]
     test eax, eax
     jle .window_geometry_line_height_default
-    imul eax, LINE_HEIGHT
+    imul eax, dword ptr [rip + doc_font_size]
     mov ecx, dword ptr [rip + font_units_per_em]
     test ecx, ecx
     jle .window_geometry_line_height_default
@@ -7649,15 +7701,18 @@ window_update_geometry:
     dec eax
     xor edx, edx
     div ecx
-    cmp eax, LINE_HEIGHT
+    cmp eax, dword ptr [rip + doc_font_size]
     jae .window_geometry_line_height_minimum_ready
-    mov eax, LINE_HEIGHT
+    mov eax, dword ptr [rip + doc_font_size]
 .window_geometry_line_height_minimum_ready:
     cmp eax, 32
     jbe .window_geometry_line_height_ready
     mov eax, 32
     jmp .window_geometry_line_height_ready
 .window_geometry_line_height_default:
+    mov eax, dword ptr [rip + doc_font_size]
+    test eax, eax
+    jnz .window_geometry_line_height_ready
     mov eax, LINE_HEIGHT
 .window_geometry_line_height_ready:
     mov dword ptr [rip + window_doc_line_height], eax
@@ -12031,7 +12086,7 @@ render_file_menu:
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 56
+    mov r8d, 80
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -12046,8 +12101,45 @@ render_file_menu:
     jmp .render_settings_state_draw
 .render_settings_state_off:
     lea rdx, [rip + ui_menu_state_off]
-.render_settings_state_draw:
+ .render_settings_state_draw:
     call draw_text
+    mov edi, 172
+    mov esi, 68
+    lea rdx, [rip + ui_menu_font_size_label]
+    call draw_text
+    mov edi, 260
+    mov esi, 68
+    mov eax, dword ptr [rip + doc_font_size]
+    call draw_decimal
+    mov edi, 282
+    mov esi, 68
+    lea rdx, [rip + ui_menu_px_label]
+    call draw_text
+    cmp dword ptr [rip + font_loaded], 0
+    je .render_settings_size_controls_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 344
+    mov edx, 58
+    mov ecx, 28
+    mov r8d, 22
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 384
+    mov edx, 58
+    mov ecx, 28
+    mov r8d, 22
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 354
+    mov esi, 64
+    lea rdx, [rip + ui_menu_minus_label]
+    call draw_text
+    mov edi, 394
+    mov esi, 64
+    lea rdx, [rip + ui_menu_plus_label]
+    call draw_text
+.render_settings_size_controls_done:
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
@@ -12624,7 +12716,7 @@ render_document:
     mov edi, r12d
     mov esi, r13d
     mov edx, ebx
-    mov ecx, 12
+    mov ecx, dword ptr [rip + doc_font_size]
     call draw_glyph
 .document_printable_skip_draw:
     add r12d, r15d

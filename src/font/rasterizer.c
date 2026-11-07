@@ -9,6 +9,7 @@
 #define SAMPLES 4u
 
 extern int32_t font_loaded, font_units_per_em, font_num_glyphs, font_ascent;
+extern int32_t doc_font_size;
 extern int32_t font_glyph_contour_count, font_glyph_point_count;
 extern int32_t font_glyph_contour_ends[MAX_CONTOURS];
 extern uint8_t font_glyph_point_flags[MAX_POINTS];
@@ -235,9 +236,9 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
  * is declared, with hhea metrics as the fallback. The cache keeps outline work
  * off the repaint hot path. */
 /*
- * The layout and renderer share this hmtx-derived pixel advance. It uses the
- * current 12px em and rounds to the nearest pixel. The legacy eight-pixel
- * advance remains active when no supported font is loaded.
+ * The layout and renderer share this hmtx-derived pixel advance. Its active
+ * em size is supplied by the document settings; the default is 12px.
+ * The legacy eight-pixel advance remains active when no supported font is loaded.
  */
 int32_t font_probe_advance_A, font_probe_advance_B, font_probe_advance_space;
 int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
@@ -259,7 +260,9 @@ int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
 }
 
 int font_codepoint_advance_pixels(uint32_t codepoint) {
-    return font_codepoint_advance_pixels_size(codepoint,12);
+    uint32_t size=(uint32_t)doc_font_size;
+    if (!size || size>32) size=12;
+    return font_codepoint_advance_pixels_size(codepoint,size);
 }
 
 int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,

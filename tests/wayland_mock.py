@@ -1798,6 +1798,8 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_mode", "picker_focus", "picker_name_length",
                         "picker_name_cursor", "picker_name_view_start",
                         "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
+                        "doc_font_size", "window_doc_line_height", "settings_menu_open",
+                        "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                     }
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
@@ -1815,6 +1817,11 @@ xkb_symbols "nekoedit-sparse" {
                         with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
                             raw = os.pread(memory.fileno(), length, font_picker_symbols[name])
                         return raw.split(bytes((0,)), 1)[0]
+
+                    def picker_u64(name: str) -> int:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            raw = os.pread(memory.fileno(), 8, font_picker_symbols[name])
+                        return struct.unpack("<Q", raw)[0]
 
                     workflow_click(120, 12, 2600, "font picker: open File menu")
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
@@ -1978,8 +1985,62 @@ xkb_symbols "nekoedit-sparse" {
                             f"AB filename glyphs escaped their selected row: "
                             f"band=({selected_row_top},{selected_row_bottom}), ink_rows={glyph_rows!r}"
                         )
+                    # Close the picker and exercise runtime document typography.
+                    key_step(2670, 1, "close picker before changing document font size")
+                    if picker_u32("picker_mode") != 0:
+                        raise AssertionError("Escape did not close the Open picker")
+                    if picker_u32("doc_font_size") != 12 or picker_u32("window_doc_line_height") != 15:
+                        raise AssertionError("synthetic font should start at 12px with a 15px metric-derived line pitch")
+
+                    serial = 2700
+                    for index in range(6):
+                        workflow_click(200, 12, serial, f"open Settings for font-size increase {index + 1}")
+                        workflow_click(400, 68, serial + 10, f"increase document font size {index + 1}")
+                        serial += 20
+                    if (
+                        picker_u32("doc_font_size") != 24
+                        or picker_u32("window_doc_line_height") != 29
+                        or picker_u32("doc_line_index_valid") != 1
+                    ):
+                        raise AssertionError(
+                            "font-size increase did not update em size, vertical metrics, and line index: "
+                            f"size={picker_u32('doc_font_size')}, "
+                            f"line_height={picker_u32('window_doc_line_height')}, "
+                            f"index_valid={picker_u32('doc_line_index_valid')}"
+                        )
+                    line_base = picker_u64("doc_line_index_base")
+                    with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                        large_size_record = struct.unpack("<4I", os.pread(memory.fileno(), 16, line_base))
+                    if large_size_record[0:2] != (96, 3):
+                        raise AssertionError(
+                            f"font-size change did not rewrap the document index: {large_size_record!r}"
+                        )
+
+                    for index in range(6):
+                        workflow_click(200, 12, serial, f"open Settings for font-size decrease {index + 1}")
+                        workflow_click(360, 68, serial + 10, f"decrease document font size {index + 1}")
+                        serial += 20
+                    if (
+                        picker_u32("doc_font_size") != 12
+                        or picker_u32("window_doc_line_height") != 15
+                        or picker_u32("doc_line_index_valid") != 1
+                    ):
+                        raise AssertionError(
+                            "font-size decrease did not restore default metrics: "
+                            f"size={picker_u32('doc_font_size')}, "
+                            f"line_height={picker_u32('window_doc_line_height')}, "
+                            f"index_valid={picker_u32('doc_line_index_valid')}"
+                        )
+                    line_base = picker_u64("doc_line_index_base")
+                    with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                        default_size_record = struct.unpack("<4I", os.pread(memory.fileno(), 16, line_base))
+                    if default_size_record[0:2] != (96, 2):
+                        raise AssertionError(
+                            f"restoring the 12px em did not restore the visual-row index: {default_size_record!r}"
+                        )
+
                     observations.append(
-                        "8px height-fitted UI font, metric-aligned filename caret and mouse hit-testing, and selected-row text/highlight alignment verified"
+                        "picker layout and runtime 12–24px document font sizing with metric/index reflow verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
