@@ -71,13 +71,13 @@ static uint32_t bounded_length(const char *text, uint32_t limit)
     return length;
 }
 
-static int equal_text(const char *left, const char *right, uint32_t length)
+static int prefix_matches(const char *line, const char *prefix, uint32_t length)
 {
     uint32_t i;
     for (i = 0; i < length; ++i)
-        if (left[i] != right[i])
+        if (line[i] != prefix[i])
             return 0;
-    return left[length] == 0;
+    return 1;
 }
 
 static const char *environment_value(const char *key)
@@ -249,9 +249,7 @@ static void parse_line(const char *line, uint32_t length)
     uint32_t prefix;
 
     prefix = (uint32_t)(sizeof(key_document) - 1u);
-    if (length > prefix && line[0] == 'd' &&
-        equal_text(key_document, key_document, prefix) &&
-        __builtin_memcmp(line, key_document, prefix) == 0) {
+    if (length > prefix && prefix_matches(line, key_document, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) &&
             number >= 8u && number <= 32u && !(number & 1u))
             doc_font_size = (int32_t)number;
@@ -259,7 +257,7 @@ static void parse_line(const char *line, uint32_t length)
     }
 
     prefix = (uint32_t)(sizeof(key_ui) - 1u);
-    if (length > prefix && __builtin_memcmp(line, key_ui, prefix) == 0) {
+    if (length > prefix && prefix_matches(line, key_ui, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) &&
             number >= 8u && number <= 16u)
             ui_font_size = (int32_t)number;
@@ -267,22 +265,21 @@ static void parse_line(const char *line, uint32_t length)
     }
 
     prefix = (uint32_t)(sizeof(key_wrap) - 1u);
-    if (length > prefix && __builtin_memcmp(line, key_wrap, prefix) == 0) {
+    if (length > prefix && prefix_matches(line, key_wrap, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) && number <= 1u)
             doc_wrap_enabled = (int32_t)number;
         return;
     }
 
     prefix = (uint32_t)(sizeof(key_confirm) - 1u);
-    if (length > prefix && __builtin_memcmp(line, key_confirm, prefix) == 0) {
+    if (length > prefix && prefix_matches(line, key_confirm, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) && number <= 1u)
             save_confirm_enabled = (int32_t)number;
         return;
     }
 
     prefix = (uint32_t)(sizeof(key_font) - 1u);
-    if (length > prefix && line[0] == 'f' &&
-        line[5] == '_' && __builtin_memcmp(line, key_font, prefix) == 0) {
+    if (length > prefix && prefix_matches(line, key_font, prefix)) {
         uint32_t path_length = length - prefix;
         if (path_length && path_length < PATH_CAPACITY &&
             line[prefix] == '/' &&
@@ -413,7 +410,7 @@ int preferences_save(void)
         return 0;
 
     offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
-                          "version=1\ndocument_font_size=", 30u);
+                          "version=1\ndocument_font_size=", 29u);
     if (offset == UINT32_MAX)
         return 0;
     offset = append_number(output_buffer, offset, CONFIG_CAPACITY,
