@@ -59,8 +59,8 @@ def recv_wayland_message(connection: socket.socket):
     return object_id, opcode, payload, received_fds
 
 
-def synthetic_true_type_font() -> bytes:
-    """Build a tiny SFNT with A/B/j/space mappings and OS/2 typography metrics."""
+def synthetic_true_type_font(*, a_advance: int = 650, a_peak_y: int = 700) -> bytes:
+    """Build a tiny SFNT face with configurable A metrics/outline for switch tests."""
     head = bytearray(54)
     struct.pack_into(">I", head, 0, 0x00010000)
     struct.pack_into(">I", head, 12, 0x5F0F3CF5)
@@ -75,7 +75,7 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">H", hhea, 34, 11)
 
     maxp = struct.pack(">IH", 0x00005000, 11)
-    hmtx = struct.pack(">22H", *([600, 0, 650, 0, 400, 0, 300, 0] + [600, 0] * 7))
+    hmtx = struct.pack(">22H", *([600, 0, a_advance, 0, 400, 0, 300, 0] + [600, 0] * 7))
     os2 = bytearray(96)
     struct.pack_into(">H", os2, 0, 4)        # OS/2 version 4
     struct.pack_into(">H", os2, 62, 0x0080)  # fsSelection.USE_TYPO_METRICS
@@ -84,11 +84,11 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">h", os2, 72, 100)    # sTypoLineGap
     # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
     glyph_a = (
-        struct.pack(">5h", 1, 0, 0, 500, 700)
+        struct.pack(">5h", 1, 0, 0, 500, a_peak_y)
         + struct.pack(">2H", 2, 0)
         + bytes((0x31, 0x21, 0x01))
         + struct.pack(">2h", 500, -250)
-        + struct.pack(">h", 700)
+        + struct.pack(">h", a_peak_y)
     )
     # Glyph 2 translates glyph 1 by (+100,+200).
     composite_xy = (
@@ -292,6 +292,10 @@ def run(
         if font_picker_test:
             with open(os.path.join(runtime_dir, "AB"), "wb") as document:
                 document.write(b"AB")
+            with open(os.path.join(runtime_dir, "alt.ttf"), "wb") as font_file:
+                font_file.write(synthetic_true_type_font(a_advance=550, a_peak_y=400))
+            with open(os.path.join(runtime_dir, "bad.ttf"), "wb") as font_file:
+                font_file.write(b"not a TrueType SFNT")
 
     def fake_compositor():
         client = None
@@ -2128,6 +2132,8 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_panel_width", "picker_panel_height", "picker_panel_x", "picker_panel_y",
                         "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
+                        "font_loaded", "font_units_per_em", "font_num_glyphs",
+                        "font_probe_A_advance", "font_file_map", "picker_error",
                     }
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
@@ -2449,6 +2455,80 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(serial, 1, "close Settings after font-size adjustments")
                     if picker_u32("settings_menu_open") != 0:
                         raise AssertionError("Escape did not close Settings after adjustment")
+
+                    # Font selection must be transactional. A malformed TTF
+                    # cannot unmap or corrupt the currently-rendered face.
+                    original_font_map = picker_u64("font_file_map")
+                    original_advance = picker_u32("font_probe_A_advance")
+                    original_glyph_region = bytes(
+                        pixels[88 * 800 * 4 + 12 * 4 : 104 * 800 * 4 + 36 * 4]
+                    )
+                    workflow_click(200, 20, serial, "open Settings for runtime font selection")
+                    serial += 10
+                    workflow_click(200, 148, serial, "open the font-file picker")
+                    serial += 10
+                    if picker_u32("picker_mode") != 3:
+                        raise AssertionError("Settings did not open the dedicated font picker")
+                    workflow_click(200, 378, serial, "focus font picker Search field")
+                    serial += 10
+                    serial = workflow_type_path("bad", serial)
+                    key_step(serial, 15, "accept malformed TTF suggestion")
+                    serial += 2
+                    key_step(serial, 28, "reject malformed font without losing active face")
+                    serial += 2
+                    if (
+                        picker_u32("picker_mode") != 3
+                        or picker_u32("picker_error") != 4
+                        or picker_u32("font_loaded") != 1
+                        or picker_u32("font_units_per_em") != 1000
+                        or picker_u32("font_probe_A_advance") != original_advance
+                        or picker_u64("font_file_map") != original_font_map
+                    ):
+                        raise AssertionError(
+                            "invalid runtime font replacement changed the active face or closed the picker: "
+                            f"mode={picker_u32('picker_mode')}, error={picker_u32('picker_error')}, "
+                            f"loaded={picker_u32('font_loaded')}, upem={picker_u32('font_units_per_em')}, "
+                            f"A={picker_u32('font_probe_A_advance')}, map={picker_u64('font_file_map')}"
+                        )
+                    key_step(serial, 1, "cancel font picker after rejected candidate")
+                    serial += 2
+                    workflow_click(200, 20, serial, "reopen Settings for valid font replacement")
+                    serial += 10
+                    workflow_click(200, 148, serial, "reopen font-file picker")
+                    serial += 10
+                    workflow_click(200, 378, serial, "focus font Search field for alternate face")
+                    serial += 10
+                    serial = workflow_type_path("alt", serial)
+                    key_step(serial, 15, "accept alternate TTF suggestion")
+                    serial += 2
+                    key_step(serial, 28, "load alternate TrueType face")
+                    serial += 2
+                    if (
+                        picker_u32("picker_mode") != 0
+                        or picker_u32("font_loaded") != 1
+                        or picker_u32("font_units_per_em") != 1000
+                        or picker_u32("font_probe_A_advance") != 550
+                        or picker_u64("font_file_map") == original_font_map
+                        or picker_u32("doc_line_index_valid") != 1
+                        or picker_u32("window_doc_line_height") != 15
+                    ):
+                        raise AssertionError(
+                            "valid runtime font replacement did not commit new metrics and rebuild document layout: "
+                            f"mode={picker_u32('picker_mode')}, loaded={picker_u32('font_loaded')}, "
+                            f"upem={picker_u32('font_units_per_em')}, A={picker_u32('font_probe_A_advance')}, "
+                            f"map={picker_u64('font_file_map')}, line={picker_u32('window_doc_line_height')}, "
+                            f"index={picker_u32('doc_line_index_valid')}"
+                        )
+                    alternate_glyph_region = bytes(
+                        pixels[88 * 800 * 4 + 12 * 4 : 104 * 800 * 4 + 36 * 4]
+                    )
+                    if alternate_glyph_region == original_glyph_region:
+                        raise AssertionError(
+                            "same glyph ID/size reused the old face's cached A bitmap after font replacement"
+                        )
+                    observations.append(
+                        "runtime font picker filters .ttf files; malformed face rollback preserves old map/metrics; valid face switch clears glyph cache and rebuilds document layout"
+                    )
                     observations.append(
                         "picker inherits UI typography; title/Location non-overlap; persistent-open Settings; independent 12–32px document and 8–16px UI font sizing verified"
                     )

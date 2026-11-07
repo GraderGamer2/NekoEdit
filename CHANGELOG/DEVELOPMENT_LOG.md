@@ -1,3 +1,13 @@
+## 2026-11-07 — Add transactional runtime TrueType font selection
+
+Settings now opens a dedicated font picker. It displays directories and TTF files, reuses the existing filename prefix/suggestion navigation, and loads the selected face without touching the active document path or bytes.
+
+The SFNT loader now treats replacement as a transaction. It snapshots the 23 parser metadata words and the prior read-only file mapping, maps and validates the candidate, and only then commits the replacement and unmaps the old face. A malformed/unsupported candidate is unmapped and the prior metadata/mapping is restored, so the existing font remains usable. Successful replacement clears the 128-slot glyph mask cache because glyph IDs are scoped to one face, recomputes line geometry, and rebuilds the indexed document layout.
+
+The synthetic Wayland fixture adds two font files: a deliberately malformed TTF and a valid alternate face with the same glyph ID but a different A outline and horizontal advance. The regression verifies invalid replacement rollback, successful replacement, map/metric changes, cache invalidation, and index refresh. Manual GNOME/Mutter selection and visual inspection remain necessary after the CI build.
+
+---
+
 ## 2026-11-07 — Fix picker navigation regressions and sync enlarged geometry
 
 The shared UI-font and responsive picker implementation had landed, but the full mock-compositor suite exposed several stale picker-test assumptions. The failures were in test hit coordinates and old expected dimensions, not in the corresponding runtime behavior.

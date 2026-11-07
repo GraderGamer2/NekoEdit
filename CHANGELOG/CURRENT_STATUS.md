@@ -5,6 +5,7 @@
 **Development branch:** `early-alpha`  
 **Application implementation tip:** [`d3df9a4945c7`](https://github.com/GraderGamer2/NekoEdit/commit/d3df9a4945c7033eabade42dffd9520723f35aa3) — picker/UI transform and decimal renderer assembly fix. The preceding feature commit [`02ec1b15232b`](https://github.com/GraderGamer2/NekoEdit/commit/02ec1b15232cb980b8b70f1ca6e3973c898d3dc5) aligns picker and status typography with the UI preference, expands the font controls, and enlarges the picker.  
 **Validated application/test tip:** [`5a0206813c09`](https://github.com/GraderGamer2/NekoEdit/commit/5a0206813c093dda77f4120ae03f48dc9622bb09). GitHub Actions [Build and test #458](https://github.com/GraderGamer2/NekoEdit/actions/runs/42378677591) passed all eight workflow steps: freestanding build/ELF verification, CLI smoke tests, the full Wayland mock-compositor suite, executable inspection, and artifact upload. The uploaded [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42378677591/artifacts/13575799654) is 62,344 bytes (artifact ID 13575799654; seven-day retention). This is mock-compositor verification; manual GNOME/Mutter retesting of the latest typography and picker layout remains outstanding.  
+**Runtime font switching:** Settings now opens a dedicated TTF picker. SFNT replacement is transactional: an invalid candidate restores the complete previous table/metric state and leaves its mmap active; a valid replacement unmaps the old face, clears all face-local glyph masks, and rebuilds line geometry and the indexed visual-row layout. The test fixture confirms malformed-font rollback and successful replacement with a different outline/advance for the same glyph ID.  
 **Settings typography and view:** the Settings dropdown stays open while adjusting document font size (8–32px, 2px steps) or UI font size (8–16px, 1px steps). Both settings are session-only; defaults are 12px and 10px respectively. The session-only Wrap Lines toggle defaults to ON. When OFF, each logical line contributes one visual row and the editor supports horizontal wheel/Shift+vertical-wheel scrolling, caret-following, offset-aware pointer hit-testing, and viewport-clipped selection painting. No dedicated draggable horizontal scrollbar is present yet.  
 **Picker and status typography:** Open/Save picker text and the path prompt follow the UI font preference, scaling down only when the available window geometry requires it. The centered picker uses a maximum 744×424 design box and maintains 16px minimum window margins; it displays 13 rows at 16px each. The Open/Save title strip and Location label occupy separate baselines. Footer line/column/byte values use the active UI font and equal-width digit cells measured from the widest numeral, preventing proportional-font jitter.  
 **Clipboard:** Wayland Ctrl+C/X/V use immutable snapshots and asynchronous nonblocking data-device transfers with UTF-8 plain-text MIME types and a 64 MiB transfer ceiling. The integration test verifies external copy/cut and paste.  
@@ -13,11 +14,10 @@
 
 ## Current next priorities
 
-1. Runtime font-family/file selection with safe SFNT state replacement, metric/cache refresh, and index reflow.
-2. Persistent typography, UI, and view preferences.
-3. Non-ASCII keyboard text input, compose/dead keys, and Wayland text-input/IME.
-4. Output/fractional scaling and release-tracked multi-buffer scheduling; then X11 and X11 clipboard.
-5. A dedicated draggable horizontal scrollbar, find/replace, and remaining picker-field editing improvements.
+1. Persistent typography, UI, font-file, and view preferences.
+2. Non-ASCII keyboard text input, compose/dead keys, and Wayland text-input/IME.
+3. Output/fractional scaling and release-tracked multi-buffer scheduling; then X11 and X11 clipboard.
+4. A dedicated draggable horizontal scrollbar, find/replace, and remaining picker-field editing improvements.
 
 The historical milestone notes below are retained as chronology. Their "latest" labels and next-work descriptions reflect the state at the time each note was written; use the branch tip and summary above as the current source of truth.
 
