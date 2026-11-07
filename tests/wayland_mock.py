@@ -58,6 +58,59 @@ def recv_wayland_message(connection: socket.socket):
     return object_id, opcode, payload, received_fds
 
 
+def synthetic_true_type_font() -> bytes:
+    """Build a tiny, valid SFNT directory with one format-4 cmap mapping A -> glyph 1."""
+    head = bytearray(54)
+    struct.pack_into(">I", head, 0, 0x00010000)
+    struct.pack_into(">I", head, 12, 0x5F0F3CF5)
+    struct.pack_into(">H", head, 18, 1000)
+    struct.pack_into(">h", head, 50, 0)
+
+    hhea = bytearray(36)
+    struct.pack_into(">I", hhea, 0, 0x00010000)
+    struct.pack_into(">h", hhea, 4, 800)
+    struct.pack_into(">h", hhea, 6, -200)
+    struct.pack_into(">H", hhea, 34, 2)
+
+    maxp = struct.pack(">IH", 0x00005000, 2)
+    hmtx = struct.pack(">HHHH", 600, 0, 650, 0)
+    loca = struct.pack(">HHH", 0, 0, 0)
+
+    format4 = (
+        struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
+        + struct.pack(">2H", 0x0041, 0xFFFF)
+        + struct.pack(">H", 0)
+        + struct.pack(">2H", 0x0041, 0xFFFF)
+        + struct.pack(">2h", -64, 1)
+        + struct.pack(">2H", 0, 0)
+    )
+    cmap = struct.pack(">HHHHI", 0, 1, 3, 1, 12) + format4
+    tables = [
+        (b"cmap", cmap),
+        (b"glyf", b""),
+        (b"head", bytes(head)),
+        (b"hhea", bytes(hhea)),
+        (b"hmtx", hmtx),
+        (b"loca", loca),
+        (b"maxp", maxp),
+    ]
+    count = len(tables)
+    offset = 12 + count * 16
+    records = []
+    payload = bytearray()
+    for tag, table_data in tables:
+        offset = (offset + 3) & ~3
+        while 12 + count * 16 + len(payload) < offset:
+            payload.append(0)
+        records.append(struct.pack(">4sIII", tag, 0, offset, len(table_data)))
+        payload.extend(table_data)
+        while len(payload) % 4:
+            payload.append(0)
+        offset = 12 + count * 16 + len(payload)
+    header = struct.pack(">IHHHH", 0x00010000, count, 0, 0, 0)
+    return header + b"".join(records) + bytes(payload)
+
+
 def expect_message(connection, expected, label: str):
     actual = recv_wayland_message(connection)
     if actual[:3] != expected:
@@ -86,6 +139,8 @@ def run(
     dynamic_growth_test: bool = False,
     line_index_test: bool = False,
     grapheme_test: bool = False,
+    font_parser_test: bool = False,
+    font_test_path: str | None = None,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -771,6 +826,56 @@ xkb_symbols "nekoedit-sparse" {
                     keyboard_events += wire_message(16, 5, struct.pack("<ii", 10, 180))
                 keyboard_events += wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
                 client.sendall(keyboard_events)
+
+                if font_parser_test:
+                    nm_text = subprocess.check_output(["nm", "-n", binary], text=True)
+                    font_symbols = {}
+                    expected_names = {
+                        "font_loaded", "font_file_map", "font_file_size",
+                        "font_units_per_em", "font_num_glyphs", "font_ascent",
+                        "font_descent", "font_num_hmetrics", "font_index_to_loc_format",
+                        "font_cmap_format", "font_probe_A_glyph", "font_probe_A_advance",
+                    }
+                    for symbol_line in nm_text.splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in expected_names:
+                            font_symbols[fields[2]] = int(fields[0], 16)
+                    if set(font_symbols) != expected_names:
+                        raise AssertionError("font parser state symbols missing: " + repr(font_symbols))
+                    with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                        fd = memory.fileno()
+                        values = {}
+                        for name, address in font_symbols.items():
+                            size = 8 if name in {"font_file_map", "font_file_size"} else 4
+                            raw = os.pread(fd, size, address)
+                            values[name] = struct.unpack("<Q" if size == 8 else "<i", raw)[0]
+                    expected = {
+                        "font_loaded": 1,
+                        "font_units_per_em": 1000,
+                        "font_num_glyphs": 2,
+                        "font_ascent": 800,
+                        "font_descent": -200,
+                        "font_num_hmetrics": 2,
+                        "font_index_to_loc_format": 0,
+                        "font_cmap_format": 4,
+                        "font_probe_A_glyph": 1,
+                        "font_probe_A_advance": 650,
+                    }
+                    mismatch = {
+                        name: (values.get(name), value)
+                        for name, value in expected.items()
+                        if values.get(name) != value
+                    }
+                    if not values["font_file_map"] or not values["font_file_size"] or mismatch:
+                        raise AssertionError(
+                            "synthetic TrueType metadata/cmap/metrics validation failed: "
+                            + repr({"mismatch": mismatch, "state": values})
+                        )
+                    observations.append(
+                        "explicit NEKOEDIT_FONT path loaded a bounded SFNT/TrueType file; validated head, hhea, maxp, hmtx, loca, glyf and cmap format 4; Unicode A mapped to glyph 1 with a 650-unit advance"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 document_symbols = {}
                 for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
@@ -3335,6 +3440,8 @@ xkb_symbols "nekoedit-sparse" {
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
+    if font_test_path is not None:
+        environment["NEKOEDIT_FONT"] = os.path.abspath(font_test_path)
     pass_fds = ()
     if use_wayland_socket:
         environment.pop("XDG_RUNTIME_DIR", None)
@@ -3643,6 +3750,24 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(grapheme_path)
+        except FileNotFoundError:
+            pass
+
+    # SFNT reader: use a deterministic tiny TrueType fixture so CI does not
+    # depend on whichever fonts happen to be installed on the runner.
+    font_fd, font_path = tempfile.mkstemp(prefix="nekoedit-sfnt-", suffix=".ttf")
+    try:
+        with os.fdopen(font_fd, "wb") as font_file:
+            font_file.write(synthetic_true_type_font())
+        run(
+            sys.argv[1],
+            initial_file=None,
+            font_parser_test=True,
+            font_test_path=font_path,
+        )
+    finally:
+        try:
+            os.unlink(font_path)
         except FileNotFoundError:
             pass
 

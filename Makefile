@@ -8,7 +8,7 @@ APP_BINARY := $(BUILD_DIR)/nekoedit
 ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
 
-SOURCES  := src/entry.S src/linux/syscall.S src/backend/wayland.S src/backend/xkb.S
+SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES))
 
 .PHONY: all clean test test-wayland check inspect

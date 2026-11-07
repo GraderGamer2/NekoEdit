@@ -2117,6 +2117,7 @@ recv_msg_control:      .zero 64
 .extern xkb_parse_keymap
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
+.extern font_init
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
@@ -2139,6 +2140,9 @@ wayland_main:
     call load_initial_document
     test rax, rax
     js .initial_file_error
+    # A valid installed/explicit TrueType font is optional for this phase;
+    # if discovery fails, the embedded 5x7 glyph renderer remains active.
+    call font_init
     # WAYLAND_SOCKET is an inherited, already-connected descriptor. It takes
     # precedence over WAYLAND_DISPLAY when supplied by a session launcher.
     lea rdi, [rip + wayland_socket_env_key]
