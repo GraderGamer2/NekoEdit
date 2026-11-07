@@ -1862,8 +1862,19 @@ xkb_symbols "nekoedit-sparse" {
                             <= editor_scroll_state.get("window_doc_visible_rows", 0)
                         or editor_scroll_state.get("doc_scroll_thumb_height", 0) <= 0
                     ):
+                        index_debug_keys = (
+                            "doc_total_visual_rows", "window_doc_visible_rows",
+                            "doc_scroll_thumb_height", "doc_line_index_valid",
+                            "doc_line_index_columns", "doc_line_index_capacity",
+                            "doc_line_count", "doc_line_index_records",
+                        )
+                        index_debug = {
+                            key: editor_scroll_state.get(key)
+                            for key in index_debug_keys
+                        }
                         raise AssertionError(
-                            f"large wrapped document did not expose an editor scrollbar: {editor_scroll_state!r}"
+                            "large wrapped document did not expose an editor scrollbar: "
+                            + repr(index_debug)
                         )
                     scrollbar_x = editor_scroll_state["window_width"] - 21
                     thumb_top = editor_scroll_state["doc_scroll_thumb_top"]
