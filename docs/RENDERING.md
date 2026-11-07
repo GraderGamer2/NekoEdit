@@ -28,6 +28,12 @@ Do not assume that a `.ttf` or `.otf` filename proves a font is supported. Inspe
 
 ## Initial font parser
 
+The initial parser layer now loads an explicit font file supplied through NEKOEDIT_FONT. It accepts single-face TrueType-outline SFNT files and validates the bounded table directory and required cmap, head, hhea, maxp, hmtx, loca, and glyf tables. Unicode cmap formats 4 and 12, glyph-index lookup, and horizontal advance metrics are implemented.
+
+Short/long loca offsets resolve to a range checked against glyf. Simple glyph data is decoded into capped scratch arrays (256 contours, 4,096 points), including contour endpoints, instruction bounds, repeated flags, and signed/short X/Y deltas. Empty glyphs are supported. Composite glyphs are detected but not decoded yet.
+
+This parser milestone is not a renderer milestone: the active document renderer still uses the embedded 5×7 bitmap and does not yet consume the outline arrays. Font-directory discovery and font-selection UI remain deferred. The runtime remains free of Fontconfig, FreeType, HarfBuzz, and shared-library font dependencies.
+
 Implement bounds-checked parsing for the SFNT header and table directory, followed by the required tables for glyph selection, metrics, and outlines:
 
 - `cmap`: Unicode code point to glyph index.

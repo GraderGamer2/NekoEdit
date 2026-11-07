@@ -1,5 +1,34 @@
 # NekoEdit development log
 
+## 2026-11-07 — Bounded TrueType parsing and simple-glyph outline decoding
+
+**Roadmap milestone:** establish the first usable data path for a dependency-free TrueType font engine without changing the current on-screen bitmap renderer yet.
+
+### Implementation
+
+- Added an explicit NEKOEDIT_FONT loading path. The file is opened read-only, size-capped at 64 MiB, mapped with mmap, and kept mapped only after the initial SFNT validation succeeds. Automatic font-directory discovery remains disabled until parser behavior is fully validated; an unavailable or invalid optional font preserves the existing bitmap fallback.
+- Validated single-face TrueType-outline SFNT files (0x00010000) and bounded table directories. The parser validates required cmap, head, hhea, maxp, hmtx, loca, and glyf table ranges, the head magic and units-per-em, loca format, glyph count, vertical metrics, numberOfHMetrics, and the required horizontal-metric/loca storage lengths.
+- Added Unicode cmap format 4 and 12 selection and lookup. The selected subtable offset is stored as an absolute file offset; table-relative and file-relative offsets are kept distinct. Horizontal advances are read from hmtx, including the repeated final advance for glyph IDs beyond numberOfHMetrics.
+- Added bounded glyph-span resolution through short and long loca entries. A glyph span must be ordered and wholly contained by the glyf table before the decoder reads its header or payload.
+- Added simple-glyph decoding: signed bounding box, contour endpoint indices, instruction-length bounds, repeated point-flag expansion, and cumulative X/Y deltas using TrueType short-vector and signed-16-bit encodings. Scratch storage is capped at 256 contours and 4,096 points. Empty glyphs are valid; malformed/out-of-range glyphs return an error; composite glyphs return a distinct unsupported result for a later stage.
+- Kept the font engine dependency-free: no Fontconfig, FreeType, HarfBuzz, dynamic loader, or shared-library dependency has been introduced. The existing draw_glyph bitmap path remains unchanged; outline rasterization and renderer integration are future steps.
+
+### Regression coverage
+
+- The synthetic SFNT fixture maps Unicode A to glyph 1 through cmap format 4 and checks the expected 650-unit horizontal advance.
+- The fixture now contains a real three-point simple glyph contour with expected points (0, 0), (500, 0), and (250, 700). The test checks the decoded contour/point counts and final coordinate.
+- Also verifies an empty glyph span and clean rejection of a glyph index equal to numGlyphs. The rest of the existing file, editor, scrollbar, grapheme, keyboard, resize, and Wayland protocol suites run in the same CI workflow.
+
+### Verification and artifact
+
+- Parser pointer arithmetic was corrected to load the 32-bit cmap table offset without accidentally incorporating the following table-length field; cmap encoding metadata is preserved across that calculation.
+- The table-directory lookup epilogue now uses flag-preserving stack adjustment so callers can reliably test its carry-flag result when a required table is absent.
+- Temporary parser diagnostics were removed after the failing phase was isolated.
+- GitHub Actions [Build and test #347](https://github.com/GraderGamer2/NekoEdit/actions/runs/42342486872) passed all eight workflow steps on commit [763dd8fcba4d](https://github.com/GraderGamer2/NekoEdit/commit/763dd8fcba4d735008c203a3be4f99b6c9f9de43).
+- Artifact nekoedit-linux-x86_64: 47,266 bytes, SHA-256 ce78cdd8e22fea8ed6c19aa6b5a8063b6f2dbe8b0b9eb1f1d4bf6bb21393a510, artifact ID 13562136040, expires 2026-11-14 05:23:01 UTC.
+
+---
+
 ## 2026-11-07 — Unicode 18.0 grapheme-aware editing
 
 **Roadmap milestone:** make navigation, hit-testing, selection, wrapping, Backspace and Delete operate on extended grapheme clusters rather than treating every valid UTF-8 scalar as an independent cursor position.
