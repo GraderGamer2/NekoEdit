@@ -944,7 +944,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
                         "font_probe_advance_A", "font_probe_advance_B",
-                        "doc_cursor", "pointer_x", "pointer_y",
+                        "doc_cursor", "doc_length", "doc_line_count", "doc_line_index_base", "pointer_x", "pointer_y",
                         "window_doc_pixel_width",
                         "doc_pointer_debug_input_x", "doc_pointer_debug_output",
                         "doc_pointer_debug_map_x", "doc_pointer_debug_midpoint",
@@ -962,7 +962,7 @@ xkb_symbols "nekoedit-sparse" {
                         fd = memory.fileno()
                         values = {}
                         for name, address in font_symbols.items():
-                            size = 8 if name in {"font_file_map", "font_file_size"} else 4
+                            size = 8 if name in {"font_file_map", "font_file_size", "doc_line_index_base"} else 4
                             raw = os.pread(fd, size, address)
                             values[name] = struct.unpack("<Q" if size == 8 else "<i", raw)[0]
                     expected = {
@@ -977,6 +977,8 @@ xkb_symbols "nekoedit-sparse" {
                         # A=8px, B=5px: clicking at x=27 is beyond B's midpoint
                         # (B starts at x=24), so the caret is before the third A.
                         "doc_cursor": 2,
+                        "doc_length": 96,
+                        "doc_line_count": 1,
                         "pointer_x": 27,
                         "pointer_y": 98,
                         "window_doc_pixel_width": 760,
@@ -1044,6 +1046,14 @@ xkb_symbols "nekoedit-sparse" {
                         for name, value in expected.items()
                         if values.get(name) != value
                     }
+                    index_errors = {}
+                    line_record = None
+                    if values.get("doc_line_index_base"):
+                        line_record = struct.unpack(
+                            "<4I", os.pread(fd, 16, values["doc_line_index_base"])
+                        )
+                    if line_record is None or line_record != (96, 2, 96, 2):
+                        index_errors["single_line_pixel_wrap_record"] = line_record
                     raster_errors = {}
                     for name in (
                         "font_probe_raster_width", "font_probe_raster_height",
@@ -1057,10 +1067,19 @@ xkb_symbols "nekoedit-sparse" {
                             values.get("font_probe_raster_result"),
                             values.get("font_probe_curve_result"),
                         )
-                    if not values["font_file_map"] or not values["font_file_size"] or mismatch or raster_errors:
+                    if (
+                        not values["font_file_map"] or not values["font_file_size"]
+                        or mismatch or index_errors or raster_errors
+                    ):
                         raise AssertionError(
                             "synthetic TrueType outline/rasterization validation failed: "
-                            + repr({"mismatch": mismatch, "raster_errors": raster_errors, "state": values})
+                            + repr({
+                                "mismatch": mismatch,
+                                "index_errors": index_errors,
+                                "raster_errors": raster_errors,
+                                "line_record": line_record,
+                                "state": values,
+                            })
                         )
                     if not antialiased_ink_present(12, 88, 24, 16):
                         raise AssertionError(
@@ -1070,8 +1089,12 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             "third A was not painted at x=29 after the 5px B advance"
                         )
+                    if not antialiased_ink_present(12, 100, 20, 16):
+                        raise AssertionError(
+                            "last A was not painted on the second visual row after pixel-width wrapping"
+                        )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
+                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, pixel-width line wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -4120,7 +4143,7 @@ if __name__ == "__main__":
         with os.fdopen(font_fd, "wb") as font_file:
             font_file.write(synthetic_true_type_font())
         with os.fdopen(render_fd, "wb") as render_file:
-            render_file.write(b"ABA")
+            render_file.write(b"AB" + (b"A" * 94))
         run(
             sys.argv[1],
             initial_file=render_path,
