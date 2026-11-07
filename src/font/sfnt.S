@@ -191,6 +191,7 @@ font_state_backup_size:         .quad 0
 
 .section .text
 .extern process_envp
+.extern preferences_font_path_ptr
 .extern font_cache_clear
 
 # Read an unsigned big-endian 16-bit integer. RDI points at two validated bytes.
@@ -2159,7 +2160,16 @@ font_init:
     jmp .Lfont_env_next
 
 .Lfont_try_defaults:
-    # Deterministic fallback discovery; NEKOEDIT_FONT has already been tried.
+    # An explicitly selected face is tried before system defaults, unless the
+    # caller supplied NEKOEDIT_FONT (which already had first priority above).
+    mov rdi, qword ptr [rip + preferences_font_path_ptr]
+    test rdi, rdi
+    jz .Lfont_try_system_defaults
+    call font_try_path
+    test rax, rax
+    jz .Lfont_init_success
+.Lfont_try_system_defaults:
+    # Deterministic fallback discovery; NEKOEDIT_FONT and saved face tried first.
     lea rbx, [rip + font_default_candidates]
 .Lfont_default_candidate_loop:
     mov rdi, qword ptr [rbx]
