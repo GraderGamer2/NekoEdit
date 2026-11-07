@@ -23,6 +23,22 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 
 Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the complete workflow on cb469d616f8b, including six dead-key token parsing, Latin-1 acute+e composition, base+combining fallback, Backspace/Escape cancellation, existing word-drag and auto-scroll regressions, ELF inspection, and artifact upload. Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes; SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8.
 
+## User validation and clipboard/history requirements — documentation only
+
+These commits record the user's manual confirmation of whole-word drag selection/edge auto-scroll and the requested clipboard persistence / scalable Undo/Redo follow-up. They do not change application or test source and are excluded from the implementation-commit total.
+
+| Commit | Subject |
+|---|---|
+| [ba67c5bc9572](https://github.com/GraderGamer2/NekoEdit/commit/ba67c5bc95722fe7a58c600a3783c03c7ce3a656) | docs: record requested clipboard persistence and repeat-use goals |
+| [07103c6c34e1](https://github.com/GraderGamer2/NekoEdit/commit/07103c6c34e1742420c3c74b3507546e95b5f350) | docs: add design brief for scalable Undo and Redo history |
+| [238b29b4a267](https://github.com/GraderGamer2/NekoEdit/commit/238b29b4a267474e383b0ba24fb4447f3747c88b) | docs: record selection confirmation and clipboard history requirements |
+| [c9312dcbd558](https://github.com/GraderGamer2/NekoEdit/commit/c9312dcbd558c178b85f8e69872fd639fb1a68f0) | docs: record manual selection result and clipboard history review |
+| [8cb6bef330ff](https://github.com/GraderGamer2/NekoEdit/commit/8cb6bef330ffdb7ce5bf46642bd0cf97aa5db311) | docs: record selection confirmation and clipboard history requests |
+| [d4323d0b6c53](https://github.com/GraderGamer2/NekoEdit/commit/d4323d0b6c537532ca17a1e4fd7ef5e232e199d3) | docs: record selection confirmation and clipboard history goals |
+| [e04b3994f748](https://github.com/GraderGamer2/NekoEdit/commit/e04b3994f74800b5ed28e175d3a503274c87cbe2) | docs: document clipboard ownership and scalable history direction |
+
+The clipboard follow-up is to investigate desktop-manager handoff first and only consider a first-party companion if necessary. Undo/Redo should move from full-document snapshots to a delta-based, preferably disk-backed journal. The user has not specified whether Undo history should survive application restart. No feature implementation was performed in this review.
+
 ## Bounded XKB Multi_key Compose input
 
 | Commit | Subject |
