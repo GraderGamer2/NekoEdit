@@ -36,6 +36,7 @@ These commits record the user's manual confirmation of whole-word drag selection
 | [8cb6bef330ff](https://github.com/GraderGamer2/NekoEdit/commit/8cb6bef330ffdb7ce5bf46642bd0cf97aa5db311) | docs: record selection confirmation and clipboard history requests |
 | [d4323d0b6c53](https://github.com/GraderGamer2/NekoEdit/commit/d4323d0b6c537532ca17a1e4fd7ef5e232e199d3) | docs: record selection confirmation and clipboard history goals |
 | [e04b3994f748](https://github.com/GraderGamer2/NekoEdit/commit/e04b3994f74800b5ed28e175d3a503274c87cbe2) | docs: document clipboard ownership and scalable history direction |
+| [439a966e7e21](https://github.com/GraderGamer2/NekoEdit/commit/439a966e7e21a5ca80bb6cd4c65bf53cae5a8e52) | docs: add clipboard and Undo design notes to continuity guide |
 
 The clipboard follow-up is to investigate desktop-manager handoff first and only consider a first-party companion if necessary. Undo/Redo should move from full-document snapshots to a delta-based, preferably disk-backed journal. The user has not specified whether Undo history should survive application restart. No feature implementation was performed in this review.
 
