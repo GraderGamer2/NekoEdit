@@ -1943,15 +1943,17 @@ window_doc_columns:     .long 0
 window_doc_pixel_width: .long 0
 .global doc_pointer_debug_input_x, doc_pointer_debug_output
 .global doc_pointer_debug_map_x, doc_pointer_debug_midpoint
-.global doc_pointer_debug_codepoint, doc_pointer_debug_advance
+.global doc_pointer_debug_codepoint, doc_pointer_debug_advance, doc_pointer_debug_target_x
 doc_pointer_debug_input_x: .long 0
 doc_pointer_debug_output: .long 0
 doc_pointer_debug_map_x: .long 0
 doc_pointer_debug_midpoint: .long 0
 doc_pointer_debug_codepoint: .long 0
 doc_pointer_debug_advance: .long 0
+doc_pointer_debug_target_x: .long 0
 .global doc_visual_debug_map_x, doc_visual_debug_midpoint
-.global doc_visual_debug_codepoint, doc_visual_debug_advance
+.global doc_visual_debug_codepoint, doc_visual_debug_advance, doc_visual_debug_target_x
+doc_visual_debug_target_x: .long 0
 doc_visual_debug_map_x: .long 0
 doc_visual_debug_midpoint: .long 0
 doc_visual_debug_codepoint: .long 0
@@ -9967,7 +9969,7 @@ doc_visual_to_offset_indexed:
     sub rsp, 8
     mov r12d, edi
     mov ebp, esi
-    mov dword ptr [rip + doc_visual_debug_map_x], r14d
+    mov dword ptr [rip + doc_visual_debug_target_x], ebp
     mov edi, r12d
     mov esi, DOC_INDEX_ROW_TREE_OFFSET
     call doc_line_index_find_prefix
@@ -10002,8 +10004,11 @@ doc_visual_to_offset_indexed:
     mov edi, r13d
     call doc_utf8_decode_at
 .Ldoc_visual_indexed_ascii:
+    mov dword ptr [rip + doc_visual_debug_codepoint], eax
     mov edi, eax
     call font_codepoint_advance_pixels
+    mov dword ptr [rip + doc_visual_debug_map_x], r14d
+    mov dword ptr [rip + doc_visual_debug_advance], eax
     lea edx, [r14d + eax]
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_visual_indexed_glyph_row_ready
@@ -10502,6 +10507,8 @@ doc_place_cursor_from_pointer:
     mov dword ptr [rip + doc_pointer_debug_codepoint], eax
     mov eax, dword ptr [rip + doc_visual_debug_advance]
     mov dword ptr [rip + doc_pointer_debug_advance], eax
+    mov eax, dword ptr [rip + doc_visual_debug_target_x]
+    mov dword ptr [rip + doc_pointer_debug_target_x], eax
     mov eax, dword ptr [rip + doc_pointer_debug_output]
     mov dword ptr [rip + doc_cursor], eax
     ret
