@@ -2997,9 +2997,34 @@ xkb_symbols "nekoedit-sparse" {
                     # of file recommendations rather than only highlighting an
                     # invisible first prefix match.
                     open_picker_from_menu(serial + 10, "filename autocomplete suggestions")
-                    serial = double_click_picker_row(
-                        120, 152, serial + 30, "enter directory for filename autocomplete"
-                    )
+                    # Exercise directory-list keyboard navigation in
+                    # both directions before activating the selected row.
+                    key_step(serial + 30, 108, "Down selects the first directory row")
+                    list_navigation_state = picker_state()
+                    if (
+                        list_navigation_state.get("picker_focus") != 0
+                        or list_navigation_state.get("picker_selected") != 0
+                    ):
+                        raise AssertionError(
+                            f"Down did not select the first directory row: {list_navigation_state!r}"
+                        )
+                    key_step(serial + 32, 108, "Down advances to the next directory-list row")
+                    list_navigation_state = picker_state()
+                    if list_navigation_state.get("picker_selected") != 1:
+                        raise AssertionError(
+                            f"Down did not advance to the second directory-list row: {list_navigation_state!r}"
+                        )
+                    key_step(serial + 34, 103, "Up returns to the first directory-list row")
+                    list_navigation_state = picker_state()
+                    if (
+                        list_navigation_state.get("picker_focus") != 0
+                        or list_navigation_state.get("picker_selected") != 0
+                    ):
+                        raise AssertionError(
+                            f"Up did not return to the first directory row: {list_navigation_state!r}"
+                        )
+                    key_step(serial + 36, 28, "Enter opens the selected directory row")
+                    serial += 38
                     autocomplete_directory_state = picker_state()
                     expected_autocomplete_directory = os.path.join(
                         runtime_dir, "nested-dir"
@@ -3275,10 +3300,10 @@ xkb_symbols "nekoedit-sparse" {
                         or restored_state.get("window_status_mode_x") != 744
                         or restored_state.get("window_doc_pixel_width") != 760
                         or restored_state.get("window_doc_visible_rows") != 30
-                        or restored_state.get("picker_panel_x") != 40
-                        or restored_state.get("picker_panel_y") != 36
-                        or restored_state.get("picker_panel_width") != 720
-                        or restored_state.get("picker_panel_height") != 408
+                        or restored_state.get("picker_panel_x") != 28
+                        or restored_state.get("picker_panel_y") != 28
+                        or restored_state.get("picker_panel_width") != 744
+                        or restored_state.get("picker_panel_height") != 424
                         or restored_state.get("path_prompt_x") != 48
                         or restored_state.get("path_prompt_y") != 148
                         or restored_state.get("path_prompt_width") != 704
