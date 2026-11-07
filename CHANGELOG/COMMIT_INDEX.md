@@ -796,10 +796,11 @@ Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/r
 | 2026-11-07 16:30:27 UTC | [`d71b0d97681a`](https://github.com/GraderGamer2/NekoEdit/commit/d71b0d97681aa52eb327da50b949cba405181771) | fix: pass complete renameat syscall arguments |
 | 2026-11-07 16:31:50 UTC | [`39c815748a3a`](https://github.com/GraderGamer2/NekoEdit/commit/39c815748a3ab92570f423d0e501c7a6b3995be3) | fix: reject newline characters in stored font paths |
 | 2026-11-07 16:31:55 UTC | [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7) | test: reject newline injection in persisted font paths |
-| 2026-11-07 16:32:35 UTC | [`91bb7db843b2`](https://github.com/GraderGamer2/NekoEdit/commit/91bb7db843b20b1871d69ed122b2f5feaab31d56) | docs: document responsive editor features and persistent settings |
-| 2026-11-07 16:32:48 UTC | [`5e748a346b9b`](https://github.com/GraderGamer2/NekoEdit/commit/5e748a346b9b78c82363a0fe80daf0980f491af2) | docs: refresh current editor and preference status |
-| 2026-11-07 16:33:02 UTC | [`90d3009ec282`](https://github.com/GraderGamer2/NekoEdit/commit/90d3009ec2824a0cb5705aea221457bce4ec9a59) | docs: record persistent preferences implementation and validation |
-| 2026-11-07 16:33:19 UTC | [`0c3226175f84`](https://github.com/GraderGamer2/NekoEdit/commit/0c3226175f84bdfb6af449410d5fbe8f4fbcb982) | docs: add persistent preferences project-history milestone |
+| 2026-11-07 16:32:30 UTC | [`91bb7db843b2`](https://github.com/GraderGamer2/NekoEdit/commit/91bb7db843b20b1871d69ed122b2f5feaab31d56) | docs: document responsive editor features and persistent settings |
+| 2026-11-07 16:32:56 UTC | [`5e748a346b9b`](https://github.com/GraderGamer2/NekoEdit/commit/5e748a346b9b78c82363a0fe80daf0980f491af2) | docs: refresh current editor and preference status |
+| 2026-11-07 16:33:33 UTC | [`90d3009ec282`](https://github.com/GraderGamer2/NekoEdit/commit/90d3009ec2824a0cb5705aea221457bce4ec9a59) | docs: record persistent preferences implementation and validation |
+| 2026-11-07 16:34:19 UTC | [`05ebbb8dfc1e`](https://github.com/GraderGamer2/NekoEdit/commit/05ebbb8dfc1ec60b83935d74968831215a116f55) | docs: index responsive editor and preference commits |
+| 2026-11-07 16:34:02 UTC | [`0c3226175f84`](https://github.com/GraderGamer2/NekoEdit/commit/0c3226175f84bdfb6af449410d5fbe8f4fbcb982) | docs: add persistent preferences project-history milestone |
 
 Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed on application/test tip `8dc43ea3a1a3`; artifact [13582086670](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592/artifacts/13582086670) is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. The following commits in this section update repository documentation only.
 
