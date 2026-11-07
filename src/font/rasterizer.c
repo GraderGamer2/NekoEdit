@@ -169,8 +169,10 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     for (uint32_t i=0;i<flat_count;++i) {
         int64_t x=flat_x[i], y=flat_y[i];
         if (x < -131072 || x > 131072 || y < -131072 || y > 131072) return -1;
-        if (x<minx) minx=x; if (x>maxx) maxx=x;
-        if (y<miny) miny=y; if (y>maxy) maxy=y;
+        if (x < minx) minx = x;
+        if (x > maxx) maxx = x;
+        if (y < miny) miny = y;
+        if (y > maxy) maxy = y;
     }
     /* Padding captures extrema between the deterministic quadratic samples. */
     left=floor_div(minx*size,upem)-1;
