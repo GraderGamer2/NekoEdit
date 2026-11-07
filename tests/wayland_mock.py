@@ -70,10 +70,10 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">I", hhea, 0, 0x00010000)
     struct.pack_into(">h", hhea, 4, 800)
     struct.pack_into(">h", hhea, 6, -200)
-    struct.pack_into(">H", hhea, 34, 2)
+    struct.pack_into(">H", hhea, 34, 9)
 
-    maxp = struct.pack(">IH", 0x00005000, 2)
-    hmtx = struct.pack(">HHHH", 600, 0, 650, 0)
+    maxp = struct.pack(">IH", 0x00005000, 9)
+    hmtx = struct.pack(">18H", *([600, 0, 650, 0] + [600, 0] * 7))
     # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
     glyph_a = (
         struct.pack(">5h", 1, 0, 0, 500, 700)
@@ -82,9 +82,55 @@ def synthetic_true_type_font() -> bytes:
         + struct.pack(">2h", 500, -250)
         + struct.pack(">h", 700)
     )
-    glyf = glyph_a + bytes((-len(glyph_a)) % 4)
-    # Glyph 0 is empty; glyph 1 occupies the complete 24-byte glyf table.
-    loca = struct.pack(">HHH", 0, 0, len(glyf) // 2)
+    # Glyph 2 translates glyph 1 by (+100,+200).
+    composite_xy = (
+        struct.pack(">5h", -1, 100, 200, 600, 900)
+        + struct.pack(">HHhh", 0x0003, 1, 100, 200)
+    )
+    # Glyph 3 nests glyph 2, scales it by 0.5, then offsets it (-50,+10).
+    composite_scaled = (
+        struct.pack(">5h", -1, 0, 10, 250, 460)
+        + struct.pack(">HHhhh", 0x000B, 2, -50, 10, 8192)
+    )
+    # Glyph 4 attaches a second copy of glyph 1 by matching parent point 0
+    # with child point 1; this covers point-number arguments, not XY offsets.
+    composite_point_match = (
+        struct.pack(">5h", -1, -500, 0, 500, 700)
+        + struct.pack(">HHhh", 0x0023, 1, 0, 0)
+        + struct.pack(">HHHH", 0x0001, 1, 0, 1)
+    )
+    # Glyph 5 references itself. The decoder must reject this cycle safely.
+    composite_cycle = (
+        struct.pack(">5h", -1, 0, 0, 0, 0)
+        + struct.pack(">HHhh", 0x0003, 5, 0, 0)
+    )
+    # Glyph 6 uses independent X/Y scales (0.5 and 2.0).
+    composite_anisotropic = (
+        struct.pack(">5h", -1, 0, 0, 250, 1400)
+        + struct.pack(">HHhhhh", 0x0043, 1, 0, 0, 8192, 32768)
+    )
+    # Glyph 7 rotates the simple outline 90 degrees using the 2x2 matrix:
+    # x' = -y, y' = x. Stored order is xscale, scale01, scale10, yscale.
+    composite_matrix = (
+        struct.pack(">5h", -1, -700, 0, 0, 500)
+        + struct.pack(">HHhhhhhh", 0x0083, 1, 0, 0, 0, 16384, -16384, 0)
+    )
+    # Glyph 8 uses signed byte XY offsets rather than 16-bit arguments.
+    composite_byte_args = (
+        struct.pack(">5h", -1, -10, 5, 490, 705)
+        + struct.pack(">HHbb", 0x0002, 1, -10, 5)
+    )
+    glyphs = (b"", glyph_a, composite_xy, composite_scaled,
+              composite_point_match, composite_cycle, composite_anisotropic,
+              composite_matrix, composite_byte_args)
+    glyf = bytearray()
+    loca_offsets = [0]
+    for glyph in glyphs:
+        glyf.extend(glyph)
+        if len(glyf) & 1:
+            glyf.append(0)
+        loca_offsets.append(len(glyf) // 2)
+    loca = struct.pack(">10H", *loca_offsets)
 
     format4 = (
         struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
@@ -849,6 +895,24 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_A_points", "font_probe_A_last_x", "font_probe_A_last_y",
                         "font_probe_empty_result", "font_probe_empty_contours",
                         "font_probe_empty_points", "font_probe_oob_result",
+                        "font_probe_composite_result", "font_probe_composite_contours",
+                        "font_probe_composite_points", "font_probe_composite_first_x",
+                        "font_probe_composite_first_y", "font_probe_composite_last_x",
+                        "font_probe_composite_last_y", "font_probe_nested_result",
+                        "font_probe_nested_contours", "font_probe_nested_points",
+                        "font_probe_nested_last_x", "font_probe_nested_last_y",
+                        "font_probe_pointmatch_result", "font_probe_pointmatch_contours",
+                        "font_probe_pointmatch_points", "font_probe_pointmatch_last_x",
+                        "font_probe_pointmatch_last_y", "font_probe_cycle_result",
+                        "font_probe_anisotropic_result", "font_probe_anisotropic_contours",
+                        "font_probe_anisotropic_points", "font_probe_anisotropic_last_x",
+                        "font_probe_anisotropic_last_y", "font_probe_matrix_result",
+                        "font_probe_matrix_contours", "font_probe_matrix_points",
+                        "font_probe_matrix_last_x", "font_probe_matrix_last_y",
+                        "font_probe_byte_result", "font_probe_byte_contours",
+                        "font_probe_byte_points", "font_probe_byte_first_x",
+                        "font_probe_byte_first_y", "font_probe_byte_last_x",
+                        "font_probe_byte_last_y",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -866,10 +930,10 @@ xkb_symbols "nekoedit-sparse" {
                     expected = {
                         "font_loaded": 1,
                         "font_units_per_em": 1000,
-                        "font_num_glyphs": 2,
+                        "font_num_glyphs": 9,
                         "font_ascent": 800,
                         "font_descent": -200,
-                        "font_num_hmetrics": 2,
+                        "font_num_hmetrics": 9,
                         "font_index_to_loc_format": 0,
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
@@ -883,6 +947,41 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_empty_contours": 0,
                         "font_probe_empty_points": 0,
                         "font_probe_oob_result": -1,
+                        "font_probe_composite_result": 0,
+                        "font_probe_composite_contours": 1,
+                        "font_probe_composite_points": 3,
+                        "font_probe_composite_first_x": 100,
+                        "font_probe_composite_first_y": 200,
+                        "font_probe_composite_last_x": 350,
+                        "font_probe_composite_last_y": 900,
+                        "font_probe_nested_result": 0,
+                        "font_probe_nested_contours": 1,
+                        "font_probe_nested_points": 3,
+                        "font_probe_nested_last_x": 125,
+                        "font_probe_nested_last_y": 460,
+                        "font_probe_pointmatch_result": 0,
+                        "font_probe_pointmatch_contours": 2,
+                        "font_probe_pointmatch_points": 6,
+                        "font_probe_pointmatch_last_x": -250,
+                        "font_probe_pointmatch_last_y": 700,
+                        "font_probe_cycle_result": -1,
+                        "font_probe_anisotropic_result": 0,
+                        "font_probe_anisotropic_contours": 1,
+                        "font_probe_anisotropic_points": 3,
+                        "font_probe_anisotropic_last_x": 125,
+                        "font_probe_anisotropic_last_y": 1400,
+                        "font_probe_matrix_result": 0,
+                        "font_probe_matrix_contours": 1,
+                        "font_probe_matrix_points": 3,
+                        "font_probe_matrix_last_x": -700,
+                        "font_probe_matrix_last_y": 250,
+                        "font_probe_byte_result": 0,
+                        "font_probe_byte_contours": 1,
+                        "font_probe_byte_points": 3,
+                        "font_probe_byte_first_x": -10,
+                        "font_probe_byte_first_y": 5,
+                        "font_probe_byte_last_x": 240,
+                        "font_probe_byte_last_y": 705,
                     }
                     mismatch = {
                         name: (values.get(name), value)
@@ -895,7 +994,7 @@ xkb_symbols "nekoedit-sparse" {
                             + repr({"mismatch": mismatch, "state": values})
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path loaded a bounded SFNT/TrueType file; validated head, hhea, maxp, hmtx, loca, glyf and cmap format 4; Unicode A mapped to glyph 1 with a 650-unit advance; decoded its three-point simple contour and checked empty/out-of-range glyphs"
+                        "explicit NEKOEDIT_FONT path validated SFNT tables and cmap format 4; decoded the simple A outline, XY-offset and nested composites, point matching, anisotropic scaling, 2×2 rotation, signed byte offsets, and safely rejected a recursive glyph cycle"
                     )
                     client.sendall(wire_message(10, 1))
                     return

@@ -2,7 +2,7 @@
 
 # Bounded, dependency-free reader for single-face TrueType-outline SFNT files.
 # The glyph rasterizer is a later layer; this module owns discovery, mapping,
-# table validation, cmap lookup and horizontal metrics only.
+# table validation, cmap lookup, metrics and bounded outline decoding.
 
 .equ FONT_SYS_openat, 257
 .equ FONT_SYS_close, 3
@@ -18,6 +18,12 @@
 .equ FONT_MAX_CMAP_GROUPS, 65536
 .equ FONT_MAX_GLYPH_CONTOURS, 256
 .equ FONT_MAX_GLYPH_POINTS, 4096
+.equ FONT_MAX_COMPOSITE_DEPTH, 16
+.equ FONT_FRAME_FLAGS_OFFSET, 24
+.equ FONT_FRAME_X_OFFSET, 4120
+.equ FONT_FRAME_Y_OFFSET, 20504
+.equ FONT_FRAME_ENDS_OFFSET, 36888
+.equ FONT_GLYPH_FRAME_STRIDE, 37912
 
 # Four-byte table tags expressed as their little-endian in-memory integers.
 .equ FONT_TAG_CMAP, 0x70616d63
@@ -59,6 +65,20 @@ font_path_dejavu_sans:
 .global font_probe_A_last_x, font_probe_A_last_y
 .global font_probe_empty_result, font_probe_empty_contours, font_probe_empty_points
 .global font_probe_oob_result
+.global font_probe_composite_result, font_probe_composite_contours, font_probe_composite_points
+.global font_probe_composite_first_x, font_probe_composite_first_y
+.global font_probe_composite_last_x, font_probe_composite_last_y
+.global font_probe_nested_result, font_probe_nested_contours, font_probe_nested_points
+.global font_probe_nested_last_x, font_probe_nested_last_y
+.global font_probe_pointmatch_result, font_probe_pointmatch_contours, font_probe_pointmatch_points
+.global font_probe_pointmatch_last_x, font_probe_pointmatch_last_y
+.global font_probe_cycle_result
+.global font_probe_anisotropic_result, font_probe_anisotropic_contours, font_probe_anisotropic_points
+.global font_probe_anisotropic_last_x, font_probe_anisotropic_last_y
+.global font_probe_matrix_result, font_probe_matrix_contours, font_probe_matrix_points
+.global font_probe_matrix_last_x, font_probe_matrix_last_y
+.global font_probe_byte_result, font_probe_byte_contours, font_probe_byte_points
+.global font_probe_byte_first_x, font_probe_byte_first_y, font_probe_byte_last_x, font_probe_byte_last_y
 .global font_glyph_contour_count, font_glyph_point_count
 .global font_glyph_x_min, font_glyph_y_min, font_glyph_x_max, font_glyph_y_max
 .global font_glyph_contour_ends, font_glyph_point_flags
@@ -96,6 +116,41 @@ font_probe_empty_result:        .long 0
 font_probe_empty_contours:      .long 0
 font_probe_empty_points:        .long 0
 font_probe_oob_result:          .long 0
+font_probe_composite_result:     .long 0
+font_probe_composite_contours:   .long 0
+font_probe_composite_points:     .long 0
+font_probe_composite_first_x:   .long 0
+font_probe_composite_first_y:   .long 0
+font_probe_composite_last_x:    .long 0
+font_probe_composite_last_y:    .long 0
+font_probe_nested_result:        .long 0
+font_probe_nested_contours:      .long 0
+font_probe_nested_points:        .long 0
+font_probe_nested_last_x:       .long 0
+font_probe_nested_last_y:       .long 0
+font_probe_pointmatch_result:    .long 0
+font_probe_pointmatch_contours:  .long 0
+font_probe_pointmatch_points:    .long 0
+font_probe_pointmatch_last_x:   .long 0
+font_probe_pointmatch_last_y:   .long 0
+font_probe_cycle_result:         .long 0
+font_probe_anisotropic_result:    .long 0
+font_probe_anisotropic_contours:  .long 0
+font_probe_anisotropic_points:    .long 0
+font_probe_anisotropic_last_x:   .long 0
+font_probe_anisotropic_last_y:   .long 0
+font_probe_matrix_result:         .long 0
+font_probe_matrix_contours:       .long 0
+font_probe_matrix_points:         .long 0
+font_probe_matrix_last_x:        .long 0
+font_probe_matrix_last_y:        .long 0
+font_probe_byte_result:           .long 0
+font_probe_byte_contours:         .long 0
+font_probe_byte_points:           .long 0
+font_probe_byte_first_x:         .long 0
+font_probe_byte_first_y:         .long 0
+font_probe_byte_last_x:          .long 0
+font_probe_byte_last_y:          .long 0
 font_glyph_contour_count:       .long 0
 font_glyph_point_count:         .long 0
 font_glyph_x_min:               .long 0
@@ -108,6 +163,10 @@ font_glyph_point_flags:         .zero FONT_MAX_GLYPH_POINTS
 .balign 4
 font_glyph_points_x:            .zero FONT_MAX_GLYPH_POINTS * 4
 font_glyph_points_y:            .zero FONT_MAX_GLYPH_POINTS * 4
+.balign 4
+font_glyph_decode_stack:         .zero FONT_MAX_COMPOSITE_DEPTH * 4
+.balign 8
+font_glyph_frames:               .zero FONT_MAX_COMPOSITE_DEPTH * FONT_GLYPH_FRAME_STRIDE
 .balign 8
 font_file_map:                  .quad 0
 font_file_size:                 .quad 0
@@ -632,6 +691,139 @@ font_try_path:
     mov edi, dword ptr [rip + font_num_glyphs]
     call font_glyph_load_outline
     mov dword ptr [rip + font_probe_oob_result], eax
+
+    # Probe XY-offset composites, nested scale transforms, point matching,
+    # and a recursive cycle. These checks exercise the complete merge path.
+    mov edi, 2
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_composite_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_composite_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_composite_points], eax
+    test eax, eax
+    jz .Lfont_probe_composite_done
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi]
+    mov dword ptr [rip + font_probe_composite_first_x], eax
+    mov eax, dword ptr [rip + font_glyph_points_y]
+    mov dword ptr [rip + font_probe_composite_first_y], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_composite_last_x], eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_composite_last_y], eax
+.Lfont_probe_composite_done:
+    mov edi, 3
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_nested_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_nested_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_nested_points], eax
+    test eax, eax
+    jz .Lfont_probe_nested_done
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_nested_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_nested_last_y], eax
+.Lfont_probe_nested_done:
+    mov edi, 4
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_pointmatch_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_pointmatch_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_pointmatch_points], eax
+    test eax, eax
+    jz .Lfont_probe_pointmatch_done
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_pointmatch_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_pointmatch_last_y], eax
+.Lfont_probe_pointmatch_done:
+    mov edi, 5
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_cycle_result], eax
+
+    mov edi, 6
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_anisotropic_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_anisotropic_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_anisotropic_points], eax
+    test eax, eax
+    jz .Lfont_probe_anisotropic_done
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_anisotropic_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_anisotropic_last_y], eax
+.Lfont_probe_anisotropic_done:
+    mov edi, 7
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_matrix_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_matrix_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_matrix_points], eax
+    test eax, eax
+    jz .Lfont_probe_matrix_done
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_matrix_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_matrix_last_y], eax
+.Lfont_probe_matrix_done:
+    mov edi, 8
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_byte_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_byte_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_byte_points], eax
+    test eax, eax
+    jz .Lfont_probe_byte_done
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi]
+    mov dword ptr [rip + font_probe_byte_first_x], eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi]
+    mov dword ptr [rip + font_probe_byte_first_y], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_byte_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_byte_last_y], eax
+.Lfont_probe_byte_done:
     mov dword ptr [rip + font_loaded], 1
     xor eax, eax
     jmp .Lfont_try_path_return
@@ -849,21 +1041,369 @@ font_glyph_advance:
     ret
 .size font_glyph_advance, . - font_glyph_advance
 
-# Decode one simple TrueType glyph into bounded design-unit point arrays.
-# EDI=glyph index. EAX=0 success, -1 malformed/out-of-range, -2 composite.
-# The output arrays are scratch storage; callers must consume them before the
-# next call. Limits are explicit so untrusted fonts cannot request huge arrays.
-.global font_glyph_load_outline
-.type font_glyph_load_outline, @function
-font_glyph_load_outline:
+# Save the current aggregate outline into the frame for one composite depth.
+# EDI=depth. This is called immediately before a recursive child decode.
+.type font_outline_frame_save, @function
+font_outline_frame_save:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov ebx, edi
+    cmp ebx, FONT_MAX_COMPOSITE_DEPTH
+    jae .Lfont_frame_save_done
+    imul rbx, FONT_GLYPH_FRAME_STRIDE
+    lea rbx, [rip + font_glyph_frames + rbx]
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rbx], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rbx + 4], eax
+    mov eax, dword ptr [rip + font_glyph_x_min]
+    mov dword ptr [rbx + 8], eax
+    mov eax, dword ptr [rip + font_glyph_y_min]
+    mov dword ptr [rbx + 12], eax
+    mov eax, dword ptr [rip + font_glyph_x_max]
+    mov dword ptr [rbx + 16], eax
+    mov eax, dword ptr [rip + font_glyph_y_max]
+    mov dword ptr [rbx + 20], eax
+    mov r12d, dword ptr [rbx]
+    lea rsi, [rip + font_glyph_point_flags]
+    lea rdi, [rbx + FONT_FRAME_FLAGS_OFFSET]
+    mov ecx, r12d
+    rep movsb
+    lea rsi, [rip + font_glyph_points_x]
+    lea rdi, [rbx + FONT_FRAME_X_OFFSET]
+    mov ecx, r12d
+    rep movsd
+    lea rsi, [rip + font_glyph_points_y]
+    lea rdi, [rbx + FONT_FRAME_Y_OFFSET]
+    mov ecx, r12d
+    rep movsd
+    mov r13d, dword ptr [rbx + 4]
+    lea rsi, [rip + font_glyph_contour_ends]
+    lea rdi, [rbx + FONT_FRAME_ENDS_OFFSET]
+    mov ecx, r13d
+    rep movsd
+.Lfont_frame_save_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size font_outline_frame_save, . - font_outline_frame_save
+
+# Merge the decoded child outline into the saved parent aggregate.
+# EDI=depth, ESI/EDX=XY offsets or parent/child point indices,
+# ECX/R8D/R9D/R10D=(xscale, scale01, scale10, yscale), R11D=1 for XY args.
+.type font_outline_frame_merge, @function
+font_outline_frame_merge:
     push rbx
     push rbp
     push r12
     push r13
     push r14
     push r15
+    sub rsp, 40
+    mov dword ptr [rsp], edi
+    mov dword ptr [rsp + 4], esi
+    mov dword ptr [rsp + 8], edx
+    mov dword ptr [rsp + 12], ecx
+    mov dword ptr [rsp + 16], r8d
+    mov dword ptr [rsp + 20], r9d
+    mov dword ptr [rsp + 24], r10d
+    mov dword ptr [rsp + 28], r11d
+    cmp edi, FONT_MAX_COMPOSITE_DEPTH
+    jae .Lfont_frame_merge_bad
+    imul rax, rdi, FONT_GLYPH_FRAME_STRIDE
+    lea rbx, [rip + font_glyph_frames + rax]
+    mov ebp, dword ptr [rbx]
+    mov r12d, dword ptr [rbx + 4]
+    mov r13d, dword ptr [rip + font_glyph_point_count]
+    mov r14d, dword ptr [rip + font_glyph_contour_count]
+    lea eax, [rbp + r13]
+    cmp eax, FONT_MAX_GLYPH_POINTS
+    ja .Lfont_frame_merge_bad
+    lea eax, [r12 + r14]
+    cmp eax, FONT_MAX_GLYPH_CONTOURS
+    ja .Lfont_frame_merge_bad
+
+    # Resolve point-matching arguments after the child has been transformed
+    # by its linear matrix. The parent index refers to already accumulated
+    # points; the child index refers to this component's decoded point array.
+    cmp dword ptr [rsp + 28], 0
+    jne .Lfont_frame_merge_xy_offset
+    mov eax, dword ptr [rsp + 4]
+    cmp eax, ebp
+    jae .Lfont_frame_merge_bad
+    mov ecx, dword ptr [rsp + 8]
+    cmp ecx, r13d
+    jae .Lfont_frame_merge_bad
+    movsxd r8, dword ptr [rbx + FONT_FRAME_X_OFFSET + rax * 4]
+    movsxd r9, dword ptr [rbx + FONT_FRAME_Y_OFFSET + rax * 4]
+    lea rsi, [rip + font_glyph_points_x]
+    movsxd rax, dword ptr [rsi + rcx * 4]
+    lea rsi, [rip + font_glyph_points_y]
+    movsxd rdx, dword ptr [rsi + rcx * 4]
+    movsxd rcx, dword ptr [rsp + 12]
+    imul rax, rcx
+    movsxd rcx, dword ptr [rsp + 20]
+    imul rdx, rcx
+    add rax, rdx
+    sar rax, 14
+    sub r8, rax
+    mov rax, 0x7fffffff
+    cmp r8, rax
+    jg .Lfont_frame_merge_bad
+    mov rax, -2147483648
+    cmp r8, rax
+    jl .Lfont_frame_merge_bad
+    mov dword ptr [rsp + 32], r8d
+    mov ecx, dword ptr [rsp + 8]
+    lea rsi, [rip + font_glyph_points_x]
+    movsxd rax, dword ptr [rsi + rcx * 4]
+    lea rsi, [rip + font_glyph_points_y]
+    movsxd rdx, dword ptr [rsi + rcx * 4]
+    movsxd rcx, dword ptr [rsp + 16]
+    imul rax, rcx
+    movsxd rcx, dword ptr [rsp + 24]
+    imul rdx, rcx
+    add rax, rdx
+    sar rax, 14
+    sub r9, rax
+    mov rax, 0x7fffffff
+    cmp r9, rax
+    jg .Lfont_frame_merge_bad
+    mov rax, -2147483648
+    cmp r9, rax
+    jl .Lfont_frame_merge_bad
+    mov dword ptr [rsp + 36], r9d
+    jmp .Lfont_frame_merge_offsets_ready
+.Lfont_frame_merge_xy_offset:
+    mov eax, dword ptr [rsp + 4]
+    mov dword ptr [rsp + 32], eax
+    mov eax, dword ptr [rsp + 8]
+    mov dword ptr [rsp + 36], eax
+.Lfont_frame_merge_offsets_ready:
+    xor r15d, r15d
+.Lfont_frame_merge_point_loop:
+    cmp r15d, r13d
+    jae .Lfont_frame_merge_points_done
+    lea rsi, [rip + font_glyph_points_x]
+    movsxd rax, dword ptr [rsi + r15 * 4]
+    lea rsi, [rip + font_glyph_points_y]
+    movsxd rdx, dword ptr [rsi + r15 * 4]
+    movsxd r8, dword ptr [rsp + 12]
+    imul rax, r8
+    movsxd r8, dword ptr [rsp + 20]
+    imul rdx, r8
+    add rax, rdx
+    sar rax, 14
+    movsxd r8, dword ptr [rsp + 32]
+    add rax, r8
+    mov rdx, 0x7fffffff
+    cmp rax, rdx
+    jg .Lfont_frame_merge_bad
+    mov rdx, -2147483648
+    cmp rax, rdx
+    jl .Lfont_frame_merge_bad
+    # Store the checked transformed X coordinate at the appended point index.
+    lea rsi, [rip + font_glyph_points_x]
+    movsxd rax, dword ptr [rsi + r15 * 4]
+    lea rsi, [rip + font_glyph_points_y]
+    movsxd rdx, dword ptr [rsi + r15 * 4]
+    movsxd r8, dword ptr [rsp + 12]
+    imul rax, r8
+    movsxd r8, dword ptr [rsp + 20]
+    imul rdx, r8
+    add rax, rdx
+    sar rax, 14
+    movsxd r8, dword ptr [rsp + 32]
+    add rax, r8
+    lea rdi, [rbx + FONT_FRAME_X_OFFSET]
+    lea ecx, [rbp + r15]
+    mov dword ptr [rdi + rcx * 4], eax
+
+    lea rsi, [rip + font_glyph_points_x]
+    movsxd rax, dword ptr [rsi + r15 * 4]
+    lea rsi, [rip + font_glyph_points_y]
+    movsxd rdx, dword ptr [rsi + r15 * 4]
+    movsxd r8, dword ptr [rsp + 16]
+    imul rax, r8
+    movsxd r8, dword ptr [rsp + 24]
+    imul rdx, r8
+    add rax, rdx
+    sar rax, 14
+    movsxd r8, dword ptr [rsp + 36]
+    add rax, r8
+    mov rdx, 0x7fffffff
+    cmp rax, rdx
+    jg .Lfont_frame_merge_bad
+    mov rdx, -2147483648
+    cmp rax, rdx
+    jl .Lfont_frame_merge_bad
+    lea rdi, [rbx + FONT_FRAME_Y_OFFSET]
+    lea ecx, [rbp + r15]
+    mov dword ptr [rdi + rcx * 4], eax
+
+    lea rsi, [rip + font_glyph_point_flags]
+    movzx eax, byte ptr [rsi + r15]
+    lea rdi, [rbx + FONT_FRAME_FLAGS_OFFSET]
+    lea ecx, [rbp + r15]
+    mov byte ptr [rdi + rcx], al
+    inc r15d
+    jmp .Lfont_frame_merge_point_loop
+.Lfont_frame_merge_points_done:
+    xor r15d, r15d
+.Lfont_frame_merge_contour_loop:
+    cmp r15d, r14d
+    jae .Lfont_frame_merge_contours_done
+    lea rsi, [rip + font_glyph_contour_ends]
+    mov eax, dword ptr [rsi + r15 * 4]
+    cmp eax, r13d
+    jae .Lfont_frame_merge_bad
+    add eax, ebp
+    lea rdi, [rbx + FONT_FRAME_ENDS_OFFSET]
+    lea ecx, [r12 + r15]
+    mov dword ptr [rdi + rcx * 4], eax
+    inc r15d
+    jmp .Lfont_frame_merge_contour_loop
+.Lfont_frame_merge_contours_done:
+    add ebp, r13d
+    add r12d, r14d
+    mov dword ptr [rbx], ebp
+    mov dword ptr [rbx + 4], r12d
+
+    # Restore the merged aggregate into the public scratch arrays.
+    lea rsi, [rbx + FONT_FRAME_FLAGS_OFFSET]
+    lea rdi, [rip + font_glyph_point_flags]
+    mov ecx, ebp
+    rep movsb
+    lea rsi, [rbx + FONT_FRAME_X_OFFSET]
+    lea rdi, [rip + font_glyph_points_x]
+    mov ecx, ebp
+    rep movsd
+    lea rsi, [rbx + FONT_FRAME_Y_OFFSET]
+    lea rdi, [rip + font_glyph_points_y]
+    mov ecx, ebp
+    rep movsd
+    lea rsi, [rbx + FONT_FRAME_ENDS_OFFSET]
+    lea rdi, [rip + font_glyph_contour_ends]
+    mov ecx, r12d
+    rep movsd
+    mov dword ptr [rip + font_glyph_point_count], ebp
+    mov dword ptr [rip + font_glyph_contour_count], r12d
+    mov eax, dword ptr [rbx + 8]
+    mov dword ptr [rip + font_glyph_x_min], eax
+    mov eax, dword ptr [rbx + 12]
+    mov dword ptr [rip + font_glyph_y_min], eax
+    mov eax, dword ptr [rbx + 16]
+    mov dword ptr [rip + font_glyph_x_max], eax
+    mov eax, dword ptr [rbx + 20]
+    mov dword ptr [rip + font_glyph_y_max], eax
+
+    # Recompute the aggregate bounding box from the transformed points.
+    test ebp, ebp
+    jz .Lfont_frame_merge_success
+    lea rsi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rsi]
+    mov dword ptr [rip + font_glyph_x_min], eax
+    mov dword ptr [rip + font_glyph_x_max], eax
+    lea rsi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rsi]
+    mov dword ptr [rip + font_glyph_y_min], eax
+    mov dword ptr [rip + font_glyph_y_max], eax
+    mov r15d, 1
+.Lfont_frame_merge_bbox_loop:
+    cmp r15d, ebp
+    jae .Lfont_frame_merge_success
+    lea rsi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rsi + r15 * 4]
+    cmp eax, dword ptr [rip + font_glyph_x_min]
+    jge .Lfont_frame_merge_bbox_xmax
+    mov dword ptr [rip + font_glyph_x_min], eax
+.Lfont_frame_merge_bbox_xmax:
+    cmp eax, dword ptr [rip + font_glyph_x_max]
+    jle .Lfont_frame_merge_bbox_y
+    mov dword ptr [rip + font_glyph_x_max], eax
+.Lfont_frame_merge_bbox_y:
+    lea rsi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rsi + r15 * 4]
+    cmp eax, dword ptr [rip + font_glyph_y_min]
+    jge .Lfont_frame_merge_bbox_ymax
+    mov dword ptr [rip + font_glyph_y_min], eax
+.Lfont_frame_merge_bbox_ymax:
+    cmp eax, dword ptr [rip + font_glyph_y_max]
+    jle .Lfont_frame_merge_bbox_next
+    mov dword ptr [rip + font_glyph_y_max], eax
+.Lfont_frame_merge_bbox_next:
+    inc r15d
+    jmp .Lfont_frame_merge_bbox_loop
+.Lfont_frame_merge_success:
+    xor eax, eax
+    jmp .Lfont_frame_merge_return
+.Lfont_frame_merge_bad:
+    mov eax, -1
+.Lfont_frame_merge_return:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size font_outline_frame_merge, . - font_outline_frame_merge
+
+# Public wrapper starts a fresh bounded recursion chain. Internal recursive
+# calls use a depth-specific frame to preserve each parent's partial outline.
+.global font_glyph_load_outline
+.type font_glyph_load_outline, @function
+font_glyph_load_outline:
     sub rsp, 8
+    xor esi, esi
+    call font_glyph_load_outline_internal
+    add rsp, 8
+    ret
+.size font_glyph_load_outline, . - font_glyph_load_outline
+
+# Decode simple or composite TrueType glyphs into bounded design-unit arrays.
+# EDI=glyph ID, ESI=recursion depth. Returns 0 on success or -1 for malformed/unsupported data.
+.type font_glyph_load_outline_internal, @function
+font_glyph_load_outline_internal:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 56
     mov r12d, edi
+    mov dword ptr [rsp + 32], esi
+    mov dword ptr [rsp + 36], 0
+    cmp esi, FONT_MAX_COMPOSITE_DEPTH
+    jae .Lfont_glyph_outline_bad
+
+    # Reject recursive cycles as well as excessive nesting.
+    xor ebx, ebx
+    lea rdi, [rip + font_glyph_decode_stack]
+.Lfont_glyph_outline_cycle_loop:
+    cmp ebx, esi
+    jae .Lfont_glyph_outline_cycle_store
+    cmp dword ptr [rdi + rbx * 4], r12d
+    je .Lfont_glyph_outline_bad
+    inc ebx
+    jmp .Lfont_glyph_outline_cycle_loop
+.Lfont_glyph_outline_cycle_store:
+    mov dword ptr [rdi + rbx * 4], r12d
+    mov dword ptr [rip + font_glyph_contour_count], 0
+    mov dword ptr [rip + font_glyph_point_count], 0
+    mov dword ptr [rip + font_glyph_x_min], 0
+    mov dword ptr [rip + font_glyph_y_min], 0
+    mov dword ptr [rip + font_glyph_x_max], 0
+    mov dword ptr [rip + font_glyph_y_max], 0
+
+    cmp r12d, dword ptr [rip + font_num_glyphs]
+    jae .Lfont_glyph_outline_bad
     mov dword ptr [rip + font_glyph_contour_count], 0
     mov dword ptr [rip + font_glyph_point_count], 0
     mov dword ptr [rip + font_glyph_x_min], 0
@@ -1117,8 +1657,272 @@ font_glyph_load_outline:
     jmp .Lfont_glyph_outline_y_loop
 
 .Lfont_glyph_outline_composite:
-    mov eax, -2
-    jmp .Lfont_glyph_outline_return
+    # Composite header bounds are retained for the all-empty-component case.
+    lea rdi, [r15 + 2]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_x_min], eax
+    lea rdi, [r15 + 4]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_y_min], eax
+    lea rdi, [r15 + 6]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_x_max], eax
+    lea rdi, [r15 + 8]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_y_max], eax
+    lea r13, [r15 + 10]
+    mov dword ptr [rsp + 36], 0
+
+.Lfont_glyph_outline_component_loop:
+    lea rax, [r13 + 4]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    mov dword ptr [rsp], eax
+    add r13, 2
+    mov rdi, r13
+    call font_be16
+    mov dword ptr [rsp + 4], eax
+    add r13, 2
+    cmp eax, dword ptr [rip + font_num_glyphs]
+    jae .Lfont_glyph_outline_bad
+    inc dword ptr [rsp + 36]
+    cmp dword ptr [rsp + 36], 256
+    ja .Lfont_glyph_outline_bad
+
+    # Reject reserved high bits and the reserved bit 4 in component flags.
+    mov eax, dword ptr [rsp]
+    test eax, 0xe000
+    jnz .Lfont_glyph_outline_bad
+    test eax, 0x0010
+    jnz .Lfont_glyph_outline_bad
+    mov edx, eax
+    and edx, 0x00c8
+    cmp edx, 0x0008
+    je .Lfont_glyph_outline_transform_ok
+    cmp edx, 0x0040
+    je .Lfont_glyph_outline_transform_ok
+    cmp edx, 0x0080
+    jne .Lfont_glyph_outline_transform_zero
+    jmp .Lfont_glyph_outline_transform_ok
+.Lfont_glyph_outline_transform_zero:
+    test edx, edx
+    jnz .Lfont_glyph_outline_bad
+.Lfont_glyph_outline_transform_ok:
+    mov eax, dword ptr [rsp]
+    mov edx, eax
+    and edx, 0x1800
+    cmp edx, 0x1800
+    je .Lfont_glyph_outline_bad
+    mov dword ptr [rsp + 16], 16384
+    mov dword ptr [rsp + 20], 0
+    mov dword ptr [rsp + 24], 0
+    mov dword ptr [rsp + 28], 16384
+
+    # Read the two arguments. XY offsets are signed; point numbers are unsigned.
+    test eax, 1
+    jz .Lfont_glyph_outline_args_bytes
+    lea rax, [r13 + 4]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    test dword ptr [rsp], 2
+    jz .Lfont_glyph_outline_args_words_points
+    movsx eax, ax
+    jmp .Lfont_glyph_outline_args_words_store
+.Lfont_glyph_outline_args_words_points:
+    movzx eax, ax
+.Lfont_glyph_outline_args_words_store:
+    mov dword ptr [rsp + 8], eax
+    lea rdi, [r13 + 2]
+    call font_be16
+    test dword ptr [rsp], 2
+    jz .Lfont_glyph_outline_args_words_points_y
+    movsx eax, ax
+    jmp .Lfont_glyph_outline_args_words_store_y
+.Lfont_glyph_outline_args_words_points_y:
+    movzx eax, ax
+.Lfont_glyph_outline_args_words_store_y:
+    mov dword ptr [rsp + 12], eax
+    add r13, 4
+    jmp .Lfont_glyph_outline_args_ready
+.Lfont_glyph_outline_args_bytes:
+    lea rax, [r13 + 2]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    movzx eax, byte ptr [r13]
+    test dword ptr [rsp], 2
+    jz .Lfont_glyph_outline_args_bytes_points
+    movsx eax, al
+    jmp .Lfont_glyph_outline_args_bytes_store
+.Lfont_glyph_outline_args_bytes_points:
+    movzx eax, al
+.Lfont_glyph_outline_args_bytes_store:
+    mov dword ptr [rsp + 8], eax
+    movzx eax, byte ptr [r13 + 1]
+    test dword ptr [rsp], 2
+    jz .Lfont_glyph_outline_args_bytes_points_y
+    movsx eax, al
+    jmp .Lfont_glyph_outline_args_bytes_store_y
+.Lfont_glyph_outline_args_bytes_points_y:
+    movzx eax, al
+.Lfont_glyph_outline_args_bytes_store_y:
+    mov dword ptr [rsp + 12], eax
+    add r13, 2
+
+.Lfont_glyph_outline_args_ready:
+    mov eax, dword ptr [rsp + 8]
+    mov dword ptr [rsp + 40], eax
+    mov eax, dword ptr [rsp + 12]
+    mov dword ptr [rsp + 44], eax
+    # Offset-coordinate flags have no meaning for point-matching arguments.
+    test dword ptr [rsp], 2
+    jnz .Lfont_glyph_outline_args_flags_ok
+    test dword ptr [rsp], 0x1800
+    jnz .Lfont_glyph_outline_bad
+.Lfont_glyph_outline_args_flags_ok:
+    # Read one of the three mutually exclusive F2Dot14 transform encodings.
+    mov eax, dword ptr [rsp]
+    test eax, 8
+    jz .Lfont_glyph_outline_check_xy_scale
+    lea rax, [r13 + 2]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 16], eax
+    mov dword ptr [rsp + 28], eax
+    add r13, 2
+    jmp .Lfont_glyph_outline_transform_ready
+.Lfont_glyph_outline_check_xy_scale:
+    test eax, 0x0040
+    jz .Lfont_glyph_outline_check_2x2
+    lea rax, [r13 + 4]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 16], eax
+    lea rdi, [r13 + 2]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 28], eax
+    add r13, 4
+    jmp .Lfont_glyph_outline_transform_ready
+.Lfont_glyph_outline_check_2x2:
+    test eax, 0x0080
+    jz .Lfont_glyph_outline_transform_ready
+    lea rax, [r13 + 8]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 16], eax
+    lea rdi, [r13 + 2]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 20], eax
+    lea rdi, [r13 + 4]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 24], eax
+    lea rdi, [r13 + 6]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rsp + 28], eax
+    add r13, 8
+
+.Lfont_glyph_outline_transform_ready:
+    # Apply SCALED_COMPONENT_OFFSET when explicitly requested. The documented
+    # default remains unscaled; point matching computes its own translation.
+    test dword ptr [rsp], 2
+    jz .Lfont_glyph_outline_offset_ready
+    test dword ptr [rsp], 0x0800
+    jz .Lfont_glyph_outline_offset_ready
+    movsxd rax, dword ptr [rsp + 40]
+    movsxd rdx, dword ptr [rsp + 44]
+    movsxd rcx, dword ptr [rsp + 16]
+    imul rax, rcx
+    movsxd rcx, dword ptr [rsp + 24]
+    imul rdx, rcx
+    add rax, rdx
+    sar rax, 14
+    mov rdx, 0x7fffffff
+    cmp rax, rdx
+    jg .Lfont_glyph_outline_bad
+    mov rdx, -2147483648
+    cmp rax, rdx
+    jl .Lfont_glyph_outline_bad
+    mov dword ptr [rsp + 8], eax
+    movsxd rax, dword ptr [rsp + 40]
+    movsxd rdx, dword ptr [rsp + 44]
+    movsxd rcx, dword ptr [rsp + 20]
+    imul rax, rcx
+    movsxd rcx, dword ptr [rsp + 28]
+    imul rdx, rcx
+    add rax, rdx
+    sar rax, 14
+    mov rdx, 0x7fffffff
+    cmp rax, rdx
+    jg .Lfont_glyph_outline_bad
+    mov rdx, -2147483648
+    cmp rax, rdx
+    jl .Lfont_glyph_outline_bad
+    mov dword ptr [rsp + 12], eax
+.Lfont_glyph_outline_offset_ready:
+    # Preserve the parent aggregate, then recursively decode the component.
+    mov edi, dword ptr [rsp + 32]
+    call font_outline_frame_save
+    mov edi, dword ptr [rsp + 4]
+    mov esi, dword ptr [rsp + 32]
+    inc esi
+    call font_glyph_load_outline_internal
+    test eax, eax
+    js .Lfont_glyph_outline_child_failed
+
+    mov edi, dword ptr [rsp + 32]
+    mov esi, dword ptr [rsp + 8]
+    mov edx, dword ptr [rsp + 12]
+    mov ecx, dword ptr [rsp + 16]
+    mov r8d, dword ptr [rsp + 20]
+    mov r9d, dword ptr [rsp + 24]
+    mov r10d, dword ptr [rsp + 28]
+    xor r11d, r11d
+    test dword ptr [rsp], 2
+    setnz r11b
+    call font_outline_frame_merge
+    test eax, eax
+    js .Lfont_glyph_outline_bad
+
+    # Continue with another component, or consume the optional instruction
+    # payload after the final component.
+    test dword ptr [rsp], 0x0020
+    jnz .Lfont_glyph_outline_component_loop
+    test dword ptr [rsp], 0x0100
+    jz .Lfont_glyph_outline_success
+    lea rax, [r13 + 2]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r13
+    call font_be16
+    mov edx, eax
+    add r13, 2
+    lea rax, [r13 + rdx]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    jmp .Lfont_glyph_outline_success
+
+.Lfont_glyph_outline_child_failed:
+    jmp .Lfont_glyph_outline_bad
 .Lfont_glyph_outline_bad:
     mov dword ptr [rip + font_glyph_contour_count], 0
     mov dword ptr [rip + font_glyph_point_count], 0
@@ -1127,7 +1931,7 @@ font_glyph_load_outline:
 .Lfont_glyph_outline_success:
     xor eax, eax
 .Lfont_glyph_outline_return:
-    add rsp, 8
+    add rsp, 56
     pop r15
     pop r14
     pop r13
@@ -1135,7 +1939,7 @@ font_glyph_load_outline:
     pop rbp
     pop rbx
     ret
-.size font_glyph_load_outline, . - font_glyph_load_outline
+.size font_glyph_load_outline_internal, . - font_glyph_load_outline_internal
 
 # Initialize the optional font engine. Explicit NEKOEDIT_FONT takes precedence;
 # otherwise try deterministic common system-font paths. EAX=0 on success.

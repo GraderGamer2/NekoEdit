@@ -1,5 +1,30 @@
 # NekoEdit development log
 
+## 2026-11-07 — Bounded TrueType composite-glyph expansion
+
+**Roadmap milestone:** expand TrueType composite glyphs into the same bounded point/contour representation already used by the simple-glyph decoder. This advances the parser toward real-font outline rendering but does not yet change the visible renderer.
+
+### Implementation
+
+- Added a recursive composite-glyph decoder with a maximum nesting depth of 16, an explicit active-glyph stack for cycle rejection, and a 256-component limit per composite.
+- Added independent per-depth snapshots of the accumulated parent outline. A child decode can no longer overwrite earlier parent components; each merge validates the resulting 4,096-point and 256-contour ceilings before copying the aggregate back to the public scratch arrays.
+- Implemented signed byte/word XY offsets and unsigned byte/word point indices. Point-matched components align the selected child point with the selected point already present in the parent outline.
+- Implemented uniform scale, independent X/Y scale, and the complete 2×2 F2Dot14 matrix. The matrix follows the OpenType convention: x′ = xscale·x + scale10·y; y′ = scale01·x + yscale·y. Explicit scaled component offsets are transformed; the default unscaled interpretation is retained when neither offset flag is set.
+- Validated the component record span, glyph index, transform declarations, component arguments, point references, aggregate bounds, and optional composite instruction payload. Unsupported/reserved flag combinations fail cleanly.
+- Composite instruction bytes are validated and skipped because the first rasterizer will not execute TrueType hinting. `ROUND_XY_TO_GRID` is not applied; composite `USE_MY_METRICS` does not yet override the composite's own `hmtx` metric.
+- The live renderer still uses its embedded 5×7 bitmap. No Font or Font size Settings item is exposed until outline rasterization and renderer integration are complete.
+
+### Regression coverage
+
+- Expanded the deterministic SFNT fixture to cover a simple contour, an XY-offset composite, nested composite scaling, point matching, independent X/Y scales, a 2×2 90-degree rotation, signed byte XY arguments, and a self-referential cycle.
+- The parser test reads the exported outline state from the running child and checks exact contour/point counts and selected transformed coordinates for each path. Existing SFNT, Unicode, grapheme, indexed-layout, large-file, save-confirmation, picker, resize, keyboard, and Wayland protocol tests remain in the suite.
+
+### Verification
+
+Validation is being run against the branch after this change; the exact Actions run and artifact will be recorded once it completes.
+
+---
+
 ## 2026-11-07 — Settings dropdown and save confirmation
 
 **User-facing milestone:** add a top-level Settings dropdown and make ordinary saves explicit, cancellable actions rather than writing immediately when Ctrl+S or File > Save is selected.
