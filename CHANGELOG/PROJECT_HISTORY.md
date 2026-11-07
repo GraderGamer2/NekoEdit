@@ -352,3 +352,19 @@ Implementation [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/
 Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed the build, CLI checks, and expanded mock-compositor suite through both Wayland transports. The suite covers the 1920×1080 maximize/restore path, configure/acknowledge and buffer replacement, non-overflow scrollbar behavior, and resize request serialization. Artifact [`13524092766`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598/artifacts/13524092766) was uploaded.
 
 This is not yet a confirmed GNOME fix. The user must retest the new artifact in Mutter; the #251 artifact was confirmed to crash on Maximize and fail to resize on the user's desktop. No unrelated feature work was started.
+---
+
+## 19. Phase N — dynamically growing document storage and large-file Open
+
+**Implementation:** [8af89d509003](https://github.com/GraderGamer2/NekoEdit/commit/8af89d509003997272479ff2271542a304bdec07).  
+**Verification:** [Build and test #312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234), all eight workflow steps successful.
+
+The fixed-capacity document array and separate fixed-capacity Open scratch area are replaced by independent mmap-backed buffers. Each starts at 64 KiB and doubles geometrically through mremap as data requires, with a 1 GiB safety ceiling. The document remains a byte-oriented gap buffer: when growth occurs, the suffix is relocated to the high end of the enlarged mapping, expanding the free interval into one contiguous gap while preserving logical byte offsets.
+
+Initial command-line loading can now exceed 64 KiB. Picker Open reads into its own growable staging buffer, grows for larger files, reserves live document capacity before committing, and only changes the active document/path after a successful read and close. Failed Open continues to preserve the previous document.
+
+The mock suite fills the initial 65,536-byte document exactly, inserts at byte zero, checks that capacity doubles to 131,072 bytes, verifies that all original suffix bytes survive, and saves the split gap as the exact expected byte stream. A second workflow opens and saves a 65,537-byte file through the native picker, confirming the active path, length, full contents, and on-disk result. Actions #312 also reruns the existing file-picker, UTF-8, gap-buffer, window-management, responsive-layout, protocol, and both Wayland-transport regressions.
+
+Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user has not yet tested large-file editing on the live GNOME/Mutter desktop; CI validation does not substitute for that check.
+
+The next document-core steps are a line-start index and grapheme-aware navigation. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, and clipboard integration remain unfinished.

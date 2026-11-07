@@ -1,5 +1,32 @@
 # NekoEdit development log
 
+## 2026-11-07 — Dynamic gap-buffer growth and large-file Open
+
+**Roadmap milestone:** remove the fixed 64 KiB document and staged-Open limits without introducing a third-party allocator or changing the logical byte-offset model.
+
+### Implementation
+
+- Replaced the static 64 KiB document array with an anonymous mmap-backed byte buffer. It starts at 64 KiB and doubles geometrically through mremap, with an explicit 1 GiB safety ceiling.
+- Added suffix relocation when the live gap buffer grows. The old suffix moves to the new end of the mapping and the enlarged free region remains one contiguous gap; document length, cursor, and selection remain logical byte offsets.
+- Replaced the fixed Open scratch array with a separate mmap-backed staging buffer that grows independently. It reads the entire file in bounded chunks and probes one byte beyond each full mapping before deciding whether to grow.
+- Picker Open reserves live-document capacity before replacing the active document. A failed read, close, or allocation leaves the previous document/path intact; successful Open resets the cursor/selection and commits the loaded byte sequence.
+- Initial command-line file loading also grows the live mapping rather than truncating or rejecting data at 64 KiB.
+- Kept storage byte-oriented. This milestone does not yet add line indexing, grapheme semantics, Unicode input/rendering, or undo/redo.
+
+### Regression coverage
+
+- An exact 65,536-byte startup file fills the initial live mapping completely. The first insertion occurs at byte zero, forces growth to 131,072 bytes, relocates the 65,536-byte suffix, and checks the exact reconstructed logical byte stream before saving it across the split gap.
+- The native picker opens a 65,537-byte file, verifies the committed active path, exact byte length and full contents, then saves it back and checks the on-disk bytes.
+- Existing file-picker rollback/cancellation, gap movement, UTF-8 code-point editing, atomic save, Wayland protocol, responsive layout, both Wayland transports, and cursor-shape fallback tests remain in the same complete integration suite.
+
+### Verification and artifact
+
+- Source implementation: [8af89d509003](https://github.com/GraderGamer2/NekoEdit/commit/8af89d509003997272479ff2271542a304bdec07), feat: grow document storage beyond 64 KiB.
+- Regression-test and harness commits: [41afebc4d38b](https://github.com/GraderGamer2/NekoEdit/commit/41afebc4d38b48fa17b695b6df174b16fccac5a9), [1e61fde65235](https://github.com/GraderGamer2/NekoEdit/commit/1e61fde65235dd4be79ad9620c78c4170f6a11d9), [c004f00d038e](https://github.com/GraderGamer2/NekoEdit/commit/c004f00d038ee9c5e0812f7a35967ea25e113c0a), [0bb96bd5a7b3](https://github.com/GraderGamer2/NekoEdit/commit/0bb96bd5a7b327a3f35acc2d1a7267ffa2d59220), [37650efa8930](https://github.com/GraderGamer2/NekoEdit/commit/37650efa89302cf2e5484186a18b80375e7116c1), and [53d4b2df8d0e](https://github.com/GraderGamer2/NekoEdit/commit/53d4b2df8d0ef8968ab12fd8fb9923e4e6caa218).
+- GitHub Actions [Build and test #312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234) passed all eight steps on 53d4b2df8d0e.
+- Artifact: nekoedit-linux-x86_64, 32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4; artifact ID 13556529585; expires 2026-11-14 02:47:14 UTC. [Download Actions #312 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585).
+- The full mock-compositor suite passes, but the user has not yet manually tested this large-document artifact in GNOME/Mutter. The real desktop check should open, edit near the end of, and save a file larger than 64 KiB.
+
 ## 2026-11-07 — Make the editor UI follow configured window geometry
 
 **User report:** Maximize and interactive edge/corner resizing now work on GNOME/Mutter without crashes, but the footer and other UI elements remained at their original positions after the window changed size.

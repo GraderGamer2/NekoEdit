@@ -5,9 +5,23 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **254** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit + 4 responsive-layout implementation and regression-test commits).
+- Recorded implementation commits: **261** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit + 4 responsive-layout implementation and regression-test commits + 7 dynamic-storage implementation and regression-test commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Dynamic gap-buffer growth and large-file Open
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 02:38:35 UTC | [8af89d509003](https://github.com/GraderGamer2/NekoEdit/commit/8af89d509003997272479ff2271542a304bdec07) | feat: grow document storage beyond 64 KiB |
+| 2026-11-07 02:42:40 UTC | [41afebc4d38b](https://github.com/GraderGamer2/NekoEdit/commit/41afebc4d38b48fa17b695b6df174b16fccac5a9) | test: cover dynamic document growth and large-file Open |
+| 2026-11-07 02:43:36 UTC | [1e61fde65235](https://github.com/GraderGamer2/NekoEdit/commit/1e61fde65235dd4be79ad9620c78c4170f6a11d9) | test: expose dynamic document state outside picker workflow |
+| 2026-11-07 02:44:06 UTC | [c004f00d038e](https://github.com/GraderGamer2/NekoEdit/commit/c004f00d038ee9c5e0812f7a35967ea25e113c0a) | test: place growth cursor at document start |
+| 2026-11-07 02:45:05 UTC | [0bb96bd5a7b3](https://github.com/GraderGamer2/NekoEdit/commit/0bb96bd5a7b327a3f35acc2d1a7267ffa2d59220) | test: update Open rollback expectation after large-file support |
+| 2026-11-07 02:45:59 UTC | [37650efa8930](https://github.com/GraderGamer2/NekoEdit/commit/37650efa89302cf2e5484186a18b80375e7116c1) | test: report bytes on cancelled Save As regression |
+| 2026-11-07 02:46:52 UTC | [53d4b2df8d0e](https://github.com/GraderGamer2/NekoEdit/commit/53d4b2df8d0ef8968ab12fd8fb9923e4e6caa218) | test: assert preserved document after cancelled Save As |
+
+Actions [#312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234) passed all eight workflow steps on the final test commit. The live document and Open staging buffer grow geometrically from 64 KiB to a 1 GiB safety ceiling; tests verify full-capacity insertion/suffix relocation/save and native Open/save of a 65,537-byte file. Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585), 32,119 bytes, SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4, expires 2026-11-14.
 
 ## Responsive window-layout geometry
 
