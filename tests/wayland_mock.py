@@ -1336,6 +1336,23 @@ xkb_symbols "nekoedit-sparse" {
                             f"horizontal wheel did not move the no-wrap viewport left by 14px: "
                             f"before={before_left}, after={state['doc_view_left_px']}"
                         )
+                    thumb_width = child_u32("doc_hscroll_thumb_width")
+                    thumb_left = child_u32("doc_hscroll_thumb_left")
+                    if thumb_width <= 0:
+                        raise AssertionError("bottom horizontal thumb is missing despite document overflow")
+                    rail_y = child_u32("window_doc_bottom") + 7
+                    drag_start_x = thumb_left + max(1, thumb_width // 2)
+                    drag_end_x = 48 + child_u32("window_doc_pixel_width") - 2
+                    workflow_horizontal_scrollbar_drag(
+                        drag_start_x, rail_y, drag_end_x, rail_y,
+                        3135, "drag bottom horizontal scrollbar to the right"
+                    )
+                    dragged_state = read_document_state()
+                    if dragged_state["doc_view_left_px"] <= state["doc_view_left_px"]:
+                        raise AssertionError(
+                            "dragging bottom scrollbar did not advance the document viewport: "
+                            f"before={state['doc_view_left_px']}, after={dragged_state['doc_view_left_px']}"
+                        )
                     workflow_click(40, 98, 3140, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
@@ -1439,6 +1456,29 @@ xkb_symbols "nekoedit-sparse" {
                         ) from error
                     # Release the frame drawn after motion before requesting the
                     # second redraw caused by releasing the scrollbar grab.
+                    client.sendall(wire_message(12, 0))
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                    )
+                    workflow_redraw(f"{label}: release")
+                    client.sendall(wire_message(12, 0))
+
+                def workflow_horizontal_scrollbar_drag(
+                    start_x: int, start_y: int, end_x: int, end_y: int,
+                    serial: int, label: str
+                ) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                    )
+                    workflow_redraw(f"{label}: press")
+                    client.sendall(wire_message(12, 0))
+                    if child_u32("doc_hscroll_drag") != 1:
+                        raise AssertionError(f"{label}: bottom thumb did not enter drag state")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                    )
+                    workflow_redraw(f"{label}: drag")
                     client.sendall(wire_message(12, 0))
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
@@ -2673,7 +2713,8 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_focus", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_pixel_width", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_cursor", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_capacity", "doc_line_count", "doc_line_index_valid", "doc_line_index_columns"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_focus", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_pixel_width", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder",
+                        "doc_hscroll_drag", "doc_hscroll_thumb_left", "doc_hscroll_thumb_width", "doc_hscroll_drag_offset", "window_doc_bottom", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_cursor", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_capacity", "doc_line_count", "doc_line_index_valid", "doc_line_index_columns"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
