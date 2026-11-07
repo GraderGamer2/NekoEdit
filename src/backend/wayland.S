@@ -1877,7 +1877,7 @@ wayland_main:
     call write_stderr_cstr
 .protocol_request_diagnostic:
     cmp dword ptr [rip + failed_request_valid], 0
-    je .protocol_sync_pending_diagnostic
+    je .protocol_print_previous_request
     mov edi, 2
     lea rsi, [rip + msg_request_failure]
     mov edx, msg_request_opcode - msg_request_failure
@@ -1902,6 +1902,7 @@ wayland_main:
     lea rsi, [rip + newline_text]
     mov edx, 1
     call linux_write_all
+.protocol_print_previous_request:
     cmp dword ptr [rip + last_request_valid], 0
     je .protocol_print_last_event
     mov edi, 2
