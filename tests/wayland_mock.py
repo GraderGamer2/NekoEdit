@@ -2859,8 +2859,10 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(16, 3, struct.pack("<IIII", 1253, 1253, 29, 0))
                         + wire_message(12, 0)
                     )
+                    if child_u32("save_confirm_open") == 1:
+                        key_step(1254, 28, "confirm save after dynamic document growth")
                     observations.append(
-                        "exact 64 KiB document growth to 128 KiB, suffix relocation, logical-byte preservation, and split-gap save verified"
+                        "exact 64 KiB document growth to 128 KiB, suffix relocation, logical-byte preservation, and confirmed split-gap save verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
