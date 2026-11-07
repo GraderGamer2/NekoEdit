@@ -26,8 +26,12 @@
 - Run the complete window workflow again without advertising `wp_cursor_shape_manager_v1` to verify that edge resizing does not depend on the optional cursor extension. The same workflow verifies that a File-menu click near the top edge is not intercepted as a resize.
 - See [WAYLAND_WINDOW_RESIZE.md](../docs/WAYLAND_WINDOW_RESIZE.md) for the pointer lifecycle, hit-testing, protocol, and compositor-fallback notes.
 
-**Validation:** The initial source commit `3da11acf616b` assembled and passed CLI smoke tests in Actions #295, but the mock suite caught a top-edge hit-band overlap with the File menu in the no-cursor-extension workflow. Follow-up source change `aa45cb1dc479` excludes the app's File menu and window-control slots from top-edge resizing; the complete Wayland mock suite is being rerun. A real GNOME/Mutter drag-resize test is still required after a passing artifact is available.
-
+### Validation and artifact
+- Initial pointer/resize change: [`3da11acf616b`](https://github.com/GraderGamer2/NekoEdit/commit/3da11acf616b694b3b0e7d00e8595b69fa0ca582). Actions #296 passed assembly/link/ELF verification and CLI smoke tests, then exposed that the widened top-edge band overlapped the File menu when the optional cursor extension was disabled.
+- Follow-up titlebar exclusion: [`064af05090c4`](https://github.com/GraderGamer2/NekoEdit/commit/064af05090c455e5effe02a20bc1e1b9a9942f27). Top-edge resizing now excludes the File menu and visible window-control strip; the outermost top-right corner remains available.
+- GitHub Actions [Build and test #297](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326928833) passed all eight workflow steps: freestanding build/ELF verification, CLI smoke tests, full Wayland mock suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,636 bytes; SHA-256 `da71ce6580529b1d86117c4c90e317b10f2cfb58a7c03569460259cf7f1f4501`; artifact ID `13556041396`; expires 2026-11-14 01:59:49 UTC. [Download from Actions #297](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326928833/artifacts/13556041396).
+- The user confirmed Maximize no longer crashes on Actions #294. The #297 build has not yet been tested in the user’s GNOME/Mutter session; real pointer-drag resizing remains pending manual verification.
 ## 2026-11-07 — Remove temporary Maximize investigation instrumentation
 
 **User retest:** The user has now confirmed that clicking the Maximize control no longer crashes NekoEdit and that the window remains usable afterward. This is the first real-desktop confirmation of the dense object-ID correction, beyond the mock-compositor suite.

@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **247** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit).
+- Recorded implementation commits: **249** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -477,6 +477,20 @@ Actions [#292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724
 | 2026-11-07 01:37:56 UTC | [`82f1e15c04c8`](https://github.com/GraderGamer2/NekoEdit/commit/82f1e15c04c87d202658eb4fda0d4c406854db93) | chore: remove temporary maximize diagnostics |
 
 Actions [#294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772) passed all eight workflow steps on this commit. The cleanup removes the one-shot resize sync barrier and verbose request/event tracking while retaining the dense client-object allocator and SIGPIPE-safe send handling. The mock suite now checks Maximize/Restore/interactive-resize buffer IDs 17, 18, and 19 without a sync callback. Artifact `13555196117`, 29,836 bytes, SHA-256 `c375eb07c23059a45387fae3f0c67f97ef6632713bd619a67b9591464c311ba3`, expires 2026-11-14 01:38:13 UTC. [Download Actions #294 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772/artifacts/13555196117).
+
+
+## 2026-11-07 Interactive edge-resize pointer handling
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 01:57:51 UTC | [`3da11acf616b`](https://github.com/GraderGamer2/NekoEdit/commit/3da11acf616b694b3b0e7d00e8595b69fa0ca582) | fix: preserve pointer focus for edge resizing |
+| 2026-11-07 01:59:31 UTC | [`064af05090c4`](https://github.com/GraderGamer2/NekoEdit/commit/064af05090c455e5effe02a20bc1e1b9a9942f27) | fix: keep titlebar controls out of resize hit area |
+
+Actions [#296](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326795347) passed assembly/link and CLI smoke steps but failed the Wayland mock suite: the widened top edge intercepted the File menu click. Commit `064af05090c4` preserves the File menu/window controls while leaving the outer top-right corner available.
+
+Actions [#297](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326928833) passed all eight workflow steps on `064af05090c4`. The mock suite covers startup pointer-enter ordering, focus re-entry, all four edges and corners, optional cursor-shape feedback plus no-extension fallback, titlebar controls, and both Wayland transports. Artifact `13556041396`, 30,636 bytes, SHA-256 `da71ce6580529b1d86117c4c90e317b10f2cfb58a7c03569460259cf7f1f4501`, expires 2026-11-14 01:59:49 UTC. [Download Actions #297 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326928833/artifacts/13556041396).
+
+The user confirmed Maximize is fixed on the preceding #294 build. Real GNOME/Mutter drag-resize testing of the #297 artifact remains pending.
 
 ## Maintenance
 
