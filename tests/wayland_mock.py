@@ -1836,7 +1836,7 @@ xkb_symbols "nekoedit-sparse" {
                     old_position_ink = any(
                         struct.unpack_from("<I", pixels, old_title_y * 800 * 4 + x * 4)[0]
                         == 0xFFD8DEE9
-                        for x in range(32, 176)
+                        for x in range(32, 110)
                     )
                     if (
                         not title_ink_rows
