@@ -1655,11 +1655,6 @@ xkb_symbols "nekoedit-sparse" {
                         "create restored buffer",
                     )
                     expect_message(
-                        client, (1, 0, struct.pack("<I", 259)),
-                        "sync after restored buffer creation",
-                    )
-                    client.sendall(wire_message(259, 0, struct.pack("<I", 2)))
-                    expect_message(
                         client, (8, 1, struct.pack("<III", 258, 0, 0)),
                         "attach restored buffer",
                     )
@@ -1711,16 +1706,11 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(258, 0))
                     expect_message(client, (258, 0, b""), "destroy old buffer after edge resize")
                     expect_message(
-                        client, (11, 0, struct.pack("<6I", 260, 0, 720, 480, 2880, 1)),
+                        client, (11, 0, struct.pack("<6I", 259, 0, 720, 480, 2880, 1)),
                         "create edge-resized buffer",
                     )
                     expect_message(
-                        client, (1, 0, struct.pack("<I", 261)),
-                        "sync after edge-resized buffer creation",
-                    )
-                    client.sendall(wire_message(261, 0, struct.pack("<I", 3)))
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", 260, 0, 0)), "attach edge-resized buffer"
+                        client, (8, 1, struct.pack("<III", 259, 0, 0)), "attach edge-resized buffer"
                     )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
@@ -1731,11 +1721,11 @@ xkb_symbols "nekoedit-sparse" {
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
                         or edge_state.get("window_stride") != 2880
-                        or edge_state.get("window_buffer_id") != 260
+                        or edge_state.get("window_buffer_id") != 259
                         or edge_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
-                    client.sendall(wire_message(260, 0))
+                    client.sendall(wire_message(259, 0))
 
                     # Probe every remaining edge and corner with coordinates
                     # deliberately inside the new 12-pixel grab band.
