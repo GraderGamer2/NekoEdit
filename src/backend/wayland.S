@@ -2080,6 +2080,7 @@ doc_save_error:         .long 0
 doc_open_error:         .long 0
 file_menu_open:         .long 0
 settings_menu_open:     .long 0
+.global save_confirm_enabled
 save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
 save_confirm_action:    .long 0
@@ -2208,6 +2209,9 @@ recv_msg_control:      .zero 64
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
 .extern font_init
+.extern preferences_load
+.extern preferences_save
+.extern preferences_set_font_path
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
@@ -2217,6 +2221,8 @@ wayland_main:
     mov dword ptr [rip + window_height], HEIGHT
     mov dword ptr [rip + doc_font_size], 12
     mov dword ptr [rip + ui_font_size], 10
+    # Load validated persistent settings before the first layout calculation.
+    call preferences_load
     mov dword ptr [rip + window_buffer_id], 12
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -3320,6 +3326,7 @@ wayland_main:
     call window_update_geometry
     call doc_line_index_rebuild
     call doc_ensure_cursor_visible
+    call preferences_save
     jmp .keyboard_changed
 
 .pointer_settings_document_font:
@@ -3338,6 +3345,7 @@ wayland_main:
 .pointer_settings_confirm_toggle:
     xor dword ptr [rip + save_confirm_enabled], 1
     mov dword ptr [rip + settings_menu_open], 0
+    call preferences_save
     jmp .keyboard_changed
 
 .pointer_settings_font_decrease:
@@ -3361,6 +3369,7 @@ wayland_main:
     call doc_line_index_rebuild
     mov dword ptr [rip + doc_view_top_row], 0
     call doc_ensure_cursor_visible
+    call preferences_save
 
 .pointer_settings_font_close:
     # Font controls are repeatable: keep the Settings dropdown visible.
@@ -3374,6 +3383,7 @@ wayland_main:
     mov dword ptr [rip + ui_font_size], eax
     call window_update_geometry
     call doc_ensure_cursor_visible
+    call preferences_save
     jmp .pointer_settings_font_close
 
 .pointer_settings_ui_font_increase:
@@ -3384,6 +3394,7 @@ wayland_main:
     mov dword ptr [rip + ui_font_size], eax
     call window_update_geometry
     call doc_ensure_cursor_visible
+    call preferences_save
     jmp .pointer_settings_font_close
 
 .pointer_menu_open:
@@ -5782,6 +5793,10 @@ picker_load_font:
     call font_replace_path
     test rax, rax
     js .picker_load_font_error
+    # Remember only a face that passed the transactional SFNT validator.
+    mov rdi, r12
+    call preferences_set_font_path
+    call preferences_save
     mov dword ptr [rip + picker_error], 0
     # Face metrics affect every document advance and line box. Rebuild the
     # width-dependent index before returning to the document surface.
