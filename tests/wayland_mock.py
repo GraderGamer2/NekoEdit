@@ -1181,6 +1181,14 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 2
                     if read_document_state()["doc_cursor"] != offsets[10]:
                         raise AssertionError("Left did not return to the boundary before CRLF")
+                    workflow_click(24, 98, serial, "reset pointer after first grapheme")
+                    serial += 10
+                    reset_state = read_document_state()
+                    if reset_state["doc_cursor"] != offsets[1]:
+                        raise AssertionError(
+                            "could not reset the grapheme deletion caret: "
+                            + repr({"cursor": reset_state["doc_cursor"], "expected": offsets[1]})
+                        )
 
                     # Backspace removes the entire preceding emoji modifier
                     # cluster, not just the modifier or base scalar.
