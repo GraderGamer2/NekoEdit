@@ -1940,6 +1940,7 @@ window_status_top:      .long 0
 window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
 window_doc_columns:     .long 0
+window_doc_pixel_width: .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
@@ -7615,6 +7616,11 @@ window_update_geometry:
     mov dword ptr [rip + window_status_top], eax
     mov eax, dword ptr [rip + window_width]
     sub eax, DOC_LEFT + DOC_SCROLL_TRACK_X_OFFSET
+    test eax, eax
+    jg .window_geometry_pixel_width_ready
+    mov eax, 1
+.window_geometry_pixel_width_ready:
+    mov dword ptr [rip + window_doc_pixel_width], eax
     xor edx, edx
     mov ecx, CELL_WIDTH
     div ecx
@@ -8706,6 +8712,7 @@ doc_line_index_reserve:
 
 # EDI=logical line byte start, ESI=byte span; returns EAX=visual rows >= 1.
 .type doc_line_index_measure_rows, @function
+.type doc_line_index_measure_rows, @function
 doc_line_index_measure_rows:
     push rbx
     push r12
@@ -8722,11 +8729,11 @@ doc_line_index_measure_rows:
     jne .Ldoc_index_measure_end_ready
     dec r13d
 .Ldoc_index_measure_end_ready:
-    mov r15d, dword ptr [rip + window_doc_columns]
+    mov r15d, dword ptr [rip + window_doc_pixel_width]
     test r15d, r15d
-    jnz .Ldoc_index_measure_columns_ready
+    jnz .Ldoc_index_measure_width_ready
     mov r15d, 1
-.Ldoc_index_measure_columns_ready:
+.Ldoc_index_measure_width_ready:
     mov r14d, 1
     xor ebx, ebx
 .Ldoc_index_measure_loop:
@@ -8740,24 +8747,35 @@ doc_line_index_measure_rows:
     je .Ldoc_index_measure_tab
     cmp eax, 32
     jb .Ldoc_index_measure_control
-    cmp ebx, r15d
-    jb .Ldoc_index_measure_glyph_fit
+    cmp eax, 128
+    jb .Ldoc_index_measure_ascii
+    mov edi, r12d
+    call doc_utf8_decode_at
+.Ldoc_index_measure_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [rbx + eax]
+    cmp edx, r15d
+    jbe .Ldoc_index_measure_glyph_fit
     inc r14d
     xor ebx, ebx
 .Ldoc_index_measure_glyph_fit:
-    inc ebx
+    add ebx, eax
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_tab:
-    lea eax, [rbx + 4]
+    lea eax, [rbx + 32]
+    and eax, -32
     cmp eax, r15d
     jbe .Ldoc_index_measure_tab_fit
     inc r14d
-    xor ebx, ebx
+    mov ebx, 32
+    jmp .Ldoc_index_measure_tab_next
 .Ldoc_index_measure_tab_fit:
-    add ebx, 4
+    mov ebx, eax
+.Ldoc_index_measure_tab_next:
     inc r12d
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_control:
@@ -8969,7 +8987,7 @@ doc_line_index_reflow:
     jmp .Ldoc_index_reflow_loop
 .Ldoc_index_reflow_done:
     call doc_line_index_build_trees
-    mov eax, dword ptr [rip + window_doc_columns]
+    mov eax, dword ptr [rip + window_doc_pixel_width]
     mov dword ptr [rip + doc_line_index_columns], eax
     mov eax, 1
     pop r15
@@ -9058,7 +9076,7 @@ doc_line_index_rebuild:
     mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], ebp
     mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], ebx
     call doc_line_index_build_trees
-    mov eax, dword ptr [rip + window_doc_columns]
+    mov eax, dword ptr [rip + window_doc_pixel_width]
     mov dword ptr [rip + doc_line_index_columns], eax
     mov dword ptr [rip + doc_line_index_valid], 1
     mov eax, 1
@@ -9087,7 +9105,7 @@ doc_line_index_ensure:
     je .Ldoc_index_ensure_unavailable
     cmp dword ptr [rip + doc_line_index_valid], 0
     je .Ldoc_index_ensure_rebuild
-    mov eax, dword ptr [rip + window_doc_columns]
+    mov eax, dword ptr [rip + window_doc_pixel_width]
     cmp eax, dword ptr [rip + doc_line_index_columns]
     jne .Ldoc_index_ensure_reflow
     mov eax, 1
@@ -9689,22 +9707,24 @@ doc_offset_to_visual:
 .size doc_offset_to_visual, . - doc_offset_to_visual
 
 .type doc_offset_to_visual_legacy, @function
+.type doc_offset_to_visual_legacy, @function
 doc_offset_to_visual_legacy:
     push rbx
     push r12
     push r13
     push r14
+    push r15
     mov r12d, edi
     mov r13d, dword ptr [rip + doc_length]
     cmp r12d, r13d
     cmova r12d, r13d
     xor r14d, r14d
     xor ebx, ebx
-    xor ecx, ecx
+    xor r15d, r15d
 .Lneko_offset_visual_scan:
-    cmp ecx, r12d
+    cmp r15d, r12d
     jae .Lneko_offset_visual_boundary
-    mov edi, ecx
+    mov edi, r15d
     call doc_byte_at
     cmp eax, 10
     je .Lneko_offset_visual_newline
@@ -9713,39 +9733,45 @@ doc_offset_to_visual_legacy:
     cmp eax, 32
     jb .Lneko_offset_visual_skip
     cmp eax, 128
-    jb .Lneko_offset_visual_glyph
-.Lneko_offset_visual_glyph:
-    cmp ebx, dword ptr [rip + window_doc_columns]
-    jb .Lneko_offset_visual_glyph_fit
+    jb .Lneko_offset_visual_ascii
+    mov edi, r15d
+    call doc_utf8_decode_at
+.Lneko_offset_visual_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [rbx + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lneko_offset_visual_glyph_fit
     inc r14d
     xor ebx, ebx
 .Lneko_offset_visual_glyph_fit:
-    inc ebx
-    mov edi, ecx
+    add ebx, eax
+    mov edi, r15d
     call doc_grapheme_next
-    mov ecx, eax
+    mov r15d, eax
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_newline:
     inc r14d
     xor ebx, ebx
-    inc ecx
+    inc r15d
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_tab:
-    lea edx, [rbx + 4]
-    cmp edx, dword ptr [rip + window_doc_columns]
+    lea eax, [rbx + 32]
+    and eax, -32
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_tab_fit
     inc r14d
-    xor ebx, ebx
+    mov ebx, 32
+    inc r15d
+    jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_tab_fit:
-    add ebx, 4
-    inc ecx
+    mov ebx, eax
+    inc r15d
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_skip:
-    inc ecx
+    inc r15d
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_boundary:
-    # An insertion boundary immediately before a token that would wrap belongs
-    # at the start of the next visual row, not just beyond the right edge.
     cmp r12d, r13d
     jae .Lneko_offset_visual_done
     mov edi, r12d
@@ -9757,22 +9783,29 @@ doc_offset_to_visual_legacy:
     cmp eax, 32
     jb .Lneko_offset_visual_done
     cmp eax, 128
-    jb .Lneko_offset_visual_boundary_glyph
-.Lneko_offset_visual_boundary_glyph:
-    cmp ebx, dword ptr [rip + window_doc_columns]
-    jb .Lneko_offset_visual_done
+    jb .Lneko_offset_visual_boundary_ascii
+    mov edi, r12d
+    call doc_utf8_decode_at
+.Lneko_offset_visual_boundary_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [rbx + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lneko_offset_visual_done
     inc r14d
     xor ebx, ebx
     jmp .Lneko_offset_visual_done
 .Lneko_offset_visual_boundary_tab:
-    lea edx, [rbx + 4]
-    cmp edx, dword ptr [rip + window_doc_columns]
+    lea edx, [rbx + 32]
+    and edx, -32
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_done
     inc r14d
     xor ebx, ebx
 .Lneko_offset_visual_done:
     mov eax, r14d
     mov edx, ebx
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -9783,6 +9816,7 @@ doc_offset_to_visual_legacy:
 
 # Fenwick lookup narrows visual mapping to one logical line; local scanning
 # preserves the editor's existing tab, control-byte, and UTF-8 semantics.
+.type doc_offset_to_visual_indexed, @function
 .type doc_offset_to_visual_indexed, @function
 doc_offset_to_visual_indexed:
     push rbx
@@ -9824,24 +9858,35 @@ doc_offset_to_visual_indexed:
     je .Ldoc_offset_indexed_tab
     cmp eax, 32
     jb .Ldoc_offset_indexed_control
-    cmp r14d, dword ptr [rip + window_doc_columns]
-    jb .Ldoc_offset_indexed_glyph_fit
+    cmp eax, 128
+    jb .Ldoc_offset_indexed_ascii
+    mov edi, r13d
+    call doc_utf8_decode_at
+.Ldoc_offset_indexed_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [r14d + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Ldoc_offset_indexed_glyph_fit
     inc ebx
     xor r14d, r14d
 .Ldoc_offset_indexed_glyph_fit:
-    inc r14d
+    add r14d, eax
     mov edi, r13d
     call doc_grapheme_next
     mov r13d, eax
     jmp .Ldoc_offset_indexed_scan
 .Ldoc_offset_indexed_tab:
-    lea eax, [r14d + 4]
-    cmp eax, dword ptr [rip + window_doc_columns]
+    lea eax, [r14d + 32]
+    and eax, -32
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_offset_indexed_tab_fit
     inc ebx
-    xor r14d, r14d
+    mov r14d, 32
+    inc r13d
+    jmp .Ldoc_offset_indexed_scan
 .Ldoc_offset_indexed_tab_fit:
-    add r14d, 4
+    mov r14d, eax
     inc r13d
     jmp .Ldoc_offset_indexed_scan
 .Ldoc_offset_indexed_control:
@@ -9858,14 +9903,23 @@ doc_offset_to_visual_indexed:
     je .Ldoc_offset_indexed_boundary_tab
     cmp eax, 32
     jb .Ldoc_offset_indexed_done
-    cmp r14d, dword ptr [rip + window_doc_columns]
-    jb .Ldoc_offset_indexed_done
+    cmp eax, 128
+    jb .Ldoc_offset_indexed_boundary_ascii
+    mov edi, r12d
+    call doc_utf8_decode_at
+.Ldoc_offset_indexed_boundary_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [r14d + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Ldoc_offset_indexed_done
     inc ebx
     xor r14d, r14d
     jmp .Ldoc_offset_indexed_done
 .Ldoc_offset_indexed_boundary_tab:
-    lea eax, [r14d + 4]
-    cmp eax, dword ptr [rip + window_doc_columns]
+    lea edx, [r14d + 32]
+    and edx, -32
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_offset_indexed_done
     inc ebx
     xor r14d, r14d
@@ -9883,6 +9937,7 @@ doc_offset_to_visual_indexed:
     ret
 .size doc_offset_to_visual_indexed, . - doc_offset_to_visual_indexed
 
+.type doc_visual_to_offset_indexed, @function
 .type doc_visual_to_offset_indexed, @function
 doc_visual_to_offset_indexed:
     push rbx
@@ -9923,19 +9978,29 @@ doc_visual_to_offset_indexed:
     je .Ldoc_visual_indexed_tab
     cmp eax, 32
     jb .Ldoc_visual_indexed_control
-    cmp r14d, dword ptr [rip + window_doc_columns]
-    jb .Ldoc_visual_indexed_glyph_row_ready
+    cmp eax, 128
+    jb .Ldoc_visual_indexed_ascii
+    mov edi, r13d
+    call doc_utf8_decode_at
+.Ldoc_visual_indexed_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [r14d + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Ldoc_visual_indexed_glyph_row_ready
     inc ebx
     xor r14d, r14d
 .Ldoc_visual_indexed_glyph_row_ready:
     cmp ebx, r12d
     ja .Ldoc_visual_indexed_done
-    cmp ebx, r12d
     jne .Ldoc_visual_indexed_consume_glyph
-    cmp r14d, ebp
-    jae .Ldoc_visual_indexed_done
+    mov edx, eax
+    shr edx, 1
+    add edx, r14d
+    cmp ebp, edx
+    jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_glyph:
-    inc r14d
+    add r14d, eax
     mov edi, r13d
     call doc_grapheme_next
     mov r13d, eax
@@ -9948,26 +10013,33 @@ doc_visual_to_offset_indexed:
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_tab:
-    lea eax, [r14d + 4]
-    cmp eax, dword ptr [rip + window_doc_columns]
-    jbe .Ldoc_visual_indexed_tab_row_ready
+    lea eax, [r14d + 32]
+    and eax, -32
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
+    jbe .Ldoc_visual_indexed_tab_fit
     inc ebx
     xor r14d, r14d
+    mov eax, 32
+    jmp .Ldoc_visual_indexed_tab_row_ready
+.Ldoc_visual_indexed_tab_fit:
+    # EAX is the next four-cell tab stop.
+    nop
 .Ldoc_visual_indexed_tab_row_ready:
     cmp ebx, r12d
     ja .Ldoc_visual_indexed_done
-    cmp ebx, r12d
     jne .Ldoc_visual_indexed_consume_tab
-    lea eax, [r14d + 2]
-    cmp ebp, eax
+    mov edx, eax
+    sub edx, r14d
+    shr edx, 1
+    add edx, r14d
+    cmp ebp, edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_tab:
-    add r14d, 4
+    mov r14d, eax
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_control:
-    # A CRLF pair is one grapheme. A click at the logical line end must
-    # remain before CR rather than returning the invalid boundary between CR/LF.
+    # CRLF is one grapheme and cannot expose the byte boundary between CR/LF.
     cmp eax, 13
     jne .Ldoc_visual_indexed_control_byte
     lea edi, [r13d + 1]
@@ -10018,8 +10090,10 @@ doc_visual_to_offset:
 .size doc_visual_to_offset, . - doc_visual_to_offset
 
 .type doc_visual_to_offset_legacy, @function
+.type doc_visual_to_offset_legacy, @function
 doc_visual_to_offset_legacy:
     push rbx
+    push rbp
     push r12
     push r13
     push r14
@@ -10029,7 +10103,7 @@ doc_visual_to_offset_legacy:
     mov r15d, dword ptr [rip + doc_length]
     xor r14d, r14d
     xor ebx, ebx
-    xor ecx, ecx
+    xor ebp, ebp
 .Lneko_visual_offset_scan:
     cmp r14d, r15d
     jae .Lneko_visual_offset_end
@@ -10044,21 +10118,28 @@ doc_visual_to_offset_legacy:
     cmp eax, 32
     jb .Lneko_visual_offset_skip
     cmp eax, 128
-    jb .Lneko_visual_offset_glyph
-.Lneko_visual_offset_glyph:
-    cmp ecx, dword ptr [rip + window_doc_columns]
-    jb .Lneko_visual_offset_glyph_row_ready
+    jb .Lneko_visual_offset_ascii
+    mov edi, r14d
+    call doc_utf8_decode_at
+.Lneko_visual_offset_ascii:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    lea edx, [rbp + eax]
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lneko_visual_offset_glyph_row_ready
     inc ebx
-    xor ecx, ecx
+    xor ebp, ebp
 .Lneko_visual_offset_glyph_row_ready:
     cmp ebx, r12d
     ja .Lneko_visual_offset_end
-    cmp ebx, r12d
     jne .Lneko_visual_offset_consume_glyph
-    cmp ecx, r13d
-    jae .Lneko_visual_offset_end
+    mov edx, eax
+    shr edx, 1
+    add edx, ebp
+    cmp r13d, edx
+    jb .Lneko_visual_offset_end
 .Lneko_visual_offset_consume_glyph:
-    inc ecx
+    add ebp, eax
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
@@ -10067,29 +10148,36 @@ doc_visual_to_offset_legacy:
     cmp ebx, r12d
     je .Lneko_visual_offset_end
     inc ebx
-    xor ecx, ecx
+    xor ebp, ebp
     inc r14d
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_tab:
-    lea edx, [rcx + 4]
-    cmp edx, dword ptr [rip + window_doc_columns]
-    jbe .Lneko_visual_offset_tab_row_ready
+    lea eax, [rbp + 32]
+    and eax, -32
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lneko_visual_offset_tab_fit
     inc ebx
-    xor ecx, ecx
+    xor ebp, ebp
+    mov eax, 32
+    jmp .Lneko_visual_offset_tab_row_ready
+.Lneko_visual_offset_tab_fit:
+    nop
 .Lneko_visual_offset_tab_row_ready:
     cmp ebx, r12d
     ja .Lneko_visual_offset_end
-    cmp ebx, r12d
     jne .Lneko_visual_offset_consume_tab
-    lea edx, [rcx + 2]
+    mov edx, eax
+    sub edx, ebp
+    shr edx, 1
+    add edx, ebp
     cmp r13d, edx
     jb .Lneko_visual_offset_end
 .Lneko_visual_offset_consume_tab:
-    add ecx, 4
+    mov ebp, eax
     inc r14d
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_skip:
-    # The scan fallback also keeps pointer hit-testing outside a CRLF pair.
+    # Keep CRLF as one insertion boundary.
     cmp eax, 13
     jne .Lneko_visual_offset_skip_byte
     lea edi, [r14d + 1]
@@ -10099,7 +10187,7 @@ doc_visual_to_offset_legacy:
     cmp ebx, r12d
     je .Lneko_visual_offset_end
     inc ebx
-    xor ecx, ecx
+    xor ebp, ebp
     add r14d, 2
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_skip_byte:
@@ -10111,6 +10199,7 @@ doc_visual_to_offset_legacy:
     pop r14
     pop r13
     pop r12
+    pop rbp
     pop rbx
     ret
 .size doc_visual_to_offset_legacy, . - doc_visual_to_offset_legacy
@@ -10370,10 +10459,6 @@ doc_place_cursor_from_pointer:
     jns .Lneko_pointer_x_nonnegative
     xor eax, eax
 .Lneko_pointer_x_nonnegative:
-    add eax, CELL_WIDTH / 2
-    xor edx, edx
-    mov ecx, CELL_WIDTH
-    div ecx
     mov esi, eax
     mov eax, dword ptr [rip + pointer_y]
     sub eax, DOC_TOP
@@ -10760,6 +10845,7 @@ draw_glyph:
 
 # Draw a NUL-terminated ASCII label. EDI=x, ESI=y, RDX=string; EAX=next x.
 .type draw_text, @function
+.type draw_text, @function
 draw_text:
     push rbx
     push r12
@@ -10774,7 +10860,9 @@ draw_text:
     mov edi, r12d
     mov esi, r13d
     call draw_glyph
-    add r12d, CELL_WIDTH
+    movzx edi, byte ptr [rbx]
+    call font_codepoint_advance_pixels
+    add r12d, eax
     inc rbx
     jmp .Lneko_draw_text_loop
 .Lneko_draw_text_done:
@@ -10786,6 +10874,7 @@ draw_text:
 .size draw_text, . - draw_text
 
 # Draw an unsigned decimal value. EAX=value, EDI=x, ESI=y; returns next x.
+.type draw_decimal, @function
 .type draw_decimal, @function
 draw_decimal:
     push rbp
@@ -10817,7 +10906,9 @@ draw_decimal:
     mov edi, r13d
     mov esi, r14d
     call draw_glyph
-    add r13d, CELL_WIDTH
+    movzx edi, byte ptr [r12]
+    call font_codepoint_advance_pixels
+    add r13d, eax
     inc r12
     jmp .Lneko_draw_decimal_paint
 .Lneko_draw_decimal_done:
@@ -12069,6 +12160,7 @@ doc_utf8_decode_at:
 .size doc_utf8_decode_at, . - doc_utf8_decode_at
 
 .type render_document, @function
+.type render_document, @function
 render_document:
     push rbx
     push r12
@@ -12081,11 +12173,8 @@ render_document:
     call doc_visual_to_offset
     mov r14d, eax
     mov r13d, DOC_TOP
-    mov r15d, dword ptr [rip + doc_length]
-    test r15d, r15d
-    jz .document_draw_cursor
-.document_render_loop:
-    cmp r14d, r15d
+.Ldocument_render_loop:
+    cmp r14d, dword ptr [rip + doc_length]
     jae .document_draw_cursor
     mov eax, dword ptr [rip + window_status_top]
     sub eax, LINE_HEIGHT
@@ -12109,10 +12198,15 @@ render_document:
     call doc_utf8_decode_at
     mov edx, eax
 .document_printable:
-    mov eax, dword ptr [rip + window_width]
-    sub eax, DOC_SCROLL_TRACK_X_OFFSET
-    cmp r12d, eax
-    jb .document_printable_fit
+    mov ebx, edx
+    mov edi, ebx
+    call font_codepoint_advance_pixels
+    mov r15d, eax
+    lea eax, [r12d + r15d]
+    mov edx, DOC_LEFT
+    add edx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, edx
+    jbe .document_printable_fit
     mov r12d, DOC_LEFT
     add r13d, LINE_HEIGHT
     mov eax, dword ptr [rip + window_status_top]
@@ -12124,28 +12218,31 @@ render_document:
     jl .document_printable_skip_draw
     mov edi, r12d
     mov esi, r13d
+    mov edx, ebx
     call draw_glyph
 .document_printable_skip_draw:
-    add r12d, CELL_WIDTH
+    add r12d, r15d
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
-    jmp .document_render_loop
+    jmp .Ldocument_render_loop
 
 .document_tab:
-    lea eax, [r12d + CELL_WIDTH * 4]
-    mov edx, dword ptr [rip + window_width]
-    sub edx, DOC_SCROLL_TRACK_X_OFFSET
-    cmp eax, edx
+    mov eax, r12d
+    sub eax, DOC_LEFT
+    add eax, 32
+    and eax, -32
+    cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .document_tab_fit
-    mov r12d, DOC_LEFT
+    mov r12d, DOC_LEFT + 32
     add r13d, LINE_HEIGHT
-    mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
-    cmp r13d, eax
+    mov edx, dword ptr [rip + window_status_top]
+    sub edx, LINE_HEIGHT
+    cmp r13d, edx
     jge .document_draw_cursor
+    jmp .document_next_byte
 .document_tab_fit:
-    add r12d, CELL_WIDTH * 4
+    lea r12d, [eax + DOC_LEFT]
     jmp .document_next_byte
 
 .document_newline:
@@ -12153,20 +12250,18 @@ render_document:
     add r13d, LINE_HEIGHT
 .document_next_byte:
     inc r14d
-    jmp .document_render_loop
+    jmp .Ldocument_render_loop
 
 .document_draw_cursor:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
-    mov r12d, edx
+    lea r12d, [rdx + DOC_LEFT]
     mov r13d, eax
     sub r13d, dword ptr [rip + doc_view_top_row]
     test r13d, r13d
     js .document_render_done
     cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .document_render_done
-    imul r12d, CELL_WIDTH
-    add r12d, DOC_LEFT
     imul r13d, LINE_HEIGHT
     add r13d, DOC_TOP
     mov eax, dword ptr [rip + window_width]
