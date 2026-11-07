@@ -538,6 +538,8 @@ font_parse_mapped:
 # RDI=NUL-terminated path; EAX=0 success, negative on failure.
 .type font_try_path, @function
 font_try_path:
+    mov edi, 'T'
+    call font_debug_mark
     push rbx
     push r12
     push r13
@@ -545,27 +547,37 @@ font_try_path:
     push r15
     mov r12, rdi
     # Open read-only. No symlink following is needed for explicit font files.
+    mov edi, 'O'
+    call font_debug_mark
     mov eax, FONT_SYS_openat
     mov edi, FONT_AT_FDCWD
     mov rsi, r12
     xor edx, edx
     xor r10d, r10d
     syscall
+    mov edi, 'o'
+    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_failed
     mov r13d, eax
     # Determine a bounded file length.
+    mov edi, 'L'
+    call font_debug_mark
     mov eax, FONT_SYS_lseek
     mov edi, r13d
     xor esi, esi
     mov edx, 2               # SEEK_END
     syscall
+    mov edi, 'l'
+    call font_debug_mark
     test rax, rax
     jle .Lfont_try_path_close_failed
     cmp rax, FONT_MAX_FILE_SIZE
     ja .Lfont_try_path_close_failed
     mov r14, rax
     # mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0)
+    mov edi, 'm'
+    call font_debug_mark
     xor edi, edi
     mov rsi, r14
     mov edx, FONT_PROT_READ
