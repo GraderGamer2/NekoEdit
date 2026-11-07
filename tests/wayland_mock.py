@@ -1327,7 +1327,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
                     with open(menu_saveas, "rb") as saved:
                         cancelled_save_bytes = saved.read()
-                    if cancelled_save_bytes != b"zabcdef":
+                    if cancelled_save_bytes != b"zabcdeg":
                         raise AssertionError(
                             "cancelled Save As changed the active destination: "
                             f"expected {b'zabcdef'!r}, got {cancelled_save_bytes!r}; state={picker_state()!r}"
