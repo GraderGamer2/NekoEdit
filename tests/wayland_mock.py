@@ -360,7 +360,7 @@ def run(
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
                 if not (
-                    sparse_keymap_test or punctuation_render_test
+                    sparse_keymap_test or punctuation_render_test or line_index_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test
                 ):
@@ -419,7 +419,7 @@ def run(
                         raise AssertionError(
                             "document click did not keep the caret visible after clamping to the document; "
                             + repr({"debug_state": debug_state, "caret_candidates": caret_candidates,
-                                    "expected": (clicked_caret_x, 92)})
+                                    "expected_document_click": "near the clicked insertion point"})
                         )
                 observations.append("document-area click was routed to the editor and safely redrew the buffer")
 
@@ -1066,6 +1066,16 @@ xkb_symbols "nekoedit-sparse" {
                         if sum(expected_spans) != len(expected_contents):
                             raise AssertionError(label + ": line spans do not cover the document")
 
+                    pointer_state = read_document_state()
+                    pointer_pixel = struct.unpack_from(
+                        "<I", pixels, 104 * 800 * 4 + 96 * 4
+                    )[0]
+                    if pointer_state["doc_cursor"] != 16 or pointer_pixel != 0xFFFFFFFF:
+                        raise AssertionError(
+                            "indexed pointer hit-testing mismatch: "
+                            + repr({"cursor": pointer_state["doc_cursor"],
+                                    "pixel": hex(pointer_pixel), "expected_cursor": 16})
+                        )
                     assert_index("initial rebuild", fixture, (6, 101, 2), (1, 2, 1))
                     key_step(1300, 30, "insert ordinary byte into indexed first line")
                     after_insert = b"a" + fixture
