@@ -297,6 +297,7 @@ window_resize_pending:  .long 0
 window_is_maximized:    .long 0
 window_sync_callback_id: .long 0
 window_attach_pending: .long 0
+window_sync_probe_done: .long 0
 failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
@@ -457,6 +458,7 @@ wayland_main:
     mov dword ptr [rip + window_is_maximized], 0
     mov dword ptr [rip + window_sync_callback_id], 0
     mov dword ptr [rip + window_attach_pending], 0
+    mov dword ptr [rip + window_sync_probe_done], 0
     call window_update_geometry
     call load_initial_document
     test rax, rax
@@ -5484,8 +5486,11 @@ window_apply_pending_resize:
     test rax, rax
     js .window_resize_done
     mov dword ptr [rip + window_buffer_id], r14d
+    cmp dword ptr [rip + window_sync_probe_done], 0
+    jne .window_resize_present
+    mov dword ptr [rip + window_sync_probe_done], 1
 
-    # Diagnostic barrier: do not attach the replacement until the compositor
+    # Diagnostic barrier: do not attach the first replacement until the compositor
     # has processed wl_shm_pool.create_buffer. A wl_display.error can then be
     # read and reported before the subsequent wl_surface.attach obscures it.
     # The sync callback gets the next unused client object ID.
