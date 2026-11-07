@@ -2131,6 +2131,7 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
                         "picker_panel_width", "picker_panel_height", "picker_panel_x", "picker_panel_y",
                         "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
+                        "settings_panel_x", "settings_panel_y", "settings_panel_width", "settings_panel_height",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                         "font_loaded", "font_units_per_em", "font_num_glyphs",
                         "font_probe_A_advance", "font_file_map", "picker_error",
@@ -2156,6 +2157,15 @@ xkb_symbols "nekoedit-sparse" {
                         with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
                             raw = os.pread(memory.fileno(), 8, font_picker_symbols[name])
                         return struct.unpack("<Q", raw)[0]
+
+                    def settings_click(design_x: int, design_y: int, serial: int, label: str) -> None:
+                        panel_x = picker_u32("settings_panel_x")
+                        panel_y = picker_u32("settings_panel_y")
+                        panel_width = picker_u32("settings_panel_width")
+                        panel_height = picker_u32("settings_panel_height")
+                        surface_x = panel_x + (design_x - 160) * panel_width // 256
+                        surface_y = panel_y + (design_y - 32) * panel_height // 168
+                        workflow_click(surface_x, surface_y, serial, label)
 
                     workflow_click(120, 12, 2600, "font picker: open File menu")
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
@@ -2395,14 +2405,14 @@ xkb_symbols "nekoedit-sparse" {
                     if picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font-size controls must not modify document font size")
                     for index in range(6):
-                        workflow_click(400, 100, serial, f"increase independent UI font size {index + 1}")
+                        settings_click(400, 100, serial, f"increase independent UI font size {index + 1}")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("UI font-size increase unexpectedly closed Settings")
                     if picker_u32("ui_font_size") != 16 or picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font size did not reach 16px independently of document size")
                     for index in range(6):
-                        workflow_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
+                        settings_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("UI font-size decrease unexpectedly closed Settings")
@@ -2411,7 +2421,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Re-open the picker at the enlarged UI setting. Its text
                     # should use the exact selected size when the window has room.
                     for index in range(6):
-                        workflow_click(400, 100, serial, f"raise UI font for picker follow-through {index + 1}")
+                        settings_click(400, 100, serial, f"raise UI font for picker follow-through {index + 1}")
                         serial += 10
                     workflow_click(120, 12, serial, "open File menu at 16px UI size")
                     serial += 10
