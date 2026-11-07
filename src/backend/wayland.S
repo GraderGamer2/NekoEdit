@@ -8517,14 +8517,10 @@ window_update_layout_geometry:
 .window_layout_picker_font_store:
     mov dword ptr [rip + picker_ui_font_size], eax
 
-    # Settings is one uniform 256x168 design grid. The same scale controls
-    # panel size, the font raster, and pointer hit-testing.
-    mov eax, 256
-    imul eax, dword ptr [rip + ui_font_size]
-    xor edx, edx
-    mov ecx, 10
-    div ecx
-    mov r8d, eax
+    # Settings keeps its 256x168 panel geometry independent of the
+    # typography preference. Only the text raster grows/shrinks; the panel
+    # still fits and centers against the actual window dimensions.
+    mov r8d, 256
     mov ebx, dword ptr [rip + window_width]
     sub ebx, 32
     cmp r8d, ebx
@@ -8568,14 +8564,9 @@ window_update_layout_geometry:
 .window_layout_settings_font_min_ready:
     mov dword ptr [rip + settings_ui_font_size], eax
 
-    # Find/Replace uses a uniform centered 448x192 design grid. Fit its
-    # aspect ratio to both window dimensions before computing the UI font scale.
-    mov eax, 448
-    imul eax, dword ptr [rip + ui_font_size]
-    xor edx, edx
-    mov ecx, 10
-    div ecx
-    mov r8d, eax
+    # Find/Replace also retains its 448x192 panel geometry while its
+    # labels and field text use the selected physical UI font size.
+    mov r8d, 448
     mov ebx, dword ptr [rip + window_width]
     sub ebx, 32
     cmp r8d, ebx
