@@ -1,3 +1,28 @@
+## 2026-11-08 — Expand named XKB Unicode coverage for Greek and Cyrillic
+
+### Implementation
+
+- Added 168 case-sensitive named keysym mappings to the existing XKB Unicode alias table. The expanded table now covers 273 named non-ASCII aliases, including the Greek upper/lower alphabets and accented forms; the 32-letter Cyrillic lower/upper alphabets; and common Ukrainian, Belarusian, Serbian, and Macedonian extensions.
+- The additions retain the bounded table format (name length, exact name bytes, Unicode scalar) and reuse the existing scalar lookup and UTF-8 insertion path. No runtime library or new dependency was introduced.
+- Corrected the stale source-file overview comment so it describes the implemented Unicode and bounded dead-key path while identifying the still-unsupported XKB modifier/type semantics, full Compose sequences, and Wayland text-input/IME.
+- The selection, word-drag, and timer-driven auto-scroll implementation was left unchanged.
+
+### Regression coverage
+
+- Extended the synthetic XKB fixture with `Greek_alpha` and `Cyrillic_ya` symbols.
+- The test reads both values from the exported per-key/group/level scalar table (U+03B1 and U+044F), then sends the corresponding key events and checks the exact final UTF-8 document bytes alongside the existing explicit-scalar, EuroSign/eacute/emdash, dead-key composition/fallback, and cancellation checks.
+- Alias names and scalar values were cross-checked against the public X.Org `keysymdef.h` definitions: https://gitlab.freedesktop.org/xorg/proto/xorgproto/-/blob/master/include/X11/keysymdef.h
+
+### Verification
+
+- Actions [Build and test #557](https://github.com/GraderGamer2/NekoEdit/actions/runs/42398786147) passed the freestanding build and ELF checks after the parser change.
+- Actions [Build and test #558](https://github.com/GraderGamer2/NekoEdit/actions/runs/42398813207) passed all workflow steps on test head [0bf445d90a47](https://github.com/GraderGamer2/NekoEdit/commit/0bf445d90a477324446f2a30a89395ecb202d7eb), including the complete Wayland mock suite, preferences tests, CLI smoke tests, no-interpreter/no-shared-dependency ELF checks, executable inspection, and artifact upload.
+- The mock log explicitly reports: “XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified.”
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42398813207/artifacts/13584039752): 74,097 bytes; artifact ID 13584039752; ZIP SHA-256 `a3514ec12f0b97dc12a200d0f8b14f7ea91168fe3c1296935cae77d54b231df2`; expires 2026-11-14.
+- Manual GNOME/Mutter verification of the latest UI and selection interactions remains outstanding; this workflow is a mock-compositor test, not a desktop-session test.
+
+---
+
 ## 2026-11-07 — Whole-word pointer dragging, edge auto-scroll, named XKB aliases, and bounded dead-key composition
 
 ### Pointer selection behavior
