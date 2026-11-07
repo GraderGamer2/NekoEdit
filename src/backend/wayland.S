@@ -348,7 +348,7 @@ doc_scroll_drag:        .long 0
 doc_scroll_drag_offset: .long 0
 doc_scroll_thumb_top:   .long 0
 doc_scroll_thumb_height: .long 0
-doc_total_visual_rows:  .long 1
+doc_total_visual_rows:  .long 0
 doc_wheel_remainder:    .long 0
 repeat_timer_fd:         .long 0
 repeat_keycode:          .long 0
