@@ -107,7 +107,7 @@ def synthetic_true_type_font() -> bytes:
     # Glyph 6 uses independent X/Y scales (0.5 and 2.0).
     composite_anisotropic = (
         struct.pack(">5h", -1, 0, 0, 250, 1400)
-        + struct.pack(">HHhhhh", 0x0043, 1, 0, 0, 8192, 32768)
+        + struct.pack(">HHhhhh", 0x0043, 1, 0, 0, 8192, 24576)
     )
     # Glyph 7 rotates the simple outline 90 degrees using the 2x2 matrix:
     # x' = -y, y' = x. Stored order is xscale, scale01, scale10, yscale.
@@ -969,7 +969,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_anisotropic_contours": 1,
                         "font_probe_anisotropic_points": 3,
                         "font_probe_anisotropic_last_x": 125,
-                        "font_probe_anisotropic_last_y": 1400,
+                        "font_probe_anisotropic_last_y": 1050,
                         "font_probe_matrix_result": 0,
                         "font_probe_matrix_contours": 1,
                         "font_probe_matrix_points": 3,
