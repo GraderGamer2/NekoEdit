@@ -3281,9 +3281,9 @@ wayland_main:
 .check_keyboard_event:
     mov eax, dword ptr [rip + keyboard_object]
     test eax, eax
-    jz .check_toplevel_close
+    jz .check_clipboard_event
     cmp dword ptr [rip + last_object], eax
-    jne .check_toplevel_close
+    jne .check_clipboard_event
     cmp dword ptr [rip + last_opcode], 0
     je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
