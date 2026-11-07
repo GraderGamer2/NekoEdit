@@ -11287,6 +11287,7 @@ draw_bounded_ascii_width:
     push r13
     push r14
     push r15
+    sub rsp, 8
     mov rbx, rdx
     mov r12d, edi
     mov r13d, esi
@@ -11325,6 +11326,7 @@ draw_bounded_ascii_width:
     jmp .draw_bounded_ascii_width_loop
 .draw_bounded_ascii_width_done:
     mov eax, r12d
+    add rsp, 8
     pop r15
     pop r14
     pop r13

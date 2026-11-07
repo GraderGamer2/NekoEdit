@@ -250,7 +250,7 @@ int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
         if (glyph_id == 0 && codepoint != 0x3f)
             glyph_id = font_cmap_lookup(0x3f);
     }
-    if (glyph_id >= (uint32_t)font_num_glyphs) return 8;
+    if (!glyph_id || glyph_id >= (uint32_t)font_num_glyphs) return 8;
     advance = font_glyph_advance(glyph_id);
     upem = (uint32_t)font_units_per_em;
     if (!advance || upem < 16 || upem > 16384) return 8;
@@ -275,9 +275,9 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
         !size || size>32) return 0;
     gid=font_cmap_lookup(cp);
     if (!gid && cp!=0x3f) gid=font_cmap_lookup(0x3f);
-    if (gid>=(uint32_t)font_num_glyphs) return 0;
+    if (!gid || gid>=(uint32_t)font_num_glyphs) return 0;
     e=cached(gid,size);
-    if (!e) return 0;
+    if (!e || !e->width || !e->height) return 0;
     for (uint32_t row=0;row<e->height;++row) {
         int32_t py=y+e->top+(int32_t)row;
         if (py<0 || py>=height) continue;
