@@ -1,3 +1,21 @@
+## 2026-11-07 — Keep dialog glyphs, advances, and caret geometry in the same scale
+
+The first corrected build passed, but source review found a remaining resize-dependent mismatch: a dialog's font size is selected from its tighter fit axis, while horizontal glyph advances were still measured at the fixed 10px design em. When the window is short but wide, the picker is height-constrained: the glyphs shrink but their advances, caret, and hit-test cells do not.
+
+### Implementation
+
+- Added a shared overlay advance helper that measures at the active raster font size, then converts the resulting screen-pixel advance back through the same horizontal transform used for glyph origins.
+- Added a picker-specific advance helper for rendering-time clipping, text-prefix measurement, caret placement, and pointer hit-testing. It uses the same picker font size and panel width, including when input events arrive after rendering has ended.
+- Routed ordinary UI labels, bounded labels, decimal labels, the path prompt, and picker text/caret calculations through the appropriate helper. The no-font 5x7 fallback retains its previous spacing.
+- Extended the synthetic-font picker test to start at 800×360, a height-constrained/wide configuration. It now verifies the 8px raster size, the measured A/B caret position, a mouse click that distinguishes 8px metrics from the old 10px metrics, and selected-row text containment against the transformed highlight.
+- Updated the rendering reference to document the shared metric/transform rule.
+
+### Verification
+
+The test change intentionally exercises the case that was missing from the original 800×480 picker test. CI is pending; no manual GNOME/Mutter result is claimed.
+
+---
+
 ## 2026-11-07 — Correct SFNT validation and responsive prompt geometry
 
 The first two CI attempts for the font-alignment change exposed two defects in the new code before any build was offered for manual testing:

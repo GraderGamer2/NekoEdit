@@ -217,6 +217,7 @@ def run(
     font_parser_test: bool = False,
     font_picker_test: bool = False,
     font_test_path: str | None = None,
+    initial_height: int = 480,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -346,7 +347,7 @@ def run(
             expect_message(client, (8, 6, b""), "initial surface commit")
 
             client.sendall(
-                wire_message(10, 0, struct.pack("<iiI", 800, 480, 0))
+                wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
@@ -397,9 +398,10 @@ def run(
                         )
                 if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
                     raise AssertionError("active document tab underline was not rendered")
-                if struct.unpack_from("<I", pixels, 460 * 800 * 4)[0] != 0xFF78A9D4:
+                status_top = initial_height - 20
+                if struct.unpack_from("<I", pixels, status_top * 800 * 4)[0] != 0xFF78A9D4:
                     raise AssertionError("status bar accent separator was not rendered")
-                if struct.unpack_from("<I", pixels, 461 * 800 * 4)[0] != 0xFF343D4B:
+                if struct.unpack_from("<I", pixels, (status_top + 1) * 800 * 4)[0] != 0xFF343D4B:
                     raise AssertionError("status bar background was not rendered")
                 def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
                     for row in range(y, y + height):
@@ -416,7 +418,7 @@ def run(
                                 return True
                     return False
 
-                if not font_parser_test and not antialiased_ink_present(16, 464, 88, 14):
+                if not font_parser_test and not antialiased_ink_present(16, initial_height - 16, 88, 14):
                     raise AssertionError("logical line status label was not rendered")
                 editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if initial_file is None:
@@ -430,11 +432,11 @@ def run(
 
                 expect_message(
                     client,
-                    (11, 0, struct.pack("<6I", 12, 0, 800, 480, 3200, 1)),
+                    (11, 0, struct.pack("<6I", 12, 0, 800, initial_height, 3200, 1)),
                     "create wl_buffer",
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "damage surface")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
                 observations.append("memfd+SCM_RIGHTS buffer verified")
 
@@ -1818,10 +1820,10 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
                     if picker_u32("picker_mode") != 1:
                         raise AssertionError("font picker test could not open the Open dialog")
-                    if picker_u32("picker_ui_font_size") != 10 or picker_u32("ui_transform_font_size") != 10:
-                        raise AssertionError("800x480 picker should render and measure at its 10px UI font")
+                    if picker_u32("picker_ui_font_size") != 8 or picker_u32("ui_transform_font_size") != 8:
+                        raise AssertionError("800x360 picker should render and measure at its height-fitted 8px UI font")
 
-                    workflow_click(200, 374, 2620, "focus filename search field")
+                    workflow_click(200, 286, 2620, "focus filename search field")
                     # The fixture maps uppercase A/B to distinct 7px/4px advances.
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 2628, 2628, 42, 1))
@@ -1843,10 +1845,12 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     # Synthetic hmtx: A=650/1000em and B=400/1000em.
-                    # At a 10px UI em these round to 7px + 4px, not 8px*2.
-                    expected_caret_x = 176 + ((650 * 10 + 500) // 1000) + ((400 * 10 + 500) // 1000)
-                    caret_pixel = struct.unpack_from("<I", pixels, 365 * 800 * 4 + expected_caret_x * 4)[0]
-                    focus_line_pixel = struct.unpack_from("<I", pixels, 360 * 800 * 4 + 200 * 4)[0]
+                    # At an 8px rendered em these round to 5px + 3px.
+                    expected_caret_x = 176 + ((650 * 8 + 500) // 1000) + ((400 * 8 + 500) // 1000)
+                    caret_y = 16 + ((365 - 36) * 328 // 408)
+                    focus_y = 16 + ((360 - 36) * 328 // 408)
+                    caret_pixel = struct.unpack_from("<I", pixels, caret_y * 800 * 4 + expected_caret_x * 4)[0]
+                    focus_line_pixel = struct.unpack_from("<I", pixels, focus_y * 800 * 4 + 200 * 4)[0]
                     if caret_pixel != 0xFFF0F3F7 or focus_line_pixel != 0xFF78A9D4:
                         raise AssertionError(
                             f"font picker caret/focus geometry mismatch: caret=({expected_caret_x},{hex(caret_pixel)}), "
@@ -1856,25 +1860,25 @@ xkb_symbols "nekoedit-sparse" {
                     # x=186 is past the midpoint of B (A starts at 176), but
                     # still inside the old fixed 8px character cell. It must
                     # resolve to the insertion boundary after B.
-                    workflow_click(186, 374, 2640, "proportional click after second glyph")
+                    workflow_click(183, 286, 2640, "proportional click after second glyph")
                     if picker_u32("picker_name_cursor") != 2:
                         raise AssertionError(
                             f"picker hit-testing did not use proportional advances: cursor={picker_u32('picker_name_cursor')}"
                         )
 
                     # Select row 1 (the fixture file named AB, after nested-dir).
-                    workflow_click(120, 150, 2650, "select AB row in Open picker")
+                    workflow_click(120, 108, 2650, "select AB row in Open picker")
                     if picker_u32("picker_selected") != 1 or picker_u32("picker_focus") != 0:
                         raise AssertionError("picker row click did not select the expected AB entry")
-                    top_fill = struct.unpack_from("<I", pixels, 144 * 800 * 4 + 58 * 4)[0]
-                    bottom_fill = struct.unpack_from("<I", pixels, 157 * 800 * 4 + 58 * 4)[0]
+                    top_fill = struct.unpack_from("<I", pixels, 103 * 800 * 4 + 58 * 4)[0]
+                    bottom_fill = struct.unpack_from("<I", pixels, 113 * 800 * 4 + 58 * 4)[0]
                     if top_fill != 0xFF414B5A or bottom_fill != 0xFF414B5A:
                         raise AssertionError(
                             f"selected row highlight is not aligned to its 14px row: {hex(top_fill)}/{hex(bottom_fill)}"
                         )
                     glyph_rows = [
-                        y for y in range(144, 158)
-                        for x in range(94, 118)
+                        y for y in range(103, 114)
+                        for x in range(94, 110)
                         if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] != 0xFF414B5A
                     ]
                     if not glyph_rows or min(glyph_rows) < 144 or max(glyph_rows) >= 158:
@@ -1882,7 +1886,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"AB filename glyphs escaped their selected row: rows={glyph_rows!r}"
                         )
                     observations.append(
-                        "10px UI font, proportional filename caret and mouse hit-testing, and selected-row text/highlight alignment verified"
+                        "8px height-fitted UI font, metric-aligned filename caret and mouse hit-testing, and selected-row text/highlight alignment verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -4260,6 +4264,7 @@ if __name__ == "__main__":
             font_picker_test=True,
             font_test_path=font_path,
             file_workflow=True,
+            initial_height=360,
         )
     finally:
         for path in (font_path, render_path):

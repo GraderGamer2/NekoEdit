@@ -80,3 +80,7 @@ Glyph fallback and the embedded bitmap keep unsupported content from requiring a
 The mock Wayland integration test builds a deterministic synthetic TrueType font and checks SFNT table/outline parsing, simple and composite glyph decoding, curve rasterization, antialiased pixels in the shared-memory framebuffer, horizontal 8px/5px glyph advances, a cmap-mapped 3px space advance, wrapping/indexed visual rows, proportional pointer hit-testing, and OS/2 `USE_TYPO_METRICS` vertical line pitch (with hhea retained as fallback). GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed the complete workflow on the metric-layout implementation. This is mock-compositor coverage; a manual GNOME/Mutter smoke test of the latest font layout remains outstanding.
 
 Bounds checks must precede font-table reads and allocation arithmetic. Surface drawing must clip to its bounds. Cache memory and outline scratch storage remain explicitly capped.
+
+## Overlay text and horizontal scaling
+
+Overlay glyphs are rasterized at the active UI font size. Their advances are converted back through the same horizontal transform applied to glyph origins, so the screen-space advance remains consistent when the dialog's height constrains the font size. The Open/Save picker uses this same advance for text clipping, visible-prefix measurement, caret placement, and pointer hit-testing. The path prompt and other transformed labels use the corresponding active-overlay helper. The no-font 5x7 fallback retains its legacy spacing.

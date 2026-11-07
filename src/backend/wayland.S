@@ -10946,6 +10946,43 @@ draw_glyph:
     ret
 .size draw_glyph, . - draw_glyph
 
+# Return a design-space advance for the active overlay transform.
+# The glyph is rasterized at ui_transform_font_size, but its origin is transformed
+# by ui_transform_x_num/ui_transform_x_den. Convert the same screen-pixel hmtx
+# advance back to design coordinates so the next origin lands on the next glyph.
+.type ui_font_advance_pixels, @function
+ui_font_advance_pixels:
+    push rbx
+    mov ebx, edi
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .ui_font_advance_legacy
+    cmp dword ptr [rip + font_loaded], 0
+    je .ui_font_advance_legacy
+    mov esi, dword ptr [rip + ui_transform_font_size]
+    test esi, esi
+    jnz .ui_font_advance_size_ready
+    mov esi, 10
+.ui_font_advance_size_ready:
+    mov edi, ebx
+    call font_codepoint_advance_pixels_size
+    mov ecx, dword ptr [rip + ui_transform_x_num]
+    test ecx, ecx
+    jz .ui_font_advance_done
+    imul eax, dword ptr [rip + ui_transform_x_den]
+    add eax, ecx
+    dec eax
+    xor edx, edx
+    div ecx
+    jmp .ui_font_advance_done
+.ui_font_advance_legacy:
+    mov edi, ebx
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+.ui_font_advance_done:
+    pop rbx
+    ret
+.size ui_font_advance_pixels, . - ui_font_advance_pixels
+
 # Draw a NUL-terminated ASCII label. EDI=x, ESI=y, RDX=string; EAX=next x.
 .type draw_text, @function
 .type draw_text, @function
@@ -10969,8 +11006,7 @@ draw_text:
 .Lneko_draw_text_size_ready:
     call draw_glyph
     movzx edi, byte ptr [rbx]
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     add r12d, eax
     inc rbx
     jmp .Lneko_draw_text_loop
@@ -11021,8 +11057,7 @@ draw_decimal:
 .Lneko_draw_decimal_size_ready:
     call draw_glyph
     movzx edi, byte ptr [r12]
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     add r13d, eax
     inc r12
     jmp .Lneko_draw_decimal_paint
@@ -11196,8 +11231,7 @@ draw_bounded_ascii:
 .draw_bounded_ascii_size_ready:
     call draw_glyph
     mov edi, r15d
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     add r12d, eax
     inc rbx
     dec r14d
@@ -11213,6 +11247,34 @@ draw_bounded_ascii:
 .size draw_bounded_ascii, . - draw_bounded_ascii
 
 
+# Return a picker design-space advance using the rendered UI font size.
+# This is shared by text clipping, caret placement, and pointer hit-testing.
+.type picker_font_advance_pixels, @function
+picker_font_advance_pixels:
+    push rbx
+    mov ebx, edi
+    mov esi, dword ptr [rip + picker_ui_font_size]
+    test esi, esi
+    jnz .picker_font_advance_size_ready
+    mov esi, 10
+.picker_font_advance_size_ready:
+    mov edi, ebx
+    call font_codepoint_advance_pixels_size
+    cmp dword ptr [rip + font_loaded], 0
+    je .picker_font_advance_done
+    mov ecx, dword ptr [rip + picker_panel_width]
+    test ecx, ecx
+    jz .picker_font_advance_done
+    imul eax, 720
+    add eax, ecx
+    dec eax
+    xor edx, edx
+    div ecx
+.picker_font_advance_done:
+    pop rbx
+    ret
+.size picker_font_advance_pixels, . - picker_font_advance_pixels
+
 # RDI=ASCII text pointer, ESI=character count. EAX=prefix width in logical UI pixels.
 .type picker_measure_ascii_prefix, @function
 picker_measure_ascii_prefix:
@@ -11226,8 +11288,7 @@ picker_measure_ascii_prefix:
     test r12d, r12d
     jz .picker_measure_ascii_prefix_done
     movzx edi, byte ptr [rbx]
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call picker_font_advance_pixels
     add r13d, eax
     inc rbx
     dec r12d
@@ -11258,8 +11319,7 @@ picker_hit_test_ascii:
     cmp r14d, r12d
     jae .picker_hit_test_ascii_done
     movzx edi, byte ptr [rbx + r14]
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call picker_font_advance_pixels
     mov ecx, eax
     shr eax, 1
     add eax, r15d
@@ -11295,8 +11355,7 @@ picker_field_view_start:
     test r13d, r13d
     jz .picker_field_view_start_done
     movzx edi, byte ptr [rbx + r13 - 1]
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call picker_font_advance_pixels
     lea ecx, [rbp + rax]
     cmp ecx, r14d
     ja .picker_field_view_start_done
@@ -11342,8 +11401,7 @@ draw_bounded_ascii_width:
 .draw_bounded_ascii_width_advance:
     mov r15d, edx
     mov edi, r15d
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     cmp eax, r14d
     ja .draw_bounded_ascii_width_done
     mov ebp, eax
@@ -12141,8 +12199,7 @@ render_path_prompt:
 .render_path_prompt_find_replacement:
     mov edi, '?'
 .render_path_prompt_find_advance:
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     lea edx, [r13d + eax]
     cmp edx, 608
     ja .render_path_prompt_start_ready
@@ -12173,8 +12230,7 @@ render_path_prompt:
     mov ecx, dword ptr [rip + ui_transform_font_size]
     call draw_glyph
     mov edi, ebp
-    mov esi, 10
-    call font_codepoint_advance_pixels_size
+    call ui_font_advance_pixels
     add r13d, eax
     inc rbx
     inc r12d
