@@ -1823,6 +1823,35 @@ xkb_symbols "nekoedit-sparse" {
                     if picker_u32("picker_ui_font_size") != 8 or picker_u32("ui_transform_font_size") != 8:
                         raise AssertionError("800x360 picker should render and measure at its height-fitted 8px UI font")
 
+                    # Bitmap-fallback labels and TrueType field contents share a
+                    # baseline; the Search label starts on the transformed 368px row.
+                    search_label_y = 16 + ((368 - 36) * 328 // 408)
+                    search_label_pixel = struct.unpack_from(
+                        "<I", pixels, search_label_y * 800 * 4 + 57 * 4
+                    )[0]
+                    if search_label_pixel != 0xFFD8DEE9:
+                        raise AssertionError(
+                            f"Search label baseline is misplaced: y={search_label_y}, "
+                            f"pixel={hex(search_label_pixel)}"
+                        )
+
+                    # Focus accents are underlines at the bottom of each field,
+                    # not rules overlaid on the top edge.
+                    workflow_click(200, 50, 2615, "focus picker path field")
+                    path_top_y = 16 + ((64 - 36) * 328 // 408)
+                    path_bottom_y = 16 + ((91 - 36) * 328 // 408)
+                    path_top_pixel = struct.unpack_from(
+                        "<I", pixels, path_top_y * 800 * 4 + 200 * 4
+                    )[0]
+                    path_underline_pixel = struct.unpack_from(
+                        "<I", pixels, path_bottom_y * 800 * 4 + 200 * 4
+                    )[0]
+                    if path_top_pixel != 0xFF252A33 or path_underline_pixel != 0xFF78A9D4:
+                        raise AssertionError(
+                            f"path-field underline geometry mismatch: top={hex(path_top_pixel)}, "
+                            f"bottom={hex(path_underline_pixel)}"
+                        )
+
                     workflow_click(200, 286, 2620, "focus filename search field")
                     # The fixture maps uppercase A/B to distinct 7px/4px advances.
                     client.sendall(
@@ -1848,13 +1877,19 @@ xkb_symbols "nekoedit-sparse" {
                     # At an 8px rendered em these round to 5px + 3px.
                     expected_caret_x = 176 + ((650 * 8 + 500) // 1000) + ((400 * 8 + 500) // 1000)
                     caret_y = 16 + ((365 - 36) * 328 // 408)
-                    focus_y = 16 + ((360 - 36) * 328 // 408)
+                    focus_top_y = 16 + ((360 - 36) * 328 // 408)
+                    focus_bottom_y = 16 + ((387 - 36) * 328 // 408)
                     caret_pixel = struct.unpack_from("<I", pixels, caret_y * 800 * 4 + expected_caret_x * 4)[0]
-                    focus_line_pixel = struct.unpack_from("<I", pixels, focus_y * 800 * 4 + 200 * 4)[0]
-                    if caret_pixel != 0xFFF0F3F7 or focus_line_pixel != 0xFF78A9D4:
+                    focus_top_pixel = struct.unpack_from("<I", pixels, focus_top_y * 800 * 4 + 200 * 4)[0]
+                    focus_line_pixel = struct.unpack_from("<I", pixels, focus_bottom_y * 800 * 4 + 200 * 4)[0]
+                    if (
+                        caret_pixel != 0xFFF0F3F7
+                        or focus_top_pixel != 0xFF252A33
+                        or focus_line_pixel != 0xFF78A9D4
+                    ):
                         raise AssertionError(
                             f"font picker caret/focus geometry mismatch: caret=({expected_caret_x},{hex(caret_pixel)}), "
-                            f"focus_line={hex(focus_line_pixel)}"
+                            f"top={hex(focus_top_pixel)}, underline={hex(focus_line_pixel)}"
                         )
 
                     # x=183 is past the B midpoint with the 8px rendered font,
@@ -1870,20 +1905,38 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(120, 108, 2650, "select AB row in Open picker")
                     if picker_u32("picker_selected") != 1 or picker_u32("picker_focus") != 0:
                         raise AssertionError("picker row click did not select the expected AB entry")
-                    top_fill = struct.unpack_from("<I", pixels, 103 * 800 * 4 + 58 * 4)[0]
-                    bottom_fill = struct.unpack_from("<I", pixels, 113 * 800 * 4 + 58 * 4)[0]
+                    selected_row_top = 16 + ((144 - 36) * 328 // 408)
+                    selected_row_height = (14 * 328 + 408 - 1) // 408
+                    selected_row_bottom = selected_row_top + selected_row_height
+                    top_fill = struct.unpack_from(
+                        "<I", pixels, selected_row_top * 800 * 4 + 58 * 4
+                    )[0]
+                    bottom_fill = struct.unpack_from(
+                        "<I", pixels, (selected_row_bottom - 1) * 800 * 4 + 58 * 4
+                    )[0]
                     if top_fill != 0xFF414B5A or bottom_fill != 0xFF414B5A:
                         raise AssertionError(
-                            f"selected row highlight is not aligned to its 14px row: {hex(top_fill)}/{hex(bottom_fill)}"
+                            f"selected row highlight is not aligned to its transformed 14px row: "
+                            f"{hex(top_fill)}/{hex(bottom_fill)}"
                         )
-                    glyph_rows = [
-                        y for y in range(103, 114)
-                        for x in range(94, 110)
-                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] != 0xFF414B5A
-                    ]
-                    if not glyph_rows or min(glyph_rows) < 103 or max(glyph_rows) >= 114:
+                    # Inspect pixels above the selected band as well as inside it.
+                    # Comparing against the actual row background makes this a real
+                    # containment check rather than a range check over the band itself.
+                    glyph_rows = []
+                    for y in range(selected_row_top - 2, selected_row_bottom):
+                        expected_background = (
+                            0xFF414B5A
+                            if selected_row_top <= y < selected_row_bottom
+                            else 0xFF252A33
+                        )
+                        for x in range(94, 110):
+                            pixel = struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                            if pixel != expected_background:
+                                glyph_rows.append(y)
+                    if not glyph_rows or min(glyph_rows) < selected_row_top or max(glyph_rows) >= selected_row_bottom:
                         raise AssertionError(
-                            f"AB filename glyphs escaped their selected row: rows={glyph_rows!r}"
+                            f"AB filename glyphs escaped their selected row: "
+                            f"band=({selected_row_top},{selected_row_bottom}), ink_rows={glyph_rows!r}"
                         )
                     observations.append(
                         "8px height-fitted UI font, metric-aligned filename caret and mouse hit-testing, and selected-row text/highlight alignment verified"

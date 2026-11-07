@@ -11504,7 +11504,7 @@ render_picker:
     jne .render_picker_path_text
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
-    mov edx, 64
+    mov edx, 91
     mov ecx, 688
     mov r8d, 1
     mov r9d, 0xff78a9d4
@@ -11765,7 +11765,7 @@ render_picker:
 
 .render_picker_name:
     mov edi, 56
-    mov esi, 363
+    mov esi, 368
     cmp dword ptr [rip + picker_mode], 1
     jne .render_picker_name_label_file
     lea rdx, [rip + ui_picker_search_label]
@@ -11785,7 +11785,7 @@ render_picker:
     jne .render_picker_name_window
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 168
-    mov edx, 360
+    mov edx, 387
     mov ecx, 440
     mov r8d, 1
     mov r9d, 0xff78a9d4

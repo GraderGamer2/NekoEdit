@@ -1,3 +1,16 @@
+## 2026-11-07 — Align picker captions, focus underlines, and row-pixel validation
+
+The latest GNOME/Mutter feedback still identifies visible displacement in Open/Save picker text and its blue focus rule. Source inspection found that the Search/File name caption used a different vertical origin from the editable text field, while both field focus rules were painted along the top edge.
+
+- Align the picker caption's glyph origin with the editable field's text origin.
+- Draw the path and filename focus accents as bottom underlines, leaving the field's top edge clear.
+- Extend the synthetic-font framebuffer test to check the caption pixel, both focus-field edges, and the transformed underline positions.
+- Replace the selected-row glyph check that only scanned pixels inside the highlight with a framebuffer comparison that also inspects the area immediately above the row.
+
+The implementation is being validated against the existing 800×360 synthetic-font Wayland fixture. This does not replace the required manual GNOME/Mutter visual check with a real installed font.
+
+---
+
 ## 2026-11-07 — Complete and verify the font/dialog alignment pass
 
 The latest early-alpha build passed GitHub Actions [Build and test #414](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432) on [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5). All workflow steps passed: freestanding build/ELF checks, CLI smoke tests, complete Wayland protocol/editor test suite, executable inspection, and artifact upload.
