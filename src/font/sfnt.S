@@ -830,16 +830,10 @@ font_init:
     jmp .Lfont_env_next
 
 .Lfont_try_defaults:
-    lea rbx, [rip + font_default_candidates]
-.Lfont_default_loop:
-    mov rdi, qword ptr [rbx]
-    test rdi, rdi
-    jz .Lfont_init_failed
-    call font_try_path
-    test rax, rax
-    jz .Lfont_init_success
-    add rbx, 8
-    jmp .Lfont_default_loop
+    # Automatic directory discovery is added after explicit-path parsing is
+    # independently validated. Until then a missing/invalid override preserves
+    # the embedded bitmap fallback without probing unrelated host files.
+    jmp .Lfont_init_failed
 .Lfont_init_success:
     xor eax, eax
     jmp .Lfont_init_return
