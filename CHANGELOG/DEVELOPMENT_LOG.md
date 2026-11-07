@@ -1009,3 +1009,14 @@ No feature development is being started in this entry. The next development task
 - The loader uses explicit `NEKOEDIT_FONT` first, then three deterministic common Debian paths; recursive system-font discovery and family/style selection are not implemented.
 - Only the first Unicode scalar of each grapheme is sent through cmap/rasterization. Kerning, GSUB/GPOS, ligatures, combining-mark placement, bidirectional layout, complex scripts, CFF/CFF2, variable/color fonts, hinting, Unicode keyboard text input, and IME remain unsupported.
 - The latest automated test validates a mock Wayland compositor/framebuffer. Manual GNOME/Mutter smoke testing of the proportional font layout and vertical metrics has not been performed.
+
+
+---
+
+## 2026-11-07 — Documentation consistency and branch-head revalidation
+
+- Refreshed `docs/RENDERING.md` to describe the active software renderer, deterministic font-path loading, bounded TrueType parser/rasterizer, proportional horizontal advances, hhea-derived vertical line pitch, and current shaping/input limitations. Updated `README.md`, `docs/ARCHITECTURE.md`, `CURRENT_STATUS.md`, and `PROJECT_HISTORY.md` so none describes the editor as fixed-width or treats the renderer as future work.
+- Reconstructed and appended the 103 commits made after the last entry in the historical commit index, preserving diagnostic and test commits as well as feature commits.
+- Documentation commits: [`1e58f0400f07`](https://github.com/GraderGamer2/NekoEdit/commit/1e58f0400f07d309a0eb65c6a2db2907b24e139c) and [`035d2424226a`](https://github.com/GraderGamer2/NekoEdit/commit/035d2424226a2bea1b8b8d1f2e7dd5c0c9a3dc59). The PR #2 description was updated to reflect metric-aware layout and current limitations.
+- Actions [#401](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355483305), on the first documentation commit, built the ELF and passed CLI smoke tests but the Wayland mock integration exceeded its 20-second process timeout during keyboard input; the fake compositor then reported a broken pipe after the timed-out client was terminated. This run did not complete the integration suite.
+- Actions [#402](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355555895) passed all eight substantive checks on documentation-only branch head [`035d2424226a`](https://github.com/GraderGamer2/NekoEdit/commit/035d2424226a2bea1b8b8d1f2e7dd5c0c9a3dc59), with no intervening source-code change. The timeout was not reproduced. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355555895/artifacts/13567202549): 54,527 bytes, artifact ID `13567202549`, expires 2026-11-14 08:27:38 UTC.

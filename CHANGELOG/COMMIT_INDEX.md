@@ -675,6 +675,16 @@ The user confirmed Maximize is fixed on the preceding #294 build. Real GNOME/Mut
 
 The history above includes intermediate diagnostic/test commits as well as the completed window, storage, scrollbar, indexed-document, Unicode, font-parser, renderer, settings, proportional-layout, and vertical-metric work. Validation milestones include Actions [#302](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328775920), [#312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234), [#316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563), [#326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320), [#331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462), [#368](https://github.com/GraderGamer2/NekoEdit/actions/runs/42347799006), [#398](https://github.com/GraderGamer2/NekoEdit/actions/runs/42354671802), and [#400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260). Actions #399 records the temporary `.bss` initialization failure; commit `beac1f4a9622` corrected it and #400 passed.
 
+
+## 2026-11-07 Documentation synchronization and revalidation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 08:26:06 UTC | [`1e58f0400f07`](https://github.com/GraderGamer2/NekoEdit/commit/1e58f0400f07d309a0eb65c6a2db2907b24e139c) | docs: update metric-aware typography status and history |
+| 2026-11-07 08:27:13 UTC | [`035d2424226a`](https://github.com/GraderGamer2/NekoEdit/commit/035d2424226a2bea1b8b8d1f2e7dd5c0c9a3dc59) | docs: synchronize README and milestone notes with font layout |
+
+Actions [#401](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355483305) passed build/ELF and CLI smoke stages but timed out during the Wayland mock test. Actions [#402](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355555895) passed all substantive stages on the second documentation commit, with the executable source unchanged from #400. Artifact ID `13567202549`, 54,527 bytes, expires 2026-11-14 08:27:38 UTC.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
