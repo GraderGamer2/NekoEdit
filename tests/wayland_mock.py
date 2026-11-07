@@ -1301,6 +1301,29 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_redraw(label)
                     client.sendall(wire_message(12, 0))
 
+                def workflow_horizontal_scrollbar_drag(
+                    start_x: int, start_y: int, end_x: int, end_y: int,
+                    serial: int, label: str
+                ) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                    )
+                    workflow_redraw(f"{label}: press")
+                    client.sendall(wire_message(12, 0))
+                    if child_u32("doc_hscroll_drag") != 1:
+                        raise AssertionError(f"{label}: bottom thumb did not enter drag state")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                    )
+                    workflow_redraw(f"{label}: drag")
+                    client.sendall(wire_message(12, 0))
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                    )
+                    workflow_redraw(f"{label}: release")
+                    client.sendall(wire_message(12, 0))
+
                 if horizontal_scroll_test:
                     state = read_document_state()
                     if state["doc_wrap_enabled"] != 1 or state["doc_line_index_records"][0][1] <= 1:
@@ -1471,29 +1494,6 @@ xkb_symbols "nekoedit-sparse" {
                         ) from error
                     # Release the frame drawn after motion before requesting the
                     # second redraw caused by releasing the scrollbar grab.
-                    client.sendall(wire_message(12, 0))
-                    client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
-                    )
-                    workflow_redraw(f"{label}: release")
-                    client.sendall(wire_message(12, 0))
-
-                def workflow_horizontal_scrollbar_drag(
-                    start_x: int, start_y: int, end_x: int, end_y: int,
-                    serial: int, label: str
-                ) -> None:
-                    client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
-                    )
-                    workflow_redraw(f"{label}: press")
-                    client.sendall(wire_message(12, 0))
-                    if child_u32("doc_hscroll_drag") != 1:
-                        raise AssertionError(f"{label}: bottom thumb did not enter drag state")
-                    client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
-                    )
-                    workflow_redraw(f"{label}: drag")
                     client.sendall(wire_message(12, 0))
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
