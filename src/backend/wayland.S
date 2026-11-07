@@ -1947,7 +1947,7 @@ doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -2120,6 +2120,11 @@ picker_panel_x:         .long 0
 picker_panel_y:         .long 0
 picker_panel_width:     .long 0
 picker_panel_height:    .long 0
+settings_panel_x:       .long 0
+settings_panel_y:       .long 0
+settings_panel_width:   .long 0
+settings_panel_height:  .long 0
+settings_ui_font_size:  .long 0
 path_prompt_x:          .long 0
 path_prompt_y:          .long 0
 path_prompt_width:      .long 0
@@ -3248,6 +3253,9 @@ wayland_main:
     jb .pointer_menu_save
     jmp .pointer_menu_save_as
 .pointer_settings_menu_rows:
+    mov edi, eax
+    mov esi, edx
+    call settings_pointer_to_design
     cmp eax, 160
     jb .pointer_menu_outside
     cmp eax, 416
@@ -8149,6 +8157,49 @@ window_update_layout_geometry:
 .window_layout_picker_font_store:
     mov dword ptr [rip + picker_ui_font_size], eax
 
+    # Settings uses a 256x168 design grid. Its panel dimensions grow in
+    # proportion to the chosen UI em, while the hit-map uses the same transform.
+    mov eax, 256
+    imul eax, dword ptr [rip + ui_font_size]
+    cdq
+    mov ecx, 10
+    idiv ecx
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 32
+    cmp eax, ecx
+    jbe .window_layout_settings_width_ready
+    mov eax, ecx
+.window_layout_settings_width_ready:
+    mov dword ptr [rip + settings_panel_width], eax
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 16
+    mov edx, 160
+    add edx, eax
+    cmp edx, ecx
+    jbe .window_layout_settings_x_ready
+    mov eax, ecx
+    sub eax, dword ptr [rip + settings_panel_width]
+    jmp .window_layout_settings_x_store
+.window_layout_settings_x_ready:
+    mov eax, 160
+.window_layout_settings_x_store:
+    mov dword ptr [rip + settings_panel_x], eax
+    mov dword ptr [rip + settings_panel_y], 32
+    mov eax, 168
+    imul eax, dword ptr [rip + ui_font_size]
+    cdq
+    mov ecx, 10
+    idiv ecx
+    mov ecx, dword ptr [rip + window_height]
+    sub ecx, 40
+    cmp eax, ecx
+    jbe .window_layout_settings_height_ready
+    mov eax, ecx
+.window_layout_settings_height_ready:
+    mov dword ptr [rip + settings_panel_height], eax
+    mov eax, dword ptr [rip + ui_font_size]
+    mov dword ptr [rip + settings_ui_font_size], eax
+
     # The path prompt uses the same fit-and-center policy with its 704x176
     # design dimensions. Its original four-pixel upward bias is retained.
     mov eax, dword ptr [rip + window_width]
@@ -8210,6 +8261,46 @@ window_update_layout_geometry:
     mov dword ptr [rip + path_prompt_y], edx
     ret
 .size window_update_layout_geometry, . - window_update_layout_geometry
+
+# Convert surface coordinates to the 256x168 Settings design coordinate space.
+.type settings_pointer_to_design, @function
+settings_pointer_to_design:
+    push rbx
+    push r12
+    mov r12d, esi
+    sub edi, dword ptr [rip + settings_panel_x]
+    imul edi, 256
+    mov eax, edi
+    cdq
+    mov ecx, dword ptr [rip + settings_panel_width]
+    test ecx, ecx
+    jz .Lsettings_pointer_x_zero
+    idiv ecx
+    jmp .Lsettings_pointer_x_ready
+.Lsettings_pointer_x_zero:
+    xor eax, eax
+.Lsettings_pointer_x_ready:
+    add eax, 160
+    mov ebx, eax
+    mov eax, r12d
+    sub eax, dword ptr [rip + settings_panel_y]
+    imul eax, 168
+    cdq
+    mov ecx, dword ptr [rip + settings_panel_height]
+    test ecx, ecx
+    jz .Lsettings_pointer_y_zero
+    idiv ecx
+    jmp .Lsettings_pointer_y_ready
+.Lsettings_pointer_y_zero:
+    xor eax, eax
+.Lsettings_pointer_y_ready:
+    add eax, 32
+    mov edx, eax
+    mov eax, ebx
+    pop r12
+    pop rbx
+    ret
+.size settings_pointer_to_design, . - settings_pointer_to_design
 
 # Parse xdg_toplevel.configure: width, height, and a uint32 array of states.
 .type window_capture_toplevel_configure, @function
@@ -12831,6 +12922,21 @@ render_file_menu:
     ret
 .render_file_menu_draw_settings:
     push rbp
+    mov dword ptr [rip + ui_transform_active], 1
+    mov eax, dword ptr [rip + settings_ui_font_size]
+    mov dword ptr [rip + ui_transform_font_size], eax
+    mov dword ptr [rip + ui_transform_base_x], 160
+    mov dword ptr [rip + ui_transform_base_y], 32
+    mov eax, dword ptr [rip + settings_panel_x]
+    mov dword ptr [rip + ui_transform_origin_x], eax
+    mov eax, dword ptr [rip + settings_panel_y]
+    mov dword ptr [rip + ui_transform_origin_y], eax
+    mov eax, dword ptr [rip + settings_panel_width]
+    mov dword ptr [rip + ui_transform_x_num], eax
+    mov dword ptr [rip + ui_transform_x_den], 256
+    mov eax, dword ptr [rip + settings_panel_height]
+    mov dword ptr [rip + ui_transform_y_num], eax
+    mov dword ptr [rip + ui_transform_y_den], 168
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 160
     mov edx, 32
@@ -12948,10 +13054,12 @@ render_file_menu:
     mov esi, 148
     lea rdx, [rip + ui_menu_font_file_label]
     call draw_text
+.render_file_menu_settings_finish:
     mov edi, 360
     mov esi, 146
     lea rdx, [rip + ui_menu_select_label]
     call draw_text
+    mov dword ptr [rip + ui_transform_active], 0
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
