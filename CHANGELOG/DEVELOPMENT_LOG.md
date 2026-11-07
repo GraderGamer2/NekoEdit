@@ -1280,3 +1280,31 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 
 - The requested adaptive UI, horizontal scrollbar, keyboard selection/navigation, and Find/Replace milestone is complete and green in CI.
 - Continue with persistent preferences next: independent document/UI sizes, selected TTF path, Wrap Lines, and Confirm before saving. Keep the existing freestanding/no-third-party-runtime design and test persistence using isolated HOME/XDG_CONFIG_HOME paths.
+
+
+---
+
+## 2026-11-07 — persistent typography and editor preferences
+
+### Implementation
+
+- Added `src/editor/preferences.c`, a freestanding preference store that uses Linux syscalls directly and introduces no libc or third-party runtime dependency. It supports `$XDG_CONFIG_HOME/nekoedit/preferences`, falling back to `~/.config/nekoedit/preferences`.
+- Persisted the independent document/UI font sizes, Wrap Lines state, Confirm before saving, and the last successfully loaded TTF path. The selected font path is tried after an explicit `NEKOEDIT_FONT` override and before the deterministic system-font fallbacks.
+- Preference values are parsed with bounded input and per-setting validation. Font paths must be absolute, bounded, and free of CR/LF. The application directory is created with mode 0700 and the file with mode 0600.
+- Saves use a same-directory temporary file, short-write/EINTR handling, file fsync, atomic rename, and directory fsync. `NEKOEDIT_DISABLE_PREFERENCES=1` disables preference reads/writes for deterministic fixtures.
+- Wired startup loading before the first layout calculation and font initialization. Settings mutations and successful TTF picker loads call the save routine.
+- Added `tests/preferences_test.c` and included it in `make test`. The test checks default preservation when no file exists, value/font-path roundtrip, file permissions, malformed/out-of-range values, relative/newline-containing path rejection, and the disable switch. The Wayland mock harness disables external preferences so its pixel/input fixtures remain repeatable.
+
+### Build iteration and verification
+
+- The first Actions compile exposed a missing sixth argument in the raw `renameat` syscall wrapper. Commit [`d71b0d97681a`](https://github.com/GraderGamer2/NekoEdit/commit/d71b0d97681aa52eb327da50b949cba405181771) corrected the syscall call; no test was skipped to work around the compiler error.
+- Added path-format hardening in [`39c815748a3a`](https://github.com/GraderGamer2/NekoEdit/commit/39c815748a3ab92570f423d0e501c7a6b3995be3) and regression coverage in [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7).
+- GitHub Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed all ten workflow steps on `8dc43ea3a1a3`: freestanding compilation/link, ELF checks, CLI smoke tests, the new persistent-preferences test, all Wayland mock-compositor tests, executable inspection, and artifact upload.
+- Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592/artifacts/13582086670) is 70,250 bytes (artifact ID 13582086670; SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`; expires 2026-11-14).
+- The earlier responsive UI/horizontal-scroll/word-selection/Find-Replace milestone was validated separately by Actions [#493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) on `aa473842d6c1`. The user has manually confirmed runtime font selection; all other new interactions and persistence still need a GNOME/Mutter desktop smoke test.
+
+### Remaining limitations and next work
+
+- Ctrl+Left/Right currently moves by word and Ctrl+Up/Down by logical line; sentence-boundary navigation is not implemented. Keyboard text entry and Find/Replace query editing remain within the supported ASCII XKB subset.
+- The preference file currently stores the documented font/view/save options only; caret position, horizontal/vertical scroll positions, window geometry, and recent-file history are not persisted.
+- Continue with non-ASCII keyboard input and compose/dead keys, Wayland text-input/IME, more complete shaping/bidi, output/fractional scale and multi-buffer scheduling, then X11.
