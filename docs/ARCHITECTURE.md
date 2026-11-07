@@ -78,10 +78,10 @@ No allocator library is required. A small internal allocator may be introduced o
 - Cursor and selection: byte offsets kept on valid UTF-8 code-point boundaries. The current navigation, hit-testing, selection, Backspace, and Delete paths use bounded UTF-8 scalar decoding.
 - Invalid UTF-8: retain the original byte sequence unless an edit explicitly removes bytes within it. The current prototype treats each malformed byte as an independent one-byte replacement unit; valid non-ASCII code points and malformed bytes currently render as `?`.
 - Character model: code-point boundaries are implemented, but grapheme clusters (for example, base letters plus combining marks or multi-code-point emoji sequences) are not yet treated as one cursor position.
-- Line index: offsets of line starts, updated incrementally where practical.
+- Line index (next document-core milestone): dynamic per-line records track byte lengths and visual-row counts. Two Fenwick prefix trees map logical byte offsets to lines and visual rows back to lines in O(log N), while ordinary character edits update only the affected line. Newline insertion/deletion splits or merges line records; a window-width change recomputes visual-row counts because soft wrapping depends on available columns. This remains planned, not implemented.
 - Line endings: detect and preserve LF or CRLF for existing files; define a consistent default for new files.
 
-A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement must decode UTF-8 safely and must not treat each byte as a visible character. Dynamic storage growth is implemented; line-start indexing remains future work. The current 1 GiB ceiling is an explicit implementation bound, not a claim of unlimited files. Unicode glyph lookup, non-ASCII keyboard/IME input, and grapheme-aware navigation are also not implemented.
+A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement must decode UTF-8 safely and must not treat each byte as a visible character. Dynamic storage growth and the vertical editor scrollbar are implemented; the line-start index described above remains future work. The current 1 GiB ceiling is an explicit implementation bound, not a claim of unlimited files. Unicode glyph lookup, non-ASCII keyboard/IME input, and grapheme-aware navigation are also not implemented.
 
 ## Platform backends
 
