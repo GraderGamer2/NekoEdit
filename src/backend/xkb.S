@@ -946,6 +946,9 @@
     .ascii "numerosign"
     .long 0x2116
     .byte 10
+    .ascii "Multi_key"
+    .long 0x110007
+    .byte 10
     .ascii "dead_grave"
     .long 0x110001
     .byte 10
