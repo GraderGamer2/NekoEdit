@@ -8,6 +8,13 @@
 
 This document reconstructs the development of NekoEdit from the first repository prototype through the current Wayland window-management and picker milestones. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
+
+## 2026-11-08 — Extend named XKB Unicode coverage
+
+The bounded XKB named-symbol table now resolves 273 case-sensitive non-ASCII aliases. Alongside the pre-existing Latin-1, EuroSign, and punctuation entries, the parser now recognizes the Greek upper/lower alphabets and accented forms; core Cyrillic upper/lower alphabets; and common Ukrainian, Belarusian, Serbian, and Macedonian letters.
+
+The new entries reuse the existing scalar table and UTF-8 insertion path. Mock-compositor coverage reads U+03B1 from `Greek_alpha` and U+044F from `Cyrillic_ya`, then verifies the inserted document bytes as part of the full Unicode/dead-key fixture. This expands named alias coverage; it does not make the parser fully xkbcommon-compatible. General custom key types, virtual modifiers and actions, other unlisted scripts/aliases, general Compose tables, and Wayland text-input/IME remain future work.
+
 ---
 
 ## 1. Original project goals and constraints
