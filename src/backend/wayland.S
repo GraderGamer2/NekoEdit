@@ -125,9 +125,17 @@ msg_document_storage_end:
 ui_document_name:      .asciz "Untitled"
 ui_mode_name:          .asciz "ASCII"
 ui_file_label:         .asciz "File"
+ui_settings_label:     .asciz "Settings"
 ui_menu_open_label:    .asciz "Open"
 ui_menu_save_label:    .asciz "Save"
 ui_menu_save_as_label: .asciz "Save As"
+ui_menu_confirm_save_label: .asciz "Confirm before saving"
+ui_menu_state_on:      .asciz "ON"
+ui_menu_state_off:     .asciz "OFF"
+ui_save_confirm_title: .asciz "CONFIRM SAVE"
+ui_save_confirm_message: .asciz "SAVE THIS DOCUMENT?"
+ui_save_confirm_save_label: .asciz "SAVE"
+ui_save_confirm_cancel_label: .asciz "CANCEL"
 ui_prompt_open_title:  .asciz "OPEN FILE PATH"
 ui_prompt_save_title:  .asciz "SAVE AS PATH"
 ui_prompt_help:        .asciz "ENTER: CONFIRM   ESC: CANCEL"
@@ -2018,6 +2026,10 @@ current_file_path:      .quad 0
 doc_save_error:         .long 0
 doc_open_error:         .long 0
 file_menu_open:         .long 0
+settings_menu_open:     .long 0
+save_confirm_enabled:   .long 0
+save_confirm_open:      .long 0
+save_confirm_action:    .long 0
 path_prompt_mode:       .long 0
 path_prompt_length:     .long 0
 file_probe_byte:        .byte 0
@@ -2130,6 +2142,10 @@ wayland_main:
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + window_is_maximized], 0
+    mov dword ptr [rip + settings_menu_open], 0
+    mov dword ptr [rip + save_confirm_enabled], 1
+    mov dword ptr [rip + save_confirm_open], 0
+    mov dword ptr [rip + save_confirm_action], 0
     mov dword ptr [rip + pointer_inside], 0
     mov dword ptr [rip + pointer_enter_serial], 0
     mov dword ptr [rip + cursor_shape_current], 0
@@ -2889,6 +2905,8 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + pointer_serial], eax
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .save_confirm_pointer
     # The directory picker is modal; pointer input belongs to its controls.
     cmp dword ptr [rip + picker_mode], 0
     jne .picker_pointer
@@ -3002,21 +3020,71 @@ wayland_main:
     jmp .event_loop
 .pointer_window_close:
     call application_exit
+.save_confirm_pointer:
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 432
+    shr eax, 1
+    mov ecx, eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, 120
+    shr eax, 1
+    mov edx, eax
+    mov eax, dword ptr [rip + pointer_y]
+    lea esi, [rdx + 78]
+    cmp eax, esi
+    jb .save_confirm_pointer_done
+    lea esi, [rdx + 106]
+    cmp eax, esi
+    jae .save_confirm_pointer_done
+    mov eax, dword ptr [rip + pointer_x]
+    lea esi, [rcx + 64]
+    cmp eax, esi
+    jb .save_confirm_pointer_cancel_check
+    lea esi, [rcx + 200]
+    cmp eax, esi
+    jb .save_confirm_pointer_accept
+.save_confirm_pointer_cancel_check:
+    lea esi, [rcx + 232]
+    cmp eax, esi
+    jb .save_confirm_pointer_done
+    lea esi, [rcx + 368]
+    cmp eax, esi
+    jae .save_confirm_pointer_done
+    call cancel_save_confirmation
+    jmp .keyboard_changed
+.save_confirm_pointer_accept:
+    call confirm_save_action
+    jmp .keyboard_changed
+.save_confirm_pointer_done:
+    jmp .event_loop
+
 .pointer_header_file_menu:
     cmp eax, 104
     jb .pointer_header_outside
     cmp eax, 160
-    jae .pointer_header_outside
+    jae .pointer_header_settings_menu
     xor dword ptr [rip + file_menu_open], 1
+    mov dword ptr [rip + settings_menu_open], 0
+    jmp .keyboard_changed
+.pointer_header_settings_menu:
+    cmp eax, 160
+    jb .pointer_header_outside
+    cmp eax, 240
+    jae .pointer_header_outside
+    xor dword ptr [rip + settings_menu_open], 1
+    mov dword ptr [rip + file_menu_open], 0
     jmp .keyboard_changed
 .pointer_header_outside:
     cmp dword ptr [rip + file_menu_open], 0
+    jne .pointer_header_close_menu
+    cmp dword ptr [rip + settings_menu_open], 0
     jne .pointer_header_close_menu
     cmp edx, 32
     jae .pointer_document_click
     jmp .pointer_window_move
 .pointer_header_close_menu:
     mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .pointer_window_move:
     # A drag in blank title-bar space starts an interactive toplevel move.
@@ -3033,7 +3101,11 @@ wayland_main:
     jmp .event_loop
 .pointer_menu_rows:
     cmp dword ptr [rip + file_menu_open], 1
-    jne .pointer_document_click
+    je .pointer_file_menu_rows
+    cmp dword ptr [rip + settings_menu_open], 1
+    je .pointer_settings_menu_rows
+    jmp .pointer_document_click
+.pointer_file_menu_rows:
     cmp eax, 104
     jb .pointer_menu_outside
     cmp eax, 232
@@ -3048,6 +3120,18 @@ wayland_main:
     cmp edx, 84
     jb .pointer_menu_save
     jmp .pointer_menu_save_as
+.pointer_settings_menu_rows:
+    cmp eax, 160
+    jb .pointer_menu_outside
+    cmp eax, 416
+    jae .pointer_menu_outside
+    cmp edx, 32
+    jb .pointer_menu_outside
+    cmp edx, 88
+    jae .pointer_menu_outside
+    xor dword ptr [rip + save_confirm_enabled], 1
+    mov dword ptr [rip + settings_menu_open], 0
+    jmp .keyboard_changed
 .pointer_menu_open:
     call start_open_prompt
     jmp .keyboard_changed
@@ -3059,6 +3143,7 @@ wayland_main:
     jmp .keyboard_changed
 .pointer_menu_outside:
     mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
 .pointer_document_click:
     cmp edx, DOC_TOP
     jl .event_loop
@@ -3244,6 +3329,8 @@ wayland_main:
 .keyboard_non_modifier:
     test edx, edx
     jz .event_loop
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .keyboard_save_confirmation
     cmp dword ptr [rip + picker_mode], 0
     jne .keyboard_picker
     cmp dword ptr [rip + path_prompt_mode], 0
@@ -3265,8 +3352,12 @@ wayland_main:
     cmp eax, 1
     jne .keyboard_unmodified_dispatch
     cmp dword ptr [rip + file_menu_open], 0
+    jne .keyboard_close_menus
+    cmp dword ptr [rip + settings_menu_open], 0
     je .event_loop
+.keyboard_close_menus:
     mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .keyboard_unmodified_dispatch:
     cmp eax, 105
@@ -3305,7 +3396,30 @@ wayland_main:
     call start_save_as_prompt
     jmp .keyboard_changed
 .keyboard_save:
-    call save_document_file
+    xor edi, edi
+    call request_save_confirmation
+    jmp .keyboard_changed
+.keyboard_save_confirmation:
+    cmp eax, 1
+    je .keyboard_save_confirmation_cancel
+    cmp eax, 28
+    je .keyboard_save_confirmation_accept
+    mov edi, eax
+    call keycode_to_ascii
+    cmp al, 'y'
+    je .keyboard_save_confirmation_accept
+    cmp al, 'Y'
+    je .keyboard_save_confirmation_accept
+    cmp al, 'n'
+    je .keyboard_save_confirmation_cancel
+    cmp al, 'N'
+    je .keyboard_save_confirmation_cancel
+    jmp .event_loop
+.keyboard_save_confirmation_accept:
+    call confirm_save_action
+    jmp .keyboard_changed
+.keyboard_save_confirmation_cancel:
+    call cancel_save_confirmation
     jmp .keyboard_changed
 
 # The path editor owns all non-modifier keys while its prompt is visible.
@@ -5060,12 +5174,10 @@ picker_save_file:
 .picker_save_new_target:
     cmp rax, -2
     jne .picker_save_file_error
-    mov rdi, r12
-    call save_document_to_path
+    mov edi, 1
+    call request_save_confirmation
     test rax, rax
     js .picker_save_file_error
-    call picker_commit_active_path
-    call picker_close
     xor eax, eax
     jmp .picker_save_file_done
 .picker_save_file_error:
@@ -6245,12 +6357,10 @@ confirm_path_prompt:
     pop rbp
     ret
 .confirm_path_save:
-    lea rdi, [rip + path_prompt_buffer]
-    call save_document_to_path
+    mov edi, 2
+    call request_save_confirmation
     test rax, rax
     js .confirm_path_failed
-    call commit_path_prompt
-    xor eax, eax
     pop rbp
     ret
 .confirm_path_error:
@@ -6275,10 +6385,77 @@ confirm_path_prompt:
 save_current_document:
     cmp qword ptr [rip + current_file_path], 0
     je .save_current_prompt
-    jmp save_document_file
+    xor edi, edi
+    jmp request_save_confirmation
 .save_current_prompt:
     jmp start_save_as_prompt
 .size save_current_document, . - save_current_document
+
+# EDI=0 current document, 1 picker target, 2 path-prompt target.
+# Return 1 when a modal is pending, otherwise the save result.
+.type request_save_confirmation, @function
+request_save_confirmation:
+    mov dword ptr [rip + save_confirm_action], edi
+    cmp dword ptr [rip + save_confirm_enabled], 0
+    je confirm_save_action
+    mov dword ptr [rip + save_confirm_open], 1
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
+    mov eax, 1
+    ret
+.size request_save_confirmation, . - request_save_confirmation
+
+.type cancel_save_confirmation, @function
+cancel_save_confirmation:
+    mov dword ptr [rip + save_confirm_open], 0
+    mov dword ptr [rip + save_confirm_action], 0
+    xor eax, eax
+    ret
+.size cancel_save_confirmation, . - cancel_save_confirmation
+
+.type confirm_save_action, @function
+confirm_save_action:
+    push rbx
+    mov ebx, dword ptr [rip + save_confirm_action]
+    mov dword ptr [rip + save_confirm_open], 0
+    mov dword ptr [rip + save_confirm_action], 0
+    test ebx, ebx
+    jz .Lconfirm_save_current
+    cmp ebx, 1
+    je .Lconfirm_save_picker
+    cmp ebx, 2
+    je .Lconfirm_save_path_prompt
+    mov rax, -22
+    jmp .Lconfirm_save_done
+.Lconfirm_save_current:
+    call save_document_file
+    jmp .Lconfirm_save_done
+.Lconfirm_save_picker:
+    lea rdi, [rip + picker_target_buffer]
+    call save_document_to_path
+    test rax, rax
+    js .Lconfirm_save_picker_error
+    call picker_commit_active_path
+    call picker_close
+    xor eax, eax
+    jmp .Lconfirm_save_done
+.Lconfirm_save_picker_error:
+    mov dword ptr [rip + picker_error], 3
+    jmp .Lconfirm_save_done
+.Lconfirm_save_path_prompt:
+    lea rdi, [rip + path_prompt_buffer]
+    call save_document_to_path
+    test rax, rax
+    js .Lconfirm_save_path_error
+    call commit_path_prompt
+    xor eax, eax
+    jmp .Lconfirm_save_done
+.Lconfirm_save_path_error:
+    mov dword ptr [rip + doc_save_error], 1
+.Lconfirm_save_done:
+    pop rbx
+    ret
+.size confirm_save_action, . - confirm_save_action
 
 .section .rodata
 temp_prefix: .ascii ".nekoedit-"
@@ -7168,6 +7345,17 @@ render_surface:
     mov esi, 12
     lea rdx, [rip + ui_file_label]
     call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 160
+    mov edx, 4
+    mov ecx, 72
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 168
+    mov esi, 12
+    lea rdx, [rip + ui_settings_label]
+    call draw_text
 
 .render_document_tab:
     # A single active document tab; the launch-time basename replaces Untitled.
@@ -7199,6 +7387,7 @@ render_surface:
     call render_window_controls
     call render_path_prompt
     call render_picker
+    call render_save_confirmation
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -11349,7 +11538,11 @@ render_window_controls:
 .type render_file_menu, @function
 render_file_menu:
     cmp dword ptr [rip + file_menu_open], 1
-    jne .render_file_menu_done
+    je .render_file_menu_draw_file
+    cmp dword ptr [rip + settings_menu_open], 1
+    je .render_file_menu_draw_settings
+    ret
+.render_file_menu_draw_file:
     push rbp
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 104
@@ -11371,9 +11564,105 @@ render_file_menu:
     lea rdx, [rip + ui_menu_save_as_label]
     call draw_text
     pop rbp
-.render_file_menu_done:
+    ret
+.render_file_menu_draw_settings:
+    push rbp
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 160
+    mov edx, 32
+    mov ecx, 256
+    mov r8d, 56
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov edi, 172
+    mov esi, 44
+    lea rdx, [rip + ui_menu_confirm_save_label]
+    call draw_text
+    mov edi, 372
+    mov esi, 44
+    cmp dword ptr [rip + save_confirm_enabled], 0
+    je .render_settings_state_off
+    lea rdx, [rip + ui_menu_state_on]
+    jmp .render_settings_state_draw
+.render_settings_state_off:
+    lea rdx, [rip + ui_menu_state_off]
+.render_settings_state_draw:
+    call draw_text
+    pop rbp
     ret
 .size render_file_menu, . - render_file_menu
+
+.type render_save_confirmation, @function
+render_save_confirmation:
+    cmp dword ptr [rip + save_confirm_open], 0
+    je .render_save_confirmation_done
+    push rbx
+    push r12
+    push r13
+    sub rsp, 8
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 432
+    shr eax, 1
+    mov r12d, eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, 120
+    shr eax, 1
+    mov r13d, eax
+
+    # Centered dialog, retained above either the editor or Save As picker.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, 432
+    mov r8d, 120
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, 432
+    mov r8d, 28
+    mov r9d, 0xff343d4b
+    call draw_rect
+    lea edi, [r12 + 16]
+    lea esi, [r13 + 10]
+    lea rdx, [rip + ui_save_confirm_title]
+    call draw_text
+    lea edi, [r12 + 24]
+    lea esi, [r13 + 44]
+    lea rdx, [rip + ui_save_confirm_message]
+    call draw_text
+
+    lea esi, [r12 + 64]
+    lea edx, [r13 + 78]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov ecx, 136
+    mov r8d, 28
+    mov r9d, 0xff526b55
+    call draw_rect
+    lea esi, [r12 + 232]
+    lea edx, [r13 + 78]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov ecx, 136
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    lea edi, [r12 + 112]
+    lea esi, [r13 + 88]
+    lea rdx, [rip + ui_save_confirm_save_label]
+    call draw_text
+    lea edi, [r12 + 276]
+    lea esi, [r13 + 88]
+    lea rdx, [rip + ui_save_confirm_cancel_label]
+    call draw_text
+
+    add rsp, 8
+    pop r13
+    pop r12
+    pop rbx
+.render_save_confirmation_done:
+    ret
+.size render_save_confirmation, . - render_save_confirmation
 
 .type render_path_prompt, @function
 render_path_prompt:
