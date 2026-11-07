@@ -1255,10 +1255,9 @@ xkb_lookup_unicode:
 .Lxkb_unicode_level_ready:
     mov eax, r12d
     shl eax, 4
-    add eax, ebx
+    lea eax, [rax + rbx*4]
+    add eax, r13d
     lea rdx, [rip + xkb_unicode_levels]
-    lea rdx, [rdx + rax*4]
-    mov eax, r13d
     mov eax, dword ptr [rdx + rax*4]
     test eax, eax
     jnz .Lxkb_unicode_lookup_done
@@ -1267,9 +1266,8 @@ xkb_lookup_unicode:
     jz .Lxkb_unicode_lookup_done
     mov eax, r12d
     shl eax, 4
+    add eax, r13d
     lea rdx, [rip + xkb_unicode_levels]
-    add rdx, rax
-    mov eax, r13d
     mov eax, dword ptr [rdx + rax*4]
     jmp .Lxkb_unicode_lookup_done
 .Lxkb_unicode_lookup_none:
