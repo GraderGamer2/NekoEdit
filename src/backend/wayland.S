@@ -2085,9 +2085,6 @@ doc_word_drag_start:     .long 0
 doc_word_drag_end:       .long 0
 .global doc_pending_dead_mark
 doc_pending_dead_mark: .long 0
-.global doc_keyboard_last_scalar, doc_keyboard_last_compose
-doc_keyboard_last_scalar: .long 0
-doc_keyboard_last_compose: .long 0
 doc_view_top_row:       .long 0
 doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
@@ -13000,8 +12997,6 @@ doc_insert_keyboard_codepoint:
     push r13
     push r14
     mov r12d, edi
-    mov dword ptr [rip + doc_keyboard_last_scalar], r12d
-    mov dword ptr [rip + doc_keyboard_last_compose], 0
     cmp r12d, 0x110001
     jb .Ldoc_keyboard_insert_scalar
     cmp r12d, 0x110006
@@ -13029,7 +13024,6 @@ doc_insert_keyboard_codepoint:
     mov edi, r12d
     mov esi, r13d
     call doc_compose_latin1
-    mov dword ptr [rip + doc_keyboard_last_compose], eax
     test eax, eax
     jz .Ldoc_keyboard_compose_fallback
     mov r14d, eax
