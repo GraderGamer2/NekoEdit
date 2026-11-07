@@ -5111,3 +5111,14 @@ if __name__ == "__main__":
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)
     run(sys.argv[1], use_wayland_socket=True, file_workflow=True)
+
+    word_fd, word_path = tempfile.mkstemp(prefix="nekoedit-word-navigation-")
+    try:
+        with os.fdopen(word_fd, "wb") as document:
+            document.write(b"one two three")
+        run(sys.argv[1], initial_file=word_path, word_navigation_test=True)
+    finally:
+        try:
+            os.unlink(word_path)
+        except FileNotFoundError:
+            pass
