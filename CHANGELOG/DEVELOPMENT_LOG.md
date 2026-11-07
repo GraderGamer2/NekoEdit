@@ -1,3 +1,34 @@
+## 2026-11-07 — Whole-word pointer dragging, edge auto-scroll, and named XKB Unicode aliases
+
+### Pointer selection behavior
+
+- Double-click now begins a word selection without ending the pointer grab. As the held pointer moves, NekoEdit extends the selection by complete words and preserves the original edge, including reverse-direction drags.
+- Pointer motion during a selection is no longer discarded merely because the pointer has left the application surface or document viewport. Hit-testing clamps to the nearest visible document edge while the original surface-local pointer coordinates determine the edge-scroll direction and speed.
+- A dedicated timerfd is polled independently of keyboard auto-repeat. It starts with a short delay, repeats at 50ms intervals while the selection button remains held, and is disarmed on release. Vertical auto-scroll works with Wrap Lines enabled and disabled; horizontal auto-scroll is added when Wrap Lines is disabled. Scroll speed increases with distance outside the edge and is bounded to avoid a single large jump.
+- The timer keeps scrolling while the pointer remains stationary outside the viewport, so users do not need to keep moving the mouse to extend a selection through long documents.
+
+### XKB Unicode roadmap slice
+
+- Added 105 case-sensitive common non-ASCII keysym aliases covering Latin-1 symbols/letters plus EuroSign and common punctuation (en/em dashes, quotation marks, bullet, ellipsis, trademark).
+- Named aliases use the same per-key/group/level Unicode-scalar table and UTF-8 document insertion path as explicit Uxxxx/Uxxxxx/Uxxxxxx keysyms. The US-QWERTY fallback and existing ASCII/group/modifier lookup remain intact.
+- This remains a bounded named-symbol table, not complete xkbcommon compatibility: arbitrary custom type maps, full virtual-modifier/action semantics, compose/dead-key processing, and Wayland text-input/IME are not yet implemented.
+
+### Regression coverage
+
+- The mock compositor double-clicks a middle word, holds the second press, and drags forward through later words; it repeats in reverse from the final word toward the first. Both selection boundaries are checked.
+- A long-document scenario drags below the document and outside pointer focus, verifies the viewport moves, holds the pointer stationary and verifies timer-driven scrolling continues, then releases and verifies the timer/word-drag state clears.
+- The same scenario disables Wrap Lines, dismisses the persistent Settings panel, and verifies horizontal edge auto-scroll plus an active selection.
+- The XKB Unicode fixture inspects the scalar table at AC02/AC03 and verifies explicit U+00E9/U+1F600 plus named EuroSign/eacute/emdash produce the expected UTF-8 bytes.
+- Existing ASCII mapping, group switching, Shift, LevelThree, keyboard repeat, grapheme, file-picker, clipboard, history, Find/Replace, preferences, resize, and protocol regressions remain in the complete suite.
+
+### Verification
+
+- GitHub Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed every workflow step on test head [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a): freestanding build/link, ELF checks (no PT_INTERP/no DT_NEEDED), CLI, preferences, full Wayland mock, executable inspection, and artifact upload.
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881): 72,303 bytes; artifact ID 13583613881; ZIP SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`; expires 2026-11-14.
+- Automated mock-compositor validation is complete. Manual GNOME/Mutter testing of word-drag selection and edge scrolling remains outstanding.
+
+---
+
 ## 2026-11-07 — Add transactional runtime TrueType font selection
 
 Settings now opens a dedicated font picker. It displays directories and TTF files, reuses the existing filename prefix/suggestion navigation, and loads the selected face without touching the active document path or bytes.
