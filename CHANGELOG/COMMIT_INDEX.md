@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **227** (224 previously indexed implementation commits + 3 commits adding Wayland send diagnostics and SIGPIPE hardening).
+- Recorded implementation commits: **229** (227 previously indexed implementation commits + 2 commits adding preceding-request/event context to Wayland send diagnostics).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -423,8 +423,11 @@ Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598
 | 2026-11-06 17:48:53 UTC | [`10df996a0b51`](https://github.com/GraderGamer2/NekoEdit/commit/10df996a0b51de4b36287d4e78180b52dfd5c4ec) | debug: report failed Wayland sends without SIGPIPE termination |
 | 2026-11-06 17:49:11 UTC | [`1331b49dde84`](https://github.com/GraderGamer2/NekoEdit/commit/1331b49dde8415d0d40dfb2d5326b4e0a3990b97) | fix: bound Wayland request diagnostic string length |
 | 2026-11-06 17:50:46 UTC | [`2ba62dd68161`](https://github.com/GraderGamer2/NekoEdit/commit/2ba62dd681611da09673e1fffc1d81b109ac4abf) | docs: correct Wayland send helper comment |
+| 2026-11-06 18:01:38 UTC | [`41b819eae69d`](https://github.com/GraderGamer2/NekoEdit/commit/41b819eae69db66c9f61f0f313027cf056965418) | debug: report preceding Wayland request and event on send failure |
+| 2026-11-06 18:02:11 UTC | [`0dbf87cbb5d6`](https://github.com/GraderGamer2/NekoEdit/commit/0dbf87cbb5d659254e200dd69a41b6efc80a20a3) | style: align Wayland send diagnostic label |
+| 2026-11-06 18:03:00 UTC | [`0501579b965d`](https://github.com/GraderGamer2/NekoEdit/commit/0501579b965dd65011ea5475fcc2b197d95946f9) | docs: describe preceding Wayland request and event diagnostics |
 
-The source change routes ordinary Wayland requests through `sendto(MSG_NOSIGNAL)`, applies `MSG_NOSIGNAL` to FD-bearing `sendmsg`, and records the client object/opcode/errno when a send fails. This converts a closed-socket SIGPIPE termination into a reportable error. Actions [#261](https://github.com/GraderGamer2/NekoEdit/actions/runs/42266008250) passed all eight workflow steps on branch head `3752714507b773c2cf07293eb5f12bf85f251f1b` and uploaded artifact `13527261651` (30,146 bytes; SHA-256 `f2572c2aa95b92c80294fdb79406cddd7c5de4d5b107887a0d64fb62df643636`). Real GNOME/Mutter diagnosis remains pending; CI does not establish why the compositor closed the socket or prove that Maximize/resize work.
+The source change routes ordinary Wayland requests through `sendto(MSG_NOSIGNAL)`, applies `MSG_NOSIGNAL` to FD-bearing `sendmsg`, and records the client object/opcode/errno when a send fails. This converts a closed-socket SIGPIPE termination into a reportable error. Actions [#261](https://github.com/GraderGamer2/NekoEdit/actions/runs/42266008250) passed all eight workflow steps on branch head `3752714507b773c2cf07293eb5f12bf85f251f1b` and uploaded artifact `13527261651` (30,146 bytes; SHA-256 `f2572c2aa95b92c80294fdb79406cddd7c5de4d5b107887a0d64fb62df643636`). Real GNOME/Mutter diagnosis remains pending; CI does not establish why the compositor closed the socket or prove that Maximize/resize work. The subsequent `wl_surface.attach` failure from the user was `object=8`, `opcode=1`, `errno=32` (`EPIPE`), showing that the compositor had already closed the socket. Commit `41b819eae69d` adds the last fully written request and last-read event to the diagnostic output; the follow-up build and real compositor retest remain pending.
 
 ## Maintenance
 
