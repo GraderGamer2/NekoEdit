@@ -3397,9 +3397,9 @@ xkb_symbols "nekoedit-sparse" {
                         or edge_state.get("window_doc_pixel_width") != 680
                         or edge_state.get("window_doc_visible_rows") != 30
                         or edge_state.get("picker_panel_x") != 16
-                        or edge_state.get("picker_panel_y") != 36
+                        or edge_state.get("picker_panel_y") != 28
                         or edge_state.get("picker_panel_width") != 688
-                        or edge_state.get("picker_panel_height") != 408
+                        or edge_state.get("picker_panel_height") != 424
                         or edge_state.get("path_prompt_x") != 16
                         or edge_state.get("path_prompt_y") != 148
                         or edge_state.get("path_prompt_width") != 688
