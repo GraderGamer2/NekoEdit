@@ -1413,7 +1413,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     key_step(3160, 1, "close Settings after wrap test")
                     observations.append(
-                        "Wrap Lines toggle, unwrapped line indexing, caret-following scroll, horizontal wheel and offset pointer hit-testing verified"
+                        "Wrap Lines toggle, unwrapped line indexing, caret-following scroll, horizontal wheel, bottom thumb drag, Shift+wheel and offset pointer hit-testing verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -2299,7 +2299,8 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
                         "picker_panel_width", "picker_panel_height", "picker_panel_x", "picker_panel_y",
                         "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
-                        "settings_panel_x", "settings_panel_y", "settings_panel_width", "settings_panel_height",
+                        "settings_panel_x", "settings_panel_y", "settings_panel_width", "settings_panel_height", "settings_ui_font_size",
+                        "find_panel_x", "find_panel_y", "find_panel_width", "find_panel_height", "find_ui_font_size",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                         "font_loaded", "font_units_per_em", "font_num_glyphs",
                         "font_probe_A_advance", "font_file_map", "picker_error",
@@ -2581,6 +2582,22 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("UI font size did not reach 16px independently of document size")
                     if picker_u32("settings_panel_width") <= 256 or picker_u32("settings_panel_height") <= 168:
                         raise AssertionError("Settings panel did not grow with the selected UI font")
+                    if picker_u32("settings_ui_font_size") != 10 or picker_u32("find_ui_font_size") != 10:
+                        raise AssertionError(
+                            "scaled overlays must preserve the requested 16px physical UI font "
+                            f"through their uniform transform: settings={picker_u32('settings_ui_font_size')}, "
+                            f"find={picker_u32('find_ui_font_size')}"
+                        )
+                    for name in ("settings_panel", "find_panel"):
+                        x = picker_u32(f"{name}_x")
+                        y = picker_u32(f"{name}_y")
+                        width = picker_u32(f"{name}_width")
+                        height = picker_u32(f"{name}_height")
+                        if abs((2 * x + width) - 800) > 1 or abs((2 * y + height) - 480) > 1:
+                            raise AssertionError(
+                                f"{name} is not centered in the 800x480 surface: "
+                                f"x={x}, y={y}, width={width}, height={height}"
+                            )
                     for index in range(6):
                         settings_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
                         serial += 10
