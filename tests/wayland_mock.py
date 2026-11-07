@@ -1077,14 +1077,14 @@ xkb_symbols "nekoedit-sparse" {
                                     "pixel": hex(pointer_pixel), "expected_cursor": 16})
                         )
                     assert_index("initial rebuild", fixture, (6, 101, 2), (1, 2, 1))
-                    key_step(1300, 30, "insert ordinary byte into indexed first line")
-                    after_insert = b"a" + fixture
-                    assert_index("ordinary insertion", after_insert, (7, 101, 2), (1, 2, 1))
-                    key_step(1302, 14, "Backspace ordinary byte from indexed first line")
+                    key_step(1300, 30, "insert ordinary byte inside indexed long line")
+                    after_insert = fixture[:16] + b"a" + fixture[16:]
+                    assert_index("ordinary insertion", after_insert, (6, 102, 2), (1, 2, 1))
+                    key_step(1302, 14, "Backspace ordinary byte inside indexed long line")
                     assert_index("ordinary deletion", fixture, (6, 101, 2), (1, 2, 1))
-                    key_step(1304, 28, "split indexed logical line with Enter")
-                    split = b"\n" + fixture
-                    assert_index("newline split", split, (1, 6, 101, 2), (1, 1, 2, 1))
+                    key_step(1304, 28, "split indexed long line with Enter")
+                    split = fixture[:16] + b"\n" + fixture[16:]
+                    assert_index("newline split", split, (6, 11, 91, 2), (1, 1, 1, 1))
                     key_step(1306, 14, "merge indexed logical lines with Backspace")
                     assert_index("newline merge", fixture, (6, 101, 2), (1, 2, 1))
                     workflow_shortcut(1310, 31, "save after indexed edit round-trip")
