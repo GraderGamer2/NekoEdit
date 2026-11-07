@@ -6,6 +6,12 @@ The SFNT loader now treats replacement as a transaction. It snapshots the 23 par
 
 The synthetic Wayland fixture adds two font files: a deliberately malformed TTF and a valid alternate face with the same glyph ID but a different A outline and horizontal advance. The regression verifies invalid replacement rollback, successful replacement, map/metric changes, cache invalidation, and index refresh. Manual GNOME/Mutter selection and visual inspection remain necessary after the CI build.
 
+### Verification
+
+- GitHub Actions [Build and test #464](https://github.com/GraderGamer2/NekoEdit/actions/runs/42386548727) passed all eight workflow steps on [a5b131b1b760](https://github.com/GraderGamer2/NekoEdit/commit/a5b131b1b760544549012d59bf8f933700df41ee).
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42386548727/artifacts/13579787461): 63,043 bytes; artifact ID 13579787461; expires 2026-11-14.
+- The test is a mock-compositor result. Manually test selection and font appearance on GNOME/Mutter before treating the UI path as desktop-validated.
+
 ---
 
 ## 2026-11-07 — Fix picker navigation regressions and sync enlarged geometry
