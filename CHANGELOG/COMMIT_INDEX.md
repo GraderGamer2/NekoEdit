@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **342** (333 previously indexed commits + seven dead-key recognition/composition and regression/fix commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **347** (333 earlier implementation commits + seven dead-key recognition/composition and regression/fix commits + two Greek/Cyrillic alias commits + five Multi_key Compose implementation/fix/test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -22,6 +22,18 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 | [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad) | test: validate complete dead-key bytes and Escape cancellation |
 
 Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the complete workflow on cb469d616f8b, including six dead-key token parsing, Latin-1 acute+e composition, base+combining fallback, Backspace/Escape cancellation, existing word-drag and auto-scroll regressions, ELF inspection, and artifact upload. Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes; SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8.
+
+## Bounded XKB Multi_key Compose input
+
+| Commit | Subject |
+|---|---|
+| [136973b0d6d1](https://github.com/GraderGamer2/NekoEdit/commit/136973b0d6d1d8f01043fc90f53baa6bebcd58a2) | feat: add bounded Multi_key Compose sequences |
+| [c91e71026efb](https://github.com/GraderGamer2/NekoEdit/commit/c91e71026efb6576e2890380e08df3386ab0917d) | feat: recognize the XKB Multi_key Compose action |
+| [cbd8680bca6a](https://github.com/GraderGamer2/NekoEdit/commit/cbd8680bca6a688743c5e192f808fafbf46d8cbf) | fix: correct Multi_key keysym name length |
+| [989ca0e3bbab](https://github.com/GraderGamer2/NekoEdit/commit/989ca0e3bbabaa4e9649fa6883033d3c269028b6) | test: verify Multi_key Compose sequences and cancellation |
+| [1e3a14ebc644](https://github.com/GraderGamer2/NekoEdit/commit/1e3a14ebc64496709edbdccd98a5c9e374980967) | test: separate Compose and dead-key event serials |
+
+The bounded pair table covers 20 two-symbol sequences after `Multi_key`; `o e` is verified as U+0153 (`œ`), while unsupported `w w` remains literal. Backspace and Escape cancel an incomplete sequence without changing document bytes. Actions [Build and test #571](https://github.com/GraderGamer2/NekoEdit/actions/runs/42399209682) passed the full workflow on 1e3a14ebc644. Artifact [13584921348](https://github.com/GraderGamer2/NekoEdit/actions/runs/42399209682/artifacts/13584921348) is 74,458 bytes; ZIP SHA-256 e55ec751a2fe7a588709c0e31a9fa0b2f745b0915aeefce26e9f2fa80fcab42e.
 
 ## Extended XKB Unicode aliases: Greek and Cyrillic
 
