@@ -283,6 +283,1637 @@ font_5x7:
     .byte 24, 4, 4, 2, 4, 4, 24            # }
     .byte 0, 0, 9, 22, 0, 0, 0             # ~
 
+
+.section .rodata
+# Unicode 18.0.0 extended grapheme-cluster property tables.
+# Generated from the Unicode Character Database 18.0.0:
+# GraphemeBreakProperty.txt, DerivedCoreProperties.txt and emoji-data.txt.
+# Hangul LV/LVT syllables are classified arithmetically in doc_grapheme_property.
+# Grapheme_Cluster_Break ranges.
+.balign 4
+unicode_gcb_ranges:
+    .long 0x0, 0x9, 3
+    .long 0xA, 0xA, 2
+    .long 0xB, 0xC, 3
+    .long 0xD, 0xD, 1
+    .long 0xE, 0x1F, 3
+    .long 0x7F, 0x9F, 3
+    .long 0xAD, 0xAD, 3
+    .long 0x300, 0x36F, 4
+    .long 0x483, 0x487, 4
+    .long 0x488, 0x489, 4
+    .long 0x591, 0x5BD, 4
+    .long 0x5BF, 0x5BF, 4
+    .long 0x5C1, 0x5C2, 4
+    .long 0x5C4, 0x5C5, 4
+    .long 0x5C7, 0x5C9, 4
+    .long 0x600, 0x605, 7
+    .long 0x610, 0x61A, 4
+    .long 0x61C, 0x61C, 3
+    .long 0x64B, 0x65F, 4
+    .long 0x670, 0x670, 4
+    .long 0x6D6, 0x6DC, 4
+    .long 0x6DD, 0x6DD, 7
+    .long 0x6DF, 0x6E4, 4
+    .long 0x6E7, 0x6E8, 4
+    .long 0x6EA, 0x6ED, 4
+    .long 0x70F, 0x70F, 7
+    .long 0x711, 0x711, 4
+    .long 0x730, 0x74A, 4
+    .long 0x7A6, 0x7B0, 4
+    .long 0x7EB, 0x7F3, 4
+    .long 0x7FD, 0x7FD, 4
+    .long 0x816, 0x819, 4
+    .long 0x81B, 0x823, 4
+    .long 0x825, 0x827, 4
+    .long 0x829, 0x82D, 4
+    .long 0x859, 0x85B, 4
+    .long 0x890, 0x891, 7
+    .long 0x897, 0x89F, 4
+    .long 0x8CA, 0x8E1, 4
+    .long 0x8E2, 0x8E2, 7
+    .long 0x8E3, 0x902, 4
+    .long 0x903, 0x903, 8
+    .long 0x93A, 0x93A, 4
+    .long 0x93B, 0x93B, 8
+    .long 0x93C, 0x93C, 4
+    .long 0x93E, 0x940, 8
+    .long 0x941, 0x948, 4
+    .long 0x949, 0x94C, 8
+    .long 0x94D, 0x94D, 4
+    .long 0x94E, 0x94F, 8
+    .long 0x951, 0x957, 4
+    .long 0x962, 0x963, 4
+    .long 0x981, 0x981, 4
+    .long 0x982, 0x983, 8
+    .long 0x9BC, 0x9BC, 4
+    .long 0x9BE, 0x9BE, 4
+    .long 0x9BF, 0x9C0, 8
+    .long 0x9C1, 0x9C4, 4
+    .long 0x9C7, 0x9C8, 8
+    .long 0x9CB, 0x9CC, 8
+    .long 0x9CD, 0x9CD, 4
+    .long 0x9D7, 0x9D7, 4
+    .long 0x9E2, 0x9E3, 4
+    .long 0x9FE, 0x9FE, 4
+    .long 0xA01, 0xA02, 4
+    .long 0xA03, 0xA03, 8
+    .long 0xA3C, 0xA3C, 4
+    .long 0xA3E, 0xA40, 8
+    .long 0xA41, 0xA42, 4
+    .long 0xA47, 0xA48, 4
+    .long 0xA4B, 0xA4D, 4
+    .long 0xA51, 0xA51, 4
+    .long 0xA70, 0xA71, 4
+    .long 0xA75, 0xA75, 4
+    .long 0xA81, 0xA82, 4
+    .long 0xA83, 0xA83, 8
+    .long 0xABC, 0xABC, 4
+    .long 0xABE, 0xAC0, 8
+    .long 0xAC1, 0xAC5, 4
+    .long 0xAC7, 0xAC8, 4
+    .long 0xAC9, 0xAC9, 8
+    .long 0xACB, 0xACC, 8
+    .long 0xACD, 0xACD, 4
+    .long 0xAE2, 0xAE3, 4
+    .long 0xAFA, 0xAFF, 4
+    .long 0xB01, 0xB01, 4
+    .long 0xB02, 0xB03, 8
+    .long 0xB3C, 0xB3C, 4
+    .long 0xB3E, 0xB3E, 4
+    .long 0xB3F, 0xB3F, 4
+    .long 0xB40, 0xB40, 8
+    .long 0xB41, 0xB44, 4
+    .long 0xB47, 0xB48, 8
+    .long 0xB4B, 0xB4C, 8
+    .long 0xB4D, 0xB4D, 4
+    .long 0xB53, 0xB56, 4
+    .long 0xB57, 0xB57, 4
+    .long 0xB62, 0xB63, 4
+    .long 0xB82, 0xB82, 4
+    .long 0xBBE, 0xBBE, 4
+    .long 0xBBF, 0xBBF, 8
+    .long 0xBC0, 0xBC0, 4
+    .long 0xBC1, 0xBC2, 8
+    .long 0xBC6, 0xBC8, 8
+    .long 0xBCA, 0xBCC, 8
+    .long 0xBCD, 0xBCD, 4
+    .long 0xBD7, 0xBD7, 4
+    .long 0xC00, 0xC00, 4
+    .long 0xC01, 0xC03, 8
+    .long 0xC04, 0xC04, 4
+    .long 0xC3C, 0xC3C, 4
+    .long 0xC3E, 0xC40, 4
+    .long 0xC41, 0xC44, 8
+    .long 0xC46, 0xC48, 4
+    .long 0xC4A, 0xC4D, 4
+    .long 0xC55, 0xC56, 4
+    .long 0xC62, 0xC63, 4
+    .long 0xC81, 0xC81, 4
+    .long 0xC82, 0xC83, 8
+    .long 0xCBC, 0xCBC, 4
+    .long 0xCBE, 0xCBE, 8
+    .long 0xCBF, 0xCBF, 4
+    .long 0xCC0, 0xCC0, 4
+    .long 0xCC1, 0xCC1, 8
+    .long 0xCC2, 0xCC2, 4
+    .long 0xCC3, 0xCC4, 8
+    .long 0xCC6, 0xCC6, 4
+    .long 0xCC7, 0xCC8, 4
+    .long 0xCCA, 0xCCB, 4
+    .long 0xCCC, 0xCCD, 4
+    .long 0xCD5, 0xCD6, 4
+    .long 0xCE2, 0xCE3, 4
+    .long 0xCF3, 0xCF3, 8
+    .long 0xD00, 0xD01, 4
+    .long 0xD02, 0xD03, 8
+    .long 0xD3B, 0xD3C, 4
+    .long 0xD3E, 0xD3E, 4
+    .long 0xD3F, 0xD40, 8
+    .long 0xD41, 0xD44, 4
+    .long 0xD46, 0xD48, 8
+    .long 0xD4A, 0xD4C, 8
+    .long 0xD4D, 0xD4D, 4
+    .long 0xD4E, 0xD4E, 7
+    .long 0xD57, 0xD57, 4
+    .long 0xD62, 0xD63, 4
+    .long 0xD81, 0xD81, 4
+    .long 0xD82, 0xD83, 8
+    .long 0xDCA, 0xDCA, 4
+    .long 0xDCF, 0xDCF, 4
+    .long 0xDD0, 0xDD1, 8
+    .long 0xDD2, 0xDD4, 4
+    .long 0xDD6, 0xDD6, 4
+    .long 0xDD8, 0xDDE, 8
+    .long 0xDDF, 0xDDF, 4
+    .long 0xDF2, 0xDF3, 8
+    .long 0xE31, 0xE31, 4
+    .long 0xE33, 0xE33, 8
+    .long 0xE34, 0xE3A, 4
+    .long 0xE47, 0xE4E, 4
+    .long 0xEB1, 0xEB1, 4
+    .long 0xEB3, 0xEB3, 8
+    .long 0xEB4, 0xEBC, 4
+    .long 0xEC8, 0xECE, 4
+    .long 0xF18, 0xF19, 4
+    .long 0xF35, 0xF35, 4
+    .long 0xF37, 0xF37, 4
+    .long 0xF39, 0xF39, 4
+    .long 0xF3E, 0xF3F, 8
+    .long 0xF71, 0xF7E, 4
+    .long 0xF7F, 0xF7F, 8
+    .long 0xF80, 0xF84, 4
+    .long 0xF86, 0xF87, 4
+    .long 0xF8D, 0xF97, 4
+    .long 0xF99, 0xFBC, 4
+    .long 0xFC6, 0xFC6, 4
+    .long 0x102D, 0x1030, 4
+    .long 0x1031, 0x1031, 8
+    .long 0x1032, 0x1037, 4
+    .long 0x1039, 0x103A, 4
+    .long 0x103B, 0x103C, 8
+    .long 0x103D, 0x103E, 4
+    .long 0x1056, 0x1057, 8
+    .long 0x1058, 0x1059, 4
+    .long 0x105E, 0x1060, 4
+    .long 0x1071, 0x1074, 4
+    .long 0x1082, 0x1082, 4
+    .long 0x1084, 0x1084, 8
+    .long 0x1085, 0x1086, 4
+    .long 0x108D, 0x108D, 4
+    .long 0x109D, 0x109D, 4
+    .long 0x1100, 0x115F, 9
+    .long 0x1160, 0x11A7, 10
+    .long 0x11A8, 0x11FF, 11
+    .long 0x135D, 0x135F, 4
+    .long 0x1712, 0x1714, 4
+    .long 0x1715, 0x1715, 4
+    .long 0x1732, 0x1733, 4
+    .long 0x1734, 0x1734, 4
+    .long 0x1752, 0x1753, 4
+    .long 0x1772, 0x1773, 4
+    .long 0x17B4, 0x17B5, 4
+    .long 0x17B6, 0x17B6, 8
+    .long 0x17B7, 0x17BD, 4
+    .long 0x17BE, 0x17C5, 8
+    .long 0x17C6, 0x17C6, 4
+    .long 0x17C7, 0x17C8, 8
+    .long 0x17C9, 0x17D3, 4
+    .long 0x17DD, 0x17DD, 4
+    .long 0x180B, 0x180D, 4
+    .long 0x180E, 0x180E, 3
+    .long 0x180F, 0x180F, 4
+    .long 0x1885, 0x1886, 4
+    .long 0x18A9, 0x18A9, 4
+    .long 0x1920, 0x1922, 4
+    .long 0x1923, 0x1926, 8
+    .long 0x1927, 0x1928, 4
+    .long 0x1929, 0x192B, 8
+    .long 0x1930, 0x1931, 8
+    .long 0x1932, 0x1932, 4
+    .long 0x1933, 0x1938, 8
+    .long 0x1939, 0x193B, 4
+    .long 0x1A17, 0x1A18, 4
+    .long 0x1A19, 0x1A1A, 8
+    .long 0x1A1B, 0x1A1B, 4
+    .long 0x1A55, 0x1A55, 8
+    .long 0x1A56, 0x1A56, 4
+    .long 0x1A57, 0x1A57, 8
+    .long 0x1A58, 0x1A5E, 4
+    .long 0x1A60, 0x1A60, 4
+    .long 0x1A62, 0x1A62, 4
+    .long 0x1A65, 0x1A6C, 4
+    .long 0x1A6D, 0x1A72, 8
+    .long 0x1A73, 0x1A7C, 4
+    .long 0x1A7F, 0x1A7F, 4
+    .long 0x1AB0, 0x1ABD, 4
+    .long 0x1ABE, 0x1ABE, 4
+    .long 0x1ABF, 0x1AF0, 4
+    .long 0x1B00, 0x1B03, 4
+    .long 0x1B04, 0x1B04, 8
+    .long 0x1B34, 0x1B34, 4
+    .long 0x1B35, 0x1B35, 4
+    .long 0x1B36, 0x1B3A, 4
+    .long 0x1B3B, 0x1B3B, 4
+    .long 0x1B3C, 0x1B3C, 4
+    .long 0x1B3D, 0x1B3D, 4
+    .long 0x1B3E, 0x1B41, 8
+    .long 0x1B42, 0x1B42, 4
+    .long 0x1B43, 0x1B44, 4
+    .long 0x1B6B, 0x1B73, 4
+    .long 0x1B80, 0x1B81, 4
+    .long 0x1B82, 0x1B82, 8
+    .long 0x1BA1, 0x1BA1, 8
+    .long 0x1BA2, 0x1BA5, 4
+    .long 0x1BA6, 0x1BA7, 8
+    .long 0x1BA8, 0x1BA9, 4
+    .long 0x1BAA, 0x1BAA, 4
+    .long 0x1BAB, 0x1BAD, 4
+    .long 0x1BE6, 0x1BE6, 4
+    .long 0x1BE7, 0x1BE7, 8
+    .long 0x1BE8, 0x1BE9, 4
+    .long 0x1BEA, 0x1BEC, 8
+    .long 0x1BED, 0x1BED, 4
+    .long 0x1BEE, 0x1BEE, 8
+    .long 0x1BEF, 0x1BF1, 4
+    .long 0x1BF2, 0x1BF3, 4
+    .long 0x1C24, 0x1C2B, 8
+    .long 0x1C2C, 0x1C33, 4
+    .long 0x1C34, 0x1C35, 8
+    .long 0x1C36, 0x1C37, 4
+    .long 0x1CD0, 0x1CD2, 4
+    .long 0x1CD4, 0x1CE0, 4
+    .long 0x1CE1, 0x1CE1, 8
+    .long 0x1CE2, 0x1CE8, 4
+    .long 0x1CED, 0x1CED, 4
+    .long 0x1CF4, 0x1CF4, 4
+    .long 0x1CF7, 0x1CF7, 8
+    .long 0x1CF8, 0x1CF9, 4
+    .long 0x1DC0, 0x1DFF, 4
+    .long 0x200B, 0x200B, 3
+    .long 0x200C, 0x200C, 4
+    .long 0x200D, 0x200D, 5
+    .long 0x200E, 0x200F, 3
+    .long 0x2028, 0x2028, 3
+    .long 0x2029, 0x2029, 3
+    .long 0x202A, 0x202E, 3
+    .long 0x2060, 0x2064, 3
+    .long 0x2065, 0x2065, 3
+    .long 0x2066, 0x206F, 3
+    .long 0x20D0, 0x20DC, 4
+    .long 0x20DD, 0x20E0, 4
+    .long 0x20E1, 0x20E1, 4
+    .long 0x20E2, 0x20E4, 4
+    .long 0x20E5, 0x20F0, 4
+    .long 0x2CEF, 0x2CF1, 4
+    .long 0x2D7F, 0x2D7F, 4
+    .long 0x2DE0, 0x2DFF, 4
+    .long 0x302A, 0x302D, 4
+    .long 0x302E, 0x302F, 4
+    .long 0x3099, 0x309A, 4
+    .long 0xA66F, 0xA66F, 4
+    .long 0xA670, 0xA672, 4
+    .long 0xA674, 0xA67D, 4
+    .long 0xA69E, 0xA69F, 4
+    .long 0xA6F0, 0xA6F1, 4
+    .long 0xA802, 0xA802, 4
+    .long 0xA806, 0xA806, 4
+    .long 0xA80B, 0xA80B, 4
+    .long 0xA823, 0xA824, 8
+    .long 0xA825, 0xA826, 4
+    .long 0xA827, 0xA827, 8
+    .long 0xA82C, 0xA82C, 4
+    .long 0xA880, 0xA881, 8
+    .long 0xA8B4, 0xA8C3, 8
+    .long 0xA8C4, 0xA8C5, 4
+    .long 0xA8E0, 0xA8F1, 4
+    .long 0xA8FF, 0xA8FF, 4
+    .long 0xA926, 0xA92D, 4
+    .long 0xA947, 0xA951, 4
+    .long 0xA952, 0xA952, 8
+    .long 0xA953, 0xA953, 4
+    .long 0xA960, 0xA97C, 9
+    .long 0xA980, 0xA982, 4
+    .long 0xA983, 0xA983, 8
+    .long 0xA9B3, 0xA9B3, 4
+    .long 0xA9B4, 0xA9B5, 8
+    .long 0xA9B6, 0xA9B9, 4
+    .long 0xA9BA, 0xA9BB, 8
+    .long 0xA9BC, 0xA9BD, 4
+    .long 0xA9BE, 0xA9BF, 8
+    .long 0xA9C0, 0xA9C0, 4
+    .long 0xA9E5, 0xA9E5, 4
+    .long 0xAA29, 0xAA2E, 4
+    .long 0xAA2F, 0xAA30, 8
+    .long 0xAA31, 0xAA32, 4
+    .long 0xAA33, 0xAA34, 8
+    .long 0xAA35, 0xAA36, 4
+    .long 0xAA43, 0xAA43, 4
+    .long 0xAA4C, 0xAA4C, 4
+    .long 0xAA4D, 0xAA4D, 8
+    .long 0xAA7C, 0xAA7C, 4
+    .long 0xAAB0, 0xAAB0, 4
+    .long 0xAAB2, 0xAAB4, 4
+    .long 0xAAB7, 0xAAB8, 4
+    .long 0xAABE, 0xAABF, 4
+    .long 0xAAC1, 0xAAC1, 4
+    .long 0xAAEB, 0xAAEB, 8
+    .long 0xAAEC, 0xAAED, 4
+    .long 0xAAEE, 0xAAEF, 8
+    .long 0xAAF5, 0xAAF5, 8
+    .long 0xAAF6, 0xAAF6, 4
+    .long 0xABE3, 0xABE4, 8
+    .long 0xABE5, 0xABE5, 4
+    .long 0xABE6, 0xABE7, 8
+    .long 0xABE8, 0xABE8, 4
+    .long 0xABE9, 0xABEA, 8
+    .long 0xABEC, 0xABEC, 8
+    .long 0xABED, 0xABED, 4
+    .long 0xD7B0, 0xD7C6, 10
+    .long 0xD7CB, 0xD7FB, 11
+    .long 0xFB1E, 0xFB1E, 4
+    .long 0xFE00, 0xFE0F, 4
+    .long 0xFE20, 0xFE2F, 4
+    .long 0xFEFF, 0xFEFF, 3
+    .long 0xFF9E, 0xFF9F, 4
+    .long 0xFFF0, 0xFFF8, 3
+    .long 0xFFF9, 0xFFFB, 3
+    .long 0x101FD, 0x101FD, 4
+    .long 0x102E0, 0x102E0, 4
+    .long 0x10376, 0x1037A, 4
+    .long 0x10A01, 0x10A03, 4
+    .long 0x10A05, 0x10A06, 4
+    .long 0x10A0C, 0x10A0F, 4
+    .long 0x10A38, 0x10A3A, 4
+    .long 0x10A3F, 0x10A3F, 4
+    .long 0x10AE5, 0x10AE6, 4
+    .long 0x10D24, 0x10D27, 4
+    .long 0x10D69, 0x10D6D, 4
+    .long 0x10EAB, 0x10EAC, 4
+    .long 0x10ECB, 0x10ECF, 4
+    .long 0x10EF0, 0x10EFF, 4
+    .long 0x10F46, 0x10F50, 4
+    .long 0x10F82, 0x10F85, 4
+    .long 0x11000, 0x11000, 8
+    .long 0x11001, 0x11001, 4
+    .long 0x11002, 0x11002, 8
+    .long 0x11038, 0x11046, 4
+    .long 0x11070, 0x11070, 4
+    .long 0x11073, 0x11074, 4
+    .long 0x1107F, 0x11081, 4
+    .long 0x11082, 0x11082, 8
+    .long 0x110B0, 0x110B2, 8
+    .long 0x110B3, 0x110B6, 4
+    .long 0x110B7, 0x110B8, 8
+    .long 0x110B9, 0x110BA, 4
+    .long 0x110BD, 0x110BD, 7
+    .long 0x110C2, 0x110C2, 4
+    .long 0x110CD, 0x110CD, 7
+    .long 0x11100, 0x11102, 4
+    .long 0x11127, 0x1112B, 4
+    .long 0x1112C, 0x1112C, 8
+    .long 0x1112D, 0x11134, 4
+    .long 0x11145, 0x11146, 8
+    .long 0x11173, 0x11173, 4
+    .long 0x11180, 0x11181, 4
+    .long 0x11182, 0x11182, 8
+    .long 0x111B3, 0x111B5, 8
+    .long 0x111B6, 0x111BE, 4
+    .long 0x111BF, 0x111BF, 8
+    .long 0x111C0, 0x111C0, 4
+    .long 0x111C2, 0x111C3, 7
+    .long 0x111C9, 0x111CC, 4
+    .long 0x111CE, 0x111CE, 8
+    .long 0x111CF, 0x111CF, 4
+    .long 0x1122C, 0x1122E, 8
+    .long 0x1122F, 0x11231, 4
+    .long 0x11232, 0x11233, 8
+    .long 0x11234, 0x11234, 4
+    .long 0x11235, 0x11235, 4
+    .long 0x11236, 0x11237, 4
+    .long 0x1123E, 0x1123E, 4
+    .long 0x11241, 0x11241, 4
+    .long 0x112DF, 0x112DF, 4
+    .long 0x112E0, 0x112E2, 8
+    .long 0x112E3, 0x112EA, 4
+    .long 0x11300, 0x11301, 4
+    .long 0x11302, 0x11303, 8
+    .long 0x1133B, 0x1133C, 4
+    .long 0x1133E, 0x1133E, 4
+    .long 0x1133F, 0x1133F, 8
+    .long 0x11340, 0x11340, 4
+    .long 0x11341, 0x11344, 8
+    .long 0x11347, 0x11348, 8
+    .long 0x1134B, 0x1134C, 8
+    .long 0x1134D, 0x1134D, 4
+    .long 0x11357, 0x11357, 4
+    .long 0x11362, 0x11363, 8
+    .long 0x11366, 0x1136C, 4
+    .long 0x11370, 0x11374, 4
+    .long 0x113B8, 0x113B8, 4
+    .long 0x113B9, 0x113BA, 8
+    .long 0x113BB, 0x113C0, 4
+    .long 0x113C2, 0x113C2, 4
+    .long 0x113C5, 0x113C5, 4
+    .long 0x113C7, 0x113C9, 4
+    .long 0x113CA, 0x113CA, 8
+    .long 0x113CC, 0x113CD, 8
+    .long 0x113CE, 0x113CE, 4
+    .long 0x113CF, 0x113CF, 4
+    .long 0x113D0, 0x113D0, 4
+    .long 0x113D1, 0x113D1, 7
+    .long 0x113D2, 0x113D2, 4
+    .long 0x113E1, 0x113E2, 4
+    .long 0x11435, 0x11437, 8
+    .long 0x11438, 0x1143F, 4
+    .long 0x11440, 0x11441, 8
+    .long 0x11442, 0x11444, 4
+    .long 0x11445, 0x11445, 8
+    .long 0x11446, 0x11446, 4
+    .long 0x1145E, 0x1145E, 4
+    .long 0x114B0, 0x114B0, 4
+    .long 0x114B1, 0x114B2, 8
+    .long 0x114B3, 0x114B8, 4
+    .long 0x114B9, 0x114B9, 8
+    .long 0x114BA, 0x114BA, 4
+    .long 0x114BB, 0x114BC, 8
+    .long 0x114BD, 0x114BD, 4
+    .long 0x114BE, 0x114BE, 8
+    .long 0x114BF, 0x114C0, 4
+    .long 0x114C1, 0x114C1, 8
+    .long 0x114C2, 0x114C3, 4
+    .long 0x115AF, 0x115AF, 4
+    .long 0x115B0, 0x115B1, 8
+    .long 0x115B2, 0x115B5, 4
+    .long 0x115B8, 0x115BB, 8
+    .long 0x115BC, 0x115BD, 4
+    .long 0x115BE, 0x115BE, 8
+    .long 0x115BF, 0x115C0, 4
+    .long 0x115DC, 0x115DD, 4
+    .long 0x11630, 0x11632, 8
+    .long 0x11633, 0x1163A, 4
+    .long 0x1163B, 0x1163C, 8
+    .long 0x1163D, 0x1163D, 4
+    .long 0x1163E, 0x1163E, 8
+    .long 0x1163F, 0x11640, 4
+    .long 0x116AB, 0x116AB, 4
+    .long 0x116AC, 0x116AC, 8
+    .long 0x116AD, 0x116AD, 4
+    .long 0x116AE, 0x116AF, 8
+    .long 0x116B0, 0x116B5, 4
+    .long 0x116B6, 0x116B6, 4
+    .long 0x116B7, 0x116B7, 4
+    .long 0x1171D, 0x1171D, 4
+    .long 0x1171E, 0x1171E, 8
+    .long 0x1171F, 0x1171F, 4
+    .long 0x11722, 0x11725, 4
+    .long 0x11726, 0x11726, 8
+    .long 0x11727, 0x1172B, 4
+    .long 0x1182C, 0x1182E, 8
+    .long 0x1182F, 0x11837, 4
+    .long 0x11838, 0x11838, 8
+    .long 0x11839, 0x1183A, 4
+    .long 0x11930, 0x11930, 4
+    .long 0x11931, 0x11935, 8
+    .long 0x11937, 0x11938, 8
+    .long 0x1193B, 0x1193C, 4
+    .long 0x1193D, 0x1193D, 4
+    .long 0x1193E, 0x1193E, 4
+    .long 0x1193F, 0x1193F, 7
+    .long 0x11940, 0x11940, 8
+    .long 0x11941, 0x11941, 7
+    .long 0x11942, 0x11942, 8
+    .long 0x11943, 0x11943, 4
+    .long 0x119D1, 0x119D3, 8
+    .long 0x119D4, 0x119D7, 4
+    .long 0x119DA, 0x119DB, 4
+    .long 0x119DC, 0x119DF, 8
+    .long 0x119E0, 0x119E0, 4
+    .long 0x119E4, 0x119E4, 8
+    .long 0x11A01, 0x11A0A, 4
+    .long 0x11A33, 0x11A38, 4
+    .long 0x11A39, 0x11A39, 8
+    .long 0x11A3B, 0x11A3E, 4
+    .long 0x11A47, 0x11A47, 4
+    .long 0x11A51, 0x11A56, 4
+    .long 0x11A57, 0x11A58, 8
+    .long 0x11A59, 0x11A5B, 4
+    .long 0x11A84, 0x11A89, 7
+    .long 0x11A8A, 0x11A96, 4
+    .long 0x11A97, 0x11A97, 8
+    .long 0x11A98, 0x11A99, 4
+    .long 0x11B60, 0x11B60, 4
+    .long 0x11B61, 0x11B61, 8
+    .long 0x11B62, 0x11B64, 4
+    .long 0x11B65, 0x11B65, 8
+    .long 0x11B66, 0x11B66, 4
+    .long 0x11B67, 0x11B67, 8
+    .long 0x11C2F, 0x11C2F, 8
+    .long 0x11C30, 0x11C36, 4
+    .long 0x11C38, 0x11C3D, 4
+    .long 0x11C3E, 0x11C3E, 8
+    .long 0x11C3F, 0x11C3F, 4
+    .long 0x11C92, 0x11CA7, 4
+    .long 0x11CA9, 0x11CA9, 8
+    .long 0x11CAA, 0x11CB0, 4
+    .long 0x11CB1, 0x11CB1, 8
+    .long 0x11CB2, 0x11CB3, 4
+    .long 0x11CB4, 0x11CB4, 8
+    .long 0x11CB5, 0x11CB6, 4
+    .long 0x11D31, 0x11D36, 4
+    .long 0x11D3A, 0x11D3A, 4
+    .long 0x11D3C, 0x11D3D, 4
+    .long 0x11D3F, 0x11D45, 4
+    .long 0x11D46, 0x11D46, 7
+    .long 0x11D47, 0x11D47, 4
+    .long 0x11D8A, 0x11D8E, 8
+    .long 0x11D90, 0x11D91, 4
+    .long 0x11D93, 0x11D94, 8
+    .long 0x11D95, 0x11D95, 4
+    .long 0x11D96, 0x11D96, 8
+    .long 0x11D97, 0x11D97, 4
+    .long 0x11DF0, 0x11DF0, 4
+    .long 0x11EF3, 0x11EF4, 4
+    .long 0x11EF5, 0x11EF6, 8
+    .long 0x11F00, 0x11F01, 4
+    .long 0x11F02, 0x11F02, 7
+    .long 0x11F03, 0x11F03, 8
+    .long 0x11F34, 0x11F35, 8
+    .long 0x11F36, 0x11F3A, 4
+    .long 0x11F3E, 0x11F3F, 8
+    .long 0x11F40, 0x11F40, 4
+    .long 0x11F41, 0x11F41, 4
+    .long 0x11F42, 0x11F42, 4
+    .long 0x11F5A, 0x11F5A, 4
+    .long 0x13430, 0x1343F, 3
+    .long 0x13440, 0x13440, 4
+    .long 0x13447, 0x13455, 4
+    .long 0x1611E, 0x16129, 4
+    .long 0x1612A, 0x1612C, 8
+    .long 0x1612D, 0x1612F, 4
+    .long 0x16AF0, 0x16AF4, 4
+    .long 0x16B30, 0x16B36, 4
+    .long 0x16D63, 0x16D63, 10
+    .long 0x16D67, 0x16D6A, 10
+    .long 0x16F4F, 0x16F4F, 4
+    .long 0x16F51, 0x16F87, 8
+    .long 0x16F8F, 0x16F92, 4
+    .long 0x16FE4, 0x16FE4, 4
+    .long 0x16FF0, 0x16FF1, 4
+    .long 0x1BC9D, 0x1BC9E, 4
+    .long 0x1BCA0, 0x1BCA3, 3
+    .long 0x1CF00, 0x1CF2D, 4
+    .long 0x1CF30, 0x1CF46, 4
+    .long 0x1D127, 0x1D128, 4
+    .long 0x1D165, 0x1D166, 4
+    .long 0x1D167, 0x1D169, 4
+    .long 0x1D16D, 0x1D172, 4
+    .long 0x1D173, 0x1D17A, 3
+    .long 0x1D17B, 0x1D182, 4
+    .long 0x1D185, 0x1D18B, 4
+    .long 0x1D1AA, 0x1D1AD, 4
+    .long 0x1D242, 0x1D244, 4
+    .long 0x1D250, 0x1D252, 4
+    .long 0x1D25B, 0x1D25C, 4
+    .long 0x1D25F, 0x1D25F, 4
+    .long 0x1D280, 0x1D281, 4
+    .long 0x1DA00, 0x1DA36, 4
+    .long 0x1DA3B, 0x1DA6C, 4
+    .long 0x1DA75, 0x1DA75, 4
+    .long 0x1DA84, 0x1DA84, 4
+    .long 0x1DA9B, 0x1DA9F, 4
+    .long 0x1DAA1, 0x1DAAF, 4
+    .long 0x1E000, 0x1E006, 4
+    .long 0x1E008, 0x1E018, 4
+    .long 0x1E01B, 0x1E021, 4
+    .long 0x1E023, 0x1E024, 4
+    .long 0x1E026, 0x1E02A, 4
+    .long 0x1E08F, 0x1E08F, 4
+    .long 0x1E130, 0x1E136, 4
+    .long 0x1E2AE, 0x1E2AE, 4
+    .long 0x1E2EC, 0x1E2EF, 4
+    .long 0x1E4EC, 0x1E4EF, 4
+    .long 0x1E5EE, 0x1E5EF, 4
+    .long 0x1E6E3, 0x1E6E3, 4
+    .long 0x1E6E6, 0x1E6E6, 4
+    .long 0x1E6EE, 0x1E6EF, 4
+    .long 0x1E6F5, 0x1E6F5, 4
+    .long 0x1E8D0, 0x1E8D6, 4
+    .long 0x1E944, 0x1E94A, 4
+    .long 0x1F1E6, 0x1F1FF, 6
+    .long 0x1F3FB, 0x1F3FF, 4
+    .long 0xE0000, 0xE0000, 3
+    .long 0xE0001, 0xE0001, 3
+    .long 0xE0002, 0xE001F, 3
+    .long 0xE0020, 0xE007F, 4
+    .long 0xE0080, 0xE00FF, 3
+    .long 0xE0100, 0xE01EF, 4
+    .long 0xE01F0, 0xE0FFF, 3
+unicode_gcb_ranges_end:
+
+# Indic_Conjunct_Break: Consonant=1, Extend=2, Linker=3.
+.balign 4
+unicode_incb_ranges:
+    .long 0x300, 0x36F, 2
+    .long 0x483, 0x487, 2
+    .long 0x488, 0x489, 2
+    .long 0x591, 0x5BD, 2
+    .long 0x5BF, 0x5BF, 2
+    .long 0x5C1, 0x5C2, 2
+    .long 0x5C4, 0x5C5, 2
+    .long 0x5C7, 0x5C9, 2
+    .long 0x610, 0x61A, 2
+    .long 0x64B, 0x65F, 2
+    .long 0x670, 0x670, 2
+    .long 0x6D6, 0x6DC, 2
+    .long 0x6DF, 0x6E4, 2
+    .long 0x6E7, 0x6E8, 2
+    .long 0x6EA, 0x6ED, 2
+    .long 0x711, 0x711, 2
+    .long 0x730, 0x74A, 2
+    .long 0x7A6, 0x7B0, 2
+    .long 0x7EB, 0x7F3, 2
+    .long 0x7FD, 0x7FD, 2
+    .long 0x816, 0x819, 2
+    .long 0x81B, 0x823, 2
+    .long 0x825, 0x827, 2
+    .long 0x829, 0x82D, 2
+    .long 0x859, 0x85B, 2
+    .long 0x897, 0x89F, 2
+    .long 0x8CA, 0x8E1, 2
+    .long 0x8E3, 0x902, 2
+    .long 0x915, 0x939, 1
+    .long 0x93A, 0x93A, 2
+    .long 0x93C, 0x93C, 2
+    .long 0x941, 0x948, 2
+    .long 0x94D, 0x94D, 3
+    .long 0x951, 0x957, 2
+    .long 0x958, 0x95F, 1
+    .long 0x962, 0x963, 2
+    .long 0x978, 0x97F, 1
+    .long 0x981, 0x981, 2
+    .long 0x995, 0x9A8, 1
+    .long 0x9AA, 0x9B0, 1
+    .long 0x9B2, 0x9B2, 1
+    .long 0x9B6, 0x9B9, 1
+    .long 0x9BC, 0x9BC, 2
+    .long 0x9BE, 0x9BE, 2
+    .long 0x9C1, 0x9C4, 2
+    .long 0x9CD, 0x9CD, 3
+    .long 0x9D7, 0x9D7, 2
+    .long 0x9DC, 0x9DD, 1
+    .long 0x9DF, 0x9DF, 1
+    .long 0x9E2, 0x9E3, 2
+    .long 0x9F0, 0x9F1, 1
+    .long 0x9FE, 0x9FE, 2
+    .long 0xA01, 0xA02, 2
+    .long 0xA3C, 0xA3C, 2
+    .long 0xA41, 0xA42, 2
+    .long 0xA47, 0xA48, 2
+    .long 0xA4B, 0xA4D, 2
+    .long 0xA51, 0xA51, 2
+    .long 0xA70, 0xA71, 2
+    .long 0xA75, 0xA75, 2
+    .long 0xA81, 0xA82, 2
+    .long 0xA95, 0xAA8, 1
+    .long 0xAAA, 0xAB0, 1
+    .long 0xAB2, 0xAB3, 1
+    .long 0xAB5, 0xAB9, 1
+    .long 0xABC, 0xABC, 2
+    .long 0xAC1, 0xAC5, 2
+    .long 0xAC7, 0xAC8, 2
+    .long 0xACD, 0xACD, 3
+    .long 0xAE2, 0xAE3, 2
+    .long 0xAF9, 0xAF9, 1
+    .long 0xAFA, 0xAFF, 2
+    .long 0xB01, 0xB01, 2
+    .long 0xB15, 0xB28, 1
+    .long 0xB2A, 0xB30, 1
+    .long 0xB32, 0xB33, 1
+    .long 0xB35, 0xB39, 1
+    .long 0xB3C, 0xB3C, 2
+    .long 0xB3E, 0xB3E, 2
+    .long 0xB3F, 0xB3F, 2
+    .long 0xB41, 0xB44, 2
+    .long 0xB4D, 0xB4D, 3
+    .long 0xB53, 0xB56, 2
+    .long 0xB57, 0xB57, 2
+    .long 0xB5C, 0xB5D, 1
+    .long 0xB5F, 0xB5F, 1
+    .long 0xB62, 0xB63, 2
+    .long 0xB71, 0xB71, 1
+    .long 0xB82, 0xB82, 2
+    .long 0xBBE, 0xBBE, 2
+    .long 0xBC0, 0xBC0, 2
+    .long 0xBCD, 0xBCD, 2
+    .long 0xBD7, 0xBD7, 2
+    .long 0xC00, 0xC00, 2
+    .long 0xC04, 0xC04, 2
+    .long 0xC15, 0xC28, 1
+    .long 0xC2A, 0xC39, 1
+    .long 0xC3C, 0xC3C, 2
+    .long 0xC3E, 0xC40, 2
+    .long 0xC46, 0xC48, 2
+    .long 0xC4A, 0xC4C, 2
+    .long 0xC4D, 0xC4D, 3
+    .long 0xC55, 0xC56, 2
+    .long 0xC58, 0xC5A, 1
+    .long 0xC62, 0xC63, 2
+    .long 0xC81, 0xC81, 2
+    .long 0xCBC, 0xCBC, 2
+    .long 0xCBF, 0xCBF, 2
+    .long 0xCC0, 0xCC0, 2
+    .long 0xCC2, 0xCC2, 2
+    .long 0xCC6, 0xCC6, 2
+    .long 0xCC7, 0xCC8, 2
+    .long 0xCCA, 0xCCB, 2
+    .long 0xCCC, 0xCCD, 2
+    .long 0xCD5, 0xCD6, 2
+    .long 0xCE2, 0xCE3, 2
+    .long 0xD00, 0xD01, 2
+    .long 0xD15, 0xD3A, 1
+    .long 0xD3B, 0xD3C, 2
+    .long 0xD3E, 0xD3E, 2
+    .long 0xD41, 0xD44, 2
+    .long 0xD4D, 0xD4D, 3
+    .long 0xD57, 0xD57, 2
+    .long 0xD62, 0xD63, 2
+    .long 0xD81, 0xD81, 2
+    .long 0xDCA, 0xDCA, 2
+    .long 0xDCF, 0xDCF, 2
+    .long 0xDD2, 0xDD4, 2
+    .long 0xDD6, 0xDD6, 2
+    .long 0xDDF, 0xDDF, 2
+    .long 0xE31, 0xE31, 2
+    .long 0xE34, 0xE3A, 2
+    .long 0xE47, 0xE4E, 2
+    .long 0xEB1, 0xEB1, 2
+    .long 0xEB4, 0xEBC, 2
+    .long 0xEC8, 0xECE, 2
+    .long 0xF18, 0xF19, 2
+    .long 0xF35, 0xF35, 2
+    .long 0xF37, 0xF37, 2
+    .long 0xF39, 0xF39, 2
+    .long 0xF71, 0xF7E, 2
+    .long 0xF80, 0xF84, 2
+    .long 0xF86, 0xF87, 2
+    .long 0xF8D, 0xF97, 2
+    .long 0xF99, 0xFBC, 2
+    .long 0xFC6, 0xFC6, 2
+    .long 0x1000, 0x102A, 1
+    .long 0x102D, 0x1030, 2
+    .long 0x1032, 0x1037, 2
+    .long 0x1039, 0x1039, 3
+    .long 0x103A, 0x103A, 2
+    .long 0x103D, 0x103E, 2
+    .long 0x103F, 0x103F, 1
+    .long 0x1050, 0x1055, 1
+    .long 0x1058, 0x1059, 2
+    .long 0x105A, 0x105D, 1
+    .long 0x105E, 0x1060, 2
+    .long 0x1061, 0x1061, 1
+    .long 0x1065, 0x1066, 1
+    .long 0x106E, 0x1070, 1
+    .long 0x1071, 0x1074, 2
+    .long 0x1075, 0x1081, 1
+    .long 0x1082, 0x1082, 2
+    .long 0x1085, 0x1086, 2
+    .long 0x108D, 0x108D, 2
+    .long 0x108E, 0x108E, 1
+    .long 0x109D, 0x109D, 2
+    .long 0x135D, 0x135F, 2
+    .long 0x1712, 0x1714, 2
+    .long 0x1715, 0x1715, 2
+    .long 0x1732, 0x1733, 2
+    .long 0x1734, 0x1734, 2
+    .long 0x1752, 0x1753, 2
+    .long 0x1772, 0x1773, 2
+    .long 0x1780, 0x17B3, 1
+    .long 0x17B4, 0x17B5, 2
+    .long 0x17B7, 0x17BD, 2
+    .long 0x17C6, 0x17C6, 2
+    .long 0x17C9, 0x17D1, 2
+    .long 0x17D2, 0x17D2, 3
+    .long 0x17D3, 0x17D3, 2
+    .long 0x17DD, 0x17DD, 2
+    .long 0x180B, 0x180D, 2
+    .long 0x180F, 0x180F, 2
+    .long 0x1885, 0x1886, 2
+    .long 0x18A9, 0x18A9, 2
+    .long 0x1920, 0x1922, 2
+    .long 0x1927, 0x1928, 2
+    .long 0x1932, 0x1932, 2
+    .long 0x1939, 0x193B, 2
+    .long 0x1A17, 0x1A18, 2
+    .long 0x1A1B, 0x1A1B, 2
+    .long 0x1A20, 0x1A54, 1
+    .long 0x1A56, 0x1A56, 2
+    .long 0x1A58, 0x1A5E, 2
+    .long 0x1A60, 0x1A60, 3
+    .long 0x1A62, 0x1A62, 2
+    .long 0x1A65, 0x1A6C, 2
+    .long 0x1A73, 0x1A7C, 2
+    .long 0x1A7F, 0x1A7F, 2
+    .long 0x1AB0, 0x1ABD, 2
+    .long 0x1ABE, 0x1ABE, 2
+    .long 0x1ABF, 0x1AF0, 2
+    .long 0x1B00, 0x1B03, 2
+    .long 0x1B0B, 0x1B0C, 1
+    .long 0x1B13, 0x1B33, 1
+    .long 0x1B34, 0x1B34, 2
+    .long 0x1B35, 0x1B35, 2
+    .long 0x1B36, 0x1B3A, 2
+    .long 0x1B3B, 0x1B3B, 2
+    .long 0x1B3C, 0x1B3C, 2
+    .long 0x1B3D, 0x1B3D, 2
+    .long 0x1B42, 0x1B42, 2
+    .long 0x1B43, 0x1B43, 2
+    .long 0x1B44, 0x1B44, 3
+    .long 0x1B45, 0x1B4C, 1
+    .long 0x1B6B, 0x1B73, 2
+    .long 0x1B80, 0x1B81, 2
+    .long 0x1B83, 0x1BA0, 1
+    .long 0x1BA2, 0x1BA5, 2
+    .long 0x1BA8, 0x1BA9, 2
+    .long 0x1BAA, 0x1BAA, 2
+    .long 0x1BAB, 0x1BAB, 3
+    .long 0x1BAC, 0x1BAD, 2
+    .long 0x1BAE, 0x1BAF, 1
+    .long 0x1BBB, 0x1BBD, 1
+    .long 0x1BE6, 0x1BE6, 2
+    .long 0x1BE8, 0x1BE9, 2
+    .long 0x1BED, 0x1BED, 2
+    .long 0x1BEF, 0x1BF1, 2
+    .long 0x1BF2, 0x1BF3, 2
+    .long 0x1C2C, 0x1C33, 2
+    .long 0x1C36, 0x1C37, 2
+    .long 0x1CD0, 0x1CD2, 2
+    .long 0x1CD4, 0x1CE0, 2
+    .long 0x1CE2, 0x1CE8, 2
+    .long 0x1CED, 0x1CED, 2
+    .long 0x1CF4, 0x1CF4, 2
+    .long 0x1CF5, 0x1CF6, 3
+    .long 0x1CF8, 0x1CF9, 2
+    .long 0x1DC0, 0x1DFF, 2
+    .long 0x200D, 0x200D, 2
+    .long 0x20D0, 0x20DC, 2
+    .long 0x20DD, 0x20E0, 2
+    .long 0x20E1, 0x20E1, 2
+    .long 0x20E2, 0x20E4, 2
+    .long 0x20E5, 0x20F0, 2
+    .long 0x2CEF, 0x2CF1, 2
+    .long 0x2D7F, 0x2D7F, 2
+    .long 0x2DE0, 0x2DFF, 2
+    .long 0x302A, 0x302D, 2
+    .long 0x302E, 0x302F, 2
+    .long 0x3099, 0x309A, 2
+    .long 0xA66F, 0xA66F, 2
+    .long 0xA670, 0xA672, 2
+    .long 0xA674, 0xA67D, 2
+    .long 0xA69E, 0xA69F, 2
+    .long 0xA6F0, 0xA6F1, 2
+    .long 0xA802, 0xA802, 2
+    .long 0xA806, 0xA806, 2
+    .long 0xA80B, 0xA80B, 2
+    .long 0xA825, 0xA826, 2
+    .long 0xA82C, 0xA82C, 2
+    .long 0xA8C4, 0xA8C5, 2
+    .long 0xA8E0, 0xA8F1, 2
+    .long 0xA8FF, 0xA8FF, 2
+    .long 0xA926, 0xA92D, 2
+    .long 0xA947, 0xA951, 2
+    .long 0xA953, 0xA953, 2
+    .long 0xA980, 0xA982, 2
+    .long 0xA989, 0xA98B, 1
+    .long 0xA98F, 0xA9B2, 1
+    .long 0xA9B3, 0xA9B3, 2
+    .long 0xA9B6, 0xA9B9, 2
+    .long 0xA9BC, 0xA9BD, 2
+    .long 0xA9C0, 0xA9C0, 3
+    .long 0xA9E0, 0xA9E4, 1
+    .long 0xA9E5, 0xA9E5, 2
+    .long 0xA9E7, 0xA9EF, 1
+    .long 0xA9FA, 0xA9FE, 1
+    .long 0xAA29, 0xAA2E, 2
+    .long 0xAA31, 0xAA32, 2
+    .long 0xAA35, 0xAA36, 2
+    .long 0xAA43, 0xAA43, 2
+    .long 0xAA4C, 0xAA4C, 2
+    .long 0xAA60, 0xAA6F, 1
+    .long 0xAA71, 0xAA73, 1
+    .long 0xAA7A, 0xAA7A, 1
+    .long 0xAA7C, 0xAA7C, 2
+    .long 0xAA7E, 0xAA7F, 1
+    .long 0xAAB0, 0xAAB0, 2
+    .long 0xAAB2, 0xAAB4, 2
+    .long 0xAAB7, 0xAAB8, 2
+    .long 0xAABE, 0xAABF, 2
+    .long 0xAAC1, 0xAAC1, 2
+    .long 0xAAE0, 0xAAEA, 1
+    .long 0xAAEC, 0xAAED, 2
+    .long 0xAAF6, 0xAAF6, 3
+    .long 0xABC0, 0xABDA, 1
+    .long 0xABE5, 0xABE5, 2
+    .long 0xABE8, 0xABE8, 2
+    .long 0xABED, 0xABED, 2
+    .long 0xFB1E, 0xFB1E, 2
+    .long 0xFE00, 0xFE0F, 2
+    .long 0xFE20, 0xFE2F, 2
+    .long 0xFF9E, 0xFF9F, 2
+    .long 0x101FD, 0x101FD, 2
+    .long 0x102E0, 0x102E0, 2
+    .long 0x10376, 0x1037A, 2
+    .long 0x10A00, 0x10A00, 1
+    .long 0x10A01, 0x10A03, 2
+    .long 0x10A05, 0x10A06, 2
+    .long 0x10A0C, 0x10A0F, 2
+    .long 0x10A10, 0x10A13, 1
+    .long 0x10A15, 0x10A17, 1
+    .long 0x10A19, 0x10A35, 1
+    .long 0x10A38, 0x10A3A, 2
+    .long 0x10A3F, 0x10A3F, 3
+    .long 0x10AE5, 0x10AE6, 2
+    .long 0x10D24, 0x10D27, 2
+    .long 0x10D69, 0x10D6D, 2
+    .long 0x10EAB, 0x10EAC, 2
+    .long 0x10ECB, 0x10ECF, 2
+    .long 0x10EF0, 0x10EFF, 2
+    .long 0x10F46, 0x10F50, 2
+    .long 0x10F82, 0x10F85, 2
+    .long 0x11001, 0x11001, 2
+    .long 0x11038, 0x11046, 2
+    .long 0x11070, 0x11070, 2
+    .long 0x11073, 0x11074, 2
+    .long 0x1107F, 0x11081, 2
+    .long 0x110B3, 0x110B6, 2
+    .long 0x110B9, 0x110BA, 2
+    .long 0x110C2, 0x110C2, 2
+    .long 0x11100, 0x11102, 2
+    .long 0x11103, 0x11126, 1
+    .long 0x11127, 0x1112B, 2
+    .long 0x1112D, 0x11132, 2
+    .long 0x11133, 0x11133, 3
+    .long 0x11134, 0x11134, 2
+    .long 0x11144, 0x11144, 1
+    .long 0x11147, 0x11147, 1
+    .long 0x11173, 0x11173, 2
+    .long 0x11180, 0x11181, 2
+    .long 0x111B6, 0x111BE, 2
+    .long 0x111C0, 0x111C0, 2
+    .long 0x111C9, 0x111CC, 2
+    .long 0x111CF, 0x111CF, 2
+    .long 0x1122F, 0x11231, 2
+    .long 0x11234, 0x11234, 2
+    .long 0x11235, 0x11235, 2
+    .long 0x11236, 0x11237, 2
+    .long 0x1123E, 0x1123E, 2
+    .long 0x11241, 0x11241, 2
+    .long 0x112DF, 0x112DF, 2
+    .long 0x112E3, 0x112EA, 2
+    .long 0x11300, 0x11301, 2
+    .long 0x1133B, 0x1133C, 2
+    .long 0x1133E, 0x1133E, 2
+    .long 0x11340, 0x11340, 2
+    .long 0x1134D, 0x1134D, 2
+    .long 0x11357, 0x11357, 2
+    .long 0x11366, 0x1136C, 2
+    .long 0x11370, 0x11374, 2
+    .long 0x11380, 0x11389, 1
+    .long 0x1138B, 0x1138B, 1
+    .long 0x1138E, 0x1138E, 1
+    .long 0x11390, 0x113B5, 1
+    .long 0x113B8, 0x113B8, 2
+    .long 0x113BB, 0x113C0, 2
+    .long 0x113C2, 0x113C2, 2
+    .long 0x113C5, 0x113C5, 2
+    .long 0x113C7, 0x113C9, 2
+    .long 0x113CE, 0x113CE, 2
+    .long 0x113CF, 0x113CF, 2
+    .long 0x113D0, 0x113D0, 3
+    .long 0x113D2, 0x113D2, 2
+    .long 0x113E1, 0x113E2, 2
+    .long 0x11438, 0x1143F, 2
+    .long 0x11442, 0x11444, 2
+    .long 0x11446, 0x11446, 2
+    .long 0x1145E, 0x1145E, 2
+    .long 0x114B0, 0x114B0, 2
+    .long 0x114B3, 0x114B8, 2
+    .long 0x114BA, 0x114BA, 2
+    .long 0x114BD, 0x114BD, 2
+    .long 0x114BF, 0x114C0, 2
+    .long 0x114C2, 0x114C3, 2
+    .long 0x115AF, 0x115AF, 2
+    .long 0x115B2, 0x115B5, 2
+    .long 0x115BC, 0x115BD, 2
+    .long 0x115BF, 0x115C0, 2
+    .long 0x115DC, 0x115DD, 2
+    .long 0x11633, 0x1163A, 2
+    .long 0x1163D, 0x1163D, 2
+    .long 0x1163F, 0x11640, 2
+    .long 0x116AB, 0x116AB, 2
+    .long 0x116AD, 0x116AD, 2
+    .long 0x116B0, 0x116B5, 2
+    .long 0x116B6, 0x116B6, 2
+    .long 0x116B7, 0x116B7, 2
+    .long 0x1171D, 0x1171D, 2
+    .long 0x1171F, 0x1171F, 2
+    .long 0x11722, 0x11725, 2
+    .long 0x11727, 0x1172B, 2
+    .long 0x1182F, 0x11837, 2
+    .long 0x11839, 0x1183A, 2
+    .long 0x11900, 0x11906, 1
+    .long 0x11909, 0x11909, 1
+    .long 0x1190C, 0x11913, 1
+    .long 0x11915, 0x11916, 1
+    .long 0x11918, 0x1192F, 1
+    .long 0x11930, 0x11930, 2
+    .long 0x1193B, 0x1193C, 2
+    .long 0x1193D, 0x1193D, 2
+    .long 0x1193E, 0x1193E, 3
+    .long 0x11943, 0x11943, 2
+    .long 0x119D4, 0x119D7, 2
+    .long 0x119DA, 0x119DB, 2
+    .long 0x119E0, 0x119E0, 2
+    .long 0x11A00, 0x11A00, 1
+    .long 0x11A01, 0x11A0A, 2
+    .long 0x11A0B, 0x11A32, 1
+    .long 0x11A33, 0x11A38, 2
+    .long 0x11A3A, 0x11A3A, 3
+    .long 0x11A3B, 0x11A3E, 2
+    .long 0x11A47, 0x11A47, 3
+    .long 0x11A50, 0x11A50, 1
+    .long 0x11A51, 0x11A56, 2
+    .long 0x11A59, 0x11A5B, 2
+    .long 0x11A5C, 0x11A83, 1
+    .long 0x11A8A, 0x11A96, 2
+    .long 0x11A98, 0x11A98, 2
+    .long 0x11A99, 0x11A99, 3
+    .long 0x11B0A, 0x11B0A, 1
+    .long 0x11B60, 0x11B60, 2
+    .long 0x11B62, 0x11B64, 2
+    .long 0x11B66, 0x11B66, 2
+    .long 0x11C30, 0x11C36, 2
+    .long 0x11C38, 0x11C3D, 2
+    .long 0x11C3F, 0x11C3F, 2
+    .long 0x11C92, 0x11CA7, 2
+    .long 0x11CAA, 0x11CB0, 2
+    .long 0x11CB2, 0x11CB3, 2
+    .long 0x11CB5, 0x11CB6, 2
+    .long 0x11D31, 0x11D36, 2
+    .long 0x11D3A, 0x11D3A, 2
+    .long 0x11D3C, 0x11D3D, 2
+    .long 0x11D3F, 0x11D45, 2
+    .long 0x11D47, 0x11D47, 2
+    .long 0x11D90, 0x11D91, 2
+    .long 0x11D95, 0x11D95, 2
+    .long 0x11D97, 0x11D97, 2
+    .long 0x11DF0, 0x11DF0, 2
+    .long 0x11DF1, 0x11DF1, 1
+    .long 0x11EF3, 0x11EF4, 2
+    .long 0x11F00, 0x11F01, 2
+    .long 0x11F04, 0x11F10, 1
+    .long 0x11F12, 0x11F33, 1
+    .long 0x11F36, 0x11F3A, 2
+    .long 0x11F40, 0x11F40, 2
+    .long 0x11F41, 0x11F41, 2
+    .long 0x11F42, 0x11F42, 3
+    .long 0x11F5A, 0x11F5A, 2
+    .long 0x13440, 0x13440, 2
+    .long 0x13447, 0x13455, 2
+    .long 0x1611E, 0x16129, 2
+    .long 0x1612D, 0x1612F, 2
+    .long 0x16AF0, 0x16AF4, 2
+    .long 0x16B30, 0x16B36, 2
+    .long 0x16F4F, 0x16F4F, 2
+    .long 0x16F8F, 0x16F92, 2
+    .long 0x16FE4, 0x16FE4, 2
+    .long 0x16FF0, 0x16FF1, 2
+    .long 0x1BC9D, 0x1BC9E, 2
+    .long 0x1CF00, 0x1CF2D, 2
+    .long 0x1CF30, 0x1CF46, 2
+    .long 0x1D127, 0x1D128, 2
+    .long 0x1D165, 0x1D166, 2
+    .long 0x1D167, 0x1D169, 2
+    .long 0x1D16D, 0x1D172, 2
+    .long 0x1D17B, 0x1D182, 2
+    .long 0x1D185, 0x1D18B, 2
+    .long 0x1D1AA, 0x1D1AD, 2
+    .long 0x1D242, 0x1D244, 2
+    .long 0x1D250, 0x1D252, 2
+    .long 0x1D25B, 0x1D25C, 2
+    .long 0x1D25F, 0x1D25F, 2
+    .long 0x1D280, 0x1D281, 2
+    .long 0x1DA00, 0x1DA36, 2
+    .long 0x1DA3B, 0x1DA6C, 2
+    .long 0x1DA75, 0x1DA75, 2
+    .long 0x1DA84, 0x1DA84, 2
+    .long 0x1DA9B, 0x1DA9F, 2
+    .long 0x1DAA1, 0x1DAAF, 2
+    .long 0x1E000, 0x1E006, 2
+    .long 0x1E008, 0x1E018, 2
+    .long 0x1E01B, 0x1E021, 2
+    .long 0x1E023, 0x1E024, 2
+    .long 0x1E026, 0x1E02A, 2
+    .long 0x1E08F, 0x1E08F, 2
+    .long 0x1E130, 0x1E136, 2
+    .long 0x1E2AE, 0x1E2AE, 2
+    .long 0x1E2EC, 0x1E2EF, 2
+    .long 0x1E4EC, 0x1E4EF, 2
+    .long 0x1E5EE, 0x1E5EF, 2
+    .long 0x1E6E3, 0x1E6E3, 2
+    .long 0x1E6E6, 0x1E6E6, 2
+    .long 0x1E6EE, 0x1E6EF, 2
+    .long 0x1E6F5, 0x1E6F5, 2
+    .long 0x1E8D0, 0x1E8D6, 2
+    .long 0x1E944, 0x1E94A, 2
+    .long 0x1F3FB, 0x1F3FF, 2
+    .long 0xE0020, 0xE007F, 2
+    .long 0xE0100, 0xE01EF, 2
+unicode_incb_ranges_end:
+
+# Extended_Pictographic ranges: true=1.
+.balign 4
+unicode_extended_pictographic_ranges:
+    .long 0xA9, 0xA9, 1
+    .long 0xAE, 0xAE, 1
+    .long 0x203C, 0x203C, 1
+    .long 0x2049, 0x2049, 1
+    .long 0x2122, 0x2122, 1
+    .long 0x2139, 0x2139, 1
+    .long 0x2194, 0x2199, 1
+    .long 0x21A9, 0x21AA, 1
+    .long 0x231A, 0x231B, 1
+    .long 0x2328, 0x2328, 1
+    .long 0x23CF, 0x23CF, 1
+    .long 0x23E9, 0x23EC, 1
+    .long 0x23ED, 0x23EE, 1
+    .long 0x23EF, 0x23EF, 1
+    .long 0x23F0, 0x23F0, 1
+    .long 0x23F1, 0x23F2, 1
+    .long 0x23F3, 0x23F3, 1
+    .long 0x23F8, 0x23FA, 1
+    .long 0x24C2, 0x24C2, 1
+    .long 0x25AA, 0x25AB, 1
+    .long 0x25B6, 0x25B6, 1
+    .long 0x25C0, 0x25C0, 1
+    .long 0x25FB, 0x25FE, 1
+    .long 0x2600, 0x2601, 1
+    .long 0x2602, 0x2603, 1
+    .long 0x2604, 0x2604, 1
+    .long 0x260E, 0x260E, 1
+    .long 0x2611, 0x2611, 1
+    .long 0x2614, 0x2615, 1
+    .long 0x2618, 0x2618, 1
+    .long 0x261D, 0x261D, 1
+    .long 0x2620, 0x2620, 1
+    .long 0x2622, 0x2623, 1
+    .long 0x2626, 0x2626, 1
+    .long 0x262A, 0x262A, 1
+    .long 0x262E, 0x262E, 1
+    .long 0x262F, 0x262F, 1
+    .long 0x2638, 0x2639, 1
+    .long 0x263A, 0x263A, 1
+    .long 0x2640, 0x2640, 1
+    .long 0x2642, 0x2642, 1
+    .long 0x2648, 0x2653, 1
+    .long 0x265F, 0x265F, 1
+    .long 0x2660, 0x2660, 1
+    .long 0x2663, 0x2663, 1
+    .long 0x2665, 0x2666, 1
+    .long 0x2668, 0x2668, 1
+    .long 0x267B, 0x267B, 1
+    .long 0x267E, 0x267E, 1
+    .long 0x267F, 0x267F, 1
+    .long 0x2692, 0x2692, 1
+    .long 0x2693, 0x2693, 1
+    .long 0x2694, 0x2694, 1
+    .long 0x2695, 0x2695, 1
+    .long 0x2696, 0x2697, 1
+    .long 0x2699, 0x2699, 1
+    .long 0x269B, 0x269C, 1
+    .long 0x26A0, 0x26A1, 1
+    .long 0x26A7, 0x26A7, 1
+    .long 0x26AA, 0x26AB, 1
+    .long 0x26B0, 0x26B1, 1
+    .long 0x26BD, 0x26BE, 1
+    .long 0x26C4, 0x26C5, 1
+    .long 0x26C8, 0x26C8, 1
+    .long 0x26CE, 0x26CE, 1
+    .long 0x26CF, 0x26CF, 1
+    .long 0x26D1, 0x26D1, 1
+    .long 0x26D3, 0x26D3, 1
+    .long 0x26D4, 0x26D4, 1
+    .long 0x26E9, 0x26E9, 1
+    .long 0x26EA, 0x26EA, 1
+    .long 0x26F0, 0x26F1, 1
+    .long 0x26F2, 0x26F3, 1
+    .long 0x26F4, 0x26F4, 1
+    .long 0x26F5, 0x26F5, 1
+    .long 0x26F7, 0x26F9, 1
+    .long 0x26FA, 0x26FA, 1
+    .long 0x26FD, 0x26FD, 1
+    .long 0x2702, 0x2702, 1
+    .long 0x2705, 0x2705, 1
+    .long 0x2708, 0x270C, 1
+    .long 0x270D, 0x270D, 1
+    .long 0x270F, 0x270F, 1
+    .long 0x2712, 0x2712, 1
+    .long 0x2714, 0x2714, 1
+    .long 0x2716, 0x2716, 1
+    .long 0x271D, 0x271D, 1
+    .long 0x2721, 0x2721, 1
+    .long 0x2728, 0x2728, 1
+    .long 0x2733, 0x2734, 1
+    .long 0x2744, 0x2744, 1
+    .long 0x2747, 0x2747, 1
+    .long 0x274C, 0x274C, 1
+    .long 0x274E, 0x274E, 1
+    .long 0x2753, 0x2755, 1
+    .long 0x2757, 0x2757, 1
+    .long 0x2763, 0x2763, 1
+    .long 0x2764, 0x2764, 1
+    .long 0x2795, 0x2797, 1
+    .long 0x27A1, 0x27A1, 1
+    .long 0x27B0, 0x27B0, 1
+    .long 0x27BF, 0x27BF, 1
+    .long 0x2934, 0x2935, 1
+    .long 0x2B05, 0x2B07, 1
+    .long 0x2B1B, 0x2B1C, 1
+    .long 0x2B50, 0x2B50, 1
+    .long 0x2B55, 0x2B55, 1
+    .long 0x3030, 0x3030, 1
+    .long 0x303D, 0x303D, 1
+    .long 0x3297, 0x3297, 1
+    .long 0x3299, 0x3299, 1
+    .long 0x1F004, 0x1F004, 1
+    .long 0x1F02C, 0x1F02F, 1
+    .long 0x1F094, 0x1F09F, 1
+    .long 0x1F0AF, 0x1F0B0, 1
+    .long 0x1F0C0, 0x1F0C0, 1
+    .long 0x1F0CF, 0x1F0CF, 1
+    .long 0x1F0D0, 0x1F0D0, 1
+    .long 0x1F0F6, 0x1F0FF, 1
+    .long 0x1F170, 0x1F171, 1
+    .long 0x1F17E, 0x1F17F, 1
+    .long 0x1F18E, 0x1F18E, 1
+    .long 0x1F191, 0x1F19A, 1
+    .long 0x1F1AF, 0x1F1E5, 1
+    .long 0x1F201, 0x1F202, 1
+    .long 0x1F203, 0x1F20F, 1
+    .long 0x1F21A, 0x1F21A, 1
+    .long 0x1F22F, 0x1F22F, 1
+    .long 0x1F232, 0x1F23A, 1
+    .long 0x1F23C, 0x1F23F, 1
+    .long 0x1F249, 0x1F24F, 1
+    .long 0x1F250, 0x1F251, 1
+    .long 0x1F252, 0x1F25F, 1
+    .long 0x1F266, 0x1F2FF, 1
+    .long 0x1F300, 0x1F30C, 1
+    .long 0x1F30D, 0x1F30E, 1
+    .long 0x1F30F, 0x1F30F, 1
+    .long 0x1F310, 0x1F310, 1
+    .long 0x1F311, 0x1F311, 1
+    .long 0x1F312, 0x1F312, 1
+    .long 0x1F313, 0x1F315, 1
+    .long 0x1F316, 0x1F318, 1
+    .long 0x1F319, 0x1F319, 1
+    .long 0x1F31A, 0x1F31A, 1
+    .long 0x1F31B, 0x1F31B, 1
+    .long 0x1F31C, 0x1F31C, 1
+    .long 0x1F31D, 0x1F31E, 1
+    .long 0x1F31F, 0x1F320, 1
+    .long 0x1F321, 0x1F321, 1
+    .long 0x1F324, 0x1F32C, 1
+    .long 0x1F32D, 0x1F32F, 1
+    .long 0x1F330, 0x1F331, 1
+    .long 0x1F332, 0x1F333, 1
+    .long 0x1F334, 0x1F335, 1
+    .long 0x1F336, 0x1F336, 1
+    .long 0x1F337, 0x1F34A, 1
+    .long 0x1F34B, 0x1F34B, 1
+    .long 0x1F34C, 0x1F34F, 1
+    .long 0x1F350, 0x1F350, 1
+    .long 0x1F351, 0x1F37B, 1
+    .long 0x1F37C, 0x1F37C, 1
+    .long 0x1F37D, 0x1F37D, 1
+    .long 0x1F37E, 0x1F37F, 1
+    .long 0x1F380, 0x1F393, 1
+    .long 0x1F396, 0x1F397, 1
+    .long 0x1F399, 0x1F39B, 1
+    .long 0x1F39E, 0x1F39F, 1
+    .long 0x1F3A0, 0x1F3C4, 1
+    .long 0x1F3C5, 0x1F3C5, 1
+    .long 0x1F3C6, 0x1F3C6, 1
+    .long 0x1F3C7, 0x1F3C7, 1
+    .long 0x1F3C8, 0x1F3C8, 1
+    .long 0x1F3C9, 0x1F3C9, 1
+    .long 0x1F3CA, 0x1F3CA, 1
+    .long 0x1F3CB, 0x1F3CE, 1
+    .long 0x1F3CF, 0x1F3D3, 1
+    .long 0x1F3D4, 0x1F3DF, 1
+    .long 0x1F3E0, 0x1F3E3, 1
+    .long 0x1F3E4, 0x1F3E4, 1
+    .long 0x1F3E5, 0x1F3F0, 1
+    .long 0x1F3F3, 0x1F3F3, 1
+    .long 0x1F3F4, 0x1F3F4, 1
+    .long 0x1F3F5, 0x1F3F5, 1
+    .long 0x1F3F7, 0x1F3F7, 1
+    .long 0x1F3F8, 0x1F3FA, 1
+    .long 0x1F400, 0x1F407, 1
+    .long 0x1F408, 0x1F408, 1
+    .long 0x1F409, 0x1F40B, 1
+    .long 0x1F40C, 0x1F40E, 1
+    .long 0x1F40F, 0x1F410, 1
+    .long 0x1F411, 0x1F412, 1
+    .long 0x1F413, 0x1F413, 1
+    .long 0x1F414, 0x1F414, 1
+    .long 0x1F415, 0x1F415, 1
+    .long 0x1F416, 0x1F416, 1
+    .long 0x1F417, 0x1F429, 1
+    .long 0x1F42A, 0x1F42A, 1
+    .long 0x1F42B, 0x1F43E, 1
+    .long 0x1F43F, 0x1F43F, 1
+    .long 0x1F440, 0x1F440, 1
+    .long 0x1F441, 0x1F441, 1
+    .long 0x1F442, 0x1F464, 1
+    .long 0x1F465, 0x1F465, 1
+    .long 0x1F466, 0x1F46B, 1
+    .long 0x1F46C, 0x1F46D, 1
+    .long 0x1F46E, 0x1F4AC, 1
+    .long 0x1F4AD, 0x1F4AD, 1
+    .long 0x1F4AE, 0x1F4B5, 1
+    .long 0x1F4B6, 0x1F4B7, 1
+    .long 0x1F4B8, 0x1F4EB, 1
+    .long 0x1F4EC, 0x1F4ED, 1
+    .long 0x1F4EE, 0x1F4EE, 1
+    .long 0x1F4EF, 0x1F4EF, 1
+    .long 0x1F4F0, 0x1F4F4, 1
+    .long 0x1F4F5, 0x1F4F5, 1
+    .long 0x1F4F6, 0x1F4F7, 1
+    .long 0x1F4F8, 0x1F4F8, 1
+    .long 0x1F4F9, 0x1F4FC, 1
+    .long 0x1F4FD, 0x1F4FD, 1
+    .long 0x1F4FF, 0x1F502, 1
+    .long 0x1F503, 0x1F503, 1
+    .long 0x1F504, 0x1F507, 1
+    .long 0x1F508, 0x1F508, 1
+    .long 0x1F509, 0x1F509, 1
+    .long 0x1F50A, 0x1F514, 1
+    .long 0x1F515, 0x1F515, 1
+    .long 0x1F516, 0x1F52B, 1
+    .long 0x1F52C, 0x1F52D, 1
+    .long 0x1F52E, 0x1F53D, 1
+    .long 0x1F549, 0x1F54A, 1
+    .long 0x1F54B, 0x1F54E, 1
+    .long 0x1F550, 0x1F55B, 1
+    .long 0x1F55C, 0x1F567, 1
+    .long 0x1F56F, 0x1F570, 1
+    .long 0x1F573, 0x1F579, 1
+    .long 0x1F57A, 0x1F57A, 1
+    .long 0x1F587, 0x1F587, 1
+    .long 0x1F58A, 0x1F58D, 1
+    .long 0x1F590, 0x1F590, 1
+    .long 0x1F595, 0x1F596, 1
+    .long 0x1F5A4, 0x1F5A4, 1
+    .long 0x1F5A5, 0x1F5A5, 1
+    .long 0x1F5A8, 0x1F5A8, 1
+    .long 0x1F5B1, 0x1F5B2, 1
+    .long 0x1F5BC, 0x1F5BC, 1
+    .long 0x1F5C2, 0x1F5C4, 1
+    .long 0x1F5D1, 0x1F5D3, 1
+    .long 0x1F5DC, 0x1F5DE, 1
+    .long 0x1F5E1, 0x1F5E1, 1
+    .long 0x1F5E3, 0x1F5E3, 1
+    .long 0x1F5E8, 0x1F5E8, 1
+    .long 0x1F5EF, 0x1F5EF, 1
+    .long 0x1F5F3, 0x1F5F3, 1
+    .long 0x1F5FA, 0x1F5FA, 1
+    .long 0x1F5FB, 0x1F5FF, 1
+    .long 0x1F600, 0x1F600, 1
+    .long 0x1F601, 0x1F606, 1
+    .long 0x1F607, 0x1F608, 1
+    .long 0x1F609, 0x1F60D, 1
+    .long 0x1F60E, 0x1F60E, 1
+    .long 0x1F60F, 0x1F60F, 1
+    .long 0x1F610, 0x1F610, 1
+    .long 0x1F611, 0x1F611, 1
+    .long 0x1F612, 0x1F614, 1
+    .long 0x1F615, 0x1F615, 1
+    .long 0x1F616, 0x1F616, 1
+    .long 0x1F617, 0x1F617, 1
+    .long 0x1F618, 0x1F618, 1
+    .long 0x1F619, 0x1F619, 1
+    .long 0x1F61A, 0x1F61A, 1
+    .long 0x1F61B, 0x1F61B, 1
+    .long 0x1F61C, 0x1F61E, 1
+    .long 0x1F61F, 0x1F61F, 1
+    .long 0x1F620, 0x1F625, 1
+    .long 0x1F626, 0x1F627, 1
+    .long 0x1F628, 0x1F62B, 1
+    .long 0x1F62C, 0x1F62C, 1
+    .long 0x1F62D, 0x1F62D, 1
+    .long 0x1F62E, 0x1F62F, 1
+    .long 0x1F630, 0x1F633, 1
+    .long 0x1F634, 0x1F634, 1
+    .long 0x1F635, 0x1F635, 1
+    .long 0x1F636, 0x1F636, 1
+    .long 0x1F637, 0x1F640, 1
+    .long 0x1F641, 0x1F644, 1
+    .long 0x1F645, 0x1F64F, 1
+    .long 0x1F680, 0x1F680, 1
+    .long 0x1F681, 0x1F682, 1
+    .long 0x1F683, 0x1F685, 1
+    .long 0x1F686, 0x1F686, 1
+    .long 0x1F687, 0x1F687, 1
+    .long 0x1F688, 0x1F688, 1
+    .long 0x1F689, 0x1F689, 1
+    .long 0x1F68A, 0x1F68B, 1
+    .long 0x1F68C, 0x1F68C, 1
+    .long 0x1F68D, 0x1F68D, 1
+    .long 0x1F68E, 0x1F68E, 1
+    .long 0x1F68F, 0x1F68F, 1
+    .long 0x1F690, 0x1F690, 1
+    .long 0x1F691, 0x1F693, 1
+    .long 0x1F694, 0x1F694, 1
+    .long 0x1F695, 0x1F695, 1
+    .long 0x1F696, 0x1F696, 1
+    .long 0x1F697, 0x1F697, 1
+    .long 0x1F698, 0x1F698, 1
+    .long 0x1F699, 0x1F69A, 1
+    .long 0x1F69B, 0x1F6A1, 1
+    .long 0x1F6A2, 0x1F6A2, 1
+    .long 0x1F6A3, 0x1F6A3, 1
+    .long 0x1F6A4, 0x1F6A5, 1
+    .long 0x1F6A6, 0x1F6A6, 1
+    .long 0x1F6A7, 0x1F6AD, 1
+    .long 0x1F6AE, 0x1F6B1, 1
+    .long 0x1F6B2, 0x1F6B2, 1
+    .long 0x1F6B3, 0x1F6B5, 1
+    .long 0x1F6B6, 0x1F6B6, 1
+    .long 0x1F6B7, 0x1F6B8, 1
+    .long 0x1F6B9, 0x1F6BE, 1
+    .long 0x1F6BF, 0x1F6BF, 1
+    .long 0x1F6C0, 0x1F6C0, 1
+    .long 0x1F6C1, 0x1F6C5, 1
+    .long 0x1F6CB, 0x1F6CB, 1
+    .long 0x1F6CC, 0x1F6CC, 1
+    .long 0x1F6CD, 0x1F6CF, 1
+    .long 0x1F6D0, 0x1F6D0, 1
+    .long 0x1F6D1, 0x1F6D2, 1
+    .long 0x1F6D5, 0x1F6D5, 1
+    .long 0x1F6D6, 0x1F6D7, 1
+    .long 0x1F6D8, 0x1F6D8, 1
+    .long 0x1F6D9, 0x1F6D9, 1
+    .long 0x1F6DA, 0x1F6DB, 1
+    .long 0x1F6DC, 0x1F6DC, 1
+    .long 0x1F6DD, 0x1F6DF, 1
+    .long 0x1F6E0, 0x1F6E5, 1
+    .long 0x1F6E9, 0x1F6E9, 1
+    .long 0x1F6EB, 0x1F6EC, 1
+    .long 0x1F6ED, 0x1F6EF, 1
+    .long 0x1F6F0, 0x1F6F0, 1
+    .long 0x1F6F3, 0x1F6F3, 1
+    .long 0x1F6F4, 0x1F6F6, 1
+    .long 0x1F6F7, 0x1F6F8, 1
+    .long 0x1F6F9, 0x1F6F9, 1
+    .long 0x1F6FA, 0x1F6FA, 1
+    .long 0x1F6FB, 0x1F6FC, 1
+    .long 0x1F6FD, 0x1F6FF, 1
+    .long 0x1F7DC, 0x1F7DF, 1
+    .long 0x1F7E0, 0x1F7EB, 1
+    .long 0x1F7EC, 0x1F7EF, 1
+    .long 0x1F7F0, 0x1F7F0, 1
+    .long 0x1F80C, 0x1F80F, 1
+    .long 0x1F848, 0x1F84F, 1
+    .long 0x1F85A, 0x1F85F, 1
+    .long 0x1F888, 0x1F88F, 1
+    .long 0x1F8AE, 0x1F8AF, 1
+    .long 0x1F8BC, 0x1F8BF, 1
+    .long 0x1F8C2, 0x1F8CF, 1
+    .long 0x1F8D9, 0x1F8FF, 1
+    .long 0x1F90C, 0x1F90C, 1
+    .long 0x1F90D, 0x1F90F, 1
+    .long 0x1F910, 0x1F918, 1
+    .long 0x1F919, 0x1F91E, 1
+    .long 0x1F91F, 0x1F91F, 1
+    .long 0x1F920, 0x1F927, 1
+    .long 0x1F928, 0x1F92F, 1
+    .long 0x1F930, 0x1F930, 1
+    .long 0x1F931, 0x1F932, 1
+    .long 0x1F933, 0x1F93A, 1
+    .long 0x1F93C, 0x1F93E, 1
+    .long 0x1F93F, 0x1F93F, 1
+    .long 0x1F940, 0x1F945, 1
+    .long 0x1F947, 0x1F94B, 1
+    .long 0x1F94C, 0x1F94C, 1
+    .long 0x1F94D, 0x1F94F, 1
+    .long 0x1F950, 0x1F95E, 1
+    .long 0x1F95F, 0x1F96B, 1
+    .long 0x1F96C, 0x1F970, 1
+    .long 0x1F971, 0x1F971, 1
+    .long 0x1F972, 0x1F972, 1
+    .long 0x1F973, 0x1F976, 1
+    .long 0x1F977, 0x1F978, 1
+    .long 0x1F979, 0x1F979, 1
+    .long 0x1F97A, 0x1F97A, 1
+    .long 0x1F97B, 0x1F97B, 1
+    .long 0x1F97C, 0x1F97F, 1
+    .long 0x1F980, 0x1F984, 1
+    .long 0x1F985, 0x1F991, 1
+    .long 0x1F992, 0x1F997, 1
+    .long 0x1F998, 0x1F9A2, 1
+    .long 0x1F9A3, 0x1F9A4, 1
+    .long 0x1F9A5, 0x1F9AA, 1
+    .long 0x1F9AB, 0x1F9AD, 1
+    .long 0x1F9AE, 0x1F9AF, 1
+    .long 0x1F9B0, 0x1F9B9, 1
+    .long 0x1F9BA, 0x1F9BF, 1
+    .long 0x1F9C0, 0x1F9C0, 1
+    .long 0x1F9C1, 0x1F9C2, 1
+    .long 0x1F9C3, 0x1F9CA, 1
+    .long 0x1F9CB, 0x1F9CB, 1
+    .long 0x1F9CC, 0x1F9CC, 1
+    .long 0x1F9CD, 0x1F9CF, 1
+    .long 0x1F9D0, 0x1F9E6, 1
+    .long 0x1F9E7, 0x1F9FF, 1
+    .long 0x1FA58, 0x1FA5F, 1
+    .long 0x1FA6E, 0x1FA6F, 1
+    .long 0x1FA70, 0x1FA73, 1
+    .long 0x1FA74, 0x1FA74, 1
+    .long 0x1FA75, 0x1FA77, 1
+    .long 0x1FA78, 0x1FA7A, 1
+    .long 0x1FA7B, 0x1FA7C, 1
+    .long 0x1FA7D, 0x1FA7F, 1
+    .long 0x1FA80, 0x1FA82, 1
+    .long 0x1FA83, 0x1FA86, 1
+    .long 0x1FA87, 0x1FA88, 1
+    .long 0x1FA89, 0x1FA89, 1
+    .long 0x1FA8A, 0x1FA8A, 1
+    .long 0x1FA8B, 0x1FA8D, 1
+    .long 0x1FA8E, 0x1FA8E, 1
+    .long 0x1FA8F, 0x1FA8F, 1
+    .long 0x1FA90, 0x1FA95, 1
+    .long 0x1FA96, 0x1FAA8, 1
+    .long 0x1FAA9, 0x1FAAC, 1
+    .long 0x1FAAD, 0x1FAAF, 1
+    .long 0x1FAB0, 0x1FAB6, 1
+    .long 0x1FAB7, 0x1FABA, 1
+    .long 0x1FABB, 0x1FABD, 1
+    .long 0x1FABE, 0x1FABE, 1
+    .long 0x1FABF, 0x1FABF, 1
+    .long 0x1FAC0, 0x1FAC2, 1
+    .long 0x1FAC3, 0x1FAC5, 1
+    .long 0x1FAC6, 0x1FAC6, 1
+    .long 0x1FAC7, 0x1FAC7, 1
+    .long 0x1FAC8, 0x1FAC8, 1
+    .long 0x1FAC9, 0x1FACB, 1
+    .long 0x1FACC, 0x1FACC, 1
+    .long 0x1FACD, 0x1FACD, 1
+    .long 0x1FACE, 0x1FACF, 1
+    .long 0x1FAD0, 0x1FAD6, 1
+    .long 0x1FAD7, 0x1FAD9, 1
+    .long 0x1FADA, 0x1FADB, 1
+    .long 0x1FADC, 0x1FADC, 1
+    .long 0x1FADD, 0x1FADD, 1
+    .long 0x1FADE, 0x1FADE, 1
+    .long 0x1FADF, 0x1FADF, 1
+    .long 0x1FAE0, 0x1FAE7, 1
+    .long 0x1FAE8, 0x1FAE8, 1
+    .long 0x1FAE9, 0x1FAE9, 1
+    .long 0x1FAEA, 0x1FAEA, 1
+    .long 0x1FAEB, 0x1FAEB, 1
+    .long 0x1FAEC, 0x1FAEE, 1
+    .long 0x1FAEF, 0x1FAEF, 1
+    .long 0x1FAF0, 0x1FAF6, 1
+    .long 0x1FAF7, 0x1FAF8, 1
+    .long 0x1FAF9, 0x1FAFA, 1
+    .long 0x1FAFB, 0x1FAFF, 1
+    .long 0x1FC00, 0x1FFFD, 1
+unicode_extended_pictographic_ranges_end:
+
+
+.section .text
+
 .section .data
 .balign 4
 repeat_rate:            .long REPEAT_DEFAULT_RATE
@@ -357,6 +1988,7 @@ doc_scroll_thumb_top:   .long 0
 doc_scroll_thumb_height: .long 0
 doc_total_visual_rows:  .long 0
 doc_wheel_remainder:    .long 0
+doc_grapheme_newline_flag: .long 0
 doc_line_index_base:    .quad 0
 doc_line_index_bytes:   .quad 0
 doc_line_index_capacity: .long 0
@@ -1751,7 +3383,7 @@ wayland_main:
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
     mov edi, dword ptr [rip + doc_cursor]
-    call doc_utf8_prev
+    call doc_grapheme_prev
     mov dword ptr [rip + doc_cursor], eax
     jmp .keyboard_changed
 .Lneko_keyboard_left_extend:
@@ -1759,7 +3391,7 @@ wayland_main:
     cmp dword ptr [rip + doc_cursor], 0
     je .Lneko_keyboard_left_extend_finish
     mov edi, dword ptr [rip + doc_cursor]
-    call doc_utf8_prev
+    call doc_grapheme_prev
     mov dword ptr [rip + doc_cursor], eax
 .Lneko_keyboard_left_extend_finish:
     call doc_finish_keyboard_selection
@@ -1783,7 +3415,7 @@ wayland_main:
     cmp eax, dword ptr [rip + doc_length]
     jae .event_loop
     mov edi, eax
-    call doc_utf8_next
+    call doc_grapheme_next
     mov dword ptr [rip + doc_cursor], eax
     jmp .keyboard_changed
 .Lneko_keyboard_right_extend:
@@ -1792,7 +3424,7 @@ wayland_main:
     cmp eax, dword ptr [rip + doc_length]
     jae .Lneko_keyboard_right_extend_finish
     mov edi, eax
-    call doc_utf8_next
+    call doc_grapheme_next
     mov dword ptr [rip + doc_cursor], eax
 .Lneko_keyboard_right_extend_finish:
     call doc_finish_keyboard_selection
@@ -1855,7 +3487,7 @@ wayland_main:
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
     mov edi, dword ptr [rip + doc_cursor]
-    call doc_utf8_prev
+    call doc_grapheme_prev
     mov dword ptr [rip + doc_cursor], eax
     call doc_delete_at_cursor
     jmp .keyboard_changed
@@ -6369,6 +8001,438 @@ doc_utf8_prev:
 .size doc_utf8_prev, . - doc_utf8_prev
 
 
+# Generic binary search over sorted {first,last,value} Unicode ranges.
+# EDI=code point, RSI=table address, EDX=entry count; EAX=property or zero.
+.type unicode_range_lookup, @function
+unicode_range_lookup:
+    mov r8d, edi
+    mov r9, rsi
+    xor r10d, r10d
+    mov r11d, edx
+.Lunicode_range_lookup_loop:
+    cmp r10d, r11d
+    jae .Lunicode_range_lookup_miss
+    lea ecx, [r10d + r11d]
+    shr ecx, 1
+    mov eax, ecx
+    lea rax, [rax + rax * 2]
+    shl rax, 2
+    mov edx, dword ptr [r9 + rax]
+    cmp r8d, edx
+    jb .Lunicode_range_lookup_lower
+    mov edx, dword ptr [r9 + rax + 4]
+    cmp r8d, edx
+    ja .Lunicode_range_lookup_upper
+    mov eax, dword ptr [r9 + rax + 8]
+    ret
+.Lunicode_range_lookup_lower:
+    mov r11d, ecx
+    jmp .Lunicode_range_lookup_loop
+.Lunicode_range_lookup_upper:
+    lea r10d, [ecx + 1]
+    jmp .Lunicode_range_lookup_loop
+.Lunicode_range_lookup_miss:
+    xor eax, eax
+    ret
+.size unicode_range_lookup, . - unicode_range_lookup
+
+# Return Unicode 18.0 Grapheme_Cluster_Break for EDI.
+# CR=1, LF=2, Control=3, Extend=4, ZWJ=5, RI=6, Prepend=7,
+# SpacingMark=8, L=9, V=10, T=11, LV=12, LVT=13, Other=0.
+.type doc_grapheme_property, @function
+doc_grapheme_property:
+    cmp edi, 0xac00
+    jb .Ldoc_gcb_table_lookup
+    cmp edi, 0xd7a3
+    ja .Ldoc_gcb_table_lookup
+    mov eax, edi
+    sub eax, 0xac00
+    xor edx, edx
+    mov ecx, 28
+    div ecx
+    test edx, edx
+    jz .Ldoc_gcb_hangul_lv
+    mov eax, 13
+    ret
+.Ldoc_gcb_hangul_lv:
+    mov eax, 12
+    ret
+.Ldoc_gcb_table_lookup:
+    lea rsi, [rip + unicode_gcb_ranges]
+    mov edx, (unicode_gcb_ranges_end - unicode_gcb_ranges) / 12
+    jmp unicode_range_lookup
+.size doc_grapheme_property, . - doc_grapheme_property
+
+.type doc_indic_conjunct_property, @function
+doc_indic_conjunct_property:
+    lea rsi, [rip + unicode_incb_ranges]
+    mov edx, (unicode_incb_ranges_end - unicode_incb_ranges) / 12
+    jmp unicode_range_lookup
+.size doc_indic_conjunct_property, . - doc_indic_conjunct_property
+
+.type doc_is_extended_pictographic, @function
+doc_is_extended_pictographic:
+    lea rsi, [rip + unicode_extended_pictographic_ranges]
+    mov edx, (unicode_extended_pictographic_ranges_end - unicode_extended_pictographic_ranges) / 12
+    jmp unicode_range_lookup
+.size doc_is_extended_pictographic, . - doc_is_extended_pictographic
+
+# Decode the UTF-8 scalar at logical byte offset EDI.
+# Returns EAX=code point and EDX=byte offset immediately after it.
+# Invalid UTF-8 bytes stay addressable as independent one-byte units.
+.type doc_unicode_decode_at, @function
+doc_unicode_decode_at:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12d, edi
+    call doc_utf8_next
+    mov r13d, eax
+    mov edi, r12d
+    call doc_byte_at
+    mov ebx, eax
+    mov ecx, r13d
+    sub ecx, r12d
+    cmp ecx, 2
+    je .Ldoc_unicode_decode_two
+    cmp ecx, 3
+    je .Ldoc_unicode_decode_three
+    cmp ecx, 4
+    je .Ldoc_unicode_decode_four
+    mov r14d, ebx
+    jmp .Ldoc_unicode_decode_done
+.Ldoc_unicode_decode_two:
+    mov r14d, ebx
+    and r14d, 0x1f
+    shl r14d, 6
+    lea edi, [r12d + 1]
+    call doc_byte_at
+    and eax, 0x3f
+    or r14d, eax
+    jmp .Ldoc_unicode_decode_done
+.Ldoc_unicode_decode_three:
+    mov r14d, ebx
+    and r14d, 0x0f
+    shl r14d, 12
+    lea edi, [r12d + 1]
+    call doc_byte_at
+    and eax, 0x3f
+    shl eax, 6
+    or r14d, eax
+    lea edi, [r12d + 2]
+    call doc_byte_at
+    and eax, 0x3f
+    or r14d, eax
+    jmp .Ldoc_unicode_decode_done
+.Ldoc_unicode_decode_four:
+    mov r14d, ebx
+    and r14d, 0x07
+    shl r14d, 18
+    lea edi, [r12d + 1]
+    call doc_byte_at
+    and eax, 0x3f
+    shl eax, 12
+    or r14d, eax
+    lea edi, [r12d + 2]
+    call doc_byte_at
+    and eax, 0x3f
+    shl eax, 6
+    or r14d, eax
+    lea edi, [r12d + 3]
+    call doc_byte_at
+    and eax, 0x3f
+    or r14d, eax
+.Ldoc_unicode_decode_done:
+    mov eax, r14d
+    mov edx, r13d
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_unicode_decode_at, . - doc_unicode_decode_at
+
+# Decide whether there is an extended grapheme boundary between adjacent
+# scalar starts: EDI=previous scalar offset, ESI=current scalar offset.
+# EAX=1 for a break, EAX=0 for no break.
+.type doc_grapheme_is_break, @function
+doc_grapheme_is_break:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 24
+    mov r12d, edi
+    mov r13d, esi
+    mov edi, r12d
+    call doc_unicode_decode_at
+    mov r14d, eax
+    mov edi, r14d
+    call doc_grapheme_property
+    mov ebx, eax
+    mov edi, r13d
+    call doc_unicode_decode_at
+    mov r15d, eax
+    mov edi, r15d
+    call doc_grapheme_property
+    mov ebp, eax
+
+    # GB3: CR x LF.
+    cmp ebx, 1
+    jne .Ldoc_grapheme_break_controls
+    cmp ebp, 2
+    je .Ldoc_grapheme_no_break
+.Ldoc_grapheme_break_controls:
+    # GB4/GB5: break around Control/CR/LF (except GB3).
+    cmp ebx, 1
+    je .Ldoc_grapheme_break_yes
+    cmp ebx, 2
+    je .Ldoc_grapheme_break_yes
+    cmp ebx, 3
+    je .Ldoc_grapheme_break_yes
+    cmp ebp, 1
+    je .Ldoc_grapheme_break_yes
+    cmp ebp, 2
+    je .Ldoc_grapheme_break_yes
+    cmp ebp, 3
+    je .Ldoc_grapheme_break_yes
+
+    # GB6: L x (L | V | LV | LVT).
+    cmp ebx, 9
+    jne .Ldoc_grapheme_break_gb7
+    cmp ebp, 9
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 10
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 12
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 13
+    je .Ldoc_grapheme_no_break
+.Ldoc_grapheme_break_gb7:
+    # GB7: (LV | V) x (V | T).
+    cmp ebx, 12
+    je .Ldoc_grapheme_break_gb7_prev_ok
+    cmp ebx, 10
+    jne .Ldoc_grapheme_break_gb8
+.Ldoc_grapheme_break_gb7_prev_ok:
+    cmp ebp, 10
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 11
+    je .Ldoc_grapheme_no_break
+.Ldoc_grapheme_break_gb8:
+    # GB8: (LVT | T) x T.
+    cmp ebx, 13
+    je .Ldoc_grapheme_break_gb8_prev_ok
+    cmp ebx, 11
+    jne .Ldoc_grapheme_break_gb9
+.Ldoc_grapheme_break_gb8_prev_ok:
+    cmp ebp, 11
+    je .Ldoc_grapheme_no_break
+.Ldoc_grapheme_break_gb9:
+    # GB9/GB9a: x Extend/ZWJ/SpacingMark. GB9b: Prepend x.
+    cmp ebp, 4
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 5
+    je .Ldoc_grapheme_no_break
+    cmp ebp, 8
+    je .Ldoc_grapheme_no_break
+    cmp ebx, 7
+    je .Ldoc_grapheme_no_break
+
+    # GB9c: InCB=Consonant (InCB=Extend|Linker)* InCB=Linker
+    # (InCB=Extend|Linker)* x InCB=Consonant.
+    mov edi, r15d
+    call doc_indic_conjunct_property
+    cmp eax, 1
+    jne .Ldoc_grapheme_break_gb11
+    mov dword ptr [rsp + 4], 0
+    mov dword ptr [rsp + 8], r12d
+.Ldoc_grapheme_gb9c_scan:
+    mov edi, dword ptr [rsp + 8]
+    call doc_unicode_decode_at
+    mov edi, eax
+    call doc_indic_conjunct_property
+    cmp eax, 3
+    je .Ldoc_grapheme_gb9c_linker
+    cmp eax, 2
+    je .Ldoc_grapheme_gb9c_step_back
+    cmp eax, 1
+    jne .Ldoc_grapheme_break_gb11
+    cmp dword ptr [rsp + 4], 0
+    jne .Ldoc_grapheme_no_break
+    jmp .Ldoc_grapheme_break_gb11
+.Ldoc_grapheme_gb9c_linker:
+    mov dword ptr [rsp + 4], 1
+.Ldoc_grapheme_gb9c_step_back:
+    mov edi, dword ptr [rsp + 8]
+    test edi, edi
+    jz .Ldoc_grapheme_break_gb11
+    call doc_utf8_prev
+    cmp eax, dword ptr [rsp + 8]
+    je .Ldoc_grapheme_break_gb11
+    mov dword ptr [rsp + 8], eax
+    jmp .Ldoc_grapheme_gb9c_scan
+
+    # GB11: Extended_Pictographic Extend* ZWJ x Extended_Pictographic.
+.Ldoc_grapheme_break_gb11:
+    cmp ebx, 5
+    jne .Ldoc_grapheme_break_gb12
+    mov edi, r15d
+    call doc_is_extended_pictographic
+    test eax, eax
+    jz .Ldoc_grapheme_break_gb12
+    mov edi, r12d
+    test edi, edi
+    jz .Ldoc_grapheme_break_gb12
+    call doc_utf8_prev
+    mov dword ptr [rsp + 8], eax
+.Ldoc_grapheme_gb11_scan:
+    mov edi, dword ptr [rsp + 8]
+    call doc_unicode_decode_at
+    mov r14d, eax
+    mov edi, r14d
+    call doc_grapheme_property
+    cmp eax, 4
+    jne .Ldoc_grapheme_gb11_check_pictographic
+    mov edi, dword ptr [rsp + 8]
+    test edi, edi
+    jz .Ldoc_grapheme_break_gb12
+    call doc_utf8_prev
+    cmp eax, dword ptr [rsp + 8]
+    je .Ldoc_grapheme_break_gb12
+    mov dword ptr [rsp + 8], eax
+    jmp .Ldoc_grapheme_gb11_scan
+.Ldoc_grapheme_gb11_check_pictographic:
+    mov edi, r14d
+    call doc_is_extended_pictographic
+    test eax, eax
+    jnz .Ldoc_grapheme_no_break
+.Ldoc_grapheme_break_gb12:
+    # GB12/GB13: pair regional indicators from the beginning of each RI run.
+    cmp ebp, 6
+    jne .Ldoc_grapheme_break_yes
+    cmp ebx, 6
+    jne .Ldoc_grapheme_break_yes
+    mov dword ptr [rsp + 8], r12d
+    mov dword ptr [rsp + 12], 0
+.Ldoc_grapheme_gb12_scan:
+    mov edi, dword ptr [rsp + 8]
+    call doc_unicode_decode_at
+    mov edi, eax
+    call doc_grapheme_property
+    cmp eax, 6
+    jne .Ldoc_grapheme_gb12_counted
+    inc dword ptr [rsp + 12]
+    mov edi, dword ptr [rsp + 8]
+    test edi, edi
+    jz .Ldoc_grapheme_gb12_counted
+    call doc_utf8_prev
+    cmp eax, dword ptr [rsp + 8]
+    je .Ldoc_grapheme_gb12_counted
+    mov dword ptr [rsp + 8], eax
+    jmp .Ldoc_grapheme_gb12_scan
+.Ldoc_grapheme_gb12_counted:
+    test dword ptr [rsp + 12], 1
+    jnz .Ldoc_grapheme_no_break
+
+.Ldoc_grapheme_break_yes:
+    mov eax, 1
+    jmp .Ldoc_grapheme_break_done
+.Ldoc_grapheme_no_break:
+    xor eax, eax
+.Ldoc_grapheme_break_done:
+    add rsp, 24
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size doc_grapheme_is_break, . - doc_grapheme_is_break
+
+# EDI=cluster start; EAX=next extended grapheme boundary, or EOF.
+.type doc_grapheme_next, @function
+doc_grapheme_next:
+    push rbx
+    push r12
+    push r13
+    mov ebx, dword ptr [rip + doc_length]
+    mov r12d, edi
+    cmp r12d, ebx
+    jae .Ldoc_grapheme_next_eof
+    call doc_unicode_decode_at
+    mov r13d, edx
+.Ldoc_grapheme_next_scan:
+    cmp r13d, ebx
+    jae .Ldoc_grapheme_next_done
+    mov edi, r12d
+    mov esi, r13d
+    call doc_grapheme_is_break
+    test eax, eax
+    jnz .Ldoc_grapheme_next_done
+    mov r12d, r13d
+    mov edi, r12d
+    call doc_unicode_decode_at
+    mov r13d, edx
+    jmp .Ldoc_grapheme_next_scan
+.Ldoc_grapheme_next_eof:
+    mov r13d, ebx
+.Ldoc_grapheme_next_done:
+    mov eax, r13d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_grapheme_next, . - doc_grapheme_next
+
+# EDI=cursor insertion offset; EAX=previous extended grapheme boundary.
+.type doc_grapheme_prev, @function
+doc_grapheme_prev:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12d, edi
+    test r12d, r12d
+    jz .Ldoc_grapheme_prev_zero
+    mov edi, r12d
+    call doc_utf8_prev
+    mov r13d, eax
+.Ldoc_grapheme_prev_scan:
+    test r13d, r13d
+    jz .Ldoc_grapheme_prev_zero
+    mov edi, r13d
+    call doc_utf8_prev
+    mov r14d, eax
+    mov edi, r14d
+    mov esi, r13d
+    call doc_grapheme_is_break
+    test eax, eax
+    jnz .Ldoc_grapheme_prev_done
+    mov r13d, r14d
+    jmp .Ldoc_grapheme_prev_scan
+.Ldoc_grapheme_prev_done:
+    mov eax, r13d
+    jmp .Ldoc_grapheme_prev_return
+.Ldoc_grapheme_prev_zero:
+    xor eax, eax
+.Ldoc_grapheme_prev_return:
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_grapheme_prev, . - doc_grapheme_prev
+
+
 # Each 16-byte logical-line record stores byte span, wrapped visual rows, and
 # one node from each Fenwick prefix tree. Byte spans include a terminating LF.
 # The index mapping is bounded and independent of the document gap buffer.
@@ -6488,7 +8552,7 @@ doc_line_index_measure_rows:
 .Ldoc_index_measure_glyph_fit:
     inc ebx
     mov edi, r12d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r12d, eax
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_tab:
@@ -7074,7 +9138,7 @@ doc_line_index_apply_delete:
     shl rax, 4
     add rdx, rax
     add r12d, dword ptr [rdx + DOC_INDEX_BYTES_OFFSET]
-    dec r12d
+    sub r12d, r13d
     mov ecx, dword ptr [rip + doc_line_count]
     sub ecx, ebx
     sub ecx, 2
@@ -7177,18 +9241,31 @@ doc_delete_at_cursor:
     cmp eax, 10
     sete bpl
     mov edi, r12d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r13d, eax
+    mov dword ptr [rip + doc_grapheme_newline_flag], 0
+    mov r14d, r12d
+.Ldoc_delete_cluster_check_newline:
+    cmp r14d, r13d
+    jae .Ldoc_delete_cluster_newline_checked
+    mov edi, r14d
+    call doc_byte_at
+    cmp eax, 10
+    jne .Ldoc_delete_cluster_advance
+    mov dword ptr [rip + doc_grapheme_newline_flag], 1
+.Ldoc_delete_cluster_advance:
+    inc r14d
+    jmp .Ldoc_delete_cluster_check_newline
+.Ldoc_delete_cluster_newline_checked:
     mov edi, r12d
     call doc_move_gap
-    mov eax, r13d
-    sub eax, r12d
-    mov r14d, eax
+    mov r14d, r13d
+    sub r14d, r12d
     add dword ptr [rip + doc_gap_end], r14d
     sub dword ptr [rip + doc_length], r14d
     mov edi, r12d
     mov esi, r14d
-    movzx edx, bpl
+    mov edx, dword ptr [rip + doc_grapheme_newline_flag]
     call doc_line_index_apply_delete
 .doc_delete_done:
     pop r14
@@ -7377,6 +9454,13 @@ doc_move_line_edge:
     cmp eax, 10
     jne .Lneko_visual_edge_store_ebx
     dec ebx
+    test ebx, ebx
+    jz .Lneko_visual_edge_store_ebx
+    lea edi, [rbx - 1]
+    call doc_byte_at
+    cmp eax, 13
+    jne .Lneko_visual_edge_store_ebx
+    dec ebx
 .Lneko_visual_edge_store_ebx:
     mov eax, ebx
 .Lneko_visual_edge_store:
@@ -7443,7 +9527,7 @@ doc_offset_to_visual_legacy:
 .Lneko_offset_visual_glyph_fit:
     inc ebx
     mov edi, ecx
-    call doc_utf8_next
+    call doc_grapheme_next
     mov ecx, eax
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_newline:
@@ -7552,7 +9636,7 @@ doc_offset_to_visual_indexed:
 .Ldoc_offset_indexed_glyph_fit:
     inc r14d
     mov edi, r13d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r13d, eax
     jmp .Ldoc_offset_indexed_scan
 .Ldoc_offset_indexed_tab:
@@ -7658,7 +9742,7 @@ doc_visual_to_offset_indexed:
 .Ldoc_visual_indexed_consume_glyph:
     inc r14d
     mov edi, r13d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r13d, eax
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_newline:
@@ -7772,7 +9856,7 @@ doc_visual_to_offset_legacy:
 .Lneko_visual_offset_consume_glyph:
     inc ecx
     mov edi, r14d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r14d, eax
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_newline:
@@ -8568,7 +10652,14 @@ render_status_bar:
     je .Lneko_status_newline
     cmp eax, 9
     je .Lneko_status_tab
+    cmp eax, 32
+    jb .Lneko_status_control
     inc ebp
+    mov edi, r14d
+    call doc_grapheme_next
+    mov r14d, eax
+    jmp .Lneko_status_scan
+.Lneko_status_control:
     inc r14d
     jmp .Lneko_status_scan
 .Lneko_status_newline:
@@ -9437,7 +11528,7 @@ render_selection:
 .Lneko_render_selection_advance_cell:
     add r12d, CELL_WIDTH
     mov edi, r14d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r14d, eax
     jmp .Lneko_render_selection_scan
 
@@ -9572,7 +11663,7 @@ render_document:
 .document_printable_skip_draw:
     add r12d, CELL_WIDTH
     mov edi, r14d
-    call doc_utf8_next
+    call doc_grapheme_next
     mov r14d, eax
     jmp .document_render_loop
 

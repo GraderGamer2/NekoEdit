@@ -85,6 +85,7 @@ def run(
     gap_buffer_test: bool = False,
     dynamic_growth_test: bool = False,
     line_index_test: bool = False,
+    grapheme_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -350,8 +351,8 @@ def run(
                         15, 2,
                         struct.pack(
                             "<Iii", 777,
-                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test) else 98))) * 256,
-                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test) else 110) * 256,
+                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test or grapheme_test) else 98))) * 256,
+                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test or grapheme_test) else 110) * 256,
                         ),
                     )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
@@ -360,7 +361,7 @@ def run(
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
                 if not (
-                    sparse_keymap_test or punctuation_render_test or line_index_test
+                    sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test
                 ):
@@ -1090,6 +1091,163 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_shortcut(1310, 31, "save after indexed edit round-trip")
                     observations.append(
                         "document line index rebuilt from mixed hard/soft-wrapped lines; ordinary insertion/deletion point-updated Fenwick trees; Enter split and Backspace merge rebuilt line records and prefix trees"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if grapheme_test:
+                    clusters = [
+                        "e\u0301",             # base + combining acute
+                        "A\u0308\u0323",       # multiple combining marks
+                        "\U0001F44D\U0001F3FD", # emoji + skin-tone modifier
+                        "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466", # family ZWJ
+                        "\U0001F1FA\U0001F1F8", # first two regional indicators
+                        "\U0001F1E8",           # third RI must begin a new cluster
+                        "\u1100\u1161\u11A8",    # Hangul L + V + T
+                        "\u0915\u094D\u0937",    # Indic consonant + linker + consonant
+                        "\u0600A",               # Prepend + base
+                        "A\u0903",              # SpacingMark
+                        "\r\n",                 # CRLF is one grapheme
+                        "Z",
+                    ]
+                    fixture = "".join(clusters).encode("utf-8")
+                    offsets = [0]
+                    for cluster in clusters:
+                        offsets.append(offsets[-1] + len(cluster.encode("utf-8")))
+
+                    state = read_document_state()
+                    if (
+                        state["doc_contents"] != fixture
+                        or state["doc_cursor"] != 0
+                        or state["doc_line_index_valid"] != 1
+                        or state["doc_line_count"] != 2
+                    ):
+                        raise AssertionError(
+                            "grapheme fixture did not initialize at byte zero with the expected line index: "
+                            + repr(state)
+                        )
+
+                    # Right and Shift+Right semantics are validated at every
+                    # expected UAX #29 boundary, including the odd RI run.
+                    serial = 1400
+                    for index, expected_offset in enumerate(offsets[1:], start=1):
+                        key_step(serial, 106, "Right over grapheme " + str(index))
+                        serial += 2
+                        state = read_document_state()
+                        if state["doc_cursor"] != expected_offset:
+                            raise AssertionError(
+                                "Right did not move to a complete grapheme boundary: "
+                                + repr({"cluster": index, "cursor": state["doc_cursor"],
+                                        "expected": expected_offset, "clusters": clusters})
+                            )
+                    for index, expected_offset in enumerate(reversed(offsets[:-1]), start=1):
+                        key_step(serial, 105, "Left over grapheme " + str(index))
+                        serial += 2
+                        state = read_document_state()
+                        if state["doc_cursor"] != expected_offset:
+                            raise AssertionError(
+                                "Left did not move to a complete grapheme boundary: "
+                                + repr({"step": index, "cursor": state["doc_cursor"],
+                                        "expected": expected_offset})
+                            )
+
+                    # Mouse hit-testing uses visual grapheme columns, not the
+                    # number of UTF-8 bytes or scalar values.
+                    workflow_click(24, 98, serial + 10, "pointer after first grapheme")
+                    pointer_state = read_document_state()
+                    if pointer_state["doc_cursor"] != offsets[1]:
+                        raise AssertionError(
+                            "pointer hit-testing did not land after the first grapheme: "
+                            + repr({"cursor": pointer_state["doc_cursor"], "expected": offsets[1]})
+                        )
+                    serial += 20
+
+                    # Backspace removes the entire preceding emoji modifier
+                    # cluster, not just the modifier or base scalar.
+                    target_cluster = 3
+                    for index in range(target_cluster):
+                        key_step(serial, 106, "move to emoji modifier cluster")
+                        serial += 2
+                    before_delete = read_document_state()
+                    if before_delete["doc_cursor"] != offsets[target_cluster]:
+                        raise AssertionError("test did not reach the expected emoji cluster boundary")
+                    key_step(serial, 14, "Backspace entire emoji grapheme")
+                    serial += 2
+                    expected_after_backspace = (
+                        clusters[0] + clusters[1] + "".join(clusters[3:])
+                    ).encode("utf-8")
+                    after_backspace = read_document_state()
+                    if (
+                        after_backspace["doc_contents"] != expected_after_backspace
+                        or after_backspace["doc_cursor"] != offsets[2]
+                    ):
+                        raise AssertionError(
+                            "Backspace did not remove the complete emoji modifier grapheme: "
+                            + repr({"cursor": after_backspace["doc_cursor"],
+                                    "contents": after_backspace["doc_contents"]})
+                        )
+
+                    # Delete at byte zero must remove the whole base-plus-mark
+                    # cluster. Then CRLF Backspace must merge the indexed lines.
+                    key_step(serial, 105, "return to document start")
+                    serial += 2
+                    key_step(serial, 105, "return to document start")
+                    serial += 2
+                    state = read_document_state()
+                    if state["doc_cursor"] != 0:
+                        raise AssertionError("Left did not return to the first grapheme boundary")
+                    key_step(serial, 111, "Delete complete combining grapheme")
+                    serial += 2
+                    expected_after_delete = (
+                        clusters[1] + "".join(clusters[3:])
+                    ).encode("utf-8")
+                    after_delete = read_document_state()
+                    if (
+                        after_delete["doc_contents"] != expected_after_delete
+                        or after_delete["doc_cursor"] != 0
+                    ):
+                        raise AssertionError(
+                            "Delete did not remove the entire combining grapheme: "
+                            + repr({"cursor": after_delete["doc_cursor"],
+                                    "contents": after_delete["doc_contents"]})
+                        )
+
+                    # Move to the final Z, then Backspace over the CRLF cluster.
+                    remaining_clusters = clusters[1:2] + clusters[3:]
+                    current_offsets = [0]
+                    for cluster in remaining_clusters:
+                        current_offsets.append(
+                            current_offsets[-1] + len(cluster.encode("utf-8"))
+                        )
+                    state = read_document_state()
+                    if state["doc_contents"] != expected_after_delete:
+                        raise AssertionError("unexpected document state before CRLF merge")
+                    for _ in remaining_clusters:
+                        key_step(serial, 106, "move to final document grapheme")
+                        serial += 2
+                    final_state = read_document_state()
+                    if final_state["doc_cursor"] != len(expected_after_delete):
+                        raise AssertionError("could not reach the end of the grapheme fixture")
+                    # One Left moves before Z, the next reaches the end of CRLF.
+                    key_step(serial, 105, "Left before final Z")
+                    serial += 2
+                    key_step(serial, 14, "Backspace complete CRLF grapheme")
+                    serial += 2
+                    after_crlf = read_document_state()
+                    expected_without_crlf = (
+                        clusters[1] + "".join(clusters[3:-2]) + clusters[-1]
+                    ).encode("utf-8")
+                    if (
+                        after_crlf["doc_contents"] != expected_without_crlf
+                        or after_crlf["doc_line_count"] != 1
+                    ):
+                        raise AssertionError(
+                            "Backspace did not delete CRLF atomically and merge indexed lines: "
+                            + repr({"line_count": after_crlf["doc_line_count"],
+                                    "contents": after_crlf["doc_contents"]})
+                        )
+                    observations.append(
+                        "Unicode 18.0 grapheme navigation verified combining sequences, emoji modifiers and ZWJ family, RI pairing, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF; pointer hit-testing and whole-cluster Backspace/Delete passed"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -3423,6 +3581,36 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(index_path)
+        except FileNotFoundError:
+            pass
+
+    # Unicode 18.0 extended-grapheme movement, hit-testing and deletion.
+    grapheme_fd, grapheme_path = tempfile.mkstemp(prefix="nekoedit-graphemes-")
+    grapheme_fixture = (
+        "e\u0301"
+        "A\u0308\u0323"
+        "\U0001F44D\U0001F3FD"
+        "\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466"
+        "\U0001F1FA\U0001F1F8"
+        "\U0001F1E8"
+        "\u1100\u1161\u11A8"
+        "\u0915\u094D\u0937"
+        "\u0600A"
+        "A\u0903"
+        "\r\n"
+        "Z"
+    ).encode("utf-8")
+    try:
+        with os.fdopen(grapheme_fd, "wb") as grapheme_file:
+            grapheme_file.write(grapheme_fixture)
+        run(
+            sys.argv[1],
+            initial_file=grapheme_path,
+            grapheme_test=True,
+        )
+    finally:
+        try:
+            os.unlink(grapheme_path)
         except FileNotFoundError:
             pass
 
