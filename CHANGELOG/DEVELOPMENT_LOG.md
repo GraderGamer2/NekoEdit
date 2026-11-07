@@ -1,3 +1,29 @@
+## 2026-11-08 — Add bounded XKB Multi_key Compose input
+
+### Implementation
+
+- Added the XKB `Multi_key` keysym and mapped it to an internal action token separate from valid Unicode scalars.
+- Added transient Compose state to the document keyboard path. After `Multi_key`, the next two printable Unicode symbols are buffered and matched against a curated table of 20 pairs; successful pairs insert one composed scalar.
+- The initial pair table covers common Latin ligatures/letters and symbols: `oe/OE`, `oc/OC`, `ae/AE`, `ss`, plus/minus, right arrow, guillemets, one-half, acute-e, tilde-n, diaeresis-u, and cedilla-c.
+- Unlisted two-symbol pairs are preserved as two literal characters, rather than discarded. Escape and Backspace cancel a pending Compose sequence without touching document text. Keyboard focus loss clears transient Compose and dead-key state; transitions to a dead key or a fresh `Multi_key` preserve any already-buffered printable symbol.
+- The implementation remains freestanding assembly and adds no shared-library or runtime dependency. It is a bounded two-symbol subset, not a full XCompose table: longer sequences and locale-specific compose files are still unsupported.
+
+### Regression coverage
+
+- The mock keymap now maps the physical C key to `Multi_key`, and the parser scalar table is checked for the internal Compose action token.
+- Integration tests verify `Multi_key` + `o` + `e` inserts U+0153 (`œ`), and an unsupported `w` + `w` pair inserts both original characters.
+- The test also checks that the first symbol remains buffered until the second arrives, successful completion clears Compose state, and Escape/Backspace cancel an incomplete sequence without deleting prior document bytes.
+- Existing Greek/Cyrillic aliases, explicit Unicode scalars, EuroSign/eacute/emdash, dead_acute composition, combining fallback, and dead-key cancellation remain covered in the same Unicode fixture.
+
+### Verification
+
+- Actions [Build and test #571](https://github.com/GraderGamer2/NekoEdit/actions/runs/42399209682) passed all workflow steps on [1e3a14ebc644](https://github.com/GraderGamer2/NekoEdit/commit/1e3a14ebc64496709edbdccd98a5c9e374980967), including the full Wayland mock suite, CLI smoke tests, preferences tests, freestanding build/ELF checks, executable inspection, and artifact upload.
+- The integration log explicitly reports: “bounded Multi_key Compose pairs/fallback, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified.”
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42399209682/artifacts/13584921348): 74,458 bytes; artifact ID 13584921348; ZIP SHA-256 `e55ec751a2fe7a588709c0e31a9fa0b2f745b0915aeefce26e9f2fa80fcab42e`; expires 2026-11-14.
+- This remains mock-compositor validation. A manual GNOME/Mutter test of real keyboard Compose behavior and the latest mouse selection interactions is still outstanding.
+
+---
+
 ## 2026-11-08 — Expand named XKB Unicode coverage for Greek and Cyrillic
 
 ### Implementation
