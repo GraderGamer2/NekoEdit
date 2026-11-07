@@ -1508,6 +1508,9 @@ xkb_symbols "nekoedit-sparse" {
                     initial = read_document_state()
                     if initial["doc_contents"] != b"one two three":
                         raise AssertionError("word navigation fixture contents mismatch")
+                    workflow_shortcut(1690, 102, "Ctrl+Home establishes a known starting caret")
+                    if child_u32("doc_cursor") != 0:
+                        raise AssertionError("Ctrl+Home did not establish the beginning of the word fixture")
                     workflow_shortcut(1700, 106, "Ctrl+Right moves to the next word start")
                     if child_u32("doc_cursor") != 4:
                         raise AssertionError(f"Ctrl+Right did not stop at second word: {child_u32('doc_cursor')}")
