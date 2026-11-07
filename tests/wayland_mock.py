@@ -3487,15 +3487,15 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         picker_720.get("picker_mode") != 1
                         or picker_720.get("picker_panel_x") != 16
-                        or picker_720.get("picker_panel_y") != 36
+                        or picker_720.get("picker_panel_y") != 28
                         or picker_720.get("picker_panel_width") != 688
-                        or picker_720.get("picker_panel_height") != 408
+                        or picker_720.get("picker_panel_height") != 424
                     ):
                         raise AssertionError(f"picker did not fit the 720x480 window: {picker_720!r}")
                     cancel_x_720 = 16 + ((636 - 40) * 688 // 720)
-                    cancel_y_720 = 36 + ((412 - 36) * 408 // 408)
+                    cancel_y_720 = 28 + ((412 - 36) * 424 // 408)
                     cancel_pixel_x_720 = 16 + ((605 - 40) * 688 // 720)
-                    cancel_pixel_y_720 = 36 + ((400 - 36) * 408 // 408)
+                    cancel_pixel_y_720 = 28 + ((400 - 36) * 424 // 408)
                     if struct.unpack_from("<I", pixels, cancel_pixel_y_720 * 2880 + cancel_pixel_x_720 * 4)[0] != 0xFF414B5A:
                         raise AssertionError("resized picker Cancel button background was not drawn at its fitted location")
                     resized_ui_click(
