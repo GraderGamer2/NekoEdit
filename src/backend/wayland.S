@@ -182,6 +182,7 @@ msg_previous_opcode:  .ascii ", opcode="
 msg_last_event:       .ascii "Wayland last event: object="
 msg_last_event_opcode:.ascii ", opcode="
 msg_last_event_size:  .ascii ", payload bytes="
+msg_last_event_size_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -1902,7 +1903,7 @@ wayland_main:
     call write_stderr_u32
     mov edi, 2
     lea rsi, [rip + msg_last_event_size]
-    mov edx, msg_protocol_error_prefix - msg_last_event_size
+    mov edx, msg_last_event_size_end - msg_last_event_size
     call linux_write_all
     mov edi, dword ptr [rip + last_size]
     call write_stderr_u32
