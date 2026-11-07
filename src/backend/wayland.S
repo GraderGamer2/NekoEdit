@@ -275,11 +275,13 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
 window_status_top:      .long 0
+window_status_bytes_x:  .long 0
+window_status_mode_x:   .long 0
 window_doc_columns:     .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
@@ -388,6 +390,23 @@ picker_edit_select_all: .long 0
 picker_last_click_index: .long 0
 picker_last_click_time: .long 0
 picker_overwrite_pending: .long 0
+picker_panel_x:         .long 0
+picker_panel_y:         .long 0
+picker_panel_width:     .long 0
+picker_panel_height:    .long 0
+path_prompt_x:          .long 0
+path_prompt_y:          .long 0
+path_prompt_width:      .long 0
+path_prompt_height:     .long 0
+ui_transform_active:   .long 0
+ui_transform_base_x:    .long 0
+ui_transform_base_y:    .long 0
+ui_transform_origin_x: .long 0
+ui_transform_origin_y: .long 0
+ui_transform_x_num:     .long 1
+ui_transform_x_den:     .long 1
+ui_transform_y_num:     .long 1
+ui_transform_y_den:     .long 1
 picker_dirents:         .zero PICKER_DIR_BYTES
 picker_stat_buffer:     .zero 144
 picker_entries:         .zero (PICKER_MAX_ENTRIES * PICKER_ENTRY_SIZE)
@@ -1101,6 +1120,13 @@ wayland_main:
     cmp dword ptr [rip + picker_scroll_drag], 1
     jne .event_loop
     mov esi, dword ptr [rip + pointer_y]
+    sub esi, dword ptr [rip + picker_panel_y]
+    imul esi, 408
+    mov eax, esi
+    cdq
+    idiv dword ptr [rip + picker_panel_height]
+    add eax, 36
+    mov esi, eax
     call picker_scrollbar_drag_to_y
     jmp .keyboard_changed
 
@@ -3624,9 +3650,37 @@ picker_handle_pointer:
     push r13
     push r14
     sub rsp, 8
-    mov r12d, edi
-    mov r13d, esi
     mov r14d, edx
+    # Ignore clicks outside the fitted modal. Convert accepted positions back
+    # into the original design-space coordinates used by the control map.
+    mov eax, edi
+    cmp eax, dword ptr [rip + picker_panel_x]
+    jl .picker_pointer_done
+    mov ecx, dword ptr [rip + picker_panel_x]
+    add ecx, dword ptr [rip + picker_panel_width]
+    cmp eax, ecx
+    jae .picker_pointer_done
+    mov eax, esi
+    cmp eax, dword ptr [rip + picker_panel_y]
+    jl .picker_pointer_done
+    mov ecx, dword ptr [rip + picker_panel_y]
+    add ecx, dword ptr [rip + picker_panel_height]
+    cmp eax, ecx
+    jae .picker_pointer_done
+    mov eax, edi
+    sub eax, dword ptr [rip + picker_panel_x]
+    imul eax, 720
+    cdq
+    idiv dword ptr [rip + picker_panel_width]
+    add eax, 40
+    mov r12d, eax
+    mov eax, esi
+    sub eax, dword ptr [rip + picker_panel_y]
+    imul eax, 408
+    cdq
+    idiv dword ptr [rip + picker_panel_height]
+    add eax, 36
+    mov r13d, eax
     cmp dword ptr [rip + picker_overwrite_pending], 0
     je .picker_pointer_normal
     # Confirm and cancel zones in the overwrite prompt.
@@ -4965,6 +5019,39 @@ draw_rect:
     mov r14d, ecx
     mov r15d, r8d
     mov r11d, r9d
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .draw_rect_transform_done
+    # Transform rectangle origin from the active dialog's design-space box.
+    mov eax, r12d
+    sub eax, dword ptr [rip + ui_transform_base_x]
+    imul eax, dword ptr [rip + ui_transform_x_num]
+    cdq
+    idiv dword ptr [rip + ui_transform_x_den]
+    add eax, dword ptr [rip + ui_transform_origin_x]
+    mov r12d, eax
+    mov eax, r13d
+    sub eax, dword ptr [rip + ui_transform_base_y]
+    imul eax, dword ptr [rip + ui_transform_y_num]
+    cdq
+    idiv dword ptr [rip + ui_transform_y_den]
+    add eax, dword ptr [rip + ui_transform_origin_y]
+    mov r13d, eax
+    # Scale dimensions upward so thin borders do not disappear at small sizes.
+    mov eax, r14d
+    imul eax, dword ptr [rip + ui_transform_x_num]
+    add eax, dword ptr [rip + ui_transform_x_den]
+    dec eax
+    xor edx, edx
+    div dword ptr [rip + ui_transform_x_den]
+    mov r14d, eax
+    mov eax, r15d
+    imul eax, dword ptr [rip + ui_transform_y_num]
+    add eax, dword ptr [rip + ui_transform_y_den]
+    dec eax
+    xor edx, edx
+    div dword ptr [rip + ui_transform_y_den]
+    mov r15d, eax
+.draw_rect_transform_done:
     test r12d, r12d
     js .draw_rect_done
     test r13d, r13d
@@ -5358,8 +5445,80 @@ window_update_geometry:
     mov eax, 1
 .window_geometry_rows_ready:
     mov dword ptr [rip + window_doc_visible_rows], eax
+    call window_update_layout_geometry
     ret
 .size window_update_geometry, . - window_update_geometry
+
+# Recalculate window-anchored and centered overlay geometry after every configure.
+.type window_update_layout_geometry, @function
+window_update_layout_geometry:
+    # Footer metadata is distributed across the available width. Preserve the
+    # original 800px byte-count position while allowing it to move at all sizes.
+    mov eax, dword ptr [rip + window_width]
+    imul eax, 5
+    xor edx, edx
+    mov ecx, 8
+    div ecx
+    sub eax, 20
+    mov dword ptr [rip + window_status_bytes_x], eax
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 56
+    mov dword ptr [rip + window_status_mode_x], eax
+
+    # The picker keeps its 720x408 design size when possible. On smaller
+    # windows, both dimensions shrink to a 16px outer margin and are centered.
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 32
+    cmp eax, 720
+    jbe .window_layout_picker_width_ready
+    mov eax, 720
+.window_layout_picker_width_ready:
+    mov dword ptr [rip + picker_panel_width], eax
+    mov edx, dword ptr [rip + window_width]
+    sub edx, eax
+    shr edx, 1
+    mov dword ptr [rip + picker_panel_x], edx
+
+    mov eax, dword ptr [rip + window_height]
+    sub eax, 32
+    cmp eax, 408
+    jbe .window_layout_picker_height_ready
+    mov eax, 408
+.window_layout_picker_height_ready:
+    mov dword ptr [rip + picker_panel_height], eax
+    mov edx, dword ptr [rip + window_height]
+    sub edx, eax
+    shr edx, 1
+    mov dword ptr [rip + picker_panel_y], edx
+
+    # The path prompt uses the same fit-and-center policy with its 704x176
+    # design dimensions. Its original four-pixel upward bias is retained.
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 32
+    cmp eax, 704
+    jbe .window_layout_prompt_width_ready
+    mov eax, 704
+.window_layout_prompt_width_ready:
+    mov dword ptr [rip + path_prompt_width], eax
+    mov edx, dword ptr [rip + window_width]
+    sub edx, eax
+    shr edx, 1
+    mov dword ptr [rip + path_prompt_x], edx
+
+    mov eax, dword ptr [rip + window_height]
+    sub eax, 32
+    cmp eax, 176
+    jbe .window_layout_prompt_height_ready
+    mov eax, 176
+.window_layout_prompt_height_ready:
+    mov dword ptr [rip + path_prompt_height], eax
+    mov edx, dword ptr [rip + window_height]
+    sub edx, eax
+    shr edx, 1
+    sub edx, 4
+    mov dword ptr [rip + path_prompt_y], edx
+    ret
+.size window_update_layout_geometry, . - window_update_layout_geometry
 
 # Parse xdg_toplevel.configure: width, height, and a uint32 array of states.
 .type window_capture_toplevel_configure, @function
@@ -6410,6 +6569,24 @@ draw_glyph:
     push r15
     mov r12d, edi
     mov r13d, esi
+    mov r15d, edx
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .glyph_transform_done
+    mov eax, r12d
+    sub eax, dword ptr [rip + ui_transform_base_x]
+    imul eax, dword ptr [rip + ui_transform_x_num]
+    cdq
+    idiv dword ptr [rip + ui_transform_x_den]
+    add eax, dword ptr [rip + ui_transform_origin_x]
+    mov r12d, eax
+    mov eax, r13d
+    sub eax, dword ptr [rip + ui_transform_base_y]
+    imul eax, dword ptr [rip + ui_transform_y_num]
+    cdq
+    idiv dword ptr [rip + ui_transform_y_den]
+    add eax, dword ptr [rip + ui_transform_origin_y]
+    mov r13d, eax
+.glyph_transform_done:
     test r12d, r12d
     js .glyph_done
     test r13d, r13d
@@ -6418,7 +6595,7 @@ draw_glyph:
     jae .glyph_done
     cmp r13d, dword ptr [rip + window_height]
     jae .glyph_done
-    mov eax, edx
+    mov eax, r15d
     cmp eax, ' '
     je .glyph_done
     cmp eax, 'a'
@@ -6803,7 +6980,7 @@ render_status_bar:
     mov eax, ebp
     call draw_decimal
 
-    mov edi, 480
+    mov edi, dword ptr [rip + window_status_bytes_x]
     mov esi, r12d
     lea rdx, [rip + ui_label_bytes]
     call draw_text
@@ -6811,7 +6988,7 @@ render_status_bar:
     mov esi, r12d
     mov eax, dword ptr [rip + doc_length]
     call draw_decimal
-    mov edi, 744
+    mov edi, dword ptr [rip + window_status_mode_x]
     mov esi, r12d
     lea rdx, [rip + ui_mode_name]
     call draw_text
@@ -6878,6 +7055,22 @@ render_picker:
     push r14
     push r15
     sub rsp, 8
+
+    # Center the picker and scale its 720x408 design box to the available
+    # surface. draw_rect/draw_glyph share this transform for visual alignment.
+    mov dword ptr [rip + ui_transform_active], 1
+    mov dword ptr [rip + ui_transform_base_x], 40
+    mov dword ptr [rip + ui_transform_base_y], 36
+    mov eax, dword ptr [rip + picker_panel_x]
+    mov dword ptr [rip + ui_transform_origin_x], eax
+    mov eax, dword ptr [rip + picker_panel_y]
+    mov dword ptr [rip + ui_transform_origin_y], eax
+    mov eax, dword ptr [rip + picker_panel_width]
+    mov dword ptr [rip + ui_transform_x_num], eax
+    mov dword ptr [rip + ui_transform_x_den], 720
+    mov eax, dword ptr [rip + picker_panel_height]
+    mov dword ptr [rip + ui_transform_y_num], eax
+    mov dword ptr [rip + ui_transform_y_den], 408
 
     # Modal panel and title strip.
     mov rdi, qword ptr [rip + shm_mapping]
@@ -7322,6 +7515,7 @@ render_picker:
     call draw_text
 
 .render_picker_done_pop:
+    mov dword ptr [rip + ui_transform_active], 0
     add rsp, 8
     pop r15
     pop r14
@@ -7448,6 +7642,21 @@ render_path_prompt:
     push r12
     push r13
     push r14
+    # Configure a centered, width/height-fitted drawing transform for the
+    # original 704x176 prompt design (48,148)-(752,324).
+    mov dword ptr [rip + ui_transform_active], 1
+    mov dword ptr [rip + ui_transform_base_x], 48
+    mov dword ptr [rip + ui_transform_base_y], 148
+    mov eax, dword ptr [rip + path_prompt_x]
+    mov dword ptr [rip + ui_transform_origin_x], eax
+    mov eax, dword ptr [rip + path_prompt_y]
+    mov dword ptr [rip + ui_transform_origin_y], eax
+    mov eax, dword ptr [rip + path_prompt_width]
+    mov dword ptr [rip + ui_transform_x_num], eax
+    mov dword ptr [rip + ui_transform_x_den], 704
+    mov eax, dword ptr [rip + path_prompt_height]
+    mov dword ptr [rip + ui_transform_y_num], eax
+    mov dword ptr [rip + ui_transform_y_den], 176
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 48
     mov edx, 148
@@ -7518,6 +7727,7 @@ render_path_prompt:
     mov esi, 264
     lea rdx, [rip + ui_prompt_help]
     call draw_text
+    mov dword ptr [rip + ui_transform_active], 0
     pop r14
     pop r13
     pop r12
