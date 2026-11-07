@@ -14227,7 +14227,7 @@ render_find_replace:
     cmp dword ptr [rip + find_replace_focus], 0
     jne .render_find_query_caret_done
     mov rdi, qword ptr [rip + shm_mapping]
-    lea esi, [r13d + 92]
+    lea esi, [r13 + 92]
     mov edx, 48
     mov ecx, 1
     mov r8d, 20
@@ -14294,7 +14294,7 @@ render_find_replace:
     cmp dword ptr [rip + find_replace_focus], 1
     jne .render_find_replace_caret_done
     mov rdi, qword ptr [rip + shm_mapping]
-    lea esi, [r13d + 92]
+    lea esi, [r13 + 92]
     mov edx, 92
     mov ecx, 1
     mov r8d, 20
