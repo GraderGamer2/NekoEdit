@@ -41,7 +41,7 @@ The parser supports TrueType `glyf` simple and composite glyphs:
 - Composite instructions are bounds-checked and skipped; TrueType hinting is not executed.
 - Empty glyphs are valid. Malformed or over-limit data is rejected rather than read past the mapped file.
 
-Quadratic contours are flattened with bounded deterministic subdivisions, including implied on-curve midpoints between consecutive off-curve points. The rasterizer applies a non-zero-winding fill rule and a 4×4 subpixel coverage grid. Its output is an 8-bit grayscale bitmap bounded to 32×32 pixels, which the Wayland renderer alpha-blends into the surface.
+Quadratic contours are flattened with bounded deterministic subdivisions, including implied on-curve midpoints between consecutive off-curve points. The rasterizer applies a non-zero-winding fill rule and a 4×4 subpixel coverage grid. Its output is an 8-bit grayscale bitmap bounded to 64×64 pixels. This mask bound is intentionally larger than the 32px maximum document em so descenders and their one-pixel outer padding are not rejected merely because a glyph extends below the baseline; the Wayland renderer alpha-blends the result into the surface.
 
 ## Metric-aware text layout
 

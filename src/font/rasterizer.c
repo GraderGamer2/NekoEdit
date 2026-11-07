@@ -3,7 +3,9 @@
 #define MAX_POINTS 4096u
 #define MAX_CONTOURS 256u
 #define MAX_FLAT_POINTS 16384u
-#define BITMAP_SIDE 32u
+#define MAX_GLYPH_EM 32u
+/* Descenders and their one-pixel raster padding can exceed one em. */
+#define BITMAP_SIDE 64u
 #define BITMAP_BYTES (BITMAP_SIDE * BITMAP_SIDE)
 #define CACHE_SLOTS 128u
 #define SAMPLES 4u
@@ -160,7 +162,7 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     font_bitmap_width=font_bitmap_height=font_bitmap_pixel_count=0;
     font_bitmap_left=font_bitmap_top=0;
     for (uint32_t i=0;i<BITMAP_BYTES;++i) font_bitmap_pixels[i]=0;
-    if (!font_loaded || glyph_id>=(uint32_t)font_num_glyphs || !size || size>BITMAP_SIDE)
+    if (!font_loaded || glyph_id>=(uint32_t)font_num_glyphs || !size || size>MAX_GLYPH_EM)
         return -1;
     upem=(uint32_t)font_units_per_em;
     if (upem<16 || upem>16384 || font_glyph_load_outline(glyph_id)<0) return -1;

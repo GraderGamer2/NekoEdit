@@ -60,7 +60,7 @@ def recv_wayland_message(connection: socket.socket):
 
 
 def synthetic_true_type_font() -> bytes:
-    """Build a tiny SFNT with A/B/space cmap mappings and OS/2 typography metrics."""
+    """Build a tiny SFNT with A/B/j/space mappings and OS/2 typography metrics."""
     head = bytearray(54)
     struct.pack_into(">I", head, 0, 0x00010000)
     struct.pack_into(">I", head, 12, 0x5F0F3CF5)
@@ -72,10 +72,10 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">h", hhea, 4, 900)
     struct.pack_into(">h", hhea, 6, -300)
     struct.pack_into(">h", hhea, 8, 100)
-    struct.pack_into(">H", hhea, 34, 10)
+    struct.pack_into(">H", hhea, 34, 11)
 
-    maxp = struct.pack(">IH", 0x00005000, 10)
-    hmtx = struct.pack(">20H", *([600, 0, 650, 0, 400, 0, 300, 0] + [600, 0] * 6))
+    maxp = struct.pack(">IH", 0x00005000, 11)
+    hmtx = struct.pack(">22H", *([600, 0, 650, 0, 400, 0, 300, 0] + [600, 0] * 7))
     os2 = bytearray(96)
     struct.pack_into(">H", os2, 0, 4)        # OS/2 version 4
     struct.pack_into(">H", os2, 62, 0x0080)  # fsSelection.USE_TYPO_METRICS
@@ -139,9 +139,19 @@ def synthetic_true_type_font() -> bytes:
         + bytes((0x21, 0x32, 0x10, 0x21))
         + struct.pack(">hBhh", 100, 200, -200, 400)
     )
+    # Glyph 10 maps to lowercase j. Its 1,050-unit vertical extent becomes
+    # 34px after scaling to 32px em and adding the two outer raster-padding
+    # pixels, deliberately exceeding the old 32x32 glyph-mask limit.
+    glyph_j = (
+        struct.pack(">5h", 1, 100, -350, 300, 700)
+        + struct.pack(">2H", 2, 0)
+        + bytes((0x01, 0x01, 0x01))
+        + struct.pack(">3h", 100, 200, -100)
+        + struct.pack(">3h", -350, 0, 1050)
+    )
     glyphs = (b"", glyph_a, composite_xy, composite_scaled,
               composite_point_match, composite_cycle, composite_anisotropic,
-              composite_matrix, composite_byte_args, quadratic_glyph)
+              composite_matrix, composite_byte_args, quadratic_glyph, glyph_j)
     glyf = bytearray()
     loca_offsets = [0]
     for glyph in glyphs:
@@ -149,15 +159,15 @@ def synthetic_true_type_font() -> bytes:
         if len(glyf) & 1:
             glyf.append(0)
         loca_offsets.append(len(glyf) // 2)
-    loca = struct.pack(">11H", *loca_offsets)
+    loca = struct.pack(">12H", *loca_offsets)
 
     format4 = (
-        struct.pack(">7H", 4, 48, 0, 8, 8, 2, 0)
-        + struct.pack(">4H", 0x0020, 0x0041, 0x0042, 0xFFFF)
+        struct.pack(">7H", 4, 56, 0, 10, 8, 2, 2)
+        + struct.pack(">5H", 0x0020, 0x0041, 0x0042, 0x006A, 0xFFFF)
         + struct.pack(">H", 0)
-        + struct.pack(">4H", 0x0020, 0x0041, 0x0042, 0xFFFF)
-        + struct.pack(">4h", -29, -64, -64, 1)
-        + struct.pack(">4H", 0, 0, 0, 0)
+        + struct.pack(">5H", 0x0020, 0x0041, 0x0042, 0x006A, 0xFFFF)
+        + struct.pack(">5h", -29, -64, -64, -96, 1)
+        + struct.pack(">5H", 0, 0, 0, 0, 0)
     )
     cmap = struct.pack(">HHHHI", 0, 1, 3, 1, 12) + format4
     tables = [
@@ -951,6 +961,8 @@ xkb_symbols "nekoedit-sparse" {
                         "font_units_per_em", "font_num_glyphs", "font_ascent",
                         "font_descent", "font_line_gap", "font_num_hmetrics", "font_index_to_loc_format",
                         "font_cmap_format", "font_probe_A_glyph", "font_probe_A_advance",
+                        "font_probe_j_raster_result", "font_probe_j_raster_width",
+                        "font_probe_j_raster_height", "font_probe_j_raster_pixels",
                         "font_probe_A_outline_result", "font_probe_A_contours",
                         "font_probe_A_points", "font_probe_A_last_x", "font_probe_A_last_y",
                         "font_probe_empty_result", "font_probe_empty_contours",
@@ -998,7 +1010,7 @@ xkb_symbols "nekoedit-sparse" {
                     expected = {
                         "font_loaded": 1,
                         "font_units_per_em": 1000,
-                        "font_num_glyphs": 10,
+                        "font_num_glyphs": 11,
                         "font_ascent": 850,
                         "font_descent": -250,
                         "font_line_gap": 100,
@@ -1096,6 +1108,19 @@ xkb_symbols "nekoedit-sparse" {
                             values.get("font_probe_curve_result"),
                         )
                     if (
+                        values.get("font_probe_j_raster_result") != 0
+                        or values.get("font_probe_j_raster_width", 0) <= 0
+                        or not (32 < values.get("font_probe_j_raster_height", 0) <= 64)
+                        or values.get("font_probe_j_raster_pixels", 0) <= 0
+                    ):
+                        raster_errors["32px_lowercase_j_descender"] = {
+                            name: values.get(name)
+                            for name in (
+                                "font_probe_j_raster_result", "font_probe_j_raster_width",
+                                "font_probe_j_raster_height", "font_probe_j_raster_pixels",
+                            )
+                        }
+                    if (
                         not values["font_file_map"] or not values["font_file_size"]
                         or mismatch or index_errors or raster_errors
                     ):
@@ -1122,7 +1147,7 @@ xkb_symbols "nekoedit-sparse" {
                             "last A was not painted on the second visual row after pixel-width wrapping"
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px glyph advances, a 3px hmtx-mapped space, OS/2 USE_TYPO_METRICS line pitch, pixel-width wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
+                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px glyph advances, a 3px hmtx-mapped space, OS/2 USE_TYPO_METRICS line pitch, pixel-width wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, a 32px lowercase j descender requiring a mask taller than 32px, and compositor-visible glyph positions"
                     )
                     client.sendall(wire_message(10, 1))
                     return

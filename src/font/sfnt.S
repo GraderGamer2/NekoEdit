@@ -25,6 +25,9 @@
 .equ FONT_FRAME_ENDS_OFFSET, 36888
 .equ FONT_GLYPH_FRAME_STRIDE, 37912
 
+.extern font_rasterize_glyph
+.extern font_bitmap_width, font_bitmap_height, font_bitmap_pixel_count
+
 # Four-byte table tags expressed as their little-endian in-memory integers.
 .equ FONT_TAG_CMAP, 0x70616d63
 .equ FONT_TAG_GLYF, 0x66796c67
@@ -83,6 +86,7 @@ font_path_dejavu_sans:
 .global font_probe_matrix_last_x, font_probe_matrix_last_y
 .global font_probe_byte_result, font_probe_byte_contours, font_probe_byte_points
 .global font_probe_byte_first_x, font_probe_byte_first_y, font_probe_byte_last_x, font_probe_byte_last_y
+.global font_probe_j_raster_result, font_probe_j_raster_width, font_probe_j_raster_height, font_probe_j_raster_pixels
 .global font_glyph_contour_count, font_glyph_point_count
 .global font_glyph_x_min, font_glyph_y_min, font_glyph_x_max, font_glyph_y_max
 .global font_glyph_contour_ends, font_glyph_point_flags
@@ -156,6 +160,10 @@ font_probe_byte_first_x:         .long 0
 font_probe_byte_first_y:         .long 0
 font_probe_byte_last_x:          .long 0
 font_probe_byte_last_y:          .long 0
+font_probe_j_raster_result:      .long 0
+font_probe_j_raster_width:       .long 0
+font_probe_j_raster_height:      .long 0
+font_probe_j_raster_pixels:      .long 0
 font_glyph_contour_count:       .long 0
 font_glyph_point_count:         .long 0
 font_glyph_x_min:               .long 0
@@ -887,6 +895,23 @@ font_try_path:
     mov dword ptr [rip + font_probe_byte_last_y], eax
 .Lfont_probe_byte_done:
     mov dword ptr [rip + font_loaded], 1
+    # A lowercase j commonly extends below the baseline. Rasterize its 32px
+    # mask during the font fixture probe so descender padding is covered.
+    mov edi, 0x6a
+    call font_cmap_lookup
+    test eax, eax
+    jz .Lfont_probe_j_done
+    mov edi, eax
+    mov esi, 32
+    call font_rasterize_glyph
+    mov dword ptr [rip + font_probe_j_raster_result], eax
+    mov eax, dword ptr [rip + font_bitmap_width]
+    mov dword ptr [rip + font_probe_j_raster_width], eax
+    mov eax, dword ptr [rip + font_bitmap_height]
+    mov dword ptr [rip + font_probe_j_raster_height], eax
+    mov eax, dword ptr [rip + font_bitmap_pixel_count]
+    mov dword ptr [rip + font_probe_j_raster_pixels], eax
+.Lfont_probe_j_done:
     xor eax, eax
     jmp .Lfont_try_path_return
 .Lfont_try_path_unmap_failed:
