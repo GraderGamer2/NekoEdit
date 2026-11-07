@@ -2518,6 +2518,17 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1590, 18, "dead_acute plus e composes to eacute")
                     if child_u32("doc_pending_dead_mark") != 0:
                         raise AssertionError("successful dead-key composition did not clear pending state")
+                    if (
+                        child_u32("doc_keyboard_last_scalar") != ord("e")
+                        or child_u32("doc_keyboard_last_compose") != 0x00E9
+                        or child_u32("doc_length") != before_dead_key + 2
+                    ):
+                        raise AssertionError(
+                            "dead-key compose stage did not insert U+00E9: "
+                            f"scalar={child_u32('doc_keyboard_last_scalar'):#x}, "
+                            f"composed={child_u32('doc_keyboard_last_compose'):#x}, "
+                            f"length={child_u32('doc_length')}"
+                        )
                     key_step(1600, 33, "dead_acute arms combining-mark fallback")
                     key_step(1610, 34, "unsupported dead-key pair preserves base and combining mark")
                     composed_state = read_document_state()
