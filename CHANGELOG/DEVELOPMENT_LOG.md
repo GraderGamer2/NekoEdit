@@ -2,6 +2,31 @@
 
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
+## 2026-11-07 — Identify the request and event surrounding the GNOME disconnect
+
+**User retest:** The `MSG_NOSIGNAL` diagnostic artifact produced:
+
+```text
+NekoEdit: Wayland protocol or shared-memory setup failed.
+Wayland stage: event loop
+Wayland send failed: object=8, opcode=1, errno=32
+```
+
+- Client object 8 is the `wl_surface` created during window setup; request opcode 1 is `wl_surface.attach`. `errno=32` is `EPIPE`: the compositor-side socket was already closed when NekoEdit attempted to send the attach request.
+- This identifies the first send that failed, **not necessarily the request that caused the compositor to disconnect**. The server may have closed the socket after an earlier request or during configure/buffer handling. No `wl_display.error` message was included in the output.
+- The user does not want journald enabled and has disabled system logging. No system logs are required for this next step.
+
+### Additional source diagnostics
+
+- Preserve the object ID/opcode of the last complete request NekoEdit wrote to the Wayland socket.
+- On a failed request, print that preceding request and the last successfully read Wayland event (object ID, event opcode, payload byte count), in addition to the failed request and errno.
+- This distinguishes whether the close happened directly after a toplevel configure, a surface configure/acknowledgement, a buffer release, or the replacement-buffer sequence. The preceding request's successful local write does not prove Mutter processed it.
+- Source commits: [`41b819eae69d`](https://github.com/GraderGamer2/NekoEdit/commit/41b819eae69db66c9f61f0f313027cf056965418) and [`0dbf87cbb5d6`](https://github.com/GraderGamer2/NekoEdit/commit/0dbf87cbb5d659254e200dd69a41b6efc80a20a3); documentation: [`0501579b965d`](https://github.com/GraderGamer2/NekoEdit/commit/0501579b965dd65011ea5475fcc2b197d95946f9).
+
+### Verification status
+
+- The earlier SIGPIPE-safe artifact passed Actions #261. The additional preceding-request/event diagnostic code has not yet been verified by a new CI run or real GNOME retest. Do not infer that Maximize or resizing is fixed.
+
 ## 2026-11-07 — Report failed Wayland sends instead of terminating on SIGPIPE
 
 **Purpose:** Continue diagnosing the user's GNOME Wayland Maximize/resize failure without asking them to enable system logging. The user confirmed the picker scrollbar correction works, while Maximize still exits NekoEdit and edge resizing still has no effect. Their original terminal run returned status 141; temporarily ignoring SIGPIPE changed this to the program's generic event-loop error and status 1.
