@@ -1053,7 +1053,8 @@ font_outline_frame_save:
     cmp ebx, FONT_MAX_COMPOSITE_DEPTH
     jae .Lfont_frame_save_done
     imul rbx, FONT_GLYPH_FRAME_STRIDE
-    lea rbx, [rip + font_glyph_frames + rbx]
+    lea rax, [rip + font_glyph_frames]
+    add rbx, rax
     mov eax, dword ptr [rip + font_glyph_point_count]
     mov dword ptr [rbx], eax
     mov eax, dword ptr [rip + font_glyph_contour_count]
@@ -1115,7 +1116,8 @@ font_outline_frame_merge:
     cmp edi, FONT_MAX_COMPOSITE_DEPTH
     jae .Lfont_frame_merge_bad
     imul rax, rdi, FONT_GLYPH_FRAME_STRIDE
-    lea rbx, [rip + font_glyph_frames + rax]
+    lea rbx, [rip + font_glyph_frames]
+    add rbx, rax
     mov ebp, dword ptr [rbx]
     mov r12d, dword ptr [rbx + 4]
     mov r13d, dword ptr [rip + font_glyph_point_count]
