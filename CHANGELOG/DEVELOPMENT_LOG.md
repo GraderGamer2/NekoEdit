@@ -1,8 +1,22 @@
+## 2026-11-07 — Complete and verify the font/dialog alignment pass
+
+The latest early-alpha build passed GitHub Actions [Build and test #414](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432) on [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5). All workflow steps passed: freestanding build/ELF checks, CLI smoke tests, complete Wayland protocol/editor test suite, executable inspection, and artifact upload.
+
+The final regression covers a short, wide 800x360 window with a height-fitted 8px picker font. It confirms the input focus line and caret pixels, a proportional click boundary, selected-row highlight pixels, and filename glyph ink within the transformed row. The synthetic font also confirms OS/2 USE_TYPO_METRICS, hmtx-mapped spaces, and the derived document line pitch.
+
+Artifact: [nekoedit-linux-x86_64 — 13570135812](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432/artifacts/13570135812), 55,797 bytes; SHA-256 0d634a43fabec59d906315b196cc50c3d3ed439b180e1ade875ed5c89a37f11a; expires 2026-11-14 09:45:13 UTC.
+
+Implementation commit: [961e19fec1a9](https://github.com/GraderGamer2/NekoEdit/commit/961e19fec1a903e061cc7804a164fb4426145825). Current source-and-test branch tip: [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5), following compact-window fixture corrections [8106dd3e109d](https://github.com/GraderGamer2/NekoEdit/commit/8106dd3e109d4b0afea3847b30503f78cca8088c) and [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5).
+
+This is automated mock-compositor verification. The user has not yet run this artifact on GNOME/Mutter, so the real desktop appearance remains unconfirmed. The intermediate CI failures #409, #410, #412, and #413 are retained in the preceding entries.
+
+---
+
 ## 2026-11-07 — Compare selected-row glyph pixels in screen coordinates
 
 CI [Build and test #413](https://github.com/GraderGamer2/NekoEdit/actions/runs/42360895800) reached the new compact-window picker assertions. The 8px font-size assertion, caret/focus-line pixel check, proportional mouse hit-test, selected-row click, and top/bottom highlight pixels all passed. The final glyph-containment assertion still compared screen-space glyph rows (103–109) against the old unscaled design-space row interval (144–158).
 
-The assertion now compares glyph ink against the transformed 103–113 screen-space selected-row interval. This is a test-coordinate correction; the reported glyph pixels were already inside the selected highlight. The CI run for this correction is pending.
+The assertion now compares glyph ink against the transformed 103–113 screen-space selected-row interval. This is a test-coordinate correction; the reported glyph pixels were already inside the selected highlight. [Build and test #414](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432) passed all workflow steps and uploaded artifact [13570135812](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432/artifacts/13570135812) (55,797 bytes; SHA-256 0d634a43fabec59d906315b196cc50c3d3ed439b180e1ade875ed5c89a37f11a). GNOME/Mutter visual retesting remains outstanding.
 
 ---
 

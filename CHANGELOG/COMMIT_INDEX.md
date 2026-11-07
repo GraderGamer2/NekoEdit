@@ -1,14 +1,27 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 180 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the Unicode 18.0 grapheme-editing milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 187 development-history commits on the branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the TrueType metric and responsive picker-alignment milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **275** (271 previously indexed commits + 4 Unicode 18.0 grapheme-editing implementation, regression, and CRLF correction commits).
+- Recorded implementation commits: **281** (275 previously indexed commits + 6 TrueType metric, dialog text-scale, and regression-test commits; the continuity-only status commit is indexed separately below).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
+## TrueType vertical metrics and responsive picker typography
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 09:25:11 UTC | [32e54ad242d5](https://github.com/GraderGamer2/NekoEdit/commit/32e54ad242d5a95f100946629e43d6d214a8fe83) | fix: align TrueType metrics and overlay font sizing |
+| 2026-11-07 09:25:52 UTC | [8ba770e7d04a](https://github.com/GraderGamer2/NekoEdit/commit/8ba770e7d04ac8048f963ea5a4f927199748259e) | fix: preserve hmtx metric count across optional OS2 parsing |
+| 2026-11-07 09:28:49 UTC | [668da6cafbe7](https://github.com/GraderGamer2/NekoEdit/commit/668da6cafbe7d6aadf4e40c21c3b10c508a712c9) | fix: correct SFNT metrics validation and prompt centering |
+| 2026-11-07 09:39:23 UTC | [961e19fec1a9](https://github.com/GraderGamer2/NekoEdit/commit/961e19fec1a903e061cc7804a164fb4426145825) | fix: scale picker advances with rendered font size |
+| 2026-11-07 09:42:51 UTC | [8106dd3e109d](https://github.com/GraderGamer2/NekoEdit/commit/8106dd3e109d4b0afea3847b30503f78cca8088c) | test: respect compact Wayland window height in redraw checks |
+| 2026-11-07 09:44:49 UTC | [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5) | test: validate glyphs against transformed picker row |
+| 2026-11-07 09:54:34 UTC | [c958facaf6c0](https://github.com/GraderGamer2/NekoEdit/commit/c958facaf6c0404bae7e06b5e7708b1cc5fd9b07) | docs: update current font and picker validation status |
+
+Actions [Build and test #414](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432) passed the freestanding build, CLI smoke tests, full Wayland mock suite, ELF inspection, and artifact upload. The synthetic-font test covers OS/2 USE_TYPO_METRICS, hmtx-mapped spaces and line pitch; the compact 800x360 picker test checks the height-fitted 8px face, caret/focus-line pixels, proportional pointer hit-testing, and filename glyph containment in the transformed selected row. Artifact [13570135812](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432/artifacts/13570135812): 55,797 bytes, SHA-256 0d634a43fabec59d906315b196cc50c3d3ed439b180e1ade875ed5c89a37f11a, expires 2026-11-14. This is mock-compositor verification; GNOME/Mutter visual confirmation remains outstanding.
 ## Unicode 18.0 grapheme-aware editing
 
 | Date (UTC) | Commit | Subject |
