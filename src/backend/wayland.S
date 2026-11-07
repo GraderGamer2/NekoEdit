@@ -1968,6 +1968,23 @@ doc_pointer_press_midpoint: .long 0
 doc_pointer_press_actual_x: .long 0
 doc_pointer_press_codepoint: .long 0
 doc_pointer_press_advance: .long 0
+.global doc_pointer_press_scan_start, doc_pointer_press_scan_end
+.global doc_pointer_press_trace_count
+.global doc_pointer_press_glyph1_offset, doc_pointer_press_glyph1_cp
+.global doc_pointer_press_glyph1_pen, doc_pointer_press_glyph1_advance
+.global doc_pointer_press_glyph2_offset, doc_pointer_press_glyph2_cp
+.global doc_pointer_press_glyph2_pen, doc_pointer_press_glyph2_advance
+doc_pointer_press_scan_start: .long 0
+doc_pointer_press_scan_end: .long 0
+doc_pointer_press_trace_count: .long 0
+doc_pointer_press_glyph1_offset: .long 0
+doc_pointer_press_glyph1_cp: .long 0
+doc_pointer_press_glyph1_pen: .long 0
+doc_pointer_press_glyph1_advance: .long 0
+doc_pointer_press_glyph2_offset: .long 0
+doc_pointer_press_glyph2_cp: .long 0
+doc_pointer_press_glyph2_pen: .long 0
+doc_pointer_press_glyph2_advance: .long 0
 .global doc_visual_debug_map_x, doc_visual_debug_midpoint
 .global doc_visual_debug_codepoint, doc_visual_debug_advance, doc_visual_debug_target_x
 doc_visual_debug_target_x: .long 0
@@ -1977,6 +1994,23 @@ doc_visual_debug_map_x: .long 0
 doc_visual_debug_midpoint: .long 0
 doc_visual_debug_codepoint: .long 0
 doc_visual_debug_advance: .long 0
+.global doc_visual_debug_scan_start, doc_visual_debug_scan_end
+.global doc_visual_debug_trace_count
+.global doc_visual_debug_glyph1_offset, doc_visual_debug_glyph1_cp
+.global doc_visual_debug_glyph1_pen, doc_visual_debug_glyph1_advance
+.global doc_visual_debug_glyph2_offset, doc_visual_debug_glyph2_cp
+.global doc_visual_debug_glyph2_pen, doc_visual_debug_glyph2_advance
+doc_visual_debug_scan_start: .long 0
+doc_visual_debug_scan_end: .long 0
+doc_visual_debug_trace_count: .long 0
+doc_visual_debug_glyph1_offset: .long 0
+doc_visual_debug_glyph1_cp: .long 0
+doc_visual_debug_glyph1_pen: .long 0
+doc_visual_debug_glyph1_advance: .long 0
+doc_visual_debug_glyph2_offset: .long 0
+doc_visual_debug_glyph2_cp: .long 0
+doc_visual_debug_glyph2_pen: .long 0
+doc_visual_debug_glyph2_advance: .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
@@ -3212,6 +3246,28 @@ wayland_main:
     mov dword ptr [rip + doc_pointer_press_codepoint], eax
     mov eax, dword ptr [rip + doc_visual_debug_advance]
     mov dword ptr [rip + doc_pointer_press_advance], eax
+    mov eax, dword ptr [rip + doc_visual_debug_scan_start]
+    mov dword ptr [rip + doc_pointer_press_scan_start], eax
+    mov eax, dword ptr [rip + doc_visual_debug_scan_end]
+    mov dword ptr [rip + doc_pointer_press_scan_end], eax
+    mov eax, dword ptr [rip + doc_visual_debug_trace_count]
+    mov dword ptr [rip + doc_pointer_press_trace_count], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph1_offset]
+    mov dword ptr [rip + doc_pointer_press_glyph1_offset], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph1_cp]
+    mov dword ptr [rip + doc_pointer_press_glyph1_cp], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph1_pen]
+    mov dword ptr [rip + doc_pointer_press_glyph1_pen], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph1_advance]
+    mov dword ptr [rip + doc_pointer_press_glyph1_advance], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph2_offset]
+    mov dword ptr [rip + doc_pointer_press_glyph2_offset], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph2_cp]
+    mov dword ptr [rip + doc_pointer_press_glyph2_cp], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph2_pen]
+    mov dword ptr [rip + doc_pointer_press_glyph2_pen], eax
+    mov eax, dword ptr [rip + doc_visual_debug_glyph2_advance]
+    mov dword ptr [rip + doc_pointer_press_glyph2_advance], eax
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
@@ -10022,6 +10078,9 @@ doc_visual_to_offset_indexed:
     mov eax, dword ptr [rdi + DOC_INDEX_BYTES_OFFSET]
     add eax, r13d
     mov r15d, eax
+    mov dword ptr [rip + doc_visual_debug_scan_start], r13d
+    mov dword ptr [rip + doc_visual_debug_scan_end], r15d
+    mov dword ptr [rip + doc_visual_debug_trace_count], 0
     xor ebx, ebx
     xor r14d, r14d
 .Ldoc_visual_indexed_scan:
@@ -10041,8 +10100,32 @@ doc_visual_to_offset_indexed:
     call doc_utf8_decode_at
 .Ldoc_visual_indexed_ascii:
     mov dword ptr [rip + doc_visual_debug_codepoint], eax
+    cmp dword ptr [rip + doc_visual_debug_trace_count], 1
+    je .Ldoc_visual_trace_glyph2
+    cmp dword ptr [rip + doc_visual_debug_trace_count], 0
+    jne .Ldoc_visual_trace_done
+    mov dword ptr [rip + doc_visual_debug_glyph1_offset], r13d
+    mov dword ptr [rip + doc_visual_debug_glyph1_cp], eax
+    mov dword ptr [rip + doc_visual_debug_glyph1_pen], r14d
+    jmp .Ldoc_visual_trace_increment
+.Ldoc_visual_trace_glyph2:
+    mov dword ptr [rip + doc_visual_debug_glyph2_offset], r13d
+    mov dword ptr [rip + doc_visual_debug_glyph2_cp], eax
+    mov dword ptr [rip + doc_visual_debug_glyph2_pen], r14d
+.Ldoc_visual_trace_increment:
+    inc dword ptr [rip + doc_visual_debug_trace_count]
+.Ldoc_visual_trace_done:
     mov edi, eax
     call font_codepoint_advance_pixels
+    cmp dword ptr [rip + doc_visual_debug_trace_count], 1
+    jne .Ldoc_visual_trace_adv2
+    mov dword ptr [rip + doc_visual_debug_glyph1_advance], eax
+    jmp .Ldoc_visual_trace_adv_done
+.Ldoc_visual_trace_adv2:
+    cmp dword ptr [rip + doc_visual_debug_trace_count], 2
+    jne .Ldoc_visual_trace_adv_done
+    mov dword ptr [rip + doc_visual_debug_glyph2_advance], eax
+.Ldoc_visual_trace_adv_done:
     mov dword ptr [rip + doc_visual_debug_map_x], r14d
     mov dword ptr [rip + doc_visual_debug_advance], eax
     lea edx, [r14d + eax]
