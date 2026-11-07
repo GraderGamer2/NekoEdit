@@ -1236,6 +1236,18 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("short child state read for " + name)
                     return struct.unpack("<I", raw)[0]
 
+                def wait_child_u32(name: str, expected: int, label: str, timeout: float = 1.0) -> int:
+                    deadline = time.monotonic() + timeout
+                    actual = child_u32(name)
+                    while actual != expected and time.monotonic() < deadline:
+                        time.sleep(0.005)
+                        actual = child_u32(name)
+                    if actual != expected:
+                        raise AssertionError(
+                            f"{label}: expected {name}={expected}, got {actual}"
+                        )
+                    return actual
+
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
                 ) -> None:
@@ -1758,8 +1770,9 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(15, 3, struct.pack("<IIII", 3010, 3011, 0x110, 0))
                         + wire_message(12, 0)
                     )
-                    if child_u32("pointer_button_down") != 0:
-                        raise AssertionError("selection drag did not stop when the mouse button was released")
+                    wait_child_u32(
+                        "pointer_button_down", 0, "selection release must clear drag state"
+                    )
                     # The timer's last coalesced frame is delivered after the
                     # released buffer is returned. Drain it before interacting
                     # with Settings so the test never confuses two commits.
@@ -1871,8 +1884,8 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(15, 3, struct.pack("<IIII", 1843, 1844, 0x110, 0))
                         + wire_message(12, 0)
                     )
-                    if child_u32("doc_word_drag_active") != 0 or child_u32("pointer_button_down") != 0:
-                        raise AssertionError("releasing a word drag did not clear its active state")
+                    wait_child_u32("pointer_button_down", 0, "word-drag release")
+                    wait_child_u32("doc_word_drag_active", 0, "word-drag mode release")
 
                     # Repeat in reverse: start on the final word and drag to the
                     # first word; the fixed edge remains the original word end.
@@ -1896,6 +1909,7 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(15, 3, struct.pack("<IIII", 1873, 1874, 0x110, 0))
                         + wire_message(12, 0)
                     )
+                    wait_child_u32("pointer_button_down", 0, "reverse word-drag release")
                     observations.append(
                         "Ctrl word navigation, double-click word selection, and forward/reverse whole-word drag selection verified"
                     )
