@@ -1823,6 +1823,35 @@ xkb_symbols "nekoedit-sparse" {
                     if picker_u32("picker_ui_font_size") != 8 or picker_u32("ui_transform_font_size") != 8:
                         raise AssertionError("800x360 picker should render and measure at its height-fitted 8px UI font")
 
+                    # The title must sit comfortably inside the transformed header.
+                    # O's top-row second pixel is known in the embedded fallback face.
+                    title_y = 16 + ((48 - 36) * 328 // 408)
+                    old_title_y = 16 + ((44 - 36) * 328 // 408)
+                    title_pixel = struct.unpack_from(
+                        "<I", pixels, title_y * 800 * 4 + 34 * 4
+                    )[0]
+                    old_position_pixel = struct.unpack_from(
+                        "<I", pixels, old_title_y * 800 * 4 + 34 * 4
+                    )[0]
+                    if title_pixel != 0xFFD8DEE9 or old_position_pixel != 0xFF343D4B:
+                        raise AssertionError(
+                            f"picker title is not vertically clear in its header: "
+                            f"new={hex(title_pixel)}, old={hex(old_position_pixel)}"
+                        )
+
+                    # Leave breathing room between the Bytes label and its value.
+                    bytes_gap_pixel = struct.unpack_from(
+                        "<I", pixels, 349 * 800 * 4 + 522 * 4
+                    )[0]
+                    bytes_value_pixel = struct.unpack_from(
+                        "<I", pixels, 346 * 800 * 4 + 528 * 4
+                    )[0]
+                    if bytes_gap_pixel != 0xFF343D4B or bytes_value_pixel != 0xFFD8DEE9:
+                        raise AssertionError(
+                            f"byte-count label/value spacing mismatch: "
+                            f"gap={hex(bytes_gap_pixel)}, value={hex(bytes_value_pixel)}"
+                        )
+
                     # Bitmap-fallback labels and TrueType field contents share a
                     # baseline; the Search label starts on the transformed 368px row.
                     search_label_y = 16 + ((368 - 36) * 328 // 408)

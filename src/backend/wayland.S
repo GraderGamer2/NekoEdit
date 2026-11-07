@@ -11176,6 +11176,8 @@ render_status_bar:
     mov esi, r12d
     lea rdx, [rip + ui_label_bytes]
     call draw_text
+    # Keep a distinct visual gap between the "Bytes" label and its value.
+    add eax, 8
     mov edi, eax
     mov esi, r12d
     mov eax, dword ptr [rip + doc_length]
@@ -11478,13 +11480,13 @@ render_picker:
     cmp dword ptr [rip + picker_mode], 1
     jne .render_picker_title_save
     mov edi, 56
-    mov esi, 44
+    mov esi, 48
     lea rdx, [rip + ui_picker_open_title]
     call draw_text
     jmp .render_picker_path
 .render_picker_title_save:
     mov edi, 56
-    mov esi, 44
+    mov esi, 48
     lea rdx, [rip + ui_picker_save_title]
     call draw_text
 

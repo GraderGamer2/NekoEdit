@@ -1,3 +1,15 @@
+## 2026-11-07 — Give picker titles and byte-count values more room
+
+The latest GNOME/Mutter test confirmed that the Open/Save picker selection and field typography are now aligned, but identified two remaining small spacing issues.
+
+- Move both Open File and Save File titles down by four design pixels so their glyphs sit more comfortably inside the top title strip.
+- Add an eight-pixel visual gap after the Bytes label before drawing the decimal byte count.
+- Extend the synthetic-font framebuffer regression to check the title's new pixel position, confirm the former position is clear, and verify that the byte-count gap remains blank while the value is still rendered.
+
+The broader next roadmap task remains the first runtime font-preference control. The fixed 12px document em, font switching, cache invalidation, and line-index reflow still need to be handled together.
+
+---
+
 ## 2026-11-07 — Align picker captions, focus underlines, and row-pixel validation
 
 The latest GNOME/Mutter feedback still identifies visible displacement in Open/Save picker text and its blue focus rule. Source inspection found that the Search/File name caption used a different vertical origin from the editable text field, while both field focus rules were painted along the top edge.
