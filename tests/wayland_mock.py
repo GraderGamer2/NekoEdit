@@ -231,6 +231,7 @@ def run(
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
     word_navigation_test: bool = False,
+    find_replace_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
@@ -550,6 +551,7 @@ def run(
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
                     or clipboard_test or history_test or horizontal_scroll_test or word_navigation_test
+                    or find_replace_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -1503,6 +1505,71 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(releases + wire_message(12, 0))
                     if child_u32("save_confirm_open") == 1:
                         key_step(serial + 6, 28, label + " — confirm pending save")
+
+                if find_replace_test:
+                    initial = read_document_state()
+                    if initial["doc_contents"] != b"one fish two fish":
+                        raise AssertionError("find/replace fixture contents mismatch")
+                    workflow_shortcut(1860, 102, "Ctrl+Home establishes search fixture start")
+                    workflow_shortcut(1870, 33, "Ctrl+F opens Find")
+                    if child_u32("find_replace_mode") != 1:
+                        raise AssertionError("Ctrl+F did not open Find mode")
+                    for index, code in enumerate((33, 23, 31, 35)):
+                        key_step(1880 + index * 3, code, f"enter Find query character {index + 1}")
+                    key_step(1900, 28, "Enter selects first Find match")
+                    start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    if (start, end) != (4, 8) or child_u32("find_status") != 1:
+                        raise AssertionError(
+                            f"Find did not select the first fish: range=({start},{end}), "
+                            f"status={child_u32('find_status')}"
+                        )
+                    key_step(1910, 61, "F3 selects the next Find match")
+                    start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    if (start, end) != (13, 17):
+                        raise AssertionError(f"F3 did not select the next fish: range=({start},{end})")
+                    workflow_shortcut(1920, 35, "Ctrl+H opens Find/Replace")
+                    if child_u32("find_replace_mode") != 2:
+                        raise AssertionError("Ctrl+H did not open Find/Replace mode")
+                    key_step(1930, 15, "Tab focuses replacement field")
+                    for index, code in enumerate((31, 35, 30, 19, 37)):
+                        key_step(1940 + index * 3, code, f"enter replacement character {index + 1}")
+                    workflow_shortcut(1960, 28, "Ctrl+Enter replaces the current match")
+                    state = read_document_state()
+                    if state["doc_contents"] != b"one fish two shark":
+                        raise AssertionError(
+                            f"Replace Current produced unexpected bytes: {state['doc_contents']!r}"
+                        )
+                    if child_u32("find_status") != 3:
+                        raise AssertionError("Replace Current did not report a replacement")
+                    workflow_shortcut(1970, 35, "Ctrl+H reopens Find/Replace for Replace All")
+                    panel_x = child_u32("find_panel_x")
+                    panel_y = child_u32("find_panel_y")
+                    panel_width = child_u32("find_panel_width")
+                    panel_height = child_u32("find_panel_height")
+                    all_x = panel_x + 316 * panel_width // 448
+                    all_y = panel_y + 164 * panel_height // 192
+                    workflow_click(all_x, all_y, 1990, "Replace All replaces remaining matches")
+                    state = read_document_state()
+                    if state["doc_contents"] != b"one shark two shark":
+                        raise AssertionError(
+                            f"Replace All produced unexpected bytes: {state['doc_contents']!r}"
+                        )
+                    if child_u32("find_replace_count") != 1 or child_u32("find_status") != 4:
+                        raise AssertionError(
+                            "Replace All did not report one replacement: "
+                            f"count={child_u32('find_replace_count')}, status={child_u32('find_status')}"
+                        )
+                    key_step(2010, 1, "Escape closes Find/Replace")
+                    if child_u32("find_replace_mode") != 0:
+                        raise AssertionError("Escape did not close Find/Replace")
+                    observations.append(
+                        "Ctrl+F/Find query editing, Enter/F3 navigation, Ctrl+H replacement editing, "
+                        "Replace Current, Replace All, and Escape verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if word_navigation_test:
                     initial = read_document_state()
@@ -5114,6 +5181,17 @@ if __name__ == "__main__":
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)
     run(sys.argv[1], use_wayland_socket=True, file_workflow=True)
+
+    find_fd, find_path = tempfile.mkstemp(prefix="nekoedit-find-replace-")
+    try:
+        with os.fdopen(find_fd, "wb") as document:
+            document.write(b"one fish two fish")
+        run(sys.argv[1], initial_file=find_path, find_replace_test=True)
+    finally:
+        try:
+            os.unlink(find_path)
+        except FileNotFoundError:
+            pass
 
     word_fd, word_path = tempfile.mkstemp(prefix="nekoedit-word-navigation-")
     try:
