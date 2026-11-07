@@ -21,7 +21,8 @@
 
 ### Verification
 
-Validation is being run against the branch after this change; the exact Actions run and artifact will be recorded once it completes.
+- GitHub Actions [Build and test #359](https://github.com/GraderGamer2/NekoEdit/actions/runs/42346409861) passed all eight workflow steps on commit [d40b466aa9e0](https://github.com/GraderGamer2/NekoEdit/commit/d40b466aa9e0a849591f68d5e5bee6d5d56c6c65): freestanding build and ELF checks, CLI smoke tests, full Wayland mock integration, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 50,721 bytes; SHA-256 `da01bd89bea41f56419c4c53b0d2ea46094a64088b88d72ca40c112ca05329a5`; artifact ID `13563518724`; expires 2026-11-14 06:18:42 UTC. [Download Actions #359 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42346409861/artifacts/13563518724).
 
 ---
 
