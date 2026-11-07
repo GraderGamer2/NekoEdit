@@ -8471,106 +8471,101 @@ window_update_layout_geometry:
 .window_layout_picker_font_store:
     mov dword ptr [rip + picker_ui_font_size], eax
 
-    # Settings uses a 256x168 design grid. Its panel dimensions grow in
-    # proportion to the chosen UI em, while the hit-map uses the same transform.
+    # Settings is one uniform 256x168 design grid. The same scale controls
+    # panel size, the font raster, and pointer hit-testing.
     mov eax, 256
     imul eax, dword ptr [rip + ui_font_size]
-    cdq
+    xor edx, edx
     mov ecx, 10
-    idiv ecx
-    mov ecx, dword ptr [rip + window_width]
-    sub ecx, 32
-    cmp eax, ecx
-    jbe .window_layout_settings_width_ready
-    mov eax, ecx
-.window_layout_settings_width_ready:
+    div ecx
+    mov ebx, dword ptr [rip + window_width]
+    sub ebx, 32
+    cmp eax, ebx
+    jbe .window_layout_settings_width_available
+    mov eax, ebx
+.window_layout_settings_width_available:
+    mov ebx, dword ptr [rip + window_height]
+    sub ebx, 40
+    imul ebx, 256
+    xor edx, edx
+    mov ecx, 168
+    div ecx
+    cmp eax, ebx
+    jbe .window_layout_settings_scale_ready
+    mov eax, ebx
+.window_layout_settings_scale_ready:
     mov dword ptr [rip + settings_panel_width], eax
-    mov ecx, dword ptr [rip + window_width]
-    sub ecx, 16
-    mov edx, 160
-    add edx, eax
-    cmp edx, ecx
-    jbe .window_layout_settings_x_ready
-    mov eax, ecx
-    sub eax, dword ptr [rip + settings_panel_width]
-    jmp .window_layout_settings_x_store
-.window_layout_settings_x_ready:
-    mov eax, 160
-.window_layout_settings_x_store:
-    mov dword ptr [rip + settings_panel_x], eax
-    mov dword ptr [rip + settings_panel_y], 32
-    mov eax, 168
-    imul eax, dword ptr [rip + ui_font_size]
-    cdq
-    mov ecx, 10
-    idiv ecx
-    mov ecx, dword ptr [rip + window_height]
-    sub ecx, 40
-    cmp eax, ecx
-    jbe .window_layout_settings_height_ready
-    mov eax, ecx
-.window_layout_settings_height_ready:
+    imul eax, 168
+    xor edx, edx
+    mov ecx, 256
+    div ecx
     mov dword ptr [rip + settings_panel_height], eax
+    mov eax, dword ptr [rip + window_width]
+    sub eax, dword ptr [rip + settings_panel_width]
+    shr eax, 1
+    mov dword ptr [rip + settings_panel_x], eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, dword ptr [rip + settings_panel_height]
+    shr eax, 1
+    mov dword ptr [rip + settings_panel_y], eax
     mov eax, dword ptr [rip + ui_font_size]
+    imul eax, 256
+    xor edx, edx
+    mov ecx, dword ptr [rip + settings_panel_width]
+    div ecx
+    cmp eax, 6
+    jae .window_layout_settings_font_min_ready
+    mov eax, 6
+.window_layout_settings_font_min_ready:
     mov dword ptr [rip + settings_ui_font_size], eax
 
-    # Find/Replace uses a centered 448x192 design grid and follows UI em sizing.
+    # Find/Replace uses a uniform centered 448x192 design grid. Fit its
+    # aspect ratio to both window dimensions before computing the UI font scale.
     mov eax, 448
     imul eax, dword ptr [rip + ui_font_size]
-    cdq
-    mov ecx, 10
-    idiv ecx
-    mov ecx, dword ptr [rip + window_width]
-    sub ecx, 32
-    cmp eax, ecx
-    jbe .window_layout_find_width_ready
-    mov eax, ecx
-.window_layout_find_width_ready:
-    mov dword ptr [rip + find_panel_width], eax
-    mov edx, dword ptr [rip + window_width]
-    sub edx, eax
-    shr edx, 1
-    mov dword ptr [rip + find_panel_x], edx
-    mov eax, 192
-    imul eax, dword ptr [rip + ui_font_size]
-    cdq
-    mov ecx, 10
-    idiv ecx
-    mov ecx, dword ptr [rip + window_height]
-    sub ecx, 32
-    cmp eax, ecx
-    jbe .window_layout_find_height_ready
-    mov eax, ecx
-.window_layout_find_height_ready:
-    mov dword ptr [rip + find_panel_height], eax
-    mov edx, dword ptr [rip + window_height]
-    sub edx, eax
-    shr edx, 1
-    mov dword ptr [rip + find_panel_y], edx
-    mov eax, dword ptr [rip + find_panel_width]
-    imul eax, 10
     xor edx, edx
-    mov ecx, 448
+    mov ecx, 10
     div ecx
-    cmp eax, dword ptr [rip + ui_font_size]
-    jbe .window_layout_find_font_width_ready
-    mov eax, dword ptr [rip + ui_font_size]
-.window_layout_find_font_width_ready:
-    mov ebx, eax
-    mov eax, dword ptr [rip + find_panel_height]
-    imul eax, 10
+    mov ebx, dword ptr [rip + window_width]
+    sub ebx, 32
+    cmp eax, ebx
+    jbe .window_layout_find_width_available
+    mov eax, ebx
+.window_layout_find_width_available:
+    mov ebx, dword ptr [rip + window_height]
+    sub ebx, 32
+    imul ebx, 448
     xor edx, edx
     mov ecx, 192
     div ecx
     cmp eax, ebx
-    jae .window_layout_find_font_store
-    mov ebx, eax
-.window_layout_find_font_store:
-    cmp ebx, 6
+    jbe .window_layout_find_scale_ready
+    mov eax, ebx
+.window_layout_find_scale_ready:
+    mov dword ptr [rip + find_panel_width], eax
+    imul eax, 192
+    xor edx, edx
+    mov ecx, 448
+    div ecx
+    mov dword ptr [rip + find_panel_height], eax
+    mov eax, dword ptr [rip + window_width]
+    sub eax, dword ptr [rip + find_panel_width]
+    shr eax, 1
+    mov dword ptr [rip + find_panel_x], eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, dword ptr [rip + find_panel_height]
+    shr eax, 1
+    mov dword ptr [rip + find_panel_y], eax
+    mov eax, dword ptr [rip + ui_font_size]
+    imul eax, 448
+    xor edx, edx
+    mov ecx, dword ptr [rip + find_panel_width]
+    div ecx
+    cmp eax, 6
     jae .window_layout_find_font_min_ready
-    mov ebx, 6
+    mov eax, 6
 .window_layout_find_font_min_ready:
-    mov dword ptr [rip + find_ui_font_size], ebx
+    mov dword ptr [rip + find_ui_font_size], eax
 
     # The path prompt uses the same fit-and-center policy with its 704x176
     # design dimensions. Its original four-pixel upward bias is retained.
