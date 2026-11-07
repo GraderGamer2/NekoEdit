@@ -59,7 +59,7 @@ def recv_wayland_message(connection: socket.socket):
 
 
 def synthetic_true_type_font() -> bytes:
-    """Build a tiny, valid SFNT directory with one format-4 cmap mapping A -> glyph 1."""
+    """Build a tiny SFNT with format-4 cmap mappings A -> glyph 1 and B -> glyph 2."""
     head = bytearray(54)
     struct.pack_into(">I", head, 0, 0x00010000)
     struct.pack_into(">I", head, 12, 0x5F0F3CF5)
@@ -73,7 +73,7 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">H", hhea, 34, 10)
 
     maxp = struct.pack(">IH", 0x00005000, 10)
-    hmtx = struct.pack(">20H", *([600, 0, 650, 0] + [600, 0] * 8))
+    hmtx = struct.pack(">20H", *([600, 0, 650, 0, 400, 0] + [600, 0] * 7))
     # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
     glyph_a = (
         struct.pack(">5h", 1, 0, 0, 500, 700)
@@ -144,12 +144,12 @@ def synthetic_true_type_font() -> bytes:
     loca = struct.pack(">11H", *loca_offsets)
 
     format4 = (
-        struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
-        + struct.pack(">2H", 0x0041, 0xFFFF)
+        struct.pack(">7H", 4, 40, 0, 6, 4, 1, 0)
+        + struct.pack(">3H", 0x0041, 0x0042, 0xFFFF)
         + struct.pack(">H", 0)
-        + struct.pack(">2H", 0x0041, 0xFFFF)
-        + struct.pack(">2h", -64, 1)
-        + struct.pack(">2H", 0, 0)
+        + struct.pack(">3H", 0x0041, 0x0042, 0xFFFF)
+        + struct.pack(">3h", -64, -64, 1)
+        + struct.pack(">3H", 0, 0, 0)
     )
     cmap = struct.pack(">HHHHI", 0, 1, 3, 1, 12) + format4
     tables = [
@@ -943,6 +943,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_raster_height", "font_probe_raster_pixels",
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
+                        "font_probe_advance_A", "font_probe_advance_B",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -964,6 +965,8 @@ xkb_symbols "nekoedit-sparse" {
                         "font_ascent": 800,
                         "font_descent": -200,
                         "font_num_hmetrics": 10,
+                        "font_probe_advance_A": 8,
+                        "font_probe_advance_B": 5,
                         "font_index_to_loc_format": 0,
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
@@ -4059,7 +4062,7 @@ if __name__ == "__main__":
         with os.fdopen(font_fd, "wb") as font_file:
             font_file.write(synthetic_true_type_font())
         with os.fdopen(render_fd, "wb") as render_file:
-            render_file.write(b"A")
+            render_file.write(b"ABA")
         run(
             sys.argv[1],
             initial_file=render_path,

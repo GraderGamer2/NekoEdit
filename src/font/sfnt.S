@@ -2042,6 +2042,12 @@ font_init:
     add rbx, 8
     jmp .Lfont_default_candidate_loop
 .Lfont_init_success:
+    mov edi, 'A'
+    call font_codepoint_advance_pixels
+    mov dword ptr [rip + font_probe_advance_A], eax
+    mov edi, 'B'
+    call font_codepoint_advance_pixels
+    mov dword ptr [rip + font_probe_advance_B], eax
     mov edi, 1
     mov esi, 12
     call font_rasterize_glyph

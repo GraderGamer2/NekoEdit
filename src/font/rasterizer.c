@@ -15,6 +15,7 @@ extern uint8_t font_glyph_point_flags[MAX_POINTS];
 extern int32_t font_glyph_points_x[MAX_POINTS], font_glyph_points_y[MAX_POINTS];
 extern int font_glyph_load_outline(uint32_t glyph_id);
 extern uint32_t font_cmap_lookup(uint32_t codepoint);
+extern uint32_t font_glyph_advance(uint32_t glyph_id);
 
 uint8_t font_bitmap_pixels[BITMAP_BYTES];
 uint32_t font_bitmap_width, font_bitmap_height, font_bitmap_pixel_count;
@@ -231,6 +232,34 @@ static struct cache_entry *cached(uint32_t glyph_id) {
 
 /* Wayland backend entry point. A fixed 8x12 editor cell currently positions
  * these 12px-em glyphs; the cache keeps outline work off the repaint hot path. */
+/*
+ * The layout and renderer share this hmtx-derived pixel advance. It uses the
+ * current 12px em and rounds to the nearest pixel. The legacy eight-pixel
+ * advance remains active when no supported font is loaded.
+ */
+int32_t font_probe_advance_A, font_probe_advance_B;
+int font_codepoint_advance_pixels(uint32_t codepoint) {
+    uint32_t glyph_id, advance, upem;
+    uint64_t scaled;
+    if (!font_loaded) return 8;
+    if (codepoint == 0x20) {
+        glyph_id = 0;
+    } else {
+        glyph_id = font_cmap_lookup(codepoint);
+        if (glyph_id == 0 && codepoint != 0x3f)
+            glyph_id = font_cmap_lookup(0x3f);
+    }
+    if (glyph_id >= (uint32_t)font_num_glyphs) return 8;
+    advance = font_glyph_advance(glyph_id);
+    upem = (uint32_t)font_units_per_em;
+    if (!advance || upem < 16 || upem > 16384) return 8;
+    scaled = (uint64_t)advance * 12u + upem / 2u;
+    scaled /= upem;
+    if (scaled < 1) scaled = 1;
+    if (scaled > 32) scaled = 32;
+    return (int)scaled;
+}
+
 int font_draw_codepoint(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
                         int32_t width,int32_t height,int32_t stride) {
     uint32_t gid;
