@@ -121,6 +121,9 @@ int main(void)
     preferences_set_font_path("relative-font.ttf");
     if (preferences_font_path_ptr)
         fail("relative font path should not be persisted");
+    preferences_set_font_path("/tmp/font\nbreak.ttf");
+    if (preferences_font_path_ptr)
+        fail("newline-containing font path should not be persisted");
 
     {
         FILE *file = fopen(file_path, "wb");
