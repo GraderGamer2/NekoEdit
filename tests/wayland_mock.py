@@ -1304,12 +1304,15 @@ xkb_symbols "nekoedit-sparse" {
                             f"horizontal wheel did not move the no-wrap viewport left by 14px: "
                             f"before={before_left}, after={state['doc_view_left_px']}"
                         )
-                    workflow_click(16, 98, 3140, "pointer hit-testing with horizontal offset")
+                    workflow_click(40, 98, 3140, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
                         raise AssertionError(
                             f"pointer hit-testing ignored the horizontal viewport offset: {state!r}"
                         )
+                    workflow_click(200, 20, 3145, "reopen Settings after horizontal hit-testing")
+                    if read_document_state()["settings_menu_open"] != 1:
+                        raise AssertionError("Settings did not reopen after document hit-testing")
                     workflow_click(200, 124, 3150, "re-enable Wrap Lines")
                     state = read_document_state()
                     if (
