@@ -1808,6 +1808,8 @@ wayland_main:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
+    cmp dword ptr [rip + window_attach_pending], 0
+    jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
@@ -5502,6 +5504,8 @@ window_apply_pending_resize:
 
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
+    jne .window_resize_done
+    cmp dword ptr [rip + window_attach_pending], 0
     jne .window_resize_done
     call present_buffer
 .window_resize_done:
