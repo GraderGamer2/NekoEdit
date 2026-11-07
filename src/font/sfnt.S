@@ -89,12 +89,21 @@ font_debug_byte: .byte 0
 .section .text
 .type font_debug_mark, @function
 font_debug_mark:
+    # Preserve syscall return values and live arguments around the trace write.
+    push rax
+    push rdi
+    push rsi
+    push rdx
     mov byte ptr [rip + font_debug_byte], dil
     mov eax, 1
     mov edi, 2
     lea rsi, [rip + font_debug_byte]
     mov edx, 1
     syscall
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rax
     ret
 .size font_debug_mark, . - font_debug_mark
 
