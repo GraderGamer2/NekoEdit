@@ -1,3 +1,20 @@
+## 2026-11-07 — Correct SFNT validation and responsive prompt geometry
+
+The first two CI attempts for the font-alignment change exposed two defects in the new code before any build was offered for manual testing:
+
+- Build and test [#409](https://github.com/GraderGamer2/NekoEdit/actions/runs/42359664591) built the executable and passed the CLI smoke tests, but the synthetic-font test ran against the system fallback face. The optional OS/2 lookup had changed EAX before the hmtx table-length calculation.
+- The follow-up [#410](https://github.com/GraderGamer2/NekoEdit/actions/runs/42359711753) still failed the synthetic-font test: the hmtx calculation reloaded the metric count for the byte-size multiplication, but still subtracted the clobbered EAX rather than the reloaded count when calculating trailing side-bearing bytes.
+
+### Corrections
+
+- The hmtx length calculation now uses the stored, validated hhea metric count for both the long-metric and trailing-side-bearing terms. The OS/2 parser's temporary register values can no longer affect the table-size validation.
+- The responsive path-prompt layout now reloads the panel height after computing its derived font size. This prevents the old vertical-centering calculation from accidentally using the font size as the panel height.
+- The rasterizer module comment now describes OS/2 USE_TYPO_METRICS with the hhea fallback rather than claiming hhea is always used.
+
+The existing responsive window test already asserts path-prompt Y/height at maximized, restored, edge-resized, and compact window sizes; it will exercise the centering correction. The next workflow is pending. No GNOME/Mutter visual result is claimed.
+
+---
+
 ## 2026-11-07 — Correct TrueType vertical metrics and overlay text sizing
 
 **User-facing issue:** the user reported that the newly loaded TTF font made the UI typography look misaligned and that text/caret/selection geometry in the Open/Save picker did not sit correctly. The existing synthetic-font tests covered glyph advances and row containment but did not exercise OS/2 typographic metrics or every overlay drawing call.

@@ -622,9 +622,9 @@ font_parse_mapped:
     # The optional OS/2 lookup clobbers EAX; reload the validated hhea metric count.
     # hmtx must contain all long metrics and the trailing side bearings.
     mov ecx, dword ptr [rip + font_num_hmetrics]
-    shl ecx, 2
     mov edx, r13d
-    sub edx, eax
+    sub edx, ecx
+    shl ecx, 2
     shl edx, 1
     add ecx, edx
     cmp dword ptr [rip + font_hmtx_length], ecx

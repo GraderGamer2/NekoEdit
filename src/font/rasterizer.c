@@ -231,8 +231,9 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
 }
 
 /* Wayland backend entry point. Document layout uses the same 12px-em
- * horizontal advances and hhea-derived vertical line box as this rasterizer.
- * The cache keeps outline work off the repaint hot path. */
+ * horizontal advances and OS/2 typographic line metrics when USE_TYPO_METRICS
+ * is declared, with hhea metrics as the fallback. The cache keeps outline work
+ * off the repaint hot path. */
 /*
  * The layout and renderer share this hmtx-derived pixel advance. It uses the
  * current 12px em and rounds to the nearest pixel. The legacy eight-pixel

@@ -7801,6 +7801,8 @@ window_update_layout_geometry:
 .window_layout_prompt_font_store:
     mov dword ptr [rip + path_prompt_font_size], eax
 
+    # Restore the panel height: EAX held the derived text size above.
+    mov eax, dword ptr [rip + path_prompt_height]
     mov edx, dword ptr [rip + window_height]
     sub edx, eax
     shr edx, 1
