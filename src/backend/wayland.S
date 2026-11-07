@@ -11213,6 +11213,7 @@ draw_bounded_ascii:
     push r12
     push r13
     push r14
+    push r15
     mov rbx, rdx
     mov r12d, edi
     mov r13d, esi
@@ -11231,15 +11232,19 @@ draw_bounded_ascii:
 .draw_bounded_ascii_replacement:
     mov edx, '?'
 .draw_bounded_ascii_glyph:
+    mov r15d, edx
     mov edi, r12d
     mov esi, r13d
     call draw_glyph
-    add r12d, CELL_WIDTH
+    mov edi, r15d
+    call font_codepoint_advance_pixels
+    add r12d, eax
     inc rbx
     dec r14d
     jmp .draw_bounded_ascii_loop
 .draw_bounded_ascii_done:
     mov eax, r12d
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -11992,28 +11997,58 @@ render_path_prompt:
     mov r8d, 36
     mov r9d, 0xff252a33
     call draw_rect
-    mov r12d, dword ptr [rip + path_prompt_length]
-    xor r14d, r14d
-    cmp r12d, 76
-    jbe .render_path_prompt_start_ready
-    mov r14d, r12d
-    sub r14d, 76
+
+    # Retain the widest suffix that fits the prompt's 608-pixel text viewport.
+    # Walking backward by hmtx advances keeps the caret visible for long paths.
+    lea rbx, [rip + path_prompt_buffer]
+    mov r14d, dword ptr [rip + path_prompt_length]
+    xor r13d, r13d
+.render_path_prompt_find_start:
+    test r14d, r14d
+    jz .render_path_prompt_start_ready
+    mov eax, r14d
+    dec eax
+    movzx edi, byte ptr [rbx + rax]
+    cmp edi, 32
+    jb .render_path_prompt_find_replacement
+    cmp edi, 126
+    jbe .render_path_prompt_find_advance
+.render_path_prompt_find_replacement:
+    mov edi, '?'
+.render_path_prompt_find_advance:
+    call font_codepoint_advance_pixels
+    lea edx, [r13d + eax]
+    cmp edx, 608
+    ja .render_path_prompt_start_ready
+    mov r13d, edx
+    dec r14d
+    jmp .render_path_prompt_find_start
 .render_path_prompt_start_ready:
     lea rbx, [rip + path_prompt_buffer]
     add rbx, r14
+    mov r12d, r14d
     mov r13d, 96
-    xor r12d, r12d
 .render_path_prompt_chars:
-    cmp r12d, 76
+    cmp r12d, dword ptr [rip + path_prompt_length]
     jae .render_path_prompt_caret
-    movzx edx, byte ptr [rbx]
-    test edx, edx
+    movzx ebp, byte ptr [rbx]
+    test ebp, ebp
     jz .render_path_prompt_caret
+    cmp ebp, 32
+    jb .render_path_prompt_char_replacement
+    cmp ebp, 126
+    jbe .render_path_prompt_char_ready
+.render_path_prompt_char_replacement:
+    mov ebp, '?'
+.render_path_prompt_char_ready:
     mov edi, r13d
     mov esi, 218
+    mov edx, ebp
     call draw_glyph
+    mov edi, ebp
+    call font_codepoint_advance_pixels
+    add r13d, eax
     inc rbx
-    add r13d, CELL_WIDTH
     inc r12d
     jmp .render_path_prompt_chars
 .render_path_prompt_caret:
