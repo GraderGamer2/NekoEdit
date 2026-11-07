@@ -86,20 +86,21 @@
 .equ PATH_CAPACITY,    4096
 .equ PICKER_MAX_ENTRIES, 128
 .equ PICKER_ENTRY_SIZE, 260
+.equ PICKER_ROW_HEIGHT, 16
 .equ PICKER_DIR_BYTES, 8192
-.equ PICKER_VISIBLE_ROWS, 15
+.equ PICKER_VISIBLE_ROWS, 13
 .equ PICKER_SUGGESTION_MAX, 5
-.equ PICKER_SUGGESTION_TOP, 272
+.equ PICKER_SUGGESTION_TOP, 264
 .equ PICKER_SUGGESTION_ROW_HEIGHT, 16
-.equ PICKER_SUGGESTION_BOTTOM, 356
+.equ PICKER_SUGGESTION_BOTTOM, 348
 .equ PICKER_PATH_VISIBLE_CHARS, 82
 .equ PICKER_NAME_VISIBLE_CHARS, 52
-.equ PICKER_TRACK_TOP, 130
-.equ PICKER_TRACK_HEIGHT, 210
+.equ PICKER_TRACK_TOP, 144
+.equ PICKER_TRACK_HEIGHT, 208
 .equ PICKER_TRACK_X, 724
 .equ PICKER_TRACK_WIDTH, 12
 .equ PICKER_TRACK_MIN_THUMB, 18
-.equ PICKER_WHEEL_ROW_FIXED, (14 * 256)
+.equ PICKER_WHEEL_ROW_FIXED, (16 * 256)
 .equ DOC_SCROLL_TRACK_WIDTH, 6
 .equ DOC_SCROLL_TRACK_X_OFFSET, 24
 .equ DOC_SCROLL_MIN_THUMB, 20
@@ -3260,7 +3261,7 @@ wayland_main:
 
 .pointer_settings_font_increase:
     mov eax, dword ptr [rip + doc_font_size]
-    cmp eax, 24
+    cmp eax, 32
     jae .pointer_settings_font_close
     add eax, 2
 
@@ -3283,14 +3284,18 @@ wayland_main:
     jbe .pointer_settings_font_close
     dec eax
     mov dword ptr [rip + ui_font_size], eax
+    call window_update_geometry
+    call doc_ensure_cursor_visible
     jmp .pointer_settings_font_close
 
 .pointer_settings_ui_font_increase:
     mov eax, dword ptr [rip + ui_font_size]
-    cmp eax, 14
+    cmp eax, 16
     jae .pointer_settings_font_close
     inc eax
     mov dword ptr [rip + ui_font_size], eax
+    call window_update_geometry
+    call doc_ensure_cursor_visible
     jmp .pointer_settings_font_close
 
 .pointer_menu_open:
@@ -6016,9 +6021,9 @@ picker_handle_pointer:
 
 .picker_pointer_controls:
     # Editable location field.
-    cmp r13d, 64
+    cmp r13d, 80
     jb .picker_pointer_toolbar
-    cmp r13d, 92
+    cmp r13d, 108
     jae .picker_pointer_toolbar
     cmp r12d, 56
     jb .picker_pointer_done
@@ -6047,9 +6052,9 @@ picker_handle_pointer:
     jmp .picker_pointer_done
 
 .picker_pointer_toolbar:
-    cmp r13d, 96
+    cmp r13d, 112
     jb .picker_pointer_list
-    cmp r13d, 124
+    cmp r13d, 138
     jae .picker_pointer_list
     cmp r12d, 56
     jb .picker_pointer_done
@@ -6098,9 +6103,9 @@ picker_handle_pointer:
     call picker_accept_suggestion
     jmp .picker_pointer_done
 .picker_pointer_list_rows_area:
-    cmp r13d, 128
+    cmp r13d, 144
     jb .picker_pointer_name
-    cmp r13d, 350
+    cmp r13d, 352
     jae .picker_pointer_name
     cmp r12d, 56
     jb .picker_pointer_done
@@ -6115,9 +6120,9 @@ picker_handle_pointer:
     jmp .picker_pointer_done
 .picker_pointer_list_rows:
     mov eax, r13d
-    sub eax, 130
+    sub eax, PICKER_TRACK_TOP
     xor edx, edx
-    mov ecx, 14
+    mov ecx, PICKER_ROW_HEIGHT
     div ecx
     add eax, dword ptr [rip + picker_scroll]
     cmp eax, dword ptr [rip + picker_entry_count]
@@ -7886,9 +7891,9 @@ window_update_geometry:
     jae .window_geometry_line_height_minimum_ready
     mov eax, dword ptr [rip + doc_font_size]
 .window_geometry_line_height_minimum_ready:
-    cmp eax, 32
+    cmp eax, 48
     jbe .window_geometry_line_height_ready
-    mov eax, 32
+    mov eax, 48
     jmp .window_geometry_line_height_ready
 .window_geometry_line_height_default:
     mov eax, dword ptr [rip + doc_font_size]
@@ -7931,9 +7936,9 @@ window_update_layout_geometry:
     # windows, both dimensions shrink to a 16px outer margin and are centered.
     mov eax, dword ptr [rip + window_width]
     sub eax, 32
-    cmp eax, 720
+    cmp eax, 744
     jbe .window_layout_picker_width_ready
-    mov eax, 720
+    mov eax, 744
 .window_layout_picker_width_ready:
     mov dword ptr [rip + picker_panel_width], eax
     mov edx, dword ptr [rip + window_width]
@@ -7943,9 +7948,9 @@ window_update_layout_geometry:
 
     mov eax, dword ptr [rip + window_height]
     sub eax, 32
-    cmp eax, 408
+    cmp eax, 424
     jbe .window_layout_picker_height_ready
-    mov eax, 408
+    mov eax, 424
 .window_layout_picker_height_ready:
     mov dword ptr [rip + picker_panel_height], eax
     mov edx, dword ptr [rip + window_height]
@@ -7953,8 +7958,8 @@ window_update_layout_geometry:
     shr edx, 1
     mov dword ptr [rip + picker_panel_y], edx
 
-    # Scale picker glyph bitmaps with the tighter axis so they remain inside
-    # the transformed 720x408 design controls at minimum window dimensions.
+    # The picker follows the UI font preference and shrinks only when the
+    # fitted modal is smaller than its 720x408 design space.
     mov eax, dword ptr [rip + picker_panel_width]
     imul eax, 408
     mov edx, dword ptr [rip + picker_panel_height]
@@ -7962,14 +7967,14 @@ window_update_layout_geometry:
     cmp eax, edx
     ja .window_layout_picker_font_height
     mov eax, dword ptr [rip + picker_panel_width]
-    imul eax, 10
+    imul eax, dword ptr [rip + ui_font_size]
     xor edx, edx
     mov ecx, 720
     div ecx
     jmp .window_layout_picker_font_clamp
 .window_layout_picker_font_height:
     mov eax, dword ptr [rip + picker_panel_height]
-    imul eax, 10
+    imul eax, dword ptr [rip + ui_font_size]
     xor edx, edx
     mov ecx, 408
     div ecx
@@ -7978,9 +7983,9 @@ window_update_layout_geometry:
     jae .window_layout_picker_font_min_ready
     mov eax, 6
 .window_layout_picker_font_min_ready:
-    cmp eax, 10
+    cmp eax, dword ptr [rip + ui_font_size]
     jbe .window_layout_picker_font_store
-    mov eax, 10
+    mov eax, dword ptr [rip + ui_font_size]
 .window_layout_picker_font_store:
     mov dword ptr [rip + picker_ui_font_size], eax
 
@@ -8006,8 +8011,7 @@ window_update_layout_geometry:
 .window_layout_prompt_height_ready:
     mov dword ptr [rip + path_prompt_height], eax
 
-    # Size prompt glyphs with the tighter of the prompt's horizontal/vertical
-    # fit ratios. Advances remain in 10px design units and share the X transform.
+    # The path prompt follows the same UI preference and scales down only to fit.
     mov eax, dword ptr [rip + path_prompt_width]
     imul eax, 176
     mov edx, dword ptr [rip + path_prompt_height]
@@ -8015,14 +8019,14 @@ window_update_layout_geometry:
     cmp eax, edx
     ja .window_layout_prompt_font_height
     mov eax, dword ptr [rip + path_prompt_width]
-    imul eax, 10
+    imul eax, dword ptr [rip + ui_font_size]
     xor edx, edx
     mov ecx, 704
     div ecx
     jmp .window_layout_prompt_font_clamp
 .window_layout_prompt_font_height:
     mov eax, dword ptr [rip + path_prompt_height]
-    imul eax, 10
+    imul eax, dword ptr [rip + ui_font_size]
     xor edx, edx
     mov ecx, 176
     div ecx
@@ -8031,9 +8035,9 @@ window_update_layout_geometry:
     jae .window_layout_prompt_font_min_ready
     mov eax, 6
 .window_layout_prompt_font_min_ready:
-    cmp eax, 10
+    cmp eax, dword ptr [rip + ui_font_size]
     jbe .window_layout_prompt_font_store
-    mov eax, 10
+    mov eax, dword ptr [rip + ui_font_size]
 .window_layout_prompt_font_store:
     mov dword ptr [rip + path_prompt_font_size], eax
 
@@ -11369,11 +11373,39 @@ draw_decimal:
     push r12
     push r13
     push r14
-    sub rsp, 16
+    push r15
+    sub rsp, 40
     mov r13d, edi
     mov r14d, esi
     mov ebx, eax
-    lea r12, [rsp + 15]
+    mov r15d, dword ptr [rip + ui_font_size]
+    test r15d, r15d
+    jnz .Lneko_draw_decimal_size_ready
+    mov r15d, 10
+.Lneko_draw_decimal_size_ready:
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .Lneko_draw_decimal_measure_digits
+    mov r15d, dword ptr [rip + ui_transform_font_size]
+.Lneko_draw_decimal_measure_digits:
+    # Use the widest digit advance as a fixed cell. This keeps numerical
+    # columns aligned when a proportional UI font is selected.
+    xor ebp, ebp
+    mov dword ptr [rsp + 12], 0
+.Lneko_draw_decimal_measure_loop:
+    mov eax, dword ptr [rsp + 12]
+    lea edi, [eax + '0']
+    call ui_font_advance_pixels
+    cmp eax, ebp
+    jbe .Lneko_draw_decimal_measure_next
+    mov ebp, eax
+.Lneko_draw_decimal_measure_next:
+    mov eax, dword ptr [rsp + 12]
+    inc eax
+    mov dword ptr [rsp + 12], eax
+    cmp eax, 10
+    jb .Lneko_draw_decimal_measure_loop
+    mov dword ptr [rsp], ebp
+    lea r12, [rsp + 31]
     mov byte ptr [r12], 0
 .Lneko_draw_decimal_convert:
     mov eax, ebx
@@ -11387,32 +11419,34 @@ draw_decimal:
     test ebx, ebx
     jnz .Lneko_draw_decimal_convert
 .Lneko_draw_decimal_paint:
-    movzx edx, byte ptr [r12]
-    test edx, edx
+    movzx eax, byte ptr [r12]
+    test eax, eax
     jz .Lneko_draw_decimal_done
-    mov edi, r13d
-    mov esi, r14d
-    mov ecx, 10
-    cmp dword ptr [rip + ui_transform_active], 0
-    je .Lneko_draw_decimal_size_ready
-    mov ecx, dword ptr [rip + ui_transform_font_size]
-.Lneko_draw_decimal_size_ready:
-    call draw_glyph
-    movzx edi, byte ptr [r12]
+    mov dword ptr [rsp + 32], eax
+    mov edi, eax
     call ui_font_advance_pixels
-    add r13d, eax
+    mov dword ptr [rsp + 36], eax
+    mov ecx, dword ptr [rsp]
+    sub ecx, eax
+    shr ecx, 1
+    lea edi, [r13d + ecx]
+    mov esi, r14d
+    mov edx, dword ptr [rsp + 32]
+    mov ecx, r15d
+    call draw_glyph
+    add r13d, dword ptr [rsp]
     inc r12
     jmp .Lneko_draw_decimal_paint
 .Lneko_draw_decimal_done:
     mov eax, r13d
-    add rsp, 16
+    add rsp, 40
+    pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
     pop rbp
-    ret
-.size draw_decimal, . - draw_decimal
+    ret.size draw_decimal, . - draw_decimal
 
 # Render the live logical line/column and current byte count in the footer.
 # Columns are one-based; tabs advance to the next four-column stop.
@@ -11495,7 +11529,15 @@ render_status_bar:
     jmp .Lneko_status_scan
 .Lneko_status_scan_done:
     mov r12d, dword ptr [rip + window_status_top]
-    add r12d, 6
+    mov eax, dword ptr [rip + ui_font_size]
+    test eax, eax
+    jnz .Lneko_status_font_ready
+    mov eax, 10
+.Lneko_status_font_ready:
+    mov ecx, 22
+    sub ecx, eax
+    sar ecx, 1
+    add r12d, ecx
     mov edi, 16
     mov esi, r12d
     lea rdx, [rip + ui_label_line]
@@ -11822,24 +11864,24 @@ render_picker:
     cmp dword ptr [rip + picker_mode], 1
     jne .render_picker_title_save
     mov edi, 56
-    mov esi, 48
+    mov esi, 40
     lea rdx, [rip + ui_picker_open_title]
     call draw_text
     jmp .render_picker_path
 .render_picker_title_save:
     mov edi, 56
-    mov esi, 48
+    mov esi, 40
     lea rdx, [rip + ui_picker_save_title]
     call draw_text
 
 .render_picker_path:
     mov edi, 56
-    mov esi, 55
+    mov esi, 62
     lea rdx, [rip + ui_picker_path_label]
     call draw_text
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
-    mov edx, 64
+    mov edx, 80
     mov ecx, 688
     mov r8d, 28
     mov r9d, 0xff252a33
@@ -11848,7 +11890,7 @@ render_picker:
     jne .render_picker_path_text
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
-    mov edx, 91
+    mov edx, 107
     mov ecx, 688
     mov r8d, 1
     mov r9d, 0xff78a9d4
@@ -11860,7 +11902,7 @@ render_picker:
     je .render_picker_path_window
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 64
-    mov edx, 68
+    mov edx, 84
     mov ecx, 672
     mov r8d, 16
     mov r9d, 0xff414b5a
@@ -11881,7 +11923,7 @@ render_picker:
     mov eax, dword ptr [rip + picker_path_view_start]
     add rdx, rax
     mov edi, 64
-    mov esi, 72
+    mov esi, 88
     mov ecx, 672
     call draw_bounded_ascii_width
     cmp dword ptr [rip + picker_focus], 1
@@ -11891,7 +11933,7 @@ render_picker:
     lea eax, [r12d + 64]
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, eax
-    mov edx, 68
+    mov edx, 84
     mov ecx, 1
     mov r8d, 18
     mov r9d, 0xfff0f3f7
@@ -11901,41 +11943,41 @@ render_picker:
     # Up, Home, and hidden-file visibility controls.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
-    mov edx, 96
+    mov edx, 112
     mov ecx, 44
     mov r8d, 26
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 68
-    mov esi, 103
+    mov esi, 119
     lea rdx, [rip + ui_picker_up_label]
     call draw_text
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 104
-    mov edx, 96
+    mov edx, 112
     mov ecx, 56
     mov r8d, 26
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 116
-    mov esi, 103
+    mov esi, 119
     lea rdx, [rip + ui_picker_home_label]
     call draw_text
     mov edi, 600
-    mov esi, 103
+    mov esi, 119
     lea rdx, [rip + ui_picker_hidden_label]
     call draw_text
     # Bordered 16x16 checkbox, with a filled interior and visible check mark.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 714
-    mov edx, 100
+    mov edx, 116
     mov ecx, 16
     mov r8d, 16
     mov r9d, 0xff9aa7b8
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 716
-    mov edx, 102
+    mov edx, 118
     mov ecx, 12
     mov r8d, 12
     mov r9d, 0xff252a33
@@ -11944,22 +11986,22 @@ render_picker:
     je .render_picker_list
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 716
-    mov edx, 102
+    mov edx, 118
     mov ecx, 12
     mov r8d, 12
     mov r9d, 0xff78a9d4
     call draw_rect
     mov edi, 718
-    mov esi, 102
+    mov esi, 118
     lea rdx, [rip + ui_picker_check_mark]
     call draw_text
 
 .render_picker_list:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
-    mov edx, 128
+    mov edx, 142
     mov ecx, 688
-    mov r8d, 222
+    mov r8d, 210
     mov r9d, 0xff252a33
     call draw_rect
     # A scrollbar exists only when entries overflow the visible list.
@@ -12000,10 +12042,10 @@ render_picker:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 58
     mov eax, r13d
-    imul eax, 14
-    lea edx, [rax + 130]
+    imul eax, PICKER_ROW_HEIGHT
+    lea edx, [rax + PICKER_TRACK_TOP]
     mov ecx, 660
-    mov r8d, 14
+    mov r8d, PICKER_ROW_HEIGHT
     mov r9d, 0xff414b5a
     call draw_rect
 .render_picker_row_text:
@@ -12013,8 +12055,8 @@ render_picker:
     add rbx, rax
     mov edi, 64
     mov eax, r13d
-    imul eax, 14
-    lea esi, [rax + 131]
+    imul eax, PICKER_ROW_HEIGHT
+    lea esi, [rax + PICKER_TRACK_TOP + 2]
     cmp byte ptr [rbx], 1
     jne .render_picker_file_marker
     lea rdx, [rip + ui_picker_dir_marker]
@@ -12027,8 +12069,8 @@ render_picker:
     lea rdx, [rbx + 4]
     mov edi, 96
     mov eax, r13d
-    imul eax, 14
-    lea esi, [rax + 131]
+    imul eax, PICKER_ROW_HEIGHT
+    lea esi, [rax + PICKER_TRACK_TOP + 2]
     mov ecx, 612
     call draw_bounded_ascii_width
     inc r13d
@@ -12038,7 +12080,7 @@ render_picker:
     cmp dword ptr [rip + picker_entry_count], 0
     jne .render_picker_suggestions
     mov edi, 72
-    mov esi, 142
+    mov esi, 158
     lea rdx, [rip + ui_picker_empty]
     call draw_text
 

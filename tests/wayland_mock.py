@@ -2100,6 +2100,7 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_mode", "picker_focus", "picker_name_length",
                         "picker_name_cursor", "picker_name_view_start",
                         "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
+                        "picker_panel_width", "picker_panel_height", "picker_panel_x", "picker_panel_y",
                         "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                     }
@@ -2129,34 +2130,47 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
                     if picker_u32("picker_mode") != 1:
                         raise AssertionError("font picker test could not open the Open dialog")
-                    if picker_u32("picker_ui_font_size") != 8 or picker_u32("ui_transform_font_size") != 8:
-                        raise AssertionError("800x360 picker should render and measure at its height-fitted 8px UI font")
+                    if (
+                        picker_u32("picker_ui_font_size") != 10
+                        or picker_u32("ui_transform_font_size") != 10
+                        or picker_u32("picker_panel_width") != 744
+                        or picker_u32("picker_panel_height") != 424
+                        or picker_u32("picker_panel_x") != 28
+                        or picker_u32("picker_panel_y") != 28
+                    ):
+                        raise AssertionError(
+                            "normal-size picker should follow the 10px UI font and use the centered 744x424 panel: "
+                            f"font={picker_u32('picker_ui_font_size')}, "
+                            f"panel=({picker_u32('picker_panel_x')},{picker_u32('picker_panel_y')},"
+                            f"{picker_u32('picker_panel_width')},{picker_u32('picker_panel_height')})"
+                        )
 
                     # The title must sit comfortably inside the transformed header.
                     # O's top-row second pixel is known in the embedded fallback face.
-                    title_y = 16 + ((48 - 36) * 328 // 408)
-                    old_title_y = 16 + ((44 - 36) * 328 // 408)
+                    title_y = 28 + ((40 - 36) * 424 // 408)
                     title_ink_rows = [
-                        y for y in range(title_y, 39)
+                        y for y in range(title_y, title_y + 10)
                         for x in range(32, 110)
                         if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
                         == 0xFFD8DEE9
                     ]
-                    old_position_ink = any(
-                        struct.unpack_from("<I", pixels, old_title_y * 800 * 4 + x * 4)[0]
+                    location_label_y = 28 + ((62 - 36) * 424 // 408)
+                    location_ink_rows = [
+                        y for y in range(location_label_y, location_label_y + 10)
+                        for x in range(48, 124)
+                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
                         == 0xFFD8DEE9
-                        for x in range(32, 110)
-                    )
+                    ]
                     if (
                         not title_ink_rows
+                        or not location_ink_rows
                         or min(title_ink_rows) < title_y
                         or min(title_ink_rows) >= title_y + 3
-                        or old_position_ink
+                        or max(title_ink_rows) >= min(location_ink_rows)
                     ):
                         raise AssertionError(
-                            f"picker title is not vertically clear in its header: "
-                            f"expected_top={title_y}, ink_rows={title_ink_rows!r}, "
-                            f"old_position_ink={old_position_ink}"
+                            f"picker title/Location labels overlap or are misplaced: "
+                            f"title_rows={title_ink_rows!r}, location_rows={location_ink_rows!r}"
                         )
 
                     # Leave breathing room between the Bytes label and its value.
@@ -2164,10 +2178,10 @@ xkb_symbols "nekoedit-sparse" {
                     # glyphs and its 3px SPACE. The document's "9" count starts
                     # at x=527; its central lit pixel on row 3 is x=529.
                     bytes_gap_pixel = struct.unpack_from(
-                        "<I", pixels, 349 * 800 * 4 + 524 * 4
+                        "<I", pixels, 469 * 800 * 4 + 524 * 4
                     )[0]
                     bytes_value_pixel = struct.unpack_from(
-                        "<I", pixels, 349 * 800 * 4 + 529 * 4
+                        "<I", pixels, 469 * 800 * 4 + 529 * 4
                     )[0]
                     if bytes_gap_pixel != 0xFF343D4B or bytes_value_pixel != 0xFFD8DEE9:
                         raise AssertionError(
@@ -2177,21 +2191,17 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Bitmap-fallback labels and TrueType field contents share a
                     # baseline; the Search label starts on the transformed 368px row.
-                    search_label_y = 16 + ((368 - 36) * 328 // 408)
-                    search_label_pixel = struct.unpack_from(
-                        "<I", pixels, search_label_y * 800 * 4 + 57 * 4
-                    )[0]
-                    if search_label_pixel != 0xFFD8DEE9:
+                    search_label_y = 28 + ((368 - 36) * 424 // 408)
+                    if not antialiased_ink_present(44, search_label_y, 72, 10):
                         raise AssertionError(
-                            f"Search label baseline is misplaced: y={search_label_y}, "
-                            f"pixel={hex(search_label_pixel)}"
+                            f"Search label is not visible at its transformed baseline: y={search_label_y}"
                         )
 
                     # Focus accents are underlines at the bottom of each field,
                     # not rules overlaid on the top edge.
-                    workflow_click(200, 50, 2615, "focus picker path field")
-                    path_top_y = 16 + ((64 - 36) * 328 // 408)
-                    path_bottom_y = 16 + ((91 - 36) * 328 // 408)
+                    workflow_click(200, 90, 2615, "focus picker path field")
+                    path_top_y = 28 + ((80 - 36) * 424 // 408)
+                    path_bottom_y = 28 + ((107 - 36) * 424 // 408)
                     path_top_pixel = struct.unpack_from(
                         "<I", pixels, path_top_y * 800 * 4 + 200 * 4
                     )[0]
@@ -2204,7 +2214,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"bottom={hex(path_underline_pixel)}"
                         )
 
-                    workflow_click(200, 286, 2620, "focus filename search field")
+                    workflow_click(200, 378, 2620, "focus filename search field")
                     # The fixture maps uppercase A/B to distinct 7px/4px advances.
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 2628, 2628, 42, 1))
@@ -2226,11 +2236,12 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     # Synthetic hmtx: A=650/1000em and B=400/1000em.
-                    # At an 8px rendered em these round to 5px + 3px.
-                    expected_caret_x = 176 + ((650 * 8 + 500) // 1000) + ((400 * 8 + 500) // 1000)
-                    caret_y = 16 + ((365 - 36) * 328 // 408)
-                    focus_top_y = 16 + ((360 - 36) * 328 // 408)
-                    focus_bottom_y = 16 + ((387 - 36) * 328 // 408)
+                    # At a 10px rendered em these round to 7px + 4px.
+                    expected_caret_x_design = 176 + ((650 * 10 + 500) // 1000) + ((400 * 10 + 500) // 1000)
+                    expected_caret_x = 28 + ((expected_caret_x_design - 40) * 744 // 720)
+                    caret_y = 28 + ((365 - 36) * 424 // 408)
+                    focus_top_y = 28 + ((360 - 36) * 424 // 408)
+                    focus_bottom_y = 28 + ((387 - 36) * 424 // 408)
                     caret_pixel = struct.unpack_from("<I", pixels, caret_y * 800 * 4 + expected_caret_x * 4)[0]
                     focus_top_pixel = struct.unpack_from("<I", pixels, focus_top_y * 800 * 4 + 200 * 4)[0]
                     focus_line_pixel = struct.unpack_from("<I", pixels, focus_bottom_y * 800 * 4 + 200 * 4)[0]
@@ -2244,21 +2255,19 @@ xkb_symbols "nekoedit-sparse" {
                             f"top={hex(focus_top_pixel)}, underline={hex(focus_line_pixel)}"
                         )
 
-                    # x=183 is past the B midpoint with the 8px rendered font,
-                    # but before it with the old fixed 10px advance. It must
-                    # resolve to the insertion boundary after B.
-                    workflow_click(183, 286, 2640, "proportional click after second glyph")
+                    # Use the same proportional 10px metrics for pointer hit-testing.
+                    workflow_click(186, 378, 2640, "proportional click after second glyph")
                     if picker_u32("picker_name_cursor") != 2:
                         raise AssertionError(
                             f"picker hit-testing did not use proportional advances: cursor={picker_u32('picker_name_cursor')}"
                         )
 
                     # Select row 1 (the fixture file named AB, after nested-dir).
-                    workflow_click(120, 108, 2650, "select AB row in Open picker")
+                    workflow_click(110, 160, 2650, "select AB row in Open picker")
                     if picker_u32("picker_selected") != 1 or picker_u32("picker_focus") != 0:
                         raise AssertionError("picker row click did not select the expected AB entry")
-                    selected_row_top = 16 + ((144 - 36) * 328 // 408)
-                    selected_row_height = (14 * 328 + 408 - 1) // 408
+                    selected_row_top = 28 + ((160 - 36) * 424 // 408)
+                    selected_row_height = (16 * 424 + 408 - 1) // 408
                     selected_row_bottom = selected_row_top + selected_row_height
                     top_fill = struct.unpack_from(
                         "<I", pixels, selected_row_top * 800 * 4 + 58 * 4
@@ -2268,7 +2277,7 @@ xkb_symbols "nekoedit-sparse" {
                     )[0]
                     if top_fill != 0xFF414B5A or bottom_fill != 0xFF414B5A:
                         raise AssertionError(
-                            f"selected row highlight is not aligned to its transformed 14px row: "
+                            f"selected row highlight is not aligned to its transformed 16px row: "
                             f"{hex(top_fill)}/{hex(bottom_fill)}"
                         )
                     # Inspect pixels above the selected band as well as inside it.
@@ -2304,14 +2313,14 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 10
                     if picker_u32("settings_menu_open") != 1:
                         raise AssertionError("Settings did not remain open after opening")
-                    for index in range(6):
+                    for index in range(10):
                         workflow_click(400, 76, serial, f"increase document font size {index + 1} without closing Settings")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("document font-size adjustment unexpectedly closed Settings")
                     if (
-                        picker_u32("doc_font_size") != 24
-                        or picker_u32("window_doc_line_height") != 29
+                        picker_u32("doc_font_size") != 32
+                        or picker_u32("window_doc_line_height") != 39
                         or picker_u32("doc_line_index_valid") != 1
                     ):
                         raise AssertionError(
@@ -2328,7 +2337,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"font-size change did not rewrap the document index: {large_size_record!r}"
                         )
 
-                    for index in range(6):
+                    for index in range(10):
                         workflow_click(360, 76, serial, f"decrease document font size {index + 1} without closing Settings")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
@@ -2354,25 +2363,69 @@ xkb_symbols "nekoedit-sparse" {
 
                     if picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font-size controls must not modify document font size")
-                    for index in range(4):
+                    for index in range(6):
                         workflow_click(400, 100, serial, f"increase independent UI font size {index + 1}")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("UI font-size increase unexpectedly closed Settings")
-                    if picker_u32("ui_font_size") != 14 or picker_u32("doc_font_size") != 12:
-                        raise AssertionError("UI font size did not reach 14px independently of document size")
-                    for index in range(4):
+                    if picker_u32("ui_font_size") != 16 or picker_u32("doc_font_size") != 12:
+                        raise AssertionError("UI font size did not reach 16px independently of document size")
+                    for index in range(6):
                         workflow_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("UI font-size decrease unexpectedly closed Settings")
                     if picker_u32("ui_font_size") != 10 or picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font size did not return to 10px independently")
+                    # Re-open the picker at the enlarged UI setting. Its text
+                    # should use the exact selected size when the window has room.
+                    for index in range(6):
+                        workflow_click(400, 100, serial, f"raise UI font for picker follow-through {index + 1}")
+                        serial += 10
+                    workflow_click(120, 12, serial, "open File menu at 16px UI size")
+                    serial += 10
+                    workflow_click(120, 44, serial, "open picker at 16px UI size")
+                    serial += 10
+                    if picker_u32("picker_ui_font_size") != 16 or picker_u32("ui_transform_font_size") != 16:
+                        raise AssertionError(
+                            f"picker did not follow 16px UI preference: picker={picker_u32('picker_ui_font_size')}, "
+                            f"transform={picker_u32('ui_transform_font_size')}"
+                        )
+                    # Larger UI text must still fit wholly inside the 16px
+                    # directory row; the selected background is the clip oracle.
+                    workflow_click(110, 160, serial, "select AB row at 16px UI size")
+                    serial += 10
+                    large_row_top = 28 + ((160 - 36) * 424 // 408)
+                    large_row_bottom = large_row_top + ((16 * 424 + 407) // 408)
+                    large_row_ink = []
+                    for y in range(large_row_top - 2, large_row_bottom + 2):
+                        for x in range(84, 122):
+                            pixel = struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                            if pixel not in (0xFF414B5A, 0xFF252A33):
+                                large_row_ink.append(y)
+                    if (
+                        picker_u32("picker_selected") != 1
+                        or not large_row_ink
+                        or min(large_row_ink) < large_row_top
+                        or max(large_row_ink) >= large_row_bottom
+                    ):
+                        raise AssertionError(
+                            f"16px picker text escaped its 16px row: "
+                            f"band=({large_row_top},{large_row_bottom}), ink={large_row_ink!r}, "
+                            f"selected={picker_u32('picker_selected')}"
+                        )
+                    key_step(serial, 1, "close picker after UI font inheritance check")
+                    serial += 10
+                    workflow_click(200, 20, serial, "open Settings after picker font test")
+                    serial += 10
+                    for index in range(6):
+                        workflow_click(360, 100, serial, f"restore default UI font {index + 1}")
+                        serial += 10
                     key_step(serial, 1, "close Settings after font-size adjustments")
                     if picker_u32("settings_menu_open") != 0:
                         raise AssertionError("Escape did not close Settings after adjustment")
                     observations.append(
-                        "picker layout; persistent-open Settings; independent 12–24px document and 8–14px UI font sizing verified"
+                        "picker inherits UI typography; title/Location non-overlap; persistent-open Settings; independent 12–32px document and 8–16px UI font sizing verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -2447,7 +2500,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     def assert_picker(label: str) -> None:
                         panel_pixel = struct.unpack_from("<I", pixels, 70 * 800 * 4 + 40 * 4)[0]
-                        path_pixel = struct.unpack_from("<I", pixels, 64 * 800 * 4 + 56 * 4)[0]
+                        path_pixel = struct.unpack_from("<I", pixels, 75 * 800 * 4 + 60 * 4)[0]
                         if panel_pixel != 0xFF1F242D or path_pixel != 0xFF252A33:
                             raise AssertionError(
                                 f"{label}: native picker not rendered; pixels="
@@ -2493,13 +2546,13 @@ xkb_symbols "nekoedit-sparse" {
                     # Browse into the directory entry, reveal a hidden file, and
                     # double-click it. Directories are listed before files.
                     open_picker_from_menu(2100, "Open picker")
-                    serial = double_click_picker_row(120, 139, 2120, "enter nested directory")
+                    serial = double_click_picker_row(120, 149, 2120, "enter nested directory")
                     small_directory_state = picker_state()
                     small_directory_pixel = struct.unpack_from(
                         "<I", pixels, 200 * 800 * 4 + 726 * 4
                     )[0]
                     if (
-                        small_directory_state.get("picker_entry_count", 999) > 15
+                        small_directory_state.get("picker_entry_count", 999) > 13
                         or small_directory_state.get("picker_scroll_thumb_height") != 0
                         or small_directory_pixel != 0xFF252A33
                     ):
@@ -2514,9 +2567,9 @@ xkb_symbols "nekoedit-sparse" {
                             f"non-scrollable directory started a scrollbar drag: {no_scroll_drag_state!r}"
                         )
                     serial += 10
-                    workflow_click(650, 110, serial, "show hidden files")
+                    workflow_click(650, 120, serial, "show hidden files")
                     serial += 10
-                    serial = double_click_picker_row(160, 139, serial, "open hidden file")
+                    serial = double_click_picker_row(160, 149, serial, "open hidden file")
                     # H's first glyph row lights columns 0 and 4; the caret overlays column 0.
                     hidden_state = picker_state()
                     hidden_path = os.path.join(runtime_dir, "nested-dir", ".hidden-note").encode()
@@ -2532,11 +2585,11 @@ xkb_symbols "nekoedit-sparse" {
                     # Open again, enter the directory, go Up, re-enter it, then
                     # open the ordinary file from the visible list.
                     open_picker_from_menu(2200, "directory navigation picker")
-                    serial = double_click_picker_row(120, 139, 2220, "enter nested directory again")
-                    workflow_click(78, 108, serial, "navigate Up to parent directory")
+                    serial = double_click_picker_row(120, 149, 2220, "enter nested directory again")
+                    workflow_click(78, 120, serial, "navigate Up to parent directory")
                     serial += 10
-                    serial = double_click_picker_row(120, 139, serial, "re-enter nested directory")
-                    serial = double_click_picker_row(160, 167, serial, "open inside.txt with hidden files hidden after two earlier entries")
+                    serial = double_click_picker_row(120, 149, serial, "re-enter nested directory")
+                    serial = double_click_picker_row(160, 166, serial, "open inside.txt with hidden files hidden after two earlier entries")
                     # Verify the exact selected document: H and N share the same
                     # first-row edge pixels, and the caret overlays column 0.
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
@@ -2666,10 +2719,10 @@ xkb_symbols "nekoedit-sparse" {
                     # with an actually empty buffer and commit its own exact path.
                     workflow_shortcut(serial + 10, 24, "Ctrl+O before zero-byte file")
                     open_picker_from_menu(serial + 20, "zero-byte file picker")
-                    serial = double_click_picker_row(120, 139, serial + 40, "enter directory for zero-byte file")
+                    serial = double_click_picker_row(120, 149, serial + 40, "enter directory for zero-byte file")
                     # With dotfiles hidden, aaa.txt sorts before empty.txt;
                     # select row 1 to catch accidental row-zero/stale selection.
-                    workflow_click(160, 153, serial, "select zero-byte empty.txt from second file row")
+                    workflow_click(160, 166, serial, "select zero-byte empty.txt from second file row")
                     workflow_click(716, 410, serial + 10, "Open selected zero-byte empty.txt")
                     empty_file = os.path.join(runtime_dir, "nested-dir", "empty.txt")
                     empty_state = picker_state()
@@ -2700,8 +2753,8 @@ xkb_symbols "nekoedit-sparse" {
                     # Repeat the zero-byte Open through the double-click route.
                     workflow_shortcut(serial + 30, 24, "Ctrl+O before double-click empty file")
                     open_picker_from_menu(serial + 40, "double-click empty-file picker")
-                    serial = double_click_picker_row(120, 139, serial + 60, "enter nested directory for double-click empty file")
-                    serial = double_click_picker_row(160, 153, serial, "double-click empty.txt from second file row")
+                    serial = double_click_picker_row(120, 149, serial + 60, "enter nested directory for double-click empty file")
+                    serial = double_click_picker_row(160, 166, serial, "double-click empty.txt from second file row")
                     empty_state = picker_state()
                     if (
                         empty_state.get("active_path") != empty_file.encode()
@@ -2758,7 +2811,7 @@ xkb_symbols "nekoedit-sparse" {
                             "Open without a selected row loaded a stale literal filename instead of "
                             f"leaving the picker active: {no_selection_state!r}"
                         )
-                    workflow_click(160, 153, serial + 20, "select empty.txt after stale-query rejection")
+                    workflow_click(160, 166, serial + 20, "select empty.txt after stale-query rejection")
                     workflow_click(716, 410, serial + 30, "Open exact empty.txt after stale-query rejection")
                     recovered_empty_state = picker_state()
                     if (
@@ -2782,7 +2835,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"scroll fixture did not create enough entries: {scroll_state!r}"
                         )
-                    workflow_axis(0, 42 * 256, serial + 30, "mouse wheel scroll down three rows")
+                    workflow_axis(0, 48 * 256, serial + 30, "mouse wheel scroll down three rows")
                     scroll_state = picker_state()
                     if scroll_state.get("picker_scroll") != 3:
                         raise AssertionError(
@@ -2801,7 +2854,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"dragging the picker scrollbar did not reach the last rows: {scroll_state!r}"
                         )
-                    workflow_axis(0, -14 * 256, serial + 50, "mouse wheel scroll up one row")
+                    workflow_axis(0, -16 * 256, serial + 50, "mouse wheel scroll up one row")
                     scroll_state = picker_state()
                     if scroll_state.get("picker_scroll") != expected_max_scroll - 1:
                         raise AssertionError(
@@ -3127,10 +3180,10 @@ xkb_symbols "nekoedit-sparse" {
                         or max_state.get("window_status_mode_x") != 1864
                         or max_state.get("window_doc_pixel_width") != 1880
                         or max_state.get("window_doc_visible_rows") != 80
-                        or max_state.get("picker_panel_x") != 600
-                        or max_state.get("picker_panel_y") != 336
-                        or max_state.get("picker_panel_width") != 720
-                        or max_state.get("picker_panel_height") != 408
+                        or max_state.get("picker_panel_x") != 588
+                        or max_state.get("picker_panel_y") != 328
+                        or max_state.get("picker_panel_width") != 744
+                        or max_state.get("picker_panel_height") != 424
                         or max_state.get("path_prompt_x") != 608
                         or max_state.get("path_prompt_y") != 448
                         or max_state.get("path_prompt_width") != 704
@@ -4803,7 +4856,7 @@ if __name__ == "__main__":
             font_picker_test=True,
             font_test_path=font_path,
             file_workflow=True,
-            initial_height=360,
+            initial_height=480,
         )
     finally:
         for path in (font_path, render_path):
