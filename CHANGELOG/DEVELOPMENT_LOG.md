@@ -1,3 +1,23 @@
+## 2026-11-07 — Fix picker navigation regressions and sync enlarged geometry
+
+The shared UI-font and responsive picker implementation had landed, but the full mock-compositor suite exposed several stale picker-test assumptions. The failures were in test hit coordinates and old expected dimensions, not in the corresponding runtime behavior.
+
+### Test and navigation corrections
+
+- Replaced the autocomplete fixture's click in the toolbar/list gap with explicit list-focus keyboard navigation: Down, Down, Up, then Enter. The test verifies the selected directory path before typing the filename prefix.
+- Exposed `picker_focus` in the mock state and assert that filename input leaves the Search field focused before validating both suggestions.
+- Moved the popup framebuffer probe to the transformed popup's left border instead of sampling the selected suggestion's highlight.
+- Updated the restored 800×480, resized 720×480, and fitted 720×480 expectations to the new 744×424 maximum modal geometry. The resized Cancel pointer and pixel probes now use the same non-identity Y transform as the application.
+- Kept existing mouse double-click directory navigation, exact-file Open, Up-to-parent, zero-byte, and search-state regressions in place.
+
+### Verification
+
+- GitHub Actions [Build and test #458](https://github.com/GraderGamer2/NekoEdit/actions/runs/42378677591) passed all eight workflow steps, including the complete Wayland mock suite, ELF inspection, and artifact upload.
+- Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42378677591/artifacts/13575799654): 62,344 bytes; artifact ID 13575799654; seven-day retention.
+- The result is mock-compositor validation. A manual GNOME/Mutter retest of the updated picker font sizing and dimensions remains outstanding.
+
+---
+
 ## 2026-11-07 — Horizontal viewport and soft-wrap control
 
 **Roadmap milestone:** implement horizontal navigation for long logical lines while preserving the existing pixel-accurate TrueType layout, indexed document navigation, and default soft-wrapped behavior.
