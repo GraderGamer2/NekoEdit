@@ -1154,6 +1154,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         initial_editor_state.get("doc_scroll_thumb_height") != 0
                         or initial_editor_state.get("doc_view_top_row") != 0
+                        or initial_editor_state.get("window_doc_columns") != 95
                     ):
                         raise AssertionError(
                             f"an empty document should not expose an active editor scrollbar: {initial_editor_state!r}"
@@ -1828,7 +1829,7 @@ xkb_symbols "nekoedit-sparse" {
                         or max_state.get("window_status_top") != 1060
                         or max_state.get("window_status_bytes_x") != 1180
                         or max_state.get("window_status_mode_x") != 1864
-                        or max_state.get("window_doc_columns") != 237
+                        or max_state.get("window_doc_columns") != 235
                         or max_state.get("window_doc_visible_rows") != 80
                         or max_state.get("picker_panel_x") != 600
                         or max_state.get("picker_panel_y") != 336
@@ -1888,7 +1889,7 @@ xkb_symbols "nekoedit-sparse" {
                         or restored_state.get("window_status_top") != 460
                         or restored_state.get("window_status_bytes_x") != 480
                         or restored_state.get("window_status_mode_x") != 744
-                        or restored_state.get("window_doc_columns") != 97
+                        or restored_state.get("window_doc_columns") != 95
                         or restored_state.get("window_doc_visible_rows") != 30
                         or restored_state.get("picker_panel_x") != 40
                         or restored_state.get("picker_panel_y") != 36
@@ -1984,7 +1985,7 @@ xkb_symbols "nekoedit-sparse" {
                         or edge_state.get("window_status_top") != 460
                         or edge_state.get("window_status_bytes_x") != 430
                         or edge_state.get("window_status_mode_x") != 664
-                        or edge_state.get("window_doc_columns") != 87
+                        or edge_state.get("window_doc_columns") != 85
                         or edge_state.get("window_doc_visible_rows") != 30
                         or edge_state.get("picker_panel_x") != 16
                         or edge_state.get("picker_panel_y") != 36
@@ -2131,7 +2132,7 @@ xkb_symbols "nekoedit-sparse" {
                         or small_state.get("window_status_top") != 340
                         or small_state.get("window_status_bytes_x") != 280
                         or small_state.get("window_status_mode_x") != 424
-                        or small_state.get("window_doc_columns") != 57
+                        or small_state.get("window_doc_columns") != 55
                         or small_state.get("window_doc_visible_rows") != 20
                         or small_state.get("picker_panel_x") != 16
                         or small_state.get("picker_panel_y") != 16
@@ -2786,7 +2787,7 @@ xkb_symbols "nekoedit-sparse" {
                     "keyboard auto-repeat used a 300 ms initial delay and repeated Left, Backspace, and Delete while held"
                 )
 
-                # Insert enough characters to pass the 97-cell line width.
+                # Insert enough characters to pass the 95-cell line width.
                 # They must wrap onto a second visual row rather than being
                 # silently consumed after the right edge.
                 for index in range(100):
@@ -2800,7 +2801,7 @@ xkb_symbols "nekoedit-sparse" {
                         f"pixel={hex(wrapped_first)}"
                     )
                 wrapped_caret = struct.unpack_from(
-                    "<I", pixels, 104 * 800 * 4 + 40 * 4
+                    "<I", pixels, 104 * 800 * 4 + 56 * 4
                 )[0]
                 if wrapped_caret != 0xFFFFFFFF:
                     raise AssertionError("caret did not follow the text onto its soft-wrapped row")
