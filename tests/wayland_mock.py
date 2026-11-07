@@ -230,6 +230,7 @@ def run(
     clipboard_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
+    word_navigation_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
@@ -1503,6 +1504,48 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("save_confirm_open") == 1:
                         key_step(serial + 6, 28, label + " — confirm pending save")
 
+                if word_navigation_test:
+                    initial = read_document_state()
+                    if initial["doc_contents"] != b"one two three":
+                        raise AssertionError("word navigation fixture contents mismatch")
+                    workflow_shortcut(1700, 106, "Ctrl+Right moves to the next word start")
+                    if child_u32("doc_cursor") != 4:
+                        raise AssertionError(f"Ctrl+Right did not stop at second word: {child_u32('doc_cursor')}")
+                    workflow_shortcut(1710, 106, "Ctrl+Right skips the current word and separator")
+                    if child_u32("doc_cursor") != 8:
+                        raise AssertionError(f"second Ctrl+Right did not stop at third word: {child_u32('doc_cursor')}")
+                    workflow_shortcut(1720, 105, "Ctrl+Shift+Left selects the previous word", shift=True)
+                    if (
+                        child_u32("doc_selection_active") != 1
+                        or child_u32("doc_selection_anchor") != 8
+                        or child_u32("doc_cursor") != 4
+                    ):
+                        raise AssertionError(
+                            "Ctrl+Shift+Left did not select the prior word: "
+                            f"anchor={child_u32('doc_selection_anchor')}, cursor={child_u32('doc_cursor')}, "
+                            f"active={child_u32('doc_selection_active')}"
+                        )
+                    workflow_shortcut(1730, 102, "Ctrl+Home returns to document start")
+                    if child_u32("doc_cursor") != 0 or child_u32("doc_selection_active") != 0:
+                        raise AssertionError("Ctrl+Home did not move to document start and clear selection")
+                    workflow_shortcut(1740, 107, "Ctrl+End moves to document end")
+                    if child_u32("doc_cursor") != len(b"one two three"):
+                        raise AssertionError("Ctrl+End did not move to document end")
+                    workflow_click(58, 98, 1800, "first click before double-click word selection")
+                    workflow_click(58, 98, 1810, "double-click selects the word under the pointer")
+                    start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    if child_u32("doc_selection_active") != 1 or (start, end) != (4, 7):
+                        raise AssertionError(
+                            "double-click did not select the full second word: "
+                            f"range=({start},{end}), active={child_u32('doc_selection_active')}"
+                        )
+                    observations.append(
+                        "Ctrl+Left/Right word navigation, Ctrl+Shift+Left selection, Ctrl+Home/End, and double-click word selection verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 evdev = {
                     "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33,
                     "g": 34, "h": 35, "i": 23, "j": 36, "k": 37, "l": 38,
@@ -2411,6 +2454,8 @@ xkb_symbols "nekoedit-sparse" {
                             raise AssertionError("UI font-size increase unexpectedly closed Settings")
                     if picker_u32("ui_font_size") != 16 or picker_u32("doc_font_size") != 12:
                         raise AssertionError("UI font size did not reach 16px independently of document size")
+                    if picker_u32("settings_panel_width") <= 256 or picker_u32("settings_panel_height") <= 168:
+                        raise AssertionError("Settings panel did not grow with the selected UI font")
                     for index in range(6):
                         settings_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
                         serial += 10
@@ -2460,7 +2505,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(200, 20, serial, "open Settings after picker font test")
                     serial += 10
                     for index in range(6):
-                        workflow_click(360, 100, serial, f"restore default UI font {index + 1}")
+                        settings_click(360, 100, serial, f"restore default UI font {index + 1}")
                         serial += 10
                     key_step(serial, 1, "close Settings after font-size adjustments")
                     if picker_u32("settings_menu_open") != 0:
