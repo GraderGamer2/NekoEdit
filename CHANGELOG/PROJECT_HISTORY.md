@@ -423,3 +423,21 @@ The mock-compositor regression uses mixed UTF-8 cases for combining marks, emoji
 
 Artifact [13561405061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462/artifacts/13561405061) contains the freestanding Linux x86-64 executable (43,886 bytes; SHA-256 25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c).
 
+
+
+---
+
+## 23. Phase R — proportional TrueType layout and font-metric line boxes
+
+**Horizontal metric integration:** [`0cc839c72181`](https://github.com/GraderGamer2/NekoEdit/commit/0cc839c72181c8ac0ec6792db01996e1ebafa8fd) exposes TrueType horizontal advances; [`3b566344ee8a`](https://github.com/GraderGamer2/NekoEdit/commit/3b566344ee8aaf83fa3f89f4d0ffa5ec9463771d) applies them to document layout and hit-testing; [`fd2e4793aa3d`](https://github.com/GraderGamer2/NekoEdit/commit/fd2e4793aa3d0b16920f90429c289f57eeb27a8f) aligns selection painting; [`3efdcbc537a4`](https://github.com/GraderGamer2/NekoEdit/commit/3efdcbc537a4b9a63224d8b68c34d24a16fe9a8e) applies advances to picker and path-prompt text.  
+**Cleanup:** [`3bc0b93a9994`](https://github.com/GraderGamer2/NekoEdit/commit/3bc0b93a999402400111b75a8644307d6ece3141) removes temporary pointer/visual hit-test diagnostics.  
+**Vertical metric integration:** [`f6d735b21549`](https://github.com/GraderGamer2/NekoEdit/commit/f6d735b215493d7a67759de2f0aa269fc66d5e21), derives document line pitch from hhea ascent, descent, and line gap; [`beac1f4a9622`](https://github.com/GraderGamer2/NekoEdit/commit/beac1f4a96229817bc3444fd035330d12914cd53), zero-initializes its runtime state for the freestanding BSS section.  
+**Verification:** [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260), all eight substantive checks successful.
+
+The first variable-width document layout now uses each grapheme's first decoded Unicode scalar to obtain a TrueType glyph advance from `hmtx`. At the fixed 12-pixel em, the advance is scaled to pixels, rounded to the nearest integer, and bounded to 1–32 pixels. This one measurement is shared by soft wrapping, indexed visual-row counts, byte/visual mapping, pointer hit-testing, selection painting, and document rendering. Picker and path-prompt text also consume these advances. The no-font/invalid-metric fallback retains the legacy eight-pixel advance.
+
+Vertical document geometry now uses the font's hhea ascent, descent, and line gap to form a line box, scaled to the fixed 12-pixel em, rounded upward, and clamped to 12–32 pixels. A single runtime line-pitch value is used by viewport row counts, pointer row selection, document/selection painting, and caret placement. With no loaded font, the original 12-pixel row pitch is retained.
+
+The synthetic-font regression deliberately assigns 900-unit ascent, −300-unit descent, and 100-unit line gap in a 1000-unit em. It verifies the resulting 16-pixel line pitch, 23 visible rows in an 800×480 surface, proportional 8px/5px advances, a correct pointer-to-caret result, the indexed wrapping record, and actual glyph pixels on both visual rows. The initial attempt failed at assembly because a nonzero value was emitted in `.bss`; the state was changed to zero initialization and Actions #400 then passed the complete workflow.
+
+Font selection and font-size controls remain unimplemented. The em size is fixed at 12 pixels, and layout currently handles only the first Unicode scalar of a grapheme; full shaping, kerning, ligatures, combining-mark positioning, bidirectional/complex-script layout, hinting, variable/color fonts, and IME remain future work. Manual GNOME/Mutter validation of the metric-aware font rendering is still pending.

@@ -975,3 +975,37 @@ No feature development is being started in this entry. The next development task
 - TrueType hinting instructions are not executed. OpenType CFF/CFF2 outlines, variable fonts, kerning, shaping, glyph substitution, mark positioning, bidirectional layout, color glyph layers, and Wayland text-input/IME remain unsupported.
 - The rasterizer rejects oversized or malformed outline data under explicit limits; affected glyphs fall back to the embedded bitmap.
 - GitHub Actions validates the mock Wayland protocol/framebuffer. A manual GNOME/Mutter desktop smoke test after this renderer change remains outstanding.
+
+
+---
+
+## 2026-11-07 — Integrate proportional font advances and vertical line metrics
+
+**Scope:** finish the first end-to-end metric-aware text-layout path after connecting the TrueType rasterizer to the Wayland software framebuffer. This work keeps the dependency-free parser/rasterizer architecture and does not add a runtime library.
+
+### Horizontal layout and interaction
+
+- Exposed the parser's `hmtx` advances to a shared pixel-advance helper. At the fixed 12-pixel em, advances are rounded to the nearest pixel and bounded to 1–32 pixels; the legacy 8-pixel advance remains the no-font/invalid-metric fallback.
+- Replaced fixed eight-pixel assumptions in document measurement and rendering with the same advance source. Soft wrapping, visual-row counts in the per-line/Fenwick index, byte/visual mapping, pointer hit-testing, caret placement, and text painting now operate in pixel coordinates.
+- Updated selection painting to use each grapheme's measured advance and the same wrap decisions as the document renderer. Picker and path-prompt text also use font advances rather than being laid out as fixed bitmap cells.
+- Corrected the pointer hit-test so the helper's returned advance cannot overwrite the pointer's target X coordinate. Regression coverage checks the midpoint decision against a mixed 8px/5px synthetic font and verifies the resulting caret offset, not private tracing state.
+- Removed the temporary pointer/visual debug globals and snapshot writes in [`3bc0b93a9994`](https://github.com/GraderGamer2/NekoEdit/commit/3bc0b93a999402400111b75a8644307d6ece3141). The hit-test retains its target coordinate and glyph advance in ordinary preserved/local state; the test still asserts `doc_cursor == 2` and the indexed line's pixel-width/visual-row record.
+
+### Vertical metrics
+
+- Added parsing of the signed TrueType `hhea.lineGap` field alongside ascent and descent.
+- Added one runtime document line-pitch value shared by window viewport geometry, visible-row count, pointer Y-to-row mapping, document rendering, selection rectangles, and caret placement. It scales `ascent - descent + lineGap` to the fixed 12-pixel em, rounds upward, and clamps to 12–32 pixels. The no-font/fallback path remains 12 pixels.
+- Strengthened the deterministic SFNT fixture: ascent 900, descent −300, and lineGap 100 at 1000 units/em must produce a 16-pixel row pitch and 23 visible rows in the 800×480 test surface. The framebuffer assertion checks the final glyph on the second wrapped visual row at its new vertical position.
+
+### Build correction and verification
+
+- The first metric-layout commit, [`f6d735b21549`](https://github.com/GraderGamer2/NekoEdit/commit/f6d735b215493d7a67759de2f0aa269fc66d5e21), placed a nonzero initial value in a `.bss` declaration. GitHub Actions [Build and test #399](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355027188) correctly rejected it at assembly time. The follow-up [`beac1f4a9622`](https://github.com/GraderGamer2/NekoEdit/commit/beac1f4a96229817bc3444fd035330d12914cd53) zero-initializes that storage; window geometry computes the fallback or font-derived value before use.
+- GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed all eight substantive checks: freestanding assembly/link and ELF verification, CLI smoke tests, the full Wayland mock-compositor suite, executable inspection, and artifact upload. The test verifies metric-derived row geometry as well as prior editor regressions.
+- Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260/artifacts/13567395102): 54,527 bytes, artifact ID `13567395102`, expires 2026-11-14 08:20:56 UTC. No artifact SHA-256 was recorded in the returned Actions metadata.
+
+### Current boundaries
+
+- Runtime em size remains 12 pixels; the metric-derived line pitch varies within 12–32 pixels. Font and font-size menus, runtime font switching/resizing, glyph-cache invalidation for preference changes, and persistent preferences are not implemented.
+- The loader uses explicit `NEKOEDIT_FONT` first, then three deterministic common Debian paths; recursive system-font discovery and family/style selection are not implemented.
+- Only the first Unicode scalar of each grapheme is sent through cmap/rasterization. Kerning, GSUB/GPOS, ligatures, combining-mark placement, bidirectional layout, complex scripts, CFF/CFF2, variable/color fonts, hinting, Unicode keyboard text input, and IME remain unsupported.
+- The latest automated test validates a mock Wayland compositor/framebuffer. Manual GNOME/Mutter smoke testing of the proportional font layout and vertical metrics has not been performed.

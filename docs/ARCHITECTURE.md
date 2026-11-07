@@ -91,7 +91,7 @@ User-facing preferences belong in the Settings menu and must be separate from do
 - Font: choose a validated supported font from the user's installed font directories without Fontconfig or a shared font library.
 - Font size: change glyph pixel size and recompute layout metrics, wrapped visual rows, pointer hit-testing, caret placement, and scrollbar ranges.
 
-Preferences should be stored in a small per-user config file under XDG_CONFIG_HOME, falling back to ~/.config, with safe defaults if the file is absent or malformed. The current Confirm before saving toggle is a session-only implementation; persistent config I/O is a remaining task. Font and font-size controls must not be exposed until the outline renderer and dynamic layout metrics can honor them.
+Preferences should be stored in a small per-user config file under XDG_CONFIG_HOME, falling back to ~/.config, with safe defaults if the file is absent or malformed. The current Confirm before saving toggle is session-only; persistent config I/O is a remaining task. The TrueType outline renderer and metric-aware document layout are now integrated: horizontal advances drive wrapping, indexed visual rows, hit-testing, and selection, while hhea metrics determine vertical line pitch. Font and font-size controls can build on those capabilities, but runtime font loading/switching, glyph-cache invalidation, em-size changes, atomic visual-row reflow, and preference persistence must be implemented before exposing those controls.
 
 ## Platform backends
 
