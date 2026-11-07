@@ -71,7 +71,6 @@ def run(
     use_wayland_socket: bool = False,
     send_protocol_error: bool = False,
     disconnect_after_configure_ack: bool = False,
-    reject_resize_buffer: bool = False,
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
@@ -212,8 +211,8 @@ def run(
             )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
             if disconnect_after_configure_ack:
-                # Close before the next client request so the send-failure
-                # diagnostic exercises its bounded event-size output path.
+                # Close before the next client request to verify the send helper
+                # returns EPIPE without process termination by SIGPIPE.
                 observations.append("compositor closed after xdg_surface.configure acknowledgement")
                 return
 
@@ -1580,37 +1579,6 @@ xkb_symbols "nekoedit-sparse" {
                         "create maximized buffer",
                     )
                     expect_message(
-                        client, (1, 0, struct.pack("<I", 18)),
-                        "sync after maximized buffer creation",
-                    )
-                    if reject_resize_buffer:
-                        # No surface attachment may be sent until the sync
-                        # callback confirms that create_buffer was processed.
-                        previous_timeout = client.gettimeout()
-                        client.settimeout(0.1)
-                        try:
-                            unexpected = client.recv(1)
-                        except socket.timeout:
-                            unexpected = None
-                        finally:
-                            client.settimeout(previous_timeout)
-                        if unexpected is not None:
-                            raise AssertionError(
-                                f"client sent data before the resize sync callback: {unexpected!r}"
-                            )
-                        message = b"mock rejected resized wl_buffer"
-                        encoded = message + b"\0"
-                        padded = encoded + b"\0" * (-len(encoded) % 4)
-                        error_payload = (
-                            struct.pack("<II", 11, 1)
-                            + struct.pack("<I", len(encoded))
-                            + padded
-                        )
-                        client.sendall(wire_message(1, 0, error_payload))
-                        observations.append("mock compositor rejected replacement wl_buffer before attach")
-                        return
-                    client.sendall(wire_message(18, 0, struct.pack("<I", 1)))
-                    expect_message(
                         client, (8, 1, struct.pack("<III", 17, 0, 0)),
                         "attach maximized buffer",
                     )
@@ -1651,11 +1619,11 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (17, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", 19, 0, 800, 480, 3200, 1)),
+                        (11, 0, struct.pack("<6I", 18, 0, 800, 480, 3200, 1)),
                         "create restored buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 19, 0, 0)),
+                        client, (8, 1, struct.pack("<III", 18, 0, 0)),
                         "attach restored buffer",
                     )
                     expect_message(
@@ -1667,7 +1635,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         restored_state.get("window_width") != 800
                         or restored_state.get("window_height") != 480
-                        or restored_state.get("window_buffer_id") != 19
+                        or restored_state.get("window_buffer_id") != 18
                         or restored_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
@@ -1695,7 +1663,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
                     )
-                    # Deliver a new size while buffer 19 is still busy.
+                    # Deliver a new size while buffer 18 is still busy.
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiIII", 720, 480, 8, 3, 4))
                         + wire_message(9, 0, struct.pack("<I", 1237))
@@ -1703,14 +1671,14 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1237)), "ack interactive-resize configure"
                     )
-                    client.sendall(wire_message(19, 0))
-                    expect_message(client, (19, 0, b""), "destroy old buffer after edge resize")
+                    client.sendall(wire_message(18, 0))
+                    expect_message(client, (18, 0, b""), "destroy old buffer after edge resize")
                     expect_message(
-                        client, (11, 0, struct.pack("<6I", 20, 0, 720, 480, 2880, 1)),
+                        client, (11, 0, struct.pack("<6I", 19, 0, 720, 480, 2880, 1)),
                         "create edge-resized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 20, 0, 0)), "attach edge-resized buffer"
+                        client, (8, 1, struct.pack("<III", 19, 0, 0)), "attach edge-resized buffer"
                     )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
@@ -1721,11 +1689,11 @@ xkb_symbols "nekoedit-sparse" {
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
                         or edge_state.get("window_stride") != 2880
-                        or edge_state.get("window_buffer_id") != 20
+                        or edge_state.get("window_buffer_id") != 19
                         or edge_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
-                    client.sendall(wire_message(20, 0))
+                    client.sendall(wire_message(19, 0))
 
                     # Probe every remaining edge and corner with coordinates
                     # deliberately inside the new 12-pixel grab band.
@@ -2561,46 +2529,24 @@ xkb_symbols "nekoedit-sparse" {
             "mock compositor failed:\n" + "\n".join(errors)
             + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
         )
-    if reject_resize_buffer:
-        required = (
-            "Wayland previous request: object=1, opcode=0",
-            "Wayland last event: object=1, opcode=0, payload bytes=44",
-            "Wayland buffer attach deferred: sync callback=18, buffer=17",
-            "Wayland compositor protocol error: mock rejected resized wl_buffer",
-        )
-        missing = [line for line in required if line not in stderr]
+    if disconnect_after_configure_ack:
+        sentinel = b"PRIVATE_CONTENT_SENTINEL"
         if (
-            result.returncode == 0
-            or missing
-            or "Wayland send failed: object=8, opcode=1" in stderr
+            result.returncode != 1
+            or "NekoEdit: Wayland protocol or shared-memory setup failed." not in stderr
         ):
             raise AssertionError(
-                "NekoEdit did not report the compositor's resize-buffer error before attach: "
-                f"status={result.returncode}, missing={missing!r}, stderr={stderr!r}"
-            )
-        print("Wayland resize sync reports create_buffer errors before wl_surface.attach.")
-        return
-    if disconnect_after_configure_ack:
-        expected = (
-            "Wayland send failed: object=5, opcode=0, errno=32",
-            "Wayland previous request: object=9, opcode=4",
-            "Wayland last event: object=9, opcode=0, payload bytes=4",
-        )
-        missing = [line for line in expected if line not in stderr]
-        sentinel = b"PRIVATE_DIAGNOSTIC_SENTINEL"
-        if result.returncode == 0 or missing:
-            raise AssertionError(
-                "closed-socket diagnostic did not preserve the expected request/event context: "
-                f"status={result.returncode}, missing={missing!r}, stderr={stderr!r}"
+                "closed Wayland socket did not produce a controlled protocol-error exit: "
+                f"status={result.returncode}, stderr={stderr!r}"
             )
         nul_present = b"\0" in result.stderr
         if len(result.stderr) > 512 or sentinel in result.stderr or nul_present:
             raise AssertionError(
-                "Wayland diagnostic output was unbounded, contained NUL bytes, or exposed document bytes: "
+                "closed-socket error output was unbounded, contained NUL bytes, or exposed document bytes: "
                 f"stderr_length={len(result.stderr)}, nul_present={nul_present}, "
                 f"sentinel_present={sentinel in result.stderr}"
             )
-        print("Wayland send-failure diagnostic is bounded and does not expose document data.")
+        print("Wayland closed-socket handling test passed without SIGPIPE termination.")
         return
     if send_protocol_error:
         if result.returncode == 0 or "test compositor protocol error" not in stderr:
@@ -2629,19 +2575,19 @@ if __name__ == "__main__":
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
     # A compositor disconnect immediately after xdg_surface.configure must
-    # produce concise numeric diagnostics without dumping editor memory.
-    diagnostic_fd, diagnostic_path = tempfile.mkstemp(prefix="nekoedit-diagnostic-")
+    # return a controlled protocol error rather than terminate via SIGPIPE.
+    disconnect_fd, disconnect_path = tempfile.mkstemp(prefix="nekoedit-disconnect-")
     try:
-        with os.fdopen(diagnostic_fd, "wb") as diagnostic_file:
-            diagnostic_file.write(b"PRIVATE_DIAGNOSTIC_SENTINEL")
+        with os.fdopen(disconnect_fd, "wb") as disconnect_file:
+            disconnect_file.write(b"PRIVATE_CONTENT_SENTINEL")
         run(
             sys.argv[1],
-            initial_file=diagnostic_path,
+            initial_file=disconnect_path,
             disconnect_after_configure_ack=True,
         )
     finally:
         try:
-            os.unlink(diagnostic_path)
+            os.unlink(disconnect_path)
         except FileNotFoundError:
             pass
     # Test positional file loading and Ctrl+S using a temporary document.
@@ -2779,9 +2725,6 @@ if __name__ == "__main__":
         except FileNotFoundError:
             pass
 
-    # The resize-buffer barrier must expose a compositor wl_display.error
-    # before the client attempts to attach the rejected replacement buffer.
-    run(sys.argv[1], file_workflow=True, reject_resize_buffer=True)
     # Full File menu, Open, Save, and Save As interaction tests on both
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)

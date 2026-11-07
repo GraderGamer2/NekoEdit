@@ -173,19 +173,6 @@ msg_protocol_end:
 newline_text:            .ascii "\n"
 msg_protocol_error_prefix: .ascii "NekoEdit: Wayland compositor protocol error: "
 msg_protocol_error_prefix_end:
-msg_request_failure: .ascii "Wayland send failed: object="
-msg_request_opcode:  .ascii ", opcode="
-msg_request_errno:   .ascii ", errno="
-msg_request_errno_end:
-msg_previous_request: .ascii "Wayland previous request: object="
-msg_previous_opcode:  .ascii ", opcode="
-msg_last_event:       .ascii "Wayland last event: object="
-msg_last_event_opcode:.ascii ", opcode="
-msg_last_event_size:  .ascii ", payload bytes="
-msg_last_event_size_end:
-msg_buffer_sync_pending: .ascii "Wayland buffer attach deferred: sync callback="
-msg_buffer_sync_buffer: .ascii ", buffer="
-msg_buffer_sync_buffer_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -294,9 +281,6 @@ window_pending_width:   .long 0
 window_pending_height:  .long 0
 window_resize_pending:  .long 0
 window_is_maximized:    .long 0
-window_sync_callback_id: .long 0
-window_attach_pending: .long 0
-window_sync_probe_done: .long 0
 failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
@@ -406,13 +390,6 @@ temp_pid_digits:        .zero 16
 last_object:           .long 0
 last_opcode:           .long 0
 last_size:             .long 0
-failed_request_object: .long 0
-failed_request_opcode: .long 0
-failed_request_errno:  .long 0
-failed_request_valid:  .long 0
-last_request_object:   .long 0
-last_request_opcode:   .long 0
-last_request_valid:    .long 0
 event_header:          .zero 8
 event_payload:         .zero 4096
 request_buffer:        .zero 8192
@@ -454,9 +431,6 @@ wayland_main:
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + window_is_maximized], 0
-    mov dword ptr [rip + window_sync_callback_id], 0
-    mov dword ptr [rip + window_attach_pending], 0
-    mov dword ptr [rip + window_sync_probe_done], 0
     call window_update_geometry
     call load_initial_document
     test rax, rax
@@ -983,27 +957,6 @@ wayland_main:
     call wl_read_event
     test rax, rax
     js .protocol_error
-    # The resize path waits for the compositor's wl_display.sync callback
-    # before attaching the newly created buffer. Other events continue through
-    # the normal dispatcher while that barrier is outstanding.
-    mov eax, dword ptr [rip + window_sync_callback_id]
-    test eax, eax
-    jz .event_check_xdg_ping
-    cmp dword ptr [rip + last_object], eax
-    jne .event_check_xdg_ping
-    cmp dword ptr [rip + last_opcode], 0
-    jne .event_loop
-    mov dword ptr [rip + window_sync_callback_id], 0
-    mov dword ptr [rip + window_attach_pending], 0
-    cmp dword ptr [rip + window_resize_pending], 0
-    jne .event_apply_window_resize
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .event_loop
-    call present_buffer
-    test rax, rax
-    js .protocol_error
-    jmp .event_loop
-.event_check_xdg_ping:
     cmp dword ptr [rip + last_object], 6
     jne .check_buffer_release
     cmp dword ptr [rip + last_opcode], 0
@@ -1017,8 +970,6 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .check_seat_event
     mov dword ptr [rip + buffer_busy], 0
-    cmp dword ptr [rip + window_attach_pending], 0
-    jne .event_loop
     cmp dword ptr [rip + window_resize_pending], 0
     jne .event_apply_window_resize
     cmp dword ptr [rip + redraw_pending], 0
@@ -1808,8 +1759,6 @@ wayland_main:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
-    cmp dword ptr [rip + window_attach_pending], 0
-    jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
@@ -1873,96 +1822,8 @@ wayland_main:
     call linux_write_all
     mov rsi, qword ptr [rip + failure_stage]
     test rsi, rsi
-    jz .protocol_request_diagnostic
+    jz .protocol_check_display_error
     call write_stderr_cstr
-.protocol_request_diagnostic:
-    cmp dword ptr [rip + failed_request_valid], 0
-    je .protocol_print_previous_request
-    mov edi, 2
-    lea rsi, [rip + msg_request_failure]
-    mov edx, msg_request_opcode - msg_request_failure
-    call linux_write_all
-    mov edi, dword ptr [rip + failed_request_object]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_request_opcode]
-    mov edx, msg_request_errno - msg_request_opcode
-    call linux_write_all
-    mov edi, dword ptr [rip + failed_request_opcode]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_request_errno]
-    mov edx, msg_request_errno_end - msg_request_errno
-    call linux_write_all
-    mov eax, dword ptr [rip + failed_request_errno]
-    neg eax
-    mov edi, eax
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + newline_text]
-    mov edx, 1
-    call linux_write_all
-.protocol_print_previous_request:
-    cmp dword ptr [rip + last_request_valid], 0
-    je .protocol_print_last_event
-    mov edi, 2
-    lea rsi, [rip + msg_previous_request]
-    mov edx, msg_previous_opcode - msg_previous_request
-    call linux_write_all
-    mov edi, dword ptr [rip + last_request_object]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_previous_opcode]
-    mov edx, msg_last_event - msg_previous_opcode
-    call linux_write_all
-    mov edi, dword ptr [rip + last_request_opcode]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + newline_text]
-    mov edx, 1
-    call linux_write_all
-.protocol_print_last_event:
-    mov edi, 2
-    lea rsi, [rip + msg_last_event]
-    mov edx, msg_last_event_opcode - msg_last_event
-    call linux_write_all
-    mov edi, dword ptr [rip + last_object]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_last_event_opcode]
-    mov edx, msg_last_event_size - msg_last_event_opcode
-    call linux_write_all
-    mov edi, dword ptr [rip + last_opcode]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_last_event_size]
-    mov edx, msg_last_event_size_end - msg_last_event_size
-    call linux_write_all
-    mov edi, dword ptr [rip + last_size]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + newline_text]
-    mov edx, 1
-    call linux_write_all
-.protocol_sync_pending_diagnostic:
-    cmp dword ptr [rip + window_attach_pending], 0
-    je .protocol_check_display_error
-    mov edi, 2
-    lea rsi, [rip + msg_buffer_sync_pending]
-    mov edx, msg_buffer_sync_buffer - msg_buffer_sync_pending
-    call linux_write_all
-    mov edi, dword ptr [rip + window_sync_callback_id]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_buffer_sync_buffer]
-    mov edx, msg_buffer_sync_buffer_end - msg_buffer_sync_buffer
-    call linux_write_all
-    mov edi, dword ptr [rip + window_buffer_id]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + newline_text]
-    mov edx, 1
-    call linux_write_all
 .protocol_check_display_error:
     # wl_display.error payload: object_id, code, then a length-prefixed
     # Wayland string. Validate both the declared event size and NUL terminator.
@@ -4399,39 +4260,6 @@ write_stderr_cstr:
 .size write_stderr_cstr, . - write_stderr_cstr
 
 # Print an unsigned 32-bit integer in decimal to stderr. Input: EDI=value.
-.type write_stderr_u32, @function
-write_stderr_u32:
-    push rbx
-    sub rsp, 16                 # aligned scratch space for up to 10 digits
-    lea rbx, [rsp + 15]
-    mov eax, edi
-    test eax, eax
-    jnz .write_stderr_u32_loop
-    dec rbx
-    mov byte ptr [rbx], '0'
-    jmp .write_stderr_u32_ready
-.write_stderr_u32_loop:
-    xor edx, edx
-    mov ecx, 10
-    div ecx
-    add dl, '0'
-    dec rbx
-    mov byte ptr [rbx], dl
-    test eax, eax
-    jnz .write_stderr_u32_loop
-.write_stderr_u32_ready:
-    # RSP+15 is the exclusive end of the 16-byte scratch area; do not
-    # include the unused terminator/padding byte after the final digit.
-    lea rdx, [rsp + 15]
-    sub rdx, rbx
-    mov edi, 2
-    mov rsi, rbx
-    call linux_write_all
-    add rsp, 16
-    pop rbx
-    ret
-.size write_stderr_u32, . - write_stderr_u32
-
 # env_lookup(key=rdi, key_length=esi) -> rax=value pointer or 0.
 .type env_lookup, @function
 env_lookup:
@@ -4596,20 +4424,6 @@ wl_send_request:
     lea rsi, [rip + request_buffer]
     lea edx, [rbx + 8]
     call wl_send_all
-    test rax, rax
-    js .wl_send_request_failed
-    jmp .wl_send_request_success
-.wl_send_request_failed:
-    mov dword ptr [rip + failed_request_object], r12d
-    mov dword ptr [rip + failed_request_opcode], r13d
-    mov dword ptr [rip + failed_request_errno], eax
-    mov dword ptr [rip + failed_request_valid], 1
-    jmp .wl_send_request_done
-.wl_send_request_success:
-    mov dword ptr [rip + last_request_object], r12d
-    mov dword ptr [rip + last_request_opcode], r13d
-    mov dword ptr [rip + last_request_valid], 1
-.wl_send_request_done:
     add rsp, 8
     pop r14
     pop r13
@@ -4682,18 +4496,6 @@ wl_send_request_fd:
 .send_fd_success:
     xor eax, eax
 .send_fd_done:
-    test rax, rax
-    js .send_fd_failed
-    mov dword ptr [rip + last_request_object], r12d
-    mov dword ptr [rip + last_request_opcode], r13d
-    mov dword ptr [rip + last_request_valid], 1
-    jmp .send_fd_return
-.send_fd_failed:
-    mov dword ptr [rip + failed_request_object], r12d
-    mov dword ptr [rip + failed_request_opcode], r13d
-    mov dword ptr [rip + failed_request_errno], eax
-    mov dword ptr [rip + failed_request_valid], 1
-.send_fd_return:
     pop r15
     pop r14
     pop r13
@@ -5420,8 +5222,6 @@ window_handle_surface_configure:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .window_surface_configure_done
-    cmp dword ptr [rip + window_attach_pending], 0
-    jne .window_surface_configure_done
     call window_apply_pending_resize
 .window_surface_configure_done:
     pop r12
@@ -5434,7 +5234,6 @@ window_apply_pending_resize:
     push r12
     push r13
     push r14
-    push r15
     cmp dword ptr [rip + window_resize_pending], 0
     je .window_resize_present
     mov r12d, dword ptr [rip + window_pending_width]
@@ -5484,37 +5283,12 @@ window_apply_pending_resize:
     test rax, rax
     js .window_resize_done
     mov dword ptr [rip + window_buffer_id], r14d
-    cmp dword ptr [rip + window_sync_probe_done], 0
-    jne .window_resize_present
-    mov dword ptr [rip + window_sync_probe_done], 1
-
-    # Diagnostic barrier: do not attach the first replacement until the compositor
-    # has processed wl_shm_pool.create_buffer. A wl_display.error can then be
-    # read and reported before the subsequent wl_surface.attach obscures it.
-    # The sync callback gets the next unused client object ID.
-    mov r15d, dword ptr [rip + next_client_object_id]
-    lea eax, [r15 + 1]
-    mov dword ptr [rip + next_client_object_id], eax
-    mov dword ptr [rip + window_sync_callback_id], r15d
-    mov dword ptr [rip + payload_buffer], r15d
-    mov edi, 1
-    xor esi, esi
-    lea rdx, [rip + payload_buffer]
-    mov ecx, 4
-    call wl_send_request
-    test rax, rax
-    js .window_resize_done
-    mov dword ptr [rip + window_attach_pending], 1
-    jmp .window_resize_done
 
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
     jne .window_resize_done
-    cmp dword ptr [rip + window_attach_pending], 0
-    jne .window_resize_done
     call present_buffer
 .window_resize_done:
-    pop r15
     pop r14
     pop r13
     pop r12

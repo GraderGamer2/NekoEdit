@@ -1,5 +1,26 @@
 # NekoEdit development log
 
+## 2026-11-07 — Remove temporary Maximize investigation instrumentation
+
+**User retest:** The user has now confirmed that clicking the Maximize control no longer crashes NekoEdit and that the window remains usable afterward. This is the first real-desktop confirmation of the dense object-ID correction, beyond the mock-compositor suite.
+
+### Cleanup
+
+- Removed the one-shot wl_display.sync callback inserted after the first resized-buffer creation. Resized buffers now follow the normal configure, old-buffer-release, create, attach, damage, and commit path without an extra round trip.
+- Removed its pending-callback state and the code that deferred drawing/configure handling while that diagnostic barrier was outstanding.
+- Removed failed-request and last-request metadata tracking, the verbose request/event fields printed on protocol failures, and the decimal-only stderr formatter that existed solely for those fields.
+- Kept the shared next_client_object_id allocator. It is the actual root-cause fix: after fixed setup IDs, pointer and keyboard consume IDs 15 and 16; the first replacement buffer is 17, followed by buffers 18 and 19 for subsequent resizes.
+- Kept MSG_NOSIGNAL on Wayland sendto/sendmsg. This is transport-failure robustness, not verbose diagnostics: a closed compositor socket becomes a controlled -EPIPE return instead of terminating the process with SIGPIPE. The existing concise protocol-error and compositor-provided wl_display.error messages also remain.
+
+### Regression coverage and debugging reference
+
+- The mock suite still exercises Maximize, Restore, and interactive edge resizing with the dense buffer-ID sequence, but no longer expects a diagnostic sync callback or simulates the barrier-specific rejected-buffer path.
+- The closed-socket regression now checks that NekoEdit exits through its normal protocol-error path (status 1), does not die from SIGPIPE, and does not print document contents.
+- See [WAYLAND_MAXIMIZE_DEBUGGING.md](../docs/WAYLAND_MAXIMIZE_DEBUGGING.md) for the investigation history, the retained root-cause fix, and the commits to inspect if a similar failure returns.
+- The existing startup-stage diagnostics and compositor-provided wl_display.error reporting remain available for general Wayland setup/protocol failures.
+
+**Validation:** The cleanup has been applied to the early-alpha implementation branch. Run the repository's make test and make test-wayland checks, then produce a fresh Actions build and repeat the real GNOME/Mutter Maximize/Restore test. The prior user's real-desktop success applies to the dense-ID fix; it does not yet validate this diagnostic cleanup build.
+
 ## 2026-11-07 — Fix dense Wayland client object IDs for resized buffers
 
 **User retest and root cause:** The Actions #290 binary returned:
@@ -16,15 +37,15 @@ The compositor's explicit protocol error finally identified the actual fault. Th
 ### Fix
 
 - Replaced the independent `next_input_object` and `window_next_buffer_id` counters with one `next_client_object_id` counter shared by pointer, keyboard, resized-buffer, and sync-callback creation.
-- Initialize the shared counter to 15 after the fixed setup objects through ID 14 have been created. In the normal mock scenario the pointer and keyboard consume 15 and 16, so the first resized buffer receives 17 and the sync callback receives 18. Restore and edge resize then receive 19 and 20.
-- Updated the Wayland integration tests to assert the dense ID sequence rather than repeating the previous sparse-ID assumption. The simulated compositor-rejection case now expects callback 18 and buffer 17.
+- Initialize the shared counter to 15 after the fixed setup objects through ID 14 have been created. Pointer and keyboard consume 15 and 16, so the first replacement buffer receives 17. During the earlier diagnostic build, the one-shot sync callback consumed 18; after its removal, subsequent replacement buffers receive 18 and 19.
+- Updated the Wayland integration tests to assert the dense ID sequence rather than repeating the previous sparse-ID assumption. The barrier-specific simulated compositor-rejection case was removed with the diagnostic probe.
 
 ### Verification and artifact
 
 - Source and test changes were committed on `early-alpha` as [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b).
 - GitHub Actions [Build and test #292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724) passed all eight workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland mock suite, executable inspection, and artifact upload.
 - Artifact: `nekoedit-linux-x86_64`, 30,659 bytes; SHA-256 `e51c74154c953d696d95bd7fe41fc3d82b42bbef3280b3428ec7c2d0a99ff65b`; artifact ID `13553938172`; expires 2026-11-14 01:21:03 UTC. [Download from Actions #292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724/artifacts/13553938172).
-- This is a protocol-level root-cause fix, not merely instrumentation. The real GNOME/Mutter retest is still needed to confirm that Maximize no longer disconnects; the original launch command remains unchanged.
+- This is a protocol-level root-cause fix, not merely instrumentation. The user has since manually confirmed that Maximize no longer crashes and the window remains usable. The diagnostic-only sync barrier and request/event tracking have now been removed in the cleanup section above; the original launch command remains unchanged.
 
 ## 2026-11-07 — Isolate the first resized-buffer request with a one-shot sync barrier
 
