@@ -61,7 +61,7 @@ Clipboard and document I/O use nonblocking descriptors and bounded chunks rather
 
 ## Memory
 
-Use mmap/munmap for large buffers and explicitly managed arenas. The document uses a gap buffer. Clipboard contents use separate immutable allocations. Glyph bitmaps and parsed font metadata use bounded caches with explicit eviction. Every length calculation must be overflow-checked before allocation or pointer arithmetic.
+Use mmap/munmap for large buffers and explicitly managed arenas. The document uses a gap buffer. Clipboard contents use separate immutable allocations, retained through in-flight Wayland sends. The current clipboard implementation uses eight source records, four concurrent send records, and a 64 MiB payload/receive ceiling; persistence after editor exit requires clipboard-manager handoff or a companion service and is a requested follow-up. Undo/Redo currently stores full-document snapshots under fixed depth and memory limits; a delta-based, disk-backed journal is the proposed route to practically unlimited history without unbounded RAM use. Glyph bitmaps and parsed font metadata use bounded caches with explicit eviction. Every length calculation must be overflow-checked before allocation or pointer arithmetic.
 
 No allocator library is required. A small internal allocator may be introduced only when individual mmap calls become a measurable or maintainability problem; avoid building a general-purpose heap unnecessarily.
 
