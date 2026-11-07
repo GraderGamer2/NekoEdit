@@ -1175,65 +1175,6 @@ xkb_symbols "nekoedit-sparse" {
                             state["doc_line_index_records"] = []
                         return state
 
-                if horizontal_scroll_test:
-                    state = read_document_state()
-                    if state["doc_wrap_enabled"] != 1 or state["doc_line_index_records"][0][1] <= 1:
-                        raise AssertionError(
-                            f"long-line fixture should start with soft wrapping enabled: {state!r}"
-                        )
-                    workflow_click(200, 20, 3100, "open Settings for wrap toggle")
-                    if read_document_state()["settings_menu_open"] != 1:
-                        raise AssertionError("Settings did not open for the wrap-lines test")
-                    workflow_click(200, 124, 3110, "disable Wrap Lines")
-                    state = read_document_state()
-                    if (
-                        state["doc_wrap_enabled"] != 0
-                        or state["doc_line_index_records"][0][1] != 1
-                        or state["doc_total_visual_rows"] != 1
-                        or state["doc_scroll_thumb_height"] != 0
-                        or state["settings_menu_open"] != 1
-                    ):
-                        raise AssertionError(
-                            f"disabling Wrap Lines did not produce one horizontally scrollable row: {state!r}"
-                        )
-                    key_step(3120, 107, "End moves to the end of the unwrapped line")
-                    state = read_document_state()
-                    if state["doc_cursor"] != 200 or state["doc_view_left_px"] <= 0:
-                        raise AssertionError(
-                            f"caret did not horizontally follow End on a long line: {state!r}"
-                        )
-                    before_left = state["doc_view_left_px"]
-                    workflow_axis(1, -14 * 256, 3130, "horizontal wheel scrolls left")
-                    state = read_document_state()
-                    if state["doc_view_left_px"] != max(0, before_left - 14):
-                        raise AssertionError(
-                            f"horizontal wheel did not move the no-wrap viewport left by 14px: "
-                            f"before={before_left}, after={state['doc_view_left_px']}"
-                        )
-                    workflow_click(16, 98, 3140, "pointer hit-testing with horizontal offset")
-                    state = read_document_state()
-                    if not (50 <= state["doc_cursor"] <= 150):
-                        raise AssertionError(
-                            f"pointer hit-testing ignored the horizontal viewport offset: {state!r}"
-                        )
-                    workflow_click(200, 124, 3150, "re-enable Wrap Lines")
-                    state = read_document_state()
-                    if (
-                        state["doc_wrap_enabled"] != 1
-                        or state["doc_line_index_records"][0][1] <= 1
-                        or state["doc_view_left_px"] != 0
-                        or state["settings_menu_open"] != 1
-                    ):
-                        raise AssertionError(
-                            f"re-enabling Wrap Lines did not restore wrapping and reset horizontal scroll: {state!r}"
-                        )
-                    key_step(3160, 1, "close Settings after wrap test")
-                    observations.append(
-                        "Wrap Lines toggle, unwrapped line indexing, caret-following scroll, horizontal wheel and offset pointer hit-testing verified"
-                    )
-                    client.sendall(wire_message(10, 1))
-                    return
-
                 child_symbol_addresses: dict[str, int] = {}
 
                 def child_u32(name: str) -> int:
@@ -1327,6 +1268,65 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     workflow_redraw(label)
                     client.sendall(wire_message(12, 0))
+
+                if horizontal_scroll_test:
+                    state = read_document_state()
+                    if state["doc_wrap_enabled"] != 1 or state["doc_line_index_records"][0][1] <= 1:
+                        raise AssertionError(
+                            f"long-line fixture should start with soft wrapping enabled: {state!r}"
+                        )
+                    workflow_click(200, 20, 3100, "open Settings for wrap toggle")
+                    if read_document_state()["settings_menu_open"] != 1:
+                        raise AssertionError("Settings did not open for the wrap-lines test")
+                    workflow_click(200, 124, 3110, "disable Wrap Lines")
+                    state = read_document_state()
+                    if (
+                        state["doc_wrap_enabled"] != 0
+                        or state["doc_line_index_records"][0][1] != 1
+                        or state["doc_total_visual_rows"] != 1
+                        or state["doc_scroll_thumb_height"] != 0
+                        or state["settings_menu_open"] != 1
+                    ):
+                        raise AssertionError(
+                            f"disabling Wrap Lines did not produce one horizontally scrollable row: {state!r}"
+                        )
+                    key_step(3120, 107, "End moves to the end of the unwrapped line")
+                    state = read_document_state()
+                    if state["doc_cursor"] != 200 or state["doc_view_left_px"] <= 0:
+                        raise AssertionError(
+                            f"caret did not horizontally follow End on a long line: {state!r}"
+                        )
+                    before_left = state["doc_view_left_px"]
+                    workflow_axis(1, -14 * 256, 3130, "horizontal wheel scrolls left")
+                    state = read_document_state()
+                    if state["doc_view_left_px"] != max(0, before_left - 14):
+                        raise AssertionError(
+                            f"horizontal wheel did not move the no-wrap viewport left by 14px: "
+                            f"before={before_left}, after={state['doc_view_left_px']}"
+                        )
+                    workflow_click(16, 98, 3140, "pointer hit-testing with horizontal offset")
+                    state = read_document_state()
+                    if not (50 <= state["doc_cursor"] <= 150):
+                        raise AssertionError(
+                            f"pointer hit-testing ignored the horizontal viewport offset: {state!r}"
+                        )
+                    workflow_click(200, 124, 3150, "re-enable Wrap Lines")
+                    state = read_document_state()
+                    if (
+                        state["doc_wrap_enabled"] != 1
+                        or state["doc_line_index_records"][0][1] <= 1
+                        or state["doc_view_left_px"] != 0
+                        or state["settings_menu_open"] != 1
+                    ):
+                        raise AssertionError(
+                            f"re-enabling Wrap Lines did not restore wrapping and reset horizontal scroll: {state!r}"
+                        )
+                    key_step(3160, 1, "close Settings after wrap test")
+                    observations.append(
+                        "Wrap Lines toggle, unwrapped line indexing, caret-following scroll, horizontal wheel and offset pointer hit-testing verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 cursor_feedback_state = {"shape": 1, "enter_serial": 777}
                 resize_buffer_base = 17 + (2 if cursor_shape_supported else 0)
