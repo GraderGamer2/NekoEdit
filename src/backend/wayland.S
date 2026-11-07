@@ -177,6 +177,11 @@ msg_request_failure: .ascii "Wayland send failed: object="
 msg_request_opcode:  .ascii ", opcode="
 msg_request_errno:   .ascii ", errno="
 msg_request_errno_end:
+msg_previous_request: .ascii "Wayland previous request: object="
+msg_previous_opcode:  .ascii ", opcode="
+msg_last_event:       .ascii "Wayland last event: object="
+msg_last_event_opcode:.ascii ", opcode="
+msg_last_event_size:  .ascii ", payload bytes="
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -399,6 +404,9 @@ failed_request_object: .long 0
 failed_request_opcode: .long 0
 failed_request_errno:  .long 0
 failed_request_valid:  .long 0
+last_request_object:   .long 0
+last_request_opcode:   .long 0
+last_request_valid:    .long 0
 event_header:          .zero 8
 event_payload:         .zero 4096
 request_buffer:        .zero 8192
@@ -1856,6 +1864,47 @@ wayland_main:
     mov eax, dword ptr [rip + failed_request_errno]
     neg eax
     mov edi, eax
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
+    cmp dword ptr [rip + last_request_valid], 0
+    je .protocol_print_last_event
+    mov edi, 2
+    lea rsi, [rip + msg_previous_request]
+    mov edx, msg_previous_opcode - msg_previous_request
+    call linux_write_all
+    mov edi, dword ptr [rip + last_request_object]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_previous_opcode]
+    mov edx, msg_last_event - msg_previous_opcode
+    call linux_write_all
+    mov edi, dword ptr [rip + last_request_opcode]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
+.protocol_print_last_event:
+    mov edi, 2
+    lea rsi, [rip + msg_last_event]
+    mov edx, msg_last_event_opcode - msg_last_event
+    call linux_write_all
+    mov edi, dword ptr [rip + last_object]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_last_event_opcode]
+    mov edx, msg_last_event_size - msg_last_event_opcode
+    call linux_write_all
+    mov edi, dword ptr [rip + last_opcode]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_last_event_size]
+    mov edx, msg_protocol_error_prefix - msg_last_event_size
+    call linux_write_all
+    mov edi, dword ptr [rip + last_size]
     call write_stderr_u32
     mov edi, 2
     lea rsi, [rip + newline_text]
@@ -4493,11 +4542,18 @@ wl_send_request:
     lea edx, [rbx + 8]
     call wl_send_all
     test rax, rax
-    jns .wl_send_request_done
+    js .wl_send_request_failed
+    jmp .wl_send_request_success
+.wl_send_request_failed:
     mov dword ptr [rip + failed_request_object], r12d
     mov dword ptr [rip + failed_request_opcode], r13d
     mov dword ptr [rip + failed_request_errno], eax
     mov dword ptr [rip + failed_request_valid], 1
+    jmp .wl_send_request_done
+.wl_send_request_success:
+    mov dword ptr [rip + last_request_object], r12d
+    mov dword ptr [rip + last_request_opcode], r13d
+    mov dword ptr [rip + last_request_valid], 1
 .wl_send_request_done:
     add rsp, 8
     pop r14
@@ -4570,9 +4626,14 @@ wl_send_request_fd:
     jmp .send_fd_done
 .send_fd_success:
     xor eax, eax
-.send_fd_done:
+ .send_fd_done:
     test rax, rax
-    jns .send_fd_return
+    js .send_fd_failed
+    mov dword ptr [rip + last_request_object], r12d
+    mov dword ptr [rip + last_request_opcode], r13d
+    mov dword ptr [rip + last_request_valid], 1
+    jmp .send_fd_return
+.send_fd_failed:
     mov dword ptr [rip + failed_request_object], r12d
     mov dword ptr [rip + failed_request_opcode], r13d
     mov dword ptr [rip + failed_request_errno], eax
