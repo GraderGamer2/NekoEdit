@@ -10655,7 +10655,6 @@ doc_delete_at_cursor:
     push r13
     push r14
     mov r12d, dword ptr [rip + doc_cursor]
-    mov r13d, r12d                 # Preserve the raw pointer offset for drag direction.
     cmp r12d, dword ptr [rip + doc_length]
     jae .doc_delete_done
     call doc_line_index_ensure
@@ -15573,6 +15572,7 @@ doc_select_word_at_cursor:
     push r14
     push r15
     mov r12d, dword ptr [rip + doc_cursor]
+    mov r13d, r12d                 # Preserve raw pointer offset for drag direction.
     cmp r12d, dword ptr [rip + doc_length]
     jb .Ldoc_select_word_probe
     test r12d, r12d
