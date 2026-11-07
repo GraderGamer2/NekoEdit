@@ -1402,7 +1402,6 @@ xkb_symbols "nekoedit-sparse" {
                             f"before={before_shift_wheel}, after={after_shift_wheel}"
                         )
                     key_step(3144, 1, "close Settings before document pointer hit-testing")
-                    key_step(3145, 1, "close Settings before document pointer hit-testing")
                     if read_document_state()["settings_menu_open"] != 0:
                         raise AssertionError("Escape did not close Settings before document pointer hit-testing")
                     workflow_click(58, 98, 3150, "pointer hit-testing with horizontal offset")
