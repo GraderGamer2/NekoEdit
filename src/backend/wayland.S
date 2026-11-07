@@ -8400,6 +8400,7 @@ window_update_geometry:
 # Recalculate window-anchored and centered overlay geometry after every configure.
 .type window_update_layout_geometry, @function
 window_update_layout_geometry:
+    push rbx
     # Footer metadata is distributed across the available width. Preserve the
     # original 800px byte-count position while allowing it to move at all sizes.
     mov eax, dword ptr [rip + window_width]
@@ -8546,12 +8547,11 @@ window_update_layout_geometry:
     sub edx, eax
     shr edx, 1
     mov dword ptr [rip + find_panel_y], edx
-    mov eax, dword ptr [rip + ui_font_size]
-    mov ecx, dword ptr [rip + find_panel_width]
-    imul ecx, 10
+    mov eax, dword ptr [rip + find_panel_width]
+    imul eax, 10
     xor edx, edx
-    mov ebx, 448
-    div ebx
+    mov ecx, 448
+    div ecx
     cmp eax, dword ptr [rip + ui_font_size]
     jbe .window_layout_find_font_width_ready
     mov eax, dword ptr [rip + ui_font_size]
@@ -8631,6 +8631,7 @@ window_update_layout_geometry:
     shr edx, 1
     sub edx, 4
     mov dword ptr [rip + path_prompt_y], edx
+    pop rbx
     ret
 .size window_update_layout_geometry, . - window_update_layout_geometry
 
@@ -12291,9 +12292,9 @@ find_replace_handle_pointer:
     jb .Lfind_pointer_focus_query
     cmp dword ptr [rip + find_replace_mode], 2
     jne .Lfind_pointer_buttons
-    cmp edx, 124
-    jb .Lfind_pointer_buttons
     cmp edx, 88
+    jb .Lfind_pointer_buttons
+    cmp edx, 124
     jae .Lfind_pointer_buttons
 .Lfind_pointer_focus_replacement:
     mov dword ptr [rip + find_replace_focus], 1
