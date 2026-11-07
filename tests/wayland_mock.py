@@ -218,6 +218,7 @@ def run(
     font_parser_test: bool = False,
     font_picker_test: bool = False,
     clipboard_test: bool = False,
+    history_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
@@ -532,7 +533,7 @@ def run(
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
-                    or clipboard_test
+                    or clipboard_test or history_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -1416,6 +1417,30 @@ xkb_symbols "nekoedit-sparse" {
                     "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
                     ".": 52, "/": 53, "-": 12,
                 }
+
+                if history_test:
+                    initial_history = read_document_state()
+                    if initial_history["doc_contents"] != b"abc":
+                        raise AssertionError(
+                            "history test did not start with b'abc': "
+                            + repr(initial_history["doc_contents"])
+                        )
+                    workflow_shortcut(2000, 30, "Ctrl+A before replacing selection")
+                    key_step(2010, 44, "replace selected text with z")
+                    replaced = read_document_state()["doc_contents"]
+                    if replaced != b"z":
+                        raise AssertionError("typing did not replace the active selection: " + repr(replaced))
+                    workflow_shortcut(2020, 44, "Ctrl+Z undo replacement")
+                    undone = read_document_state()["doc_contents"]
+                    if undone != b"abc":
+                        raise AssertionError("Ctrl+Z did not restore the pre-edit document: " + repr(undone))
+                    workflow_shortcut(2030, 21, "Ctrl+Y redo replacement")
+                    redone = read_document_state()["doc_contents"]
+                    if redone != b"z":
+                        raise AssertionError("Ctrl+Y did not restore the edited document: " + repr(redone))
+                    observations.append("Ctrl+Z restored the prior text and selection state; Ctrl+Y redid the replacement")
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if clipboard_test:
                     original_clipboard = b"copy me\n"
@@ -4457,6 +4482,23 @@ if __name__ == "__main__":
             os.unlink(xkb_path)
         except FileNotFoundError:
             pass
+    # Basic bounded snapshot undo/redo, including replacement of a selection.
+    history_fd, history_path = tempfile.mkstemp(prefix="nekoedit-history-")
+    try:
+        with os.fdopen(history_fd, "wb") as history_document:
+            history_document.write(b"abc")
+        run(
+            sys.argv[1],
+            initial_file=history_path,
+            history_test=True,
+            cursor_shape_supported=False,
+        )
+    finally:
+        try:
+            os.unlink(history_path)
+        except FileNotFoundError:
+            pass
+
     # Wayland text clipboard interoperability: copy/cut immutable snapshots,
     # then paste a MIME offer from a separate compositor-side client.
     clipboard_fd, clipboard_path = tempfile.mkstemp(prefix="nekoedit-clipboard-")

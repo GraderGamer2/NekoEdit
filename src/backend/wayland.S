@@ -2016,6 +2016,7 @@ doc_line_index_base:    .quad 0
 doc_line_index_bytes:   .quad 0
 doc_line_index_capacity: .long 0
 doc_line_count:         .long 0
+.global doc_line_index_valid
 doc_line_index_valid:   .long 0
 doc_line_index_columns: .long 0
 repeat_timer_fd:         .long 0
@@ -2048,6 +2049,8 @@ doc_buffer:             .quad 0
 doc_capacity:           .long 0
 .global doc_storage_error
 doc_storage_error:      .long 0
+.global doc_revision
+doc_revision:           .long 0
 current_file_path:      .quad 0
 doc_save_error:         .long 0
 doc_open_error:         .long 0
@@ -3401,6 +3404,7 @@ wayland_main:
     jb .event_loop
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
+    call history_checkpoint
     mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
     mov dword ptr [rip + keyboard_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
@@ -3472,6 +3476,10 @@ wayland_main:
     je .keyboard_clipboard_cut
     cmp eax, 47
     je .keyboard_clipboard_paste
+    cmp eax, 44
+    je .keyboard_history_undo_or_redo
+    cmp eax, 21
+    je .keyboard_history_redo
     jmp .event_loop
 .keyboard_clipboard_copy:
     mov edi, 1
@@ -3486,6 +3494,18 @@ wayland_main:
 .keyboard_clipboard_paste:
     mov edi, 3
     call clipboard_key_command
+    test eax, eax
+    jnz .keyboard_changed
+    jmp .event_loop
+.keyboard_history_undo_or_redo:
+    cmp dword ptr [rip + shift_down], 0
+    jne .keyboard_history_redo
+    call history_undo
+    test eax, eax
+    jnz .keyboard_changed
+    jmp .event_loop
+.keyboard_history_redo:
+    call history_redo
     test eax, eax
     jnz .keyboard_changed
     jmp .event_loop
@@ -3781,6 +3801,7 @@ wayland_main:
     mov edi, 32
     call doc_insert_byte
 .keyboard_changed:
+    call history_checkpoint
     call doc_ensure_cursor_visible
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
@@ -4221,6 +4242,7 @@ load_initial_document:
     mov dword ptr [rip + doc_save_error], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_storage_error], 0
+    call history_reset
     xor eax, eax
 .load_file_return:
     add rsp, 8
@@ -6433,6 +6455,7 @@ load_document_from_path:
     mov dword ptr [rip + doc_save_error], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_storage_error], 0
+    call history_reset
     xor eax, eax
     jmp .load_path_return
 .load_path_close_error:
@@ -9691,6 +9714,7 @@ doc_insert_byte:
     inc dword ptr [rip + doc_gap_start]
     inc dword ptr [rip + doc_length]
     inc dword ptr [rip + doc_cursor]
+    inc dword ptr [rip + doc_revision]
     mov dword ptr [rip + doc_storage_error], 0
     mov edi, dword ptr [rip + doc_cursor]
     dec edi
@@ -9745,6 +9769,7 @@ doc_delete_at_cursor:
     sub r14d, r12d
     add dword ptr [rip + doc_gap_end], r14d
     sub dword ptr [rip + doc_length], r14d
+    inc dword ptr [rip + doc_revision]
     mov edi, r12d
     mov esi, r14d
     mov edx, dword ptr [rip + doc_grapheme_newline_flag]
@@ -9782,6 +9807,10 @@ doc_delete_selection:
     sub r13d, ebx
     add dword ptr [rip + doc_gap_end], r13d
     sub dword ptr [rip + doc_length], r13d
+    test r13d, r13d
+    jz .Lneko_delete_selection_no_revision
+    inc dword ptr [rip + doc_revision]
+.Lneko_delete_selection_no_revision:
     mov dword ptr [rip + doc_cursor], ebx
     mov dword ptr [rip + doc_selection_anchor], ebx
     mov dword ptr [rip + doc_selection_active], 0
