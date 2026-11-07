@@ -74,7 +74,17 @@ def synthetic_true_type_font() -> bytes:
 
     maxp = struct.pack(">IH", 0x00005000, 2)
     hmtx = struct.pack(">HHHH", 600, 0, 650, 0)
-    loca = struct.pack(">HHH", 0, 0, 0)
+    # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
+    glyph_a = (
+        struct.pack(">5h", 1, 0, 0, 500, 700)
+        + struct.pack(">2H", 2, 0)
+        + bytes((0x31, 0x21, 0x01))
+        + struct.pack(">2h", 500, -250)
+        + struct.pack(">h", 700)
+    )
+    glyf = glyph_a + bytes((-len(glyph_a)) % 4)
+    # Glyph 0 is empty; glyph 1 occupies the complete 24-byte glyf table.
+    loca = struct.pack(">HHH", 0, 0, len(glyf) // 2)
 
     format4 = (
         struct.pack(">7H", 4, 32, 0, 4, 4, 1, 0)
@@ -87,7 +97,7 @@ def synthetic_true_type_font() -> bytes:
     cmap = struct.pack(">HHHHI", 0, 1, 3, 1, 12) + format4
     tables = [
         (b"cmap", cmap),
-        (b"glyf", b""),
+        (b"glyf", glyf),
         (b"head", bytes(head)),
         (b"hhea", bytes(hhea)),
         (b"hmtx", hmtx),
@@ -835,6 +845,10 @@ xkb_symbols "nekoedit-sparse" {
                         "font_units_per_em", "font_num_glyphs", "font_ascent",
                         "font_descent", "font_num_hmetrics", "font_index_to_loc_format",
                         "font_cmap_format", "font_probe_A_glyph", "font_probe_A_advance",
+                        "font_probe_A_outline_result", "font_probe_A_contours",
+                        "font_probe_A_points", "font_probe_A_last_x", "font_probe_A_last_y",
+                        "font_probe_empty_result", "font_probe_empty_contours",
+                        "font_probe_empty_points", "font_probe_oob_result",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -860,6 +874,15 @@ xkb_symbols "nekoedit-sparse" {
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
                         "font_probe_A_advance": 650,
+                        "font_probe_A_outline_result": 0,
+                        "font_probe_A_contours": 1,
+                        "font_probe_A_points": 3,
+                        "font_probe_A_last_x": 250,
+                        "font_probe_A_last_y": 700,
+                        "font_probe_empty_result": 0,
+                        "font_probe_empty_contours": 0,
+                        "font_probe_empty_points": 0,
+                        "font_probe_oob_result": -1,
                     }
                     mismatch = {
                         name: (values.get(name), value)
@@ -872,7 +895,7 @@ xkb_symbols "nekoedit-sparse" {
                             + repr({"mismatch": mismatch, "state": values})
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path loaded a bounded SFNT/TrueType file; validated head, hhea, maxp, hmtx, loca, glyf and cmap format 4; Unicode A mapped to glyph 1 with a 650-unit advance"
+                        "explicit NEKOEDIT_FONT path loaded a bounded SFNT/TrueType file; validated head, hhea, maxp, hmtx, loca, glyf and cmap format 4; Unicode A mapped to glyph 1 with a 650-unit advance; decoded its three-point simple contour and checked empty/out-of-range glyphs"
                     )
                     client.sendall(wire_message(10, 1))
                     return
