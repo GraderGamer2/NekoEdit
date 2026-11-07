@@ -1938,6 +1938,63 @@ unicode_extended_pictographic_ranges:
 unicode_extended_pictographic_ranges_end:
 
 
+.Ldoc_dead_marks:
+    .long 0x300, 0x301, 0x302, 0x303, 0x308, 0x327
+.Ldoc_dead_compose_table:
+    .long 0x41, 0x300, 0xc0
+    .long 0x45, 0x300, 0xc8
+    .long 0x49, 0x300, 0xcc
+    .long 0x4f, 0x300, 0xd2
+    .long 0x55, 0x300, 0xd9
+    .long 0x61, 0x300, 0xe0
+    .long 0x65, 0x300, 0xe8
+    .long 0x69, 0x300, 0xec
+    .long 0x6f, 0x300, 0xf2
+    .long 0x75, 0x300, 0xf9
+    .long 0x41, 0x301, 0xc1
+    .long 0x45, 0x301, 0xc9
+    .long 0x49, 0x301, 0xcd
+    .long 0x4f, 0x301, 0xd3
+    .long 0x55, 0x301, 0xda
+    .long 0x59, 0x301, 0xdd
+    .long 0x61, 0x301, 0xe1
+    .long 0x65, 0x301, 0xe9
+    .long 0x69, 0x301, 0xed
+    .long 0x6f, 0x301, 0xf3
+    .long 0x75, 0x301, 0xfa
+    .long 0x79, 0x301, 0xfd
+    .long 0x41, 0x302, 0xc2
+    .long 0x45, 0x302, 0xca
+    .long 0x49, 0x302, 0xce
+    .long 0x4f, 0x302, 0xd4
+    .long 0x55, 0x302, 0xdb
+    .long 0x61, 0x302, 0xe2
+    .long 0x65, 0x302, 0xea
+    .long 0x69, 0x302, 0xee
+    .long 0x6f, 0x302, 0xf4
+    .long 0x75, 0x302, 0xfb
+    .long 0x41, 0x303, 0xc3
+    .long 0x4e, 0x303, 0xd1
+    .long 0x4f, 0x303, 0xd5
+    .long 0x61, 0x303, 0xe3
+    .long 0x6e, 0x303, 0xf1
+    .long 0x6f, 0x303, 0xf5
+    .long 0x41, 0x308, 0xc4
+    .long 0x45, 0x308, 0xcb
+    .long 0x49, 0x308, 0xcf
+    .long 0x4f, 0x308, 0xd6
+    .long 0x55, 0x308, 0xdc
+    .long 0x59, 0x308, 0x178
+    .long 0x61, 0x308, 0xe4
+    .long 0x65, 0x308, 0xeb
+    .long 0x69, 0x308, 0xef
+    .long 0x6f, 0x308, 0xf6
+    .long 0x75, 0x308, 0xfc
+    .long 0x79, 0x308, 0xff
+    .long 0x43, 0x327, 0xc7
+    .long 0x63, 0x327, 0xe7
+    .long 0, 0, 0
+
 .section .text
 
 .section .data
@@ -2026,6 +2083,8 @@ doc_selection_end:      .long 0
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
 doc_word_drag_end:       .long 0
+.global doc_pending_dead_mark
+doc_pending_dead_mark: .long 0
 doc_view_top_row:       .long 0
 doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
@@ -3627,6 +3686,7 @@ wayland_main:
     cmp dword ptr [rip + last_size], 8
     jb .event_loop
     mov dword ptr [rip + keyboard_focused], 0
+    mov dword ptr [rip + doc_pending_dead_mark], 0
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + level3_down], 0
     call repeat_cancel
@@ -3876,6 +3936,14 @@ wayland_main:
     mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .keyboard_unmodified_dispatch:
+    cmp eax, 1
+    jne .Lkeyboard_dispatch_navigation
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    je .Lkeyboard_dispatch_navigation
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    call repeat_cancel
+    jmp .keyboard_changed
+.Lkeyboard_dispatch_navigation:
     cmp eax, 105
     je .keyboard_left
     cmp eax, 106
@@ -3900,10 +3968,8 @@ wayland_main:
     call keycode_to_unicode
     test eax, eax
     jz .event_loop
-    mov r12d, eax
-    call doc_delete_selection
-    mov edi, r12d
-    call doc_insert_codepoint_utf8
+    mov edi, eax
+    call doc_insert_keyboard_codepoint
     jmp .keyboard_changed
 .keyboard_open_command:
     call start_open_prompt
@@ -4263,6 +4329,12 @@ wayland_main:
     call doc_clear_selection
     jmp .keyboard_changed
 .keyboard_backspace:
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    je .Lkeyboard_backspace_document
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    call repeat_cancel
+    jmp .keyboard_changed
+.Lkeyboard_backspace_document:
     cmp dword ptr [rip + doc_selection_active], 0
     jne .Lneko_keyboard_backspace_selection
     cmp dword ptr [rip + doc_cursor], 0
@@ -12882,6 +12954,103 @@ keycode_to_unicode:
     pop rbx
     ret
 .size keycode_to_unicode, . - keycode_to_unicode
+
+# Return a precomposed Latin-1 scalar for (EDI=base, ESI=combining mark).
+# Zero means no precomposed mapping exists; callers preserve base+mark.
+.type doc_compose_latin1, @function
+doc_compose_latin1:
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    mov r13d, esi
+    lea rbx, [rip + .Ldoc_dead_compose_table]
+.Ldoc_compose_latin1_loop:
+    cmp dword ptr [rbx], 0
+    je .Ldoc_compose_latin1_none
+    cmp dword ptr [rbx], r12d
+    jne .Ldoc_compose_latin1_next
+    cmp dword ptr [rbx + 4], r13d
+    je .Ldoc_compose_latin1_found
+.Ldoc_compose_latin1_next:
+    add rbx, 12
+    jmp .Ldoc_compose_latin1_loop
+.Ldoc_compose_latin1_found:
+    mov eax, dword ptr [rbx + 8]
+    jmp .Ldoc_compose_latin1_done
+.Ldoc_compose_latin1_none:
+    xor eax, eax
+.Ldoc_compose_latin1_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_compose_latin1, . - doc_compose_latin1
+
+# Insert a Unicode scalar or arm one of the six bounded XKB dead-key actions.
+# Dead-key actions occupy 0x110001..0x110006 and are never UTF-8 encoded.
+# The next scalar composes through the Latin-1 table. Unsupported pairs are
+# preserved as base+combining mark. A second dead key flushes the first mark.
+.type doc_insert_keyboard_codepoint, @function
+doc_insert_keyboard_codepoint:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, edi
+    cmp r12d, 0x110001
+    jb .Ldoc_keyboard_insert_scalar
+    cmp r12d, 0x110006
+    ja .Ldoc_keyboard_insert_scalar
+    lea rax, [rip + .Ldoc_dead_marks]
+    sub r12d, 0x110001
+    mov r13d, dword ptr [rax + r12*4]
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    je .Ldoc_keyboard_store_dead
+    mov edi, dword ptr [rip + doc_pending_dead_mark]
+    call doc_delete_selection
+    mov edi, dword ptr [rip + doc_pending_dead_mark]
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_store_dead:
+    mov dword ptr [rip + doc_pending_dead_mark], r13d
+    mov eax, 1
+    jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_insert_scalar:
+    cmp r12d, 0x10ffff
+    ja .Ldoc_keyboard_insert_done
+    mov r13d, dword ptr [rip + doc_pending_dead_mark]
+    test r13d, r13d
+    jz .Ldoc_keyboard_plain_scalar
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov edi, r12d
+    mov esi, r13d
+    call doc_compose_latin1
+    test eax, eax
+    jz .Ldoc_keyboard_compose_fallback
+    mov r14d, eax
+    call doc_delete_selection
+    mov edi, r14d
+    call doc_insert_codepoint_utf8
+    jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_compose_fallback:
+    # Preserve the base scalar and append its canonical combining mark.
+    call doc_delete_selection
+    mov edi, r12d
+    call doc_insert_codepoint_utf8
+    mov edi, r13d
+    call doc_insert_codepoint_utf8
+    jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_plain_scalar:
+    call doc_delete_selection
+    mov edi, r12d
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_insert_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_insert_keyboard_codepoint, . - doc_insert_keyboard_codepoint
 
 .type draw_glyph, @function
 draw_glyph:
