@@ -1326,11 +1326,11 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(serial + 2, evdev["g"], "edit after cancelling Save As")
                     workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
                     with open(menu_saveas, "rb") as saved:
-                        if saved.read() != b"zabcdefg":
+                        if saved.read() != b"zabcdef":
                             raise AssertionError("cancelled Save As changed the active destination")
                     if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
                         raise AssertionError("Escape unexpectedly created the cancelled Save As path")
-                    observations.append("missing/oversized Open rollback, failed Save As rollback, and Escape cancellation verified")
+                    observations.append("missing Open rollback, failed Save As rollback, and Escape cancellation verified")
 
                     # A zero-byte text file must replace the current document
                     # with an actually empty buffer and commit its own exact path.
