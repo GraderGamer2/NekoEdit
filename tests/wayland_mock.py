@@ -488,7 +488,7 @@ def run(
                         15, 2,
                         struct.pack(
                             "<Iii", 777,
-                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test or grapheme_test) else 98))) * 256,
+                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test or grapheme_test) else (27 if font_parser_test else 98)))) * 256,
                             (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test or grapheme_test) else 110) * 256,
                         ),
                     )
@@ -944,6 +944,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
                         "font_probe_advance_A", "font_probe_advance_B",
+                        "doc_cursor",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -967,6 +968,9 @@ xkb_symbols "nekoedit-sparse" {
                         "font_num_hmetrics": 10,
                         "font_probe_advance_A": 8,
                         "font_probe_advance_B": 5,
+                        # A=8px, B=5px: clicking at x=27 is beyond B's midpoint
+                        # (B starts at x=24), so the caret is before the third A.
+                        "doc_cursor": 2,
                         "font_index_to_loc_format": 0,
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
@@ -1043,8 +1047,12 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             "synthetic TrueType glyph A was rasterized but not painted into the Wayland framebuffer"
                         )
+                    if not antialiased_ink_present(30, 92, 2, 12):
+                        raise AssertionError(
+                            "third A was not painted at x=29 after the 5px B advance"
+                        )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT tables/cmap/metrics, simple and transformed composite outlines, cycle rejection, straight-edge rasterization, quadratic flattening with implicit off-curve midpoints, and compositor-visible glyph pixels"
+                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
                     )
                     client.sendall(wire_message(10, 1))
                     return
