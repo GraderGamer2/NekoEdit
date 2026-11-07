@@ -880,11 +880,11 @@ font_init:
 .Lfont_env_equal:
     cmp byte ptr [r13], '='
     jne .Lfont_env_advance
+    mov edi, 'E'
+    call font_debug_mark
     lea rdi, [r13 + 1]
     cmp byte ptr [rdi], 0
     je .Lfont_try_defaults
-    mov edi, 'E'
-    call font_debug_mark
     call font_try_path
     test rax, rax
     jz .Lfont_init_success
