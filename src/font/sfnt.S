@@ -82,31 +82,6 @@ font_file_map:                  .quad 0
 font_file_size:                 .quad 0
 
 
-# Temporary one-byte startup trace for SFNT parser isolation.
-.section .bss
-.balign 1
-font_debug_byte: .byte 0
-.section .text
-.type font_debug_mark, @function
-font_debug_mark:
-    # Preserve syscall return values and live arguments around the trace write.
-    push rax
-    push rdi
-    push rsi
-    push rdx
-    mov byte ptr [rip + font_debug_byte], dil
-    mov eax, 1
-    mov edi, 2
-    lea rsi, [rip + font_debug_byte]
-    mov edx, 1
-    syscall
-    pop rdx
-    pop rsi
-    pop rdi
-    pop rax
-    ret
-.size font_debug_mark, . - font_debug_mark
-
 .section .text
 .extern process_envp
 
@@ -359,8 +334,6 @@ font_parse_cmap:
 # Returns EAX=0 on success, -1 on malformed/unsupported input.
 .type font_parse_mapped, @function
 font_parse_mapped:
-    mov edi, '1'
-    call font_debug_mark
     push rbx
     push rbp
     push r12
@@ -380,8 +353,6 @@ font_parse_mapped:
     cmp eax, FONT_MAX_TABLES
     ja .Lfont_parse_failed
     mov dword ptr [rip + font_num_tables], eax
-    mov edi, '2'
-    call font_debug_mark
     shl eax, 4
     add eax, 12
     cmp rax, qword ptr [rip + font_file_size]
@@ -431,8 +402,6 @@ font_parse_mapped:
     jc .Lfont_parse_failed
     mov dword ptr [rip + font_loca_offset], eax
     mov dword ptr [rip + font_loca_length], edx
-    mov edi, '3'
-    call font_debug_mark
 
     # head: magicNumber, unitsPerEm and indexToLocFormat.
     mov r12, qword ptr [rip + font_file_map]
@@ -519,14 +488,10 @@ font_parse_mapped:
 .Lfont_loca_required:
     cmp dword ptr [rip + font_loca_length], ecx
     jb .Lfont_parse_failed
-    mov edi, '4'
-    call font_debug_mark
 
     call font_parse_cmap
     test rax, rax
     js .Lfont_parse_failed
-    mov edi, '5'
-    call font_debug_mark
     xor eax, eax
     jmp .Lfont_parse_return
 .Lfont_parse_failed:
@@ -547,8 +512,6 @@ font_parse_mapped:
 # RDI=NUL-terminated path; EAX=0 success, negative on failure.
 .type font_try_path, @function
 font_try_path:
-    mov edi, 'T'
-    call font_debug_mark
     push rbx
     push r12
     push r13
@@ -556,37 +519,27 @@ font_try_path:
     push r15
     mov r12, rdi
     # Open read-only. No symlink following is needed for explicit font files.
-    mov edi, 'O'
-    call font_debug_mark
     mov eax, FONT_SYS_openat
     mov edi, FONT_AT_FDCWD
     mov rsi, r12
     xor edx, edx
     xor r10d, r10d
     syscall
-    mov edi, 'o'
-    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_failed
     mov r13d, eax
     # Determine a bounded file length.
-    mov edi, 'L'
-    call font_debug_mark
     mov eax, FONT_SYS_lseek
     mov edi, r13d
     xor esi, esi
     mov edx, 2               # SEEK_END
     syscall
-    mov edi, 'l'
-    call font_debug_mark
     test rax, rax
     jle .Lfont_try_path_close_failed
     cmp rax, FONT_MAX_FILE_SIZE
     ja .Lfont_try_path_close_failed
     mov r14, rax
     # mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0)
-    mov edi, 'm'
-    call font_debug_mark
     xor edi, edi
     mov rsi, r14
     mov edx, FONT_PROT_READ
@@ -598,8 +551,6 @@ font_try_path:
     test rax, rax
     js .Lfont_try_path_close_failed
     mov r15, rax
-    mov edi, 'M'
-    call font_debug_mark
     mov eax, FONT_SYS_close
     mov edi, r13d
     syscall
@@ -607,25 +558,15 @@ font_try_path:
     mov qword ptr [rip + font_file_size], r14
     mov dword ptr [rip + font_loaded], 0
     mov dword ptr [rip + font_num_tables], 0
-    mov edi, 'P'
-    call font_debug_mark
     call font_parse_mapped
-    mov edi, 'p'
-    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_unmap_failed
     # Prove that the chosen Unicode cmap and horizontal metrics work.
-    mov edi, 'C'
-    call font_debug_mark
     mov edi, 0x41             # 'A'
     call font_cmap_lookup
-    mov edi, 'c'
-    call font_debug_mark
     mov dword ptr [rip + font_probe_A_glyph], eax
     mov edi, eax
     call font_glyph_advance
-    mov edi, 'a'
-    call font_debug_mark
     mov dword ptr [rip + font_probe_A_advance], eax
     mov dword ptr [rip + font_loaded], 1
     xor eax, eax
@@ -880,8 +821,6 @@ font_init:
 .Lfont_env_equal:
     cmp byte ptr [r13], '='
     jne .Lfont_env_advance
-    mov edi, 'E'
-    call font_debug_mark
     lea rdi, [r13 + 1]
     cmp byte ptr [rdi], 0
     je .Lfont_try_defaults
