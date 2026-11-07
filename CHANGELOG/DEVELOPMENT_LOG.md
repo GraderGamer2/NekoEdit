@@ -19,7 +19,12 @@
 - See [WAYLAND_MAXIMIZE_DEBUGGING.md](../docs/WAYLAND_MAXIMIZE_DEBUGGING.md) for the investigation history, the retained root-cause fix, and the commits to inspect if a similar failure returns.
 - The existing startup-stage diagnostics and compositor-provided wl_display.error reporting remain available for general Wayland setup/protocol failures.
 
-**Validation:** The cleanup has been applied to the early-alpha implementation branch. Run the repository's make test and make test-wayland checks, then produce a fresh Actions build and repeat the real GNOME/Mutter Maximize/Restore test. The prior user's real-desktop success applies to the dense-ID fix; it does not yet validate this diagnostic cleanup build.
+### Verification and artifact
+
+- Cleanup commit: [`82f1e15c04c8`](https://github.com/GraderGamer2/NekoEdit/commit/82f1e15c04c87d202658eb4fda0d4c406854db93).
+- GitHub Actions [Build and test #294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772) passed all eight steps: freestanding assembly/link and ELF checks, CLI smoke tests, the complete Wayland mock-compositor suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 29,836 bytes; SHA-256 `c375eb07c23059a45387fae3f0c67f97ef6632713bd619a67b9591464c311ba3`; artifact ID `13555196117`; expires 2026-11-14 01:38:13 UTC. [Download from Actions #294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772/artifacts/13555196117).
+- The user's successful Maximize test applies to the dense-ID correction before this cleanup. The cleanup itself passes automated CI but its exact binary still needs a real GNOME/Mutter retest.
 
 ## 2026-11-07 — Fix dense Wayland client object IDs for resized buffers
 

@@ -21,6 +21,10 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
 
+## Wayland Maximize crash investigation
+
+The removed temporary diagnostics and sync barrier are documented in [docs/WAYLAND_MAXIMIZE_DEBUGGING.md](../docs/WAYLAND_MAXIMIZE_DEBUGGING.md). It records the confirmed dense-object-ID root cause, the historical commits containing the probes, and safe guidance for reintroducing them if the issue returns.
+
 ## Mandatory rule for future NekoEdit development
 
 **Every time NekoEdit is developed, the changelog must be updated as part of that same work. Do not treat changelog updates as optional or postpone them to a later session.**

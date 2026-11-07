@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **246** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit).
+- Recorded implementation commits: **247** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -469,6 +469,14 @@ Actions [#290](https://github.com/GraderGamer2/NekoEdit/actions/runs/42322351170
 | 2026-11-07 01:20:45 UTC | [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b) | fix: allocate Wayland client object IDs densely |
 
 Actions [#292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724) passed all eight workflow steps on this commit and uploaded artifact `13553938172` (30,659 bytes; SHA-256 `e51c74154c953d696d95bd7fe41fc3d82b42bbef3280b3428ec7c2d0a99ff65b`). The fix unifies pointer, keyboard, replacement-buffer, and sync-callback allocation so every new client object receives the next available dense ID. The mock suite checks the Maximize/Restore/edge-resize sequence using IDs 17, 18, 19, and 20. The GNOME/Mutter retest remains pending.
+
+## 2026-11-07 Removal of temporary Maximize investigation instrumentation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 01:37:56 UTC | [`82f1e15c04c8`](https://github.com/GraderGamer2/NekoEdit/commit/82f1e15c04c87d202658eb4fda0d4c406854db93) | chore: remove temporary maximize diagnostics |
+
+Actions [#294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772) passed all eight workflow steps on this commit. The cleanup removes the one-shot resize sync barrier and verbose request/event tracking while retaining the dense client-object allocator and SIGPIPE-safe send handling. The mock suite now checks Maximize/Restore/interactive-resize buffer IDs 17, 18, and 19 without a sync callback. Artifact `13555196117`, 29,836 bytes, SHA-256 `c375eb07c23059a45387fae3f0c67f97ef6632713bd619a67b9591464c311ba3`, expires 2026-11-14 01:38:13 UTC. [Download Actions #294 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772/artifacts/13555196117).
 
 ## Maintenance
 
