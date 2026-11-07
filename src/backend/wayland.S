@@ -107,9 +107,7 @@
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
-.equ CELL_WIDTH,          8
 .equ LINE_HEIGHT,        12
-.equ DOC_COLUMNS,        ((WIDTH - DOC_LEFT - 8) / CELL_WIDTH)
 .equ DOC_VISIBLE_ROWS,   ((STATUS_TOP - DOC_TOP) / LINE_HEIGHT)
 
 .section .rodata
@@ -1932,14 +1930,13 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
 window_status_top:      .long 0
 window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
-window_doc_columns:     .long 0
 window_doc_pixel_width: .long 0
 .global doc_pointer_debug_input_x, doc_pointer_debug_output
 .global doc_pointer_debug_map_x, doc_pointer_debug_midpoint
@@ -7729,14 +7726,6 @@ window_update_geometry:
     mov eax, 1
 .window_geometry_pixel_width_ready:
     mov dword ptr [rip + window_doc_pixel_width], eax
-    xor edx, edx
-    mov ecx, CELL_WIDTH
-    div ecx
-    test eax, eax
-    jnz .window_geometry_columns_ready
-    mov eax, 1
-.window_geometry_columns_ready:
-    mov dword ptr [rip + window_doc_columns], eax
     mov eax, dword ptr [rip + window_status_top]
     sub eax, DOC_TOP
     xor edx, edx
