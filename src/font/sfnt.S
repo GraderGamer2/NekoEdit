@@ -82,40 +82,6 @@ font_file_map:                  .quad 0
 font_file_size:                 .quad 0
 
 
-# Temporary parser trace; preserve all caller-saved registers across write(2).
-.section .bss
-.balign 1
-font_debug_byte: .byte 0
-.section .text
-.type font_debug_mark, @function
-font_debug_mark:
-    push rax
-    push rdi
-    push rsi
-    push rdx
-    push rcx
-    push r8
-    push r9
-    push r10
-    push r11
-    mov byte ptr [rip + font_debug_byte], dil
-    mov eax, 1
-    mov edi, 2
-    lea rsi, [rip + font_debug_byte]
-    mov edx, 1
-    syscall
-    pop r11
-    pop r10
-    pop r9
-    pop r8
-    pop rcx
-    pop rdx
-    pop rsi
-    pop rdi
-    pop rax
-    ret
-.size font_debug_mark, . - font_debug_mark
-
 .section .text
 .extern process_envp
 
@@ -177,7 +143,7 @@ font_find_table:
 .Lfont_find_table_invalid:
     stc
 .Lfont_find_table_return:
-    add rsp, 8
+    lea rsp, [rsp + 8]       # preserve CF for callers testing table lookup
     pop r14
     pop r13
     pop r12
@@ -189,8 +155,6 @@ font_find_table:
 # Uses the best available Unicode platform/encoding record; rejects unsafe lengths.
 .type font_parse_cmap, @function
 font_parse_cmap:
-    mov edi, 'a'
-    call font_debug_mark
     push rbx
     push rbp
     push r12
@@ -214,8 +178,6 @@ font_parse_cmap:
     jz .Lfont_cmap_failed
     cmp eax, FONT_MAX_CMAP_RECORDS
     ja .Lfont_cmap_failed
-    mov edi, 'b'
-    call font_debug_mark
     mov ebx, eax
     lea eax, [rbx * 8 + 4]
     cmp eax, r13d
@@ -224,8 +186,6 @@ font_parse_cmap:
     xor r14d, r14d              # chosen format
     xor r15d, r15d              # chosen relative offset
     mov dword ptr [rsp], 0      # chosen subtable length
-    mov edi, 'c'
-    call font_debug_mark
     lea r12, [r12 + 4]
 .Lfont_cmap_record_loop:
     test ebx, ebx
@@ -245,8 +205,6 @@ font_parse_cmap:
     sub eax, ecx
     cmp eax, 2
     jb .Lfont_cmap_record_next
-    mov edi, 'd'
-    call font_debug_mark
     mov r8, qword ptr [rip + font_file_map]
     mov eax, dword ptr [rip + font_cmap_offset]
     add r8, rax
@@ -254,8 +212,6 @@ font_parse_cmap:
     mov rdi, r8
     call font_be16
     mov r9d, eax                # format
-    mov edi, 'e'
-    call font_debug_mark
     xor r10d, r10d              # score
     cmp r9d, 12
     je .Lfont_cmap_score_format12
@@ -339,8 +295,6 @@ font_parse_cmap:
     add eax, 16
     cmp r11d, eax
     jb .Lfont_cmap_record_next
-    mov edi, 'f'
-    call font_debug_mark
 .Lfont_cmap_store:
     mov ebp, r10d
     mov r14d, r9d
@@ -351,8 +305,6 @@ font_parse_cmap:
     dec ebx
     jmp .Lfont_cmap_record_loop
 .Lfont_cmap_records_done:
-    mov edi, 'g'
-    call font_debug_mark
     cmp r14d, 4
     je .Lfont_cmap_selected
     cmp r14d, 12
@@ -364,8 +316,6 @@ font_parse_cmap:
     mov dword ptr [rip + font_cmap_subtable_offset], eax
     mov eax, dword ptr [rsp]
     mov dword ptr [rip + font_cmap_subtable_length], eax
-    mov edi, 'h'
-    call font_debug_mark
     xor eax, eax
     jmp .Lfont_cmap_return
 .Lfont_cmap_failed:
@@ -385,8 +335,6 @@ font_parse_cmap:
 # Returns EAX=0 on success, -1 on malformed/unsupported input.
 .type font_parse_mapped, @function
 font_parse_mapped:
-    mov edi, '1'
-    call font_debug_mark
     push rbx
     push rbp
     push r12
@@ -406,8 +354,6 @@ font_parse_mapped:
     cmp eax, FONT_MAX_TABLES
     ja .Lfont_parse_failed
     mov dword ptr [rip + font_num_tables], eax
-    mov edi, '2'
-    call font_debug_mark
     shl eax, 4
     add eax, 12
     cmp rax, qword ptr [rip + font_file_size]
@@ -457,8 +403,6 @@ font_parse_mapped:
     jc .Lfont_parse_failed
     mov dword ptr [rip + font_loca_offset], eax
     mov dword ptr [rip + font_loca_length], edx
-    mov edi, '3'
-    call font_debug_mark
 
     # head: magicNumber, unitsPerEm and indexToLocFormat.
     mov r12, qword ptr [rip + font_file_map]
@@ -545,14 +489,10 @@ font_parse_mapped:
 .Lfont_loca_required:
     cmp dword ptr [rip + font_loca_length], ecx
     jb .Lfont_parse_failed
-    mov edi, '4'
-    call font_debug_mark
 
     call font_parse_cmap
     test rax, rax
     js .Lfont_parse_failed
-    mov edi, '5'
-    call font_debug_mark
     xor eax, eax
     jmp .Lfont_parse_return
 .Lfont_parse_failed:
@@ -579,8 +519,6 @@ font_try_path:
     push r14
     push r15
     mov r12, rdi
-    mov edi, 'T'
-    call font_debug_mark
     # Open read-only. No symlink following is needed for explicit font files.
     mov eax, FONT_SYS_openat
     mov edi, FONT_AT_FDCWD
@@ -588,8 +526,6 @@ font_try_path:
     xor edx, edx
     xor r10d, r10d
     syscall
-    mov edi, 'o'
-    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_failed
     mov r13d, eax
@@ -599,8 +535,6 @@ font_try_path:
     xor esi, esi
     mov edx, 2               # SEEK_END
     syscall
-    mov edi, 'l'
-    call font_debug_mark
     test rax, rax
     jle .Lfont_try_path_close_failed
     cmp rax, FONT_MAX_FILE_SIZE
@@ -615,8 +549,6 @@ font_try_path:
     xor r9d, r9d
     mov eax, FONT_SYS_mmap
     syscall
-    mov edi, 'm'
-    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_close_failed
     mov r15, rax
@@ -627,25 +559,15 @@ font_try_path:
     mov qword ptr [rip + font_file_size], r14
     mov dword ptr [rip + font_loaded], 0
     mov dword ptr [rip + font_num_tables], 0
-    mov edi, 'P'
-    call font_debug_mark
     call font_parse_mapped
-    mov edi, 'p'
-    call font_debug_mark
     test rax, rax
     js .Lfont_try_path_unmap_failed
     # Prove that the chosen Unicode cmap and horizontal metrics work.
-    mov edi, 'C'
-    call font_debug_mark
     mov edi, 0x41             # 'A'
     call font_cmap_lookup
-    mov edi, 'c'
-    call font_debug_mark
     mov dword ptr [rip + font_probe_A_glyph], eax
     mov edi, eax
     call font_glyph_advance
-    mov edi, 'a'
-    call font_debug_mark
     mov dword ptr [rip + font_probe_A_advance], eax
     mov dword ptr [rip + font_loaded], 1
     xor eax, eax
@@ -903,8 +825,6 @@ font_init:
     lea rdi, [r13 + 1]
     cmp byte ptr [rdi], 0
     je .Lfont_try_defaults
-    mov edi, 'E'
-    call font_debug_mark
     lea rdi, [r13 + 1]
     call font_try_path
     test rax, rax
