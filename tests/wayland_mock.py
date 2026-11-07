@@ -1199,9 +1199,24 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                 def workflow_redraw(label: str) -> None:
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
-                    )
+                    attach = (8, 1, struct.pack("<III", 12, 0, 0))
+                    while True:
+                        actual = recv_wayland_message(client)
+                        # Pointer motion can change the optional cursor shape
+                        # immediately before the surface redraw. Consume that
+                        # protocol request without mistaking it for an attach.
+                        if (
+                            actual[0] == child_u32("cursor_shape_device")
+                            and actual[1] == 1
+                            and len(actual[2]) == 8
+                            and not actual[3]
+                        ):
+                            continue
+                        if actual[:3] != attach:
+                            raise AssertionError(
+                                f"{label} attach: expected {attach!r}, got {actual[:3]!r}"
+                            )
+                        break
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
