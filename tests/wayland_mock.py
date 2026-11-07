@@ -232,6 +232,16 @@ def run(
                 if os.fstat(shm_fd).st_size != expected_size:
                     raise AssertionError("memfd size does not match requested shared buffer size")
                 pixels = mmap.mmap(shm_fd, expected_size, access=mmap.ACCESS_READ)
+
+                def rendered_color_present(
+                    x: int, y: int, width: int, height: int, stride: int, color: int
+                ) -> bool:
+                    return any(
+                        struct.unpack_from("<I", pixels, row * stride + column * 4)[0] == color
+                        for row in range(y, y + height)
+                        for column in range(x, x + width)
+                    )
+
                 if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
                     raise AssertionError("expected title-bar background was not rendered")
                 if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
@@ -1671,6 +1681,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"window controls did not follow the maximized width: {hex(max_close_pixel)}"
                         )
+                    if not rendered_color_present(1180, 1066, 48, 7, 7680, 0xFFD8DEE9):
+                        raise AssertionError("the byte-count footer label did not follow the maximized width")
+                    if not rendered_color_present(1864, 1066, 40, 7, 7680, 0xFFD8DEE9):
+                        raise AssertionError("the mode footer label did not follow the maximized width")
                     observations.append(
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
                     )
@@ -1722,6 +1736,10 @@ xkb_symbols "nekoedit-sparse" {
                         or restored_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
+                    if not rendered_color_present(480, 466, 48, 7, 3200, 0xFFD8DEE9):
+                        raise AssertionError("the byte-count footer label did not return to its restored-width anchor")
+                    if not rendered_color_present(744, 466, 40, 7, 3200, 0xFFD8DEE9):
+                        raise AssertionError("the mode footer label did not return to its restored-width anchor")
                     observations.append(
                         "Restore acknowledges the compositor's normal size and replaces the maximized buffer"
                     )
@@ -1815,6 +1833,10 @@ xkb_symbols "nekoedit-sparse" {
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
                     client.sendall(wire_message(resize_buffer_base + 2, 0))
+                    if not rendered_color_present(430, 466, 48, 7, 2880, 0xFFD8DEE9):
+                        raise AssertionError("the byte-count footer label did not follow the 720px resized width")
+                    if not rendered_color_present(664, 466, 40, 7, 2880, 0xFFD8DEE9):
+                        raise AssertionError("the mode footer label did not follow the 720px resized width")
 
                     # Probe every remaining edge and corner with coordinates
                     # deliberately inside the new 16-pixel grab band.
@@ -1834,10 +1856,176 @@ xkb_symbols "nekoedit-sparse" {
                             cursor_shape=cursor_shape,
                         )
 
+                    # Exercise the centered picker after a non-identity width transform.
+                    # This validates that the rendered Cancel button and pointer hit box
+                    # still share the same design-space geometry.
+                    def resized_ui_click(
+                        x: int, y: int, click_serial: int, label: str,
+                        buffer_id: int, width: int, height: int,
+                    ) -> None:
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", click_serial, x * 256, y * 256))
+                            + wire_message(
+                                15, 3, struct.pack("<IIII", click_serial + 1, click_serial + 2, 0x110, 1)
+                            )
+                        )
+                        expect_message(
+                            client, (8, 1, struct.pack("<III", buffer_id, 0, 0)),
+                            f"{label}: attach",
+                        )
+                        expect_message(
+                            client, (8, 2, struct.pack("<4I", 0, 0, width, height)),
+                            f"{label}: damage",
+                        )
+                        expect_message(client, (8, 6, b""), f"{label}: commit")
+                        client.sendall(
+                            wire_message(
+                                15, 3, struct.pack("<IIII", click_serial + 3, click_serial + 4, 0x110, 0)
+                            )
+                            + wire_message(buffer_id, 0)
+                        )
+
+                    # Re-enter at a neutral title-bar location so cursor feedback
+                    # has a fresh, valid enter serial before opening the picker.
+                    resized_enter = serial + 150
+                    client.sendall(
+                        wire_message(15, 1, struct.pack("<II", resized_enter - 1, 8))
+                        + wire_message(
+                            15, 0,
+                            struct.pack("<IIii", resized_enter, 8, 120 * 256, 12 * 256),
+                        )
+                    )
+                    if cursor_shape_supported and cursor_feedback_state["shape"] != 1:
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", resized_enter, 1)),
+                            "reset cursor before resized picker",
+                        )
+                    cursor_feedback_state["enter_serial"] = resized_enter
+                    cursor_feedback_state["shape"] = 1
+
+                    resized_ui_click(
+                        120, 12, serial + 160, "open File menu at 720px", resize_buffer_base + 2, 720, 480
+                    )
+                    resized_ui_click(
+                        120, 48, serial + 170, "open picker at 720px", resize_buffer_base + 2, 720, 480
+                    )
+                    picker_720 = picker_state()
+                    if (
+                        picker_720.get("picker_mode") != 1
+                        or picker_720.get("picker_panel_x") != 16
+                        or picker_720.get("picker_panel_y") != 36
+                        or picker_720.get("picker_panel_width") != 688
+                        or picker_720.get("picker_panel_height") != 408
+                    ):
+                        raise AssertionError(f"picker did not fit the 720x480 window: {picker_720!r}")
+                    cancel_x_720 = 16 + ((636 - 40) * 688 // 720)
+                    cancel_y_720 = 36 + ((412 - 36) * 408 // 408)
+                    if struct.unpack_from("<I", pixels, cancel_y_720 * 2880 + cancel_x_720 * 4)[0] != 0xFF414B5A:
+                        raise AssertionError("resized picker Cancel button was not drawn at its fitted location")
+                    resized_ui_click(
+                        cancel_x_720, cancel_y_720, serial + 180,
+                        "cancel fitted picker at 720px", resize_buffer_base + 2, 720, 480,
+                    )
+                    if picker_state().get("picker_mode") != 0:
+                        raise AssertionError("the fitted 720px picker Cancel hit target did not close the picker")
+                    observations.append(
+                        "centered picker scales to a resized 720px-wide surface and its Cancel hit target matches the drawn button"
+                    )
+
+                    # Exercise the smallest compositor geometry NekoEdit advertises.
+                    # The picker and path prompt must both fit within its 16px margins.
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiIII", 480, 360, 8, 3, 4))
+                        + wire_message(9, 0, struct.pack("<I", 1238))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1238)), "ack minimum-size configure"
+                    )
+                    expect_message(
+                        client, (resize_buffer_base + 2, 0, b""), "destroy released 720px buffer"
+                    )
+                    expect_message(
+                        client,
+                        (11, 0, struct.pack("<6I", resize_buffer_base + 3, 0, 480, 360, 1920, 1)),
+                        "create minimum-size buffer",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", resize_buffer_base + 3, 0, 0)),
+                        "attach minimum-size buffer",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 480, 360)),
+                        "damage minimum-size surface",
+                    )
+                    expect_message(client, (8, 6, b""), "commit minimum-size surface")
+                    small_state = picker_state()
+                    if (
+                        small_state.get("window_width") != 480
+                        or small_state.get("window_height") != 360
+                        or small_state.get("window_status_top") != 340
+                        or small_state.get("window_status_bytes_x") != 280
+                        or small_state.get("window_status_mode_x") != 424
+                        or small_state.get("window_doc_columns") != 57
+                        or small_state.get("window_doc_visible_rows") != 20
+                        or small_state.get("picker_panel_x") != 16
+                        or small_state.get("picker_panel_y") != 16
+                        or small_state.get("picker_panel_width") != 448
+                        or small_state.get("picker_panel_height") != 328
+                        or small_state.get("path_prompt_x") != 16
+                        or small_state.get("path_prompt_y") != 88
+                        or small_state.get("path_prompt_width") != 448
+                        or small_state.get("path_prompt_height") != 176
+                        or small_state.get("window_buffer_id") != resize_buffer_base + 3
+                    ):
+                        raise AssertionError(f"minimum-size layout geometry is inconsistent: {small_state!r}")
+                    if not rendered_color_present(280, 346, 48, 7, 1920, 0xFFD8DEE9):
+                        raise AssertionError("the byte-count footer label did not fit the minimum width")
+                    if not rendered_color_present(424, 346, 40, 7, 1920, 0xFFD8DEE9):
+                        raise AssertionError("the mode footer label did not fit the minimum width")
+                    client.sendall(wire_message(resize_buffer_base + 3, 0))
+
+                    small_enter = serial + 190
+                    client.sendall(
+                        wire_message(15, 1, struct.pack("<II", small_enter - 1, 8))
+                        + wire_message(
+                            15, 0,
+                            struct.pack("<IIii", small_enter, 8, 120 * 256, 12 * 256),
+                        )
+                    )
+                    if cursor_shape_supported:
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", small_enter, 1)),
+                            "apply default cursor at minimum size",
+                        )
+                    cursor_feedback_state["enter_serial"] = small_enter
+                    cursor_feedback_state["shape"] = 1
+                    resized_ui_click(
+                        120, 12, serial + 200, "open File menu at minimum size", resize_buffer_base + 3, 480, 360
+                    )
+                    resized_ui_click(
+                        120, 48, serial + 210, "open picker at minimum size", resize_buffer_base + 3, 480, 360
+                    )
+                    picker_small = picker_state()
+                    if picker_small.get("picker_mode") != 1:
+                        raise AssertionError(f"picker did not open at minimum size: {picker_small!r}")
+                    cancel_x_small = 16 + ((636 - 40) * 448 // 720)
+                    cancel_y_small = 16 + ((412 - 36) * 328 // 408)
+                    if struct.unpack_from("<I", pixels, cancel_y_small * 1920 + cancel_x_small * 4)[0] != 0xFF414B5A:
+                        raise AssertionError("minimum-size picker Cancel button was not drawn at its fitted location")
+                    resized_ui_click(
+                        cancel_x_small, cancel_y_small, serial + 220,
+                        "cancel fitted picker at minimum size", resize_buffer_base + 3, 480, 360,
+                    )
+                    if picker_state().get("picker_mode") != 0:
+                        raise AssertionError("the minimum-size picker Cancel hit target did not close the picker")
+                    observations.append(
+                        "picker, path-prompt geometry, footer, and mouse hit targets remain fitted at the 480x360 minimum size"
+                    )
+
                     # The app's own Close control exits cleanly; no terminal
                     # shutdown or synthetic xdg_toplevel.close is required.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 120, 692 * 256, 20 * 256))
+                        wire_message(15, 2, struct.pack("<Iii", serial + 230, 452 * 256, 16 * 256))
                     )
                     if cursor_shape_supported and cursor_feedback_state["shape"] != 1:
                         expect_message(
