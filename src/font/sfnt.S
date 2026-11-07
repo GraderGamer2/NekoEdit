@@ -248,7 +248,8 @@ font_parse_cmap:
     mov edi, 'd'
     call font_debug_mark
     mov r8, qword ptr [rip + font_file_map]
-    add r8, qword ptr [rip + font_cmap_offset]
+    mov edx, dword ptr [rip + font_cmap_offset]
+    add r8, rdx
     add r8, rcx
     mov rdi, r8
     call font_be16
