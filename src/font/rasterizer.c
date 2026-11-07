@@ -40,6 +40,16 @@ struct cache_entry {
 static struct cache_entry cache[CACHE_SLOTS];
 static uint32_t cache_clock;
 
+/* Discard all face-local masks after a validated font replacement. */
+void font_cache_clear(void) {
+    for (uint32_t i=0;i<CACHE_SLOTS;++i) {
+        cache[i].valid=0;
+        cache[i].stamp=0;
+    }
+    cache_clock=0;
+}
+
+
 static int64_t floor_div(int64_t n, int64_t d) {
     int64_t q=n/d, r=n%d;
     return q-(r<0);

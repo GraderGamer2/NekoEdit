@@ -183,10 +183,15 @@ font_glyph_frames:               .zero FONT_MAX_COMPOSITE_DEPTH * FONT_GLYPH_FRA
 .balign 8
 font_file_map:                  .quad 0
 font_file_size:                 .quad 0
+.balign 8
+font_state_backup:              .zero 96
+font_state_backup_map:          .quad 0
+font_state_backup_size:         .quad 0
 
 
 .section .text
 .extern process_envp
+.extern font_cache_clear
 
 # Read an unsigned big-endian 16-bit integer. RDI points at two validated bytes.
 .type font_be16, @function
@@ -669,7 +674,8 @@ font_parse_mapped:
     ret
 .size font_parse_mapped, . - font_parse_mapped
 
-# Load and validate one font path, retaining its read-only mapping on success.
+# Load and validate one font path transactionally. The old mapping and every
+# parser offset/metric remain live until the candidate has passed validation.
 # RDI=NUL-terminated path; EAX=0 success, negative on failure.
 .type font_try_path, @function
 font_try_path:
@@ -679,6 +685,17 @@ font_try_path:
     push r14
     push r15
     mov r12, rdi
+    # The 23 contiguous dwords from font_loaded through font_loca_length are
+    # the active parser state. Save them alongside the current read-only face.
+    lea rsi, [rip + font_loaded]
+    lea rdi, [rip + font_state_backup]
+    mov ecx, 23
+    cld
+    rep movsd
+    mov rbx, qword ptr [rip + font_file_map]
+    mov qword ptr [rip + font_state_backup_map], rbx
+    mov rax, qword ptr [rip + font_file_size]
+    mov qword ptr [rip + font_state_backup_size], rax
     # Open read-only. No symlink following is needed for explicit font files.
     mov eax, FONT_SYS_openat
     mov edi, FONT_AT_FDCWD
@@ -912,6 +929,17 @@ font_try_path:
     mov eax, dword ptr [rip + font_bitmap_pixel_count]
     mov dword ptr [rip + font_probe_j_raster_pixels], eax
 .Lfont_probe_j_done:
+    # Commit after parsing and outline probes have succeeded. The previous
+    # mapping stays live until this point, so rollback never needs to reopen it.
+    test rbx, rbx
+    jz .Lfont_try_path_cache_clear
+    mov rdi, rbx
+    mov rsi, qword ptr [rip + font_state_backup_size]
+    mov eax, FONT_SYS_munmap
+    syscall
+.Lfont_try_path_cache_clear:
+    # Glyph IDs are face-local; no cached mask may survive a face replacement.
+    call font_cache_clear
     xor eax, eax
     jmp .Lfont_try_path_return
 .Lfont_try_path_unmap_failed:
@@ -919,8 +947,17 @@ font_try_path:
     mov rsi, r14
     mov eax, FONT_SYS_munmap
     syscall
-    mov qword ptr [rip + font_file_map], 0
-    mov qword ptr [rip + font_file_size], 0
+    # Roll parser metadata and the file mapping back together. The active
+    # document therefore keeps using the previous face after an invalid file.
+    lea rsi, [rip + font_state_backup]
+    lea rdi, [rip + font_loaded]
+    mov ecx, 23
+    cld
+    rep movsd
+    mov rax, qword ptr [rip + font_state_backup_map]
+    mov qword ptr [rip + font_file_map], rax
+    mov rax, qword ptr [rip + font_state_backup_size]
+    mov qword ptr [rip + font_file_size], rax
     jmp .Lfont_try_path_failed
 .Lfont_try_path_close_failed:
     mov eax, FONT_SYS_close
@@ -936,6 +973,13 @@ font_try_path:
     pop rbx
     ret
 .size font_try_path, . - font_try_path
+
+# Runtime Settings entry point; shares font_try_path's transactional contract.
+.global font_replace_path
+.type font_replace_path, @function
+font_replace_path:
+    jmp font_try_path
+.size font_replace_path, . - font_replace_path
 
 # Map a Unicode scalar to a glyph index using cmap format 4 or 12.
 # EDI=code point; EAX=glyph ID or zero for missing/invalid.
