@@ -957,7 +957,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_num_glyphs": 10,
                         "font_ascent": 800,
                         "font_descent": -200,
-                        "font_num_hmetrics": 9,
+                        "font_num_hmetrics": 10,
                         "font_index_to_loc_format": 0,
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
