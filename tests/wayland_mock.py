@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import mmap
 import os
+import select
 import socket
 import struct
 import subprocess
@@ -216,6 +217,7 @@ def run(
     grapheme_test: bool = False,
     font_parser_test: bool = False,
     font_picker_test: bool = False,
+    clipboard_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
@@ -298,6 +300,8 @@ def run(
             )
             if cursor_shape_supported:
                 globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
+            if clipboard_test:
+                globals_payload += registry_global(6, "wl_data_device_manager", version=1)
             client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
             bind_messages = [recv_wayland_message(client) for _ in range(3)]
@@ -492,6 +496,19 @@ def run(
                         "set initial default cursor shape",
                     )
                     observations.append("optional cursor-shape manager bound; startup pointer.enter retained and applied")
+                if clipboard_test:
+                    manager_name = b"wl_data_device_manager\0"
+                    manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
+                    expect_message(
+                        client,
+                        (2, 0, struct.pack("<II", 6, len(manager_name)) + manager_padded + struct.pack("<II", 1, 17)),
+                        "bind wl_data_device_manager",
+                    )
+                    expect_message(
+                        client, (17, 1, struct.pack("<II", 18, 13)),
+                        "get wl_data_device for the application seat",
+                    )
+                    observations.append("wl_data_device_manager bound; wl_data_device created for seat 13")
                 observations.append("seat pointer and keyboard capability/object creation verified")
 
                 # Release the initial buffer before sending a click. The client
@@ -1398,6 +1415,153 @@ xkb_symbols "nekoedit-sparse" {
                     "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
                     ".": 52, "/": 53, "-": 12,
                 }
+
+                if clipboard_test:
+                    original_clipboard = b"copy me\n"
+                    initial_state = read_document_state()
+                    if initial_state["doc_contents"] != original_clipboard:
+                        raise AssertionError(
+                            "clipboard test did not start with its original document bytes: "
+                            + repr(initial_state["doc_contents"])
+                        )
+
+                    def clipboard_string(value: str) -> bytes:
+                        encoded = value.encode("ascii") + b"\\0"
+                        return struct.pack("<I", len(encoded)) + encoded + (b"\\0" * (-len(encoded) % 4))
+
+                    def ctrl_event(serial: int, code: int, down: bool) -> bytes:
+                        return wire_message(
+                            16, 3, struct.pack("<IIII", serial, serial, code, int(down))
+                        )
+
+                    def clipboard_combo(serial: int, code: int, label: str, redraw: bool) -> None:
+                        client.sendall(ctrl_event(serial, 29, True) + ctrl_event(serial + 1, code, True))
+                        if redraw:
+                            workflow_redraw(label)
+                        client.sendall(
+                            ctrl_event(serial + 3, code, False)
+                            + ctrl_event(serial + 4, 29, False)
+                        )
+                        if redraw:
+                            client.sendall(wire_message(12, 0))
+
+                    def receive_source_bytes(source_id: int, label: str) -> bytes:
+                        read_fd, write_fd = os.pipe()
+                        try:
+                            transfer = wire_message(
+                                source_id, 1, clipboard_string("text/plain;charset=utf-8")
+                            )
+                            client.sendmsg(
+                                [transfer],
+                                [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", write_fd))],
+                            )
+                        finally:
+                            os.close(write_fd)
+                        received = bytearray()
+                        deadline = time.monotonic() + 4
+                        try:
+                            while time.monotonic() < deadline:
+                                readable, _, _ = select.select([read_fd], [], [], max(0, deadline - time.monotonic()))
+                                if not readable:
+                                    break
+                                chunk = os.read(read_fd, 4096)
+                                if not chunk:
+                                    break
+                                received.extend(chunk)
+                        finally:
+                            os.close(read_fd)
+                        result = bytes(received)
+                        if result != original_clipboard:
+                            raise AssertionError(
+                                f"{label}: clipboard source snapshot changed: {result!r}"
+                            )
+                        return result
+
+                    def expect_source_creation(source_id: int, serial: int, label: str) -> None:
+                        expect_message(
+                            client, (17, 0, struct.pack("<I", source_id)),
+                            f"{label}: create data source",
+                        )
+                        expect_message(
+                            client,
+                            (source_id, 0, clipboard_string("text/plain;charset=utf-8")),
+                            f"{label}: offer UTF-8 text MIME",
+                        )
+                        expect_message(
+                            client, (source_id, 0, clipboard_string("text/plain")),
+                            f"{label}: offer plain text MIME",
+                        )
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", source_id, serial)),
+                            f"{label}: set clipboard selection",
+                        )
+
+                    # Select all, then test Ctrl+C through the actual Wayland
+                    # data-source protocol and an SCM_RIGHTS transfer pipe.
+                    workflow_shortcut(1900, 30, "Ctrl+A before clipboard copy")
+                    clipboard_combo(1910, 46, "Ctrl+C", redraw=False)
+                    expect_source_creation(19, 1911, "Ctrl+C")
+                    receive_source_bytes(19, "Ctrl+C")
+                    observations.append("Ctrl+C exported an immutable selected-text snapshot through wl_data_source.send")
+
+                    # Ctrl+X must publish its own snapshot before deleting the
+                    # selection, and that snapshot must survive the deletion.
+                    client.sendall(ctrl_event(1930, 29, True) + ctrl_event(1931, 45, True))
+                    expect_source_creation(20, 1931, "Ctrl+X")
+                    workflow_redraw("Ctrl+X removes the selected document bytes")
+                    client.sendall(
+                        ctrl_event(1933, 45, False) + ctrl_event(1934, 29, False)
+                        + wire_message(12, 0)
+                    )
+                    cut_state = read_document_state()
+                    if cut_state["doc_contents"] != b"":
+                        raise AssertionError(
+                            "Ctrl+X did not delete the active selection: "
+                            + repr(cut_state["doc_contents"])
+                        )
+                    receive_source_bytes(20, "Ctrl+X after document deletion")
+                    observations.append("Ctrl+X deleted the selection only after publishing an independent snapshot")
+
+                    # Replacing the selection retires both old source objects;
+                    # the client must destroy them rather than retaining them.
+                    client.sendall(wire_message(19, 2) + wire_message(20, 2))
+                    expect_message(client, (19, 1, b""), "destroy retired Ctrl+C source")
+                    expect_message(client, (20, 1, b""), "destroy retired Ctrl+X source")
+
+                    external_offer = 0xFF000020
+                    client.sendall(
+                        wire_message(18, 0, struct.pack("<I", external_offer))
+                        + wire_message(external_offer, 0, clipboard_string("text/plain;charset=utf-8"))
+                        + wire_message(external_offer, 0, clipboard_string("text/plain"))
+                        + wire_message(18, 5, struct.pack("<I", external_offer))
+                    )
+                    clipboard_combo(1950, 47, "Ctrl+V", redraw=False)
+                    paste_request = recv_wayland_message(client)
+                    if paste_request[:3] != (
+                        external_offer, 1, clipboard_string("text/plain;charset=utf-8")
+                    ) or len(paste_request[3]) != 1:
+                        raise AssertionError(
+                            "Ctrl+V did not request the preferred UTF-8 MIME with one pipe FD: "
+                            + repr(paste_request[:3])
+                            + repr(paste_request[3])
+                        )
+                    paste_fd = paste_request[3][0]
+                    pasted = b"pasted from another Wayland client\n"
+                    try:
+                        os.write(paste_fd, pasted)
+                    finally:
+                        os.close(paste_fd)
+                    workflow_redraw("Ctrl+V finishes asynchronous clipboard paste")
+                    client.sendall(wire_message(12, 0))
+                    paste_state = read_document_state()
+                    if paste_state["doc_contents"] != pasted:
+                        raise AssertionError(
+                            "Ctrl+V did not insert external clipboard bytes at the document caret: "
+                            + repr(paste_state["doc_contents"])
+                        )
+                    observations.append("Ctrl+V received an external Wayland MIME offer asynchronously and inserted its text")
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if line_index_test:
                     fixture = (
@@ -4292,6 +4456,24 @@ if __name__ == "__main__":
             os.unlink(xkb_path)
         except FileNotFoundError:
             pass
+    # Wayland text clipboard interoperability: copy/cut immutable snapshots,
+    # then paste a MIME offer from a separate compositor-side client.
+    clipboard_fd, clipboard_path = tempfile.mkstemp(prefix="nekoedit-clipboard-")
+    try:
+        with os.fdopen(clipboard_fd, "wb") as clipboard_document:
+            clipboard_document.write(b"copy me\\n")
+        run(
+            sys.argv[1],
+            initial_file=clipboard_path,
+            clipboard_test=True,
+            cursor_shape_supported=False,
+        )
+    finally:
+        try:
+            os.unlink(clipboard_path)
+        except FileNotFoundError:
+            pass
+
     # The embedded 5x7 renderer must cover every printable ASCII punctuation
     # character, not replace the unimplemented glyphs with '?'.
     punctuation_fd, punctuation_path = tempfile.mkstemp(prefix="nekoedit-punctuation-")
