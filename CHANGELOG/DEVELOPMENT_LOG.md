@@ -1,3 +1,29 @@
+## 2026-11-07 — Correct TrueType vertical metrics and overlay text sizing
+
+**User-facing issue:** the user reported that the newly loaded TTF font made the UI typography look misaligned and that text/caret/selection geometry in the Open/Save picker did not sit correctly. The existing synthetic-font tests covered glyph advances and row containment but did not exercise OS/2 typographic metrics or every overlay drawing call.
+
+### Implementation
+
+- The SFNT parser now honors OS/2 version 4+ sTypoAscender, sTypoDescender, and sTypoLineGap only when fsSelection.USE_TYPO_METRICS is set. Fonts without that flag/table continue using hhea metrics, so the existing fallback behavior remains.
+- The text-advance path now resolves U+0020 SPACE through cmap and hmtx like other characters. It no longer forces every font's spaces to the legacy 8px advance.
+- Overlay rendering now carries an explicit active transform font size. The picker and path prompt select their own size based on their fitted dimensions instead of sharing the picker's size accidentally.
+- The path-prompt filename renderer now passes an explicit glyph size and measures advances at the same 10px design em. Previously it passed an unspecified ECX register value to draw_glyph while advancing at the 12px em, which could make prompt text inconsistent.
+
+### Regression coverage
+
+- The synthetic TrueType fixture now exposes U+0020 as a real cmap mapping with a 300-unit hmtx advance; the runtime probe must report 3px at the 10px em.
+- The fixture includes OS/2 version 4 metrics with USE_TYPO_METRICS. The parser/runtime assertions verify those metrics and the resulting 15px document line pitch, while the existing hhea values differ so the test proves the preference is applied.
+- The font-picker test asserts the active transform uses the expected 10px UI size and retains proportional caret/hit-testing plus selected-row glyph containment.
+- Path-prompt sizing/advance consistency is covered by source-level alignment in the renderer; a GNOME/Mutter visual retest is still required.
+
+### Verification
+
+- Source and test changes are committed; the GitHub Actions run for the updated branch is pending and will be recorded after it completes.
+- No manual GNOME/Mutter result is claimed. The user has not yet tested this corrected build.
+- Remaining limitations: no hinting, kerning, shaping, combining-mark positioning, variable-font support, or runtime Font Settings controls.
+
+---
+
 # NekoEdit development log
 
 ## 2026-11-07 — Bounded TrueType composite-glyph expansion

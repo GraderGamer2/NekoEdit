@@ -30,6 +30,7 @@
 .equ FONT_TAG_GLYF, 0x66796c67
 .equ FONT_TAG_HEAD, 0x64616568
 .equ FONT_TAG_HHEA, 0x61656868
+.equ FONT_TAG_OS2, 0x322f534f
 .equ FONT_TAG_HMTX, 0x78746d68
 .equ FONT_TAG_LOCA, 0x61636f6c
 .equ FONT_TAG_MAXP, 0x7078616d
@@ -568,6 +569,55 @@ font_parse_mapped:
     cmp eax, r13d
     ja .Lfont_parse_failed
     mov dword ptr [rip + font_num_hmetrics], eax
+
+    # Prefer OS/2 typographic metrics only for version 4+ fonts that set
+    # fsSelection.USE_TYPO_METRICS. Otherwise the hhea values above remain active.
+    mov edi, FONT_TAG_OS2
+    call font_find_table
+    jc .Lfont_typo_metrics_done
+    cmp edx, 74
+    jb .Lfont_typo_metrics_done
+    mov r14d, eax
+    mov rax, qword ptr [rip + font_file_map]
+    add rax, r14
+    mov rdi, rax
+    call font_be16
+    cmp eax, 4
+    jb .Lfont_typo_metrics_done
+    mov rax, qword ptr [rip + font_file_map]
+    add rax, r14
+    lea rdi, [rax + 62]
+    call font_be16
+    test eax, 0x80
+    jz .Lfont_typo_metrics_done
+    mov rax, qword ptr [rip + font_file_map]
+    add rax, r14
+    lea rdi, [rax + 68]
+    call font_be16
+    movsx r10d, ax
+    test r10d, r10d
+    jle .Lfont_typo_metrics_done
+    mov rax, qword ptr [rip + font_file_map]
+    add rax, r14
+    lea rdi, [rax + 70]
+    call font_be16
+    movsx r11d, ax
+    test r11d, r11d
+    jg .Lfont_typo_metrics_done
+    mov rax, qword ptr [rip + font_file_map]
+    add rax, r14
+    lea rdi, [rax + 72]
+    call font_be16
+    movsx r9d, ax
+    mov eax, r10d
+    sub eax, r11d
+    add eax, r9d
+    test eax, eax
+    jle .Lfont_typo_metrics_done
+    mov dword ptr [rip + font_ascent], r10d
+    mov dword ptr [rip + font_descent], r11d
+    mov dword ptr [rip + font_line_gap], r9d
+.Lfont_typo_metrics_done:
 
     # hmtx must contain all long metrics and the trailing side bearings.
     mov ecx, eax
@@ -1968,6 +2018,7 @@ font_init:
     mov dword ptr [rip + font_loaded], 0
     mov dword ptr [rip + font_probe_A_glyph], 0
     mov dword ptr [rip + font_probe_A_advance], 0
+    mov dword ptr [rip + font_probe_advance_space], 0
     # The test harness can request the legacy embedded renderer explicitly.
     # This keeps old pixel-level UI tests deterministic while the font fixture
     # separately exercises the real outline-to-framebuffer path.
@@ -2056,6 +2107,10 @@ font_init:
     mov edi, 'B'
     call font_codepoint_advance_pixels
     mov dword ptr [rip + font_probe_advance_B], eax
+    mov edi, 0x20
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+    mov dword ptr [rip + font_probe_advance_space], eax
     mov edi, 1
     mov esi, 12
     call font_rasterize_glyph

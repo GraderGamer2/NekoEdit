@@ -30,7 +30,7 @@ NEKOEDIT_FONT=/absolute/path/to/font.ttf ./build/nekoedit [file]
 
 The test-only `NEKOEDIT_DISABLE_FONT=1` environment variable bypasses font loading so legacy fixed-bitmap UI tests can use their original pixel expectations. It is not a user-facing preference.
 
-The loader maps the font read-only and validates the SFNT directory and required `cmap`, `head`, `hhea`, `maxp`, `hmtx`, `loca`, and `glyf` tables. Unicode cmap formats 4 and 12 are supported. The implementation accepts bounded single-face TrueType-outline SFNT files; a filename extension alone is not treated as proof of support.
+The loader maps the font read-only and validates the SFNT directory and required `cmap`, `head`, `hhea`, `maxp`, `hmtx`, `loca`, and `glyf` tables. Unicode cmap formats 4 and 12 are supported. An optional OS/2 version 4+ table supplies typographic ascent, descent, and line gap when `fsSelection.USE_TYPO_METRICS` is set; otherwise hhea metrics remain active. The implementation accepts bounded single-face TrueType-outline SFNT files; a filename extension alone is not treated as proof of support.
 
 ## Outline decoding and rasterization
 
@@ -47,10 +47,10 @@ Quadratic contours are flattened with bounded deterministic subdivisions, includ
 
 The document layout now consumes the same TrueType metrics that the renderer uses:
 
-- **Horizontal advance:** the glyph's `hmtx` advance is scaled to the fixed 12-pixel em and rounded to the nearest pixel. The resulting advance is bounded to 1–32 pixels. If no font is loaded or the metric is invalid, layout falls back to the legacy eight-pixel advance.
+- **Horizontal advance:** each code point, including U+0020 SPACE, uses its cmap-mapped glyph's `hmtx` advance scaled to the fixed 12-pixel em and rounded to the nearest pixel. The resulting advance is bounded to 1–32 pixels. If no font is loaded or the metric is invalid/unmapped, layout falls back to the legacy eight-pixel advance.
 - **Wrapping and indexing:** pixel advances determine soft-wrap boundaries and per-line visual-row counts. The per-line index/Fenwick tree therefore reflects the same pixel width that the renderer paints.
 - **Hit-testing and selection:** pointer X mapping, caret placement, selection rectangles, and document painting use the same advance and wrapping decisions. Picker and path-prompt text also use font advances.
-- **Vertical line box:** the parser reads hhea ascent, descent, and line gap. Their combined line box (`ascent - descent + lineGap`) is scaled to the 12-pixel em, rounded upward, and clamped to 12–32 pixels. One runtime row-pitch value drives visible-row calculations, pointer Y mapping, line movement geometry, document/selection painting, and caret placement. Without a loaded font, the row pitch remains 12 pixels.
+- **Vertical line box:** the parser uses OS/2 sTypoAscender/sTypoDescender/sTypoLineGap when a version 4+ OS/2 table sets `USE_TYPO_METRICS`; otherwise it uses hhea ascent, descent, and line gap. The combined line box (`ascent - descent + lineGap`) is scaled to the 12-pixel em, rounded upward, and clamped to 12–32 pixels. One runtime row-pitch value drives visible-row calculations, pointer Y mapping, line movement geometry, document/selection painting, and caret placement. Without a loaded font, the row pitch remains 12 pixels.
 - **Tabs:** document tabs retain 32-pixel stops; they are not shaped glyph runs.
 
 The em size itself is currently fixed at 12 pixels. Font-size changes are not exposed, and runtime font switching/cache invalidation has not been implemented. The line pitch may vary with the selected font's hhea metrics even though the em size is fixed.
@@ -77,6 +77,6 @@ Glyph fallback and the embedded bitmap keep unsupported content from requiring a
 
 ## Verification and correctness
 
-The mock Wayland integration test builds a deterministic synthetic TrueType font and checks SFNT table/outline parsing, simple and composite glyph decoding, curve rasterization, antialiased pixels in the shared-memory framebuffer, horizontal 8px/5px glyph advances, wrapping/indexed visual rows, proportional pointer hit-testing, and hhea-derived vertical line pitch. GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed the complete workflow on the metric-layout implementation. This is mock-compositor coverage; a manual GNOME/Mutter smoke test of the latest font layout remains outstanding.
+The mock Wayland integration test builds a deterministic synthetic TrueType font and checks SFNT table/outline parsing, simple and composite glyph decoding, curve rasterization, antialiased pixels in the shared-memory framebuffer, horizontal 8px/5px glyph advances, a cmap-mapped 3px space advance, wrapping/indexed visual rows, proportional pointer hit-testing, and OS/2 `USE_TYPO_METRICS` vertical line pitch (with hhea retained as fallback). GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed the complete workflow on the metric-layout implementation. This is mock-compositor coverage; a manual GNOME/Mutter smoke test of the latest font layout remains outstanding.
 
 Bounds checks must precede font-table reads and allocation arithmetic. Surface drawing must clip to its bounds. Cache memory and outline scratch storage remain explicitly capped.

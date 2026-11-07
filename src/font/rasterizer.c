@@ -238,18 +238,14 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
  * current 12px em and rounds to the nearest pixel. The legacy eight-pixel
  * advance remains active when no supported font is loaded.
  */
-int32_t font_probe_advance_A, font_probe_advance_B;
+int32_t font_probe_advance_A, font_probe_advance_B, font_probe_advance_space;
 int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     uint32_t glyph_id, advance, upem;
     uint64_t scaled;
     if (!font_loaded || !size || size>32) return 8;
-    if (codepoint == 0x20) {
-        glyph_id = 0;
-    } else {
-        glyph_id = font_cmap_lookup(codepoint);
-        if (glyph_id == 0 && codepoint != 0x3f)
-            glyph_id = font_cmap_lookup(0x3f);
-    }
+    glyph_id = font_cmap_lookup(codepoint);
+    if (glyph_id == 0 && codepoint != 0x20 && codepoint != 0x3f)
+        glyph_id = font_cmap_lookup(0x3f);
     if (!glyph_id || glyph_id >= (uint32_t)font_num_glyphs) return 8;
     advance = font_glyph_advance(glyph_id);
     upem = (uint32_t)font_units_per_em;

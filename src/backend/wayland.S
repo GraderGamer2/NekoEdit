@@ -1929,7 +1929,7 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -1940,6 +1940,8 @@ window_doc_pixel_width: .long 0
 window_doc_line_height: .long 0
 window_doc_visible_rows: .long 0
 picker_ui_font_size: .long 0
+path_prompt_font_size: .long 0
+ui_transform_font_size: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
 window_pending_height:  .long 0
@@ -7767,6 +7769,38 @@ window_update_layout_geometry:
     mov eax, 176
 .window_layout_prompt_height_ready:
     mov dword ptr [rip + path_prompt_height], eax
+
+    # Size prompt glyphs with the tighter of the prompt's horizontal/vertical
+    # fit ratios. Advances remain in 10px design units and share the X transform.
+    mov eax, dword ptr [rip + path_prompt_width]
+    imul eax, 176
+    mov edx, dword ptr [rip + path_prompt_height]
+    imul edx, 704
+    cmp eax, edx
+    ja .window_layout_prompt_font_height
+    mov eax, dword ptr [rip + path_prompt_width]
+    imul eax, 10
+    xor edx, edx
+    mov ecx, 704
+    div ecx
+    jmp .window_layout_prompt_font_clamp
+.window_layout_prompt_font_height:
+    mov eax, dword ptr [rip + path_prompt_height]
+    imul eax, 10
+    xor edx, edx
+    mov ecx, 176
+    div ecx
+.window_layout_prompt_font_clamp:
+    cmp eax, 6
+    jae .window_layout_prompt_font_min_ready
+    mov eax, 6
+.window_layout_prompt_font_min_ready:
+    cmp eax, 10
+    jbe .window_layout_prompt_font_store
+    mov eax, 10
+.window_layout_prompt_font_store:
+    mov dword ptr [rip + path_prompt_font_size], eax
+
     mov edx, dword ptr [rip + window_height]
     sub edx, eax
     shr edx, 1
@@ -10929,7 +10963,7 @@ draw_text:
     mov ecx, 10
     cmp dword ptr [rip + ui_transform_active], 0
     je .Lneko_draw_text_size_ready
-    mov ecx, dword ptr [rip + picker_ui_font_size]
+    mov ecx, dword ptr [rip + ui_transform_font_size]
 .Lneko_draw_text_size_ready:
     call draw_glyph
     movzx edi, byte ptr [rbx]
@@ -10981,7 +11015,7 @@ draw_decimal:
     mov ecx, 10
     cmp dword ptr [rip + ui_transform_active], 0
     je .Lneko_draw_decimal_size_ready
-    mov ecx, dword ptr [rip + picker_ui_font_size]
+    mov ecx, dword ptr [rip + ui_transform_font_size]
 .Lneko_draw_decimal_size_ready:
     call draw_glyph
     movzx edi, byte ptr [r12]
@@ -11156,7 +11190,7 @@ draw_bounded_ascii:
     mov ecx, 10
     cmp dword ptr [rip + ui_transform_active], 0
     je .draw_bounded_ascii_size_ready
-    mov ecx, dword ptr [rip + picker_ui_font_size]
+    mov ecx, dword ptr [rip + ui_transform_font_size]
 .draw_bounded_ascii_size_ready:
     call draw_glyph
     mov edi, r15d
@@ -11316,7 +11350,7 @@ draw_bounded_ascii_width:
     mov ecx, 10
     cmp dword ptr [rip + ui_transform_active], 0
     je .draw_bounded_ascii_width_size_ready
-    mov ecx, dword ptr [rip + picker_ui_font_size]
+    mov ecx, dword ptr [rip + ui_transform_font_size]
 .draw_bounded_ascii_width_size_ready:
     mov edx, r15d
     call draw_glyph
@@ -11351,6 +11385,8 @@ render_picker:
     # Center the picker and scale its 720x408 design box to the available
     # surface. draw_rect/draw_glyph share this transform for visual alignment.
     mov dword ptr [rip + ui_transform_active], 1
+    mov eax, dword ptr [rip + picker_ui_font_size]
+    mov dword ptr [rip + ui_transform_font_size], eax
     mov dword ptr [rip + ui_transform_base_x], 40
     mov dword ptr [rip + ui_transform_base_y], 36
     mov eax, dword ptr [rip + picker_panel_x]
@@ -12036,6 +12072,8 @@ render_path_prompt:
     # Configure a centered, width/height-fitted drawing transform for the
     # original 704x176 prompt design (48,148)-(752,324).
     mov dword ptr [rip + ui_transform_active], 1
+    mov eax, dword ptr [rip + path_prompt_font_size]
+    mov dword ptr [rip + ui_transform_font_size], eax
     mov dword ptr [rip + ui_transform_base_x], 48
     mov dword ptr [rip + ui_transform_base_y], 148
     mov eax, dword ptr [rip + path_prompt_x]
@@ -12101,7 +12139,8 @@ render_path_prompt:
 .render_path_prompt_find_replacement:
     mov edi, '?'
 .render_path_prompt_find_advance:
-    call font_codepoint_advance_pixels
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
     lea edx, [r13d + eax]
     cmp edx, 608
     ja .render_path_prompt_start_ready
@@ -12129,9 +12168,11 @@ render_path_prompt:
     mov edi, r13d
     mov esi, 218
     mov edx, ebp
+    mov ecx, dword ptr [rip + ui_transform_font_size]
     call draw_glyph
     mov edi, ebp
-    call font_codepoint_advance_pixels
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
     add r13d, eax
     inc rbx
     inc r12d

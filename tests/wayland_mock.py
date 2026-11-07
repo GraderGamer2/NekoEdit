@@ -59,7 +59,7 @@ def recv_wayland_message(connection: socket.socket):
 
 
 def synthetic_true_type_font() -> bytes:
-    """Build a tiny SFNT with format-4 cmap mappings A -> glyph 1 and B -> glyph 2."""
+    """Build a tiny SFNT with A/B/space cmap mappings and OS/2 typography metrics."""
     head = bytearray(54)
     struct.pack_into(">I", head, 0, 0x00010000)
     struct.pack_into(">I", head, 12, 0x5F0F3CF5)
@@ -74,7 +74,13 @@ def synthetic_true_type_font() -> bytes:
     struct.pack_into(">H", hhea, 34, 10)
 
     maxp = struct.pack(">IH", 0x00005000, 10)
-    hmtx = struct.pack(">20H", *([600, 0, 650, 0, 400, 0] + [600, 0] * 7))
+    hmtx = struct.pack(">20H", *([600, 0, 650, 0, 400, 0, 300, 0] + [600, 0] * 6))
+    os2 = bytearray(96)
+    struct.pack_into(">H", os2, 0, 4)        # OS/2 version 4
+    struct.pack_into(">H", os2, 62, 0x0080)  # fsSelection.USE_TYPO_METRICS
+    struct.pack_into(">h", os2, 68, 850)    # sTypoAscender
+    struct.pack_into(">h", os2, 70, -250)   # sTypoDescender
+    struct.pack_into(">h", os2, 72, 100)    # sTypoLineGap
     # Glyph 1 is a three-point simple contour: (0,0), (500,0), (250,700).
     glyph_a = (
         struct.pack(">5h", 1, 0, 0, 500, 700)
@@ -145,12 +151,12 @@ def synthetic_true_type_font() -> bytes:
     loca = struct.pack(">11H", *loca_offsets)
 
     format4 = (
-        struct.pack(">7H", 4, 40, 0, 6, 4, 1, 0)
-        + struct.pack(">3H", 0x0041, 0x0042, 0xFFFF)
+        struct.pack(">7H", 4, 48, 0, 8, 8, 2, 0)
+        + struct.pack(">4H", 0x0020, 0x0041, 0x0042, 0xFFFF)
         + struct.pack(">H", 0)
-        + struct.pack(">3H", 0x0041, 0x0042, 0xFFFF)
-        + struct.pack(">3h", -64, -64, 1)
-        + struct.pack(">3H", 0, 0, 0)
+        + struct.pack(">4H", 0x0020, 0x0041, 0x0042, 0xFFFF)
+        + struct.pack(">4h", -29, -64, -64, 1)
+        + struct.pack(">4H", 0, 0, 0, 0)
     )
     cmap = struct.pack(">HHHHI", 0, 1, 3, 1, 12) + format4
     tables = [
@@ -161,6 +167,7 @@ def synthetic_true_type_font() -> bytes:
         (b"hmtx", hmtx),
         (b"loca", loca),
         (b"maxp", maxp),
+        (b"OS/2", bytes(os2)),
     ]
     count = len(tables)
     offset = 12 + count * 16
@@ -948,7 +955,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_raster_height", "font_probe_raster_pixels",
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
-                        "font_probe_advance_A", "font_probe_advance_B",
+                        "font_probe_advance_A", "font_probe_advance_B", "font_probe_advance_space",
                         "doc_cursor", "doc_length", "doc_line_count", "doc_line_index_base", "pointer_x", "pointer_y",
                         "window_doc_pixel_width", "window_doc_line_height", "window_doc_visible_rows",
                         "doc_line_index_valid", "doc_line_index_columns",
@@ -970,12 +977,13 @@ xkb_symbols "nekoedit-sparse" {
                         "font_loaded": 1,
                         "font_units_per_em": 1000,
                         "font_num_glyphs": 10,
-                        "font_ascent": 900,
-                        "font_descent": -300,
+                        "font_ascent": 850,
+                        "font_descent": -250,
                         "font_line_gap": 100,
                         "font_num_hmetrics": 10,
                         "font_probe_advance_A": 8,
                         "font_probe_advance_B": 5,
+                        "font_probe_advance_space": 3,
                         # A=8px, B=5px: clicking at x=27 is beyond B's midpoint
                         # (B starts at x=24), so the caret is before the third A.
                         "doc_cursor": 2,
@@ -984,8 +992,8 @@ xkb_symbols "nekoedit-sparse" {
                         "pointer_x": 27,
                         "pointer_y": 98,
                         "window_doc_pixel_width": 760,
-                        "window_doc_line_height": 16,
-                        "window_doc_visible_rows": 23,
+                        "window_doc_line_height": 15,
+                        "window_doc_visible_rows": 24,
                         "doc_line_index_valid": 1,
                         "doc_line_index_columns": 760,
                         "font_index_to_loc_format": 0,
@@ -1092,7 +1100,7 @@ xkb_symbols "nekoedit-sparse" {
                             "last A was not painted on the second visual row after pixel-width wrapping"
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, hhea-derived 16px line pitch, pixel-width wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
+                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px glyph advances, a 3px hmtx-mapped space, OS/2 USE_TYPO_METRICS line pitch, pixel-width wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -1787,7 +1795,7 @@ xkb_symbols "nekoedit-sparse" {
                     wanted = {
                         "picker_mode", "picker_focus", "picker_name_length",
                         "picker_name_cursor", "picker_name_view_start",
-                        "picker_name_buffer", "picker_ui_font_size", "picker_selected",
+                        "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
                     }
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
@@ -1810,8 +1818,8 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
                     if picker_u32("picker_mode") != 1:
                         raise AssertionError("font picker test could not open the Open dialog")
-                    if picker_u32("picker_ui_font_size") != 10:
-                        raise AssertionError("800x480 picker should retain its 10px UI font")
+                    if picker_u32("picker_ui_font_size") != 10 or picker_u32("ui_transform_font_size") != 10:
+                        raise AssertionError("800x480 picker should render and measure at its 10px UI font")
 
                     workflow_click(200, 374, 2620, "focus filename search field")
                     # The fixture maps uppercase A/B to distinct 7px/4px advances.
