@@ -19,7 +19,7 @@
 
 ## Current next priorities
 
-1. Extend XKB compatibility beyond the current curated alias table and simplified level/type model; expand the six-dead-key Latin-1 compose subset into general Compose sequences, then add Wayland text-input/IME.
+1. Improve XKB level/type, virtual-modifier, and action semantics; broaden named-symbol coverage beyond the current Latin-1/Greek/Cyrillic subset; extend the six-dead-key Latin-1 compose path into general Compose sequences, then add Wayland text-input/IME.
 2. Improve shaping and layout: combining-mark positioning, kerning, ligatures, and bidirectional text.
 3. Implement output/fractional scaling and release-tracked multi-buffer scheduling.
 4. Develop the X11 backend, including X11 clipboard interoperability.
