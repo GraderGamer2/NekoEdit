@@ -520,3 +520,30 @@ Values are parsed with bounded input and range checks. Font paths must be absolu
 The preference-specific unit test verifies initial defaults, persistence and reload of every supported setting, the TTF path, restrictive file mode, invalid/range-out-of-bounds values, path-format rejection, and the disable switch. The Wayland mock-compositor test sets the disable switch so machine-specific user settings cannot change the expected pixel/input fixtures.
 
 GitHub Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed the full build, ELF, CLI, preferences, Wayland, executable-inspection, and artifact-upload workflow on commit [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7). The artifact is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. This remains mock-compositor/automated verification; manual GNOME/Mutter testing of the scrollbar, responsive overlays, Find/Replace, and preference restoration is still required.
+
+
+---
+
+## 29. Phase Y — home-level settings, document-wide search highlighting, and Unicode keyboard input
+
+### Home-level settings storage
+
+The preferences implementation was moved from the XDG-style configuration directories to a single hidden application folder directly under the user's home directory: `$HOME/.nekoedit/preferences`. The application no longer reads XDG_CONFIG_HOME. The directory retains mode 0700 and the preference file mode 0600; same-directory temporary writes, fsync, atomic rename, and directory fsync are retained. The preferences test sets both HOME and XDG_CONFIG_HOME and proves that only the HOME-level `.nekoedit` directory is created.
+
+### Typography panel refinement
+
+Settings and Find/Replace no longer scale their outer panel dimensions with the UI font-size preference. They retain 256×168 and 448×192 design dimensions respectively, centered and fitted to the available window. The actual glyph size follows the selected UI font and the pointer transform remains in the same coordinate space. The regression test sets the UI font to 16px and checks the two panel dimensions stay at their fixed values while both overlay font-size values report 16px.
+
+### Document-wide Find highlighting
+
+The renderer now runs a literal query scan over the document while Find/Replace is open. Every occurrence is highlighted in amber, including repeated and overlapping results. The active result is painted afterward using the selection renderer, so the current match remains distinct. The Find integration test inspects the framebuffer to prove that the second non-active occurrence is also painted.
+
+### Unicode keysyms and UTF-8 document insertion
+
+The XKB text-v1 parser now maintains a parallel Unicode-scalar table in addition to its existing ASCII byte lookup table. It recognizes explicit Unicode keysym tokens in Uxxxx, Uxxxxx, and Uxxxxxx form, rejects values outside Unicode's scalar range, surrogate values and control characters, and stores each value by keycode, group and level. Document keyboard input uses the Unicode lookup path when a parsed keymap is available and encodes the selected scalar into one to four UTF-8 bytes through the normal document insertion path. The built-in US-QWERTY fallback remains unchanged.
+
+The regression map maps one physical key to U+00E9 (é) and its Shift level to U+1F600 (😀). The mock test verifies the document contains the exact byte sequence C3 A9 F0 9F 98 80. Existing ASCII layout tests still exercise keycode offset, group switching, Shift, LevelThree, and the shifted punctuation rows. This is explicit Unicode-keysym support only; named keysym aliases, full XKB modifier/type/action handling, compose/dead keys and Wayland text-input/IME remain future work.
+
+### Verification and boundaries
+
+Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393599670) passed the three requested refinement tests. After the Unicode-input work, Actions [Build and test #523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784) passed the complete build, CLI, preferences, Wayland mock, ELF inspection, and artifact-upload workflow on [`72695a3d9f3d`](https://github.com/GraderGamer2/NekoEdit/commit/72695a3d9f3dd7a714c5f80bf014b9e1d7fd28e6). Artifact [13582597118](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784/artifacts/13582597118) is 70,702 bytes. This is automated mock-compositor verification; GNOME/Mutter desktop testing of the latest settings restoration, responsive panels, search highlights, and Unicode typing remains outstanding.
