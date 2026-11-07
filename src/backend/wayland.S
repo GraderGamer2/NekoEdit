@@ -108,6 +108,11 @@
 .equ DOC_HSCROLL_TRACK_HEIGHT, 6
 .equ DOC_HSCROLL_MIN_THUMB, 24
 .equ DOC_SCROLL_WHEEL_ROW_FIXED, (14 * 256)
+.equ DOC_DRAG_SCROLL_TICK_NS, 50000000
+.equ DOC_DRAG_SCROLL_INITIAL_NS, 120000000
+.equ DOC_DRAG_SCROLL_MAX_STEPS, 8
+.equ DOC_DRAG_SCROLL_ROW_PIXELS, 24
+.equ DOC_DRAG_SCROLL_COLUMN_PIXELS, 32
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
@@ -2011,12 +2016,16 @@ keymap_mapping:         .quad 0
 next_client_object_id:  .long 0
 seat_capabilities:      .long 0
 pointer_button_down:    .long 0
-.global doc_selection_active
+.global doc_selection_active, doc_view_top_row, doc_view_left_px
 doc_selection_active:   .long 0
 .global doc_selection_anchor
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
+.global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
+doc_word_drag_active:   .long 0
+doc_word_drag_start:     .long 0
+doc_word_drag_end:       .long 0
 doc_view_top_row:       .long 0
 doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
@@ -2044,10 +2053,13 @@ doc_line_count:         .long 0
 doc_line_index_valid:   .long 0
 doc_line_index_columns: .long 0
 repeat_timer_fd:         .long 0
+doc_drag_timer_fd:       .long 0
 repeat_keycode:          .long 0
-poll_fds:               .zero 56
+poll_fds:               .zero 64
 repeat_timer_spec:      .zero 32
 repeat_timer_read:      .quad 0
+doc_drag_timer_spec:    .zero 32
+doc_drag_timer_read:    .quad 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
@@ -2762,7 +2774,7 @@ wayland_main:
     lea rax, [rip + stage_event_loop]
     mov qword ptr [rip + failure_stage], rax
     cmp dword ptr [rip + repeat_timer_fd], 0
-    jne .event_poll_prepare
+    jne .event_drag_timer_ensure
     # A monotonic timerfd lets key repetition proceed while the Wayland
     # socket is otherwise idle, without introducing a userspace runtime.
     mov eax, SYS_timerfd_create
@@ -2772,6 +2784,18 @@ wayland_main:
     test rax, rax
     js .protocol_error
     mov dword ptr [rip + repeat_timer_fd], eax
+.event_drag_timer_ensure:
+    cmp dword ptr [rip + doc_drag_timer_fd], 0
+    jne .event_poll_prepare
+    # Selection auto-scroll has its own timer so it can coexist with XKB key
+    # repetition and continue while the pointer is stationary beyond an edge.
+    mov eax, SYS_timerfd_create
+    mov edi, CLOCK_MONOTONIC
+    mov esi, TFD_CLOEXEC
+    syscall
+    test rax, rax
+    js .protocol_error
+    mov dword ptr [rip + doc_drag_timer_fd], eax
 .event_poll_prepare:
     mov eax, dword ptr [rip + socket_fd]
     mov dword ptr [rip + poll_fds], eax
@@ -2779,11 +2803,14 @@ wayland_main:
     mov eax, dword ptr [rip + repeat_timer_fd]
     mov dword ptr [rip + poll_fds + 8], eax
     mov word ptr [rip + poll_fds + 12], POLLIN
+    mov eax, dword ptr [rip + doc_drag_timer_fd]
+    mov dword ptr [rip + poll_fds + 56], eax
+    mov word ptr [rip + poll_fds + 60], POLLIN
     lea rdi, [rip + poll_fds]
     call clipboard_poll_prepare
     mov eax, SYS_poll
     lea rdi, [rip + poll_fds]
-    mov esi, 7
+    mov esi, 8
     mov edx, -1
     syscall
     test rax, rax
@@ -2796,6 +2823,9 @@ wayland_main:
     movzx eax, word ptr [rip + poll_fds + 14]
     test eax, eax
     jnz .event_repeat_timer
+    movzx eax, word ptr [rip + poll_fds + 62]
+    test eax, eax
+    jnz .event_drag_timer
     lea rdi, [rip + poll_fds]
     call clipboard_poll_dispatch
     test eax, eax
@@ -2883,28 +2913,14 @@ wayland_main:
     je .pointer_document_scroll_motion
     cmp dword ptr [rip + pointer_button_down], 1
     jne .event_loop
-    cmp dword ptr [rip + pointer_inside], 1
-    jne .event_loop
-    mov eax, dword ptr [rip + pointer_y]
-    cmp eax, DOC_TOP
-    jl .event_loop
-    cmp eax, dword ptr [rip + window_height]
-    jae .event_loop
-    mov eax, dword ptr [rip + pointer_x]
+    # wl_pointer's implicit button grab continues delivering surface-local
+    # motion beyond the window. Do not discard that motion at pointer_leave
+    # or at the document bounds: the selection updater clamps the hit-test
+    # location and scrolls the viewport as needed.
+    xor edi, edi
+    call doc_drag_pointer_update
     test eax, eax
-    js .event_loop
-    cmp eax, dword ptr [rip + window_width]
-    ja .event_loop
-    mov edi, eax
-    mov esi, dword ptr [rip + pointer_y]
-    call doc_place_cursor_from_pointer
-    mov eax, dword ptr [rip + doc_selection_anchor]
-    cmp eax, dword ptr [rip + doc_cursor]
-    jne .Lneko_pointer_selection_set
-    mov dword ptr [rip + doc_selection_active], 0
-    jmp .keyboard_changed
-.Lneko_pointer_selection_set:
-    mov dword ptr [rip + doc_selection_active], 1
+    jz .event_loop
     jmp .keyboard_changed
 .pointer_picker_motion:
     cmp dword ptr [rip + picker_scroll_drag], 1
@@ -3028,6 +3044,10 @@ wayland_main:
     cmp dword ptr [rip + pointer_button_down], 1
     jne .event_loop
     mov dword ptr [rip + pointer_button_down], 0
+    mov dword ptr [rip + doc_word_drag_active], 0
+    call doc_drag_timer_stop
+    test rax, rax
+    js .protocol_error
     mov eax, dword ptr [rip + doc_selection_anchor]
     cmp eax, dword ptr [rip + doc_cursor]
     jne .Lneko_pointer_button_released
@@ -3443,11 +3463,21 @@ wayland_main:
     cmp ecx, 5
     ja .Lpointer_document_single_click
     mov dword ptr [rip + doc_last_click_valid], 0
-    mov dword ptr [rip + pointer_button_down], 0
+    mov dword ptr [rip + doc_word_drag_active], 0
+    mov dword ptr [rip + pointer_button_down], 1
     mov edi, dword ptr [rip + pointer_x]
-    mov esi, dword ptr [rip + pointer_y]
     call doc_place_cursor_from_pointer
     call doc_select_word_at_cursor
+    # Keep the mouse grab after the second press. The two word boundaries
+    # form the fixed edge while the dragged edge advances in whole words.
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov dword ptr [rip + doc_word_drag_start], eax
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_word_drag_end], eax
+    mov dword ptr [rip + doc_word_drag_active], 1
+    call doc_drag_timer_start
+    test rax, rax
+    js .protocol_error
     jmp .keyboard_changed
 .Lpointer_document_single_click:
     mov eax, dword ptr [rip + event_payload + 4]
@@ -3458,12 +3488,15 @@ wayland_main:
     mov dword ptr [rip + doc_last_click_y], eax
     mov dword ptr [rip + doc_last_click_valid], 1
     mov dword ptr [rip + pointer_button_down], 1
+    mov dword ptr [rip + doc_word_drag_active], 0
     mov edi, dword ptr [rip + pointer_x]
-    mov esi, dword ptr [rip + pointer_y]
     call doc_place_cursor_from_pointer
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
+    call doc_drag_timer_start
+    test rax, rax
+    js .protocol_error
     jmp .keyboard_changed
 .check_keyboard_event:
     mov eax, dword ptr [rip + keyboard_object]
@@ -3493,6 +3526,21 @@ wayland_main:
     test rax, rax
     js .protocol_error
     jmp .event_loop
+.event_drag_timer:
+    mov edi, dword ptr [rip + doc_drag_timer_fd]
+    lea rsi, [rip + doc_drag_timer_read]
+    mov edx, 8
+    call linux_read_exact
+    test rax, rax
+    js .protocol_error
+    cmp dword ptr [rip + pointer_button_down], 1
+    jne .event_loop
+    mov edi, 1
+    call doc_drag_pointer_update
+    test eax, eax
+    jz .event_loop
+    jmp .document_scroll_redraw
+
 .event_repeat_timer:
     mov edi, dword ptr [rip + repeat_timer_fd]
     lea rsi, [rip + repeat_timer_read]
@@ -10607,6 +10655,7 @@ doc_delete_at_cursor:
     push r13
     push r14
     mov r12d, dword ptr [rip + doc_cursor]
+    mov r13d, r12d                 # Preserve the raw pointer offset for drag direction.
     cmp r12d, dword ptr [rip + doc_length]
     jae .doc_delete_done
     call doc_line_index_ensure
@@ -10767,6 +10816,48 @@ repeat_start_if_supported:
 .Lneko_repeat_start_done:
     ret
 .size repeat_start_if_supported, . - repeat_start_if_supported
+
+# A separate periodic timer drives edge auto-scroll during mouse selection.
+# The initial 120ms delay avoids scrolling during an ordinary short drag.
+.type doc_drag_timer_start, @function
+doc_drag_timer_start:
+    cmp dword ptr [rip + doc_drag_timer_fd], 0
+    je .Ldoc_drag_timer_start_done
+    mov qword ptr [rip + doc_drag_timer_spec], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 8], DOC_DRAG_SCROLL_TICK_NS
+    mov qword ptr [rip + doc_drag_timer_spec + 16], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 24], DOC_DRAG_SCROLL_INITIAL_NS
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + doc_drag_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + doc_drag_timer_spec]
+    xor r10d, r10d
+    syscall
+    ret
+.Ldoc_drag_timer_start_done:
+    xor eax, eax
+    ret
+.size doc_drag_timer_start, . - doc_drag_timer_start
+
+.type doc_drag_timer_stop, @function
+doc_drag_timer_stop:
+    cmp dword ptr [rip + doc_drag_timer_fd], 0
+    je .Ldoc_drag_timer_stop_done
+    mov qword ptr [rip + doc_drag_timer_spec], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 8], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 16], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 24], 0
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + doc_drag_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + doc_drag_timer_spec]
+    xor r10d, r10d
+    syscall
+    ret
+.Ldoc_drag_timer_stop_done:
+    xor eax, eax
+    ret
+.size doc_drag_timer_stop, . - doc_drag_timer_stop
 
 .type repeat_cancel, @function
 repeat_cancel:
@@ -11882,6 +11973,172 @@ doc_ensure_cursor_visible:
 .size doc_ensure_cursor_visible, . - doc_ensure_cursor_visible
 
 # Place cursor from surface-local coordinates; rows include the current scroll.
+# EDI=1 for a timer tick, 0 for a pointer-motion update. Surface-local
+# coordinates are retained separately from the clamped hit-test coordinates.
+# Motion beyond the document viewport scrolls vertically in either wrap mode;
+# horizontal auto-scroll is enabled only while soft wrapping is disabled.
+.type doc_drag_pointer_update, @function
+doc_drag_pointer_update:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r15d, edi
+    mov r12d, dword ptr [rip + pointer_x]
+    mov r13d, dword ptr [rip + pointer_y]
+    xor r14d, r14d
+
+    # Distance outside the vertical viewport controls the scroll rate.
+    mov eax, r13d
+    cmp eax, DOC_TOP
+    jl .Ldoc_drag_scroll_above
+    mov ecx, dword ptr [rip + window_doc_bottom]
+    cmp eax, ecx
+    jge .Ldoc_drag_scroll_below
+    jmp .Ldoc_drag_scroll_horizontal
+.Ldoc_drag_scroll_above:
+    mov eax, DOC_TOP
+    sub eax, r13d
+    add eax, DOC_DRAG_SCROLL_ROW_PIXELS - 1
+    xor edx, edx
+    mov ecx, DOC_DRAG_SCROLL_ROW_PIXELS
+    div ecx
+    cmp eax, DOC_DRAG_SCROLL_MAX_STEPS
+    jbe .Ldoc_drag_scroll_above_clamped
+    mov eax, DOC_DRAG_SCROLL_MAX_STEPS
+.Ldoc_drag_scroll_above_clamped:
+    neg eax
+    mov edi, eax
+    call doc_scroll_by
+    or r14d, eax
+    jmp .Ldoc_drag_scroll_horizontal
+.Ldoc_drag_scroll_below:
+    mov eax, r13d
+    sub eax, ecx
+    inc eax
+    add eax, DOC_DRAG_SCROLL_ROW_PIXELS - 1
+    xor edx, edx
+    mov ecx, DOC_DRAG_SCROLL_ROW_PIXELS
+    div ecx
+    cmp eax, DOC_DRAG_SCROLL_MAX_STEPS
+    jbe .Ldoc_drag_scroll_below_clamped
+    mov eax, DOC_DRAG_SCROLL_MAX_STEPS
+.Ldoc_drag_scroll_below_clamped:
+    mov edi, eax
+    call doc_scroll_by
+    or r14d, eax
+
+.Ldoc_drag_scroll_horizontal:
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldoc_drag_scroll_position
+    mov eax, r12d
+    cmp eax, DOC_LEFT
+    jl .Ldoc_drag_scroll_left
+    mov ecx, dword ptr [rip + window_doc_pixel_width]
+    add ecx, DOC_LEFT
+    cmp eax, ecx
+    jge .Ldoc_drag_scroll_right
+    jmp .Ldoc_drag_scroll_position
+.Ldoc_drag_scroll_left:
+    mov eax, DOC_LEFT
+    sub eax, r12d
+    add eax, DOC_DRAG_SCROLL_COLUMN_PIXELS - 1
+    xor edx, edx
+    mov ecx, DOC_DRAG_SCROLL_COLUMN_PIXELS
+    div ecx
+    cmp eax, DOC_DRAG_SCROLL_MAX_STEPS
+    jbe .Ldoc_drag_scroll_left_clamped
+    mov eax, DOC_DRAG_SCROLL_MAX_STEPS
+.Ldoc_drag_scroll_left_clamped:
+    imul eax, 14
+    neg eax
+    mov edi, eax
+    call doc_scroll_horizontal_by
+    or r14d, eax
+    jmp .Ldoc_drag_scroll_position
+.Ldoc_drag_scroll_right:
+    mov eax, r12d
+    sub eax, ecx
+    inc eax
+    add eax, DOC_DRAG_SCROLL_COLUMN_PIXELS - 1
+    xor edx, edx
+    mov ecx, DOC_DRAG_SCROLL_COLUMN_PIXELS
+    div ecx
+    cmp eax, DOC_DRAG_SCROLL_MAX_STEPS
+    jbe .Ldoc_drag_scroll_right_clamped
+    mov eax, DOC_DRAG_SCROLL_MAX_STEPS
+.Ldoc_drag_scroll_right_clamped:
+    imul eax, 14
+    mov edi, eax
+    call doc_scroll_horizontal_by
+    or r14d, eax
+
+.Ldoc_drag_scroll_position:
+    # A timer tick only needs a frame when it actually advanced the viewport.
+    cmp r15d, 1
+    jne .Ldoc_drag_map_pointer
+    test r14d, r14d
+    jz .Ldoc_drag_no_change
+
+.Ldoc_drag_map_pointer:
+    mov eax, r12d
+    cmp eax, DOC_LEFT
+    jge .Ldoc_drag_x_left_ready
+    mov eax, DOC_LEFT
+.Ldoc_drag_x_left_ready:
+    mov ecx, dword ptr [rip + window_doc_pixel_width]
+    add ecx, DOC_LEFT
+    dec ecx
+    cmp eax, ecx
+    jle .Ldoc_drag_x_clamped
+    mov eax, ecx
+.Ldoc_drag_x_clamped:
+    mov dword ptr [rip + pointer_x], eax
+
+    mov eax, r13d
+    cmp eax, DOC_TOP
+    jge .Ldoc_drag_y_top_ready
+    mov eax, DOC_TOP
+.Ldoc_drag_y_top_ready:
+    mov ecx, dword ptr [rip + window_doc_bottom]
+    dec ecx
+    cmp eax, ecx
+    jle .Ldoc_drag_y_clamped
+    mov eax, ecx
+.Ldoc_drag_y_clamped:
+    mov dword ptr [rip + pointer_y], eax
+    mov edi, dword ptr [rip + pointer_x]
+    call doc_place_cursor_from_pointer
+    mov dword ptr [rip + pointer_x], r12d
+    mov dword ptr [rip + pointer_y], r13d
+
+    cmp dword ptr [rip + doc_word_drag_active], 1
+    jne .Ldoc_drag_character_selection
+    call doc_select_word_at_cursor
+    jmp .Ldoc_drag_updated
+.Ldoc_drag_character_selection:
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    cmp eax, dword ptr [rip + doc_cursor]
+    jne .Ldoc_drag_selection_active
+    mov dword ptr [rip + doc_selection_active], 0
+    jmp .Ldoc_drag_updated
+.Ldoc_drag_selection_active:
+    mov dword ptr [rip + doc_selection_active], 1
+.Ldoc_drag_updated:
+    mov eax, 1
+    jmp .Ldoc_drag_pointer_done
+.Ldoc_drag_no_change:
+    xor eax, eax
+.Ldoc_drag_pointer_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_drag_pointer_update, . - doc_drag_pointer_update
+
 .type doc_place_cursor_from_pointer, @function
 doc_place_cursor_from_pointer:
     mov eax, edi
@@ -15384,8 +15641,27 @@ doc_select_word_at_cursor:
     call doc_grapheme_next
     mov r15d, eax
 .Ldoc_select_word_store:
+    cmp dword ptr [rip + doc_word_drag_active], 1
+    jne .Ldoc_select_word_store_initial
+    mov eax, dword ptr [rip + doc_word_drag_start]
+    cmp r13d, eax
+    jb .Ldoc_select_word_store_reverse
+    # Forward drag: preserve the original word's left edge and extend to the
+    # end of the word currently under the pointer.
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov dword ptr [rip + doc_cursor], r15d
+    jmp .Ldoc_select_word_store_active
+.Ldoc_select_word_store_reverse:
+    # Reverse drag: preserve the original word's right edge and move the
+    # active cursor to the start of the word under the pointer.
+    mov eax, dword ptr [rip + doc_word_drag_end]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov dword ptr [rip + doc_cursor], r14d
+    jmp .Ldoc_select_word_store_active
+.Ldoc_select_word_store_initial:
     mov dword ptr [rip + doc_selection_anchor], r14d
     mov dword ptr [rip + doc_cursor], r15d
+.Ldoc_select_word_store_active:
     mov dword ptr [rip + doc_selection_active], 1
 .Ldoc_select_word_done:
     pop r15
