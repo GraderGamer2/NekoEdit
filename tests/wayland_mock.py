@@ -70,6 +70,7 @@ def run(
     *,
     use_wayland_socket: bool = False,
     send_protocol_error: bool = False,
+    disconnect_after_configure_ack: bool = False,
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
@@ -209,6 +210,11 @@ def run(
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
+            if disconnect_after_configure_ack:
+                # Close before the next client request so the send-failure
+                # diagnostic exercises its bounded event-size output path.
+                observations.append("compositor closed after xdg_surface.configure acknowledgement")
+                return
 
             pool = recv_wayland_message(client)
             if pool[0:2] != (5, 0) or len(pool[3]) != 1:
@@ -2523,6 +2529,26 @@ xkb_symbols "nekoedit-sparse" {
             "mock compositor failed:\n" + "\n".join(errors)
             + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
         )
+    if disconnect_after_configure_ack:
+        expected = (
+            "Wayland send failed: object=5, opcode=0, errno=32",
+            "Wayland previous request: object=9, opcode=4",
+            "Wayland last event: object=9, opcode=0, payload bytes=4",
+        )
+        missing = [line for line in expected if line not in stderr]
+        sentinel = b"PRIVATE_DIAGNOSTIC_SENTINEL"
+        if result.returncode == 0 or missing:
+            raise AssertionError(
+                "closed-socket diagnostic did not preserve the expected request/event context: "
+                f"status={result.returncode}, missing={missing!r}, stderr={stderr!r}"
+            )
+        if len(result.stderr) > 512 or sentinel in result.stderr:
+            raise AssertionError(
+                "Wayland diagnostic output exceeded its bounded size or exposed document bytes: "
+                f"stderr_length={len(result.stderr)}, sentinel_present={sentinel in result.stderr}"
+            )
+        print("Wayland send-failure diagnostic is bounded and does not expose document data.")
+        return
     if send_protocol_error:
         if result.returncode == 0 or "test compositor protocol error" not in stderr:
             raise AssertionError(
@@ -2549,6 +2575,22 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
+    # A compositor disconnect immediately after xdg_surface.configure must
+    # produce concise numeric diagnostics without dumping editor memory.
+    diagnostic_fd, diagnostic_path = tempfile.mkstemp(prefix="nekoedit-diagnostic-")
+    try:
+        with os.fdopen(diagnostic_fd, "wb") as diagnostic_file:
+            diagnostic_file.write(b"PRIVATE_DIAGNOSTIC_SENTINEL")
+        run(
+            sys.argv[1],
+            initial_file=diagnostic_path,
+            disconnect_after_configure_ack=True,
+        )
+    finally:
+        try:
+            os.unlink(diagnostic_path)
+        except FileNotFoundError:
+            pass
     # Test positional file loading and Ctrl+S using a temporary document.
     file_descriptor, file_path = tempfile.mkstemp(prefix="nekoedit-file-")
     try:
