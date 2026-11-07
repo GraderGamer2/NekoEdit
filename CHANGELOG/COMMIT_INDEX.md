@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **229** (227 previously indexed implementation commits + 2 commits adding preceding-request/event context to Wayland send diagnostics).
+- Recorded implementation commits: **234** (229 previously indexed commits + 5 diagnostic-boundary and regression-test commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -428,6 +428,20 @@ Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598
 | 2026-11-06 18:03:00 UTC | [`0501579b965d`](https://github.com/GraderGamer2/NekoEdit/commit/0501579b965dd65011ea5475fcc2b197d95946f9) | docs: describe preceding Wayland request and event diagnostics |
 
 The source change routes ordinary Wayland requests through `sendto(MSG_NOSIGNAL)`, applies `MSG_NOSIGNAL` to FD-bearing `sendmsg`, and records the client object/opcode/errno when a send fails. This converts a closed-socket SIGPIPE termination into a reportable error. Actions [#261](https://github.com/GraderGamer2/NekoEdit/actions/runs/42266008250) passed all eight workflow steps on branch head `3752714507b773c2cf07293eb5f12bf85f251f1b` and uploaded artifact `13527261651` (30,146 bytes; SHA-256 `f2572c2aa95b92c80294fdb79406cddd7c5de4d5b107887a0d64fb62df643636`). Real GNOME/Mutter diagnosis remains pending; CI does not establish why the compositor closed the socket or prove that Maximize/resize work. The subsequent `wl_surface.attach` failure from the user was `object=8`, `opcode=1`, `errno=32` (`EPIPE`), showing that the compositor had already closed the socket. Commit `41b819eae69d` adds the last fully written request and last-read event to the diagnostic output; the follow-up build and real compositor retest remain pending. Actions [#270](https://github.com/GraderGamer2/NekoEdit/actions/runs/42320683568) then passed all eight steps on `f7fd732d7d2fd01b67826f2b9a43c3ef767001d0` and uploaded artifact `13552837524` (30,387 bytes; SHA-256 `b49e824bc3aba908a025286d2e54ed76c0db4e26bc338858d5f748eb1ceea9bf`). The artifact needs the user's GNOME/Mutter retest to provide the previous-request and last-event values.
+
+
+
+## 2026-11-07 Bounded Wayland event diagnostics and output-safety regression
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 00:56:34 UTC | [`5765d1dc7dc0`](https://github.com/GraderGamer2/NekoEdit/commit/5765d1dc7dc0d1cd2f6c928b91363d0b5aa2988c) | fix: bound Wayland event diagnostic output |
+| 2026-11-07 00:57:04 UTC | [`ad4ec280e31e`](https://github.com/GraderGamer2/NekoEdit/commit/ad4ec280e31e8cb653abede6edbbf7b6d5ea1a47) | test: prevent Wayland diagnostic memory disclosure |
+| 2026-11-07 00:57:50 UTC | [`c2a9f0d08597`](https://github.com/GraderGamer2/NekoEdit/commit/c2a9f0d08597ed3f2d0a8a4d7ba97b62bf38af45) | fix: remove NUL bytes from Wayland diagnostics |
+| 2026-11-07 00:57:57 UTC | [`2408b3e00983`](https://github.com/GraderGamer2/NekoEdit/commit/2408b3e009833d294d0f2233261a84e18e9b23e8) | test: reject NUL bytes in Wayland diagnostics |
+| 2026-11-07 00:58:11 UTC | [`a85488248ecaf3`](https://github.com/GraderGamer2/NekoEdit/commit/a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b) | test: check diagnostic NUL bytes without f-string escapes |
+
+The event-label write length was corrected, the decimal writer's trailing NUL byte was removed, and a mock disconnect regression now checks that diagnostics remain bounded, NUL-free, and do not include bytes from an opened document. Actions [#278](https://github.com/GraderGamer2/NekoEdit/actions/runs/42321400180) passed all eight workflow steps on `a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b` and uploaded artifact `13553546144` (30,396 bytes; SHA-256 `ca459f68e21289cb7bd7c0deb74d1f1c36c928ccf912292848ebbe32594fcb51`). The user's real GNOME retest remains pending; the regression does not claim a Mutter fix.
 
 ## Maintenance
 

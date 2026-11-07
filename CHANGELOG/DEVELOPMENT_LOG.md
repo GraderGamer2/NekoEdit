@@ -1,5 +1,23 @@
 # NekoEdit development log
 
+## 2026-11-07 — Bound Wayland diagnostics and prevent diagnostic memory disclosure
+
+**User retest and observed sequence:** The Actions #270 binary reported a failed `wl_surface.attach` request (object 8, opcode 1, `EPIPE`/errno 32), with the preceding locally written request at object 11/opcode 0 and the last event at object 9/opcode 0. Those IDs identify `wl_shm_pool.create_buffer` and `xdg_surface.configure`, respectively; the event's payload size is 4 bytes. This is consistent with the configure-driven buffer replacement path, but a locally successful socket write does not prove Mutter processed or accepted that request, so the disconnect's actual cause remains unconfirmed.
+
+### Diagnostic defects found and fixed
+
+- The diagnostic formatter calculated the byte length for `", payload bytes="` by subtracting the label address from a preceding label. The resulting length was vastly larger than the string itself, so the stderr write continued through adjacent process memory. That explains the unrelated XKB text, editor contents, and binary-looking bytes in the user's terminal output. This was an application-side out-of-bounds diagnostic write, not Wayland event payload data.
+- Added an explicit end label for the payload-size string and calculate its length from the start and end of that exact string in [`5765d1dc7dc0`](https://github.com/GraderGamer2/NekoEdit/commit/5765d1dc7dc0d1cd2f6c928b91363d0b5aa2988c).
+- The decimal integer printer also included one byte beyond its final digit, adding a NUL byte after every numeric field. Corrected the exclusive end address in [`c2a9f0d08597`](https://github.com/GraderGamer2/NekoEdit/commit/c2a9f0d08597ed3f2d0a8a4d7ba97b62bf38af45).
+- Added a mock-compositor regression in [`ad4ec280e31e`](https://github.com/GraderGamer2/NekoEdit/commit/ad4ec280e31e8cb653abede6edbbf7b6d5ea1a47), then tightened it in [`2408b3e00983`](https://github.com/GraderGamer2/NekoEdit/commit/2408b3e009833d294d0f2233261a84e18e9b23e8) and [`a85488248ecaf3`](https://github.com/GraderGamer2/NekoEdit/commit/a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b). It writes a unique sentinel to a temporary document, closes the mock compositor immediately after `xdg_surface.configure` acknowledgement, checks the failed request/previous request/last event values, rejects NUL bytes, caps stderr at 512 bytes, and ensures the document sentinel is absent.
+
+### Verification
+
+- Actions #274 passed all eight steps on the bounded-label source fix. Actions #275 then failed the new regression because the integer formatter appended NUL bytes; that failure identified the second off-by-one and was corrected. Intermediate runs #276 and #277 were cancelled as the fixes landed.
+- GitHub Actions [Build and test #278](https://github.com/GraderGamer2/NekoEdit/actions/runs/42321400180) passed all eight steps on [`a85488248ecaf3`](https://github.com/GraderGamer2/NekoEdit/commit/a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b), including the new closed-socket output-safety regression, all existing Wayland mock scenarios, CLI smoke tests, ELF inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,396 bytes; SHA-256 `ca459f68e21289cb7bd7c0deb74d1f1c36c928ccf912292848ebbe32594fcb51`; artifact ID `13553546144`; expires 2026-11-14 00:58:35 UTC. [Download from Actions #278](https://github.com/GraderGamer2/NekoEdit/actions/runs/42321400180/artifacts/13553546144).
+- This CI test establishes that the diagnostic output is bounded and does not contain the opened document's sentinel. It does not establish why GNOME/Mutter closed the real client socket or demonstrate that Maximize/edge resize now work. The real GNOME retest is still required; no journald or system-log changes are needed.
+
 This is an append-only narrative log. New entries go at the top, with the newest work first. The complete historical narrative is in [PROJECT_HISTORY.md](PROJECT_HISTORY.md); the full SHA/subject ledger is in [COMMIT_INDEX.md](COMMIT_INDEX.md).
 
 ## 2026-11-07 — Identify the request and event surrounding the GNOME disconnect
