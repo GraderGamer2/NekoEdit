@@ -1,6 +1,6 @@
 # Clipboard behavior
 
-Clipboard copy and paste are first-release requirements. They must interoperate with ordinary desktop applications and must not depend on a clipboard library or daemon.
+Clipboard copy and paste are first-release requirements. They must interoperate with ordinary desktop applications and must not depend on a third-party clipboard library. A new user-requested goal is to keep copied text available after NekoEdit exits; this requires cooperation from a desktop clipboard manager or a small first-party companion process, because an exited Wayland client cannot continue serving its data source.
 
 ## Current Wayland implementation
 
@@ -10,7 +10,7 @@ The Wayland backend binds the optional `wl_data_device_manager`, creates a data 
 - **Ctrl+X:** establishes clipboard ownership from that independent snapshot first, then deletes the selected range. If ownership cannot be established, the selected text remains.
 - **Ctrl+V:** requests `text/plain;charset=utf-8` first and falls back to `text/plain`, receiving the payload through an asynchronous nonblocking pipe. Received bytes replace the active selection or are inserted at the caret.
 
-Clipboard transfers are serviced by the existing `poll()` loop in bounded chunks. Outgoing snapshots are independent of the document gap buffer and remain available during in-flight sends. The current payload ceiling is 64 MiB. Paste targets the document editor only: paste into picker/path fields, PRIMARY selection, X11 clipboard support, external UTF-8 validation/replacement policy, and clipboard-manager persistence after process exit are not implemented. The end-to-end mock-compositor test exercises a separate receiver for Copy/Cut and an external MIME offer for Paste.
+Clipboard transfers are serviced by the existing `poll()` loop in bounded chunks. Outgoing snapshots are independent of the document gap buffer and remain available during in-flight sends. The current payload ceiling is 64 MiB, the implementation has eight source records and four simultaneous outgoing-send slots, and it has one asynchronous receive buffer capped at 64 MiB. These are resource/concurrency limits, not a lifetime counter on how many sequential Ctrl+C/Ctrl+V commands a user may issue; completed/retired transfers release their slots for reuse. Paste targets the document editor only: paste into picker/path fields, PRIMARY selection, X11 clipboard support, and external UTF-8 validation/replacement policy are not implemented. Clipboard-manager handoff after process exit is not yet implemented.
 
 ## Ownership rule: copy is a snapshot
 
@@ -27,7 +27,22 @@ Cut must first establish clipboard ownership using the snapshot, then remove the
 
 The current snapshot remains available while NekoEdit owns the system clipboard. If another application replaces the clipboard, mark the snapshot as no longer current; free it only after all in-flight sends finish. This needs explicit reference counting or an equivalent lifetime mechanism.
 
-NekoEdit does not promise to preserve clipboard contents after its process exits. A desktop clipboard manager may preserve the selection, but that is external behavior. NekoEdit will not install or require a resident clipboard daemon, nor maintain a clipboard-history database.
+NekoEdit currently does not guarantee clipboard persistence after its process exits. This is now a requested feature, not an implemented guarantee. First investigate whether the desktop's existing clipboard manager reliably captures the current offer before the editor exits. Prefer that integration over creating another resident process. If desktop-manager behavior cannot meet the requirement, evaluate an optional small first-party companion service. A companion could retain the last copied snapshot in memory (survives editor exit but not logout/reboot) or use an app-private file (survives editor exit and potentially logout/reboot); the latter adds disk writes, privacy/permissions requirements, cleanup policy, and data-at-rest considerations. Persistence across logout/reboot has not been requested or decided.
+
+## Requested next target: repeated use and process-exit persistence
+
+The user wants Ctrl+C/Ctrl+V use to be effectively unlimited in normal editing, and wants the last copied text to remain available after NekoEdit is closed.
+
+Acceptance goals for a future implementation:
+
+- Do not impose a lifetime command-count limit on sequential copy, cut, or paste operations.
+- Reuse source and send records after their protocol references and in-flight transfers are finished. Replace fixed concurrent-slot ceilings with safely managed records if they become a practical obstacle; keep resource limits for concurrent work and payload size rather than silently exhausting RAM.
+- Keep the copied payload immutable and independent of document storage. A later edit, cut, new document, or document close must not corrupt it.
+- Preserve the last copied/cut payload after the editor process exits. First test handoff to the desktop clipboard manager. Only add an optional first-party companion service if the desktop manager cannot provide reliable handoff.
+- Keep process-exit persistence distinct from session/reboot persistence. The latter remains undecided.
+- Do not turn ordinary Copy into an accumulating clipboard-history database unless explicitly requested; the current requirement is to retain the latest clipboard contents, not every previous copy.
+
+Current limits are not a total number of clipboard uses: eight source records, four simultaneous outgoing transfers, and 64 MiB maximum payload/receive size are the present implementation bounds. The source slots can be reused after retirement and transfer completion. The 64 MiB payload ceiling should be reviewed separately rather than removed without checked allocation, overflow handling, and memory-pressure behavior.
 
 ## Common editor interface
 
