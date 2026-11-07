@@ -33,7 +33,6 @@ extern int32_t save_confirm_enabled;
 
 char *preferences_font_path_ptr;
 
-static char config_directory[PATH_CAPACITY];
 static char application_directory[PATH_CAPACITY];
 static char preferences_path[PATH_CAPACITY];
 static char temporary_path[PATH_CAPACITY];
@@ -144,43 +143,21 @@ static int append_literal(char *destination, uint32_t capacity,
 
 static int build_paths(void)
 {
-    const char *root = environment_value("XDG_CONFIG_HOME");
-    const char *home;
-    uint32_t root_length, length;
+    const char *home = environment_value("HOME");
+    uint32_t home_length, length;
 
-    config_directory[0] = 0;
     application_directory[0] = 0;
     preferences_path[0] = 0;
     temporary_path[0] = 0;
 
-    root_length = bounded_length(root, PATH_CAPACITY);
-    if (!root || !root_length || root[0] != '/') {
-        home = environment_value("HOME");
-        if (!home || home[0] != '/')
-            return 0;
-        root_length = bounded_length(home, PATH_CAPACITY);
-        if (!root_length || root_length >= PATH_CAPACITY - 9u)
-            return 0;
-        if (!copy_text(config_directory, PATH_CAPACITY, home, root_length))
-            return 0;
-        length = root_length;
-        if (!append_literal(config_directory, PATH_CAPACITY, &length, ".config"))
-            return 0;
-    } else {
-        if (root_length >= PATH_CAPACITY)
-            return 0;
-        if (!copy_text(config_directory, PATH_CAPACITY, root, root_length))
-            return 0;
-        length = root_length;
-        while (length > 1 && config_directory[length - 1] == '/')
-            config_directory[--length] = 0;
-    }
-
-    if (!copy_text(application_directory, PATH_CAPACITY,
-                   config_directory, bounded_length(config_directory, PATH_CAPACITY)))
+    home_length = bounded_length(home, PATH_CAPACITY);
+    if (!home || !home_length || home[0] != '/' ||
+        home_length >= PATH_CAPACITY - 12u)
         return 0;
-    length = bounded_length(application_directory, PATH_CAPACITY);
-    if (!append_literal(application_directory, PATH_CAPACITY, &length, "nekoedit"))
+    if (!copy_text(application_directory, PATH_CAPACITY, home, home_length))
+        return 0;
+    length = home_length;
+    if (!append_literal(application_directory, PATH_CAPACITY, &length, ".nekoedit"))
         return 0;
 
     if (!copy_text(preferences_path, PATH_CAPACITY,
@@ -207,9 +184,8 @@ static int build_paths(void)
             digits[count++] = (char)('0' + (pid % 10u));
             pid /= 10u;
         } while (pid && count < sizeof(digits));
-        while (count) {
+        while (count)
             temporary_path[length++] = digits[--count];
-        }
         temporary_path[length] = 0;
     }
     return 1;
@@ -349,7 +325,7 @@ int preferences_load(void)
     }
     preferences_font_path_ptr = (char *)0;
     saved_font_path[0] = 0;
-    if (!build_paths() || !make_directory(config_directory))
+    if (!build_paths() || !make_directory(application_directory))
         return 0;
     fd = syscall6(SYS_openat, AT_FDCWD, (long)preferences_path,
                   O_RDONLY | O_CLOEXEC, 0, 0, 0);
@@ -415,7 +391,7 @@ int preferences_save(void)
     uint32_t font_length;
     if (disabled() || !build_paths())
         return 0;
-    if (!make_directory(config_directory) || !make_directory(application_directory))
+    if (!make_directory(application_directory))
         return 0;
 
     offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
