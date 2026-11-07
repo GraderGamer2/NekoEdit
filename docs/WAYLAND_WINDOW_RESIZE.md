@@ -28,7 +28,7 @@ The normal event loop uses the same capture helpers. A leave clears pointer focu
 
 ## Hit areas and cursor feedback
 
-The resize hit band is 16 logical surface units on each edge. Corner hits combine the corresponding horizontal and vertical edge bits. The same edge-calculation routine is used for both the button press and hover feedback, so the indicated resize direction matches the request that will be sent.
+The resize hit band is 16 logical surface units on each edge. Corner hits combine the corresponding horizontal and vertical edge bits. The top-edge hit band preserves the app-drawn File menu and window-control slots; the outermost top-right corner remains resizable. The same edge-calculation routine is used for both the button press and hover feedback, so the indicated resize direction matches the request that will be sent.
 
 When the compositor advertises the optional `wp_cursor_shape_manager_v1` extension, NekoEdit requests horizontal, vertical, and diagonal resize cursors. The extension is only a visual affordance: resizing still uses `xdg_toplevel.resize`. Its `set_shape` request must use the serial from the latest pointer-enter event, not the button-press serial or motion timestamp.
 

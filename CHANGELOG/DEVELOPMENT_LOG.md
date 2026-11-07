@@ -14,6 +14,7 @@
 
 - Capture `wl_pointer.enter`, its serial, and surface-local coordinates during the startup roundtrip; process pointer motion there too. Reuse the same capture helpers in the normal event loop.
 - Share one edge/corner calculation between the resize button handler and cursor feedback. Increase the logical hit band to 16 surface units.
+- Keep the app-drawn File menu and right-side window controls clickable: the top resize band excludes those titlebar controls, while the outermost top-right corner remains available for resizing.
 - When the compositor advertises the optional `wp_cursor_shape_manager_v1` global, bind it and provide horizontal, vertical, and diagonal resize cursors. Cursor-shape requests use the latest pointer-enter serial; the actual interactive resize still uses the serial from the user's button press.
 - Keep resizing functional when the optional cursor-shape extension is not advertised. The extension changes hover feedback, not the underlying `xdg_toplevel.resize` request.
 - Keep the dense `next_client_object_id` allocator and the Maximize fix unchanged.
@@ -22,10 +23,10 @@
 
 - The mock compositor sends `wl_pointer.enter` after `get_pointer` but before the startup sync callback. The initial pointer interaction must still be handled.
 - Verify the cursor-shape manager binding, initial default cursor, side/corner cursor shapes, the updated enter serial after pointer focus is lost and regained, and `xdg_toplevel.resize` with the button serial for all four edges and corners.
-- Run the complete window workflow again without advertising `wp_cursor_shape_manager_v1` to verify that edge resizing does not depend on the optional cursor extension.
+- Run the complete window workflow again without advertising `wp_cursor_shape_manager_v1` to verify that edge resizing does not depend on the optional cursor extension. The same workflow verifies that a File-menu click near the top edge is not intercepted as a resize.
 - See [WAYLAND_WINDOW_RESIZE.md](../docs/WAYLAND_WINDOW_RESIZE.md) for the pointer lifecycle, hit-testing, protocol, and compositor-fallback notes.
 
-**Validation:** Source and mock-test changes are prepared for the `early-alpha` branch. GitHub Actions build and Wayland mock results are pending; a real GNOME/Mutter drag-resize test is still required after the new artifact is available.
+**Validation:** The initial source commit `3da11acf616b` assembled and passed CLI smoke tests in Actions #295, but the mock suite caught a top-edge hit-band overlap with the File menu in the no-cursor-extension workflow. Follow-up source change `aa45cb1dc479` excludes the app's File menu and window-control slots from top-edge resizing; the complete Wayland mock suite is being rerun. A real GNOME/Mutter drag-resize test is still required after a passing artifact is available.
 
 ## 2026-11-07 — Remove temporary Maximize investigation instrumentation
 

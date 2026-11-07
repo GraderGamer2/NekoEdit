@@ -5183,6 +5183,25 @@ window_get_resize_edges:
 .window_get_resize_edges_vertical:
     cmp edx, WINDOW_RESIZE_BORDER
     jae .window_get_resize_edges_bottom
+    # The top hit band overlaps the app-drawn title bar. Keep the File menu
+    # (x=104..159) and the window-control strip clickable; the top-right
+    # resize corner remains available in the outermost 16 units.
+    cmp edx, 32
+    jae .window_get_resize_edges_top
+    cmp eax, 104
+    jb .window_get_resize_edges_top
+    cmp eax, 160
+    jb .window_get_resize_edges_done
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 104
+    cmp eax, ecx
+    jb .window_get_resize_edges_top
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, WINDOW_RESIZE_BORDER
+    cmp eax, ecx
+    jae .window_get_resize_edges_top
+    jmp .window_get_resize_edges_done
+.window_get_resize_edges_top:
     or r8d, 1                  # top
     jmp .window_get_resize_edges_done
 .window_get_resize_edges_bottom:
