@@ -1,5 +1,27 @@
 # NekoEdit development log
 
+## 2026-11-07 — Editor vertical scrollbar and mouse-wheel scrolling
+
+**Roadmap milestone:** provide direct viewport navigation for documents that exceed the visible editor area, without making the caret jump back into view during manual scrolling.
+
+### Implementation
+
+- Added a document scrollbar whose thumb height is proportional to visible visual rows versus total visual rows, with a minimum thumb size and clamping at both document ends.
+- Rendered the track and thumb only when content overflows. Short and empty documents do not expose an active scrollbar.
+- Added Wayland pointer hit-testing, thumb dragging, and track-click repositioning. The gutter is inset from the compositor resize band, and the text layout reserves 24 pixels for it.
+- Routed Wayland vertical-axis deltas to the editor when the picker/path prompt is inactive; the picker retains its own independent wheel and scrollbar state.
+- Kept manual viewport movement separate from caret-follow logic, so scrolling does not immediately snap back to the current insertion point.
+- The scrollbar total uses visual rows, so hard newlines and soft wrapping both contribute. A line-start index and per-line visual metadata remain a subsequent optimization.
+
+### Regression coverage and verification
+
+- The integration suite verifies that the scrollbar is hidden on an empty document, checks the rendered thumb pixel for a 65,537-byte wrapped file, scrolls down three rows and up one row with wheel events, and drags the thumb to the final visual rows.
+- Existing wrapping/caret expectations were updated for the 24-pixel gutter; an 800-pixel test surface now has 95 text columns rather than 97.
+- Source implementation: [e3489badd178](https://github.com/GraderGamer2/NekoEdit/commit/e3489badd178d4db59c30e6660f9768f224f7e35). Zero-initialization correction: [028379b66a6b](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96). Gutter/wrapping regression update: [d4c0fcc5710b](https://github.com/GraderGamer2/NekoEdit/commit/d4c0fcc5710b0ab5ff49bc5831a3a334ecfaa01e).
+- GitHub Actions [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563) passed all eight steps on the final test commit.
+- Artifact: `nekoedit-linux-x86_64`, 32,919 bytes; SHA-256 `3c46b8da79b5896773caf1865118fa01cd201049d8dbb94c6df0ec8be4847646`; artifact ID `13557314756`. [Download Actions #316 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563/artifacts/13557314756).
+- Manual scrollbar interaction on the user's GNOME/Mutter desktop remains pending; passing mock-compositor tests are not a substitute for pointer/wheel testing against the live compositor.
+
 ## 2026-11-07 — Dynamic gap-buffer growth and large-file Open
 
 **Roadmap milestone:** remove the fixed 64 KiB document and staged-Open limits without introducing a third-party allocator or changing the logical byte-offset model.
@@ -25,7 +47,7 @@
 - Regression-test and harness commits: [41afebc4d38b](https://github.com/GraderGamer2/NekoEdit/commit/41afebc4d38b48fa17b695b6df174b16fccac5a9), [1e61fde65235](https://github.com/GraderGamer2/NekoEdit/commit/1e61fde65235dd4be79ad9620c78c4170f6a11d9), [c004f00d038e](https://github.com/GraderGamer2/NekoEdit/commit/c004f00d038ee9c5e0812f7a35967ea25e113c0a), [0bb96bd5a7b3](https://github.com/GraderGamer2/NekoEdit/commit/0bb96bd5a7b327a3f35acc2d1a7267ffa2d59220), [37650efa8930](https://github.com/GraderGamer2/NekoEdit/commit/37650efa89302cf2e5484186a18b80375e7116c1), and [53d4b2df8d0e](https://github.com/GraderGamer2/NekoEdit/commit/53d4b2df8d0ef8968ab12fd8fb9923e4e6caa218).
 - GitHub Actions [Build and test #312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234) passed all eight steps on 53d4b2df8d0e.
 - Artifact: nekoedit-linux-x86_64, 32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4; artifact ID 13556529585; expires 2026-11-14 02:47:14 UTC. [Download Actions #312 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585).
-- The full mock-compositor suite passes, but the user has not yet manually tested this large-document artifact in GNOME/Mutter. The real desktop check should open, edit near the end of, and save a file larger than 64 KiB.
+- The user subsequently confirmed on the live GNOME/Mutter desktop that a 70 KB text file opens, accepts edits, and saves those changes correctly without crashing or exhibiting anomalous behavior. This completes the real-desktop validation of the dynamic-storage/large-file Open milestone.
 
 ## 2026-11-07 — Make the editor UI follow configured window geometry
 
