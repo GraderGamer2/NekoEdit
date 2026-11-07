@@ -1858,14 +1858,14 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     # Leave breathing room between the Bytes label and its value.
-                    # "Bytes " uses five 8px fallback glyphs plus its mapped
-                    # 3px SPACE; the following 8px visual gap puts the first
-                    # question-mark fallback pixel at x=532.
+                    # "Bytes " uses the mapped 4px B, four 8px fallback
+                    # glyphs and its 3px SPACE. The empty-document "0" starts
+                    # at x=527; its third topological pixel on row 3 is x=529.
                     bytes_gap_pixel = struct.unpack_from(
                         "<I", pixels, 349 * 800 * 4 + 524 * 4
                     )[0]
                     bytes_value_pixel = struct.unpack_from(
-                        "<I", pixels, 349 * 800 * 4 + 530 * 4
+                        "<I", pixels, 349 * 800 * 4 + 529 * 4
                     )[0]
                     if bytes_gap_pixel != 0xFF343D4B or bytes_value_pixel != 0xFFD8DEE9:
                         raise AssertionError(
