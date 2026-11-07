@@ -1426,8 +1426,8 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     def clipboard_string(value: str) -> bytes:
-                        encoded = value.encode("ascii") + b"\\0"
-                        return struct.pack("<I", len(encoded)) + encoded + (b"\\0" * (-len(encoded) % 4))
+                        encoded = value.encode("ascii") + b"\0"
+                        return struct.pack("<I", len(encoded)) + encoded + (b"\0" * (-len(encoded) % 4))
 
                     def ctrl_event(serial: int, code: int, down: bool) -> bytes:
                         return wire_message(
@@ -4461,7 +4461,7 @@ if __name__ == "__main__":
     clipboard_fd, clipboard_path = tempfile.mkstemp(prefix="nekoedit-clipboard-")
     try:
         with os.fdopen(clipboard_fd, "wb") as clipboard_document:
-            clipboard_document.write(b"copy me\\n")
+            clipboard_document.write(b"copy me\n")
         run(
             sys.argv[1],
             initial_file=clipboard_path,
