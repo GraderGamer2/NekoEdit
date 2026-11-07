@@ -944,7 +944,8 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
                         "font_probe_advance_A", "font_probe_advance_B",
-                        "doc_cursor",
+                        "doc_cursor", "pointer_x", "pointer_y",
+                        "window_doc_pixel_width",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -971,6 +972,9 @@ xkb_symbols "nekoedit-sparse" {
                         # A=8px, B=5px: clicking at x=27 is beyond B's midpoint
                         # (B starts at x=24), so the caret is before the third A.
                         "doc_cursor": 2,
+                        "pointer_x": 27,
+                        "pointer_y": 110,
+                        "window_doc_pixel_width": 760,
                         "font_index_to_loc_format": 0,
                         "font_cmap_format": 4,
                         "font_probe_A_glyph": 1,
