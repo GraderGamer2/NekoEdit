@@ -1,5 +1,24 @@
 # NekoEdit development log
 
+## 2026-11-07 — Isolate the first resized-buffer request with a one-shot sync barrier
+
+**Observed failure sequence:** The user's clean #278 retest reproduced the same EPIPE trace: NekoEdit's first failed send was `wl_surface.attach` (object 8/opcode 1), while its last successfully written request was `wl_shm_pool.create_buffer` (object 11/opcode 0), and its last received event was `xdg_surface.configure` (object 9/opcode 0). The compositor had already closed the socket by the time attach was attempted. This narrows the issue to the configure-driven replacement-buffer sequence, but does not prove whether the compositor accepted the new buffer.
+
+### Diagnostic change
+
+- After creating the first replacement `wl_buffer`, NekoEdit now sends `wl_display.sync` and waits for that request's `wl_callback.done` before sending `wl_surface.attach`. The sync callback is an ordering barrier: prior requests have been processed before it is delivered, allowing a fatal compositor error associated with the pool/buffer request to be received before attach.
+- The barrier is one-shot after startup; later interactive-resize frames do not incur another round-trip. While it is pending, the regular event dispatcher continues processing other Wayland events. Input-triggered redraws and newer configure-driven replacements are deferred until the callback resolves.
+- If the compositor sends `wl_display.error`, diagnostics print the previous request, last event, sync callback ID, replacement buffer ID, and compositor-provided message. If the socket closes before the callback, NekoEdit prints the pending sync context without requiring journald or external logs.
+- Mock coverage verifies the successful Maximize/Restore/interactive-resize path and a simulated fatal error on the replacement `wl_shm_pool.create_buffer`. The failure case asserts that NekoEdit receives and reports the compositor error before sending any `wl_surface.attach`, including the previous sync request (object 1/opcode 0), 44-byte error event, callback 257, and replacement buffer 256.
+- This is diagnostic instrumentation, not yet a confirmed fix for GNOME Maximize or edge resizing.
+
+### Verification and artifact
+
+- Intermediate runs #280, #283, and #284 exposed test-harness gaps while the barrier and error path were being wired; these were corrected. Runs #281/#282 passed the standard successful barrier path. Run #286 passed the protocol-error reporting path. Run #289 exposed that the test still expected a barrier on every resize after the implementation became one-shot; the test expectations were corrected.
+- GitHub Actions [Build and test #290](https://github.com/GraderGamer2/NekoEdit/actions/runs/42322351170) passed all eight steps on [`593ec1cdd82d`](https://github.com/GraderGamer2/NekoEdit/commit/593ec1cdd82dce7ae540818f6eae14ea610341d4): build/ELF checks, CLI smoke tests, successful one-shot synchronization, simulated compositor rejection before attach, all existing Wayland mock scenarios over both transports, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,652 bytes; SHA-256 `d59b82c487e5262745e4590a9204bcb4bebe431b0f2a09a0edf841dd434b8961`; artifact ID `13552914100`; expires 2026-11-14 01:08:14 UTC. [Download from Actions #290](https://github.com/GraderGamer2/NekoEdit/actions/runs/42322351170/artifacts/13552914100).
+- The GNOME/Mutter retest remains pending. The next manual output should distinguish a compositor protocol error before attach from a disconnect while waiting for the sync callback, or a later failure after callback completion. No system logging or extra packages are needed.
+
 ## 2026-11-07 — Bound Wayland diagnostics and prevent diagnostic memory disclosure
 
 **User retest and observed sequence:** The Actions #270 binary reported a failed `wl_surface.attach` request (object 8, opcode 1, `EPIPE`/errno 32), with the preceding locally written request at object 11/opcode 0 and the last event at object 9/opcode 0. Those IDs identify `wl_shm_pool.create_buffer` and `xdg_surface.configure`, respectively; the event's payload size is 4 bytes. This is consistent with the configure-driven buffer replacement path, but a locally successful socket write does not prove Mutter processed or accepted that request, so the disconnect's actual cause remains unconfirmed.

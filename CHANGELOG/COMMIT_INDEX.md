@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **234** (229 previously indexed commits + 5 diagnostic-boundary and regression-test commits).
+- Recorded implementation commits: **245** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -442,6 +442,25 @@ The source change routes ordinary Wayland requests through `sendto(MSG_NOSIGNAL)
 | 2026-11-07 00:58:11 UTC | [`a85488248ecaf3`](https://github.com/GraderGamer2/NekoEdit/commit/a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b) | test: check diagnostic NUL bytes without f-string escapes |
 
 The event-label write length was corrected, the decimal writer's trailing NUL byte was removed, and a mock disconnect regression now checks that diagnostics remain bounded, NUL-free, and do not include bytes from an opened document. Actions [#278](https://github.com/GraderGamer2/NekoEdit/actions/runs/42321400180) passed all eight workflow steps on `a85488248ecaf3f4c4742e5f0cb599d79b0e6c1b` and uploaded artifact `13553546144` (30,396 bytes; SHA-256 `ca459f68e21289cb7bd7c0deb74d1f1c36c928ccf912292848ebbe32594fcb51`). The user's real GNOME retest remains pending; the regression does not claim a Mutter fix.
+
+
+## 2026-11-07 One-shot resize-buffer sync barrier and compositor-error diagnosis
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 01:04:00 UTC | [`a0d226f3207b`](https://github.com/GraderGamer2/NekoEdit/commit/a0d226f3207b50b26c530fd213dc6a6eb52658ae) | debug: synchronize resize buffer creation before attach |
+| 2026-11-07 01:04:16 UTC | [`1d4f7b4a16f5`](https://github.com/GraderGamer2/NekoEdit/commit/1d4f7b4a16f5e4875b04109aa30173e3a581df4b) | test: cover compositor sync before resize buffer attach |
+| 2026-11-07 01:04:35 UTC | [`054deba34a0e`](https://github.com/GraderGamer2/NekoEdit/commit/054deba34a0e6c4aaeb537723275ddcc3d458a7b) | fix: defer redraws until resize buffer sync completes |
+| 2026-11-07 01:05:15 UTC | [`38ca69a7aada`](https://github.com/GraderGamer2/NekoEdit/commit/38ca69a7aada044dd04ffcf36143d1156d9ab58f) | test: surface resized buffer protocol errors before attach |
+| 2026-11-07 01:05:33 UTC | [`8e05def05ef7`](https://github.com/GraderGamer2/NekoEdit/commit/8e05def05ef7d7383c57d1138a0ed7dbc5cf8ee1) | test: encode mock Wayland error string correctly |
+| 2026-11-07 01:06:35 UTC | [`268bc234753b`](https://github.com/GraderGamer2/NekoEdit/commit/268bc234753baa254763a49b2a19d66cd008bf53) | fix: report deferred resize attach on compositor errors |
+| 2026-11-07 01:06:47 UTC | [`f8d7f84e29a5`](https://github.com/GraderGamer2/NekoEdit/commit/f8d7f84e29a56bfb07b71a02180ea66bdbfd373c) | style: centralize pending resize sync diagnostics |
+| 2026-11-07 01:07:10 UTC | [`532de0397449`](https://github.com/GraderGamer2/NekoEdit/commit/532de03974493c712b02dc7aae74125ffb65d1e8) | debug: retain request and event context for protocol errors |
+| 2026-11-07 01:07:17 UTC | [`20d399fc77fe`](https://github.com/GraderGamer2/NekoEdit/commit/20d399fc77fe502b75bc70a90681491b28aba3f3) | test: assert buffered Wayland error context |
+| 2026-11-07 01:07:38 UTC | [`7dca6ccfe92c`](https://github.com/GraderGamer2/NekoEdit/commit/7dca6ccfe92c092bf30eb29854496998eb5b63f4) | perf: limit resize sync probe to first replacement |
+| 2026-11-07 01:07:58 UTC | [`593ec1cdd82d`](https://github.com/GraderGamer2/NekoEdit/commit/593ec1cdd82dce7ae540818f6eae14ea610341d4) | test: verify sync probe is one-shot |
+
+Actions [#290](https://github.com/GraderGamer2/NekoEdit/actions/runs/42322351170) passed all eight workflow steps and uploaded artifact `13552914100` (30,652 bytes; SHA-256 `d59b82c487e5262745e4590a9204bcb4bebe431b0f2a09a0edf841dd434b8961`). The new test proves that a simulated compositor error on replacement-buffer creation is reported before attach; the real GNOME/Mutter result remains unverified.
 
 ## Maintenance
 
