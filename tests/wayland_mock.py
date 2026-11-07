@@ -2573,6 +2573,8 @@ xkb_symbols "nekoedit-sparse" {
         )
     if reject_resize_buffer:
         required = (
+            "Wayland previous request: object=1, opcode=0",
+            "Wayland last event: object=1, opcode=0, payload bytes=44",
             "Wayland buffer attach deferred: sync callback=257, buffer=256",
             "Wayland compositor protocol error: mock rejected resized wl_buffer",
         )
