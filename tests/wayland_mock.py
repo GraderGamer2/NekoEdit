@@ -777,12 +777,17 @@ xkb_symbols "nekoedit-test" {
                             b"key <AB02> { [ x, X ] };",
                             b"key <AB02> { [ Cyrillic_ya ] };",
                         )
+                        keymap_data = keymap_data.replace(
+                            b"key <AB03> { [ c, C ] };",
+                            b"key <AB03> { [ Multi_key ] };",
+                        )
                         if (
                             b"EuroSign, eacute" not in keymap_data
                             or b"[ emdash ]" not in keymap_data
                             or b"[ dead_acute ]" not in keymap_data
                             or b"[ Greek_alpha ]" not in keymap_data
                             or b"[ Cyrillic_ya ]" not in keymap_data
+                            or b"[ Multi_key ]" not in keymap_data
                         ):
                             raise AssertionError("named Unicode/dead-key/Greek/Cyrillic test substitutions did not apply")
                 elif sparse_keymap_test:
@@ -2491,8 +2496,9 @@ xkb_symbols "nekoedit-sparse" {
                         child_u32_at("xkb_unicode_levels", 41 * 64),
                         child_u32_at("xkb_unicode_levels", 52 * 64),
                         child_u32_at("xkb_unicode_levels", 53 * 64),
+                        child_u32_at("xkb_unicode_levels", 54 * 64),
                     )
-                    if alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002, 0x03B1, 0x044F):
+                    if alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002, 0x03B1, 0x044F, 0x110007):
                         raise AssertionError(
                             "named XKB Unicode/Greek/Cyrillic keysyms were not loaded into the scalar table: "
                             + repr(alias_scalars)
@@ -2518,12 +2524,39 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1570, 32, "named emdash inserts U+2014")
                     key_step(1572, 44, "Greek_alpha inserts U+03B1")
                     key_step(1574, 45, "Cyrillic_ya inserts U+044F")
+                    before_compose = child_u32("doc_length")
+                    key_step(1576, 46, "Multi_key starts a Compose sequence")
+                    if child_u32("doc_compose_active") != 1:
+                        raise AssertionError("Multi_key did not activate Compose state")
+                    key_step(1578, 24, "Compose buffers the first symbol o")
+                    if (
+                        child_u32("doc_compose_active") != 1
+                        or child_u32("doc_compose_first") != ord("o")
+                        or child_u32("doc_length") != before_compose
+                    ):
+                        raise AssertionError("Compose did not buffer its first symbol without inserting it")
+                    key_step(1579, 18, "Compose o e inserts the œ ligature")
+                    if (
+                        child_u32("doc_compose_active") != 0
+                        or child_u32("doc_compose_first") != 0
+                        or child_u32("doc_length") != before_compose + 2
+                    ):
+                        raise AssertionError("Compose o e did not resolve to one two-byte UTF-8 scalar")
+                    before_fallback = child_u32("doc_length")
+                    key_step(1579, 46, "Multi_key starts a literal-fallback sequence")
+                    key_step(1579, 17, "Compose buffers w as its first symbol")
+                    key_step(1579, 17, "unknown Compose w w pair preserves both symbols")
+                    if (
+                        child_u32("doc_compose_active") != 0
+                        or child_u32("doc_length") != before_fallback + 2
+                    ):
+                        raise AssertionError("unsupported Compose pair did not preserve both literal symbols")
                     client.sendall(wire_message(12, 0))
                     unicode_state = read_document_state()
                     expected_unicode = (
                         b"\xc3\xa9\xf0\x9f\x98\x80"
                         b"\xe2\x82\xac\xc3\xa9\xe2\x80\x94"
-                        b"\xce\xb1\xd1\x8f\xc3\xa9g\xcc\x81"
+                        b"\xce\xb1\xd1\x8f\xc5\x93ww\xc3\xa9g\xcc\x81"
                     )
                     before_dead_key = child_u32("doc_length")
                     key_step(1580, 33, "named dead_acute arms an acute accent")
@@ -2551,8 +2584,20 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1650, 1, "Escape cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape changed document text instead of canceling the pending accent")
+                    key_step(1660, 46, "Multi_key arms Compose Escape cancellation")
+                    key_step(1670, 17, "Compose buffers w before Escape")
+                    if child_u32("doc_compose_active") != 1:
+                        raise AssertionError("Compose state was not active before Escape cancellation")
+                    key_step(1680, 1, "Escape cancels a pending Compose sequence")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
+                        raise AssertionError("Escape did not cancel Compose without inserting or deleting text")
+                    key_step(1690, 46, "Multi_key arms Compose Backspace cancellation")
+                    key_step(1700, 17, "Compose buffers w before Backspace")
+                    key_step(1710, 14, "Backspace cancels a pending Compose sequence")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
+                        raise AssertionError("Backspace did not cancel Compose without deleting document text")
                     observations.append(
-                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
+                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, bounded Multi_key Compose pairs/fallback, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
