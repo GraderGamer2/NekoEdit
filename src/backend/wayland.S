@@ -9973,7 +9973,8 @@ doc_visual_to_offset_indexed:
     sub rsp, 8
     mov r12d, edi
     mov ebp, esi
-    mov dword ptr [rip + doc_visual_debug_target_x], ebp
+    mov dword ptr [rsp], esi
+    mov dword ptr [rip + doc_visual_debug_target_x], esi
     mov edi, r12d
     mov esi, DOC_INDEX_ROW_TREE_OFFSET
     call doc_line_index_find_prefix
@@ -10026,8 +10027,9 @@ doc_visual_to_offset_indexed:
     shr edx, 1
     add edx, r14d
     mov dword ptr [rip + doc_visual_debug_midpoint], edx
-    mov dword ptr [rip + doc_visual_debug_actual_x], ebp
-    cmp ebp, edx
+    mov eax, dword ptr [rsp]
+    mov dword ptr [rip + doc_visual_debug_actual_x], eax
+    cmp dword ptr [rsp], edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_glyph:
     add r14d, eax
@@ -10062,7 +10064,7 @@ doc_visual_to_offset_indexed:
     sub edx, r14d
     shr edx, 1
     add edx, r14d
-    cmp ebp, edx
+    cmp dword ptr [rsp], edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_tab:
     mov r14d, eax
