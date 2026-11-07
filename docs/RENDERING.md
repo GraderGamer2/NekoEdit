@@ -55,9 +55,15 @@ The document layout now consumes the same TrueType metrics that the renderer use
 
 The document em defaults to 12 pixels and can be changed during the session from Settings in the 8–24px range, in two-pixel steps. A size change updates hmtx advances, raster glyph size, OS/2/hhea-derived line pitch, and rebuilds the visual-row index before repainting. The Settings dropdown remains open during repeated size adjustments. A separate UI font-size setting defaults to 10px and adjusts from 8px to 14px in one-pixel steps; it changes ordinary interface text sizing without changing document metrics or the file picker's height-fitted dialog font. Glyph cache entries are keyed by both glyph ID and raster size, so sizes can coexist safely in the bounded cache. Font-family switching and persistent font preferences remain unimplemented.
 
+## Soft wrapping and horizontal viewport
+
+Soft wrapping is enabled by default. In this mode, the available document width and the same TrueType pixel advances used for glyph rendering determine wrap boundaries and per-line visual-row weights in the line index/Fenwick tree.
+
+The session-only **Wrap Lines** setting can disable soft wrapping. In no-wrap mode each logical line contributes exactly one visual row to the vertical index, while doc_view_left_px represents the horizontal pixel origin of the viewport. Native Wayland horizontal-axis events and Shift+vertical-wheel events move that origin in 14px increments. The caret is kept horizontally visible as it moves; pointer hit-testing adds the current pixel offset before resolving the nearest grapheme boundary; tabs retain their 32px stops; and unwrapped selection backgrounds are clipped to the document viewport. Re-enabling wrapping resets the horizontal offset and rebuilds wrapped visual-row weights. The horizontal viewport currently has wheel/Shift+wheel navigation but no dedicated draggable horizontal scrollbar.
+
 ## Preferences and unfinished font controls
 
-The Settings menu exposes **Confirm before saving**, **Font size**, and **UI font size**. These preferences currently apply to the running session and are not yet persisted across launches. The document-size range is 8–24px in two-pixel steps; UI text size is independent at 8–14px in one-pixel steps. Both steppers keep the dropdown open for consecutive adjustments. Before adding runtime font-family changes, the application needs to connect selection to a validated font-loading path, replace the mapped SFNT state, and refresh cmap/metrics/outline-cache state as one operation. The current `NEKOEDIT_FONT` environment variable remains the font-file override.
+The Settings menu exposes **Confirm before saving**, **Font size**, **UI font size**, and **Wrap Lines**. These preferences currently apply to the running session and are not yet persisted across launches. The document-size range is 8–24px in two-pixel steps; UI text size is independent at 8–14px in one-pixel steps; Wrap Lines defaults to ON. Both font-size steppers keep the dropdown open for consecutive adjustments. Runtime font-family/file selection still needs a validated font-loading path, safe replacement of mapped SFNT state, and coordinated cmap/metrics/outline-cache refresh. The current NEKOEDIT_FONT environment variable remains the font-file override.
 
 ## Text-rendering limits
 

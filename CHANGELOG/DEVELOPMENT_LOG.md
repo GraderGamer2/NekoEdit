@@ -1,3 +1,28 @@
+## 2026-11-07 — Horizontal viewport and soft-wrap control
+
+**Roadmap milestone:** implement horizontal navigation for long logical lines while preserving the existing pixel-accurate TrueType layout, indexed document navigation, and default soft-wrapped behavior.
+
+### Implementation
+
+- Added a session-only **Wrap Lines** toggle to Settings, enabled by default. The menu remains open while adjusting the setting.
+- With wrapping disabled, every logical line contributes one visual row to the line index and Fenwick row tree. Re-enabling wrapping rebuilds the width-dependent visual-row weights and resets the horizontal origin.
+- Added a horizontal pixel viewport offset. Caret visibility now tracks both the vertical visual row and the horizontal pixel column, so End and horizontal movement do not leave the insertion point off-screen.
+- Wayland horizontal-axis wheel events and Shift+vertical-wheel events move the horizontal viewport in 14px increments, using an independent fixed-point remainder accumulator. The existing vertical wheel remains unchanged.
+- Pointer hit-testing includes the horizontal pixel origin before mapping the pointer to the nearest grapheme boundary. The no-wrap renderer preserves proportional hmtx advances and 32px tab stops; selection backgrounds use an unwrapped path and are clipped to the document viewport.
+- The existing vertical scrollbar continues to represent visual rows: wrapped mode reflects soft-wrap rows; no-wrap mode reflects logical lines. No dedicated draggable horizontal scrollbar is exposed yet.
+
+### Regression coverage
+
+The dedicated long-line mock-compositor scenario starts with a 200-byte line in wrapped mode, turns wrapping off through Settings, confirms the line index contains one visual row and the vertical scrollbar is hidden, presses End and checks that the caret drives a nonzero horizontal offset, scrolls left by one 14px wheel detent, hit-tests a position while the horizontal offset is nonzero, then re-enables wrapping and verifies the wrapped row count and zero horizontal origin are restored. Existing clipboard, Undo/Redo, file-picker, typography, selection, editor-index, scrollbar, resize, and protocol regressions remain in the same complete Wayland suite.
+
+### Verification
+
+- GitHub Actions [Build and test #447](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911) passed the freestanding build/ELF verification, CLI smoke tests, full Wayland mock-compositor suite, executable inspection, and artifact upload on [5de2605dde0d](https://github.com/GraderGamer2/NekoEdit/commit/5de2605dde0d33e980437930e9f701f5a57e59fd).
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911/artifacts/13574342289): 62,237 bytes; artifact ID 13574342289; expires 2026-11-14.
+- The result is mock-compositor validation. A manual GNOME/Mutter test of this exact horizontal-viewport build remains outstanding.
+
+---
+
 ## 2026-11-07 — Add runtime document font-size controls
 
 Settings now provides minus/plus controls for the active document em size, from 8px to 24px in two-pixel steps. The default remains 12px.

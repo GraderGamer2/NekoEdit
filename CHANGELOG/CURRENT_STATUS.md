@@ -2,22 +2,21 @@
 
 **Snapshot date:** 2026-11-07  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
-**Development branch:** `early-alpha`  
-**Current source tip:** [`67a7e5c66603`](https://github.com/GraderGamer2/NekoEdit/commit/67a7e5c666037fc9823bd16362ad4d2439622f48).  
-**Latest full workflow:** [Build and test #440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed the freestanding build/ELF verification, CLI smoke tests, full Wayland mock-compositor suite, executable inspection, and artifact upload. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390): 61,359 bytes, SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`, artifact ID `13572958390`, expires 2026-11-14. This is mock-compositor verification; the user has not yet manually tested this exact clipboard/history build on GNOME/Mutter.
-**Settings typography:** the Settings dropdown remains open during repeated document font adjustments (8–24px, 2px steps) and has a separate UI font-size control (8–14px, 1px steps). Both remain session-only.
+**Development branch:** early-alpha  
+**Current source tip:** [5de2605dde0d](https://github.com/GraderGamer2/NekoEdit/commit/5de2605dde0d33e980437930e9f701f5a57e59fd).  
+**Latest full workflow:** [Build and test #447](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911) passed the freestanding build/ELF verification, CLI smoke tests, complete Wayland mock-compositor suite, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911/artifacts/13574342289): 62,237 bytes, artifact ID 13574342289, expires 2026-11-14. This is mock-compositor verification; a manual GNOME/Mutter test of this exact horizontal-viewport build remains outstanding.
+**Settings typography and view:** the Settings dropdown remains open while adjusting document font size (8–24px, 2px steps) or UI font size (8–14px, 1px steps). The session-only Wrap Lines toggle defaults to ON. When OFF, each logical line contributes one visual row and the editor supports horizontal wheel/Shift+vertical-wheel scrolling, caret-following, offset-aware pointer hit-testing, and viewport-clipped selection painting. No dedicated draggable horizontal scrollbar is present yet.
 **Clipboard:** Wayland Ctrl+C/X/V use immutable snapshots and asynchronous nonblocking data-device transfers with UTF-8 plain-text MIME types and a 64 MiB transfer ceiling. The integration test verifies external copy/cut and paste.
 **Undo/redo:** Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z use bounded snapshots that restore bytes, caret and selection; 16 entries per stack, 32 MiB aggregate history budget, and 4 MiB maximum per snapshot. Opening a new document resets history; editing after Undo clears Redo.
-**Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged, targeting `main`.
+**Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged, targeting main.
 
 ## Current next priorities
 
-1. Horizontal document scrolling and a deliberate wrap/overflow behavior for long lines.
-2. Runtime font-family/file selection with safe SFNT state replacement, metric/cache refresh, and index reflow.
-3. Persistent typography and UI preferences.
-4. Non-ASCII keyboard text input, compose/dead keys, and Wayland text-input/IME.
-5. Output/fractional scaling and release-tracked multi-buffer scheduling; then X11 and X11 clipboard.
-6. Find/replace and remaining picker-field editing improvements.
+1. Runtime font-family/file selection with safe SFNT state replacement, metric/cache refresh, and index reflow.
+2. Persistent typography, UI, and view preferences.
+3. Non-ASCII keyboard text input, compose/dead keys, and Wayland text-input/IME.
+4. Output/fractional scaling and release-tracked multi-buffer scheduling; then X11 and X11 clipboard.
+5. A dedicated draggable horizontal scrollbar, find/replace, and remaining picker-field editing improvements.
 
 The historical milestone notes below are retained as chronology. Their "latest" labels and next-work descriptions reflect the state at the time each note was written; use the branch tip and summary above as the current source of truth.
 
