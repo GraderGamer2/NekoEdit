@@ -309,7 +309,9 @@ font_parse_cmap:
     jne .Lfont_cmap_failed
 .Lfont_cmap_selected:
     mov dword ptr [rip + font_cmap_format], r14d
-    mov dword ptr [rip + font_cmap_subtable_offset], r15d
+    mov eax, dword ptr [rip + font_cmap_offset]
+    add eax, r15d
+    mov dword ptr [rip + font_cmap_subtable_offset], eax
     mov eax, dword ptr [rsp]
     mov dword ptr [rip + font_cmap_subtable_length], eax
     xor eax, eax
