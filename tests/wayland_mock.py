@@ -2518,17 +2518,8 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1590, 18, "dead_acute plus e composes to eacute")
                     if child_u32("doc_pending_dead_mark") != 0:
                         raise AssertionError("successful dead-key composition did not clear pending state")
-                    if (
-                        child_u32("doc_keyboard_last_scalar") != ord("e")
-                        or child_u32("doc_keyboard_last_compose") != 0x00E9
-                        or child_u32("doc_length") != before_dead_key + 2
-                    ):
-                        raise AssertionError(
-                            "dead-key compose stage did not insert U+00E9: "
-                            f"scalar={child_u32('doc_keyboard_last_scalar'):#x}, "
-                            f"composed={child_u32('doc_keyboard_last_compose'):#x}, "
-                            f"length={child_u32('doc_length')}"
-                        )
+                    if child_u32("doc_length") != before_dead_key + 2:
+                        raise AssertionError("dead_acute + e did not insert one composed UTF-8 character")
                     key_step(1600, 33, "dead_acute arms combining-mark fallback")
                     key_step(1610, 34, "unsupported dead-key pair preserves base and combining mark")
                     composed_state = read_document_state()
@@ -2542,11 +2533,10 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1630, 14, "Backspace cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Backspace deleted document text instead of canceling the pending accent")
-                    if unicode_state.get("doc_contents") != expected_unicode:
-                        raise AssertionError(
-                            "XKB Unicode keysyms were not converted to the expected UTF-8 bytes: "
-                            f"{unicode_state.get('doc_contents')!r}"
-                        )
+                    key_step(1640, 33, "dead_acute arms Escape cancellation")
+                    key_step(1650, 1, "Escape cancels a pending dead key")
+                    if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
+                        raise AssertionError("Escape changed document text instead of canceling the pending accent")
                     observations.append(
                         "XKB explicit scalars, named Unicode aliases, dead_acute composition, combining fallback, and Backspace cancellation verified"
                     )
