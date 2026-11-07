@@ -2812,9 +2812,49 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1850, 28, "accept save confirmation with Enter")
                     if child_u32("save_confirm_open") != 0:
                         raise AssertionError("Enter did not accept the save confirmation")
+                    with open(initial_file, "rb") as saved_file:
+                        if saved_file.read() != b"z":
+                            raise AssertionError("Enter did not write the accepted document")
+
+                    # Verify the on-screen Cancel and Save buttons as well as
+                    # the keyboard shortcuts used above.
+                    key_step(1860, 30, "append a after the accepted save")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1870, 1870, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1871, 1871, 31, 1))
+                    )
+                    workflow_redraw("open save dialog for pointer Cancel")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1872, 1872, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1873, 1873, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    workflow_click(484, 272, 1880, "pointer Cancel save dialog")
+                    if child_u32("save_confirm_open") != 0:
+                        raise AssertionError("pointer Cancel did not close the save dialog")
+                    with open(initial_file, "rb") as saved_file:
+                        if saved_file.read() != b"z":
+                            raise AssertionError("pointer Cancel modified the destination")
+
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1890, 1890, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1891, 1891, 31, 1))
+                    )
+                    workflow_redraw("open save dialog for pointer Save")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1892, 1892, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1893, 1893, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    workflow_click(316, 272, 1900, "pointer Save save dialog")
+                    if child_u32("save_confirm_open") != 0:
+                        raise AssertionError("pointer Save did not close the save dialog")
+                    with open(initial_file, "rb") as saved_file:
+                        if saved_file.read() != b"za":
+                            raise AssertionError("pointer Save did not write the confirmed document")
                     observations.append(
-                        "Settings toggles confirm-before-save; Ctrl+S shows a default-on modal, "
-                        "Escape leaves the file untouched, and Enter commits the save"
+                        "Settings toggles confirm-before-save; Ctrl+S shows a default-on modal; "
+                        "Escape and pointer Cancel leave the file untouched; Enter and pointer Save commit it"
                     )
                     client.sendall(wire_message(10, 1))
                     return
