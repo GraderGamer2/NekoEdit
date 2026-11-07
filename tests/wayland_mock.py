@@ -231,6 +231,7 @@ def run(
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
     word_navigation_test: bool = False,
+    line_navigation_test: bool = False,
     find_replace_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
@@ -551,7 +552,7 @@ def run(
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
                     or clipboard_test or history_test or horizontal_scroll_test or word_navigation_test
-                    or find_replace_test
+                    or line_navigation_test or find_replace_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -1632,6 +1633,53 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "Ctrl+F/Find query editing, Enter/F3 navigation, Ctrl+H replacement editing, "
                         "Replace Current, Replace All, and Escape verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if line_navigation_test:
+                    initial = read_document_state()
+                    if initial["doc_contents"] != b"first\nsecond\nthird":
+                        raise AssertionError("line navigation fixture contents mismatch")
+                    workflow_shortcut(2020, 102, "Ctrl+Home establishes paragraph-navigation start")
+                    workflow_shortcut(2030, 108, "Ctrl+Down moves to the second logical line")
+                    if child_u32("doc_cursor") != 6:
+                        raise AssertionError(f"Ctrl+Down did not move to byte 6: {child_u32('doc_cursor')}")
+                    workflow_shortcut(2040, 108, "Ctrl+Down moves to the third logical line")
+                    if child_u32("doc_cursor") != 13:
+                        raise AssertionError(f"second Ctrl+Down did not move to byte 13: {child_u32('doc_cursor')}")
+                    workflow_shortcut(2050, 103, "Ctrl+Up moves to the previous logical line")
+                    if child_u32("doc_cursor") != 6:
+                        raise AssertionError(f"Ctrl+Up did not return to byte 6: {child_u32('doc_cursor')}")
+                    workflow_shortcut(2060, 103, "Ctrl+Shift+Up selects the previous logical line", shift=True)
+                    if (
+                        child_u32("doc_cursor") != 0
+                        or child_u32("doc_selection_anchor") != 6
+                        or child_u32("doc_selection_active") != 1
+                    ):
+                        raise AssertionError(
+                            "Ctrl+Shift+Up did not select the previous logical line: "
+                            f"anchor={child_u32('doc_selection_anchor')}, cursor={child_u32('doc_cursor')}, "
+                            f"active={child_u32('doc_selection_active')}"
+                        )
+                    workflow_shortcut(2070, 107, "Ctrl+End moves to document end")
+                    if child_u32("doc_cursor") != 18 or child_u32("doc_selection_active") != 0:
+                        raise AssertionError("Ctrl+End failed after paragraph selection")
+                    workflow_shortcut(2080, 103, "Ctrl+Up returns to the second line")
+                    if child_u32("doc_cursor") != 6:
+                        raise AssertionError("Ctrl+Up did not return to the second line from the end")
+                    workflow_shortcut(2090, 103, "Ctrl+Up returns to the first line")
+                    if child_u32("doc_cursor") != 0:
+                        raise AssertionError("Ctrl+Up did not return to the document start")
+                    workflow_shortcut(2100, 108, "Ctrl+Shift+Down selects the next logical line", shift=True)
+                    if (
+                        child_u32("doc_cursor") != 6
+                        or child_u32("doc_selection_anchor") != 0
+                        or child_u32("doc_selection_active") != 1
+                    ):
+                        raise AssertionError("Ctrl+Shift+Down did not extend selection to the next line")
+                    observations.append(
+                        "Ctrl+Up/Down logical-line navigation and Shift-extended paragraph selection verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -5273,6 +5321,17 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(find_path)
+        except FileNotFoundError:
+            pass
+
+    line_fd, line_path = tempfile.mkstemp(prefix="nekoedit-line-navigation-")
+    try:
+        with os.fdopen(line_fd, "wb") as document:
+            document.write(b"first\nsecond\nthird")
+        run(sys.argv[1], initial_file=line_path, line_navigation_test=True)
+    finally:
+        try:
+            os.unlink(line_path)
         except FileNotFoundError:
             pass
 
