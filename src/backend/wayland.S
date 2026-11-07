@@ -1941,6 +1941,21 @@ window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
 window_doc_columns:     .long 0
 window_doc_pixel_width: .long 0
+.global doc_pointer_debug_input_x, doc_pointer_debug_output
+.global doc_pointer_debug_map_x, doc_pointer_debug_midpoint
+.global doc_pointer_debug_codepoint, doc_pointer_debug_advance
+doc_pointer_debug_input_x: .long 0
+doc_pointer_debug_output: .long 0
+doc_pointer_debug_map_x: .long 0
+doc_pointer_debug_midpoint: .long 0
+doc_pointer_debug_codepoint: .long 0
+doc_pointer_debug_advance: .long 0
+.global doc_visual_debug_map_x, doc_visual_debug_midpoint
+.global doc_visual_debug_codepoint, doc_visual_debug_advance
+doc_visual_debug_map_x: .long 0
+doc_visual_debug_midpoint: .long 0
+doc_visual_debug_codepoint: .long 0
+doc_visual_debug_advance: .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
@@ -9863,8 +9878,11 @@ doc_offset_to_visual_indexed:
     mov edi, r13d
     call doc_utf8_decode_at
 .Ldoc_offset_indexed_ascii:
+    mov dword ptr [rip + doc_visual_debug_codepoint], eax
     mov edi, eax
     call font_codepoint_advance_pixels
+    mov dword ptr [rip + doc_visual_debug_map_x], r14d
+    mov dword ptr [rip + doc_visual_debug_advance], eax
     lea edx, [r14d + eax]
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_offset_indexed_glyph_fit
@@ -9949,6 +9967,7 @@ doc_visual_to_offset_indexed:
     sub rsp, 8
     mov r12d, edi
     mov ebp, esi
+    mov dword ptr [rip + doc_visual_debug_map_x], r14d
     mov edi, r12d
     mov esi, DOC_INDEX_ROW_TREE_OFFSET
     call doc_line_index_find_prefix
@@ -9997,6 +10016,7 @@ doc_visual_to_offset_indexed:
     mov edx, eax
     shr edx, 1
     add edx, r14d
+    mov dword ptr [rip + doc_visual_debug_midpoint], edx
     cmp ebp, edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_glyph:
@@ -10460,6 +10480,7 @@ doc_place_cursor_from_pointer:
     xor eax, eax
 .Lneko_pointer_x_nonnegative:
     mov esi, eax
+    mov dword ptr [rip + doc_pointer_debug_input_x], esi
     mov eax, dword ptr [rip + pointer_y]
     sub eax, DOC_TOP
     test eax, eax
@@ -10472,6 +10493,16 @@ doc_place_cursor_from_pointer:
     add eax, dword ptr [rip + doc_view_top_row]
     mov edi, eax
     call doc_visual_to_offset
+    mov dword ptr [rip + doc_pointer_debug_output], eax
+    mov eax, dword ptr [rip + doc_visual_debug_map_x]
+    mov dword ptr [rip + doc_pointer_debug_map_x], eax
+    mov eax, dword ptr [rip + doc_visual_debug_midpoint]
+    mov dword ptr [rip + doc_pointer_debug_midpoint], eax
+    mov eax, dword ptr [rip + doc_visual_debug_codepoint]
+    mov dword ptr [rip + doc_pointer_debug_codepoint], eax
+    mov eax, dword ptr [rip + doc_visual_debug_advance]
+    mov dword ptr [rip + doc_pointer_debug_advance], eax
+    mov eax, dword ptr [rip + doc_pointer_debug_output]
     mov dword ptr [rip + doc_cursor], eax
     ret
 .size doc_place_cursor_from_pointer, . - doc_place_cursor_from_pointer
