@@ -1048,7 +1048,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_columns", "window_doc_visible_rows", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -1651,6 +1651,19 @@ xkb_symbols "nekoedit-sparse" {
                         or max_state.get("window_stride") != 7680
                         or max_state.get("window_buffer_id") != resize_buffer_base
                         or max_state.get("window_is_maximized") != 1
+                        or max_state.get("window_status_top") != 1060
+                        or max_state.get("window_status_bytes_x") != 1180
+                        or max_state.get("window_status_mode_x") != 1864
+                        or max_state.get("window_doc_columns") != 237
+                        or max_state.get("window_doc_visible_rows") != 80
+                        or max_state.get("picker_panel_x") != 600
+                        or max_state.get("picker_panel_y") != 336
+                        or max_state.get("picker_panel_width") != 720
+                        or max_state.get("picker_panel_height") != 408
+                        or max_state.get("path_prompt_x") != 608
+                        or max_state.get("path_prompt_y") != 448
+                        or max_state.get("path_prompt_width") != 704
+                        or max_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"maximized configure was not applied: {max_state!r}")
                     max_close_pixel = struct.unpack_from("<I", pixels, 4 * 7680 + 1880 * 4)[0]
@@ -1694,6 +1707,19 @@ xkb_symbols "nekoedit-sparse" {
                         or restored_state.get("window_height") != 480
                         or restored_state.get("window_buffer_id") != resize_buffer_base + 1
                         or restored_state.get("window_is_maximized") != 0
+                        or restored_state.get("window_status_top") != 460
+                        or restored_state.get("window_status_bytes_x") != 480
+                        or restored_state.get("window_status_mode_x") != 744
+                        or restored_state.get("window_doc_columns") != 97
+                        or restored_state.get("window_doc_visible_rows") != 30
+                        or restored_state.get("picker_panel_x") != 40
+                        or restored_state.get("picker_panel_y") != 36
+                        or restored_state.get("picker_panel_width") != 720
+                        or restored_state.get("picker_panel_height") != 408
+                        or restored_state.get("path_prompt_x") != 48
+                        or restored_state.get("path_prompt_y") != 148
+                        or restored_state.get("path_prompt_width") != 704
+                        or restored_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
                     observations.append(
@@ -1773,6 +1799,19 @@ xkb_symbols "nekoedit-sparse" {
                         or edge_state.get("window_stride") != 2880
                         or edge_state.get("window_buffer_id") != resize_buffer_base + 2
                         or edge_state.get("window_is_maximized") != 0
+                        or edge_state.get("window_status_top") != 460
+                        or edge_state.get("window_status_bytes_x") != 430
+                        or edge_state.get("window_status_mode_x") != 664
+                        or edge_state.get("window_doc_columns") != 87
+                        or edge_state.get("window_doc_visible_rows") != 30
+                        or edge_state.get("picker_panel_x") != 16
+                        or edge_state.get("picker_panel_y") != 36
+                        or edge_state.get("picker_panel_width") != 688
+                        or edge_state.get("picker_panel_height") != 408
+                        or edge_state.get("path_prompt_x") != 16
+                        or edge_state.get("path_prompt_y") != 148
+                        or edge_state.get("path_prompt_width") != 688
+                        or edge_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
                     client.sendall(wire_message(resize_buffer_base + 2, 0))

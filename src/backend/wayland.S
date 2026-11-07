@@ -275,7 +275,7 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_columns, window_doc_visible_rows, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -403,10 +403,10 @@ ui_transform_base_x:    .long 0
 ui_transform_base_y:    .long 0
 ui_transform_origin_x: .long 0
 ui_transform_origin_y: .long 0
-ui_transform_x_num:     .long 1
-ui_transform_x_den:     .long 1
-ui_transform_y_num:     .long 1
-ui_transform_y_den:     .long 1
+ui_transform_x_num:     .long 0
+ui_transform_x_den:     .long 0
+ui_transform_y_num:     .long 0
+ui_transform_y_den:     .long 0
 picker_dirents:         .zero PICKER_DIR_BYTES
 picker_stat_buffer:     .zero 144
 picker_entries:         .zero (PICKER_MAX_ENTRIES * PICKER_ENTRY_SIZE)
