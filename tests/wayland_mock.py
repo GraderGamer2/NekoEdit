@@ -125,9 +125,11 @@ def synthetic_true_type_font() -> bytes:
     quadratic_glyph = (
         struct.pack(">5h", 1, 100, 0, 300, 400)
         + struct.pack(">2H", 3, 0)
-        + bytes((0x31, 0x30, 0x30, 0x21))
-        + struct.pack(">4h", 100, 200, 0, -200)
-        + struct.pack(">4h", 0, 0, 400, 0)
+        # p0: signed X word +100, zero Y; p1: positive X byte +200,
+        # zero Y; p2: zero X, signed Y word +400; p3: signed X word -200,
+        # zero Y. This leaves two successive off-curve controls at p1/p2.
+        + bytes((0x21, 0x32, 0x10, 0x21))
+        + struct.pack(">hBhh", 100, 200, -200, 400)
     )
     glyphs = (b"", glyph_a, composite_xy, composite_scaled,
               composite_point_match, composite_cycle, composite_anisotropic,
