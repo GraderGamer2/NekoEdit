@@ -146,6 +146,9 @@
 xkb_key_names:          .zero 1024        # 256 XKB keycodes, four-byte names
 .global xkb_ascii_levels
 xkb_ascii_levels:       .zero 16384       # 256 codes * 4 groups * 4 levels
+.balign 16
+.global xkb_unicode_levels
+xkb_unicode_levels:     .zero 65536       # 256 codes * 4 groups * 4 levels, uint32 scalars
 .global xkb_key_types
 xkb_key_types:          .zero 256         # bit 0: alphabetic, bit 1: level-three
 .global xkb_keymap_ready
@@ -163,6 +166,9 @@ xkb_reset_keymap:
     rep stosb
     lea rdi, [rip + xkb_ascii_levels]
     mov ecx, 16384
+    rep stosb
+    lea rdi, [rip + xkb_unicode_levels]
+    mov ecx, 65536
     rep stosb
     lea rdi, [rip + xkb_key_types]
     mov ecx, 256
@@ -730,6 +736,80 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_keysym_ascii, . - .Lxkb_keysym_ascii
 
+# Convert a printable ASCII or XKB Unicode keysym token to a Unicode scalar.
+# XKB's Uxxxx/Uxxxxx/Uxxxxxx forms are accepted; invalid scalars return zero.
+.type .Lxkb_keysym_unicode, @function
+.Lxkb_keysym_unicode:
+    push rbx
+    push r12
+    push r13
+    mov ecx, dword ptr [rip + .Lxkb_token_length]
+    cmp ecx, 5
+    jb .Lxkb_unicode_ascii
+    cmp ecx, 7
+    ja .Lxkb_unicode_ascii
+    lea rbx, [rip + .Lxkb_token]
+    cmp byte ptr [rbx], 'U'
+    jne .Lxkb_unicode_ascii
+    inc rbx
+    lea r13d, [rcx - 1]
+    xor r12d, r12d
+.Lxkb_unicode_hex_loop:
+    movzx eax, byte ptr [rbx]
+    cmp al, '0'
+    jb .Lxkb_unicode_hex_lower
+    cmp al, '9'
+    jbe .Lxkb_unicode_hex_digit
+.Lxkb_unicode_hex_lower:
+    cmp al, 'a'
+    jb .Lxkb_unicode_hex_upper
+    cmp al, 'f'
+    jbe .Lxkb_unicode_hex_alpha
+.Lxkb_unicode_hex_upper:
+    cmp al, 'A'
+    jb .Lxkb_unicode_invalid
+    cmp al, 'F'
+    ja .Lxkb_unicode_invalid
+    sub eax, 'A' - 10
+    jmp .Lxkb_unicode_hex_accumulate
+.Lxkb_unicode_hex_alpha:
+    sub eax, 'a' - 10
+    jmp .Lxkb_unicode_hex_accumulate
+.Lxkb_unicode_hex_digit:
+    sub eax, '0'
+.Lxkb_unicode_hex_accumulate:
+    shl r12d, 4
+    add r12d, eax
+    inc rbx
+    dec r13d
+    jnz .Lxkb_unicode_hex_loop
+    cmp r12d, 0x10ffff
+    ja .Lxkb_unicode_invalid
+    cmp r12d, 0x20
+    jb .Lxkb_unicode_invalid
+    cmp r12d, 0x7f
+    jb .Lxkb_unicode_valid
+    cmp r12d, 0x9f
+    jbe .Lxkb_unicode_invalid
+    cmp r12d, 0xd800
+    jb .Lxkb_unicode_valid
+    cmp r12d, 0xdfff
+    jbe .Lxkb_unicode_invalid
+.Lxkb_unicode_valid:
+    mov eax, r12d
+    jmp .Lxkb_unicode_done
+.Lxkb_unicode_ascii:
+    call .Lxkb_keysym_ascii
+    jmp .Lxkb_unicode_done
+.Lxkb_unicode_invalid:
+    xor eax, eax
+.Lxkb_unicode_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_keysym_unicode, . - .Lxkb_keysym_unicode
+
 # Parse the symbols array following symbols[GroupN] = [ ... ].
 .type .Lxkb_parse_symbol_array, @function
 .Lxkb_parse_symbol_array:
@@ -767,19 +847,28 @@ xkb_reset_keymap:
     je .Lxkb_symbol_array_success
     cmp eax, ','
     je .Lxkb_symbol_array_loop
-    call .Lxkb_keysym_ascii
+    call .Lxkb_keysym_unicode
     mov r12d, eax
     mov eax, dword ptr [rip + .Lxkb_level]
     cmp eax, 4
     jae .Lxkb_symbol_array_advance
     mov r13d, dword ptr [rip + .Lxkb_keycode]
     mov r14d, dword ptr [rip + .Lxkb_group]
-    lea rbx, [rip + xkb_ascii_levels]
     shl r13d, 4
-    lea rbx, [rbx + r13]
+    lea eax, [r13d + r14d*4]
+    add eax, dword ptr [rip + .Lxkb_level]
+    lea rbx, [rip + xkb_unicode_levels]
+    mov dword ptr [rbx + rax*4], r12d
+    # Keep the legacy byte table for existing ASCII layout heuristics and
+    # callers; non-ASCII symbols are retained in the parallel scalar table.
+    lea rbx, [rip + xkb_ascii_levels]
+    add rbx, r13
     lea rbx, [rbx + r14*4]
     mov eax, dword ptr [rip + .Lxkb_level]
+    cmp r12d, 0x7e
+    ja .Lxkb_symbol_array_ascii_done
     mov byte ptr [rbx + rax], r12b
+.Lxkb_symbol_array_ascii_done:
     test r12d, r12d
     jz .Lxkb_symbol_array_advance
     inc dword ptr [rip + .Lxkb_symbol_count]
@@ -1121,5 +1210,77 @@ xkb_lookup_ascii:
     pop rbx
     ret
 .size xkb_lookup_ascii, . - xkb_lookup_ascii
+
+# RDI=evdev keycode, ESI=Shift, EDX=Caps, ECX=LevelThree, R8D=group.
+# Returns an XKB Unicode keysym scalar or zero.
+.global xkb_lookup_unicode
+.type xkb_lookup_unicode, @function
+xkb_lookup_unicode:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + xkb_keymap_ready], 1
+    jne .Lxkb_unicode_lookup_none
+    cmp edi, 247
+    ja .Lxkb_unicode_lookup_none
+    lea r12d, [rdi + 8]
+    mov r13d, esi
+    mov r14d, edx
+    mov r15d, ecx
+    mov ebx, r8d
+    cmp ebx, 3
+    jbe .Lxkb_unicode_group_ready
+    xor ebx, ebx
+.Lxkb_unicode_group_ready:
+    lea rax, [rip + xkb_key_types]
+    movzx eax, byte ptr [rax + r12]
+    test eax, 4
+    jnz .Lxkb_unicode_level_one
+    test eax, 1
+    jz .Lxkb_unicode_caps_done
+    xor r13d, r14d
+.Lxkb_unicode_caps_done:
+    and r13d, 1
+    test eax, 2
+    jz .Lxkb_unicode_level_done
+    test r15d, r15d
+    jz .Lxkb_unicode_level_done
+    add r13d, 2
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_level_one:
+    xor r13d, r13d
+.Lxkb_unicode_level_done:
+.Lxkb_unicode_level_ready:
+    mov eax, r12d
+    shl eax, 4
+    add eax, ebx
+    lea rdx, [rip + xkb_unicode_levels]
+    lea rdx, [rdx + rax*4]
+    movzx eax, r13d
+    mov eax, dword ptr [rdx + rax*4]
+    test eax, eax
+    jnz .Lxkb_unicode_lookup_done
+    # Preserve the same Group1 retry used by the ASCII lookup path.
+    test ebx, ebx
+    jz .Lxkb_unicode_lookup_done
+    mov eax, r12d
+    shl eax, 4
+    lea rdx, [rip + xkb_unicode_levels]
+    add rdx, rax
+    movzx eax, r13d
+    mov eax, dword ptr [rdx + rax*4]
+    jmp .Lxkb_unicode_lookup_done
+.Lxkb_unicode_lookup_none:
+    xor eax, eax
+.Lxkb_unicode_lookup_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size xkb_lookup_unicode, . - xkb_lookup_unicode
 
 .section .note.GNU-stack,"",@progbits
