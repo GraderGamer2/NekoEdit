@@ -1326,8 +1326,12 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(serial + 2, evdev["g"], "edit after cancelling Save As")
                     workflow_shortcut(serial + 4, 31, "save after cancelled Save As")
                     with open(menu_saveas, "rb") as saved:
-                        if saved.read() != b"zabcdef":
-                            raise AssertionError("cancelled Save As changed the active destination")
+                        cancelled_save_bytes = saved.read()
+                    if cancelled_save_bytes != b"zabcdef":
+                        raise AssertionError(
+                            "cancelled Save As changed the active destination: "
+                            f"expected {b'zabcdef'!r}, got {cancelled_save_bytes!r}; state={picker_state()!r}"
+                        )
                     if os.path.exists(os.path.join(runtime_dir, "cancelled.txt")):
                         raise AssertionError("Escape unexpectedly created the cancelled Save As path")
                     observations.append("missing Open rollback, failed Save As rollback, and Escape cancellation verified")
