@@ -2,6 +2,8 @@ AS       ?= as
 LD       ?= ld
 READELF  ?= readelf
 PYTHON   ?= python3
+CC       ?= cc
+CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 
@@ -9,7 +11,8 @@ ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
 
 SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
-OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES))
+C_SOURCES := src/font/rasterizer.c
+OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
 .PHONY: all clean test test-wayland check inspect
 
@@ -22,6 +25,10 @@ $(APP_BINARY): $(OBJECTS)
 $(BUILD_DIR)/%.o: src/%.S
 	@mkdir -p $(@D)
 	$(AS) $(ASFLAGS) -o $@ $<
+
+$(BUILD_DIR)/%.o: src/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 check: $(APP_BINARY)
 	@if $(READELF) -l $(APP_BINARY) | grep -q 'INTERP'; then \
