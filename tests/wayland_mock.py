@@ -84,6 +84,7 @@ def run(
     utf8_pointer_test: bool = False,
     gap_buffer_test: bool = False,
     dynamic_growth_test: bool = False,
+    line_index_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -745,8 +746,11 @@ xkb_symbols "nekoedit-sparse" {
                 for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                     fields = symbol_line.split()
                     if len(fields) == 3 and fields[2] in {
-                        "doc_length", "doc_buffer", "doc_capacity",
+                        "doc_length", "doc_buffer", "doc_capacity", "doc_cursor",
                         "doc_gap_start", "doc_gap_end", "doc_storage_error",
+                        "doc_line_index_base", "doc_line_index_bytes",
+                        "doc_line_index_capacity", "doc_line_count",
+                        "doc_line_index_valid", "doc_line_index_columns",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
 
@@ -754,9 +758,12 @@ xkb_symbols "nekoedit-sparse" {
                     with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
                         fd = memory.fileno()
                         state: dict[str, object] = {}
-                        for name in ("doc_length", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error"):
-                            state[name] = struct.unpack("<I", os.pread(fd, 4, document_symbols[name]))[0]
-                        pointer = struct.unpack("<Q", os.pread(fd, 8, document_symbols["doc_buffer"]))[0]
+                        qword_names = {"doc_buffer", "doc_line_index_base", "doc_line_index_bytes"}
+                        for name in document_symbols:
+                            size = 8 if name in qword_names else 4
+                            raw = os.pread(fd, size, document_symbols[name])
+                            state[name] = struct.unpack("<Q" if size == 8 else "<I", raw)[0]
+                        pointer = state["doc_buffer"]
                         state["doc_buffer_pointer"] = pointer
                         state["doc_buffer"] = os.pread(fd, 64, pointer) if pointer else b""
                         if pointer:
@@ -766,6 +773,18 @@ xkb_symbols "nekoedit-sparse" {
                             state["doc_contents"] = prefix + suffix
                         else:
                             state["doc_contents"] = b""
+                        index_pointer = state.get("doc_line_index_base", 0)
+                        line_count = state.get("doc_line_count", 0)
+                        if index_pointer and line_count:
+                            raw_records = os.pread(fd, line_count * 16, index_pointer)
+                            if len(raw_records) != line_count * 16:
+                                raise AssertionError("short read from document line-index mapping")
+                            state["doc_line_index_records"] = [
+                                struct.unpack_from("<IIII", raw_records, index * 16)
+                                for index in range(line_count)
+                            ]
+                        else:
+                            state["doc_line_index_records"] = []
                         return state
 
                 def key_step(serial: int, code: int, label: str) -> None:
@@ -967,6 +986,74 @@ xkb_symbols "nekoedit-sparse" {
                     "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
                     ".": 52, "/": 53, "-": 12,
                 }
+
+                if line_index_test:
+                    fixture = (
+                        b"alpha\n"
+                        + (b"x" * 100)
+                        + b"\n\tz"
+                    )
+
+                    def assert_index(
+                        label: str, expected_contents: bytes,
+                        expected_spans: tuple[int, ...], expected_rows: tuple[int, ...],
+                    ) -> None:
+                        state = read_document_state()
+                        if state["doc_contents"] != expected_contents:
+                            raise AssertionError(
+                                label + ": logical bytes changed: " + repr(state["doc_contents"])
+                            )
+                        records = state["doc_line_index_records"]
+                        if (
+                            state["doc_line_index_valid"] != 1
+                            or state["doc_line_count"] != len(expected_spans)
+                            or len(records) != len(expected_spans)
+                        ):
+                            raise AssertionError(label + ": index is not valid/current: " + repr(state))
+                        actual_spans = tuple(record[0] for record in records)
+                        actual_rows = tuple(record[1] for record in records)
+                        if actual_spans != expected_spans or actual_rows != expected_rows:
+                            raise AssertionError(
+                                label + ": per-line metadata mismatch; "
+                                + repr((actual_spans, actual_rows, state))
+                            )
+                        expected_byte_nodes = []
+                        expected_row_nodes = []
+                        for end in range(1, len(expected_spans) + 1):
+                            lowbit = end & -end
+                            expected_byte_nodes.append(sum(expected_spans[end - lowbit:end]))
+                            expected_row_nodes.append(sum(expected_rows[end - lowbit:end]))
+                        actual_byte_nodes = tuple(record[2] for record in records)
+                        actual_row_nodes = tuple(record[3] for record in records)
+                        if (
+                            actual_byte_nodes != tuple(expected_byte_nodes)
+                            or actual_row_nodes != tuple(expected_row_nodes)
+                        ):
+                            raise AssertionError(
+                                label + ": Fenwick nodes mismatch; "
+                                + repr((actual_byte_nodes, tuple(expected_byte_nodes),
+                                        actual_row_nodes, tuple(expected_row_nodes)))
+                            )
+                        if sum(expected_spans) != len(expected_contents):
+                            raise AssertionError(label + ": line spans do not cover the document")
+
+                    assert_index("initial rebuild", fixture, (6, 101, 2), (1, 2, 1))
+                    key_step(1300, 30, "insert ordinary byte into indexed first line")
+                    after_insert = b"a" + fixture
+                    assert_index("ordinary insertion", after_insert, (7, 101, 2), (1, 2, 1))
+                    key_step(1302, 14, "Backspace ordinary byte from indexed first line")
+                    assert_index("ordinary deletion", fixture, (6, 101, 2), (1, 2, 1))
+                    key_step(1304, 28, "split indexed logical line with Enter")
+                    split = b"\n" + fixture
+                    assert_index("newline split", split, (1, 6, 101, 2), (1, 1, 2, 1))
+                    key_step(1306, 14, "merge indexed logical lines with Backspace")
+                    assert_index("newline merge", fixture, (6, 101, 2), (1, 2, 1))
+                    workflow_shortcut(1310, 31, "save after indexed edit round-trip")
+                    observations.append(
+                        "document line index rebuilt from mixed hard/soft-wrapped lines; ordinary insertion/deletion point-updated Fenwick trees; Enter split and Backspace merge rebuilt line records and prefix trees"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if punctuation_render_test:
                     # Every printable ASCII punctuation character must have
@@ -3254,6 +3341,26 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(growth_path)
+        except FileNotFoundError:
+            pass
+
+    # Validate per-line byte spans, wrapped visual-row counts and both
+    # Fenwick trees across ordinary edits and newline split/merge operations.
+    index_fd, index_path = tempfile.mkstemp(prefix="nekoedit-line-index-")
+    index_fixture = b"alpha\n" + (b"x" * 100) + b"\n\tz"
+    try:
+        with os.fdopen(index_fd, "wb") as index_file:
+            index_file.write(index_fixture)
+        run(
+            sys.argv[1],
+            initial_file=index_path,
+            save_roundtrip=True,
+            expected_saved_bytes=index_fixture,
+            line_index_test=True,
+        )
+    finally:
+        try:
+            os.unlink(index_path)
         except FileNotFoundError:
             pass
 
