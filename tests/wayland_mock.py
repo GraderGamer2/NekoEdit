@@ -741,6 +741,33 @@ xkb_symbols "nekoedit-sparse" {
                 keyboard_events += wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
                 client.sendall(keyboard_events)
 
+                document_symbols = {}
+                for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                    fields = symbol_line.split()
+                    if len(fields) == 3 and fields[2] in {
+                        "doc_length", "doc_buffer", "doc_capacity",
+                        "doc_gap_start", "doc_gap_end", "doc_storage_error",
+                    }:
+                        document_symbols[fields[2]] = int(fields[0], 16)
+
+                def read_document_state() -> dict[str, object]:
+                    with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                        fd = memory.fileno()
+                        state: dict[str, object] = {}
+                        for name in ("doc_length", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error"):
+                            state[name] = struct.unpack("<I", os.pread(fd, 4, document_symbols[name]))[0]
+                        pointer = struct.unpack("<Q", os.pread(fd, 8, document_symbols["doc_buffer"]))[0]
+                        state["doc_buffer_pointer"] = pointer
+                        state["doc_buffer"] = os.pread(fd, 64, pointer) if pointer else b""
+                        if pointer:
+                            prefix = os.pread(fd, state["doc_gap_start"], pointer)
+                            suffix_length = state["doc_length"] - state["doc_gap_start"]
+                            suffix = os.pread(fd, suffix_length, pointer + state["doc_gap_end"])
+                            state["doc_contents"] = prefix + suffix
+                        else:
+                            state["doc_contents"] = b""
+                        return state
+
                 def key_step(serial: int, code: int, label: str) -> None:
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", serial, serial, code, 1))
@@ -2141,7 +2168,7 @@ xkb_symbols "nekoedit-sparse" {
                     # An exact-capacity document starts with no free gap.
                     # Inserting at its beginning must grow and relocate the
                     # suffix without changing its logical contents.
-                    before_growth = picker_state()
+                    before_growth = read_document_state()
                     if (
                         before_growth.get("doc_length") != 65536
                         or before_growth.get("doc_capacity") != 65536
@@ -2152,7 +2179,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"exact-capacity initial document was not loaded contiguously: {before_growth!r}"
                         )
                     key_step(1240, 44, "insert z to grow an exhausted 64 KiB gap")
-                    after_growth = picker_state()
+                    after_growth = read_document_state()
                     expected_contents = b"z" + (b"a" * 65536)
                     if (
                         after_growth.get("doc_length") != 65537
