@@ -8478,22 +8478,25 @@ window_update_layout_geometry:
     xor edx, edx
     mov ecx, 10
     div ecx
+    mov r8d, eax
     mov ebx, dword ptr [rip + window_width]
     sub ebx, 32
-    cmp eax, ebx
+    cmp r8d, ebx
     jbe .window_layout_settings_width_available
-    mov eax, ebx
+    mov r8d, ebx
 .window_layout_settings_width_available:
     mov ebx, dword ptr [rip + window_height]
     sub ebx, 40
     imul ebx, 256
+    mov eax, ebx
     xor edx, edx
     mov ecx, 168
     div ecx
-    cmp eax, ebx
+    cmp r8d, eax
     jbe .window_layout_settings_scale_ready
-    mov eax, ebx
+    mov r8d, eax
 .window_layout_settings_scale_ready:
+    mov eax, r8d
     mov dword ptr [rip + settings_panel_width], eax
     imul eax, 168
     xor edx, edx
@@ -8526,22 +8529,25 @@ window_update_layout_geometry:
     xor edx, edx
     mov ecx, 10
     div ecx
+    mov r8d, eax
     mov ebx, dword ptr [rip + window_width]
     sub ebx, 32
-    cmp eax, ebx
+    cmp r8d, ebx
     jbe .window_layout_find_width_available
-    mov eax, ebx
+    mov r8d, ebx
 .window_layout_find_width_available:
     mov ebx, dword ptr [rip + window_height]
     sub ebx, 32
     imul ebx, 448
+    mov eax, ebx
     xor edx, edx
     mov ecx, 192
     div ecx
-    cmp eax, ebx
+    cmp r8d, eax
     jbe .window_layout_find_scale_ready
-    mov eax, ebx
+    mov r8d, eax
 .window_layout_find_scale_ready:
+    mov eax, r8d
     mov dword ptr [rip + find_panel_width], eax
     imul eax, 192
     xor edx, edx
