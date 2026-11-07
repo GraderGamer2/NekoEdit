@@ -2012,7 +2012,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     serial = 2700
                     for index in range(6):
-                        workflow_click(200, 12, serial, f"open Settings for font-size increase {index + 1}")
+                        workflow_click(200, 20, serial, f"open Settings for font-size increase {index + 1}")
                         workflow_click(400, 68, serial + 10, f"increase document font size {index + 1}")
                         serial += 20
                     if (
@@ -2035,7 +2035,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     for index in range(6):
-                        workflow_click(200, 12, serial, f"open Settings for font-size decrease {index + 1}")
+                        workflow_click(200, 20, serial, f"open Settings for font-size decrease {index + 1}")
                         workflow_click(360, 68, serial + 10, f"decrease document font size {index + 1}")
                         serial += 20
                     if (
