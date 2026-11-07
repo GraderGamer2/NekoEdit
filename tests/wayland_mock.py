@@ -1445,6 +1445,11 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("second Ctrl+Z did not restore the original bytes")
                     if child_u32("doc_cursor") != 3:
                         raise AssertionError("undo did not restore the pre-edit caret offset")
+                    if child_u32("doc_selection_active") != 1:
+                        raise AssertionError("undo did not restore the pre-edit active selection")
+                    key_step(2045, 106, "Right Arrow collapses the restored selection")
+                    if child_u32("doc_selection_active") != 0:
+                        raise AssertionError("Right Arrow did not collapse the restored selection")
                     key_step(2050, 16, "type q after undo to create a new history branch")
                     branch_state = read_document_state()["doc_contents"]
                     if branch_state != b"abcq":
