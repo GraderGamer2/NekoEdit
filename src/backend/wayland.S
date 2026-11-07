@@ -8147,6 +8147,7 @@ render_surface:
 
     call doc_scrollbar_geometry
     call doc_hscrollbar_geometry
+    call render_find_highlights
     call render_selection
     call render_document
     call render_document_scrollbar
@@ -14608,6 +14609,94 @@ draw_document_selection_rect:
     pop rbx
     ret
 .size draw_document_selection_rect, . - draw_document_selection_rect
+
+# Paint every literal query occurrence in the document. The active match is
+# subsequently overpainted by render_selection, so the current result remains
+# visually distinct while all other occurrences stay highlighted.
+.type render_find_highlights, @function
+render_find_highlights:
+    cmp dword ptr [rip + find_replace_mode], 0
+    je .Lrender_find_highlights_done
+    cmp dword ptr [rip + find_query_length], 0
+    je .Lrender_find_highlights_done
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+    mov r14d, dword ptr [rip + find_query_length]
+    xor r12d, r12d
+.Lrender_find_highlights_next_match:
+    # Start one byte after the previous result so overlapping occurrences
+    # are highlighted too. A wrapped result below the scan point ends the pass.
+    mov edi, r12d
+    mov esi, 1
+    call doc_find_match
+    test eax, eax
+    js .Lrender_find_highlights_finish
+    cmp eax, r12d
+    jb .Lrender_find_highlights_finish
+    mov r13d, eax
+    lea r12d, [rax + 1]
+    xor r15d, r15d
+.Lrender_find_highlights_match_bytes:
+    cmp r15d, r14d
+    jae .Lrender_find_highlights_next_match
+    mov eax, r13d
+    add eax, r15d
+    mov dword ptr [rsp], eax
+    mov edi, eax
+    call doc_offset_to_visual
+    mov dword ptr [rsp + 4], eax
+    mov dword ptr [rsp + 8], edx
+    # Find currently accepts ASCII keymap text, so each query byte is one
+    # document glyph; use the active font's real proportional advance.
+    mov edi, dword ptr [rsp]
+    call doc_byte_at
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    mov dword ptr [rsp + 12], eax
+
+    mov eax, dword ptr [rsp + 4]
+    sub eax, dword ptr [rip + doc_view_top_row]
+    test eax, eax
+    js .Lrender_find_highlights_advance
+    cmp eax, dword ptr [rip + window_doc_visible_rows]
+    jae .Lrender_find_highlights_advance
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov dword ptr [rsp + 16], eax
+
+    mov eax, dword ptr [rsp + 8]
+    add eax, DOC_LEFT
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Lrender_find_highlights_x_ready
+    sub eax, dword ptr [rip + doc_view_left_px]
+.Lrender_find_highlights_x_ready:
+    mov dword ptr [rsp + 20], eax
+
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, dword ptr [rsp + 20]
+    mov edx, dword ptr [rsp + 16]
+    mov ecx, dword ptr [rsp + 12]
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    mov r9d, 0xff8f7834
+    call draw_document_selection_rect
+.Lrender_find_highlights_advance:
+    inc r15d
+    jmp .Lrender_find_highlights_match_bytes
+
+.Lrender_find_highlights_finish:
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+.Lrender_find_highlights_done:
+    ret
+.size render_find_highlights, . - render_find_highlights
 
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
