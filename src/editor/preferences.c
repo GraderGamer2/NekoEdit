@@ -390,10 +390,19 @@ int preferences_load(void)
 void preferences_set_font_path(const char *path)
 {
     uint32_t length = bounded_length(path, PATH_CAPACITY);
+    uint32_t i;
     if (!path || !length || length >= PATH_CAPACITY || path[0] != '/') {
         preferences_font_path_ptr = (char *)0;
         saved_font_path[0] = 0;
         return;
+    }
+    /* The line-oriented on-disk format cannot represent newline characters. */
+    for (i = 0; i < length; ++i) {
+        if (path[i] == '\n' || path[i] == '\r') {
+            preferences_font_path_ptr = (char *)0;
+            saved_font_path[0] = 0;
+            return;
+        }
     }
     if (copy_text(saved_font_path, PATH_CAPACITY, path, length))
         preferences_font_path_ptr = saved_font_path;
