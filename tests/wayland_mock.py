@@ -1353,7 +1353,22 @@ xkb_symbols "nekoedit-sparse" {
                             "dragging bottom scrollbar did not advance the document viewport: "
                             f"before={state['doc_view_left_px']}, after={dragged_state['doc_view_left_px']}"
                         )
-                    workflow_click(40, 98, 3140, "pointer hit-testing with horizontal offset")
+                    before_shift_wheel = dragged_state["doc_view_left_px"]
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 3141, 3141, 42, 1))
+                    )
+                    workflow_axis(0, -14 * 256, 3142, "Shift+vertical wheel scrolls horizontally")
+                    after_shift_wheel = read_document_state()["doc_view_left_px"]
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 3144, 3144, 42, 0))
+                        + wire_message(12, 0)
+                    )
+                    if after_shift_wheel != max(0, before_shift_wheel - 14):
+                        raise AssertionError(
+                            "Shift+vertical wheel did not scroll the no-wrap viewport left by 14px: "
+                            f"before={before_shift_wheel}, after={after_shift_wheel}"
+                        )
+                    workflow_click(40, 98, 3145, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
                         raise AssertionError(
