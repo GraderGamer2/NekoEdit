@@ -945,7 +945,7 @@
     .byte 10
     .ascii "numerosign"
     .long 0x2116
-    .byte 10
+    .byte 9
     .ascii "Multi_key"
     .long 0x110007
     .byte 10
