@@ -8754,7 +8754,7 @@ doc_line_index_measure_rows:
 .Ldoc_index_measure_ascii:
     mov edi, eax
     call font_codepoint_advance_pixels
-    lea edx, [rbx + eax]
+    lea edx, [ebx + eax]
     cmp edx, r15d
     jbe .Ldoc_index_measure_glyph_fit
     inc r14d
@@ -9739,7 +9739,7 @@ doc_offset_to_visual_legacy:
 .Lneko_offset_visual_ascii:
     mov edi, eax
     call font_codepoint_advance_pixels
-    lea edx, [rbx + eax]
+    lea edx, [ebx + eax]
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_glyph_fit
     inc r14d
@@ -9789,7 +9789,7 @@ doc_offset_to_visual_legacy:
 .Lneko_offset_visual_boundary_ascii:
     mov edi, eax
     call font_codepoint_advance_pixels
-    lea edx, [rbx + eax]
+    lea edx, [ebx + eax]
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_done
     inc r14d
@@ -10124,7 +10124,7 @@ doc_visual_to_offset_legacy:
 .Lneko_visual_offset_ascii:
     mov edi, eax
     call font_codepoint_advance_pixels
-    lea edx, [rbp + eax]
+    lea edx, [ebp + eax]
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_visual_offset_glyph_row_ready
     inc ebx
