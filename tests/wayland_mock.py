@@ -3358,6 +3358,8 @@ xkb_symbols "nekoedit-sparse" {
                             "doc_selection_start", "doc_selection_end",
                             "doc_selection_anchor", "doc_cursor", "doc_selection_active",
                             "doc_length", "pointer_x", "pointer_y",
+                            "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
+                            "doc_line_index_columns",
                         }
                         debug_addresses = {}
                         for debug_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
@@ -3365,10 +3367,17 @@ xkb_symbols "nekoedit-sparse" {
                             if len(debug_fields) == 3 and debug_fields[2] in debug_names:
                                 debug_addresses[debug_fields[2]] = int(debug_fields[0], 16)
                         with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as debug_memory:
+                            debug_fd = debug_memory.fileno()
                             debug_state = {
-                                name: struct.unpack("<i", os.pread(debug_memory.fileno(), 4, address))[0]
+                                name: struct.unpack("<q" if name == "doc_line_index_base" else "<i",
+                                                    os.pread(debug_fd, 8 if name == "doc_line_index_base" else 4, address))[0]
                                 for name, address in debug_addresses.items()
                             }
+                            index_base = debug_state.get("doc_line_index_base", 0)
+                            debug_state["line_records"] = [
+                                struct.unpack("<4I", os.pread(debug_fd, 16, index_base + row * 16))
+                                for row in range(min(debug_state.get("doc_line_count", 0), 3))
+                            ] if index_base else []
                         raise AssertionError(
                             "drag selection did not highlight both selected characters; "
                             f"x={x}, pixel={hex(selected_pixel)}, state={debug_state!r}"
