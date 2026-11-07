@@ -1943,7 +1943,7 @@ window_doc_columns:     .long 0
 window_doc_pixel_width: .long 0
 .global doc_pointer_debug_input_x, doc_pointer_debug_output
 .global doc_pointer_debug_map_x, doc_pointer_debug_midpoint
-.global doc_pointer_debug_codepoint, doc_pointer_debug_advance, doc_pointer_debug_target_x
+.global doc_pointer_debug_codepoint, doc_pointer_debug_advance, doc_pointer_debug_target_x, doc_pointer_debug_actual_x
 doc_pointer_debug_input_x: .long 0
 doc_pointer_debug_output: .long 0
 doc_pointer_debug_map_x: .long 0
@@ -1951,9 +1951,13 @@ doc_pointer_debug_midpoint: .long 0
 doc_pointer_debug_codepoint: .long 0
 doc_pointer_debug_advance: .long 0
 doc_pointer_debug_target_x: .long 0
+.global doc_pointer_debug_actual_x
+doc_pointer_debug_actual_x: .long 0
 .global doc_visual_debug_map_x, doc_visual_debug_midpoint
 .global doc_visual_debug_codepoint, doc_visual_debug_advance, doc_visual_debug_target_x
 doc_visual_debug_target_x: .long 0
+.global doc_visual_debug_actual_x
+doc_visual_debug_actual_x: .long 0
 doc_visual_debug_map_x: .long 0
 doc_visual_debug_midpoint: .long 0
 doc_visual_debug_codepoint: .long 0
@@ -10022,6 +10026,7 @@ doc_visual_to_offset_indexed:
     shr edx, 1
     add edx, r14d
     mov dword ptr [rip + doc_visual_debug_midpoint], edx
+    mov dword ptr [rip + doc_visual_debug_actual_x], ebp
     cmp ebp, edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_glyph:
@@ -10509,6 +10514,8 @@ doc_place_cursor_from_pointer:
     mov dword ptr [rip + doc_pointer_debug_advance], eax
     mov eax, dword ptr [rip + doc_visual_debug_target_x]
     mov dword ptr [rip + doc_pointer_debug_target_x], eax
+    mov eax, dword ptr [rip + doc_visual_debug_actual_x]
+    mov dword ptr [rip + doc_pointer_debug_actual_x], eax
     mov eax, dword ptr [rip + doc_pointer_debug_output]
     mov dword ptr [rip + doc_cursor], eax
     ret
