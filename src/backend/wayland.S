@@ -3135,9 +3135,9 @@ wayland_main:
     jae .pointer_menu_outside
     cmp edx, 32
     jb .pointer_menu_outside
-    cmp edx, 56
+    cmp edx, 64
     jb .pointer_settings_confirm_toggle
-    cmp edx, 80
+    cmp edx, 88
     jae .pointer_menu_outside
     cmp dword ptr [rip + font_loaded], 0
     je .pointer_menu_outside
@@ -12086,7 +12086,7 @@ render_file_menu:
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 80
+    mov r8d, 88
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -12119,24 +12119,24 @@ render_file_menu:
     je .render_settings_size_controls_done
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 344
-    mov edx, 58
+    mov edx, 66
     mov ecx, 28
     mov r8d, 22
     mov r9d, 0xff414b5a
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 384
-    mov edx, 58
+    mov edx, 66
     mov ecx, 28
     mov r8d, 22
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 354
-    mov esi, 64
+    mov esi, 72
     lea rdx, [rip + ui_menu_minus_label]
     call draw_text
     mov edi, 394
-    mov esi, 64
+    mov esi, 72
     lea rdx, [rip + ui_menu_plus_label]
     call draw_text
 .render_settings_size_controls_done:
