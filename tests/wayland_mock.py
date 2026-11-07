@@ -1244,6 +1244,22 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("short child state read for " + name)
                     return struct.unpack("<I", raw)[0]
 
+                def child_u32_at(name: str, byte_offset: int) -> int:
+                    if name not in child_symbol_addresses:
+                        # Reuse the same nm-derived symbol cache as child_u32.
+                        child_u32(name)
+                    with open(
+                        f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0
+                    ) as memory:
+                        raw = os.pread(
+                            memory.fileno(), 4, child_symbol_addresses[name] + byte_offset
+                        )
+                    if len(raw) != 4:
+                        raise AssertionError(
+                            f"short child state read for {name}+{byte_offset}"
+                        )
+                    return struct.unpack("<I", raw)[0]
+
                 def wait_child_u32(name: str, expected: int, label: str, timeout: float = 1.0) -> int:
                     deadline = time.monotonic() + timeout
                     actual = child_u32(name)
@@ -2446,6 +2462,18 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
                 if unicode_keyboard_test:
+                    # Inspect the parser's scalar table before exercising
+                    # modifiers and insertion. Layout index is keycode*16+level.
+                    alias_scalars = (
+                        child_u32_at("xkb_unicode_levels", 39 * 64),
+                        child_u32_at("xkb_unicode_levels", 39 * 64 + 4),
+                        child_u32_at("xkb_unicode_levels", 40 * 64),
+                    )
+                    if alias_scalars != (0x20AC, 0x00E9, 0x2014):
+                        raise AssertionError(
+                            "named XKB Unicode keysyms were not loaded into the scalar table: "
+                            + repr(alias_scalars)
+                        )
                     # AC01 is XKB keycode 38 (evdev 30). The first level
                     # produces U+00E9 and Shift selects supplementary U+1F600.
                     key_step(1500, 30, "XKB U00E9 inserts a two-byte UTF-8 scalar")
