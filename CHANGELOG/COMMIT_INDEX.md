@@ -564,6 +564,117 @@ Actions [#297](https://github.com/GraderGamer2/NekoEdit/actions/runs/42326928833
 
 The user confirmed Maximize is fixed on the preceding #294 build. Real GNOME/Mutter drag-resize testing of the #297 artifact remains pending.
 
+
+## 2026-11-07 Development after Actions #297
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 02:02:22 UTC | [`7a011e9bc566`](https://github.com/GraderGamer2/NekoEdit/commit/7a011e9bc5668bff8e93acdc9eda34631759cfad) | docs: record interactive edge-resize fix |
+| 2026-11-07 02:07:45 UTC | [`a440fd2683a8`](https://github.com/GraderGamer2/NekoEdit/commit/a440fd2683a821bf1535924b932be55b05ab58f7) | fix: marshal cursor-shape get_pointer arguments |
+| 2026-11-07 02:08:53 UTC | [`fa3639898230`](https://github.com/GraderGamer2/NekoEdit/commit/fa36398982300a0d593ad34d121eb77f0b86a1bd) | docs: record cursor-shape protocol correction |
+| 2026-11-07 02:15:06 UTC | [`f66fe64eb20d`](https://github.com/GraderGamer2/NekoEdit/commit/f66fe64eb20d14167d8f7f77af8d614ebf6999c7) | fix: adapt editor UI layout to window geometry |
+| 2026-11-07 02:16:08 UTC | [`6eec3c4f13c2`](https://github.com/GraderGamer2/NekoEdit/commit/6eec3c4f13c2798909b64e1a166ba836cc12f9c3) | fix: zero-initialize responsive layout transform state |
+| 2026-11-07 02:18:01 UTC | [`5f03a54c693f`](https://github.com/GraderGamer2/NekoEdit/commit/5f03a54c693f6b80817dc4a7d6b2afe545374082) | test: verify responsive layout and modal hit targets |
+| 2026-11-07 02:18:57 UTC | [`3ae9583d34bc`](https://github.com/GraderGamer2/NekoEdit/commit/3ae9583d34bccfddfeb2d5e6e2a03f4b326186a9) | test: probe empty picker button padding |
+| 2026-11-07 02:20:39 UTC | [`4a333cf636ae`](https://github.com/GraderGamer2/NekoEdit/commit/4a333cf636ae3bb29dbd1816b6b916b2174b67d6) | docs: record responsive window layout milestone |
+| 2026-11-07 02:38:35 UTC | [`8af89d509003`](https://github.com/GraderGamer2/NekoEdit/commit/8af89d509003997272479ff2271542a304bdec07) | feat: grow document storage beyond 64 KiB |
+| 2026-11-07 02:42:40 UTC | [`41afebc4d38b`](https://github.com/GraderGamer2/NekoEdit/commit/41afebc4d38b48fa17b695b6df174b16fccac5a9) | test: cover dynamic document growth and large-file Open |
+| 2026-11-07 02:43:36 UTC | [`1e61fde65235`](https://github.com/GraderGamer2/NekoEdit/commit/1e61fde65235dd4be79ad9620c78c4170f6a11d9) | test: expose dynamic document state outside picker workflow |
+| 2026-11-07 02:44:06 UTC | [`c004f00d038e`](https://github.com/GraderGamer2/NekoEdit/commit/c004f00d038ee9c5e0812f7a35967ea25e113c0a) | test: place growth cursor at document start |
+| 2026-11-07 02:45:05 UTC | [`0bb96bd5a7b3`](https://github.com/GraderGamer2/NekoEdit/commit/0bb96bd5a7b327a3f35acc2d1a7267ffa2d59220) | test: update Open rollback expectation after large-file support |
+| 2026-11-07 02:45:59 UTC | [`37650efa8930`](https://github.com/GraderGamer2/NekoEdit/commit/37650efa89302cf2e5484186a18b80375e7116c1) | test: report bytes on cancelled Save As regression |
+| 2026-11-07 02:46:52 UTC | [`53d4b2df8d0e`](https://github.com/GraderGamer2/NekoEdit/commit/53d4b2df8d0ef8968ab12fd8fb9923e4e6caa218) | test: assert preserved document after cancelled Save As |
+| 2026-11-07 02:50:43 UTC | [`aa00288aed39`](https://github.com/GraderGamer2/NekoEdit/commit/aa00288aed39e40f05e9259f01bc3290d4e91c19) | docs: record dynamic document storage milestone |
+| 2026-11-07 03:11:20 UTC | [`e3489badd178`](https://github.com/GraderGamer2/NekoEdit/commit/e3489badd178d4db59c30e6660f9768f224f7e35) | feat: add editor vertical scrollbar and wheel scrolling |
+| 2026-11-07 03:12:09 UTC | [`028379b66a6b`](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96) | fix: zero-initialize editor scrollbar cache |
+| 2026-11-07 03:13:25 UTC | [`d4c0fcc5710b`](https://github.com/GraderGamer2/NekoEdit/commit/d4c0fcc5710b0ab5ff49bc5831a3a334ecfaa01e) | test: account for editor scrollbar gutter in wrapping |
+| 2026-11-07 03:23:05 UTC | [`42d6b2064891`](https://github.com/GraderGamer2/NekoEdit/commit/42d6b2064891ec50148d94572c7a1105480a3a63) | docs: record editor scrollbar milestone and desktop large-file test |
+| 2026-11-07 03:23:35 UTC | [`da3ae1075f2e`](https://github.com/GraderGamer2/NekoEdit/commit/da3ae1075f2e8dc6fad15ec44292f91709d4b533) | docs: update roadmap and current status for editor scrolling |
+| 2026-11-07 03:25:02 UTC | [`8dcecdc903c1`](https://github.com/GraderGamer2/NekoEdit/commit/8dcecdc903c1bebd33dea239dc0d8693038473c8) | docs: index editor scrollbar milestone and GNOME large-file verification |
+| 2026-11-07 04:11:22 UTC | [`87a33b203501`](https://github.com/GraderGamer2/NekoEdit/commit/87a33b20350180f324b70ce1bff091deabef0bab) | feat: add indexed document line navigation |
+| 2026-11-07 04:12:56 UTC | [`62cbcf339394`](https://github.com/GraderGamer2/NekoEdit/commit/62cbcf33939445e5563267b6ae452e845026ad23) | test: diagnose indexed pointer hit-testing regression |
+| 2026-11-07 04:13:57 UTC | [`0eda4d095330`](https://github.com/GraderGamer2/NekoEdit/commit/0eda4d095330f6b2726300e34573e559631dd0d1) | test: account for multi-line index hit-test fixture |
+| 2026-11-07 04:15:23 UTC | [`552d561dab6f`](https://github.com/GraderGamer2/NekoEdit/commit/552d561dab6fccdb3cbd0415ec3c1c8cd9a8afe2) | test: cover incremental index updates at caret position |
+| 2026-11-07 04:16:33 UTC | [`89cc025cd3d7`](https://github.com/GraderGamer2/NekoEdit/commit/89cc025cd3d7b10b5dd97098ee7c1684cd197cfa) | test: expose index records in scrollbar regression state |
+| 2026-11-07 04:17:34 UTC | [`9e0d3c8c6789`](https://github.com/GraderGamer2/NekoEdit/commit/9e0d3c8c67892b0e7a46dc5e6423f3ca3568a814) | test: report line metadata for large-file scrollbar failure |
+| 2026-11-07 04:18:35 UTC | [`78db904b063f`](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c) | fix: invalidate line index when opening a document |
+| 2026-11-07 04:21:24 UTC | [`176abb11ec1d`](https://github.com/GraderGamer2/NekoEdit/commit/176abb11ec1d9f91f7b462e3bcb55bd945ac73b5) | docs: record indexed document navigation milestone |
+| 2026-11-07 04:32:37 UTC | [`1eb5894443aa`](https://github.com/GraderGamer2/NekoEdit/commit/1eb5894443aafcccd73e2463e91e7d85787dfaf1) | feat: navigate and delete extended grapheme clusters |
+| 2026-11-07 04:33:24 UTC | [`ac74062cc8a1`](https://github.com/GraderGamer2/NekoEdit/commit/ac74062cc8a19f60e9c7dd31f7e3abbae071b74a) | test: correct grapheme deletion cursor setup |
+| 2026-11-07 04:34:44 UTC | [`fd8020b4fe67`](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e) | fix: keep pointer hit-testing outside CRLF graphemes |
+| 2026-11-07 04:35:25 UTC | [`d7cd3f9bfed4`](https://github.com/GraderGamer2/NekoEdit/commit/d7cd3f9bfed41cdf8a359c0bb188e415a26555ca) | test: reset grapheme caret after CRLF pointer check |
+| 2026-11-07 04:38:40 UTC | [`5a748eb5876d`](https://github.com/GraderGamer2/NekoEdit/commit/5a748eb5876db81d3aa46ab646b59315ff4c74b3) | docs: record Unicode grapheme editing milestone |
+| 2026-11-07 04:43:51 UTC | [`1530b2f516b8`](https://github.com/GraderGamer2/NekoEdit/commit/1530b2f516b82a3f8d81f5a76e64afa908406e9e) | feat: add bounded TrueType font discovery and SFNT parsing |
+| 2026-11-07 04:45:30 UTC | [`f7159a7006df`](https://github.com/GraderGamer2/NekoEdit/commit/f7159a7006dfbc052e1e6f014d76898428953366) | fix: isolate explicit TrueType loading from default discovery |
+| 2026-11-07 04:46:33 UTC | [`6e1ffe44a33b`](https://github.com/GraderGamer2/NekoEdit/commit/6e1ffe44a33be552c200493d94941a67dee95869) | fix: store absolute cmap subtable offsets |
+| 2026-11-07 04:49:45 UTC | [`d243bc6e757e`](https://github.com/GraderGamer2/NekoEdit/commit/d243bc6e757e583ef7aeac5ab279e285b19be0f8) | test: trace TrueType parser startup stages |
+| 2026-11-07 04:50:51 UTC | [`d22e55a57f45`](https://github.com/GraderGamer2/NekoEdit/commit/d22e55a57f458d909719190b1963aa4c51a3e08b) | test: trace TrueType font file syscalls |
+| 2026-11-07 04:52:17 UTC | [`43176582ea00`](https://github.com/GraderGamer2/NekoEdit/commit/43176582ea0074ed0699dd683452fdfc688bf877) | test: preserve parser state across debug trace writes |
+| 2026-11-07 04:53:07 UTC | [`0febf78045fe`](https://github.com/GraderGamer2/NekoEdit/commit/0febf78045fefd2f78423c5c35886748f83b616b) | test: preserve explicit font path across trace marker |
+| 2026-11-07 05:15:07 UTC | [`f0fc04847941`](https://github.com/GraderGamer2/NekoEdit/commit/f0fc04847941596dbfc394642c2af55f30e099a6) | fix: preserve explicit TrueType font path during loading |
+| 2026-11-07 05:17:00 UTC | [`f92f224233de`](https://github.com/GraderGamer2/NekoEdit/commit/f92f224233dec3e51ff1459dbd9a54836d6e41b4) | test: trace bounded TrueType parser execution safely |
+| 2026-11-07 05:18:06 UTC | [`33cbdbfef116`](https://github.com/GraderGamer2/NekoEdit/commit/33cbdbfef1162a4a32c3879e79be5350ca490f95) | test: trace Unicode cmap parser stages |
+| 2026-11-07 05:18:57 UTC | [`2b19fda05964`](https://github.com/GraderGamer2/NekoEdit/commit/2b19fda05964ed7554d10d20a97d97a35a201173) | fix: use 32-bit cmap table offset when selecting subtable |
+| 2026-11-07 05:19:32 UTC | [`255008cb5c2b`](https://github.com/GraderGamer2/NekoEdit/commit/255008cb5c2b76cc186f334c0efa7bfb8d69573d) | fix: preserve cmap encoding while resolving subtable offset |
+| 2026-11-07 05:20:10 UTC | [`889343939ecf`](https://github.com/GraderGamer2/NekoEdit/commit/889343939ecf3581d3f0cdd9e8a49c8e17fc18ff) | fix: preserve table lookup flags and remove parser tracing |
+| 2026-11-07 05:22:14 UTC | [`753f6366e1ac`](https://github.com/GraderGamer2/NekoEdit/commit/753f6366e1acfd7903327caf41c701693dc40445) | feat: decode bounded simple TrueType glyph outlines |
+| 2026-11-07 05:22:44 UTC | [`763dd8fcba4d`](https://github.com/GraderGamer2/NekoEdit/commit/763dd8fcba4d735008c203a3be4f99b6c9f9de43) | test: decode bounded TrueType simple glyph outlines |
+| 2026-11-07 05:24:36 UTC | [`0958240745b3`](https://github.com/GraderGamer2/NekoEdit/commit/0958240745b338f99637e0bb4bd4d41cc96228ca) | docs: record TrueType parser and outline decoding milestone |
+| 2026-11-07 05:37:58 UTC | [`d438d9363e15`](https://github.com/GraderGamer2/NekoEdit/commit/d438d9363e15cd8b8462070b47c8fec991484adb) | feat: add save confirmation dialog and settings menu |
+| 2026-11-07 05:38:21 UTC | [`b90d4e69455e`](https://github.com/GraderGamer2/NekoEdit/commit/b90d4e69455e49403aebc13b688137e4116cc636) | fix: align save dialog rendering and close settings on modal open |
+| 2026-11-07 05:39:29 UTC | [`069ec3bcd104`](https://github.com/GraderGamer2/NekoEdit/commit/069ec3bcd1049b22df4e470de5643b7c3b6e464a) | test: verify settings toggle and save confirmation dialog |
+| 2026-11-07 05:39:43 UTC | [`e1b52bd03b3a`](https://github.com/GraderGamer2/NekoEdit/commit/e1b52bd03b3a5a532ddaccae7f106d94e60b15f3) | test: confirm save after document growth workflow |
+| 2026-11-07 05:41:22 UTC | [`1f82bf199fce`](https://github.com/GraderGamer2/NekoEdit/commit/1f82bf199fced5fa0acbded3b9c347fed81b94ff) | docs: record Settings and save confirmation requirements |
+| 2026-11-07 05:42:00 UTC | [`9f2876a1d92f`](https://github.com/GraderGamer2/NekoEdit/commit/9f2876a1d92f86694f8398a8fb81db51f06e1aa0) | test: verify save dialog pointer buttons |
+| 2026-11-07 05:42:35 UTC | [`a91de1c697ad`](https://github.com/GraderGamer2/NekoEdit/commit/a91de1c697adb856764cb23d7d9c2d1981249664) | test: expect pointer-confirmed save result in roundtrip |
+| 2026-11-07 05:43:25 UTC | [`e036161e3a14`](https://github.com/GraderGamer2/NekoEdit/commit/e036161e3a142f827ac282c9c54f4aac98d8d924) | docs: record verified Save and Cancel pointer coverage |
+| 2026-11-07 06:02:27 UTC | [`82d58862daf0`](https://github.com/GraderGamer2/NekoEdit/commit/82d58862daf0f1fd333179f087b6b2d1118a257b) | feat(font): decode bounded composite TrueType glyphs |
+| 2026-11-07 06:17:28 UTC | [`981aea91931d`](https://github.com/GraderGamer2/NekoEdit/commit/981aea91931d5e73711b8e032fbec7dcfade8d60) | fix(font): use valid indexed composite frame addressing |
+| 2026-11-07 06:18:16 UTC | [`d40b466aa9e0`](https://github.com/GraderGamer2/NekoEdit/commit/d40b466aa9e0a849591f68d5e5bee6d5d56c6c65) | test(font): use representable F2Dot14 anisotropic scale |
+| 2026-11-07 06:19:58 UTC | [`962220271016`](https://github.com/GraderGamer2/NekoEdit/commit/962220271016f487ccfd97a5140da65cc38bc48f) | docs: record composite TrueType parser milestone |
+| 2026-11-07 06:29:17 UTC | [`cd050a96586f`](https://github.com/GraderGamer2/NekoEdit/commit/cd050a96586f32e69f8caa8acc2555dd4ebbca0d) | Render TrueType outlines in the Wayland glyph path |
+| 2026-11-07 06:29:37 UTC | [`21fc733389c2`](https://github.com/GraderGamer2/NekoEdit/commit/21fc733389c2246b084e94feeca2850007615d89) | Add freestanding rasterizer to the build |
+| 2026-11-07 06:30:47 UTC | [`4bcb8a9d6146`](https://github.com/GraderGamer2/NekoEdit/commit/4bcb8a9d6146a614f91d22ac7f190a3946636042) | Fix rasterizer warnings under strict compilation |
+| 2026-11-07 06:32:07 UTC | [`0e62d41a7b44`](https://github.com/GraderGamer2/NekoEdit/commit/0e62d41a7b4430fc99154d3c6ed5df721baabe4d) | Make framebuffer text assertions antialias-aware |
+| 2026-11-07 06:34:03 UTC | [`678368bfd790`](https://github.com/GraderGamer2/NekoEdit/commit/678368bfd790b0bc77a8a07bab63956f996ef57e) | Isolate legacy UI tests and verify painted TrueType pixels |
+| 2026-11-07 06:34:50 UTC | [`952ce5c56373`](https://github.com/GraderGamer2/NekoEdit/commit/952ce5c563734430ee5434f234e44625a373fb23) | Update synthetic font horizontal metric count |
+| 2026-11-07 06:35:53 UTC | [`c0b7aa8e673b`](https://github.com/GraderGamer2/NekoEdit/commit/c0b7aa8e673b80445f7cc7a500e4a1cfb9ed044d) | Read raster probe symbols in the font integration test |
+| 2026-11-07 06:36:49 UTC | [`61b0d415031c`](https://github.com/GraderGamer2/NekoEdit/commit/61b0d415031c14158b15ad99dd3dfc0209d452a7) | Correct TrueType curve fixture coordinate flags |
+| 2026-11-07 06:40:52 UTC | [`c94a941e414c`](https://github.com/GraderGamer2/NekoEdit/commit/c94a941e414cde7b0c2d373b2c2ba5d3cf32aa96) | Document the TrueType glyph renderer milestone |
+| 2026-11-07 06:54:56 UTC | [`0cc839c72181`](https://github.com/GraderGamer2/NekoEdit/commit/0cc839c72181c8ac0ec6792db01996e1ebafa8fd) | Expose TrueType horizontal advances to the text layout |
+| 2026-11-07 06:55:57 UTC | [`3b566344ee8a`](https://github.com/GraderGamer2/NekoEdit/commit/3b566344ee8aaf83fa3f89f4d0ffa5ec9463771d) | Use font advances throughout document layout and hit testing |
+| 2026-11-07 06:56:48 UTC | [`bc591fd2cdd6`](https://github.com/GraderGamer2/NekoEdit/commit/bc591fd2cdd60efd210c1e57c4f29bbe1ca0827f) | Skip fixed-cell click assertion in font metric fixture |
+| 2026-11-07 06:57:24 UTC | [`caef46e519c4`](https://github.com/GraderGamer2/NekoEdit/commit/caef46e519c479d383be129d52b0b8f70ba4b4a3) | Fix register-width addressing in font layout calculations |
+| 2026-11-07 06:59:31 UTC | [`b9d29b8684f3`](https://github.com/GraderGamer2/NekoEdit/commit/b9d29b8684f3445f1297571472663552695fa8f3) | Verify proportional glyph placement and pointer hit testing |
+| 2026-11-07 07:02:11 UTC | [`7b473ec86b42`](https://github.com/GraderGamer2/NekoEdit/commit/7b473ec86b42003cb459afd2ac6d3e788acc214c) | Expose pointer coordinates in proportional-font regression |
+| 2026-11-07 07:03:41 UTC | [`1a910d73aa4a`](https://github.com/GraderGamer2/NekoEdit/commit/1a910d73aa4ae59f10e864a8f578624edbb25c5e) | Instrument proportional glyph hit testing |
+| 2026-11-07 07:05:11 UTC | [`37fac9be8137`](https://github.com/GraderGamer2/NekoEdit/commit/37fac9be8137daa558f6ac23b1b7cdc51b88518f) | Instrument the exact glyph-boundary comparison |
+| 2026-11-07 07:05:52 UTC | [`bb3efd15cab2`](https://github.com/GraderGamer2/NekoEdit/commit/bb3efd15cab2efb01f20fb216040754818571f4f) | Report indexed pixel-width state in font hit-test regression |
+| 2026-11-07 07:06:50 UTC | [`4c578f73834e`](https://github.com/GraderGamer2/NekoEdit/commit/4c578f73834eb623348cec2c29fb0aceca1f7ead) | Trace the target X register at the midpoint branch |
+| 2026-11-07 07:07:21 UTC | [`226ded09bbbf`](https://github.com/GraderGamer2/NekoEdit/commit/226ded09bbbf7275ccd325d59ba970d1312fa6fe) | Assert actual pixel target at proportional hit-test comparison |
+| 2026-11-07 07:08:40 UTC | [`a2ff57398138`](https://github.com/GraderGamer2/NekoEdit/commit/a2ff57398138b56bca4dd8713c931fc36c8736cc) | Preserve pointer target X across font metric helper calls |
+| 2026-11-07 07:10:38 UTC | [`fd2e4793aa3d`](https://github.com/GraderGamer2/NekoEdit/commit/fd2e4793aa3d0b16920f90429c289f57eeb27a8f) | Render text selection using variable glyph advances |
+| 2026-11-07 07:12:34 UTC | [`6c333c509c10`](https://github.com/GraderGamer2/NekoEdit/commit/6c333c509c10224c0efe0d7d131fd0c7cd97bb8e) | Expose drag selection endpoints in the regression failure |
+| 2026-11-07 07:14:27 UTC | [`356f6aed8f22`](https://github.com/GraderGamer2/NekoEdit/commit/356f6aed8f229c4c5742e496238a8000cc10c9f6) | Include indexed logical-line spans in selection diagnostics |
+| 2026-11-07 07:16:38 UTC | [`0f40c71aaf07`](https://github.com/GraderGamer2/NekoEdit/commit/0f40c71aaf07a5bb3ae63d0dba791ce057e9ddae) | Capture press-time variable-width hit-test state |
+| 2026-11-07 07:19:28 UTC | [`6def829ae2df`](https://github.com/GraderGamer2/NekoEdit/commit/6def829ae2df3be496431262a678be83b13fcd93) | Expose active font state in fixed-bitmap test diagnostics |
+| 2026-11-07 07:21:52 UTC | [`0f9332677cf7`](https://github.com/GraderGamer2/NekoEdit/commit/0f9332677cf77e6ceddb3e6155b146a817845cb1) | Trace variable glyph advances in pointer hit testing |
+| 2026-11-07 07:22:22 UTC | [`6053341c70e3`](https://github.com/GraderGamer2/NekoEdit/commit/6053341c70e35899d51b859a57184145318877ec) | Include per-glyph pointer scan state in debug failure |
+| 2026-11-07 07:25:51 UTC | [`101a0ccd3c7c`](https://github.com/GraderGamer2/NekoEdit/commit/101a0ccd3c7c6abf51363615db0e324df41412f4) | fix: preserve glyph advance during pointer hit testing |
+| 2026-11-07 07:28:59 UTC | [`e575e17ae67c`](https://github.com/GraderGamer2/NekoEdit/commit/e575e17ae67cb9d9ea541aa0b2e21fbbd659da9d) | Keep hit-test target and glyph advance outside helper stack frames |
+| 2026-11-07 07:29:59 UTC | [`b6d9178938cd`](https://github.com/GraderGamer2/NekoEdit/commit/b6d9178938cdb3d9d4dce6feb6b66e2dc89d716e) | test: place proportional font hit test on text row |
+| 2026-11-07 07:31:37 UTC | [`404ec5791166`](https://github.com/GraderGamer2/NekoEdit/commit/404ec5791166c4acc3b5476f266a4ea7c41c6eb0) | test: align proportional hit-test row expectation |
+| 2026-11-07 07:36:37 UTC | [`2c06bcec3d52`](https://github.com/GraderGamer2/NekoEdit/commit/2c06bcec3d527b450b274ec5071a97fa4e622a5c) | test: verify proportional font wrapping and indexed rows |
+| 2026-11-07 07:38:19 UTC | [`b38862ca6ae7`](https://github.com/GraderGamer2/NekoEdit/commit/b38862ca6ae71f063d11b4d2628df24f11eeb3e3) | test: keep process memory open while reading line index |
+| 2026-11-07 07:42:15 UTC | [`3efdcbc537a4`](https://github.com/GraderGamer2/NekoEdit/commit/3efdcbc537a4b9a63224d8b68c34d24a16fe9a8e) | fix: use font advances in picker and path prompt text |
+| 2026-11-07 07:43:23 UTC | [`2ec04cfca131`](https://github.com/GraderGamer2/NekoEdit/commit/2ec04cfca1315e0942faadefa7b776721b792105) | refactor: remove obsolete fixed-column geometry |
+| 2026-11-07 07:47:47 UTC | [`d067b011a918`](https://github.com/GraderGamer2/NekoEdit/commit/d067b011a918092cbeb3f39ff3fe739ee8e3fc17) | test: assert pixel-width document geometry |
+| 2026-11-07 08:15:02 UTC | [`3bc0b93a9994`](https://github.com/GraderGamer2/NekoEdit/commit/3bc0b93a999402400111b75a8644307d6ece3141) | refactor: remove proportional hit-test diagnostics |
+| 2026-11-07 08:19:55 UTC | [`f6d735b21549`](https://github.com/GraderGamer2/NekoEdit/commit/f6d735b215493d7a67759de2f0aa269fc66d5e21) | feat: derive document line pitch from font metrics |
+| 2026-11-07 08:20:36 UTC | [`beac1f4a9622`](https://github.com/GraderGamer2/NekoEdit/commit/beac1f4a96229817bc3444fd035330d12914cd53) | fix: zero-initialize document line-height state |
+
+The history above includes intermediate diagnostic/test commits as well as the completed window, storage, scrollbar, indexed-document, Unicode, font-parser, renderer, settings, proportional-layout, and vertical-metric work. Validation milestones include Actions [#302](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328775920), [#312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234), [#316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563), [#326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320), [#331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462), [#368](https://github.com/GraderGamer2/NekoEdit/actions/runs/42347799006), [#398](https://github.com/GraderGamer2/NekoEdit/actions/runs/42354671802), and [#400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260). Actions #399 records the temporary `.bss` initialization failure; commit `beac1f4a9622` corrected it and #400 passed.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
