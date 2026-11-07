@@ -568,3 +568,14 @@ The parser now resolves a curated set of 105 common named non-ASCII keysyms, cov
 ### Regression coverage and verification
 
 The mock compositor verifies forward and reverse whole-word dragging after double-click; character-selection continuation after pointer-leave; vertical auto-scroll both immediately and while the pointer is stationary; horizontal auto-scroll with Wrap Lines disabled; and timer cleanup on release. XKB tests inspect the parsed scalar table and confirm explicit U+00E9/U+1F600 plus EuroSign/eacute/emdash insertion. GitHub Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed the complete freestanding build, CLI, preferences, Wayland integration, ELF inspection, and artifact-upload workflow on [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a). Artifact [13583613881](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881) is 72,303 bytes with SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`. A GNOME/Mutter desktop test of the new mouse interaction remains outstanding.
+
+
+---
+
+## 31. Phase AA — bounded XKB dead-key composition
+
+Six common XKB dead-key names are now recognized: grave, acute, circumflex, tilde, diaeresis, and cedilla. Their keysyms use reserved action tokens rather than pretending to be ordinary Unicode scalars. The Wayland keyboard path stores a pending combining mark and applies it to the next printable scalar. A 52-pair mapping produces common Latin-1 precomposed letters. When no precomposed result exists, the editor inserts the base scalar followed by the combining mark, preserving the input. Backspace and Escape cancel a pending mark without modifying the document, and keyboard focus loss clears it.
+
+The mock compositor verifies that AC04 maps to the reserved dead_acute action, dead acute followed by e inserts UTF-8 for é, dead acute followed by g preserves g plus U+0301, and Backspace/Escape cancellation leaves document bytes and length unchanged. This is a deliberately bounded first compose implementation: general Compose sequences/tables, locale-specific mappings, full XKB actions/types, and Wayland text-input/IME remain unimplemented.
+
+GitHub Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the full build/ELF, CLI, preferences, Wayland mock-compositor, executable-inspection, and artifact-upload workflow on [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad). Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes with uploaded ZIP SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8. Automated verification is complete; live GNOME/Mutter testing remains outstanding.
