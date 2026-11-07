@@ -1438,7 +1438,33 @@ xkb_symbols "nekoedit-sparse" {
                     redone = read_document_state()["doc_contents"]
                     if redone != b"z":
                         raise AssertionError("Ctrl+Y did not restore the edited document: " + repr(redone))
-                    observations.append("Ctrl+Z restored the prior text and selection state; Ctrl+Y redid the replacement")
+                    if child_u32("doc_cursor") != 1 or child_u32("doc_selection_active") != 0:
+                        raise AssertionError("redo did not restore the post-edit caret/selection state")
+                    workflow_shortcut(2040, 44, "Ctrl+Z before new branch")
+                    if read_document_state()["doc_contents"] != b"abc":
+                        raise AssertionError("second Ctrl+Z did not restore the original bytes")
+                    if child_u32("doc_cursor") != 3:
+                        raise AssertionError("undo did not restore the pre-edit caret offset")
+                    key_step(2050, 16, "type q after undo to create a new history branch")
+                    branch_state = read_document_state()["doc_contents"]
+                    if branch_state != b"abcq":
+                        raise AssertionError("new edit after undo produced unexpected bytes: " + repr(branch_state))
+                    # Redo has been invalidated by the new edit. A no-op shortcut
+                    # must not trigger a compositor frame commit.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 2060, 2060, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 2061, 2061, 21, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 2062, 2062, 21, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 2063, 2063, 29, 0))
+                    )
+                    ready, _, _ = select.select([client], [], [], 0.05)
+                    if ready:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError("redo remained available after a new edit: " + repr(unexpected[:3]))
+                    client.sendall(wire_message(12, 0))
+                    if read_document_state()["doc_contents"] != b"abcq":
+                        raise AssertionError("stale redo changed document contents after a new edit")
+                    # Ctrl+Shift+Z is also a conventional redo binding.
                     client.sendall(wire_message(10, 1))
                     return
 

@@ -234,8 +234,14 @@ void history_reset(void)
 void history_checkpoint(void)
 {
     snapshot_t current = {0};
-    if (baseline_valid && baseline.revision == doc_revision)
+    if (baseline_valid && baseline.revision == doc_revision) {
+        /* Navigation/selection do not change the content revision, but the
+           next undo should restore the actual pre-edit caret and selection. */
+        baseline.cursor = doc_cursor;
+        baseline.selection_anchor = doc_selection_anchor;
+        baseline.selection_active = doc_selection_active;
         return;
+    }
 
     /* An edit after Undo starts a new branch and invalidates Redo. */
     stack_clear(redo_stack, &redo_count);
