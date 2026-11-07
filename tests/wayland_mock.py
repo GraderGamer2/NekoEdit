@@ -1400,6 +1400,7 @@ xkb_symbols "nekoedit-sparse" {
                             "Shift+vertical wheel did not scroll the no-wrap viewport left by 14px: "
                             f"before={before_shift_wheel}, after={after_shift_wheel}"
                         )
+                    key_step(3144, 1, "close Settings before document pointer hit-testing")
                     workflow_click(40, 98, 3145, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
