@@ -441,6 +441,24 @@
     .byte 9
     .ascii "trademark"
     .long 0x2122
+    .byte 10
+    .ascii "dead_grave"
+    .long 0x110001
+    .byte 10
+    .ascii "dead_acute"
+    .long 0x110002
+    .byte 15
+    .ascii "dead_circumflex"
+    .long 0x110003
+    .byte 10
+    .ascii "dead_tilde"
+    .long 0x110004
+    .byte 14
+    .ascii "dead_diaeresis"
+    .long 0x110005
+    .byte 12
+    .ascii "dead_cedilla"
+    .long 0x110006
     .byte 0
 
 .section .bss
@@ -468,7 +486,7 @@ xkb_key_names:          .zero 1024        # 256 XKB keycodes, four-byte names
 xkb_ascii_levels:       .zero 16384       # 256 codes * 4 groups * 4 levels
 .balign 16
 .global xkb_unicode_levels
-xkb_unicode_levels:     .zero 65536       # 256 codes * 4 groups * 4 levels, uint32 scalars
+xkb_unicode_levels:     .zero 65536       # uint32 scalars; 0x110001..0x110006 are dead-key actions
 .global xkb_key_types
 xkb_key_types:          .zero 256         # bit 0: alphabetic, bit 1: level-three
 .global xkb_keymap_ready
