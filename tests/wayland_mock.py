@@ -68,8 +68,9 @@ def synthetic_true_type_font() -> bytes:
 
     hhea = bytearray(36)
     struct.pack_into(">I", hhea, 0, 0x00010000)
-    struct.pack_into(">h", hhea, 4, 800)
-    struct.pack_into(">h", hhea, 6, -200)
+    struct.pack_into(">h", hhea, 4, 900)
+    struct.pack_into(">h", hhea, 6, -300)
+    struct.pack_into(">h", hhea, 8, 100)
     struct.pack_into(">H", hhea, 34, 10)
 
     maxp = struct.pack(">IH", 0x00005000, 10)
@@ -915,7 +916,7 @@ xkb_symbols "nekoedit-sparse" {
                     expected_names = {
                         "font_loaded", "font_file_map", "font_file_size",
                         "font_units_per_em", "font_num_glyphs", "font_ascent",
-                        "font_descent", "font_num_hmetrics", "font_index_to_loc_format",
+                        "font_descent", "font_line_gap", "font_num_hmetrics", "font_index_to_loc_format",
                         "font_cmap_format", "font_probe_A_glyph", "font_probe_A_advance",
                         "font_probe_A_outline_result", "font_probe_A_contours",
                         "font_probe_A_points", "font_probe_A_last_x", "font_probe_A_last_y",
@@ -945,7 +946,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_curve_height", "font_probe_curve_pixels",
                         "font_probe_advance_A", "font_probe_advance_B",
                         "doc_cursor", "doc_length", "doc_line_count", "doc_line_index_base", "pointer_x", "pointer_y",
-                        "window_doc_pixel_width",
+                        "window_doc_pixel_width", "window_doc_line_height", "window_doc_visible_rows",
                         "doc_line_index_valid", "doc_line_index_columns",
                     }
                     for symbol_line in nm_text.splitlines():
@@ -965,8 +966,9 @@ xkb_symbols "nekoedit-sparse" {
                         "font_loaded": 1,
                         "font_units_per_em": 1000,
                         "font_num_glyphs": 10,
-                        "font_ascent": 800,
-                        "font_descent": -200,
+                        "font_ascent": 900,
+                        "font_descent": -300,
+                        "font_line_gap": 100,
                         "font_num_hmetrics": 10,
                         "font_probe_advance_A": 8,
                         "font_probe_advance_B": 5,
@@ -978,6 +980,8 @@ xkb_symbols "nekoedit-sparse" {
                         "pointer_x": 27,
                         "pointer_y": 98,
                         "window_doc_pixel_width": 760,
+                        "window_doc_line_height": 16,
+                        "window_doc_visible_rows": 23,
                         "doc_line_index_valid": 1,
                         "doc_line_index_columns": 760,
                         "font_index_to_loc_format": 0,
@@ -1079,12 +1083,12 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             "third A was not painted at x=29 after the 5px B advance"
                         )
-                    if not antialiased_ink_present(12, 100, 20, 16):
+                    if not antialiased_ink_present(12, 106, 20, 16):
                         raise AssertionError(
                             "last A was not painted on the second visual row after pixel-width wrapping"
                         )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, pixel-width line wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
+                        "explicit NEKOEDIT_FONT path validated SFNT outlines, 8px/5px hmtx advances, hhea-derived 16px line pitch, pixel-width wrapping and indexed row counts, proportional pointer hit-testing, straight and quadratic rasterization, and compositor-visible glyph positions"
                     )
                     client.sendall(wire_message(10, 1))
                     return

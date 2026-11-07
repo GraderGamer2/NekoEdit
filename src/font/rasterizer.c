@@ -230,8 +230,9 @@ static struct cache_entry *cached(uint32_t glyph_id) {
     return slot;
 }
 
-/* Wayland backend entry point. A fixed 8x12 editor cell currently positions
- * these 12px-em glyphs; the cache keeps outline work off the repaint hot path. */
+/* Wayland backend entry point. Document layout uses the same 12px-em
+ * horizontal advances and hhea-derived vertical line box as this rasterizer.
+ * The cache keeps outline work off the repaint hot path. */
 /*
  * The layout and renderer share this hmtx-derived pixel advance. It uses the
  * current 12px em and rounds to the nearest pixel. The legacy eight-pixel

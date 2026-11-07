@@ -108,7 +108,6 @@
 .equ DOC_TOP,            92
 .equ STATUS_TOP,         460
 .equ LINE_HEIGHT,        12
-.equ DOC_VISIBLE_ROWS,   ((STATUS_TOP - DOC_TOP) / LINE_HEIGHT)
 
 .section .rodata
 wayland_socket_env_key: .asciz "WAYLAND_SOCKET"
@@ -1930,7 +1929,7 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -1938,6 +1937,7 @@ window_status_top:      .long 0
 window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
 window_doc_pixel_width: .long 0
+window_doc_line_height: .long LINE_HEIGHT
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
@@ -7618,10 +7618,38 @@ window_update_geometry:
     mov eax, 1
 .window_geometry_pixel_width_ready:
     mov dword ptr [rip + window_doc_pixel_width], eax
+    mov eax, LINE_HEIGHT
+    cmp dword ptr [rip + font_loaded], 0
+    je .window_geometry_line_height_ready
+    mov eax, dword ptr [rip + font_ascent]
+    sub eax, dword ptr [rip + font_descent]
+    add eax, dword ptr [rip + font_line_gap]
+    test eax, eax
+    jle .window_geometry_line_height_default
+    imul eax, LINE_HEIGHT
+    mov ecx, dword ptr [rip + font_units_per_em]
+    test ecx, ecx
+    jle .window_geometry_line_height_default
+    add eax, ecx
+    dec eax
+    xor edx, edx
+    div ecx
+    cmp eax, LINE_HEIGHT
+    jae .window_geometry_line_height_minimum_ready
+    mov eax, LINE_HEIGHT
+.window_geometry_line_height_minimum_ready:
+    cmp eax, 32
+    jbe .window_geometry_line_height_ready
+    mov eax, 32
+    jmp .window_geometry_line_height_ready
+.window_geometry_line_height_default:
+    mov eax, LINE_HEIGHT
+.window_geometry_line_height_ready:
+    mov dword ptr [rip + window_doc_line_height], eax
     mov eax, dword ptr [rip + window_status_top]
     sub eax, DOC_TOP
     xor edx, edx
-    mov ecx, LINE_HEIGHT
+    mov ecx, dword ptr [rip + window_doc_line_height]
     div ecx
     test eax, eax
     jnz .window_geometry_rows_ready
@@ -10456,7 +10484,7 @@ doc_place_cursor_from_pointer:
     xor eax, eax
 .Lneko_pointer_y_nonnegative:
     xor edx, edx
-    mov ecx, LINE_HEIGHT
+    mov ecx, dword ptr [rip + window_doc_line_height]
     div ecx
     add eax, dword ptr [rip + doc_view_top_row]
     mov edi, eax
@@ -11926,7 +11954,7 @@ render_selection:
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
     mov eax, dword ptr [rip + doc_view_top_row]
-    imul eax, LINE_HEIGHT
+    imul eax, dword ptr [rip + window_doc_line_height]
     sub r13d, eax
     xor r14d, r14d
 .Lneko_render_selection_scan:
@@ -11967,7 +11995,7 @@ render_selection:
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_render_selection_character_fit
     mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
 .Lneko_render_selection_character_fit:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r14d, eax
@@ -11975,14 +12003,14 @@ render_selection:
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_character_advance
     mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
+    sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_character_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
     mov ecx, r15d
-    mov r8d, LINE_HEIGHT
+    mov r8d, dword ptr [rip + window_doc_line_height]
     mov r9d, 0xff5e81ac
     call draw_rect
 .Lneko_render_selection_character_advance:
@@ -12004,7 +12032,7 @@ render_selection:
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_render_selection_tab_fit
     mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
     mov r15d, 32
 .Lneko_render_selection_tab_fit:
     mov eax, dword ptr [rip + doc_selection_start]
@@ -12013,14 +12041,14 @@ render_selection:
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_tab_advance
     mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
+    sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_tab_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
     mov ecx, r15d
-    mov r8d, LINE_HEIGHT
+    mov r8d, dword ptr [rip + window_doc_line_height]
     mov r9d, 0xff5e81ac
     call draw_rect
 .Lneko_render_selection_tab_advance:
@@ -12035,7 +12063,7 @@ render_selection:
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_newline_advance
     mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
+    sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_newline_advance
     mov eax, r12d
@@ -12052,12 +12080,12 @@ render_selection:
     mov esi, r12d
     mov ecx, edx
     mov edx, r13d
-    mov r8d, LINE_HEIGHT
+    mov r8d, dword ptr [rip + window_doc_line_height]
     mov r9d, 0xff5e81ac
     call draw_rect
 .Lneko_render_selection_newline_advance:
     mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
@@ -12224,7 +12252,7 @@ render_document:
     cmp r14d, dword ptr [rip + doc_length]
     jae .document_draw_cursor
     mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
+    sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jge .document_draw_cursor
     mov edi, r14d
@@ -12255,9 +12283,9 @@ render_document:
     cmp eax, edx
     jbe .document_printable_fit
     mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
     mov eax, dword ptr [rip + window_status_top]
-    sub eax, LINE_HEIGHT
+    sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jge .document_draw_cursor
 .document_printable_fit:
@@ -12282,9 +12310,9 @@ render_document:
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .document_tab_fit
     mov r12d, DOC_LEFT + 32
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
     mov edx, dword ptr [rip + window_status_top]
-    sub edx, LINE_HEIGHT
+    sub edx, dword ptr [rip + window_doc_line_height]
     cmp r13d, edx
     jge .document_draw_cursor
     jmp .document_next_byte
@@ -12294,7 +12322,7 @@ render_document:
 
 .document_newline:
     mov r12d, DOC_LEFT
-    add r13d, LINE_HEIGHT
+    add r13d, dword ptr [rip + window_doc_line_height]
 .document_next_byte:
     inc r14d
     jmp .Ldocument_render_loop
@@ -12309,7 +12337,7 @@ render_document:
     js .document_render_done
     cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .document_render_done
-    imul r13d, LINE_HEIGHT
+    imul r13d, dword ptr [rip + window_doc_line_height]
     add r13d, DOC_TOP
     mov eax, dword ptr [rip + window_width]
     sub eax, DOC_SCROLL_TRACK_X_OFFSET + 1
@@ -12319,7 +12347,8 @@ render_document:
     mov esi, r12d
     mov edx, r13d
     mov ecx, 1
-    mov r8d, 9
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    sub r8d, 3
     mov r9d, 0xffffffff
     call draw_rect
 .document_render_done:

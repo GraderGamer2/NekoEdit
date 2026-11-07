@@ -58,7 +58,7 @@ font_path_dejavu_sans:
 .balign 8
 .global font_loaded, font_file_map, font_file_size
 .global font_num_tables, font_units_per_em, font_num_glyphs
-.global font_ascent, font_descent, font_num_hmetrics, font_index_to_loc_format
+.global font_ascent, font_descent, font_line_gap, font_num_hmetrics, font_index_to_loc_format
 .global font_cmap_format, font_cmap_subtable_offset, font_cmap_subtable_length
 .global font_head_offset, font_hhea_offset, font_maxp_offset
 .global font_cmap_offset, font_cmap_length, font_hmtx_offset, font_hmtx_length
@@ -92,6 +92,7 @@ font_units_per_em:              .long 0
 font_num_glyphs:                .long 0
 font_ascent:                    .long 0
 font_descent:                   .long 0
+font_line_gap:                  .long 0
 font_num_hmetrics:              .long 0
 font_index_to_loc_format:       .long 0
 font_cmap_format:               .long 0
@@ -550,6 +551,13 @@ font_parse_mapped:
     call font_be16
     movsx eax, ax
     mov dword ptr [rip + font_descent], eax
+    mov rax, qword ptr [rip + font_file_map]
+    mov edx, dword ptr [rip + font_hhea_offset]
+    add rax, rdx
+    lea rdi, [rax + 8]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_line_gap], eax
     mov rax, qword ptr [rip + font_file_map]
     mov edx, dword ptr [rip + font_hhea_offset]
     add rax, rdx
