@@ -74,13 +74,25 @@ No allocator library is required. A small internal allocator may be introduced o
 ## Document model
 
 - Canonical storage: UTF-8 bytes.
-- Editing: gap buffer.
-- Cursor and selection: byte offsets that are always adjusted to valid UTF-8 boundaries.
-- Line index: offsets of line starts, updated incrementally where practical.
+- Storage: a byte-oriented gap buffer in an anonymous mmap-backed allocation. The live document and transactional Open-staging buffer each start at 64 KiB and grow geometrically through mremap, up to a 1 GiB safety ceiling. For the live buffer, the suffix is relocated to the end of the enlarged mapping so the added allocation becomes one contiguous insertion gap. Document length, cursor, and selection remain logical byte offsets. Startup loading grows the live mapping; picker Open grows its separate staging mapping and reserves live capacity before committing the replacement document.
+- Cursor and selection: logical byte offsets at extended grapheme-cluster boundaries. UTF-8 is still decoded one scalar at a time, but navigation, pointer hit-testing, selection, Backspace, and Delete use Unicode 18.0 UAX #29 segmentation; malformed bytes remain independent one-byte units.
+- Invalid UTF-8: retain the original byte sequence unless an edit explicitly removes bytes within it. The current prototype treats each malformed byte as an independent one-byte replacement unit; valid non-ASCII code points and malformed bytes currently render as `?`.
+- Character model: extended grapheme clusters are segmented using embedded Unicode 18.0 Grapheme_Cluster_Break, Indic_Conjunct_Break, and Extended_Pictographic property tables. The implementation covers CRLF, combining and spacing marks, Hangul composition, Prepend, Indic conjuncts, emoji ZWJ sequences, emoji modifiers, and regional-indicator pairing. Grapheme-aware navigation, hit-testing, selection, wrapping, and deletion are implemented. Text shaping and non-ASCII glyph rasterization are separate unfinished features.
+- Line index: implemented as a dynamically mmap-backed array of 16-byte logical-line records. Each record stores its byte span (including a terminating LF), visual-row count, and one node from each of two Fenwick prefix trees. With Wrap Lines enabled, the visual-row count reflects soft wrapping at the current document width; when disabled, each logical line contributes exactly one visual row. Byte-offset-to-line and visual-row-to-line lookup use O(log N) prefix searches, followed by a scan within the selected logical line for the exact character boundary. Ordinary byte insertions/deletions update the affected line and the corresponding Fenwick paths. LF insertion/deletion splits or merges records and rebuilds the trees after shifting later records; a window-width change remeasures every line because soft wrapping depends on available columns. The mapping grows geometrically from 256 records up to 0x01000000 lines. If allocation fails or that bound is reached, the index is marked unavailable and the previous scan-based mapping remains as a correctness fallback. Replacing a document invalidates the prior index before the next lookup rebuilds it.
 - Line endings: detect and preserve LF or CRLF for existing files; define a consistent default for new files.
-- Invalid UTF-8: preserve original bytes where possible and render replacement glyphs rather than silently rewriting file contents. Editing around invalid sequences needs a deliberate policy before implementation.
 
-A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement must decode UTF-8 safely and must not treat each byte as a visible character.
+A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement decode UTF-8 safely and never use encoded bytes as visible character positions. Dynamic storage growth, the per-line Fenwick index, grapheme-aware editing, vertical scrolling/scrollbar, and horizontal viewport scrolling for unwrapped lines are implemented. The horizontal viewport uses a pixel offset and wheel/Shift+wheel input; it does not yet have a dedicated draggable thumb. Rendering begins at the indexed byte offset for the first visible visual row; caret mapping, scrollbar geometry, and logical line status also use the index. The index has an explicit maximum line count and falls back to scan-based mapping if it cannot be maintained. The document's separate 1 GiB byte-capacity ceiling is an implementation bound, not a claim of unlimited files. Unicode glyph rasterization, non-ASCII keyboard/IME input, and shaping remain future work.
+
+## User preferences
+
+User-facing preferences belong in the Settings menu and must be separate from document bytes. The initial preferences are:
+
+- Confirm before saving: enabled by default. Save and new Save As operations ask before writing; overwriting an existing file retains an explicit overwrite decision.
+- Font: choose a validated supported font from the user's installed font directories without Fontconfig or a shared font library.
+- Font size: change glyph pixel size and recompute layout metrics, wrapped visual rows, pointer hit-testing, caret placement, and scrollbar ranges.
+- Wrap Lines: toggle soft wrapping; when disabled, keep one visual row per logical line and expose horizontal viewport movement.
+
+Preferences should be stored in a small per-user config file under XDG_CONFIG_HOME, falling back to ~/.config, with safe defaults if the file is absent or malformed. Confirm-before-save, document/UI font-size controls, and Wrap Lines currently apply to the running session only; persistent config I/O remains unfinished. The TrueType outline renderer and metric-aware document layout are integrated: hmtx advances drive wrapping, indexed visual rows, pointer mapping and selection; hhea/OS/2 metrics determine vertical line pitch. Runtime font-family/file selection and preference persistence remain future work. The active font can still be supplied through the NEKOEDIT_FONT environment variable.
 
 ## Platform backends
 
@@ -95,16 +107,18 @@ The current prototype implements a deliberately small part of the stable core pr
 - Set the window title and perform the initial empty surface commit.
 - Receive xdg_surface.configure and acknowledge its serial before attaching a buffer.
 - Create a memfd, size it with ftruncate, map it with mmap, and pass its descriptor to wl_shm.create_pool using sendmsg + SCM_RIGHTS.
-- Create one XRGB8888 wl_buffer, destroy the pool object, attach the buffer, damage the surface, and commit.
+- Keep the wl_shm_pool alive after creating the initial 800×480 XRGB8888 wl_buffer; the pool backs subsequent buffers after compositor-requested resizes.
+- Handle xdg_toplevel.configure width/height/maximized state and xdg_surface.configure acknowledgement. Recompute active geometry/stride, wait for the previous wl_buffer.release, destroy the old buffer, and allocate a replacement from the retained pool. The memfd mapping is bounded for 3840×2160 XRGB8888.
+- Draw Minimize, Maximize/Restore, and Close controls in the application title bar and serialize the corresponding xdg_toplevel requests or clean client shutdown.
 - Answer xdg_wm_base.ping and exit on xdg_toplevel.close.
 
-This prototype has one static buffer and a blocking event loop. It does not yet implement seat discovery, keyboard or pointer input, frame callbacks, resize/reconfigure handling, buffer recreation, clipboard, or text rendering. It intentionally binds protocol version 1 to keep the initial request/event surface small.
+The Wayland prototype now has a single active release-tracked buffer rather than a static-size buffer set; configure-driven resizing is implemented but output-scale changes and multi-buffer/frame scheduling are not. The event loop waits in poll for socket or repeat-timer activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
 
 See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
 ### Wayland: next steps
 
-Add seat discovery and keyboard/pointer objects, keymap interpretation without libxkbcommon, input event normalization, resize and scale handling, release-safe multiple buffers, and a nonblocking poll-based event loop. The clipboard data-device protocol will be added as a separate service with immutable snapshot ownership.
+Further work: complete output-scale/fractional-scale handling, replace the single active buffer with a small release-tracked buffer set, add frame scheduling, and continue protocol interoperability testing. The app-drawn window controls and configure-driven resizing are implemented. Clipboard data-device support will be added as a separate service with immutable snapshot ownership.
 
 ### X11
 

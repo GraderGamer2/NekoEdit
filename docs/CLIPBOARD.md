@@ -2,6 +2,16 @@
 
 Clipboard copy and paste are first-release requirements. They must interoperate with ordinary desktop applications and must not depend on a clipboard library or daemon.
 
+## Current Wayland implementation
+
+The Wayland backend binds the optional `wl_data_device_manager`, creates a data device for the editor seat, and implements document shortcuts:
+
+- **Ctrl+C:** copies the selection into an immutable mmap-backed snapshot and publishes UTF-8 plain-text MIME offers.
+- **Ctrl+X:** establishes clipboard ownership from that independent snapshot first, then deletes the selected range. If ownership cannot be established, the selected text remains.
+- **Ctrl+V:** requests `text/plain;charset=utf-8` first and falls back to `text/plain`, receiving the payload through an asynchronous nonblocking pipe. Received bytes replace the active selection or are inserted at the caret.
+
+Clipboard transfers are serviced by the existing `poll()` loop in bounded chunks. Outgoing snapshots are independent of the document gap buffer and remain available during in-flight sends. The current payload ceiling is 64 MiB. Paste targets the document editor only: paste into picker/path fields, PRIMARY selection, X11 clipboard support, external UTF-8 validation/replacement policy, and clipboard-manager persistence after process exit are not implemented. The end-to-end mock-compositor test exercises a separate receiver for Copy/Cut and an external MIME offer for Paste.
+
 ## Ownership rule: copy is a snapshot
 
 When the user invokes Copy, NekoEdit copies the selected UTF-8 byte range into a dedicated immutable clipboard allocation. The clipboard must never point into the live document buffer or the gap buffer.

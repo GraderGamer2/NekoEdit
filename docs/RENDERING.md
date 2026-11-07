@@ -1,72 +1,90 @@
-# Software rendering and system fonts
+# Software rendering and TrueType fonts
 
-NekoEdit will draw its own interface and text using CPU-side pixel buffers. No GPU API or external graphics/font library is required.
+NekoEdit's Wayland backend draws the interface and document into CPU-side pixel buffers and presents them through `wl_shm`. It does not use OpenGL, Vulkan, EGL, a GUI toolkit, or a third-party runtime font library. The application remains a freestanding Linux x86-64 executable; the outline rasterizer is a small freestanding C translation unit linked with the assembly implementation.
 
-## Renderer
+## Active software renderer
 
-- Maintain a software surface in memory.
-- Draw fills, borders, separators, selection backgrounds, caret, and glyph masks into that surface.
-- Use dirty rectangles or line-level invalidation so a keypress does not require a full-window redraw.
-- Convert the canonical internal pixel representation to the pixel format expected by the active display backend.
-- On Wayland, present through `wl_shm` buffers and observe buffer-release events before reusing memory.
-- On X11, begin with core image upload (`PutImage`) and query the server's visual masks, depth, and image byte order instead of assuming one pixel layout.
+- Draw fills, borders, separators, selection backgrounds, caret, and glyph masks into the shared-memory surface.
+- Wait for the compositor's buffer-release event before reusing a buffer.
+- Rasterize TrueType outlines into bounded grayscale glyph masks, then alpha-blend coverage into the software surface.
+- Keep a 128-entry glyph-ID cache to avoid decoding and rasterizing the same glyph on every redraw.
+- Keep the embedded 5×7 bitmap renderer as a fallback when no supported TrueType font is loaded or the outline path cannot draw a glyph.
 
-A text editor does not need OpenGL, Vulkan, EGL, or hardware acceleration. Optimize only after measuring actual redraw and typing workloads.
+The current implementation is Wayland-only. The X11 backend is not ready. A text editor does not need a GPU API; performance changes should be based on measured redraw and typing workloads.
 
-## System-font discovery
+## Font selection and loading
 
-No Fontconfig dependency will be used. Scan a small, documented set of common directories:
+No Fontconfig, FreeType, or HarfBuzz dependency is used. Font loading is deterministic rather than a recursive system-font scan:
 
-- `$XDG_DATA_HOME/fonts` when set.
-- `~/.local/share/fonts`.
-- `/usr/local/share/fonts`.
-- `/usr/share/fonts`.
+1. If `NEKOEDIT_FONT` is set, NekoEdit attempts that file first.
+2. Otherwise it tries these common Debian font paths, in order:
+   - `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`
+   - `/usr/share/fonts/truetype/liberation2/LiberationMono-Regular.ttf`
+   - `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf`
 
-The implementation should avoid following symlink loops, handle unreadable directories, and cap recursion depth and total scan work. Font discovery should happen lazily or be cached so startup does not recursively scan the entire filesystem.
+To test a specific TrueType font:
 
-Do not assume that a `.ttf` or `.otf` filename proves a font is supported. Inspect the SFNT table directory and accept only fonts with the required tables and TrueType `glyf`/`loca` outlines in the initial implementation. CFF/CFF2, bitmap-only, color, and variable font support are deferred.
+~~~sh
+NEKOEDIT_FONT=/absolute/path/to/font.ttf ./build/nekoedit [file]
+~~~
 
-## Initial font parser
+The test-only `NEKOEDIT_DISABLE_FONT=1` environment variable bypasses font loading so legacy fixed-bitmap UI tests can use their original pixel expectations. It is not a user-facing preference.
 
-Implement bounds-checked parsing for the SFNT header and table directory, followed by the required tables for glyph selection, metrics, and outlines:
+The loader maps the font read-only and validates the SFNT directory and required `cmap`, `head`, `hhea`, `maxp`, `hmtx`, `loca`, and `glyf` tables. Unicode cmap formats 4 and 12 are supported. An optional OS/2 version 4+ table supplies typographic ascent, descent, and line gap when `fsSelection.USE_TYPO_METRICS` is set; otherwise hhea metrics remain active. The implementation accepts bounded single-face TrueType-outline SFNT files; a filename extension alone is not treated as proof of support.
 
-- `cmap`: Unicode code point to glyph index.
-- `head`: units per em and global font bounds.
-- `hhea` and `hmtx`: horizontal metrics.
-- `maxp`: glyph count and limits.
-- `loca` and `glyf`: TrueType glyph outlines.
-- `name` and `OS/2`: family/style and useful selection metadata.
-- `kern` format 0 may be supported for simple pair kerning after basic layout works.
+## Outline decoding and rasterization
 
-Every table offset and length must be validated against the font file length before reading. Composite glyph recursion must have depth and cycle guards. Reject malformed fonts cleanly.
+The parser supports TrueType `glyf` simple and composite glyphs:
 
-## Glyph rasterization
+- Simple outlines validate contour endpoints, instruction bounds, repeated flags, and signed/short X/Y deltas.
+- Composite outlines are expanded with a 16-level recursion limit and cycle detection. The decoder handles XY offsets, point matching, uniform and independent scales, and the complete 2×2 F2Dot14 transform within bounded component/contour/point storage.
+- Composite instructions are bounds-checked and skipped; TrueType hinting is not executed.
+- Empty glyphs are valid. Malformed or over-limit data is rejected rather than read past the mapped file.
 
-The initial rasterizer can use a compact fixed-point pipeline:
+Quadratic contours are flattened with bounded deterministic subdivisions, including implied on-curve midpoints between consecutive off-curve points. The rasterizer applies a non-zero-winding fill rule and a 4×4 subpixel coverage grid. Its output is an 8-bit grayscale bitmap bounded to 32×32 pixels, which the Wayland renderer alpha-blends into the surface.
 
-1. Decode simple and composite TrueType glyph contours.
-2. Convert quadratic Bézier curves into line segments using bounded subdivision.
-3. Rasterize the contours into an 8-bit grayscale coverage mask. A small fixed supersampling grid is an acceptable first implementation; cache the result by font, glyph ID, and pixel size.
-4. Composite the mask into the software surface using foreground color and coverage.
+## Metric-aware text layout
 
-Do not implement TrueType hinting in the first pass. Use font metrics for advance widths and vertical placement. A glyph cache avoids rerasterizing the same common characters on every redraw.
+The document layout now consumes the same TrueType metrics that the renderer uses:
 
-## Font selection and fallback
+- **Horizontal advance:** each code point, including U+0020 SPACE, uses its cmap-mapped glyph's `hmtx` advance scaled to the fixed 12-pixel em and rounded to the nearest pixel. The resulting advance is bounded to 1–32 pixels. If no font is loaded or the metric is invalid/unmapped, layout falls back to the legacy eight-pixel advance.
+- **Wrapping and indexing:** pixel advances determine soft-wrap boundaries and per-line visual-row counts. The per-line index/Fenwick tree therefore reflects the same pixel width that the renderer paints.
+- **Hit-testing and selection:** pointer X mapping, caret placement, selection rectangles, and document painting use the same advance and wrapping decisions. Picker and path-prompt text also use font advances.
+- **Vertical line box:** the parser uses OS/2 sTypoAscender/sTypoDescender/sTypoLineGap when a version 4+ OS/2 table sets `USE_TYPO_METRICS`; otherwise it uses hhea ascent, descent, and line gap. The combined line box (`ascent - descent + lineGap`) is scaled to the 12-pixel em, rounded upward, and clamped to 12–32 pixels. One runtime row-pitch value drives visible-row calculations, pointer Y mapping, line movement geometry, document/selection painting, and caret placement. Without a loaded font, the row pitch remains 12 pixels.
+- **Tabs:** document tabs retain 32-pixel stops; they are not shaped glyph runs.
 
-Prefer installed monospace fonts for the editor. Since Fontconfig is intentionally excluded, selection must be deterministic and self-contained: inspect family/style metadata, rank known monospace families where present, and use glyph advance metrics as a secondary monospace check. Let the user choose a font file/family later through a small preference UI.
+The document em defaults to 12 pixels and can be changed during the session from Settings in the 8–24px range, in two-pixel steps. A size change updates hmtx advances, raster glyph size, OS/2/hhea-derived line pitch, and rebuilds the visual-row index before repainting. The Settings dropdown remains open during repeated size adjustments. A separate UI font-size setting defaults to 10px and adjusts from 8px to 14px in one-pixel steps; it changes ordinary interface text sizing without changing document metrics or the file picker's height-fitted dialog font. Glyph cache entries are keyed by both glyph ID and raster size, so sizes can coexist safely in the bounded cache. Font-family switching and persistent font preferences remain unimplemented.
 
-If a font lacks a glyph, try another discovered font before drawing a replacement box. Do not silently substitute a different font for the whole document.
+## Soft wrapping and horizontal viewport
 
-## Text layout limitations
+Soft wrapping is enabled by default. In this mode, the available document width and the same TrueType pixel advances used for glyph rendering determine wrap boundaries and per-line visual-row weights in the line index/Fenwick tree.
 
-Rendering glyphs is not equivalent to shaping text. The initial renderer targets left-to-right text and common Latin editing. Extended Latin, Greek, and Cyrillic can be rendered when the chosen fonts contain the required glyphs.
+The session-only **Wrap Lines** setting can disable soft wrapping. In no-wrap mode each logical line contributes exactly one visual row to the vertical index, while doc_view_left_px represents the horizontal pixel origin of the viewport. Native Wayland horizontal-axis events and Shift+vertical-wheel events move that origin in 14px increments. The caret is kept horizontally visible as it moves; pointer hit-testing adds the current pixel offset before resolving the nearest grapheme boundary; tabs retain their 32px stops; and unwrapped selection backgrounds are clipped to the document viewport. Re-enabling wrapping resets the horizontal offset and rebuilds wrapped visual-row weights. The horizontal viewport currently has wheel/Shift+wheel navigation but no dedicated draggable horizontal scrollbar.
 
-Complex script shaping, Arabic joining, Indic shaping, bidirectional layout, full IME composition, variable fonts, CFF/CFF2, color glyphs, and advanced OpenType GPOS shaping are explicitly deferred. The implementation should keep decoding, shaping, line layout, and rasterization separate so those capabilities can be added without replacing the renderer.
+## Preferences and unfinished font controls
 
-## Correctness
+The Settings menu exposes **Confirm before saving**, **Font size**, **UI font size**, and **Wrap Lines**. These preferences currently apply to the running session and are not yet persisted across launches. The document-size range is 8–24px in two-pixel steps; UI text size is independent at 8–14px in one-pixel steps; Wrap Lines defaults to ON. Both font-size steppers keep the dropdown open for consecutive adjustments. Runtime font-family/file selection still needs a validated font-loading path, safe replacement of mapped SFNT state, and coordinated cmap/metrics/outline-cache refresh. The current NEKOEDIT_FONT environment variable remains the font-file override.
 
-- Keep UTF-8 decoding separate from glyph lookup.
-- Never index a font table without validating its bounds.
-- Use checked arithmetic for dimensions, strides, and allocation sizes.
-- Cache glyph masks with a clear memory budget and eviction policy.
-- Ensure the software renderer clips every draw operation to the surface bounds.
+## Text-rendering limits
+
+The document renderer decodes the first Unicode scalar of each grapheme cluster for cmap lookup and rasterization. Grapheme-aware editing/navigation is implemented separately, but that does not constitute full grapheme shaping. Combining marks are not positioned over a base glyph; ZWJ sequences, variation selectors, and multi-scalar emoji are not composed into shaped glyph runs.
+
+The current renderer does not implement:
+
+- TrueType hinting;
+- OpenType CFF/CFF2, WOFF, variable fonts, bitmap/color fonts, or color glyph layers;
+- kerning, GSUB/GPOS, ligatures, script shaping, or bidirectional text;
+- combining-mark positioning or complete emoji ZWJ rendering;
+- non-ASCII keyboard text entry, dead-key/compose input, or Wayland text-input/IME.
+
+Glyph fallback and the embedded bitmap keep unsupported content from requiring a third-party font stack, but the result is not typographically equivalent to a shaping engine such as HarfBuzz or a complete rasterizer such as FreeType.
+
+## Verification and correctness
+
+The mock Wayland integration test builds a deterministic synthetic TrueType font and checks SFNT table/outline parsing, simple and composite glyph decoding, curve rasterization, antialiased pixels in the shared-memory framebuffer, horizontal 8px/5px glyph advances, a cmap-mapped 3px space advance, wrapping/indexed visual rows, proportional pointer hit-testing, and OS/2 `USE_TYPO_METRICS` vertical line pitch (with hhea retained as fallback). GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed the complete workflow on the metric-layout implementation. This is mock-compositor coverage; a manual GNOME/Mutter smoke test of the latest font layout remains outstanding.
+
+Bounds checks must precede font-table reads and allocation arithmetic. Surface drawing must clip to its bounds. Cache memory and outline scratch storage remain explicitly capped.
+
+## Overlay text and horizontal scaling
+
+Overlay glyphs are rasterized at the active UI font size. Their advances are converted back through the same horizontal transform applied to glyph origins, so the screen-space advance remains consistent when the dialog's height constrains the font size. The Open/Save picker uses this same advance for text clipping, visible-prefix measurement, caret placement, and pointer hit-testing. The path prompt and other transformed labels use the corresponding active-overlay helper. The no-font 5x7 fallback retains its legacy spacing.
