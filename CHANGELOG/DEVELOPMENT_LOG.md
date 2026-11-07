@@ -1,5 +1,39 @@
 # NekoEdit development log
 
+## 2026-11-07 — Make the editor UI follow configured window geometry
+
+**User report:** Maximize and interactive edge/corner resizing now work on GNOME/Mutter without crashes, but the footer and other UI elements remained at their original positions after the window changed size.
+
+### Diagnosis
+
+- Window geometry and the shared-memory buffer were already updated from compositor configure events. The editor document also recalculated its wrapping columns and visible rows.
+- Several UI elements still had fixed design coordinates. In particular, the byte-count and mode labels in the status bar remained at x=480 and x=744 even when the footer background followed the bottom of the resized surface.
+- The file picker and path prompt were drawn at fixed 720×408 and 704×176 design dimensions and fixed top-left offsets. Their pointer hit-tests used the same fixed coordinates, so simply moving or scaling the visuals would have made controls difficult to click.
+
+### Implementation
+
+- Recalculate footer label anchors from the current window width. The status row remains attached to `height - 20`.
+- Recalculate the document's current wrap columns and visible row count from every configured geometry (the existing document renderer/cursor visibility logic consumes those values).
+- Keep the picker and path prompt at their original design size when possible. If the surface is smaller, center and scale each within a 16-pixel margin.
+- Add a shared drawing transform for rectangle and glyph origins. Apply its inverse to picker pointer hit-testing and vertical scrollbar dragging, preserving alignment between the visible controls and their interactive areas.
+- Keep the window-management protocol unchanged: compositor configure events still determine the dimensions, and buffer replacement remains release-gated.
+
+### Regression coverage
+
+- Maximize geometry: 1920×1080, including footer anchors and document rows/columns.
+- Restore geometry: 800×480, checking the original design anchors are restored.
+- Interactive resize geometry: 720×480, checking the footer follows the width while the bottom bar follows the height.
+- Minimum-size geometry: 480×360, checking responsive footer placement and fitted modal geometry.
+- The mock opens the file picker at 720×480 and 480×360, checks its transformed Cancel-button background, clicks that exact button, and verifies that the picker closes. Both the optional cursor-shape and no-extension compositor paths exercise the complete workflow.
+
+### Verification and artifact
+
+- Responsive source and geometry-state regression: [`6eec3c4f13c2`](https://github.com/GraderGamer2/NekoEdit/commit/6eec3c4f13c2798909b64e1a166ba836cc12f9c3). The initial build exposed nonzero initializers accidentally placed in `.bss`; these were changed to zero-initialized storage before the passing run.
+- Expanded small-window interaction test: [`5f03a54c693f`](https://github.com/GraderGamer2/NekoEdit/commit/5f03a54c693f6b80817dc4a7d6b2afe545374082). Its first CI run caught an overly precise pixel probe intersecting the Cancel label glyph. The probe was moved to empty button padding; the button click itself remains at its center.
+- GitHub Actions [Build and test #301](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328626464) passed all eight steps on [`3ae9583d34bc`](https://github.com/GraderGamer2/NekoEdit/commit/3ae9583d34bccfddfeb2d5e6e2a03f4b326186a9).
+- Artifact: `nekoedit-linux-x86_64`, 31,328 bytes; SHA-256 `9be62cda309b4c460e90df2200a9963ab9e541f011c471d9510e9d1dbcbd4de4`; artifact ID `13556316772`; expires 2026-11-14 02:19:14 UTC. [Download Actions #301 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328626464/artifacts/13556316772).
+- The user has verified the Maximize and edge/corner resize behavior on the live GNOME/Mutter desktop. The responsive-layout artifact still needs the user's visual confirmation; CI verifies layout state, rendered footer/modal positions, and mouse hit targets in the mock compositor.
+
 ## 2026-11-07 — Correct cursor-shape get_pointer argument marshalling
 
 **User report:** The Actions #297 binary exited during Wayland startup with:

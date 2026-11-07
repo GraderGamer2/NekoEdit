@@ -5,9 +5,20 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **250** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit).
+- Recorded implementation commits: **254** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit + 4 responsive-layout implementation and regression-test commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Responsive window-layout geometry
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 02:13:58 UTC | [`f66fe64eb20d`](https://github.com/GraderGamer2/NekoEdit/commit/f66fe64eb20d14167d8f7f77af8d614ebf6999c7) | fix: adapt editor UI layout to window geometry |
+| 2026-11-07 02:16:12 UTC | [`6eec3c4f13c2`](https://github.com/GraderGamer2/NekoEdit/commit/6eec3c4f13c2798909b64e1a166ba836cc12f9c3) | fix: zero-initialize responsive layout transform state |
+| 2026-11-07 02:18:08 UTC | [`5f03a54c693f`](https://github.com/GraderGamer2/NekoEdit/commit/5f03a54c693f6b80817dc4a7d6b2afe545374082) | test: verify responsive layout and modal hit targets |
+| 2026-11-07 02:18:57 UTC | [`3ae9583d34bc`](https://github.com/GraderGamer2/NekoEdit/commit/3ae9583d34bccfddfeb2d5e6e2a03f4b326186a9) | test: probe empty picker button padding |
+
+Actions [#301](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328626464) passed all eight workflow steps on the final test commit and uploaded artifact [`13556316772`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328626464/artifacts/13556316772), 31,328 bytes, SHA-256 `9be62cda309b4c460e90df2200a9963ab9e541f011c471d9510e9d1dbcbd4de4`. The UI now positions the status/footer metadata against the active width, while the picker and path prompt are centered and scaled to smaller surfaces with matching mouse hit testing.
 
 ## Cursor-shape get_pointer argument marshalling
 

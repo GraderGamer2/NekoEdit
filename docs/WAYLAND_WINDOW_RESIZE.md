@@ -36,6 +36,17 @@ Protocol reference: [cursor-shape-v1](https://wayland.app/protocols/cursor-shape
 
 If the compositor does not advertise the cursor-shape extension, NekoEdit skips the hover-cursor requests but keeps the same pointer hit-testing and `xdg_toplevel.resize` behavior.
 
+## Responsive layout geometry
+
+The renderer recalculates layout geometry whenever a compositor configure changes the surface size.
+
+- The status/footer row follows the lower edge at `window_height - 20`. The byte-count and mode labels use width-derived horizontal anchors rather than the original 800-pixel positions.
+- The document view uses the configured width for wrapping and the configured height for its visible-row count. Cursor visibility and selection/document rendering use those current row and column bounds.
+- The file picker keeps its 720×408 design size when it fits; otherwise it is centered and scaled to the available surface with a 16-pixel margin. The path prompt follows the same rule using its 704×176 design size.
+- Rectangle and glyph origins are transformed through the same modal coordinate mapping. Pointer hit-testing and picker scrollbar dragging apply the inverse mapping, so the visible controls and their interactive regions stay aligned.
+
+The responsive layout is exercised at 1920×1080 (Maximize), 800×480 (Restore), 720×480 (interactive resize), and the declared 480×360 minimum. The mock checks footer pixels, fitted modal geometry, the Cancel button's drawn position, and its actual click target at resized widths.
+
 ## Regression coverage
 
 `tests/wayland_mock.py` verifies the exact eight-byte `get_pointer` payload (new device ID followed by the existing `wl_pointer` ID), startup pointer-enter ordering, button-press serial and edge mask, all four edges and four corners, cursor-shape mapping and refreshed enter serials, plus the no-extension fallback. The mock verifies protocol sequencing; a real GNOME/Mutter session is still required to confirm the interactive drag behavior end to end.
