@@ -1,3 +1,31 @@
+## 2026-11-08 — Manual selection confirmation and clipboard/history review (documentation only)
+
+### User-reported desktop result
+
+- The user reports that text selection now behaves like a conventional text editor: character/word selection works, and edge auto-scroll follows the drag as expected.
+- This is recorded as a manual user confirmation of the latest build, separate from the mock-compositor evidence in Actions #579.
+- No further selection implementation work was requested in this review.
+
+### Clipboard review
+
+- Inspected `src/backend/clipboard.c`. Copy uses an independent immutable mmap-backed snapshot; transfers are nonblocking and keep their source alive while sends are in flight.
+- Current implementation constants are eight source records, four simultaneous outgoing-send records, and a 64 MiB per-payload/receive-buffer ceiling. These are reusable resource/concurrency and payload limits, not a lifetime counter on sequential Ctrl+C/Ctrl+V use.
+- The snapshot is owned by the running NekoEdit process. The current code does not guarantee that the latest copied text remains available after the process exits; that requires the desktop clipboard manager to capture the offer or a separate first-party companion service to continue serving it.
+- The user requests effectively unlimited sequential copy/paste use and preservation of the latest copied text after NekoEdit closes. The documented direction is to test desktop clipboard-manager handoff first and consider a companion service only if needed. Session persistence is distinct from surviving logout/reboot; the latter has not been requested.
+
+### Undo/Redo review
+
+- Inspected `src/editor/history.c`. Current Undo/Redo stores full-document snapshots, including caret/selection metadata, with a 4 MiB individual snapshot limit, 32 MiB aggregate memory budget, and 16 entries per stack.
+- If a new snapshot cannot be captured, the existing implementation clears all history. Full-document snapshots make long history expensive because each checkpoint duplicates the entire document.
+- The recommended direction is a delta-based edit journal, preferably disk-backed, so retained history scales with changed bytes rather than document size multiplied by operation count. It must preserve caret/selection state, redo-branch invalidation, paste/cut reversibility, and explicit disk-full/corruption behavior.
+- The user requests practically unlimited Undo/Redo. Whether Undo history must survive closing and reopening NekoEdit is not yet specified; do not assume restart-persistent history is required.
+
+### Scope of this review
+
+- Updated current status, clipboard requirements, Undo design notes, README/architecture roadmap, project history, commit index, and PR description.
+- Added `docs/UNDO.md` as a design brief.
+- **No editor, clipboard, history, or test source code was changed. No new implementation work was started.** Wait for explicit user authorization before implementing these requirements.
+
 ## 2026-11-08 — Add bounded XKB Multi_key Compose input
 
 ### Implementation
