@@ -944,3 +944,34 @@ No feature development is being started in this entry. The next development task
 - This enables real font glyphs to become visible, but layout is intentionally still fixed at 8×12 cells and the rasterizer currently uses a 12-pixel em. Variable-width advances, kerning, shaping, combining-mark placement, Settings font selection, and Settings font-size controls remain later steps.
 - The embedded bitmap remains available if no supported system font is found, or the requested outline cannot be rasterized.
 - CI still must validate the exact source commit before this milestone is considered complete.
+
+
+---
+
+## 2026-11-07 — Connect TrueType rasterization to the visible Wayland renderer
+
+**Scope:** move the font work from parsed outlines to visible framebuffer glyphs without adding third-party runtime libraries.
+
+### Rendering pipeline
+
+- Added `src/font/rasterizer.c` as a freestanding compilation unit. It is compiled with `-ffreestanding`, no builtins, no stack protector, no PIE, no red zone, and no unwind metadata; the final ELF remains static with no interpreter or dynamic dependencies.
+- Added TrueType contour flattening for on-curve vertices, straight edges, off-curve quadratic controls, cyclic contour starts, and implied on-curve midpoints between consecutive off-curve controls. Quadratic curves use four deterministic subdivisions and flattened outline storage is capped at 16,384 points.
+- Added bounded non-zero-winding fill with 4×4 subpixel coverage sampling. The output is a grayscale glyph bitmap capped at 32×32 pixels.
+- Routed Wayland's `draw_glyph` path through the rasterizer when a font is loaded. Glyph coverage is alpha-blended into the compositor's shared-memory surface, and a 128-entry glyph-ID LRU cache avoids repeated decoding/rasterization on repaint. The embedded 5×7 bitmap remains as a fallback.
+- Font loading tries an explicit `NEKOEDIT_FONT` path first, then common Debian locations for DejaVu Sans Mono, Liberation Mono, and DejaVu Sans. This is deterministic path probing rather than a recursive font discovery service and does not use Fontconfig.
+- The document drawing path decodes the first Unicode scalar of each grapheme cluster before cmap lookup. Full grapheme shaping is not implemented: combining marks, variation selectors, ZWJ sequences, ligatures, kerning, bidirectional text, and complex scripts remain unsupported.
+
+### Regression coverage and verification
+
+- Extended the deterministic synthetic SFNT fixture with a quadratic glyph containing consecutive off-curve points. It validates nonzero raster coverage for both a straight-edged glyph and a curve requiring an implied midpoint.
+- Added a Wayland framebuffer assertion: a one-character document rendered with the synthetic font must contribute antialiased glyph pixels to the actual shared-memory buffer.
+- Preserved the legacy fixed-coordinate bitmap UI tests with the test-only `NEKOEDIT_DISABLE_FONT=1` switch; the dedicated font test removes that switch and points `NEKOEDIT_FONT` at its generated fixture.
+- The initial curve-fixture attempt incorrectly set the Y deltas to zero. The fixture flags/delta encoding were corrected; the successful CI test covers the intended curve rather than merely accepting a non-empty straight contour.
+- GitHub Actions [Build and test #368](https://github.com/GraderGamer2/NekoEdit/actions/runs/42347799006) passed all eight workflow steps on [`61b0d415031c`](https://github.com/GraderGamer2/NekoEdit/commit/61b0d415031c14158b15ad99dd3dfc0209d452a7). Artifact `nekoedit-linux-x86_64`: 53,890 bytes, SHA-256 `eb1ae5c10ee5967f9f173a5804963c465f016516e7b8481d9892a7230a0350bc`, ID `13564486238`, expires 2026-11-14 06:37:10 UTC.
+
+### Known boundaries
+
+- The editor still advances in fixed 8-pixel cells and renders at a 12-pixel em. Horizontal metrics, variable-width layout, line reflow, Settings font selection, and font-size controls are not integrated.
+- TrueType hinting instructions are not executed. OpenType CFF/CFF2 outlines, variable fonts, kerning, shaping, glyph substitution, mark positioning, bidirectional layout, color glyph layers, and Wayland text-input/IME remain unsupported.
+- The rasterizer rejects oversized or malformed outline data under explicit limits; affected glyphs fall back to the embedded bitmap.
+- GitHub Actions validates the mock Wayland protocol/framebuffer. A manual GNOME/Mutter desktop smoke test after this renderer change remains outstanding.
