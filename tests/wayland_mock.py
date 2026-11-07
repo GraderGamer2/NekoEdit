@@ -1874,8 +1874,8 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Leave breathing room between the Bytes label and its value.
                     # "Bytes " uses the mapped 4px B, four 8px fallback
-                    # glyphs and its 3px SPACE. The empty-document "0" starts
-                    # at x=527; its third topological pixel on row 3 is x=529.
+                    # glyphs and its 3px SPACE. The document's "9" count starts
+                    # at x=527; its central lit pixel on row 3 is x=529.
                     bytes_gap_pixel = struct.unpack_from(
                         "<I", pixels, 349 * 800 * 4 + 524 * 4
                     )[0]
@@ -4433,6 +4433,7 @@ if __name__ == "__main__":
         # pixel-accurate field editing, and selected file-row geometry.
         run(
             sys.argv[1],
+            initial_file=render_path,
             font_picker_test=True,
             font_test_path=font_path,
             file_workflow=True,
