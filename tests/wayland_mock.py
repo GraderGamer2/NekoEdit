@@ -758,13 +758,15 @@ xkb_symbols "nekoedit-test" {
                             b"key <AC01> { [ U00E9, U1F600 ] };",
                         )
                         keymap_data = keymap_data.replace(
-                            b"key <AC02> { [ s, S ] };",
-                            b'key <AC02> { type = "ALPHABETIC", symbols[Group1] = [ EuroSign, eacute ] };',
+                            b'key <AC02> {\n        type = "ALPHABETIC",\n        symbols[Group1] = [ s, S ]\n    };',
+                            b'key <AC02> {\n        type = "ALPHABETIC",\n        symbols[Group1] = [ EuroSign, eacute ]\n    };',
                         )
                         keymap_data = keymap_data.replace(
                             b"key <AC03> { [ d, D ] };",
                             b'key <AC03> { type = "ONE_LEVEL", symbols[Group1] = [ emdash ] };',
                         )
+                        if b"EuroSign, eacute" not in keymap_data or b"[ emdash ]" not in keymap_data:
+                            raise AssertionError("named Unicode test keymap substitutions did not apply")
                 elif sparse_keymap_test:
                     # This map has enough punctuation symbols to pass the
                     # old symbol-count test, but no alphabetic keys. It must
