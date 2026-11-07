@@ -109,7 +109,7 @@ The Build and test workflow runs on pushes to main and pull requests targeting m
 - New, open, save, and save as.
 - A simple built-in directory-browser file picker.
 - Full XKB modifier/type/action semantics beyond the supported common ASCII subset, plus broader non-ASCII keysym and layout handling.
-- Add a line-start index, grapheme-aware navigation, Unicode glyph rendering, and Unicode text input. (Geometrically growing gap-buffer storage and large-file Open are implemented.)
+- Add grapheme-aware navigation, Unicode glyph rendering, and Unicode text input. (The per-line byte/visual-row index, geometrically growing gap-buffer storage, and large-file Open are implemented.)
 - IME/dead-key composition through the appropriate Wayland text-input protocol.
 - Undo and redo.
 - Horizontal document scrolling.
@@ -148,7 +148,7 @@ See [docs/RENDERING.md](docs/RENDERING.md).
 2. Native Wayland window, xdg-shell setup, and software-buffer proof of concept. (Implemented prototype.)
 3. Pointer/keyboard editing, in-window file operations, and initial ASCII document editing. (Implemented prototype.)
 4. Bounded XKB text-v1 parsing and common ASCII layout-aware translation. (Implemented subset; sparse maps safely fall back.) Next: broader XKB modifier/type semantics and Wayland text-input integration.
-5. Dynamic gap-buffer growth, line indexing, grapheme-aware navigation, Unicode glyph/input support, undo/redo, and scrolling. (Geometric mmap-backed growth from 64 KiB to a 1 GiB safety ceiling is implemented and tested, including insert-at-full-capacity, suffix relocation, and staged Open/save of a 65,537-byte file. Vertical cursor-follow scrolling, a proportional editor scrollbar, pointer dragging, and mouse-wheel scrolling are implemented and CI-tested. The user also confirmed that editing and saving a 70 KB file works on GNOME. The line-start index, grapheme handling, Unicode input/rendering, undo/redo, and horizontal scrolling remain unfinished.)
+5. Document storage, navigation, Unicode, undo/redo, and scrolling. (Geometric mmap-backed gap-buffer growth from 64 KiB to a 1 GiB safety ceiling is implemented and tested, including insert-at-full-capacity, suffix relocation, and staged Open/save of a 65,537-byte file. The per-line byte-span/visual-row index uses byte and visual-row Fenwick trees for O(log N) line lookup; ordinary character edits point-update the affected line, newline edits split/merge records, and width changes reflow the visual-row counts. Vertical cursor-follow scrolling, a proportional editor scrollbar, pointer dragging, and mouse-wheel scrolling are implemented and CI-tested. The user also confirmed that editing and saving a 70 KB file works on GNOME. Grapheme handling, Unicode input/rendering, undo/redo, and horizontal scrolling remain unfinished.)
 6. Installed-font discovery, TrueType parsing, glyph rasterization, and text layout.
 7. File open/save, the directory-browser picker, and clipboard interoperability.
 8. Output-scale/fractional-scale handling, multi-buffer frame scheduling, X11 backend, compatibility testing, and profiling. Compositor-configured window resizing is implemented.

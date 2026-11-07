@@ -367,7 +367,7 @@ The mock suite fills the initial 65,536-byte document exactly, inserts at byte z
 
 Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user subsequently confirmed that a 70 KB file opens, accepts edits, and saves correctly on the live GNOME/Mutter desktop without crashing or behaving anomalously. This completes the real-desktop dynamic-storage/large-file verification.
 
-The next document-core steps are a per-line byte-length/visual-row index and grapheme-aware navigation. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, horizontal scrolling, and clipboard integration remain unfinished.
+The next document-core step is grapheme-aware cursor movement and deletion. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, horizontal scrolling, and clipboard integration remain unfinished. The indexed line-navigation implementation and its verification are recorded in Phase P below.
 
 ---
 
@@ -384,3 +384,22 @@ The editor reserves a 24-pixel gutter for the scrollbar, and line wrapping, sele
 Artifact [13557973435](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492/artifacts/13557973435) contains the freestanding Linux x86-64 executable (32,919 bytes; SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`). The live GNOME/Mutter scrollbar check has not yet been performed. The user's separate 70 KB file edit/save test confirms the preceding dynamic-storage phase, but does not validate this new pointer and wheel interaction.
 
 The next document-core milestone is a dynamic per-line index for byte lengths and visual-row counts, using prefix-sum trees so normal character edits do not shift all subsequent line offsets. Grapheme-aware cursor movement and Unicode input/rendering follow. The custom system-font parser and glyph rasterizer remain in the later rendering/font phase.
+
+
+---
+
+## 21. Phase P — indexed document line navigation
+
+**Implementation:** [87a33b203501](https://github.com/GraderGamer2/NekoEdit/commit/87a33b20350180f324b70ce1bff091deabef0bab), feat: add indexed document line navigation.  
+**Transactional Open correction:** [78db904b063f](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c), invalidate the old index when a new document is committed.  
+**Verification:** [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320), all eight workflow steps successful.
+
+The document core now maintains one compact record per logical line. Each 16-byte record stores the line's byte span (including LF), its soft-wrapped visual-row count, and the corresponding nodes of two Fenwick prefix trees. One tree indexes byte lengths; the other indexes visual-row counts. Both byte-offset-to-line and visual-row-to-line lookups use O(log N) prefix searches, then scan only within the selected logical line to locate the exact character boundary.
+
+Ordinary byte insertion and deletion update the current line's metadata and point-update the Fenwick paths. Inserting LF splits a record; deleting LF merges two records. Since records remain in a compact contiguous array, structural newline edits shift the following records and rebuild the prefix trees. A window-width change recalculates the visual-row count for each logical line and rebuilds the row tree.
+
+The index is integrated into caret/visual mapping, pointer hit-testing, scrollbar geometry, logical line status, and the renderer's first visible byte. As a result, painting a scrolled viewport no longer has to walk all preceding document bytes. The mmap-backed index starts at 256 records and grows geometrically to a bounded maximum of 0x01000000 lines. If it cannot be allocated or the document exceeds that line bound, the editor marks the index unavailable and retains the previous scan-based mapping as a fallback. Successful transactional Open invalidates the previous file's records before the next lookup rebuilds the index for the new document.
+
+The regression suite inspects the actual per-line records and independently verifies both Fenwick node arrays on a document containing hard newlines, a soft-wrapped line, and a tab. It exercises ordinary insert/delete, newline split/merge, and exact save preservation. The complete Actions #326 run also confirms the existing 65,537-byte Open/save and editor-scrollbar path, including visibility, proportional thumb geometry, wheel movement, and thumb dragging. The live GNOME/Mutter index path still requires manual confirmation.
+
+Artifact [13559973130](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320/artifacts/13559973130) contains the freestanding Linux x86-64 executable (34,965 bytes; SHA-256 e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a).

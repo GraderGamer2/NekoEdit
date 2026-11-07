@@ -1,5 +1,36 @@
 # NekoEdit development log
 
+## 2026-11-07 — Indexed document line navigation
+
+**Roadmap milestone:** replace whole-document scans for byte-offset/visual-row mapping with an indexed logical-line model while keeping UTF-8 byte offsets and the existing gap buffer as canonical storage.
+
+### Implementation
+
+- Added a dynamically mmap-backed array of 16-byte logical-line records. Each record stores its byte span (including a terminating LF), soft-wrapped visual-row count, byte-length Fenwick node, and visual-row Fenwick node.
+- Added two Fenwick prefix trees. Byte offsets resolve to a logical line in O(log N); visual rows resolve to a logical line in O(log N). Only the selected line is then scanned to map the exact character insertion point.
+- Ordinary byte insertion/deletion recalculates the affected line and applies point updates to the relevant Fenwick paths. LF insertion splits a line; LF deletion merges adjacent lines. Because records are kept in a compact array, those structural edits shift the following records and rebuild the two trees.
+- Window-width changes remeasure per-line visual-row counts and rebuild the visual-row tree, since soft wrapping depends on available columns.
+- Integrated indexed lookup into caret/visual mapping, pointer hit-testing, scrollbar geometry, status-bar logical line calculation, and the renderer's first visible byte. Rendering no longer scans every document byte above the current viewport.
+- Transactional Open now invalidates the previous document's index on successful replacement; the next indexed lookup rebuilds it for the newly committed bytes.
+- The index starts with 256 records and grows geometrically up to 0x01000000 logical lines. If allocation fails or the line-count bound is exceeded, it is marked unavailable and the previous scan-based mapping remains the correctness fallback.
+
+### Regression coverage
+
+- Added a mixed document with hard newlines, a 100-character soft-wrapped line, and a tabbed final line. The test inspects each line's byte span/visual-row count and independently recomputes the expected Fenwick nodes.
+- Verified that ordinary insertion and Backspace update the affected line/Fenwick nodes, Enter splits the line into two records, and Backspace merges them again; the exact saved bytes must match the original fixture.
+- Re-ran the 65,537-byte Open/save fixture and confirmed that index invalidation on Open restores the large-file scrollbar instead of retaining stale metadata from the previous document.
+- The full existing wrapping, selection, keyboard, UTF-8, file-picker, resize, editor-scrollbar, Wayland protocol, and WAYLAND_DISPLAY/WAYLAND_SOCKET integration regressions remain in the same workflow.
+
+### Verification and artifact
+
+- Source milestone: [87a33b203501](https://github.com/GraderGamer2/NekoEdit/commit/87a33b20350180f324b70ce1bff091deabef0bab), feat: add indexed document line navigation.
+- Follow-up regression/fix commits: [62cbcf339394](https://github.com/GraderGamer2/NekoEdit/commit/62cbcf33939445e5563267b6ae452e845026ad23), [0eda4d095330](https://github.com/GraderGamer2/NekoEdit/commit/0eda4d095330f6b2726300e34573e559631dd0d1), [552d561dab6f](https://github.com/GraderGamer2/NekoEdit/commit/552d561dab6fccdb3cbd0415ec3c1c8cd9a8afe2), [89cc025cd3d7](https://github.com/GraderGamer2/NekoEdit/commit/89cc025cd3d7b10b5dd97098ee7c1684cd197cfa), [9e0d3c8c6789](https://github.com/GraderGamer2/NekoEdit/commit/9e0d3c8c67892b0e7a46dc5e6423f3ca3568a814), and [78db904b063f](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c).
+- GitHub Actions [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320) passed all eight workflow steps: freestanding build/ELF validation, CLI smoke tests, complete Wayland mock tests, executable inspection, and artifact upload.
+- Artifact: nekoedit-linux-x86_64, 34,965 bytes; SHA-256 e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a; artifact ID 13559973130; expires 2026-11-14. [Actions #326 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320/artifacts/13559973130).
+- Manual validation of the indexed navigation path on GNOME/Mutter remains pending. The successful mock-compositor suite does not replace that desktop check.
+
+---
+
 ## 2026-11-07 — Editor vertical scrollbar and mouse-wheel scrolling
 
 **Roadmap milestone:** provide direct viewport navigation for documents that exceed the visible editor area, without making the caret jump back into view during manual scrolling.
@@ -11,7 +42,7 @@
 - Added Wayland pointer hit-testing, thumb dragging, and track-click repositioning. The gutter is inset from the compositor resize band, and the text layout reserves 24 pixels for it.
 - Routed Wayland vertical-axis deltas to the editor when the picker/path prompt is inactive; the picker retains its own independent wheel and scrollbar state.
 - Kept manual viewport movement separate from caret-follow logic, so scrolling does not immediately snap back to the current insertion point.
-- The scrollbar total uses visual rows, so hard newlines and soft wrapping both contribute. A line-start index and per-line visual metadata remain a subsequent optimization.
+- The scrollbar total uses visual rows, so hard newlines and soft wrapping both contribute. The subsequent per-line byte/visual-row index now supplies the total through its visual-row Fenwick tree.
 
 ### Regression coverage and verification
 

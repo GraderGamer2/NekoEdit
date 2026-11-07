@@ -1,13 +1,29 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the editor-scrollbar milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 176 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the indexed-document-navigation milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **264** (261 previously indexed commits + 3 editor-scrollbar implementation/fix/regression-test commits).
+- Recorded implementation commits: **271** (264 previously indexed commits + 7 indexed-document-navigation implementation, regression, diagnostic, and correction commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Indexed document line navigation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 04:11:29 UTC | [87a33b203501](https://github.com/GraderGamer2/NekoEdit/commit/87a33b20350180f324b70ce1bff091deabef0bab) | feat: add indexed document line navigation |
+| 2026-11-07 04:13:04 UTC | [62cbcf339394](https://github.com/GraderGamer2/NekoEdit/commit/62cbcf33939445e5563267b6ae452e845026ad23) | test: diagnose indexed pointer hit-testing regression |
+| 2026-11-07 04:14:00 UTC | [0eda4d095330](https://github.com/GraderGamer2/NekoEdit/commit/0eda4d095330f6b2726300e34573e559631dd0d1) | test: account for multi-line index hit-test fixture |
+| 2026-11-07 04:15:26 UTC | [552d561dab6f](https://github.com/GraderGamer2/NekoEdit/commit/552d561dab6fccdb3cbd0415ec3c1c8cd9a8afe2) | test: cover incremental index updates at caret position |
+| 2026-11-07 04:16:00 UTC | [89cc025cd3d7](https://github.com/GraderGamer2/NekoEdit/commit/89cc025cd3d7b10b5dd97098ee7c1684cd197cfa) | test: expose index records in scrollbar regression state |
+| 2026-11-07 04:17:00 UTC | [9e0d3c8c6789](https://github.com/GraderGamer2/NekoEdit/commit/9e0d3c8c67892b0e7a46dc5e6423f3ca3568a814) | test: report line metadata for large-file scrollbar failure |
+| 2026-11-07 04:18:35 UTC | [78db904b063f](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c) | fix: invalidate line index when opening a document |
+
+Actions [#326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320) passed all eight workflow steps on the final correction commit. The index stores per-line byte spans and wrapped visual-row counts plus two Fenwick trees. Ordinary byte edits point-update the affected line/tree paths; LF split/merge shifts records and rebuilds the trees; width changes reflow visual-row weights. Tests inspect actual record/Fenwick values, verify ordinary edits and newline split/merge, and retain the large-file editor-scrollbar, picker, keyboard, resize, and Wayland transport regressions.
+
+Artifact [13559973130](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320/artifacts/13559973130) contains nekoedit-linux-x86_64, 34,965 bytes; SHA-256 e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a; expires 2026-11-14.
 
 ## Editor vertical scrollbar and wheel scrolling
 

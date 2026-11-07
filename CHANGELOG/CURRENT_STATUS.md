@@ -4,11 +4,12 @@
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
 **Latest window-management/layout fix:** [`6eec3c4f13c2`](https://github.com/GraderGamer2/NekoEdit/commit/6eec3c4f13c2798909b64e1a166ba836cc12f9c3) — recalculates footer anchors and fits/centers the file picker and path prompt to the current surface while preserving compositor-driven Maximize and edge resizing  
-**Latest implementation-code tip:** [`028379b66a6b`](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96) — adds the editor's proportional vertical scrollbar and wheel scrolling, with a zero-initialized scrollbar cache; interaction tests and the 24-pixel content-gutter adjustment are recorded below  
+**Latest implementation-code tip:** [`78db904b063f`](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c) — implements the per-line byte/visual-row index and invalidates stale metadata when transactional Open replaces a document  
 **Confirmed desktop window management:** the user has confirmed on GNOME/Mutter that Maximize, interactive edge resizing, and corner resizing all work without crashes; the dense-ID root-cause fix is [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b), with resize hit-testing/cursor fixes in [`064af05090c4`](https://github.com/GraderGamer2/NekoEdit/commit/064af05090c455e5effe02a20bc1e1b9a9942f27)  
 **Latest layout validation:** GitHub Actions [Build and test #302](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328775920) passed all eight steps on `4a333cf636ae`. It verifies responsive footer and modal geometry, and the user confirmed this build resizes correctly on GNOME/Mutter. Artifact `nekoedit-linux-x86_64`, 31,328 bytes, SHA-256 `f8c811db9d6e589a7447960fedaa65469bcf32992632c820094a0c5aaa1624aa`, artifact ID `13556526553`  
 **Latest document-storage desktop verification:** The user opened a 70 KB text file on GNOME/Mutter, edited it, and saved the changes successfully without crashing or anomalous behavior. This confirms the dynamic document growth/Open milestone beyond the 64 KiB boundary on the real desktop. Mock-compositor coverage remains in Actions [#312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234) and [#313](https://github.com/GraderGamer2/NekoEdit/actions/runs/42331219008).  
-**Latest editor-scrollbar validation:** GitHub Actions [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563) passed the scrollbar-specific integration suite, including empty-document hiding, thumb rendering on the 65,537-byte wrapped document, three-row wheel movement, drag-to-bottom, and wheel-up. The branch-head rebuild [#318](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492) passed all eight workflow steps and uploaded artifact `nekoedit-linux-x86_64`, 32,919 bytes, SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`, artifact ID `13557973435`. Manual scrollbar interaction on GNOME/Mutter remains the next desktop check.
+**Latest editor-scrollbar validation:** GitHub Actions [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563) passed the scrollbar-specific integration suite, including empty-document hiding, thumb rendering on the 65,537-byte wrapped document, three-row wheel movement, drag-to-bottom, and wheel-up. The branch-head rebuild [#318](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492) passed all eight workflow steps and uploaded artifact `nekoedit-linux-x86_64`, 32,919 bytes, SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`, artifact ID `13557973435`. Manual scrollbar interaction on GNOME/Mutter remains the next desktop check.  
+**Latest indexed document-navigation validation:** GitHub Actions [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320) passed all eight workflow steps. Tests inspect line records and both Fenwick trees, verify ordinary insertion/deletion point updates and newline split/merge, and re-run the 65,537-byte wrapped-file scrollbar plus the existing picker/window/input regressions. Artifact `nekoedit-linux-x86_64`: 34,965 bytes, SHA-256 `e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a`, artifact ID `13559973130`, expires 2026-11-14. Live GNOME/Mutter index validation remains pending.
 **Latest responsive-layout regression test:** [`3ae9583d34bc`](https://github.com/GraderGamer2/NekoEdit/commit/3ae9583d34bccfddfeb2d5e6e2a03f4b326186a9) — checks responsive footer positions, centered/scaled picker geometry, and the real Cancel hit target at 720×480 and 480×360  
 **Latest picker implementation-code tip:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — hide the scrollbar when all directory entries fit in the visible rows  
 **Latest picker integration-test commit:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — non-overflow scrollbar visibility and non-draggable gutter regression coverage  
@@ -20,7 +21,7 @@
 
 The editor now draws a proportional vertical scrollbar only when visual content exceeds the viewport. Wayland wheel deltas scroll the document independently of the picker; the thumb can be dragged or repositioned by clicking elsewhere on its track. The text layout reserves a 24-pixel gutter, and the mock suite verifies thumb rendering and navigation against a 65,537-byte wrapped document. Actions #316 passes all eight workflow steps. Manual scrollbar interaction on GNOME/Mutter remains the next desktop check.
 
-**Next document-core priority:** implement the per-line byte-length/visual-row index with prefix-sum trees, then use it to accelerate line mapping and navigation. Grapheme-aware movement and Unicode text handling follow. The custom font engine belongs to Phase 6, after the document core is ready.
+**Next document-core priority:** grapheme-aware cursor movement and deletion, followed by broader Unicode handling. The custom system-font parser and glyph rasterizer remain in Phase 6; they were intentionally not pulled ahead of the completed line-index milestone.
 
 ## Start here when continuing development
 
@@ -148,7 +149,7 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 
 ## Known unfinished work
 
-- A line-start index and faster line/visual-row mapping (dynamic gap-buffer growth is implemented).
+
 - Unicode glyph lookup/font rendering.
 - Non-ASCII keyboard text input, IME, compose and dead-key handling.
 - Grapheme-cluster-aware movement and deletion.
@@ -170,7 +171,7 @@ File-operation limitations: picker path and filename typing is ASCII-only; non-A
 
 - `src/entry.S` — freestanding entry point, command-line parsing, backend launch, help/version.
 - `src/linux/syscall.S` — low-level syscall helpers.
-- `src/backend/wayland.S` — Wayland protocol, window/UI, input, fixed-capacity gap-buffer document storage, rendering, file operations, UTF-8 code-point helpers.
+- `src/backend/wayland.S` — Wayland protocol, window/UI, input, mmap-backed dynamically growing gap-buffer storage, per-line byte/visual-row index with Fenwick trees, rendering, file operations, and UTF-8 code-point helpers.
 - `src/backend/xkb.S` — bounded XKB text-v1 parser and ASCII symbol lookup.
 - `tests/smoke.sh` — CLI smoke tests.
 - `tests/wayland_mock.py` — mock compositor and end-to-end protocol/editor regression tests.
