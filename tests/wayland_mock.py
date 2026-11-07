@@ -2723,7 +2723,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     workflow_click(200, 20, serial, "open Settings for runtime font selection")
                     serial += 10
-                    workflow_click(200, 148, serial, "open the font-file picker")
+                    settings_click(200, 148, serial, "open the font-file picker")
                     serial += 10
                     if picker_u32("picker_mode") != 3:
                         raise AssertionError("Settings did not open the dedicated font picker")
@@ -2752,7 +2752,7 @@ xkb_symbols "nekoedit-sparse" {
                     serial += 2
                     workflow_click(200, 20, serial, "reopen Settings for valid font replacement")
                     serial += 10
-                    workflow_click(200, 148, serial, "reopen font-file picker")
+                    settings_click(200, 148, serial, "reopen font-file picker")
                     serial += 10
                     workflow_click(200, 378, serial, "focus font Search field for alternate face")
                     serial += 10
