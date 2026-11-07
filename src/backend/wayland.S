@@ -10700,7 +10700,7 @@ doc_scroll_horizontal_by:
     jns .Ldoc_scroll_horizontal_nonnegative
     xor eax, eax
 .Ldoc_scroll_horizontal_nonnegative:
-    cmp eax, r12
+    cmp eax, r12d
     jbe .Ldoc_scroll_horizontal_clamped
     mov eax, r12d
 .Ldoc_scroll_horizontal_clamped:
