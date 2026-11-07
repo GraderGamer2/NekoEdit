@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **295** (281 previously indexed commits + 9 Settings, clipboard, history, and regression-test commits + 5 horizontal-viewport implementation/test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **322** (295 previously indexed commits + 27 responsive-layout, horizontal-scrollbar, selection/navigation, Find/Replace implementation and test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -743,6 +743,41 @@ Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425
 | Date (UTC) | Commit | Subject |
 |---|---|---|
 | 2026-11-07 | [`d68e304d985e`](https://github.com/GraderGamer2/NekoEdit/commit/d68e304d985e5b6cdadb7b0fe68c4b83a22d004f) | docs: record clipboard history and settings milestones |
+
+## Responsive layout, horizontal scrollbar, keyboard navigation, and Find/Replace (2026-11-07)
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 | [`ed9f432dca08`](https://github.com/GraderGamer2/NekoEdit/commit/ed9f432dca0883be6c2e1d76b3ecbca589703466) | feat: add draggable horizontal scrollbar |
+| 2026-11-07 | [`4b116c25e730`](https://github.com/GraderGamer2/NekoEdit/commit/4b116c25e7304743ff54cd3c731da887cbd0eb01) | fix: scale settings controls with UI typography |
+| 2026-11-07 | [`d040871ee7c0`](https://github.com/GraderGamer2/NekoEdit/commit/d040871ee7c09ed8386b342975b3fd8eca2ee401) | test: follow scaled settings hit targets |
+| 2026-11-07 | [`9ba8ec298672`](https://github.com/GraderGamer2/NekoEdit/commit/9ba8ec298672201d31551eb5bacd90116eeaf098) | feat: add word navigation and double-click selection |
+| 2026-11-07 | [`eb4c1a5bc7bd`](https://github.com/GraderGamer2/NekoEdit/commit/eb4c1a5bc7bd9a0f33d9d5fa3eeb735329d0d4ca) | test: cover keyboard word selection behavior |
+| 2026-11-07 | [`050a1f7bd27e`](https://github.com/GraderGamer2/NekoEdit/commit/050a1f7bd27e82627139a2e77d598b2a473f2c5a) | test: run isolated word selection scenario |
+| 2026-11-07 | [`b02b9ae3ff4d`](https://github.com/GraderGamer2/NekoEdit/commit/b02b9ae3ff4de94253cc80d7ae404051008aa942) | test: isolate word-selection fixture from startup click check |
+| 2026-11-07 | [`e10aea281db6`](https://github.com/GraderGamer2/NekoEdit/commit/e10aea281db6f385ce303f0980a6df086463c4d4) | test: reset caret before word navigation assertions |
+| 2026-11-07 | [`a8bd382bbd75`](https://github.com/GraderGamer2/NekoEdit/commit/a8bd382bbd75b4fb99786ae8c83cf91a83cfd3f2) | feat: add find and replace modal |
+| 2026-11-07 | [`fc45e5556459`](https://github.com/GraderGamer2/NekoEdit/commit/fc45e5556459e2697c7097c69ae1fb6a6f76dd10) | fix: correct find dialog layout and hit testing |
+| 2026-11-07 | [`45b01ace7b73`](https://github.com/GraderGamer2/NekoEdit/commit/45b01ace7b7397ce4e7a52b747907d38a23cc9b5) | test: cover find and replace workflows |
+| 2026-11-07 | [`cd9acdbe39e2`](https://github.com/GraderGamer2/NekoEdit/commit/cd9acdbe39e2eab94b8a90f7381c8658c617a757) | test: exercise find and replace modal transitions |
+| 2026-11-07 | [`73cb45028b69`](https://github.com/GraderGamer2/NekoEdit/commit/73cb45028b697cf9b1655240cea8e45620575cd0) | test: verify horizontal scrollbar thumb dragging |
+| 2026-11-07 | [`d13b91d13cef`](https://github.com/GraderGamer2/NekoEdit/commit/d13b91d13cefc89e8334e389cb26bc5d60dbee05) | test: verify shift-wheel horizontal scrolling |
+| 2026-11-07 | [`c7bc47f98f96`](https://github.com/GraderGamer2/NekoEdit/commit/c7bc47f98f962d14a58a5c76640b86890f51756a) | test: declare horizontal scroll helper before scenario |
+| 2026-11-07 | [`4284d4fd9260`](https://github.com/GraderGamer2/NekoEdit/commit/4284d4fd9260eae15ecebc4e36af9449d12224c1) | fix: keep find field caret and text within modal |
+| 2026-11-07 | [`716b71a955a5`](https://github.com/GraderGamer2/NekoEdit/commit/716b71a955a5ef82a7b94f8f44bb78a7b050ec9e) | fix: address find caret with valid x86-64 register |
+| 2026-11-07 | [`80403869a088`](https://github.com/GraderGamer2/NekoEdit/commit/80403869a088acc3e487f31a2ef8f49849060f9b) | fix: scale overlays uniformly with UI font |
+| 2026-11-07 | [`87944aaa2a28`](https://github.com/GraderGamer2/NekoEdit/commit/87944aaa2a285c48d159eee9e5125852b86b7268) | fix: clamp responsive overlays by aspect ratio |
+| 2026-11-07 | [`aa801709220d`](https://github.com/GraderGamer2/NekoEdit/commit/aa801709220db9fca4bba48cd7e30a3685abb326) | test: assert adaptive overlay sizing and centering |
+| 2026-11-07 | [`145aa56de417`](https://github.com/GraderGamer2/NekoEdit/commit/145aa56de417d5393661ce48614b1ef5e56aaeb0) | test: use responsive Settings panel coordinates |
+| 2026-11-07 | [`c70aca26a65a`](https://github.com/GraderGamer2/NekoEdit/commit/c70aca26a65adaa3c328120d616348b69a962d29) | test: close Settings before document hit-testing |
+| 2026-11-07 | [`844da8f8a8fb`](https://github.com/GraderGamer2/NekoEdit/commit/844da8f8a8fbaeb447f03e99480fb13ad541f4b7) | feat: add Ctrl+Up and Ctrl+Down line navigation |
+| 2026-11-07 | [`e9a2b4e64c36`](https://github.com/GraderGamer2/NekoEdit/commit/e9a2b4e64c3623a3b43060a8e6260387281ddda9) | test: verify Ctrl+Up and Ctrl+Down paragraph navigation |
+| 2026-11-07 | [`b26963e0949f`](https://github.com/GraderGamer2/NekoEdit/commit/b26963e0949f1bc90a51535f52e590e2e1ee8b44) | test: isolate horizontal hit-testing from Settings dismissal |
+| 2026-11-07 | [`49dd8861c89b`](https://github.com/GraderGamer2/NekoEdit/commit/49dd8861c89b93507c5e48f1910934d4dd2a7d13) | test: use responsive Settings coordinates for font selection |
+| 2026-11-07 | [`c52d165b0ec6`](https://github.com/GraderGamer2/NekoEdit/commit/c52d165b0ec6440b726609290ce97167cf811a18) | test: send only one Settings dismiss key |
+| 2026-11-07 | [`aa473842d6c1`](https://github.com/GraderGamer2/NekoEdit/commit/aa473842d6c15bbc3af40d48eec9d30eec938710) | test: close Settings via its title control before hit testing |
+
+Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed the complete workflow on `aa473842d6c1`. Artifact [13581805940](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760/artifacts/13581805940) is 67,298 bytes; SHA-256 `b19ddfb04d6d269949ecb993cf211ed91d5269d84ee6ce5ae0c06fd008b164c0`. Mock-compositor verification does not replace manual GNOME/Mutter testing.
 
 ## Maintenance
 

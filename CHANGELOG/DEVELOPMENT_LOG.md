@@ -1250,3 +1250,33 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 
 - Settings steppers, Wayland document clipboard, and bounded Undo/Redo are now implemented. The next major editor-core milestone is horizontal scrolling, which should be designed together with soft-wrap behavior, text-origin offsets, selection/caret clipping, pointer hit-testing, and scrollbar/viewport policy.
 - After that, continue runtime font-family/file switching and persistent preferences, then non-ASCII keyboard text/IME and fuller shaping, output/fractional scaling and multi-buffer scheduling, and X11.
+
+
+---
+
+## 2026-11-07 — Responsive overlays, horizontal scrollbar, keyboard selection, and Find/Replace
+
+### Responsive UI layout and horizontal scrolling
+
+- Added a centered Settings panel whose geometry is derived from the active UI font and available window size. Panel scale, overlay raster size, and pointer hit-testing share one aspect-ratio-preserving transform; the effective screen font remains the requested UI size instead of being magnified twice. Find/Replace uses the same centered and fitted design.
+- In no-wrap mode, the editor now renders a bottom horizontal scrollbar with a proportional thumb. Clicking the rail moves the thumb, dragging preserves the pointer-to-thumb grab offset, and native horizontal-wheel plus Shift+vertical-wheel events update the same document pixel origin.
+- Updated content viewport geometry so the bottom rail is not painted over document rows. Vertical scrolling, caret visibility, pointer hit-testing, and selection clipping use the resized document viewport.
+- The mock Wayland suite verifies scaled Settings clicks, centered Settings/Find panels, preservation of the 16px UI setting through the overlay transform, horizontal wheel motion, draggable-thumb motion, Shift+wheel motion, and pointer hit-testing after scrolling.
+
+### Keyboard selection and document search
+
+- Added Ctrl+Left/Right word navigation and Ctrl+Up/Down logical-line navigation, with Shift variants extending the active selection. Ctrl+Home/End jumps to document boundaries, and Ctrl+Backspace/Delete removes the adjacent word.
+- A double-click selects the whole word at the pointer. Word runs use ASCII alphanumeric/underscore classification and keep non-ASCII scalars together; punctuation and whitespace fall back to selecting one grapheme.
+- Added Ctrl+F Find and Ctrl+H Find/Replace. Enter/F3/Shift+F3 navigate literal matches, Ctrl+Enter replaces the selected match, and Replace All iterates across the document while reporting the replacement count. Query-field editing includes caret movement, selection-all, backspace/delete, clipping, and horizontal caret-following.
+- The Find/Replace keyboard entry currently follows the editor's supported ASCII XKB subset; non-ASCII keyboard entry/IME remains a separate roadmap item.
+
+### Verification
+
+- GitHub Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed the complete freestanding build, CLI smoke tests, full Wayland mock-compositor integration suite, ELF inspection, and artifact upload on [`aa473842d6c1`](https://github.com/GraderGamer2/NekoEdit/commit/aa473842d6c15bbc3af40d48eec9d30eec938710).
+- Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760/artifacts/13581805940) is 67,298 bytes, artifact ID 13581805940, SHA-256 `b19ddfb04d6d269949ecb993cf211ed91d5269d84ee6ce5ae0c06fd008b164c0`, and expires 2026-11-14.
+- This is deterministic mock-compositor verification. A manual GNOME/Mutter smoke test of the new bottom scrollbar, responsive overlays, and Find/Replace is still outstanding. The user has separately confirmed that runtime TTF selection works.
+
+### Roadmap handoff
+
+- The requested adaptive UI, horizontal scrollbar, keyboard selection/navigation, and Find/Replace milestone is complete and green in CI.
+- Continue with persistent preferences next: independent document/UI sizes, selected TTF path, Wrap Lines, and Confirm before saving. Keep the existing freestanding/no-third-party-runtime design and test persistence using isolated HOME/XDG_CONFIG_HOME paths.
