@@ -216,6 +216,7 @@ def run(
     save_roundtrip: bool = False,
     file_workflow: bool = False,
     keyboard_layout_test: bool = False,
+    unicode_keyboard_test: bool = False,
     punctuation_render_test: bool = False,
     utf8_edit_test: bool = False,
     utf8_delete_test: bool = False,
@@ -620,7 +621,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test:
+                if keyboard_layout_test or unicode_keyboard_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -750,6 +751,11 @@ xkb_symbols "nekoedit-test" {
 };
 };
 \0"""
+                    if unicode_keyboard_test:
+                        keymap_data = keymap_data.replace(
+                            b"key <AC01> { [ a, A ] };",
+                            b"key <AC01> { [ U00E9, U1F600 ] };",
+                        )
                 elif sparse_keymap_test:
                     # This map has enough punctuation symbols to pass the
                     # old symbol-count test, but no alphabetic keys. It must
@@ -2263,6 +2269,31 @@ xkb_symbols "nekoedit-sparse" {
                             )
                     observations.append(
                         "all 32 printable ASCII punctuation glyphs rendered without question-mark fallback"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if unicode_keyboard_test:
+                    # AC01 is XKB keycode 38 (evdev 30). The first level
+                    # produces U+00E9 and Shift selects supplementary U+1F600.
+                    key_step(1500, 30, "XKB U00E9 inserts a two-byte UTF-8 scalar")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1502, 1, 0, 0, 0))
+                    )
+                    key_step(1510, 30, "XKB U1F600 inserts a four-byte UTF-8 scalar")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1520, 0, 0, 0, 0))
+                        + wire_message(12, 0)
+                    )
+                    unicode_state = read_document_state()
+                    expected_unicode = b"\xc3\xa9\xf0\x9f\x98\x80"
+                    if unicode_state.get("doc_contents") != expected_unicode:
+                        raise AssertionError(
+                            "XKB Unicode keysyms were not converted to the expected UTF-8 bytes: "
+                            f"{unicode_state.get('doc_contents')!r}"
+                        )
+                    observations.append(
+                        "XKB U00E9 and U1F600 keysyms inserted valid two-/four-byte UTF-8"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -5086,6 +5117,23 @@ if __name__ == "__main__":
             os.unlink(xkb_path)
         except FileNotFoundError:
             pass
+
+    # Direct XKB Unicode keysyms must become valid UTF-8 in the document.
+    unicode_fd, unicode_path = tempfile.mkstemp(prefix="nekoedit-unicode-keysyms-")
+    try:
+        with os.fdopen(unicode_fd, "wb") as unicode_document:
+            unicode_document.write(b"")
+        run(
+            sys.argv[1],
+            initial_file=unicode_path,
+            unicode_keyboard_test=True,
+        )
+    finally:
+        try:
+            os.unlink(unicode_path)
+        except FileNotFoundError:
+            pass
+
     # Basic bounded snapshot undo/redo, including replacement of a selection.
     history_fd, history_path = tempfile.mkstemp(prefix="nekoedit-history-")
     try:
