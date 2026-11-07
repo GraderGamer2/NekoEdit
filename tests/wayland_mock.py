@@ -1165,12 +1165,16 @@ xkb_symbols "nekoedit-sparse" {
                     # Backspace removes the entire preceding emoji modifier
                     # cluster, not just the modifier or base scalar.
                     target_cluster = 3
-                    for index in range(target_cluster):
+                    for index in range(target_cluster - 1):
                         key_step(serial, 106, "move to emoji modifier cluster")
                         serial += 2
                     before_delete = read_document_state()
                     if before_delete["doc_cursor"] != offsets[target_cluster]:
-                        raise AssertionError("test did not reach the expected emoji cluster boundary")
+                        raise AssertionError(
+                            "test did not reach the expected emoji cluster boundary: "
+                            + repr({"cursor": before_delete["doc_cursor"],
+                                    "expected": offsets[target_cluster]})
+                        )
                     key_step(serial, 14, "Backspace entire emoji grapheme")
                     serial += 2
                     expected_after_backspace = (
