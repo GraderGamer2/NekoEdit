@@ -3849,13 +3849,13 @@ wayland_main:
     cmp eax, 15
     je .keyboard_tab
     mov edi, eax
-    call keycode_to_ascii
+    call keycode_to_unicode
     test eax, eax
     jz .event_loop
     mov r12d, eax
     call doc_delete_selection
     mov edi, r12d
-    call doc_insert_byte
+    call doc_insert_codepoint_utf8
     jmp .keyboard_changed
 .keyboard_open_command:
     call start_open_prompt
@@ -10497,6 +10497,108 @@ doc_insert_byte:
     ret
 .size doc_insert_byte, . - doc_insert_byte
 
+# Insert one Unicode scalar as one to four UTF-8 bytes at the document cursor.
+# The caller has already removed an active selection, so all bytes belong to
+# the same key input action and the existing grapheme/index machinery applies.
+.global doc_insert_codepoint_utf8
+.type doc_insert_codepoint_utf8, @function
+doc_insert_codepoint_utf8:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 16
+    mov r12d, edi
+    cmp r12d, 0x10ffff
+    ja .Ldoc_insert_codepoint_done
+    cmp r12d, 0x20
+    jb .Ldoc_insert_codepoint_done
+    cmp r12d, 0x7f
+    jb .Ldoc_insert_codepoint_one
+    cmp r12d, 0x9f
+    jbe .Ldoc_insert_codepoint_done
+    cmp r12d, 0xd800
+    jb .Ldoc_insert_codepoint_scalar
+    cmp r12d, 0xdfff
+    jbe .Ldoc_insert_codepoint_done
+.Ldoc_insert_codepoint_scalar:
+    cmp r12d, 0x7ff
+    jbe .Ldoc_insert_codepoint_two
+    cmp r12d, 0xffff
+    jbe .Ldoc_insert_codepoint_three
+    # Four-byte UTF-8: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx.
+    mov eax, r12d
+    shr eax, 18
+    or eax, 0xf0
+    mov byte ptr [rsp], al
+    mov eax, r12d
+    shr eax, 12
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 1], al
+    mov eax, r12d
+    shr eax, 6
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 2], al
+    mov eax, r12d
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 3], al
+    mov r13d, 4
+    jmp .Ldoc_insert_codepoint_emit
+.Ldoc_insert_codepoint_three:
+    # Three-byte UTF-8: 1110xxxx 10xxxxxx 10xxxxxx.
+    mov eax, r12d
+    shr eax, 12
+    or eax, 0xe0
+    mov byte ptr [rsp], al
+    mov eax, r12d
+    shr eax, 6
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 1], al
+    mov eax, r12d
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 2], al
+    mov r13d, 3
+    jmp .Ldoc_insert_codepoint_emit
+.Ldoc_insert_codepoint_two:
+    # Two-byte UTF-8: 110xxxxx 10xxxxxx.
+    mov eax, r12d
+    shr eax, 6
+    or eax, 0xc0
+    mov byte ptr [rsp], al
+    mov eax, r12d
+    and eax, 0x3f
+    or eax, 0x80
+    mov byte ptr [rsp + 1], al
+    mov r13d, 2
+    jmp .Ldoc_insert_codepoint_emit
+.Ldoc_insert_codepoint_one:
+    mov byte ptr [rsp], r12b
+    mov r13d, 1
+.Ldoc_insert_codepoint_emit:
+    xor r14d, r14d
+.Ldoc_insert_codepoint_loop:
+    cmp r14d, r13d
+    jae .Ldoc_insert_codepoint_done
+    movzx edi, byte ptr [rsp + r14]
+    call doc_insert_byte
+    inc r14d
+    jmp .Ldoc_insert_codepoint_loop
+.Ldoc_insert_codepoint_done:
+    add rsp, 16
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_insert_codepoint_utf8, . - doc_insert_codepoint_utf8
+
 .type doc_delete_at_cursor, @function
 doc_delete_at_cursor:
     push rbx
@@ -12501,6 +12603,29 @@ keycode_to_ascii:
     pop rbx
     ret
 .size keycode_to_ascii, . - keycode_to_ascii
+
+# Document entry path: preserve ASCII fallback while accepting Unicode XKB
+# keysyms from a parsed text-v1 keymap. Prompt/search widgets remain ASCII.
+.type keycode_to_unicode, @function
+keycode_to_unicode:
+    push rbx
+    mov ebx, edi
+    cmp dword ptr [rip + keymap_format], 1
+    jne .Lkeycode_unicode_fallback
+    mov edi, ebx
+    mov esi, dword ptr [rip + shift_down]
+    mov edx, dword ptr [rip + caps_lock]
+    mov ecx, dword ptr [rip + level3_down]
+    mov r8d, dword ptr [rip + keyboard_group]
+    call xkb_lookup_unicode
+    pop rbx
+    ret
+.Lkeycode_unicode_fallback:
+    mov edi, ebx
+    call keycode_to_ascii
+    pop rbx
+    ret
+.size keycode_to_unicode, . - keycode_to_unicode
 
 .type draw_glyph, @function
 draw_glyph:
