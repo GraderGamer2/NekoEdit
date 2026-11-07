@@ -2543,9 +2543,9 @@ xkb_symbols "nekoedit-sparse" {
                     ):
                         raise AssertionError("Compose o e did not resolve to one two-byte UTF-8 scalar")
                     before_fallback = child_u32("doc_length")
-                    key_step(1579, 46, "Multi_key starts a literal-fallback sequence")
-                    key_step(1579, 17, "Compose buffers w as its first symbol")
-                    key_step(1579, 17, "unknown Compose w w pair preserves both symbols")
+                    key_step(1580, 46, "Multi_key starts a literal-fallback sequence")
+                    key_step(1581, 17, "Compose buffers w as its first symbol")
+                    key_step(1582, 17, "unknown Compose w w pair preserves both symbols")
                     if (
                         child_u32("doc_compose_active") != 0
                         or child_u32("doc_length") != before_fallback + 2
@@ -2559,16 +2559,16 @@ xkb_symbols "nekoedit-sparse" {
                         b"\xce\xb1\xd1\x8f\xc5\x93ww\xc3\xa9g\xcc\x81"
                     )
                     before_dead_key = child_u32("doc_length")
-                    key_step(1580, 33, "named dead_acute arms an acute accent")
+                    key_step(1590, 33, "named dead_acute arms an acute accent")
                     if child_u32("doc_pending_dead_mark") != 0x301 or child_u32("doc_length") != before_dead_key:
                         raise AssertionError("dead_acute inserted bytes instead of arming an accent")
-                    key_step(1590, 18, "dead_acute plus e composes to eacute")
+                    key_step(1600, 18, "dead_acute plus e composes to eacute")
                     if child_u32("doc_pending_dead_mark") != 0:
                         raise AssertionError("successful dead-key composition did not clear pending state")
                     if child_u32("doc_length") != before_dead_key + 2:
                         raise AssertionError("dead_acute + e did not insert one composed UTF-8 character")
-                    key_step(1600, 33, "dead_acute arms combining-mark fallback")
-                    key_step(1610, 34, "unsupported dead-key pair preserves base and combining mark")
+                    key_step(1610, 33, "dead_acute arms combining-mark fallback")
+                    key_step(1620, 34, "unsupported dead-key pair preserves base and combining mark")
                     composed_state = read_document_state()
                     if composed_state.get("doc_contents") != expected_unicode:
                         raise AssertionError(
@@ -2576,24 +2576,24 @@ xkb_symbols "nekoedit-sparse" {
                             f"{composed_state.get('doc_contents')!r}"
                         )
                     length_before_cancel = child_u32("doc_length")
-                    key_step(1620, 33, "dead_acute can be canceled")
-                    key_step(1630, 14, "Backspace cancels a pending dead key")
+                    key_step(1630, 33, "dead_acute can be canceled")
+                    key_step(1640, 14, "Backspace cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Backspace deleted document text instead of canceling the pending accent")
-                    key_step(1640, 33, "dead_acute arms Escape cancellation")
-                    key_step(1650, 1, "Escape cancels a pending dead key")
+                    key_step(1650, 33, "dead_acute arms Escape cancellation")
+                    key_step(1660, 1, "Escape cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape changed document text instead of canceling the pending accent")
-                    key_step(1660, 46, "Multi_key arms Compose Escape cancellation")
-                    key_step(1670, 17, "Compose buffers w before Escape")
+                    key_step(1670, 46, "Multi_key arms Compose Escape cancellation")
+                    key_step(1680, 17, "Compose buffers w before Escape")
                     if child_u32("doc_compose_active") != 1:
                         raise AssertionError("Compose state was not active before Escape cancellation")
-                    key_step(1680, 1, "Escape cancels a pending Compose sequence")
+                    key_step(1690, 1, "Escape cancels a pending Compose sequence")
                     if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape did not cancel Compose without inserting or deleting text")
-                    key_step(1690, 46, "Multi_key arms Compose Backspace cancellation")
-                    key_step(1700, 17, "Compose buffers w before Backspace")
-                    key_step(1710, 14, "Backspace cancels a pending Compose sequence")
+                    key_step(1700, 46, "Multi_key arms Compose Backspace cancellation")
+                    key_step(1710, 17, "Compose buffers w before Backspace")
+                    key_step(1720, 14, "Backspace cancels a pending Compose sequence")
                     if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Backspace did not cancel Compose without deleting document text")
                     observations.append(
