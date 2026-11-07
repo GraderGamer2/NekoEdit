@@ -1937,7 +1937,7 @@ window_status_top:      .long 0
 window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
 window_doc_pixel_width: .long 0
-window_doc_line_height: .long LINE_HEIGHT
+window_doc_line_height: .long 0
 window_doc_visible_rows: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
