@@ -466,7 +466,7 @@ int preferences_save(void)
         return 0;
     }
     result = syscall6(SYS_renameat, AT_FDCWD, (long)temporary_path,
-                      AT_FDCWD, (long)preferences_path, 0);
+                      AT_FDCWD, (long)preferences_path, 0, 0);
     if (syscall_error(result)) {
         (void)syscall6(SYS_unlinkat, AT_FDCWD, (long)temporary_path, 0, 0, 0, 0);
         return 0;
