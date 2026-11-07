@@ -547,3 +547,24 @@ The regression map maps one physical key to U+00E9 (é) and its Shift level to U
 ### Verification and boundaries
 
 Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393599670) passed the three requested refinement tests. After the Unicode-input work, Actions [Build and test #523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784) passed the complete build, CLI, preferences, Wayland mock, ELF inspection, and artifact-upload workflow on [`72695a3d9f3d`](https://github.com/GraderGamer2/NekoEdit/commit/72695a3d9f3dd7a714c5f80bf014b9e1d7fd28e6). Artifact [13582597118](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784/artifacts/13582597118) is 70,702 bytes. This is automated mock-compositor verification; GNOME/Mutter desktop testing of the latest settings restoration, responsive panels, search highlights, and Unicode typing remains outstanding.
+
+
+---
+
+## 30. Phase Z — whole-word pointer dragging, edge auto-scroll, and named Unicode keysyms
+
+### Whole-word mouse dragging
+
+Double-click now creates a complete word selection while preserving the active pointer grab. Dragging the held button extends the selection by whole words; moving to the left of the original word retains its right boundary and extends toward earlier words, while moving right retains the original left boundary. Single-click dragging continues to operate at character/grapheme boundaries.
+
+### Selection edge auto-scroll
+
+Selection motion is handled even when the pointer is outside the document viewport or the application surface. NekoEdit clamps the hit-test position to the nearest document edge while retaining the actual pointer location to determine the scroll direction. A separate timerfd drives scrolling while the mouse button is held and the pointer is outside the viewport. Vertical scrolling works in both soft-wrap modes; horizontal scrolling follows the pointer when Wrap Lines is disabled. Timer-driven scrolling continues if the pointer stops moving at the edge and stops on button release.
+
+### Named XKB Unicode keysyms
+
+The parser now resolves a curated set of 105 common named non-ASCII keysyms, covering Latin-1 symbol/letter names and selected currency, punctuation, quotation-mark, and typographic symbols such as EuroSign, endash, emdash, bullet, ellipsis, and trademark. These aliases populate the same per-key/group/level scalar table as explicit Uxxxx/Uxxxxx/Uxxxxxx tokens and use the existing UTF-8 document insertion path. This is a deliberate subset rather than full XKB support; complete virtual-modifier and action semantics, arbitrary custom type maps, compose/dead keys, and text-input/IME remain future work.
+
+### Regression coverage and verification
+
+The mock compositor verifies forward and reverse whole-word dragging after double-click; character-selection continuation after pointer-leave; vertical auto-scroll both immediately and while the pointer is stationary; horizontal auto-scroll with Wrap Lines disabled; and timer cleanup on release. XKB tests inspect the parsed scalar table and confirm explicit U+00E9/U+1F600 plus EuroSign/eacute/emdash insertion. GitHub Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed the complete freestanding build, CLI, preferences, Wayland integration, ELF inspection, and artifact-upload workflow on [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a). Artifact [13583613881](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881) is 72,303 bytes with SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`. A GNOME/Mutter desktop test of the new mouse interaction remains outstanding.
