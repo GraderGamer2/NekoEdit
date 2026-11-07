@@ -118,9 +118,6 @@ int main(void)
                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") != 0)
         fail("font path did not roundtrip");
 
-    if (preferences_set_font_path, 0) { /* Keep the public API referenced by the test. */
-        fail("unreachable");
-    }
     preferences_set_font_path("relative-font.ttf");
     if (preferences_font_path_ptr)
         fail("relative font path should not be persisted");
