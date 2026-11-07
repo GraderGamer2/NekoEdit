@@ -23,6 +23,15 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 
 Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the complete workflow on cb469d616f8b, including six dead-key token parsing, Latin-1 acute+e composition, base+combining fallback, Backspace/Escape cancellation, existing word-drag and auto-scroll regressions, ELF inspection, and artifact upload. Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes; SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8.
 
+## Extended XKB Unicode aliases: Greek and Cyrillic
+
+| Commit | Subject |
+|---|---|
+| [1c8f7fc34ac7](https://github.com/GraderGamer2/NekoEdit/commit/1c8f7fc34ac7cf01f339e09bb944daafd8958241) | feat: add Greek and Cyrillic XKB Unicode aliases |
+| [0bf445d90a47](https://github.com/GraderGamer2/NekoEdit/commit/0bf445d90a477324446f2a30a89395ecb202d7eb) | test: cover Greek and Cyrillic XKB aliases |
+
+Actions [Build and test #558](https://github.com/GraderGamer2/NekoEdit/actions/runs/42398813207) passed the full workflow on 0bf445d90a47. The mock integration fixture verified Greek_alpha → U+03B1 and Cyrillic_ya → U+044F in both the parsed scalar table and inserted UTF-8 document bytes. Artifact [13584039752](https://github.com/GraderGamer2/NekoEdit/actions/runs/42398813207/artifacts/13584039752) is 74,097 bytes; ZIP SHA-256 a3514ec12f0b97dc12a200d0f8b14f7ea91168fe3c1296935cae77d54b231df2.
+
 ## Whole-word drag selection, edge auto-scroll, and named XKB Unicode aliases
 
 | Commit | Subject |
