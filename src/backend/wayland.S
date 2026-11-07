@@ -4105,6 +4105,7 @@ picker_start:
     mov dword ptr [rip + picker_scroll_drag], 0
     mov dword ptr [rip + picker_wheel_remainder], 0
     mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     mov dword ptr [rip + path_prompt_mode], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_save_error], 0
@@ -6305,6 +6306,7 @@ begin_path_prompt:
     mov dword ptr [rip + path_prompt_length], 0
     mov byte ptr [rip + path_prompt_buffer], 0
     mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_save_error], 0
     ret
@@ -11599,7 +11601,6 @@ render_save_confirmation:
     push rbx
     push r12
     push r13
-    sub rsp, 8
     mov eax, dword ptr [rip + window_width]
     sub eax, 432
     shr eax, 1
@@ -11656,7 +11657,6 @@ render_save_confirmation:
     lea rdx, [rip + ui_save_confirm_cancel_label]
     call draw_text
 
-    add rsp, 8
     pop r13
     pop r12
     pop rbx
