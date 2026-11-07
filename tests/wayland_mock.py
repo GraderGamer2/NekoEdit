@@ -71,6 +71,7 @@ def run(
     use_wayland_socket: bool = False,
     send_protocol_error: bool = False,
     disconnect_after_configure_ack: bool = False,
+    reject_resize_buffer: bool = False,
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
@@ -1582,6 +1583,32 @@ xkb_symbols "nekoedit-sparse" {
                         client, (1, 0, struct.pack("<I", 257)),
                         "sync after maximized buffer creation",
                     )
+                    if reject_resize_buffer:
+                        # No surface attachment may be sent until the sync
+                        # callback confirms that create_buffer was processed.
+                        previous_timeout = client.gettimeout()
+                        client.settimeout(0.1)
+                        try:
+                            unexpected = client.recv(1)
+                        except socket.timeout:
+                            unexpected = None
+                        finally:
+                            client.settimeout(previous_timeout)
+                        if unexpected is not None:
+                            raise AssertionError(
+                                f"client sent data before the resize sync callback: {unexpected!r}"
+                            )
+                        message = b"mock rejected resized wl_buffer"
+                        encoded = message + b"\\0"
+                        padded = encoded + b"\\0" * (-len(encoded) % 4)
+                        error_payload = (
+                            struct.pack("<II", 11, 1)
+                            + struct.pack("<I", len(encoded))
+                            + padded
+                        )
+                        client.sendall(wire_message(1, 0, error_payload))
+                        observations.append("mock compositor rejected replacement wl_buffer before attach")
+                        return
                     client.sendall(wire_message(257, 0, struct.pack("<I", 1)))
                     expect_message(
                         client, (8, 1, struct.pack("<III", 256, 0, 0)),
@@ -2544,6 +2571,23 @@ xkb_symbols "nekoedit-sparse" {
             "mock compositor failed:\n" + "\n".join(errors)
             + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
         )
+    if reject_resize_buffer:
+        required = (
+            "Wayland buffer attach deferred: sync callback=257, buffer=256",
+            "Wayland compositor protocol error: mock rejected resized wl_buffer",
+        )
+        missing = [line for line in required if line not in stderr]
+        if (
+            result.returncode == 0
+            or missing
+            or "Wayland send failed: object=8, opcode=1" in stderr
+        ):
+            raise AssertionError(
+                "NekoEdit did not report the compositor's resize-buffer error before attach: "
+                f"status={result.returncode}, missing={missing!r}, stderr={stderr!r}"
+            )
+        print("Wayland resize sync reports create_buffer errors before wl_surface.attach.")
+        return
     if disconnect_after_configure_ack:
         expected = (
             "Wayland send failed: object=5, opcode=0, errno=32",
@@ -2743,6 +2787,9 @@ if __name__ == "__main__":
         except FileNotFoundError:
             pass
 
+    # The resize-buffer barrier must expose a compositor wl_display.error
+    # before the client attempts to attach the rejected replacement buffer.
+    run(sys.argv[1], file_workflow=True, reject_resize_buffer=True)
     # Full File menu, Open, Save, and Save As interaction tests on both
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)
