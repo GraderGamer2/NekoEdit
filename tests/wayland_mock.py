@@ -83,6 +83,7 @@ def run(
     utf8_invalid_test: bool = False,
     utf8_pointer_test: bool = False,
     gap_buffer_test: bool = False,
+    dynamic_growth_test: bool = False,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
@@ -348,7 +349,7 @@ def run(
                         15, 2,
                         struct.pack(
                             "<Iii", 777,
-                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98))) * 256,
+                            (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test) else 98))) * 256,
                             (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test) else 110) * 256,
                         ),
                     )
@@ -360,7 +361,7 @@ def run(
                 if not (
                     sparse_keymap_test or punctuation_render_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
-                    or gap_buffer_test
+                    or gap_buffer_test or dynamic_growth_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -1058,7 +1059,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_columns", "window_doc_visible_rows", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_columns", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -1066,8 +1067,12 @@ xkb_symbols "nekoedit-sparse" {
                             fd = memory.fileno()
                             result: dict[str, object] = {}
                             for name, address in picker_symbols.items():
-                                if name in {"picker_name_buffer", "doc_buffer", "picker_path_buffer", "picker_current_path", "current_path_buffer", "picker_target_buffer"}:
-                                    size = 64 if name in {"picker_name_buffer", "doc_buffer"} else 256
+                                if name == "doc_buffer":
+                                    pointer = struct.unpack("<Q", os.pread(fd, 8, address))[0]
+                                    result["doc_buffer_pointer"] = pointer
+                                    result[name] = os.pread(fd, 64, pointer) if pointer else b""
+                                elif name in {"picker_name_buffer", "picker_path_buffer", "picker_current_path", "current_path_buffer", "picker_target_buffer"}:
+                                    size = 64 if name == "picker_name_buffer" else 256
                                     result[name] = os.pread(fd, size, address).split(b"\0", 1)[0]
                                 elif name == "picker_suggestion_indices":
                                     result[name] = struct.unpack("<5I", os.pread(fd, 20, address))
@@ -1077,6 +1082,14 @@ xkb_symbols "nekoedit-sparse" {
                                     result["active_path"] = os.pread(fd, 4096, pointer).split(b"\0", 1)[0] if pointer else b""
                                 else:
                                     result[name] = struct.unpack("<i", os.pread(fd, 4, address))[0]
+                            pointer = result.get("doc_buffer_pointer", 0)
+                            if pointer:
+                                length = result.get("doc_length", 0)
+                                gap_start = result.get("doc_gap_start", 0)
+                                gap_end = result.get("doc_gap_end", 0)
+                                prefix = os.pread(fd, gap_start, pointer)
+                                suffix = os.pread(fd, max(0, length - gap_start), pointer + gap_end)
+                                result["doc_contents"] = prefix + suffix
                             return result
 
                     def assert_picker(label: str) -> None:
@@ -1278,16 +1291,6 @@ xkb_symbols "nekoedit-sparse" {
                     with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabcde":
                             raise AssertionError("failed Open changed the active document or save path")
-
-                    workflow_shortcut(serial + 12, 24, "Ctrl+O before oversized file")
-                    serial = workflow_type_path("oversized.txt", serial + 22)
-                    key_step(serial, 28, "reject file larger than 64 KiB")
-                    key_step(serial + 2, 1, "Escape oversized Open picker")
-                    key_step(serial + 4, evdev["f"], "edit after oversized Open")
-                    workflow_shortcut(serial + 6, 31, "save after oversized Open")
-                    with open(menu_saveas, "rb") as saved:
-                        if saved.read() != b"zabcdef":
-                            raise AssertionError("oversized Open damaged the active document")
 
                     # Escape from Save As must not alter the active destination.
                     workflow_shortcut(serial + 12, 31, "Ctrl+Shift+S before cancellation", shift=True)
@@ -1610,6 +1613,35 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "partial filename input renders multiple autocomplete recommendations; mouse/keyboard selection is supported and Enter opens the highlighted exact file"
                     )
+
+                    # Open a file above the former 64 KiB limit through the native
+                    # picker, then save it again to verify the entire staged buffer.
+                    large_open_start = serial + 12
+                    workflow_shortcut(large_open_start, 24, "Ctrl+O before large-file Open")
+                    large_open_serial = workflow_type_path("oversized.txt", large_open_start + 10)
+                    key_step(large_open_serial, 28, "Open file larger than 64 KiB")
+                    large_open_state = picker_state()
+                    large_expected = b"x" * 65537
+                    large_path = os.path.join(runtime_dir, "oversized.txt").encode()
+                    if (
+                        large_open_state.get("active_path") != large_path
+                        or large_open_state.get("doc_length") != len(large_expected)
+                        or large_open_state.get("doc_contents") != large_expected
+                        or large_open_state.get("doc_capacity", 0) < len(large_expected)
+                    ):
+                        raise AssertionError(
+                            f"large file Open did not commit the complete staged document: {large_open_state!r}"
+                        )
+                    workflow_shortcut(
+                        large_open_serial + 4, 31, "Ctrl+S saves dynamically loaded file"
+                    )
+                    with open(os.path.join(runtime_dir, "oversized.txt"), "rb") as saved:
+                        if saved.read() != large_expected:
+                            raise AssertionError("Ctrl+S did not serialize the complete dynamic document")
+                    observations.append(
+                        "native picker Open and Ctrl+S save verified for a 65,537-byte document"
+                    )
+                    serial = large_open_serial + 12
 
                     # Minimize is a real xdg_toplevel request, not a decorative
                     # titlebar control. The normal buffer remains valid after it.
@@ -2065,7 +2097,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
-                if save_roundtrip and not (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test):
+                if save_roundtrip and not (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test):
                     # Keep this path-specific test independent from the full
                     # empty-document editor interaction suite below.
                     client.sendall(
@@ -2102,6 +2134,50 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(12, 0)
                     )
                     observations.append("launch-time load, selection replacement, and Ctrl+S write verified")
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if dynamic_growth_test:
+                    # An exact-capacity document starts with no free gap.
+                    # Inserting at its beginning must grow and relocate the
+                    # suffix without changing its logical contents.
+                    before_growth = picker_state()
+                    if (
+                        before_growth.get("doc_length") != 65536
+                        or before_growth.get("doc_capacity") != 65536
+                        or before_growth.get("doc_gap_start") != 65536
+                        or before_growth.get("doc_gap_end") != 65536
+                    ):
+                        raise AssertionError(
+                            f"exact-capacity initial document was not loaded contiguously: {before_growth!r}"
+                        )
+                    key_step(1240, 44, "insert z to grow an exhausted 64 KiB gap")
+                    after_growth = picker_state()
+                    expected_contents = b"z" + (b"a" * 65536)
+                    if (
+                        after_growth.get("doc_length") != 65537
+                        or after_growth.get("doc_capacity") != 131072
+                        or after_growth.get("doc_gap_start") != 1
+                        or after_growth.get("doc_gap_end") != 65536
+                        or after_growth.get("doc_contents") != expected_contents
+                        or after_growth.get("doc_storage_error") != 0
+                    ):
+                        raise AssertionError(
+                            f"gap-buffer growth did not preserve prefix/suffix bytes: {after_growth!r}"
+                        )
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1250, 1250, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1251, 1251, 31, 1))
+                    )
+                    workflow_redraw("Ctrl+S after dynamic document growth")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1252, 1252, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1253, 1253, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    observations.append(
+                        "exact 64 KiB document growth to 128 KiB, suffix relocation, logical-byte preservation, and split-gap save verified"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
@@ -3026,6 +3102,25 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(gap_path)
+        except FileNotFoundError:
+            pass
+
+    # An exactly-full mapping forces the first new byte to grow the gap
+    # and relocate the suffix while preserving both serialized segments.
+    growth_fd, growth_path = tempfile.mkstemp(prefix="nekoedit-growth-")
+    try:
+        with os.fdopen(growth_fd, "wb") as growth_file:
+            growth_file.write(b"a" * 65536)
+        run(
+            sys.argv[1],
+            initial_file=growth_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"z" + (b"a" * 65536),
+            dynamic_growth_test=True,
+        )
+    finally:
+        try:
+            os.unlink(growth_path)
         except FileNotFoundError:
             pass
 

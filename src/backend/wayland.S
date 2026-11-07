@@ -2122,6 +2122,7 @@ load_initial_document:
     push r12
     push r13
     push r14
+    sub rsp, 8
     mov r12, qword ptr [rip + initial_file_path]
     mov dword ptr [rip + doc_length], 0
     mov dword ptr [rip + doc_gap_start], 0
@@ -2228,6 +2229,7 @@ load_initial_document:
     mov dword ptr [rip + doc_storage_error], 0
     xor eax, eax
 .load_file_return:
+    add rsp, 8
     pop r14
     pop r13
     pop r12
@@ -4337,6 +4339,7 @@ load_document_from_path:
     push r12
     push r13
     push r14
+    sub rsp, 8
     mov r12, rdi
     test r12, r12
     jz .load_path_error
@@ -4433,6 +4436,7 @@ load_document_from_path:
     mov dword ptr [rip + doc_open_error], 1
     mov rax, -5
 .load_path_return:
+    add rsp, 8
     pop r14
     pop r13
     pop r12
