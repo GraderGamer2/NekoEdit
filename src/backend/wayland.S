@@ -10117,6 +10117,8 @@ doc_visual_to_offset_indexed:
 .Ldoc_visual_trace_done:
     mov edi, eax
     call font_codepoint_advance_pixels
+    # Keep the glyph advance separate: EAX becomes the pointer X below.
+    mov dword ptr [rsp + 4], eax
     cmp dword ptr [rip + doc_visual_debug_trace_count], 1
     jne .Ldoc_visual_trace_adv2
     mov dword ptr [rip + doc_visual_debug_glyph1_advance], eax
@@ -10146,7 +10148,7 @@ doc_visual_to_offset_indexed:
     cmp dword ptr [rsp], edx
     jb .Ldoc_visual_indexed_done
 .Ldoc_visual_indexed_consume_glyph:
-    add r14d, eax
+    add r14d, dword ptr [rsp + 4]
     mov edi, r13d
     call doc_grapheme_next
     mov r13d, eax
