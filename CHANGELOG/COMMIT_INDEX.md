@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **290** (281 previously indexed commits + 9 Settings, clipboard, history, and regression-test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **295** (281 previously indexed commits + 9 Settings, clipboard, history, and regression-test commits + 5 horizontal-viewport implementation/test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -14,6 +14,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 | Commit | Subject |
 |---|---|
 | [80c2fdc6916f](https://github.com/GraderGamer2/NekoEdit/commit/80c2fdc6916f8403350d10826043f90936642f0a) | feat: add horizontal scrolling for unwrapped document lines |
+| [091c59e84a9e](https://github.com/GraderGamer2/NekoEdit/commit/091c59e84a9ebd4dbf73fb3a54d49469aa84bfef) | test: isolate horizontal-scroll scenario from generic startup click assertion |
 | [f0631a7f17ff](https://github.com/GraderGamer2/NekoEdit/commit/f0631a7f17ffafdde2a86da6766d1df3e7261bd9) | fix: correct horizontal scroll clamp register width |
 | [6884f0314db1](https://github.com/GraderGamer2/NekoEdit/commit/6884f0314db13f62a7a0800bcb30c623f86cf697) | test: run horizontal-scroll scenario after Wayland event helpers are defined |
 | [5de2605dde0d](https://github.com/GraderGamer2/NekoEdit/commit/5de2605dde0d33e980437930e9f701f5a57e59fd) | test: reopen settings and click inside the editor for horizontal hit-testing |
