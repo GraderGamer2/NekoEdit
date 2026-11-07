@@ -1,5 +1,32 @@
 # NekoEdit development log
 
+## 2026-11-07 — Restore edge-drag window resizing and resize cursor feedback
+
+**User report:** The newest build no longer crashes when Maximize is clicked, but manually dragging the window edges still does not resize the window. The Maximize fix is confirmed; edge dragging is the remaining window-management defect.
+
+### Root cause
+
+- The edge hit-test and `xdg_toplevel.resize` request were already present, but the initial `wl_pointer.enter` event could arrive during the synchronous startup seat roundtrip, between `wl_pointer.get_pointer` and the roundtrip callback.
+- The startup roundtrip handled seat capabilities and buffer release but discarded pointer events. If the pointer entered NekoEdit during that interval, `pointer_inside` remained false, and the later button handler discarded the press before it could send `xdg_toplevel.resize`.
+- The previous 12-pixel hit band was also unnecessarily narrow and there was no resize-cursor feedback to show the user where the drag area begins.
+
+### Implementation
+
+- Capture `wl_pointer.enter`, its serial, and surface-local coordinates during the startup roundtrip; process pointer motion there too. Reuse the same capture helpers in the normal event loop.
+- Share one edge/corner calculation between the resize button handler and cursor feedback. Increase the logical hit band to 16 surface units.
+- When the compositor advertises the optional `wp_cursor_shape_manager_v1` global, bind it and provide horizontal, vertical, and diagonal resize cursors. Cursor-shape requests use the latest pointer-enter serial; the actual interactive resize still uses the serial from the user's button press.
+- Keep resizing functional when the optional cursor-shape extension is not advertised. The extension changes hover feedback, not the underlying `xdg_toplevel.resize` request.
+- Keep the dense `next_client_object_id` allocator and the Maximize fix unchanged.
+
+### Regression coverage
+
+- The mock compositor sends `wl_pointer.enter` after `get_pointer` but before the startup sync callback. The initial pointer interaction must still be handled.
+- Verify the cursor-shape manager binding, initial default cursor, side/corner cursor shapes, the updated enter serial after pointer focus is lost and regained, and `xdg_toplevel.resize` with the button serial for all four edges and corners.
+- Run the complete window workflow again without advertising `wp_cursor_shape_manager_v1` to verify that edge resizing does not depend on the optional cursor extension.
+- See [WAYLAND_WINDOW_RESIZE.md](../docs/WAYLAND_WINDOW_RESIZE.md) for the pointer lifecycle, hit-testing, protocol, and compositor-fallback notes.
+
+**Validation:** Source and mock-test changes are prepared for the `early-alpha` branch. GitHub Actions build and Wayland mock results are pending; a real GNOME/Mutter drag-resize test is still required after the new artifact is available.
+
 ## 2026-11-07 — Remove temporary Maximize investigation instrumentation
 
 **User retest:** The user has now confirmed that clicking the Maximize control no longer crashes NekoEdit and that the window remains usable afterward. This is the first real-desktop confirmation of the dense object-ID correction, beyond the mock-compositor suite.
@@ -24,7 +51,7 @@
 - Cleanup commit: [`82f1e15c04c8`](https://github.com/GraderGamer2/NekoEdit/commit/82f1e15c04c87d202658eb4fda0d4c406854db93).
 - GitHub Actions [Build and test #294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772) passed all eight steps: freestanding assembly/link and ELF checks, CLI smoke tests, the complete Wayland mock-compositor suite, executable inspection, and artifact upload.
 - Artifact: `nekoedit-linux-x86_64`, 29,836 bytes; SHA-256 `c375eb07c23059a45387fae3f0c67f97ef6632713bd619a67b9591464c311ba3`; artifact ID `13555196117`; expires 2026-11-14 01:38:13 UTC. [Download from Actions #294](https://github.com/GraderGamer2/NekoEdit/actions/runs/42325108772/artifacts/13555196117).
-- The user's successful Maximize test applies to the dense-ID correction before this cleanup. The cleanup itself passes automated CI but its exact binary still needs a real GNOME/Mutter retest.
+- The user subsequently tested the newest cleanup build (Actions #294) and confirmed Maximize no longer crashes. Manual edge dragging still does not work on that build; the new pointer-focus/cursor-resize work is intended to address that remaining issue.
 
 ## 2026-11-07 — Fix dense Wayland client object IDs for resized buffers
 

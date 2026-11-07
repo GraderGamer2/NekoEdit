@@ -71,6 +71,7 @@ def run(
     use_wayland_socket: bool = False,
     send_protocol_error: bool = False,
     disconnect_after_configure_ack: bool = False,
+    cursor_shape_supported: bool = True,
     advertised_seat_version: int = 7,
     initial_file: str | None = None,
     save_roundtrip: bool = False,
@@ -151,13 +152,15 @@ def run(
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
-            client.sendall(
+            globals_payload = (
                 registry_global(1, "wl_compositor")
                 + registry_global(2, "wl_shm")
                 + registry_global(3, "xdg_wm_base")
                 + registry_global(4, "wl_seat", version=advertised_seat_version)
-                + wire_message(3, 0, struct.pack("<I", 1))
             )
+            if cursor_shape_supported:
+                globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
+            client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
             bind_messages = [recv_wayland_message(client) for _ in range(3)]
             for message, expected_name, expected_iface, expected_object in zip(
@@ -287,10 +290,7 @@ def run(
                     "bind wl_seat",
                 )
                 expect_message(client, (1, 0, struct.pack("<I", 14)), "seat sync")
-                client.sendall(
-                    wire_message(13, 0, struct.pack("<I", 3))
-                    + wire_message(14, 0, struct.pack("<I", 2))
-                )
+                client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
                 expect_message(
                     client,
                     (13, 0, struct.pack("<I", 15)),
@@ -301,6 +301,33 @@ def run(
                     (13, 1, struct.pack("<I", 16)),
                     "get wl_keyboard",
                 )
+                # Send pointer.enter only after get_pointer has created object 15,
+                # and before callback 14 ends the client's initial seat roundtrip.
+                client.sendall(
+                    wire_message(15, 0, struct.pack("<IIii", 777, 8, 100 * 256, 110 * 256))
+                    + wire_message(14, 0, struct.pack("<I", 2))
+                )
+                if cursor_shape_supported:
+                    expect_message(
+                        client,
+                        (
+                            2, 0,
+                            struct.pack("<II", 5, 27)
+                            + b"wp_cursor_shape_manager_v1\0"
+                            + b"\0"
+                            + struct.pack("<II", 1, 17),
+                        ),
+                        "bind cursor-shape manager",
+                    )
+                    expect_message(
+                        client, (17, 1, struct.pack("<I", 15)),
+                        "get cursor-shape pointer",
+                    )
+                    expect_message(
+                        client, (18, 1, struct.pack("<II", 777, 1)),
+                        "set initial default cursor shape",
+                    )
+                    observations.append("optional cursor-shape manager bound; startup pointer.enter retained and applied")
                 observations.append("seat pointer and keyboard capability/object creation verified")
 
                 # Release the initial buffer before sending a click. The client
@@ -308,9 +335,9 @@ def run(
                 client.sendall(
                     wire_message(12, 0)
                     + wire_message(
-                        15, 0,
+                        15, 2,
                         struct.pack(
-                            "<IIii", 777, 8,
+                            "<Iii", 777,
                             (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test) else 98))) * 256,
                             (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test) else 110) * 256,
                         ),
@@ -752,13 +779,25 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_redraw(label)
                     client.sendall(wire_message(12, 0))
 
+                cursor_feedback_state = {"shape": 1, "enter_serial": 777}
+                resize_buffer_base = 17 + (2 if cursor_shape_supported else 0)
+
                 def workflow_window_click(
                     x: int, serial: int, request_opcode: int, label: str,
-                    y: int = 12, request_payload: bytes = b"",
+                    y: int = 20, request_payload: bytes = b"",
+                    cursor_shape: int = 1,
                 ) -> None:
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
-                        + wire_message(
+                    )
+                    if cursor_shape_supported and cursor_shape != cursor_feedback_state["shape"]:
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", cursor_feedback_state["enter_serial"], cursor_shape)),
+                            f"{label}: resize cursor shape",
+                        )
+                        cursor_feedback_state["shape"] = cursor_shape
+                    client.sendall(
+                        wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
                     )
@@ -771,6 +810,24 @@ xkb_symbols "nekoedit-sparse" {
                             15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
                         )
                     )
+                    # A real xdg_toplevel.resize may remove pointer focus and later
+                    # re-enter the resized surface with a fresh enter serial.
+                    if request_opcode in (5, 6):
+                        enter_serial = serial + 6
+                        client.sendall(
+                            wire_message(15, 1, struct.pack("<II", serial + 5, 8))
+                            + wire_message(
+                                15, 0,
+                                struct.pack("<IIii", enter_serial, 8, x * 256, y * 256),
+                            )
+                        )
+                        if cursor_shape_supported:
+                            expect_message(
+                                client, (18, 1, struct.pack("<II", enter_serial, cursor_shape)),
+                                f"{label}: cursor shape after resize focus returns",
+                            )
+                        cursor_feedback_state["enter_serial"] = enter_serial
+                        cursor_feedback_state["shape"] = cursor_shape
 
                 def workflow_scrollbar_drag(
                     start_x: int, start_y: int, end_x: int, end_y: int,
@@ -1575,11 +1632,11 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (12, 0, b""), "destroy released pre-maximize buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", 17, 0, 1920, 1080, 7680, 1)),
+                        (11, 0, struct.pack("<6I", resize_buffer_base, 0, 1920, 1080, 7680, 1)),
                         "create maximized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 17, 0, 0)),
+                        client, (8, 1, struct.pack("<III", resize_buffer_base, 0, 0)),
                         "attach maximized buffer",
                     )
                     expect_message(
@@ -1592,7 +1649,7 @@ xkb_symbols "nekoedit-sparse" {
                         max_state.get("window_width") != 1920
                         or max_state.get("window_height") != 1080
                         or max_state.get("window_stride") != 7680
-                        or max_state.get("window_buffer_id") != 17
+                        or max_state.get("window_buffer_id") != resize_buffer_base
                         or max_state.get("window_is_maximized") != 1
                     ):
                         raise AssertionError(f"maximized configure was not applied: {max_state!r}")
@@ -1605,7 +1662,7 @@ xkb_symbols "nekoedit-sparse" {
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
                     )
 
-                    # Restore: deliver the configure while buffer 17 is still
+                    # Restore: deliver the configure while buffer {resize_buffer_base} is still
                     # compositor-owned. The client must ack but defer replacement.
                     workflow_window_click(1860, serial + 30, 10, "restore")
                     client.sendall(
@@ -1615,15 +1672,15 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1236)), "ack restored configure"
                     )
-                    client.sendall(wire_message(17, 0))
-                    expect_message(client, (17, 0, b""), "destroy released maximized buffer")
+                    client.sendall(wire_message(resize_buffer_base, 0))
+                    expect_message(client, (resize_buffer_base, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", 18, 0, 800, 480, 3200, 1)),
+                        (11, 0, struct.pack("<6I", resize_buffer_base + 1, 0, 800, 480, 3200, 1)),
                         "create restored buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 18, 0, 0)),
+                        client, (8, 1, struct.pack("<III", resize_buffer_base + 1, 0, 0)),
                         "attach restored buffer",
                     )
                     expect_message(
@@ -1635,7 +1692,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         restored_state.get("window_width") != 800
                         or restored_state.get("window_height") != 480
-                        or restored_state.get("window_buffer_id") != 18
+                        or restored_state.get("window_buffer_id") != resize_buffer_base + 1
                         or restored_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"restore configure was not applied: {restored_state!r}")
@@ -1652,7 +1709,15 @@ xkb_symbols "nekoedit-sparse" {
                     # The left edge requests a compositor-controlled interactive resize.
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial + 60, 10 * 256, 240 * 256))
-                        + wire_message(
+                    )
+                    if cursor_shape_supported and cursor_feedback_state["shape"] != 26:
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", cursor_feedback_state["enter_serial"], 26)),
+                            "left-edge resize cursor",
+                        )
+                        cursor_feedback_state["shape"] = 26
+                    client.sendall(
+                        wire_message(
                             15, 3, struct.pack("<IIII", serial + 61, serial + 62, 0x110, 1)
                         )
                     )
@@ -1662,8 +1727,12 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     client.sendall(
                         wire_message(15, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
+                        + wire_message(15, 1, struct.pack("<II", serial + 65, 8))
                     )
-                    # Deliver a new size while buffer 18 is still busy.
+                    # The compositor may refocus the pointer after the interactive
+                    # resize completes; the enter serial must be refreshed before
+                    # the next cursor-shape request.
+                    # Deliver a new size while the maximized replacement buffer is still busy.
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiIII", 720, 480, 8, 3, 4))
                         + wire_message(9, 0, struct.pack("<I", 1237))
@@ -1671,52 +1740,75 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1237)), "ack interactive-resize configure"
                     )
-                    client.sendall(wire_message(18, 0))
-                    expect_message(client, (18, 0, b""), "destroy old buffer after edge resize")
+                    client.sendall(wire_message(resize_buffer_base + 1, 0))
+                    expect_message(client, (resize_buffer_base + 1, 0, b""), "destroy old buffer after edge resize")
                     expect_message(
-                        client, (11, 0, struct.pack("<6I", 19, 0, 720, 480, 2880, 1)),
+                        client, (11, 0, struct.pack("<6I", resize_buffer_base + 2, 0, 720, 480, 2880, 1)),
                         "create edge-resized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", 19, 0, 0)), "attach edge-resized buffer"
+                        client, (8, 1, struct.pack("<III", resize_buffer_base + 2, 0, 0)), "attach edge-resized buffer"
                     )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
                     )
                     expect_message(client, (8, 6, b""), "commit edge-resized surface")
+                    client.sendall(
+                        wire_message(
+                            15, 0,
+                            struct.pack("<IIii", serial + 66, 8, 10 * 256, 240 * 256),
+                        )
+                    )
+                    if cursor_shape_supported:
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", serial + 66, 26)),
+                            "left-edge cursor after focus returns",
+                        )
+                    cursor_feedback_state["enter_serial"] = serial + 66
+                    cursor_feedback_state["shape"] = 26
                     edge_state = picker_state()
                     if (
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
                         or edge_state.get("window_stride") != 2880
-                        or edge_state.get("window_buffer_id") != 19
+                        or edge_state.get("window_buffer_id") != resize_buffer_base + 2
                         or edge_state.get("window_is_maximized") != 0
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
-                    client.sendall(wire_message(19, 0))
+                    client.sendall(wire_message(resize_buffer_base + 2, 0))
 
                     # Probe every remaining edge and corner with coordinates
-                    # deliberately inside the new 12-pixel grab band.
-                    for index, (x, y, edges, label) in enumerate((
-                        (710, 240, 8, "right edge"),
-                        (360, 10, 1, "top edge"),
-                        (360, 470, 2, "bottom edge"),
-                        (710, 10, 9, "top-right corner"),
-                        (710, 470, 10, "bottom-right corner"),
-                        (10, 10, 5, "top-left corner"),
-                        (10, 470, 6, "bottom-left corner"),
+                    # deliberately inside the new 16-pixel grab band.
+                    for index, (x, y, edges, label, cursor_shape) in enumerate((
+                        (710, 240, 8, "right edge", 26),
+                        (360, 10, 1, "top edge", 27),
+                        (360, 470, 2, "bottom edge", 27),
+                        (710, 10, 9, "top-right corner", 28),
+                        (710, 470, 10, "bottom-right corner", 29),
+                        (10, 10, 5, "top-left corner", 29),
+                        (10, 470, 6, "bottom-left corner", 28),
                     )):
-                        base_serial = serial + 80 + index * 4
+                        base_serial = serial + 80 + index * 10
                         workflow_window_click(
                             x, base_serial, 6, label, y=y,
                             request_payload=struct.pack("<III", 13, base_serial + 1, edges),
+                            cursor_shape=cursor_shape,
                         )
 
                     # The app's own Close control exits cleanly; no terminal
                     # shutdown or synthetic xdg_toplevel.close is required.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 120, 692 * 256, 12 * 256))
-                        + wire_message(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 120, 692 * 256, 20 * 256))
+                    )
+                    if cursor_shape_supported and cursor_feedback_state["shape"] != 1:
+                        expect_message(
+                            client,
+                            (18, 1, struct.pack("<II", cursor_feedback_state["enter_serial"], 1)),
+                            "restore default cursor before titlebar Close",
+                        )
+                        cursor_feedback_state["shape"] = 1
+                    client.sendall(
+                        wire_message(
                             15, 3, struct.pack("<IIII", serial + 121, serial + 122, 0x110, 1)
                         )
                     )
@@ -2725,6 +2817,9 @@ if __name__ == "__main__":
         except FileNotFoundError:
             pass
 
+    # Compositors that do not advertise wp_cursor_shape_manager_v1 still get
+    # the same edge hit-testing and xdg_toplevel.resize path without hover icons.
+    run(sys.argv[1], cursor_shape_supported=False, file_workflow=True)
     # Full File menu, Open, Save, and Save As interaction tests on both
     # supported connection transports. The subprocess CWD is the fixture dir.
     run(sys.argv[1], file_workflow=True)

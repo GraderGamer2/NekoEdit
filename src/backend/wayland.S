@@ -57,7 +57,12 @@
 .equ SHM_BUFFER_CAPACITY, (MAX_WINDOW_WIDTH * MAX_WINDOW_HEIGHT * 4)
 .equ WINDOW_MIN_WIDTH, 480
 .equ WINDOW_MIN_HEIGHT, 360
-.equ WINDOW_RESIZE_BORDER, 12
+.equ WINDOW_RESIZE_BORDER, 16
+.equ CURSOR_SHAPE_DEFAULT,  1
+.equ CURSOR_SHAPE_EW_RESIZE, 26
+.equ CURSOR_SHAPE_NS_RESIZE, 27
+.equ CURSOR_SHAPE_NESW_RESIZE, 28
+.equ CURSOR_SHAPE_NWSE_RESIZE, 29
 .equ BTN_LEFT,          0x110
 .equ CLOCK_MONOTONIC,      1
 .equ TFD_CLOEXEC,     0x80000
@@ -142,6 +147,7 @@ iface_compositor:      .asciz "wl_compositor"
 iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
 iface_seat:            .asciz "wl_seat"
+iface_cursor_shape:   .asciz "wp_cursor_shape_manager_v1"
 keymap_base:
     .byte 0, 0, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 45, 61, 0, 0
     .byte 113, 119, 101, 114, 116, 121, 117, 105, 111, 112, 91, 93, 0, 0, 97, 115
@@ -294,6 +300,12 @@ shm_global:            .long 0
 xdg_global:            .long 0
 seat_global:           .long 0
 seat_version:          .long 0
+cursor_shape_global:   .long 0
+cursor_shape_version:  .long 0
+cursor_shape_manager:  .long 0
+cursor_shape_device:   .long 0
+pointer_enter_serial:  .long 0
+cursor_shape_current:  .long 0
 pointer_x:             .long 0
 pointer_y:             .long 0
 pointer_serial:        .long 0
@@ -431,6 +443,9 @@ wayland_main:
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + window_is_maximized], 0
+    mov dword ptr [rip + pointer_inside], 0
+    mov dword ptr [rip + pointer_enter_serial], 0
+    mov dword ptr [rip + cursor_shape_current], 0
     call window_update_geometry
     call load_initial_document
     test rax, rax
@@ -904,15 +919,43 @@ wayland_main:
 .seat_check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
     cmp dword ptr [rip + last_object], eax
+    jne .seat_check_pointer_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_pointer_event
+    mov dword ptr [rip + buffer_busy], 0
+    jmp .seat_check_sync
+.seat_check_pointer_event:
+    mov eax, dword ptr [rip + pointer_object]
+    test eax, eax
+    jz .seat_check_sync
+    cmp dword ptr [rip + last_object], eax
     jne .seat_check_sync
     cmp dword ptr [rip + last_opcode], 0
-    jne .seat_check_sync
-    mov dword ptr [rip + buffer_busy], 0
+    je .seat_pointer_enter
+    cmp dword ptr [rip + last_opcode], 1
+    je .seat_pointer_leave
+    cmp dword ptr [rip + last_opcode], 2
+    je .seat_pointer_motion
+    jmp .seat_check_sync
+.seat_pointer_enter:
+    call pointer_capture_enter
+    jmp .seat_check_sync
+.seat_pointer_leave:
+    mov dword ptr [rip + pointer_inside], 0
+    mov dword ptr [rip + cursor_shape_current], 0
+    jmp .seat_check_sync
+.seat_pointer_motion:
+    call pointer_capture_motion
 .seat_check_sync:
     cmp dword ptr [rip + last_object], 14
     jne .seat_roundtrip
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_roundtrip
+    # Bind the optional cursor-shape extension only after pointer/keyboard IDs
+    # have been assigned by the seat-capability event.
+    call cursor_shape_setup
+    test rax, rax
+    js .protocol_error
 
     # Main event loop: pointer input edits the document. The single
     # wl_buffer is only rewritten after wl_buffer.release.
@@ -991,6 +1034,9 @@ wayland_main:
     call handle_seat_capabilities
     test rax, rax
     js .protocol_error
+    call cursor_shape_setup
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
@@ -1010,28 +1056,20 @@ wayland_main:
     je .pointer_axis
     jmp .event_loop
 .pointer_enter:
-    cmp dword ptr [rip + last_size], 16
-    jb .event_loop
-    mov eax, dword ptr [rip + event_payload + 8]
-    sar eax, 8
-    mov dword ptr [rip + pointer_x], eax
-    mov eax, dword ptr [rip + event_payload + 12]
-    sar eax, 8
-    mov dword ptr [rip + pointer_y], eax
-    mov dword ptr [rip + pointer_inside], 1
+    call pointer_capture_enter
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .pointer_leave:
     mov dword ptr [rip + pointer_inside], 0
+    mov dword ptr [rip + cursor_shape_current], 0
     jmp .event_loop
 .pointer_motion:
-    cmp dword ptr [rip + last_size], 12
-    jb .event_loop
-    mov eax, dword ptr [rip + event_payload + 4]
-    sar eax, 8
-    mov dword ptr [rip + pointer_x], eax
-    mov eax, dword ptr [rip + event_payload + 8]
-    sar eax, 8
-    mov dword ptr [rip + pointer_y], eax
+    call pointer_capture_motion
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
     cmp dword ptr [rip + picker_mode], 0
     jne .pointer_picker_motion
     cmp dword ptr [rip + pointer_button_down], 1
@@ -1128,34 +1166,12 @@ wayland_main:
     # document caret or insert text into the document.
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .event_loop
+    # Edge/corner hit-testing is shared with the hover cursor so the visual
+    # affordance and the actual resize request use identical geometry.
+    call window_get_resize_edges
+    mov r12d, eax
     mov eax, dword ptr [rip + pointer_x]
     mov edx, dword ptr [rip + pointer_y]
-
-    # Edge/corner dragging belongs to the compositor. Send xdg_toplevel.resize
-    # with the serial from this button press rather than resizing locally.
-    xor r12d, r12d
-    cmp eax, WINDOW_RESIZE_BORDER
-    jae .pointer_resize_check_right
-    or r12d, 4                  # left
-    jmp .pointer_resize_check_vertical
-.pointer_resize_check_right:
-    mov ecx, dword ptr [rip + window_width]
-    sub ecx, WINDOW_RESIZE_BORDER
-    cmp eax, ecx
-    jb .pointer_resize_check_vertical
-    or r12d, 8                  # right
-.pointer_resize_check_vertical:
-    cmp edx, WINDOW_RESIZE_BORDER
-    jae .pointer_resize_check_bottom
-    or r12d, 1                  # top
-    jmp .pointer_resize_send_check
-.pointer_resize_check_bottom:
-    mov ecx, dword ptr [rip + window_height]
-    sub ecx, WINDOW_RESIZE_BORDER
-    cmp edx, ecx
-    jb .pointer_resize_send_check
-    or r12d, 2                  # bottom
-.pointer_resize_send_check:
     test r12d, r12d
     jnz .pointer_window_resize
 
@@ -4873,7 +4889,7 @@ registry_capture_global:
     lea rsi, [rip + iface_seat]
     call string_equal
     test eax, eax
-    jz .registry_done
+    jz .registry_try_cursor_shape
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + seat_global], eax
     # Request at most wl_seat version 4, which exposes wl_keyboard.repeat_info.
@@ -4889,6 +4905,25 @@ registry_capture_global:
     mov edx, 4
 .Lneko_seat_version_ready:
     mov dword ptr [rip + seat_version], edx
+    jmp .registry_done
+.registry_try_cursor_shape:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_cursor_shape]
+    call string_equal
+    test eax, eax
+    jz .registry_done
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + cursor_shape_global], eax
+    # Bind only v1; all resize shape values used by NekoEdit are available in v1.
+    mov eax, dword ptr [rip + event_payload + 4]
+    add eax, 3
+    and eax, -4
+    lea rdi, [rip + event_payload + 8]
+    add rdi, rax
+    mov edx, dword ptr [rdi]
+    test edx, edx
+    jz .registry_done
+    mov dword ptr [rip + cursor_shape_version], 1
 .registry_done:
     pop rbp
     ret
@@ -5086,6 +5121,193 @@ render_surface:
 
 # Attach and repaint the one buffer, but only after wl_buffer.release.
 # RAX = 0 on success, negative on failure.
+# Retain pointer focus/coordinates even if wl_pointer.enter arrives during
+# the initial seat roundtrip, before the regular event loop is running.
+.type pointer_capture_enter, @function
+pointer_capture_enter:
+    cmp dword ptr [rip + last_size], 16
+    jb .pointer_capture_enter_done
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + pointer_enter_serial], eax
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+    mov dword ptr [rip + pointer_inside], 1
+    mov dword ptr [rip + cursor_shape_current], 0
+.pointer_capture_enter_done:
+    xor eax, eax
+    ret
+.size pointer_capture_enter, . - pointer_capture_enter
+
+.type pointer_capture_motion, @function
+pointer_capture_motion:
+    cmp dword ptr [rip + last_size], 12
+    jb .pointer_capture_motion_done
+    mov eax, dword ptr [rip + event_payload + 4]
+    sar eax, 8
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + event_payload + 8]
+    sar eax, 8
+    mov dword ptr [rip + pointer_y], eax
+.pointer_capture_motion_done:
+    xor eax, eax
+    ret
+.size pointer_capture_motion, . - pointer_capture_motion
+
+# Return xdg_toplevel.resize_edge bits from the last surface-local pointer position.
+# The same calculation drives resize cursor feedback and button-press requests.
+.type window_get_resize_edges, @function
+window_get_resize_edges:
+    cmp dword ptr [rip + window_is_maximized], 0
+    jne .window_get_resize_edges_none
+    mov eax, dword ptr [rip + pointer_x]
+    mov edx, dword ptr [rip + pointer_y]
+    test eax, eax
+    js .window_get_resize_edges_none
+    test edx, edx
+    js .window_get_resize_edges_none
+    xor r8d, r8d
+    cmp eax, WINDOW_RESIZE_BORDER
+    jae .window_get_resize_edges_right
+    or r8d, 4                  # left
+    jmp .window_get_resize_edges_vertical
+.window_get_resize_edges_right:
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, WINDOW_RESIZE_BORDER
+    cmp eax, ecx
+    jb .window_get_resize_edges_vertical
+    or r8d, 8                  # right
+.window_get_resize_edges_vertical:
+    cmp edx, WINDOW_RESIZE_BORDER
+    jae .window_get_resize_edges_bottom
+    or r8d, 1                  # top
+    jmp .window_get_resize_edges_done
+.window_get_resize_edges_bottom:
+    mov ecx, dword ptr [rip + window_height]
+    sub ecx, WINDOW_RESIZE_BORDER
+    cmp edx, ecx
+    jb .window_get_resize_edges_done
+    or r8d, 2                  # bottom
+.window_get_resize_edges_done:
+    mov eax, r8d
+    ret
+.window_get_resize_edges_none:
+    xor eax, eax
+    ret
+.size window_get_resize_edges, . - window_get_resize_edges
+
+# Use the optional wp_cursor_shape_manager_v1 extension to show resize cursors
+# while hovering. The actual drag still uses xdg_toplevel.resize and the button serial.
+.type window_update_cursor_shape, @function
+window_update_cursor_shape:
+    push r12
+    cmp dword ptr [rip + cursor_shape_device], 0
+    je .window_cursor_shape_done
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .window_cursor_shape_done
+    mov r12d, CURSOR_SHAPE_DEFAULT
+    cmp dword ptr [rip + picker_mode], 0
+    jne .window_cursor_shape_send
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .window_cursor_shape_send
+    call window_get_resize_edges
+    cmp eax, 1
+    je .window_cursor_shape_ns
+    cmp eax, 2
+    je .window_cursor_shape_ns
+    cmp eax, 4
+    je .window_cursor_shape_ew
+    cmp eax, 8
+    je .window_cursor_shape_ew
+    cmp eax, 5
+    je .window_cursor_shape_nwse
+    cmp eax, 10
+    je .window_cursor_shape_nwse
+    cmp eax, 6
+    je .window_cursor_shape_nesw
+    cmp eax, 9
+    je .window_cursor_shape_nesw
+    jmp .window_cursor_shape_send
+.window_cursor_shape_ew:
+    mov r12d, CURSOR_SHAPE_EW_RESIZE
+    jmp .window_cursor_shape_send
+.window_cursor_shape_ns:
+    mov r12d, CURSOR_SHAPE_NS_RESIZE
+    jmp .window_cursor_shape_send
+.window_cursor_shape_nesw:
+    mov r12d, CURSOR_SHAPE_NESW_RESIZE
+    jmp .window_cursor_shape_send
+.window_cursor_shape_nwse:
+    mov r12d, CURSOR_SHAPE_NWSE_RESIZE
+.window_cursor_shape_send:
+    cmp r12d, dword ptr [rip + cursor_shape_current]
+    je .window_cursor_shape_done
+    mov dword ptr [rip + cursor_shape_current], r12d
+    mov eax, dword ptr [rip + pointer_enter_serial]
+    mov dword ptr [rip + payload_buffer], eax
+    mov dword ptr [rip + payload_buffer + 4], r12d
+    mov edi, dword ptr [rip + cursor_shape_device]
+    mov esi, 1                  # wp_cursor_shape_device_v1.set_shape
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    jmp .window_cursor_shape_return
+.window_cursor_shape_done:
+    xor eax, eax
+.window_cursor_shape_return:
+    pop r12
+    ret
+.size window_update_cursor_shape, . - window_update_cursor_shape
+
+# Bind cursor-shape manager and get a cursor-shape device for the wl_pointer.
+# Both objects use the shared dense client-object ID allocator.
+.type cursor_shape_setup, @function
+cursor_shape_setup:
+    push r12
+    cmp dword ptr [rip + cursor_shape_global], 0
+    je .cursor_shape_setup_done
+    cmp dword ptr [rip + pointer_created], 1
+    jne .cursor_shape_setup_done
+    cmp dword ptr [rip + cursor_shape_manager], 0
+    jne .cursor_shape_setup_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    lea eax, [r12 + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    mov dword ptr [rip + cursor_shape_manager], r12d
+    mov edi, dword ptr [rip + cursor_shape_global]
+    lea rsi, [rip + iface_cursor_shape]
+    mov edx, 27                 # interface string including NUL
+    mov ecx, dword ptr [rip + cursor_shape_version]
+    mov r8d, r12d
+    call wl_registry_bind
+    test rax, rax
+    js .cursor_shape_setup_return
+    mov eax, dword ptr [rip + next_client_object_id]
+    lea edx, [rax + 1]
+    mov dword ptr [rip + next_client_object_id], edx
+    mov dword ptr [rip + cursor_shape_device], eax
+    mov eax, dword ptr [rip + pointer_object]
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, r12d
+    mov esi, 1                  # wp_cursor_shape_manager_v1.get_pointer
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .cursor_shape_setup_return
+    call window_update_cursor_shape
+.cursor_shape_setup_return:
+    pop r12
+    ret
+.cursor_shape_setup_done:
+    xor eax, eax
+    pop r12
+    ret
+.size cursor_shape_setup, . - cursor_shape_setup
+
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
 window_update_geometry:
