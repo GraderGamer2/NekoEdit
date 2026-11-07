@@ -2542,10 +2542,11 @@ xkb_symbols "nekoedit-sparse" {
                 "closed-socket diagnostic did not preserve the expected request/event context: "
                 f"status={result.returncode}, missing={missing!r}, stderr={stderr!r}"
             )
-        if len(result.stderr) > 512 or sentinel in result.stderr or b"\\0" in result.stderr:
+        nul_present = b"\0" in result.stderr
+        if len(result.stderr) > 512 or sentinel in result.stderr or nul_present:
             raise AssertionError(
                 "Wayland diagnostic output was unbounded, contained NUL bytes, or exposed document bytes: "
-                f"stderr_length={len(result.stderr)}, nul_present={b'\\0' in result.stderr}, "
+                f"stderr_length={len(result.stderr)}, nul_present={nul_present}, "
                 f"sentinel_present={sentinel in result.stderr}"
             )
         print("Wayland send-failure diagnostic is bounded and does not expose document data.")
