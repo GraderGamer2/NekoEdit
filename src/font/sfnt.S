@@ -16,6 +16,8 @@
 .equ FONT_MAX_TABLES, 256
 .equ FONT_MAX_CMAP_RECORDS, 128
 .equ FONT_MAX_CMAP_GROUPS, 65536
+.equ FONT_MAX_GLYPH_CONTOURS, 256
+.equ FONT_MAX_GLYPH_POINTS, 4096
 
 # Four-byte table tags expressed as their little-endian in-memory integers.
 .equ FONT_TAG_CMAP, 0x70616d63
@@ -53,6 +55,14 @@ font_path_dejavu_sans:
 .global font_cmap_offset, font_cmap_length, font_hmtx_offset, font_hmtx_length
 .global font_glyf_offset, font_glyf_length, font_loca_offset, font_loca_length
 .global font_probe_A_glyph, font_probe_A_advance
+.global font_probe_A_outline_result, font_probe_A_contours, font_probe_A_points
+.global font_probe_A_last_x, font_probe_A_last_y
+.global font_probe_empty_result, font_probe_empty_contours, font_probe_empty_points
+.global font_probe_oob_result
+.global font_glyph_contour_count, font_glyph_point_count
+.global font_glyph_x_min, font_glyph_y_min, font_glyph_x_max, font_glyph_y_max
+.global font_glyph_contour_ends, font_glyph_point_flags
+.global font_glyph_points_x, font_glyph_points_y
 font_loaded:                    .long 0
 font_num_tables:                .long 0
 font_units_per_em:              .long 0
@@ -77,6 +87,27 @@ font_loca_offset:               .long 0
 font_loca_length:               .long 0
 font_probe_A_glyph:             .long 0
 font_probe_A_advance:           .long 0
+font_probe_A_outline_result:    .long 0
+font_probe_A_contours:          .long 0
+font_probe_A_points:            .long 0
+font_probe_A_last_x:            .long 0
+font_probe_A_last_y:            .long 0
+font_probe_empty_result:        .long 0
+font_probe_empty_contours:      .long 0
+font_probe_empty_points:        .long 0
+font_probe_oob_result:          .long 0
+font_glyph_contour_count:       .long 0
+font_glyph_point_count:         .long 0
+font_glyph_x_min:               .long 0
+font_glyph_y_min:               .long 0
+font_glyph_x_max:               .long 0
+font_glyph_y_max:               .long 0
+.balign 4
+font_glyph_contour_ends:        .zero FONT_MAX_GLYPH_CONTOURS * 4
+font_glyph_point_flags:         .zero FONT_MAX_GLYPH_POINTS
+.balign 4
+font_glyph_points_x:            .zero FONT_MAX_GLYPH_POINTS * 4
+font_glyph_points_y:            .zero FONT_MAX_GLYPH_POINTS * 4
 .balign 8
 font_file_map:                  .quad 0
 font_file_size:                 .quad 0
@@ -569,6 +600,38 @@ font_try_path:
     mov edi, eax
     call font_glyph_advance
     mov dword ptr [rip + font_probe_A_advance], eax
+
+    # Probe the simple-outline decoder without making composite glyphs fatal
+    # to font selection; the renderer may fall back for unsupported glyphs.
+    mov edi, dword ptr [rip + font_probe_A_glyph]
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_A_outline_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_A_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_A_points], eax
+    test eax, eax
+    jz .Lfont_probe_empty_outline
+    dec eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_A_last_x], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    dec eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, dword ptr [rdi + rax * 4]
+    mov dword ptr [rip + font_probe_A_last_y], eax
+.Lfont_probe_empty_outline:
+    xor edi, edi
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_empty_result], eax
+    mov eax, dword ptr [rip + font_glyph_contour_count]
+    mov dword ptr [rip + font_probe_empty_contours], eax
+    mov eax, dword ptr [rip + font_glyph_point_count]
+    mov dword ptr [rip + font_probe_empty_points], eax
+    mov edi, dword ptr [rip + font_num_glyphs]
+    call font_glyph_load_outline
+    mov dword ptr [rip + font_probe_oob_result], eax
     mov dword ptr [rip + font_loaded], 1
     xor eax, eax
     jmp .Lfont_try_path_return
@@ -785,6 +848,294 @@ font_glyph_advance:
     add rsp, 8
     ret
 .size font_glyph_advance, . - font_glyph_advance
+
+# Decode one simple TrueType glyph into bounded design-unit point arrays.
+# EDI=glyph index. EAX=0 success, -1 malformed/out-of-range, -2 composite.
+# The output arrays are scratch storage; callers must consume them before the
+# next call. Limits are explicit so untrusted fonts cannot request huge arrays.
+.global font_glyph_load_outline
+.type font_glyph_load_outline, @function
+font_glyph_load_outline:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 8
+    mov r12d, edi
+    mov dword ptr [rip + font_glyph_contour_count], 0
+    mov dword ptr [rip + font_glyph_point_count], 0
+    mov dword ptr [rip + font_glyph_x_min], 0
+    mov dword ptr [rip + font_glyph_y_min], 0
+    mov dword ptr [rip + font_glyph_x_max], 0
+    mov dword ptr [rip + font_glyph_y_max], 0
+
+    cmp r12d, dword ptr [rip + font_num_glyphs]
+    jae .Lfont_glyph_outline_bad
+
+    # Resolve the glyph's two loca entries. Short entries are divided by two.
+    mov eax, r12d
+    cmp dword ptr [rip + font_index_to_loc_format], 0
+    jne .Lfont_glyph_outline_loca_long
+    lea eax, [rax + rax]
+    mov rdi, qword ptr [rip + font_file_map]
+    mov edx, dword ptr [rip + font_loca_offset]
+    add rdi, rdx
+    add rdi, rax
+    call font_be16
+    mov r13d, eax
+    shl r13d, 1
+    lea rdi, [rdi + 2]
+    call font_be16
+    mov r14d, eax
+    shl r14d, 1
+    jmp .Lfont_glyph_outline_loca_ready
+.Lfont_glyph_outline_loca_long:
+    shl eax, 2
+    mov rdi, qword ptr [rip + font_file_map]
+    mov edx, dword ptr [rip + font_loca_offset]
+    add rdi, rdx
+    add rdi, rax
+    call font_be32
+    mov r13d, eax
+    lea rdi, [rdi + 4]
+    call font_be32
+    mov r14d, eax
+
+.Lfont_glyph_outline_loca_ready:
+    # Both offsets must be ordered and contained by the glyf table.
+    cmp r14d, r13d
+    jb .Lfont_glyph_outline_bad
+    cmp r14d, dword ptr [rip + font_glyf_length]
+    ja .Lfont_glyph_outline_bad
+    mov ebp, r14d
+    sub ebp, r13d
+    test ebp, ebp
+    jz .Lfont_glyph_outline_success
+
+    mov r15, qword ptr [rip + font_file_map]
+    mov eax, dword ptr [rip + font_glyf_offset]
+    add r15, rax
+    add r15, r13
+    lea rbx, [r15 + rbp]
+    cmp ebp, 10
+    jb .Lfont_glyph_outline_bad
+
+    # Glyph header: signed contour count followed by xMin/yMin/xMax/yMax.
+    mov rdi, r15
+    call font_be16
+    movsx ebp, ax
+    cmp ebp, -1
+    je .Lfont_glyph_outline_composite
+    test ebp, ebp
+    js .Lfont_glyph_outline_bad
+    cmp ebp, FONT_MAX_GLYPH_CONTOURS
+    ja .Lfont_glyph_outline_bad
+    mov dword ptr [rip + font_glyph_contour_count], ebp
+
+    lea rdi, [r15 + 2]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_x_min], eax
+    lea rdi, [r15 + 4]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_y_min], eax
+    lea rdi, [r15 + 6]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_x_max], eax
+    lea rdi, [r15 + 8]
+    call font_be16
+    movsx eax, ax
+    mov dword ptr [rip + font_glyph_y_max], eax
+
+    # endPtsOfContours plus the two-byte instruction length must fit.
+    mov eax, ebp
+    lea r13, [r15 + 10]
+    lea r14, [r13 + rax * 2 + 2]
+    cmp r14, rbx
+    ja .Lfont_glyph_outline_bad
+
+    # End-point indices are strictly increasing; the last one sets point count.
+    xor r8d, r8d
+    mov r9d, -1
+.Lfont_glyph_outline_endpoint_loop:
+    cmp r8d, ebp
+    jae .Lfont_glyph_outline_endpoints_done
+    mov eax, r8d
+    lea rdi, [r13 + rax * 2]
+    call font_be16
+    test r8d, r8d
+    jz .Lfont_glyph_outline_endpoint_first
+    cmp eax, r9d
+    jbe .Lfont_glyph_outline_bad
+.Lfont_glyph_outline_endpoint_first:
+    cmp eax, FONT_MAX_GLYPH_POINTS - 1
+    ja .Lfont_glyph_outline_bad
+    mov r9d, eax
+    lea rdi, [rip + font_glyph_contour_ends]
+    mov eax, r8d
+    mov dword ptr [rdi + rax * 4], r9d
+    inc r8d
+    jmp .Lfont_glyph_outline_endpoint_loop
+.Lfont_glyph_outline_endpoints_done:
+    test ebp, ebp
+    jz .Lfont_glyph_outline_no_points
+    lea eax, [r9d + 1]
+    mov dword ptr [rip + font_glyph_point_count], eax
+    jmp .Lfont_glyph_outline_read_instructions
+.Lfont_glyph_outline_no_points:
+    mov dword ptr [rip + font_glyph_point_count], 0
+
+.Lfont_glyph_outline_read_instructions:
+    # instructionLength follows the end-point array.
+    mov eax, ebp
+    shl eax, 1
+    lea r13, [r15 + 10]
+    add r13, rax
+    mov rdi, r13
+    call font_be16
+    mov r9d, eax
+    lea r14, [r13 + 2]
+    add r14, r9
+    cmp r14, rbx
+    ja .Lfont_glyph_outline_bad
+    mov r15, r14              # first flag byte
+
+    # Decode the run-length encoded point flags.
+    mov r13d, dword ptr [rip + font_glyph_point_count]
+    xor r14d, r14d
+.Lfont_glyph_outline_flags_loop:
+    cmp r14d, r13d
+    jae .Lfont_glyph_outline_flags_done
+    cmp r15, rbx
+    jae .Lfont_glyph_outline_bad
+    movzx r8d, byte ptr [r15]
+    inc r15
+    mov r9d, 1
+    test r8d, 8               # REPEAT_FLAG
+    jz .Lfont_glyph_outline_flags_fill
+    cmp r15, rbx
+    jae .Lfont_glyph_outline_bad
+    movzx r9d, byte ptr [r15]
+    inc r15
+    inc r9d                   # repeat count includes the current flag
+.Lfont_glyph_outline_flags_fill:
+    mov eax, r13d
+    sub eax, r14d
+    cmp r9d, eax
+    ja .Lfont_glyph_outline_bad
+.Lfont_glyph_outline_flags_fill_loop:
+    lea rdi, [rip + font_glyph_point_flags]
+    mov byte ptr [rdi + r14], r8b
+    inc r14d
+    dec r9d
+    jnz .Lfont_glyph_outline_flags_fill_loop
+    jmp .Lfont_glyph_outline_flags_loop
+
+.Lfont_glyph_outline_flags_done:
+    # X coordinates: short-vector, same/positive, or signed 16-bit delta.
+    mov r13d, dword ptr [rip + font_glyph_point_count]
+    xor r14d, r14d
+    xor r10d, r10d
+.Lfont_glyph_outline_x_loop:
+    cmp r14d, r13d
+    jae .Lfont_glyph_outline_x_done
+    lea rdi, [rip + font_glyph_point_flags]
+    movzx r8d, byte ptr [rdi + r14]
+    test r8d, 2               # X_SHORT_VECTOR
+    jz .Lfont_glyph_outline_x_not_short
+    cmp r15, rbx
+    jae .Lfont_glyph_outline_bad
+    movzx eax, byte ptr [r15]
+    inc r15
+    test r8d, 16              # X_IS_SAME_OR_POSITIVE
+    jnz .Lfont_glyph_outline_x_delta
+    neg eax
+    jmp .Lfont_glyph_outline_x_delta
+.Lfont_glyph_outline_x_not_short:
+    test r8d, 16
+    jnz .Lfont_glyph_outline_x_zero
+    lea rax, [r15 + 2]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r15
+    call font_be16
+    movsx eax, ax
+    add r15, 2
+    jmp .Lfont_glyph_outline_x_delta
+.Lfont_glyph_outline_x_zero:
+    xor eax, eax
+.Lfont_glyph_outline_x_delta:
+    add r10d, eax
+    lea rdi, [rip + font_glyph_points_x]
+    mov eax, r14d
+    mov dword ptr [rdi + rax * 4], r10d
+    inc r14d
+    jmp .Lfont_glyph_outline_x_loop
+.Lfont_glyph_outline_x_done:
+    # Y coordinates use the corresponding bit pair in each point flag.
+    mov r13d, dword ptr [rip + font_glyph_point_count]
+    xor r14d, r14d
+    xor r10d, r10d
+.Lfont_glyph_outline_y_loop:
+    cmp r14d, r13d
+    jae .Lfont_glyph_outline_success
+    lea rdi, [rip + font_glyph_point_flags]
+    movzx r8d, byte ptr [rdi + r14]
+    test r8d, 4               # Y_SHORT_VECTOR
+    jz .Lfont_glyph_outline_y_not_short
+    cmp r15, rbx
+    jae .Lfont_glyph_outline_bad
+    movzx eax, byte ptr [r15]
+    inc r15
+    test r8d, 32              # Y_IS_SAME_OR_POSITIVE
+    jnz .Lfont_glyph_outline_y_delta
+    neg eax
+    jmp .Lfont_glyph_outline_y_delta
+.Lfont_glyph_outline_y_not_short:
+    test r8d, 32
+    jnz .Lfont_glyph_outline_y_zero
+    lea rax, [r15 + 2]
+    cmp rax, rbx
+    ja .Lfont_glyph_outline_bad
+    mov rdi, r15
+    call font_be16
+    movsx eax, ax
+    add r15, 2
+    jmp .Lfont_glyph_outline_y_delta
+.Lfont_glyph_outline_y_zero:
+    xor eax, eax
+.Lfont_glyph_outline_y_delta:
+    add r10d, eax
+    lea rdi, [rip + font_glyph_points_y]
+    mov eax, r14d
+    mov dword ptr [rdi + rax * 4], r10d
+    inc r14d
+    jmp .Lfont_glyph_outline_y_loop
+
+.Lfont_glyph_outline_composite:
+    mov eax, -2
+    jmp .Lfont_glyph_outline_return
+.Lfont_glyph_outline_bad:
+    mov dword ptr [rip + font_glyph_contour_count], 0
+    mov dword ptr [rip + font_glyph_point_count], 0
+    mov eax, -1
+    jmp .Lfont_glyph_outline_return
+.Lfont_glyph_outline_success:
+    xor eax, eax
+.Lfont_glyph_outline_return:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size font_glyph_load_outline, . - font_glyph_load_outline
 
 # Initialize the optional font engine. Explicit NEKOEDIT_FONT takes precedence;
 # otherwise try deterministic common system-font paths. EAX=0 on success.
