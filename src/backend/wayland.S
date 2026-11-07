@@ -183,6 +183,9 @@ msg_last_event:       .ascii "Wayland last event: object="
 msg_last_event_opcode:.ascii ", opcode="
 msg_last_event_size:  .ascii ", payload bytes="
 msg_last_event_size_end:
+msg_buffer_sync_pending: .ascii "Wayland buffer attach deferred: sync callback="
+msg_buffer_sync_buffer: .ascii ", buffer="
+msg_buffer_sync_buffer_end:
 stage_registry:       .asciz "Wayland stage: registry discovery"
 stage_registry_read:  .asciz "Wayland stage: registry roundtrip"
 stage_bind:           .asciz "Wayland stage: bind globals"
@@ -292,6 +295,8 @@ window_pending_width:   .long 0
 window_pending_height:  .long 0
 window_resize_pending:  .long 0
 window_is_maximized:    .long 0
+window_sync_callback_id: .long 0
+window_attach_pending: .long 0
 failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
@@ -450,6 +455,8 @@ wayland_main:
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + window_is_maximized], 0
+    mov dword ptr [rip + window_sync_callback_id], 0
+    mov dword ptr [rip + window_attach_pending], 0
     call window_update_geometry
     call load_initial_document
     test rax, rax
@@ -976,6 +983,27 @@ wayland_main:
     call wl_read_event
     test rax, rax
     js .protocol_error
+    # The resize path waits for the compositor's wl_display.sync callback
+    # before attaching the newly created buffer. Other events continue through
+    # the normal dispatcher while that barrier is outstanding.
+    mov eax, dword ptr [rip + window_sync_callback_id]
+    test eax, eax
+    jz .event_check_xdg_ping
+    cmp dword ptr [rip + last_object], eax
+    jne .event_check_xdg_ping
+    cmp dword ptr [rip + last_opcode], 0
+    jne .event_loop
+    mov dword ptr [rip + window_sync_callback_id], 0
+    mov dword ptr [rip + window_attach_pending], 0
+    cmp dword ptr [rip + window_resize_pending], 0
+    jne .event_apply_window_resize
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.event_check_xdg_ping:
     cmp dword ptr [rip + last_object], 6
     jne .check_buffer_release
     cmp dword ptr [rip + last_opcode], 0
@@ -989,6 +1017,8 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .check_seat_event
     mov dword ptr [rip + buffer_busy], 0
+    cmp dword ptr [rip + window_attach_pending], 0
+    jne .event_loop
     cmp dword ptr [rip + window_resize_pending], 0
     jne .event_apply_window_resize
     cmp dword ptr [rip + redraw_pending], 0
@@ -1906,6 +1936,24 @@ wayland_main:
     mov edx, msg_last_event_size_end - msg_last_event_size
     call linux_write_all
     mov edi, dword ptr [rip + last_size]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + newline_text]
+    mov edx, 1
+    call linux_write_all
+    cmp dword ptr [rip + window_attach_pending], 0
+    je .protocol_check_display_error
+    mov edi, 2
+    lea rsi, [rip + msg_buffer_sync_pending]
+    mov edx, msg_buffer_sync_buffer - msg_buffer_sync_pending
+    call linux_write_all
+    mov edi, dword ptr [rip + window_sync_callback_id]
+    call write_stderr_u32
+    mov edi, 2
+    lea rsi, [rip + msg_buffer_sync_buffer]
+    mov edx, msg_buffer_sync_buffer_end - msg_buffer_sync_buffer
+    call linux_write_all
+    mov edi, dword ptr [rip + window_buffer_id]
     call write_stderr_u32
     mov edi, 2
     lea rsi, [rip + newline_text]
@@ -5368,6 +5416,8 @@ window_handle_surface_configure:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .window_surface_configure_done
+    cmp dword ptr [rip + window_attach_pending], 0
+    jne .window_surface_configure_done
     call window_apply_pending_resize
 .window_surface_configure_done:
     pop r12
@@ -5430,6 +5480,26 @@ window_apply_pending_resize:
     test rax, rax
     js .window_resize_done
     mov dword ptr [rip + window_buffer_id], r14d
+
+    # Diagnostic barrier: do not attach the replacement until the compositor
+    # has processed wl_shm_pool.create_buffer. A wl_display.error can then be
+    # read and reported before the subsequent wl_surface.attach obscures it.
+    # The sync callback gets the next unused client object ID.
+    mov r15d, dword ptr [rip + window_next_buffer_id]
+    lea eax, [r15 + 1]
+    mov dword ptr [rip + window_next_buffer_id], eax
+    mov dword ptr [rip + window_sync_callback_id], r15d
+    mov dword ptr [rip + payload_buffer], r15d
+    mov edi, 1
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .window_resize_done
+    mov dword ptr [rip + window_attach_pending], 1
+    jmp .window_resize_done
+
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
     jne .window_resize_done
