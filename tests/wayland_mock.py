@@ -2517,9 +2517,31 @@ xkb_symbols "nekoedit-sparse" {
                         workflow_click(120, 92, serial + 10, f"{label}: select File > Save As")
                         assert_picker(label)
 
+                    def workflow_picker_click(x: int, y: int, serial: int, label: str) -> None:
+                        screen_x = 28 + ((x - 40) * 744 // 720)
+                        screen_y = 28 + ((y - 36) * 424 // 408)
+                        workflow_click(screen_x, screen_y, serial, label)
+
+                    def workflow_picker_scrollbar_drag(
+                        start_x: int, start_y: int, end_x: int, end_y: int,
+                        serial: int, label: str
+                    ) -> None:
+                        start_screen = (
+                            28 + ((start_x - 40) * 744 // 720),
+                            28 + ((start_y - 36) * 424 // 408),
+                        )
+                        end_screen = (
+                            28 + ((end_x - 40) * 744 // 720),
+                            28 + ((end_y - 36) * 424 // 408),
+                        )
+                        workflow_scrollbar_drag(
+                            start_screen[0], start_screen[1],
+                            end_screen[0], end_screen[1], serial, label
+                        )
+
                     def double_click_picker_row(x: int, y: int, serial: int, label: str) -> int:
-                        workflow_click(x, y, serial, f"{label}: first click")
-                        workflow_click(x, y, serial + 10, f"{label}: second click")
+                        workflow_picker_click(x, y, serial, f"{label}: first click")
+                        workflow_picker_click(x, y, serial + 10, f"{label}: second click")
                         return serial + 20
 
                     # Ctrl+S on Untitled opens the directory picker in Save mode.
@@ -2546,7 +2568,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Browse into the directory entry, reveal a hidden file, and
                     # double-click it. Directories are listed before files.
                     open_picker_from_menu(2100, "Open picker")
-                    serial = double_click_picker_row(120, 149, 2120, "enter nested directory")
+                    serial = double_click_picker_row(120, 152, 2120, "enter nested directory")
                     small_directory_state = picker_state()
                     small_directory_pixel = struct.unpack_from(
                         "<I", pixels, 200 * 800 * 4 + 726 * 4
@@ -2560,16 +2582,16 @@ xkb_symbols "nekoedit-sparse" {
                             "a directory that fits its visible rows must not draw a scrollbar: "
                             f"state={small_directory_state!r}, pixel={hex(small_directory_pixel)}"
                         )
-                    workflow_click(730, 200, serial, "click empty scrollbar gutter with no overflow")
+                    workflow_picker_click(730, 200, serial, "click empty scrollbar gutter with no overflow")
                     no_scroll_drag_state = picker_state()
                     if no_scroll_drag_state.get("picker_scroll_drag") != 0:
                         raise AssertionError(
                             f"non-scrollable directory started a scrollbar drag: {no_scroll_drag_state!r}"
                         )
                     serial += 10
-                    workflow_click(650, 120, serial, "show hidden files")
+                    workflow_picker_click(650, 124, serial, "show hidden files")
                     serial += 10
-                    serial = double_click_picker_row(160, 149, serial, "open hidden file")
+                    serial = double_click_picker_row(160, 152, serial, "open hidden file")
                     # H's first glyph row lights columns 0 and 4; the caret overlays column 0.
                     hidden_state = picker_state()
                     hidden_path = os.path.join(runtime_dir, "nested-dir", ".hidden-note").encode()
@@ -2585,11 +2607,11 @@ xkb_symbols "nekoedit-sparse" {
                     # Open again, enter the directory, go Up, re-enter it, then
                     # open the ordinary file from the visible list.
                     open_picker_from_menu(2200, "directory navigation picker")
-                    serial = double_click_picker_row(120, 149, 2220, "enter nested directory again")
-                    workflow_click(78, 120, serial, "navigate Up to parent directory")
+                    serial = double_click_picker_row(120, 152, 2220, "enter nested directory again")
+                    workflow_picker_click(78, 124, serial, "navigate Up to parent directory")
                     serial += 10
-                    serial = double_click_picker_row(120, 149, serial, "re-enter nested directory")
-                    serial = double_click_picker_row(160, 166, serial, "open inside.txt with hidden files hidden after two earlier entries")
+                    serial = double_click_picker_row(120, 152, serial, "re-enter nested directory")
+                    serial = double_click_picker_row(160, 168, serial, "open inside.txt with hidden files hidden after two earlier entries")
                     # Verify the exact selected document: H and N share the same
                     # first-row edge pixels, and the caret overlays column 0.
                     nested_file = os.path.join(runtime_dir, "nested-dir", "inside.txt")
@@ -2719,11 +2741,11 @@ xkb_symbols "nekoedit-sparse" {
                     # with an actually empty buffer and commit its own exact path.
                     workflow_shortcut(serial + 10, 24, "Ctrl+O before zero-byte file")
                     open_picker_from_menu(serial + 20, "zero-byte file picker")
-                    serial = double_click_picker_row(120, 149, serial + 40, "enter directory for zero-byte file")
+                    serial = double_click_picker_row(120, 152, serial + 40, "enter directory for zero-byte file")
                     # With dotfiles hidden, aaa.txt sorts before empty.txt;
                     # select row 1 to catch accidental row-zero/stale selection.
-                    workflow_click(160, 166, serial, "select zero-byte empty.txt from second file row")
-                    workflow_click(716, 410, serial + 10, "Open selected zero-byte empty.txt")
+                    workflow_picker_click(160, 168, serial, "select zero-byte empty.txt from second file row")
+                    workflow_picker_click(716, 410, serial + 10, "Open selected zero-byte empty.txt")
                     empty_file = os.path.join(runtime_dir, "nested-dir", "empty.txt")
                     empty_state = picker_state()
                     if (
@@ -2753,8 +2775,8 @@ xkb_symbols "nekoedit-sparse" {
                     # Repeat the zero-byte Open through the double-click route.
                     workflow_shortcut(serial + 30, 24, "Ctrl+O before double-click empty file")
                     open_picker_from_menu(serial + 40, "double-click empty-file picker")
-                    serial = double_click_picker_row(120, 149, serial + 60, "enter nested directory for double-click empty file")
-                    serial = double_click_picker_row(160, 166, serial, "double-click empty.txt from second file row")
+                    serial = double_click_picker_row(120, 152, serial + 60, "enter nested directory for double-click empty file")
+                    serial = double_click_picker_row(160, 168, serial, "double-click empty.txt from second file row")
                     empty_state = picker_state()
                     if (
                         empty_state.get("active_path") != empty_file.encode()
@@ -2784,7 +2806,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     original_path = os.fsencode(runtime_dir)
                     path_end_x = 64 + min(len(original_path), 82) * 8
-                    workflow_click(path_end_x, 76, serial + 10, "focus location before directory-scoped search check")
+                    workflow_picker_click(path_end_x, 84, serial + 10, "focus location before directory-scoped search check")
                     serial = workflow_type_path("/nested-dir", serial + 20)
                     key_step(serial, 28, "navigate after unmatched search query")
                     serial += 2
@@ -2800,7 +2822,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"directory navigation retained a stale search query/selection: {stale_path_state!r}"
                         )
-                    workflow_click(716, 410, serial + 10, "Open with no selected row after search navigation")
+                    workflow_picker_click(716, 410, serial + 10, "Open with no selected row after search navigation")
                     no_selection_state = picker_state()
                     if (
                         no_selection_state.get("picker_mode") != 1
@@ -2811,8 +2833,8 @@ xkb_symbols "nekoedit-sparse" {
                             "Open without a selected row loaded a stale literal filename instead of "
                             f"leaving the picker active: {no_selection_state!r}"
                         )
-                    workflow_click(160, 166, serial + 20, "select empty.txt after stale-query rejection")
-                    workflow_click(716, 410, serial + 30, "Open exact empty.txt after stale-query rejection")
+                    workflow_picker_click(160, 168, serial + 20, "select empty.txt after stale-query rejection")
+                    workflow_picker_click(716, 410, serial + 30, "Open exact empty.txt after stale-query rejection")
                     recovered_empty_state = picker_state()
                     if (
                         recovered_empty_state.get("picker_mode") != 0
@@ -2844,12 +2866,12 @@ xkb_symbols "nekoedit-sparse" {
                     thumb_top = scroll_state["picker_scroll_thumb_top"]
                     thumb_height = scroll_state["picker_scroll_thumb_height"]
                     thumb_center = thumb_top + thumb_height // 2
-                    workflow_scrollbar_drag(
+                    workflow_picker_scrollbar_drag(
                         730, thumb_center, 730, 339, serial + 40,
                         "drag picker scrollbar thumb to bottom"
                     )
                     scroll_state = picker_state()
-                    expected_max_scroll = scroll_state["picker_entry_count"] - 15
+                    expected_max_scroll = scroll_state["picker_entry_count"] - 13
                     if scroll_state.get("picker_scroll") != expected_max_scroll:
                         raise AssertionError(
                             f"dragging the picker scrollbar did not reach the last rows: {scroll_state!r}"
@@ -2868,7 +2890,7 @@ xkb_symbols "nekoedit-sparse" {
                     # then append a subdirectory and navigate using the edited path.
                     open_picker_from_menu(serial + 60, "editable path field")
                     original_path = os.fsencode(runtime_dir)
-                    workflow_click(96, 76, serial + 80, "place path caret in the middle")
+                    workflow_picker_click(96, 84, serial + 80, "place path caret in the middle")
                     key_step(serial + 90, evdev["x"], "insert into middle of path")
                     path_state = picker_state()
                     expected_inserted_path = original_path[:4] + b"x" + original_path[4:]
@@ -2888,7 +2910,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Click at the visible end of the path, append /nested-dir,
                     # and commit with Enter.
                     path_end_x = 64 + min(len(original_path), 82) * 8
-                    workflow_click(path_end_x, 76, serial + 100, "place path caret at the end")
+                    workflow_picker_click(path_end_x, 84, serial + 100, "place path caret at the end")
                     serial = workflow_type_path("/nested-dir", serial + 110)
                     key_step(serial, 28, "navigate using edited path field")
                     nested_path_state = picker_state()
@@ -2913,7 +2935,7 @@ xkb_symbols "nekoedit-sparse" {
                         or name_state.get("picker_selected") < 0
                     ):
                         raise AssertionError(f"filename prefix search did not select empty.txt: {name_state!r}")
-                    workflow_click(192, 374, serial + 20, "place search-field cursor after two characters")
+                    workflow_picker_click(192, 374, serial + 20, "place search-field cursor after two characters")
                     key_step(serial + 30, evdev["x"], "insert inside filename search")
                     name_state = picker_state()
                     if (

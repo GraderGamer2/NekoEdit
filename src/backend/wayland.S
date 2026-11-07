@@ -11446,7 +11446,8 @@ draw_decimal:
     pop r12
     pop rbx
     pop rbp
-    ret.size draw_decimal, . - draw_decimal
+    ret
+.size draw_decimal, . - draw_decimal
 
 # Render the live logical line/column and current byte count in the footer.
 # Columns are one-based; tabs advance to the next four-column stop.
