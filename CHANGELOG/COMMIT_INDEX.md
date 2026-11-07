@@ -805,6 +805,31 @@ Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/r
 
 Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed on application/test tip `8dc43ea3a1a3`; artifact [13582086670](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592/artifacts/13582086670) is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. The following commits in this section update repository documentation only.
 
+
+## 2026-11-07 — home-level preferences, all-match Find, responsive panel text, and XKB Unicode keysyms
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 16:52:49 UTC | [`6147c946ebb6`](https://github.com/GraderGamer2/NekoEdit/commit/6147c946ebb6b73769c7de0999c90fb5d68c501e) | feat: store preferences in the home-level .nekoedit folder |
+| 2026-11-07 16:52:57 UTC | [`d6164de1d857`](https://github.com/GraderGamer2/NekoEdit/commit/d6164de1d8578b710c3f2f581c31c6d9e31c3282) | test: verify preferences live in home-level .nekoedit |
+| 2026-11-07 16:53:03 UTC | [`39e713a5d8a5`](https://github.com/GraderGamer2/NekoEdit/commit/39e713a5d8a5cdeb89e0e19b2b9f057d2d85f4bb) | test: isolate ignored XDG path inside temporary HOME |
+| 2026-11-07 16:53:12 UTC | [`6a032f95431d`](https://github.com/GraderGamer2/NekoEdit/commit/6a032f95431df26c86a67479e0f74bc31e21dbba) | fix: resize Settings and Find text without growing panels |
+| 2026-11-07 16:53:35 UTC | [`15729626022f`](https://github.com/GraderGamer2/NekoEdit/commit/15729626022ff183c356722af5d63bcbedca0581) | feat: highlight every document search match |
+| 2026-11-07 16:53:57 UTC | [`98320fc9c3ad`](https://github.com/GraderGamer2/NekoEdit/commit/98320fc9c3ad3adb15f251ea663355a7b60a598d) | test: verify document-wide find highlights and font-only panel scaling |
+| 2026-11-07 16:56:50 UTC | [`f8b3477d450d`](https://github.com/GraderGamer2/NekoEdit/commit/f8b3477d450dd76321cab1fc70b049009b35461f) | feat: parse XKB Unicode keysyms into scalar lookup tables |
+| 2026-11-07 16:57:08 UTC | [`b5c498ca0d8b`](https://github.com/GraderGamer2/NekoEdit/commit/b5c498ca0d8beb7c7d7858f5e3d593904c5a25b9) | feat: insert UTF-8 text from Unicode XKB keysyms |
+| 2026-11-07 16:57:40 UTC | [`c8c82791d01f`](https://github.com/GraderGamer2/NekoEdit/commit/c8c82791d01f4d2f89b7504c1aa186959d50913a) | test: verify XKB Unicode keysyms create UTF-8 document text |
+| 2026-11-07 16:58:00 UTC | [`e02e4eb2ad98`](https://github.com/GraderGamer2/NekoEdit/commit/e02e4eb2ad98114949a6b9464f0326d4f3b57165) | fix: use 32-bit moves for XKB Unicode level indices |
+| 2026-11-07 16:58:37 UTC | [`72695a3d9f3d`](https://github.com/GraderGamer2/NekoEdit/commit/72695a3d9f3dd7a714c5f80bf014b9e1d7fd28e6) | fix: scale XKB Unicode indices by group and level |
+| 2026-11-07 17:00:28 UTC | [`1426008a558e`](https://github.com/GraderGamer2/NekoEdit/commit/1426008a558e11080a14ab645da187df60ab4b58) | docs: update README for editor refinements and Unicode keysym input |
+| 2026-11-07 17:01:21 UTC | [`832731c0e2f5`](https://github.com/GraderGamer2/NekoEdit/commit/832731c0e2f57389fbac81843100bb67b472be9a) | docs: update Wayland scope for Unicode keysyms and search refinements |
+| 2026-11-07 17:01:31 UTC | [`bf6768bdbeed`](https://github.com/GraderGamer2/NekoEdit/commit/bf6768bdbeed18bac0908c5cc4eda013c32392a8) | docs: refresh architecture for stored settings and Unicode input |
+| 2026-11-07 17:01:58 UTC | [`bc76b0d029fc`](https://github.com/GraderGamer2/NekoEdit/commit/bc76b0d029fcae838332586aa6550992e44de682) | docs: refresh editor refinements and Unicode input status |
+| 2026-11-07 17:02:14 UTC | [`c52c947b6b51`](https://github.com/GraderGamer2/NekoEdit/commit/c52c947b6b51d5816e1f4ad0727ba2f22a865886) | docs: record UI refinement and Unicode XKB implementation |
+| 2026-11-07 17:02:24 UTC | [`8551f2fd1799`](https://github.com/GraderGamer2/NekoEdit/commit/8551f2fd17996b6df8f6b3990b5bcd26c207346a) | docs: add UI refinement and Unicode input milestone |
+
+Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393599670) passed the home-level preference test, fixed overlay geometry/font-size assertions, and all-match search framebuffer assertion. Actions [Build and test #523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784) passed the full current implementation on `72695a3d9f3d`; artifact [13582597118](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784/artifacts/13582597118) is 70,702 bytes with uploaded ZIP digest SHA-256 `d8e36e359141aa71251f24b18330463f41c7a0db06f8d24cb5c9422a8f6468e3`.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
