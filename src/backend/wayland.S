@@ -1943,24 +1943,6 @@ wayland_main:
     lea rsi, [rip + newline_text]
     mov edx, 1
     call linux_write_all
-    cmp dword ptr [rip + window_attach_pending], 0
-    je .protocol_check_display_error
-    mov edi, 2
-    lea rsi, [rip + msg_buffer_sync_pending]
-    mov edx, msg_buffer_sync_buffer - msg_buffer_sync_pending
-    call linux_write_all
-    mov edi, dword ptr [rip + window_sync_callback_id]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + msg_buffer_sync_buffer]
-    mov edx, msg_buffer_sync_buffer_end - msg_buffer_sync_buffer
-    call linux_write_all
-    mov edi, dword ptr [rip + window_buffer_id]
-    call write_stderr_u32
-    mov edi, 2
-    lea rsi, [rip + newline_text]
-    mov edx, 1
-    call linux_write_all
 .protocol_sync_pending_diagnostic:
     cmp dword ptr [rip + window_attach_pending], 0
     je .protocol_check_display_error
