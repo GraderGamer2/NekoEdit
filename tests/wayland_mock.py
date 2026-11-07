@@ -757,6 +757,14 @@ xkb_symbols "nekoedit-test" {
                             b"key <AC01> { [ a, A ] };",
                             b"key <AC01> { [ U00E9, U1F600 ] };",
                         )
+                        keymap_data = keymap_data.replace(
+                            b"key <AC02> { [ s, S ] };",
+                            b'key <AC02> { type = "ALPHABETIC", symbols[Group1] = [ EuroSign, eacute ] };',
+                        )
+                        keymap_data = keymap_data.replace(
+                            b"key <AC03> { [ d, D ] };",
+                            b'key <AC03> { type = "ONE_LEVEL", symbols[Group1] = [ emdash ] };',
+                        )
                 elif sparse_keymap_test:
                     # This map has enough punctuation symbols to pass the
                     # old symbol-count test, but no alphabetic keys. It must
@@ -2447,17 +2455,29 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1510, 30, "XKB U1F600 inserts a four-byte UTF-8 scalar")
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", 1520, 0, 0, 0, 0))
-                        + wire_message(12, 0)
                     )
+                    key_step(1530, 31, "named EuroSign inserts U+20AC")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1540, 1, 0, 0, 0))
+                    )
+                    key_step(1550, 31, "named eacute inserts U+00E9")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1560, 0, 0, 0, 0))
+                    )
+                    key_step(1570, 32, "named emdash inserts U+2014")
+                    client.sendall(wire_message(12, 0))
                     unicode_state = read_document_state()
-                    expected_unicode = b"\xc3\xa9\xf0\x9f\x98\x80"
+                    expected_unicode = (
+                        b"\xc3\xa9\xf0\x9f\x98\x80"
+                        b"\xe2\x82\xac\xc3\xa9\xe2\x80\x94"
+                    )
                     if unicode_state.get("doc_contents") != expected_unicode:
                         raise AssertionError(
                             "XKB Unicode keysyms were not converted to the expected UTF-8 bytes: "
                             f"{unicode_state.get('doc_contents')!r}"
                         )
                     observations.append(
-                        "XKB U00E9 and U1F600 keysyms inserted valid two-/four-byte UTF-8"
+                        "XKB U00E9/U1F600 scalars and named EuroSign/eacute/emdash aliases inserted valid UTF-8"
                     )
                     client.sendall(wire_message(10, 1))
                     return
