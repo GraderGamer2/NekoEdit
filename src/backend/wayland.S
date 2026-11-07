@@ -18,6 +18,7 @@
 .equ MSG_NOSIGNAL, 0x4000
 .equ SYS_recvmsg,      47
 .equ SYS_munmap,       11
+.equ SYS_mremap,       25
 .equ SYS_ftruncate,    77
 .equ SYS_mmap,          9
 .equ SYS_memfd_create, 319
@@ -28,6 +29,8 @@
 .equ PROT_WRITE,         2
 .equ MAP_SHARED,         1
 .equ MAP_PRIVATE,        2
+.equ MAP_ANONYMOUS,   0x20
+.equ MREMAP_MAYMOVE,     1
 .equ MFD_CLOEXEC,        1
 .equ AT_FDCWD,          -100
 .equ O_WRONLY,             1
@@ -71,7 +74,8 @@
 .equ REPEAT_DEFAULT_RATE, 30
 .equ REPEAT_NS_PER_SECOND, 1000000000
 .equ REPEAT_MAX_RATE, 1000
-.equ DOC_CAPACITY,    65536
+.equ DOC_INITIAL_CAPACITY, 65536
+.equ DOC_MAX_CAPACITY, 0x40000000
 .equ PATH_CAPACITY,    4096
 .equ PICKER_MAX_ENTRIES, 128
 .equ PICKER_ENTRY_SIZE, 260
@@ -104,6 +108,9 @@ xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
 ui_app_name:           .asciz "NekoEdit"
 ui_mode_error:         .asciz "SAVE ERR"
+ui_storage_error:      .asciz "MEM ERR"
+msg_document_storage:  .ascii "NekoEdit: unable to allocate document storage\n"
+msg_document_storage_end:
 ui_document_name:      .asciz "Untitled"
 ui_mode_name:          .asciz "ASCII"
 ui_file_label:         .asciz "File"
@@ -348,7 +355,10 @@ doc_cursor:             .long 0
 # Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
 doc_gap_start:          .long 0
 doc_gap_end:            .long 0
-doc_buffer:             .zero DOC_CAPACITY
+.balign 8
+doc_buffer:             .quad 0
+doc_capacity:           .long 0
+doc_storage_error:      .long 0
 current_file_path:      .quad 0
 doc_save_error:         .long 0
 doc_open_error:         .long 0
@@ -361,7 +371,7 @@ save_target_path:       .quad 0
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
-.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_path_cursor, picker_name_cursor, picker_name_match, picker_edit_select_all, picker_path_buffer, picker_current_path, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, picker_suggestion_count, picker_suggestion_selected, picker_suggestion_indices, doc_length, doc_buffer, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
+.global picker_mode, picker_dir_fd, picker_error, picker_entry_count, picker_selected, picker_scroll, picker_scroll_drag, pointer_x, pointer_y, pointer_inside, picker_path_cursor, picker_name_cursor, picker_name_match, picker_edit_select_all, picker_path_buffer, picker_current_path, picker_last_click_index, picker_last_click_time, picker_name_length, picker_name_buffer, picker_suggestion_count, picker_suggestion_selected, picker_suggestion_indices, doc_length, doc_buffer, doc_capacity, doc_gap_start, doc_gap_end, doc_storage_error, current_file_path, current_path_buffer, picker_target_buffer, doc_save_error
 picker_mode:            .long 0
 picker_focus:           .long 0
 picker_dir_fd:          .long 0
@@ -415,7 +425,9 @@ picker_current_path:    .zero PATH_CAPACITY
 picker_path_buffer:     .zero PATH_CAPACITY
 picker_name_buffer:     .zero 256
 picker_target_buffer:   .zero PATH_CAPACITY
-load_buffer:            .zero DOC_CAPACITY
+.balign 8
+load_buffer:            .quad 0
+load_capacity:          .long 0
 temp_path_buffer:       .zero PATH_CAPACITY
 temp_pid_digits:        .zero 16
 last_object:           .long 0
@@ -466,6 +478,9 @@ wayland_main:
     mov dword ptr [rip + pointer_enter_serial], 0
     mov dword ptr [rip + cursor_shape_current], 0
     call window_update_geometry
+    call doc_storage_init
+    test rax, rax
+    js .document_storage_error
     call load_initial_document
     test rax, rax
     js .initial_file_error
@@ -1828,6 +1843,14 @@ wayland_main:
     js .protocol_error
     jmp .event_loop
 
+.document_storage_error:
+    mov edi, 2
+    lea rsi, [rip + msg_document_storage]
+    mov edx, msg_document_storage_end - msg_document_storage
+    call linux_write_all
+    mov edi, 1
+    jmp linux_exit
+
 .initial_file_error:
     mov edi, 2
     lea rsi, [rip + msg_file_error]
@@ -1909,8 +1932,190 @@ wayland_main:
     jmp linux_exit
 .size wayland_main, . - wayland_main
 
-# Load an optional initial file. A nonexistent path is a new, empty document;
-# existing files larger than the bounded document buffer are rejected.
+# Allocate separate growable mappings for the live document and transactional
+# Open staging area. Both start small and grow geometrically with mremap.
+.type doc_storage_init, @function
+doc_storage_init:
+    push rbx
+    mov eax, SYS_mmap
+    xor edi, edi
+    mov esi, DOC_INITIAL_CAPACITY
+    mov edx, PROT_READ | PROT_WRITE
+    mov r10d, MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1
+    xor r9d, r9d
+    syscall
+    test rax, rax
+    js .doc_storage_init_failed
+    mov qword ptr [rip + doc_buffer], rax
+    mov dword ptr [rip + doc_capacity], DOC_INITIAL_CAPACITY
+    mov dword ptr [rip + doc_gap_start], 0
+    mov dword ptr [rip + doc_gap_end], DOC_INITIAL_CAPACITY
+
+    mov eax, SYS_mmap
+    xor edi, edi
+    mov esi, DOC_INITIAL_CAPACITY
+    mov edx, PROT_READ | PROT_WRITE
+    mov r10d, MAP_PRIVATE | MAP_ANONYMOUS
+    mov r8, -1
+    xor r9d, r9d
+    syscall
+    test rax, rax
+    js .doc_storage_init_unmap_document
+    mov qword ptr [rip + load_buffer], rax
+    mov dword ptr [rip + load_capacity], DOC_INITIAL_CAPACITY
+    xor eax, eax
+    pop rbx
+    ret
+.doc_storage_init_unmap_document:
+    mov rdi, qword ptr [rip + doc_buffer]
+    mov esi, DOC_INITIAL_CAPACITY
+    mov eax, SYS_munmap
+    syscall
+    mov qword ptr [rip + doc_buffer], 0
+    mov dword ptr [rip + doc_capacity], 0
+.doc_storage_init_failed:
+    mov rax, -12
+    pop rbx
+    ret
+.size doc_storage_init, . - doc_storage_init
+
+# Grow the live gap buffer geometrically. Existing suffix bytes are relocated
+# to the end of the enlarged mapping; logical byte offsets remain unchanged.
+# RAX=0 on success, negative errno on failure.
+.type doc_buffer_grow, @function
+doc_buffer_grow:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, qword ptr [rip + doc_buffer]
+    mov r13d, dword ptr [rip + doc_capacity]
+    test r12, r12
+    jz .doc_buffer_grow_failed
+    cmp r13d, DOC_MAX_CAPACITY
+    jae .doc_buffer_grow_failed
+    mov r14d, r13d
+    shl r14d, 1
+    cmp r14d, DOC_MAX_CAPACITY
+    jbe .doc_buffer_grow_size_ready
+    mov r14d, DOC_MAX_CAPACITY
+.doc_buffer_grow_size_ready:
+    mov rdi, r12
+    mov esi, r13d
+    mov edx, r14d
+    mov r10d, MREMAP_MAYMOVE
+    mov eax, SYS_mremap
+    syscall
+    test rax, rax
+    js .doc_buffer_grow_return
+    mov r12, rax
+    mov qword ptr [rip + doc_buffer], rax
+    mov dword ptr [rip + doc_capacity], r14d
+
+    # The old suffix occupied [gap_end, old_capacity). Move it backwards
+    # into the high end of the new mapping, opening all new bytes as one gap.
+    mov ebx, dword ptr [rip + doc_length]
+    sub ebx, dword ptr [rip + doc_gap_start]
+    mov r13d, r14d
+    sub r13d, ebx
+    test ebx, ebx
+    jz .doc_buffer_grow_store_gap
+    mov rsi, r12
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rsi, rax
+    add rsi, rbx
+    dec rsi
+    mov rdi, r12
+    mov eax, r13d
+    add rdi, rax
+    add rdi, rbx
+    dec rdi
+    mov ecx, ebx
+    std
+    rep movsb
+    cld
+.doc_buffer_grow_store_gap:
+    mov dword ptr [rip + doc_gap_end], r13d
+    xor eax, eax
+.doc_buffer_grow_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.doc_buffer_grow_failed:
+    mov rax, -12
+    jmp .doc_buffer_grow_return
+.size doc_buffer_grow, . - doc_buffer_grow
+
+# EDI=minimum required live-document capacity. Preserve the current logical
+# document and grow until the requested size is available.
+.type doc_buffer_reserve, @function
+doc_buffer_reserve:
+    push rbx
+    mov ebx, edi
+    cmp ebx, DOC_MAX_CAPACITY
+    ja .doc_buffer_reserve_failed
+.doc_buffer_reserve_loop:
+    cmp ebx, dword ptr [rip + doc_capacity]
+    jbe .doc_buffer_reserve_success
+    call doc_buffer_grow
+    test rax, rax
+    js .doc_buffer_reserve_return
+    jmp .doc_buffer_reserve_loop
+.doc_buffer_reserve_success:
+    xor eax, eax
+.doc_buffer_reserve_return:
+    pop rbx
+    ret
+.doc_buffer_reserve_failed:
+    mov rax, -12
+    jmp .doc_buffer_reserve_return
+.size doc_buffer_reserve, . - doc_buffer_reserve
+
+# Grow the independent Open staging mapping. Unlike the live document this is
+# a contiguous byte stream, so mremap needs no gap/suffix relocation.
+.type load_buffer_grow, @function
+load_buffer_grow:
+    push r12
+    push r13
+    push r14
+    mov r12, qword ptr [rip + load_buffer]
+    mov r13d, dword ptr [rip + load_capacity]
+    test r12, r12
+    jz .load_buffer_grow_failed
+    cmp r13d, DOC_MAX_CAPACITY
+    jae .load_buffer_grow_failed
+    mov r14d, r13d
+    shl r14d, 1
+    cmp r14d, DOC_MAX_CAPACITY
+    jbe .load_buffer_grow_size_ready
+    mov r14d, DOC_MAX_CAPACITY
+.load_buffer_grow_size_ready:
+    mov rdi, r12
+    mov esi, r13d
+    mov edx, r14d
+    mov r10d, MREMAP_MAYMOVE
+    mov eax, SYS_mremap
+    syscall
+    test rax, rax
+    js .load_buffer_grow_return
+    mov qword ptr [rip + load_buffer], rax
+    mov dword ptr [rip + load_capacity], r14d
+    xor eax, eax
+    jmp .load_buffer_grow_return
+.load_buffer_grow_failed:
+    mov rax, -12
+.load_buffer_grow_return:
+    pop r14
+    pop r13
+    pop r12
+    ret
+.size load_buffer_grow, . - load_buffer_grow
+
+# Load an optional initial file. A nonexistent path is a new, empty document.
+# The live document mapping grows geometrically if the file fills its capacity.
 .type load_initial_document, @function
 load_initial_document:
     push rbx
@@ -1918,6 +2123,10 @@ load_initial_document:
     push r13
     push r14
     mov r12, qword ptr [rip + initial_file_path]
+    mov dword ptr [rip + doc_length], 0
+    mov dword ptr [rip + doc_gap_start], 0
+    mov eax, dword ptr [rip + doc_capacity]
+    mov dword ptr [rip + doc_gap_end], eax
     test r12, r12
     jz .load_file_empty
     mov qword ptr [rip + current_file_path], r12
@@ -1926,7 +2135,7 @@ load_initial_document:
     mov eax, SYS_openat
     mov edi, AT_FDCWD
     mov rsi, r12
-    xor edx, edx                 # O_RDONLY
+    xor edx, edx
     xor r10d, r10d
     syscall
     cmp rax, -2                  # ENOENT: retain path for a later Ctrl+S
@@ -1936,13 +2145,14 @@ load_initial_document:
     mov r14d, eax
     xor r13d, r13d
 .load_file_read:
-    cmp r13d, DOC_CAPACITY
+    mov eax, dword ptr [rip + doc_capacity]
+    cmp r13d, eax
     jae .load_file_probe
     mov eax, SYS_read
     mov edi, r14d
-    lea rsi, [rip + doc_buffer]
+    mov rsi, qword ptr [rip + doc_buffer]
     add rsi, r13
-    mov edx, DOC_CAPACITY
+    mov edx, dword ptr [rip + doc_capacity]
     sub edx, r13d
     syscall
     test rax, rax
@@ -1953,20 +2163,38 @@ load_initial_document:
     jmp .load_file_close_error
 .load_file_advance:
     add r13, rax
+    mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_gap_start], r13d
+    mov eax, dword ptr [rip + doc_capacity]
+    mov dword ptr [rip + doc_gap_end], eax
     jmp .load_file_read
 .load_file_probe:
-    # Read one extra byte to distinguish an exactly-full file from truncation.
+    # Read one byte beyond capacity. EOF preserves an exactly-full mapping;
+    # data triggers growth and is appended before the next bulk read.
     mov eax, SYS_read
     mov edi, r14d
     lea rsi, [rip + file_probe_byte]
     mov edx, 1
     syscall
     test rax, rax
-    jg .load_file_close_error
+    jg .load_file_grow_for_probe
     je .load_file_done
     cmp rax, -4
     je .load_file_probe
     jmp .load_file_close_error
+.load_file_grow_for_probe:
+    call doc_buffer_grow
+    test rax, rax
+    js .load_file_close_error
+    mov rdx, qword ptr [rip + doc_buffer]
+    mov al, byte ptr [rip + file_probe_byte]
+    mov byte ptr [rdx + r13], al
+    inc r13
+    mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_gap_start], r13d
+    mov eax, dword ptr [rip + doc_capacity]
+    mov dword ptr [rip + doc_gap_end], eax
+    jmp .load_file_read
 .load_file_done:
     mov edi, r14d
     mov eax, SYS_close
@@ -1985,15 +2213,19 @@ load_initial_document:
 .load_file_empty:
     mov dword ptr [rip + doc_length], 0
 .load_file_reset:
-    # The file was read contiguously at the start of the allocation. Put the
-    # initial gap after its bytes; the unused tail becomes the insertion space.
     mov eax, dword ptr [rip + doc_length]
     mov dword ptr [rip + doc_gap_start], eax
-    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
+    mov edx, dword ptr [rip + doc_capacity]
+    mov dword ptr [rip + doc_gap_end], edx
     mov dword ptr [rip + doc_cursor], 0
     mov dword ptr [rip + doc_view_top_row], 0
     mov dword ptr [rip + doc_selection_active], 0
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov dword ptr [rip + doc_selection_start], 0
+    mov dword ptr [rip + doc_selection_end], 0
     mov dword ptr [rip + doc_save_error], 0
+    mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_storage_error], 0
     xor eax, eax
 .load_file_return:
     pop r14
@@ -4015,7 +4247,7 @@ save_document_to_path:
     mov ebx, eax
     # Write the prefix before the gap, then the suffix after it. The physical
     # gap is never serialized into the file.
-    lea r12, [rip + doc_buffer]
+    mov r12, qword ptr [rip + doc_buffer]
     mov ebp, dword ptr [rip + doc_gap_start]
     xor r15d, r15d
 .save_atomic_write:
@@ -4024,7 +4256,7 @@ save_document_to_path:
     test r15d, r15d
     jnz .save_atomic_fsync
     mov r15d, 1
-    lea r12, [rip + doc_buffer]
+    mov r12, qword ptr [rip + doc_buffer]
     mov eax, dword ptr [rip + doc_gap_end]
     add r12, rax
     mov ebp, dword ptr [rip + doc_length]
@@ -4097,8 +4329,8 @@ save_document_to_path:
     ret
 .size save_document_to_path, . - save_document_to_path
 
-# Open a replacement document into a scratch buffer first. The live document,
-# path, and tab label are changed only after EOF and a successful close.
+# Open a replacement document into a separate growable staging mapping first.
+# The active document/path/tab are committed only after EOF and successful close.
 .type load_document_from_path, @function
 load_document_from_path:
     push rbx
@@ -4121,13 +4353,14 @@ load_document_from_path:
     mov ebx, eax
     xor r13d, r13d
 .load_path_read:
-    cmp r13d, DOC_CAPACITY
+    mov eax, dword ptr [rip + load_capacity]
+    cmp r13d, eax
     jae .load_path_probe
     mov eax, SYS_read
     mov edi, ebx
-    lea rsi, [rip + load_buffer]
+    mov rsi, qword ptr [rip + load_buffer]
     add rsi, r13
-    mov edx, DOC_CAPACITY
+    mov edx, dword ptr [rip + load_capacity]
     sub edx, r13d
     syscall
     test rax, rax
@@ -4146,24 +4379,41 @@ load_document_from_path:
     mov edx, 1
     syscall
     test rax, rax
-    jg .load_path_close_error
+    jg .load_path_grow_for_probe
     je .load_path_close
     cmp rax, -4
     je .load_path_probe
     jmp .load_path_close_error
+.load_path_grow_for_probe:
+    call load_buffer_grow
+    test rax, rax
+    js .load_path_close_error
+    mov rdx, qword ptr [rip + load_buffer]
+    mov al, byte ptr [rip + file_probe_byte]
+    mov byte ptr [rdx + r13], al
+    inc r13
+    jmp .load_path_read
 .load_path_close:
     mov eax, SYS_close
     mov edi, ebx
     syscall
     test rax, rax
     js .load_path_error
-    lea rsi, [rip + load_buffer]
-    lea rdi, [rip + doc_buffer]
+
+    # Reserve enough live storage before committing the staged contents. If
+    # allocation fails, the previous document and active path remain intact.
+    mov edi, r13d
+    call doc_buffer_reserve
+    test rax, rax
+    js .load_path_error
+    mov rsi, qword ptr [rip + load_buffer]
+    mov rdi, qword ptr [rip + doc_buffer]
     mov ecx, r13d
     rep movsb
     mov dword ptr [rip + doc_length], r13d
     mov dword ptr [rip + doc_gap_start], r13d
-    mov dword ptr [rip + doc_gap_end], DOC_CAPACITY
+    mov eax, dword ptr [rip + doc_capacity]
+    mov dword ptr [rip + doc_gap_end], eax
     mov dword ptr [rip + doc_cursor], 0
     mov dword ptr [rip + doc_view_top_row], 0
     mov dword ptr [rip + doc_selection_active], 0
@@ -4172,6 +4422,7 @@ load_document_from_path:
     mov dword ptr [rip + doc_selection_end], 0
     mov dword ptr [rip + doc_save_error], 0
     mov dword ptr [rip + doc_open_error], 0
+    mov dword ptr [rip + doc_storage_error], 0
     xor eax, eax
     jmp .load_path_return
 .load_path_close_error:
@@ -4188,6 +4439,7 @@ load_document_from_path:
     pop rbx
     ret
 .size load_document_from_path, . - load_document_from_path
+
 
 .type start_open_prompt, @function
 start_open_prompt:
@@ -5141,10 +5393,19 @@ render_surface:
     jne .render_open_error
     cmp dword ptr [rip + doc_save_error], 0
     jne .render_save_error
+    cmp dword ptr [rip + doc_storage_error], 0
+    jne .render_storage_error
     mov edi, dword ptr [rip + window_width]
     sub edi, 184
     mov esi, 12
     lea rdx, [rip + ui_mode_name]
+    call draw_text
+    jmp .render_file_button
+.render_storage_error:
+    mov edi, dword ptr [rip + window_width]
+    sub edi, 192
+    mov esi, 12
+    lea rdx, [rip + ui_storage_error]
     call draw_text
     jmp .render_file_button
 .render_open_error:
@@ -5775,7 +6036,7 @@ doc_byte_at:
     sub edx, dword ptr [rip + doc_gap_start]
     add eax, edx
 .doc_byte_at_physical:
-    lea rdx, [rip + doc_buffer]
+    mov rdx, qword ptr [rip + doc_buffer]
     movzx eax, byte ptr [rdx + rax]
     ret
 .doc_byte_at_out_of_range:
@@ -5808,11 +6069,11 @@ doc_move_gap:
     sub r13d, ebx
     test r13d, r13d
     jz .doc_move_gap_done
-    lea rsi, [rip + doc_buffer]
+    mov rsi, qword ptr [rip + doc_buffer]
     mov eax, dword ptr [rip + doc_gap_start]
     add rsi, rax
     dec rsi
-    lea rdi, [rip + doc_buffer]
+    mov rdi, qword ptr [rip + doc_buffer]
     mov eax, dword ptr [rip + doc_gap_end]
     add rdi, rax
     dec rdi
@@ -5830,10 +6091,10 @@ doc_move_gap:
     sub r13d, r12d
     test r13d, r13d
     jz .doc_move_gap_done
-    lea rsi, [rip + doc_buffer]
+    mov rsi, qword ptr [rip + doc_buffer]
     mov eax, dword ptr [rip + doc_gap_end]
     add rsi, rax
-    lea rdi, [rip + doc_buffer]
+    mov rdi, qword ptr [rip + doc_buffer]
     mov eax, dword ptr [rip + doc_gap_start]
     add rdi, rax
     mov ecx, r13d
@@ -6007,7 +6268,7 @@ doc_utf8_prev:
     ret
 .size doc_utf8_prev, . - doc_utf8_prev
 
-# Insert one byte at the cursor. The bounded buffer never writes past its allocation.
+# Insert one byte at the logical cursor. Grow the mapping when its gap is empty.
 .type doc_insert_byte, @function
 # Insert a byte at the logical cursor by consuming one byte from the gap.
 doc_insert_byte:
@@ -6019,12 +6280,21 @@ doc_insert_byte:
     call doc_move_gap
     mov eax, dword ptr [rip + doc_gap_start]
     cmp eax, dword ptr [rip + doc_gap_end]
-    jae .doc_insert_done
-    lea r12, [rip + doc_buffer]
+    jb .doc_insert_has_space
+    call doc_buffer_grow
+    test rax, rax
+    js .doc_insert_allocation_failed
+    mov eax, dword ptr [rip + doc_gap_start]
+.doc_insert_has_space:
+    mov r12, qword ptr [rip + doc_buffer]
     mov byte ptr [r12 + rax], r13b
     inc dword ptr [rip + doc_gap_start]
     inc dword ptr [rip + doc_length]
     inc dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_storage_error], 0
+    jmp .doc_insert_done
+.doc_insert_allocation_failed:
+    mov dword ptr [rip + doc_storage_error], 1
 .doc_insert_done:
     pop r13
     pop r12
