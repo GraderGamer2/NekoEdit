@@ -4893,6 +4893,9 @@ xkb_symbols "nekoedit-sparse" {
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
+    # The preference unit test covers persistence separately; keep protocol
+    # fixtures independent of the developer machine's per-user config.
+    environment["NEKOEDIT_DISABLE_PREFERENCES"] = "1"
     if font_test_path is not None:
         environment["NEKOEDIT_FONT"] = os.path.abspath(font_test_path)
         environment.pop("NEKOEDIT_DISABLE_FONT", None)
