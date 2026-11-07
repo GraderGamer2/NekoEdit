@@ -1,3 +1,13 @@
+## 2026-11-07 — Make shared Wayland test helpers height-aware
+
+CI [Build and test #412](https://github.com/GraderGamer2/NekoEdit/actions/runs/42360656059) confirmed the synthetic font parser/rasterizer checks passed, then the new 800×360 picker test stopped before reaching its caret assertions: the generic mock-compositor redraw checks still expected an 800×480 damage rectangle. The application correctly redrew at 800×360.
+
+The initial redraw and shared keyboard/workflow redraw helpers now use the configured initial test height. Default tests remain 800×480; the constrained font-picker test can now proceed to validate the actual 8px glyph advances, caret, pointer hit-testing, and selected-row highlight.
+
+The CI run for this harness correction is pending. No manual GNOME/Mutter visual test is claimed.
+
+---
+
 ## 2026-11-07 — Keep dialog glyphs, advances, and caret geometry in the same scale
 
 The first corrected build passed, but source review found a remaining resize-dependent mismatch: a dialog's font size is selected from its tighter fit axis, while horizontal glyph advances were still measured at the fixed 10px design em. When the window is short but wide, the picker is height-constrained: the glyphs shrink but their advances, caret, and hit-test cells do not.

@@ -509,7 +509,7 @@ def run(
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "redraw damage")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
                 if not (
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
@@ -1183,7 +1183,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(
@@ -1203,7 +1203,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
@@ -3381,7 +3381,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(
@@ -3403,7 +3403,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(
@@ -3628,7 +3628,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                     )
                     expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), f"{label} damage"
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
