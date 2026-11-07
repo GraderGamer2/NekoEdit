@@ -1947,7 +1947,7 @@ doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode, find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -2129,6 +2129,22 @@ settings_panel_y:       .long 0
 settings_panel_width:   .long 0
 settings_panel_height:  .long 0
 settings_ui_font_size:  .long 0
+find_panel_x:           .long 0
+find_panel_y:           .long 0
+find_panel_width:       .long 0
+find_panel_height:      .long 0
+find_ui_font_size:      .long 0
+find_replace_mode:      .long 0
+find_replace_focus:     .long 0
+find_query_length:      .long 0
+find_query_cursor:      .long 0
+find_replacement_length: .long 0
+find_replacement_cursor: .long 0
+find_field_select_all:  .long 0
+find_status:            .long 0
+find_replace_count:     .long 0
+find_query_buffer:      .zero 128
+find_replacement_buffer: .zero 128
 path_prompt_x:          .long 0
 path_prompt_y:          .long 0
 path_prompt_width:      .long 0
@@ -3019,6 +3035,8 @@ wayland_main:
     mov dword ptr [rip + pointer_serial], eax
     cmp dword ptr [rip + save_confirm_open], 0
     jne .save_confirm_pointer
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .find_replace_pointer
     # The directory picker is modal; pointer input belongs to its controls.
     cmp dword ptr [rip + picker_mode], 0
     jne .picker_pointer
@@ -3607,12 +3625,18 @@ wayland_main:
     jz .event_loop
     cmp dword ptr [rip + save_confirm_open], 0
     jne .keyboard_save_confirmation
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .keyboard_find_replace
     cmp dword ptr [rip + picker_mode], 0
     jne .keyboard_picker
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .keyboard_path_prompt
     cmp dword ptr [rip + ctrl_down], 0
     je .keyboard_unmodified
+    cmp eax, 33
+    je .keyboard_find_open
+    cmp eax, 35
+    je .keyboard_replace_open
     cmp eax, 24
     je .keyboard_open_command
     cmp eax, 30
@@ -3749,6 +3773,8 @@ wayland_main:
     jmp .keyboard_changed
 
 .keyboard_unmodified:
+    cmp eax, 61
+    je .keyboard_find_f3
     cmp eax, 1
     jne .keyboard_unmodified_dispatch
     cmp dword ptr [rip + file_menu_open], 0
@@ -3823,6 +3849,12 @@ wayland_main:
     jmp .keyboard_changed
 
 # The path editor owns all non-modifier keys while its prompt is visible.
+.find_replace_pointer:
+    mov edi, dword ptr [rip + pointer_x]
+    mov esi, dword ptr [rip + pointer_y]
+    call find_replace_handle_pointer
+    jmp .keyboard_changed
+
 .picker_pointer:
     mov edi, dword ptr [rip + pointer_x]
     mov esi, dword ptr [rip + pointer_y]
@@ -3873,6 +3905,147 @@ wayland_main:
 .keyboard_path_enter:
     call repeat_cancel
     call confirm_path_prompt
+    jmp .keyboard_changed
+
+.keyboard_find_open:
+    mov edi, 1
+    call find_replace_open
+    jmp .keyboard_changed
+.keyboard_replace_open:
+    mov edi, 2
+    call find_replace_open
+    jmp .keyboard_changed
+.keyboard_find_f3:
+    cmp dword ptr [rip + shift_down], 0
+    jne .keyboard_find_f3_previous
+    call doc_find_next
+    jmp .keyboard_changed
+.keyboard_find_f3_previous:
+    call doc_find_previous
+    jmp .keyboard_changed
+
+.keyboard_find_replace:
+    cmp eax, 1
+    je .keyboard_find_close
+    cmp eax, 15
+    je .keyboard_find_tab
+    cmp eax, 28
+    je .keyboard_find_enter
+    cmp eax, 61
+    je .keyboard_find_f3
+    cmp eax, 105
+    je .keyboard_find_left
+    cmp eax, 106
+    je .keyboard_find_right
+    cmp eax, 102
+    je .keyboard_find_home
+    cmp eax, 107
+    je .keyboard_find_end
+    cmp eax, 14
+    je .keyboard_find_backspace
+    cmp eax, 111
+    je .keyboard_find_delete
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .keyboard_find_ctrl
+    mov edi, eax
+    call keycode_to_ascii
+    cmp eax, 32
+    jb .event_loop
+    cmp eax, 126
+    ja .event_loop
+    mov edi, eax
+    call find_input_insert_byte
+    jmp .keyboard_changed
+.keyboard_find_ctrl:
+    cmp eax, 30
+    je .keyboard_find_select_all
+    jmp .event_loop
+.keyboard_find_select_all:
+    mov dword ptr [rip + find_field_select_all], 1
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .keyboard_find_select_replacement
+    mov eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + find_query_cursor], eax
+    jmp .keyboard_changed
+.keyboard_find_select_replacement:
+    mov eax, dword ptr [rip + find_replacement_length]
+    mov dword ptr [rip + find_replacement_cursor], eax
+    jmp .keyboard_changed
+.keyboard_find_tab:
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .event_loop
+    xor dword ptr [rip + find_replace_focus], 1
+    mov dword ptr [rip + find_field_select_all], 0
+    jmp .keyboard_changed
+.keyboard_find_enter:
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .keyboard_find_enter_next
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .keyboard_find_enter_replace
+.keyboard_find_enter_next:
+    call doc_find_next
+    jmp .keyboard_changed
+.keyboard_find_enter_replace:
+    call doc_find_replace_current
+    jmp .keyboard_changed
+.keyboard_find_left:
+    mov dword ptr [rip + find_field_select_all], 0
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .keyboard_find_left_replacement
+    cmp dword ptr [rip + find_query_cursor], 0
+    je .keyboard_changed
+    dec dword ptr [rip + find_query_cursor]
+    jmp .keyboard_changed
+.keyboard_find_left_replacement:
+    cmp dword ptr [rip + find_replacement_cursor], 0
+    je .keyboard_changed
+    dec dword ptr [rip + find_replacement_cursor]
+    jmp .keyboard_changed
+.keyboard_find_right:
+    mov dword ptr [rip + find_field_select_all], 0
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .keyboard_find_right_replacement
+    mov eax, dword ptr [rip + find_query_cursor]
+    cmp eax, dword ptr [rip + find_query_length]
+    jae .keyboard_changed
+    inc dword ptr [rip + find_query_cursor]
+    jmp .keyboard_changed
+.keyboard_find_right_replacement:
+    mov eax, dword ptr [rip + find_replacement_cursor]
+    cmp eax, dword ptr [rip + find_replacement_length]
+    jae .keyboard_changed
+    inc dword ptr [rip + find_replacement_cursor]
+    jmp .keyboard_changed
+.keyboard_find_home:
+    mov dword ptr [rip + find_field_select_all], 0
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .keyboard_find_home_replacement
+    mov dword ptr [rip + find_query_cursor], 0
+    jmp .keyboard_changed
+.keyboard_find_home_replacement:
+    mov dword ptr [rip + find_replacement_cursor], 0
+    jmp .keyboard_changed
+.keyboard_find_end:
+    mov dword ptr [rip + find_field_select_all], 0
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .keyboard_find_end_replacement
+    mov eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + find_query_cursor], eax
+    jmp .keyboard_changed
+.keyboard_find_end_replacement:
+    mov eax, dword ptr [rip + find_replacement_length]
+    mov dword ptr [rip + find_replacement_cursor], eax
+    jmp .keyboard_changed
+.keyboard_find_backspace:
+    mov edi, 1
+    call find_input_delete
+    jmp .keyboard_changed
+.keyboard_find_delete:
+    xor edi, edi
+    call find_input_delete
+    jmp .keyboard_changed
+.keyboard_find_close:
+    call find_replace_close
     jmp .keyboard_changed
 
 .keyboard_select_all:
@@ -6984,6 +7157,20 @@ temp_prefix: .ascii ".nekoedit-"
 temp_prefix_end:
 temp_suffix: .ascii ".tmp"
 temp_suffix_end:
+ui_find_title: .asciz "FIND"
+ui_replace_title: .asciz "FIND / REPLACE"
+ui_find_label: .asciz "Find"
+ui_replace_label: .asciz "Replace"
+ui_find_prev_label: .asciz "Prev"
+ui_find_next_label: .asciz "Next"
+ui_replace_one_label: .asciz "Replace"
+ui_replace_all_label: .asciz "All"
+ui_find_close_label: .asciz "Close"
+ui_find_empty_label: .asciz "Enter a search term"
+ui_find_match_label: .asciz "Match found"
+ui_find_none_label: .asciz "No match"
+ui_find_replaced_label: .asciz "Replacement complete"
+ui_find_all_label: .asciz "Replace All complete"
 .section .text
 
 # Print a NUL-terminated string to stderr. Input: RSI = string.
@@ -7924,6 +8111,7 @@ render_surface:
     call render_path_prompt
     call render_picker
     call render_save_confirmation
+    call render_find_replace
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -8324,6 +8512,65 @@ window_update_layout_geometry:
     mov dword ptr [rip + settings_panel_height], eax
     mov eax, dword ptr [rip + ui_font_size]
     mov dword ptr [rip + settings_ui_font_size], eax
+
+    # Find/Replace uses a centered 448x192 design grid and follows UI em sizing.
+    mov eax, 448
+    imul eax, dword ptr [rip + ui_font_size]
+    cdq
+    mov ecx, 10
+    idiv ecx
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 32
+    cmp eax, ecx
+    jbe .window_layout_find_width_ready
+    mov eax, ecx
+.window_layout_find_width_ready:
+    mov dword ptr [rip + find_panel_width], eax
+    mov edx, dword ptr [rip + window_width]
+    sub edx, eax
+    shr edx, 1
+    mov dword ptr [rip + find_panel_x], edx
+    mov eax, 192
+    imul eax, dword ptr [rip + ui_font_size]
+    cdq
+    mov ecx, 10
+    idiv ecx
+    mov ecx, dword ptr [rip + window_height]
+    sub ecx, 32
+    cmp eax, ecx
+    jbe .window_layout_find_height_ready
+    mov eax, ecx
+.window_layout_find_height_ready:
+    mov dword ptr [rip + find_panel_height], eax
+    mov edx, dword ptr [rip + window_height]
+    sub edx, eax
+    shr edx, 1
+    mov dword ptr [rip + find_panel_y], edx
+    mov eax, dword ptr [rip + ui_font_size]
+    mov ecx, dword ptr [rip + find_panel_width]
+    imul ecx, 10
+    xor edx, edx
+    mov ebx, 448
+    div ebx
+    cmp eax, dword ptr [rip + ui_font_size]
+    jbe .window_layout_find_font_width_ready
+    mov eax, dword ptr [rip + ui_font_size]
+.window_layout_find_font_width_ready:
+    mov ebx, eax
+    mov eax, dword ptr [rip + find_panel_height]
+    imul eax, 10
+    xor edx, edx
+    mov ecx, 192
+    div ecx
+    cmp eax, ebx
+    jae .window_layout_find_font_store
+    mov ebx, eax
+.window_layout_find_font_store:
+    cmp ebx, 6
+    jae .window_layout_find_font_min_ready
+    mov ebx, 6
+.window_layout_find_font_min_ready:
+    mov dword ptr [rip + find_ui_font_size], ebx
 
     # The path prompt uses the same fit-and-center policy with its 704x176
     # design dimensions. Its original four-pixel upward bias is retained.
@@ -11550,6 +11797,558 @@ doc_move_vertical:
     ret
 .size doc_move_vertical, . - doc_move_vertical
 
+# Open the Find/Replace modal. EDI=1 for Find, EDI=2 for Find/Replace.
+.type find_replace_open, @function
+find_replace_open:
+    mov dword ptr [rip + find_replace_mode], edi
+    mov dword ptr [rip + find_replace_focus], 0
+    mov dword ptr [rip + find_field_select_all], 0
+    mov dword ptr [rip + find_status], 0
+    mov eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + find_query_cursor], eax
+    mov eax, dword ptr [rip + find_replacement_length]
+    mov dword ptr [rip + find_replacement_cursor], eax
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
+    ret
+.size find_replace_open, . - find_replace_open
+
+.type find_replace_close, @function
+find_replace_close:
+    mov dword ptr [rip + find_replace_mode], 0
+    mov dword ptr [rip + find_field_select_all], 0
+    ret
+.size find_replace_close, . - find_replace_close
+
+# Insert EDI (an ASCII byte) at the active Find/Replace field cursor.
+.type find_input_insert_byte, @function
+find_input_insert_byte:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r10d, edi
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .Lfind_insert_replacement
+    lea rbx, [rip + find_query_buffer]
+    lea r14, [rip + find_query_cursor]
+    lea r15, [rip + find_query_length]
+    jmp .Lfind_insert_field_ready
+.Lfind_insert_replacement:
+    lea rbx, [rip + find_replacement_buffer]
+    lea r14, [rip + find_replacement_cursor]
+    lea r15, [rip + find_replacement_length]
+.Lfind_insert_field_ready:
+    mov r12d, dword ptr [r15]
+    mov r13d, dword ptr [r14]
+    cmp dword ptr [rip + find_field_select_all], 0
+    je .Lfind_insert_no_selection
+    xor r12d, r12d
+    xor r13d, r13d
+    mov byte ptr [rbx], 0
+    mov dword ptr [rip + find_field_select_all], 0
+.Lfind_insert_no_selection:
+    cmp r12d, 127
+    jae .Lfind_insert_done
+    mov ecx, r12d
+.Lfind_insert_shift:
+    cmp ecx, r13d
+    jbe .Lfind_insert_store
+    mov al, byte ptr [rbx + rcx - 1]
+    mov byte ptr [rbx + rcx], al
+    dec ecx
+    jmp .Lfind_insert_shift
+.Lfind_insert_store:
+    mov byte ptr [rbx + r13], r10b
+    inc r12d
+    inc r13d
+    mov byte ptr [rbx + r12], 0
+    mov dword ptr [r15], r12d
+    mov dword ptr [r14], r13d
+.Lfind_insert_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size find_input_insert_byte, . - find_input_insert_byte
+
+# EDI=1 backspace, EDI=0 delete-forward in the active field.
+.type find_input_delete, @function
+find_input_delete:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r10d, edi
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .Lfind_delete_replacement
+    lea rbx, [rip + find_query_buffer]
+    lea r14, [rip + find_query_cursor]
+    lea r15, [rip + find_query_length]
+    jmp .Lfind_delete_field_ready
+.Lfind_delete_replacement:
+    lea rbx, [rip + find_replacement_buffer]
+    lea r14, [rip + find_replacement_cursor]
+    lea r15, [rip + find_replacement_length]
+.Lfind_delete_field_ready:
+    mov r12d, dword ptr [r15]
+    mov r13d, dword ptr [r14]
+    cmp dword ptr [rip + find_field_select_all], 0
+    je .Lfind_delete_no_selection
+    xor r12d, r12d
+    xor r13d, r13d
+    mov byte ptr [rbx], 0
+    mov dword ptr [rip + find_field_select_all], 0
+    jmp .Lfind_delete_store
+.Lfind_delete_no_selection:
+    test r10d, r10d
+    jz .Lfind_delete_forward
+    test r13d, r13d
+    jz .Lfind_delete_done
+    dec r13d
+    mov ecx, r13d
+    jmp .Lfind_delete_shift
+.Lfind_delete_forward:
+    cmp r13d, r12d
+    jae .Lfind_delete_done
+    mov ecx, r13d
+.Lfind_delete_shift:
+    lea edx, [r12 - 1]
+.Lfind_delete_shift_loop:
+    cmp ecx, edx
+    jae .Lfind_delete_reduced
+    mov al, byte ptr [rbx + rcx + 1]
+    mov byte ptr [rbx + rcx], al
+    inc ecx
+    jmp .Lfind_delete_shift_loop
+.Lfind_delete_reduced:
+    dec r12d
+.Lfind_delete_store:
+    mov byte ptr [rbx + r12], 0
+    mov dword ptr [r15], r12d
+    mov dword ptr [r14], r13d
+.Lfind_delete_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size find_input_delete, . - find_input_delete
+
+# EDI=start byte offset; ESI=1 searches forward, ESI=0 backward.
+# Search wraps once and returns EAX=match offset or -1.
+.type doc_find_match, @function
+doc_find_match:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, esi
+    mov r13d, edi
+    mov eax, dword ptr [rip + find_query_length]
+    test eax, eax
+    jz .Ldoc_find_match_none
+    mov ebx, dword ptr [rip + doc_length]
+    cmp ebx, eax
+    jb .Ldoc_find_match_none
+    sub ebx, eax
+    cmp r13d, ebx
+    jbe .Ldoc_find_start_ready
+    mov r13d, ebx
+.Ldoc_find_start_ready:
+    xor ebp, ebp
+    mov r14d, r13d
+    test r12d, r12d
+    jz .Ldoc_find_backward
+    mov r15d, ebx
+.Ldoc_find_forward_candidate:
+    xor r10d, r10d
+.Ldoc_find_forward_compare:
+    mov edi, r14d
+    add edi, r10d
+    call doc_byte_at
+    lea rcx, [rip + find_query_buffer]
+    cmp al, byte ptr [rcx + r10]
+    jne .Ldoc_find_forward_miss
+    inc r10d
+    cmp r10d, dword ptr [rip + find_query_length]
+    jb .Ldoc_find_forward_compare
+    mov eax, r14d
+    jmp .Ldoc_find_match_done
+.Ldoc_find_forward_miss:
+    inc r14d
+    cmp r14d, r15d
+    jbe .Ldoc_find_forward_candidate
+    test ebp, ebp
+    jnz .Ldoc_find_match_none
+    mov ebp, 1
+    xor r14d, r14d
+    mov r15d, r13d
+    test r15d, r15d
+    jz .Ldoc_find_match_none
+    dec r15d
+    jmp .Ldoc_find_forward_candidate
+.Ldoc_find_backward:
+    xor r15d, r15d
+.Ldoc_find_backward_candidate:
+    xor r10d, r10d
+.Ldoc_find_backward_compare:
+    mov edi, r14d
+    add edi, r10d
+    call doc_byte_at
+    lea rcx, [rip + find_query_buffer]
+    cmp al, byte ptr [rcx + r10]
+    jne .Ldoc_find_backward_miss
+    inc r10d
+    cmp r10d, dword ptr [rip + find_query_length]
+    jb .Ldoc_find_backward_compare
+    mov eax, r14d
+    jmp .Ldoc_find_match_done
+.Ldoc_find_backward_miss:
+    test r14d, r14d
+    jz .Ldoc_find_backward_pass_end
+    dec r14d
+    cmp r14d, r15d
+    jae .Ldoc_find_backward_candidate
+.Ldoc_find_backward_pass_end:
+    test ebp, ebp
+    jnz .Ldoc_find_match_none
+    mov ebp, 1
+    mov r14d, ebx
+    lea r15d, [r13 + 1]
+    cmp r14d, r15d
+    jb .Ldoc_find_match_none
+    jmp .Ldoc_find_backward_candidate
+.Ldoc_find_match_none:
+    mov eax, -1
+.Ldoc_find_match_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size doc_find_match, . - doc_find_match
+
+.type doc_find_next, @function
+doc_find_next:
+    cmp dword ptr [rip + find_query_length], 0
+    je .Ldoc_find_next_empty
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Ldoc_find_next_from_cursor
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jae .Ldoc_find_next_start
+    mov eax, edx
+.Ldoc_find_next_start:
+    mov edi, eax
+    jmp .Ldoc_find_next_search
+.Ldoc_find_next_from_cursor:
+    mov edi, dword ptr [rip + doc_cursor]
+.Ldoc_find_next_search:
+    mov esi, 1
+    call doc_find_match
+    test eax, eax
+    js .Ldoc_find_next_not_found
+    mov dword ptr [rip + doc_selection_anchor], eax
+    add eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + doc_cursor], eax
+    mov dword ptr [rip + doc_selection_active], 1
+    mov dword ptr [rip + find_status], 1
+    call doc_ensure_cursor_visible
+    mov eax, 1
+    ret
+.Ldoc_find_next_empty:
+    mov dword ptr [rip + find_status], 0
+    xor eax, eax
+    ret
+.Ldoc_find_next_not_found:
+    mov dword ptr [rip + find_status], 2
+    xor eax, eax
+    ret
+.size doc_find_next, . - doc_find_next
+
+.type doc_find_previous, @function
+doc_find_previous:
+    cmp dword ptr [rip + find_query_length], 0
+    je .Ldoc_find_previous_empty
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Ldoc_find_previous_from_cursor
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Ldoc_find_previous_start
+    mov eax, edx
+.Ldoc_find_previous_start:
+    test eax, eax
+    jz .Ldoc_find_previous_search
+    dec eax
+    mov edi, eax
+    jmp .Ldoc_find_previous_search
+.Ldoc_find_previous_from_cursor:
+    mov edi, dword ptr [rip + doc_cursor]
+    test edi, edi
+    jz .Ldoc_find_previous_search
+    dec edi
+.Ldoc_find_previous_search:
+    xor esi, esi
+    call doc_find_match
+    test eax, eax
+    js .Ldoc_find_previous_not_found
+    mov dword ptr [rip + doc_selection_anchor], eax
+    add eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + doc_cursor], eax
+    mov dword ptr [rip + doc_selection_active], 1
+    mov dword ptr [rip + find_status], 1
+    call doc_ensure_cursor_visible
+    mov eax, 1
+    ret
+.Ldoc_find_previous_empty:
+    mov dword ptr [rip + find_status], 0
+    xor eax, eax
+    ret
+.Ldoc_find_previous_not_found:
+    mov dword ptr [rip + find_status], 2
+    xor eax, eax
+    ret
+.size doc_find_previous, . - doc_find_previous
+
+# Replace the currently selected query; caller guarantees the selection matches.
+.type doc_replace_selection_with_buffer, @function
+doc_replace_selection_with_buffer:
+    push rbx
+    call doc_delete_selection
+    xor ebx, ebx
+.Ldoc_replace_insert_loop:
+    cmp ebx, dword ptr [rip + find_replacement_length]
+    jae .Ldoc_replace_insert_done
+    lea rdx, [rip + find_replacement_buffer]
+    movzx edi, byte ptr [rdx + rbx]
+    call doc_insert_byte
+    inc ebx
+    jmp .Ldoc_replace_insert_loop
+.Ldoc_replace_insert_done:
+    mov eax, dword ptr [rip + doc_cursor]
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov dword ptr [rip + doc_selection_active], 0
+    pop rbx
+    ret
+.size doc_replace_selection_with_buffer, . - doc_replace_selection_with_buffer
+
+.type doc_find_selection_matches, @function
+doc_find_selection_matches:
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Ldoc_find_selection_no
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Ldoc_find_selection_bounds
+    xchg eax, edx
+.Ldoc_find_selection_bounds:
+    sub edx, eax
+    cmp edx, dword ptr [rip + find_query_length]
+    jne .Ldoc_find_selection_no
+    push rbx
+    push r12
+    mov ebx, eax
+    xor r12d, r12d
+.Ldoc_find_selection_compare:
+    cmp r12d, dword ptr [rip + find_query_length]
+    jae .Ldoc_find_selection_yes
+    mov edi, ebx
+    add edi, r12d
+    call doc_byte_at
+    lea rdx, [rip + find_query_buffer]
+    cmp al, byte ptr [rdx + r12]
+    jne .Ldoc_find_selection_no_pop
+    inc r12d
+    jmp .Ldoc_find_selection_compare
+.Ldoc_find_selection_yes:
+    mov eax, 1
+    jmp .Ldoc_find_selection_pop
+.Ldoc_find_selection_no_pop:
+    xor eax, eax
+.Ldoc_find_selection_pop:
+    pop r12
+    pop rbx
+    ret
+.Ldoc_find_selection_no:
+    xor eax, eax
+    ret
+.size doc_find_selection_matches, . - doc_find_selection_matches
+
+.type doc_find_replace_current, @function
+doc_find_replace_current:
+    call doc_find_selection_matches
+    test eax, eax
+    jz .Ldoc_find_replace_find_next
+    call doc_replace_selection_with_buffer
+    mov dword ptr [rip + find_status], 3
+    mov eax, 1
+    ret
+.Ldoc_find_replace_find_next:
+    call doc_find_next
+    xor eax, eax
+    ret
+.size doc_find_replace_current, . - doc_find_replace_current
+
+.type doc_find_replace_all, @function
+doc_find_replace_all:
+    push rbx
+    mov dword ptr [rip + find_replace_count], 0
+    mov dword ptr [rip + doc_cursor], 0
+    mov dword ptr [rip + doc_selection_anchor], 0
+    mov dword ptr [rip + doc_selection_active], 0
+    cmp dword ptr [rip + find_query_length], 0
+    je .Ldoc_find_replace_all_done
+.Ldoc_find_replace_all_loop:
+    mov edi, dword ptr [rip + doc_cursor]
+    mov esi, 1
+    call doc_find_match
+    test eax, eax
+    js .Ldoc_find_replace_all_done
+    cmp eax, dword ptr [rip + doc_cursor]
+    jb .Ldoc_find_replace_all_done
+    mov dword ptr [rip + doc_selection_anchor], eax
+    add eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + doc_cursor], eax
+    mov dword ptr [rip + doc_selection_active], 1
+    call doc_replace_selection_with_buffer
+    inc dword ptr [rip + find_replace_count]
+    jmp .Ldoc_find_replace_all_loop
+.Ldoc_find_replace_all_done:
+    mov dword ptr [rip + doc_selection_active], 0
+    cmp dword ptr [rip + find_replace_count], 0
+    je .Ldoc_find_replace_all_none
+    mov dword ptr [rip + find_status], 4
+    mov eax, dword ptr [rip + find_replace_count]
+    jmp .Ldoc_find_replace_all_return
+.Ldoc_find_replace_all_none:
+    mov dword ptr [rip + find_status], 2
+    xor eax, eax
+.Ldoc_find_replace_all_return:
+    pop rbx
+    ret
+.size doc_find_replace_all, . - doc_find_replace_all
+
+# Convert pointer pixels to the Find/Replace modal's 448x192 design grid.
+.type find_pointer_to_design, @function
+find_pointer_to_design:
+    push rbx
+    push r12
+    mov r12d, esi
+    sub edi, dword ptr [rip + find_panel_x]
+    imul edi, 448
+    mov eax, edi
+    cdq
+    mov ecx, dword ptr [rip + find_panel_width]
+    test ecx, ecx
+    jz .Lfind_pointer_x_zero
+    idiv ecx
+    jmp .Lfind_pointer_x_ready
+.Lfind_pointer_x_zero:
+    xor eax, eax
+.Lfind_pointer_x_ready:
+    mov ebx, eax
+    mov eax, r12d
+    sub eax, dword ptr [rip + find_panel_y]
+    imul eax, 192
+    cdq
+    mov ecx, dword ptr [rip + find_panel_height]
+    test ecx, ecx
+    jz .Lfind_pointer_y_zero
+    idiv ecx
+    jmp .Lfind_pointer_y_ready
+.Lfind_pointer_y_zero:
+    xor eax, eax
+.Lfind_pointer_y_ready:
+    mov edx, eax
+    mov eax, ebx
+    pop r12
+    pop rbx
+    ret
+.size find_pointer_to_design, . - find_pointer_to_design
+
+.type find_replace_handle_pointer, @function
+find_replace_handle_pointer:
+    push rbx
+    mov ebx, dword ptr [rip + pointer_y]
+    mov edi, dword ptr [rip + pointer_x]
+    mov esi, ebx
+    call find_pointer_to_design
+    cmp edx, 42
+    jb .Lfind_pointer_buttons
+    cmp edx, 78
+    jb .Lfind_pointer_focus_query
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .Lfind_pointer_buttons
+    cmp edx, 124
+    jb .Lfind_pointer_buttons
+    cmp edx, 88
+    jae .Lfind_pointer_buttons
+.Lfind_pointer_focus_replacement:
+    mov dword ptr [rip + find_replace_focus], 1
+    mov dword ptr [rip + find_field_select_all], 0
+    mov eax, dword ptr [rip + find_replacement_length]
+    mov dword ptr [rip + find_replacement_cursor], eax
+    jmp .Lfind_pointer_done
+.Lfind_pointer_focus_query:
+    mov dword ptr [rip + find_replace_focus], 0
+    mov dword ptr [rip + find_field_select_all], 0
+    mov eax, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + find_query_cursor], eax
+    jmp .Lfind_pointer_done
+.Lfind_pointer_buttons:
+    cmp edx, 144
+    jb .Lfind_pointer_outside
+    cmp edx, 184
+    jae .Lfind_pointer_outside
+    cmp eax, 88
+    jb .Lfind_pointer_prev
+    cmp eax, 176
+    jb .Lfind_pointer_next
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .Lfind_pointer_close_check
+    cmp eax, 280
+    jb .Lfind_pointer_replace
+    cmp eax, 368
+    jb .Lfind_pointer_replace_all
+.Lfind_pointer_close_check:
+    cmp eax, 368
+    jae .Lfind_pointer_close
+    jmp .Lfind_pointer_done
+.Lfind_pointer_prev:
+    call doc_find_previous
+    jmp .Lfind_pointer_done
+.Lfind_pointer_next:
+    call doc_find_next
+    jmp .Lfind_pointer_done
+.Lfind_pointer_replace:
+    call doc_find_replace_current
+    jmp .Lfind_pointer_done
+.Lfind_pointer_replace_all:
+    call doc_find_replace_all
+    jmp .Lfind_pointer_done
+.Lfind_pointer_close:
+    call find_replace_close
+    jmp .Lfind_pointer_done
+.Lfind_pointer_outside:
+    mov dword ptr [rip + find_replace_mode], 0
+.Lfind_pointer_done:
+    mov eax, 1
+    pop rbx
+    ret
+.size find_replace_handle_pointer, . - find_replace_handle_pointer
+
 # Translate printable input from the active XKB keymap when the supported
 # text-v1 subset was parsed. A parsed map's non-ASCII keys are deliberately
 # ignored rather than silently producing an unrelated US-QWERTY character.
@@ -13258,6 +14057,235 @@ render_save_confirmation:
 .render_save_confirmation_done:
     ret
 .size render_save_confirmation, . - render_save_confirmation
+
+.type render_find_replace, @function
+render_find_replace:
+    cmp dword ptr [rip + find_replace_mode], 0
+    je .render_find_replace_done
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov dword ptr [rip + ui_transform_active], 1
+    mov eax, dword ptr [rip + find_ui_font_size]
+    mov dword ptr [rip + ui_transform_font_size], eax
+    mov dword ptr [rip + ui_transform_base_x], 0
+    mov dword ptr [rip + ui_transform_base_y], 0
+    mov eax, dword ptr [rip + find_panel_x]
+    mov dword ptr [rip + ui_transform_origin_x], eax
+    mov eax, dword ptr [rip + find_panel_y]
+    mov dword ptr [rip + ui_transform_origin_y], eax
+    mov eax, dword ptr [rip + find_panel_width]
+    mov dword ptr [rip + ui_transform_x_num], eax
+    mov dword ptr [rip + ui_transform_x_den], 448
+    mov eax, dword ptr [rip + find_panel_height]
+    mov dword ptr [rip + ui_transform_y_num], eax
+    mov dword ptr [rip + ui_transform_y_den], 192
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, 448
+    mov r8d, 192
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, 448
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .render_find_title
+    mov edi, 16
+    mov esi, 10
+    lea rdx, [rip + ui_replace_title]
+    call draw_text
+    jmp .render_find_field
+.render_find_title:
+    mov edi, 16
+    mov esi, 10
+    lea rdx, [rip + ui_find_title]
+    call draw_text
+.render_find_field:
+    mov edi, 20
+    mov esi, 55
+    lea rdx, [rip + ui_find_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 84
+    mov edx, 44
+    mov ecx, 340
+    mov r8d, 32
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 84
+    mov edx, 74
+    mov ecx, 340
+    mov r8d, 2
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .render_find_field_border
+    mov r9d, 0xff78a9d4
+    jmp .render_find_field_border_draw
+.render_find_field_border:
+    mov r9d, 0xff596273
+.render_find_field_border_draw:
+    call draw_rect
+    cmp dword ptr [rip + find_field_select_all], 0
+    je .render_find_text
+    cmp dword ptr [rip + find_replace_focus], 0
+    jne .render_find_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 88
+    mov edx, 48
+    mov ecx, 332
+    mov r8d, 24
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.render_find_text:
+    mov edi, 92
+    mov esi, 52
+    lea rdx, [rip + find_query_buffer]
+    call draw_text
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .render_find_status
+    mov edi, 20
+    mov esi, 99
+    lea rdx, [rip + ui_replace_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 84
+    mov edx, 88
+    mov ecx, 340
+    mov r8d, 32
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 84
+    mov edx, 118
+    mov ecx, 340
+    mov r8d, 2
+    cmp dword ptr [rip + find_replace_focus], 1
+    jne .render_replace_field_border
+    mov r9d, 0xff78a9d4
+    jmp .render_replace_field_border_draw
+.render_replace_field_border:
+    mov r9d, 0xff596273
+.render_replace_field_border_draw:
+    call draw_rect
+    cmp dword ptr [rip + find_field_select_all], 0
+    je .render_replace_text
+    cmp dword ptr [rip + find_replace_focus], 1
+    jne .render_replace_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 88
+    mov edx, 92
+    mov ecx, 332
+    mov r8d, 24
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.render_replace_text:
+    mov edi, 92
+    mov esi, 96
+    lea rdx, [rip + find_replacement_buffer]
+    call draw_text
+.render_find_status:
+    mov eax, dword ptr [rip + find_status]
+    test eax, eax
+    jz .render_find_status_empty
+    cmp eax, 1
+    je .render_find_status_match
+    cmp eax, 2
+    je .render_find_status_none
+    cmp eax, 3
+    je .render_find_status_replaced
+    lea rdx, [rip + ui_find_all_label]
+    jmp .render_find_status_draw
+.render_find_status_match:
+    lea rdx, [rip + ui_find_match_label]
+    jmp .render_find_status_draw
+.render_find_status_none:
+    lea rdx, [rip + ui_find_none_label]
+    jmp .render_find_status_draw
+.render_find_status_replaced:
+    lea rdx, [rip + ui_find_replaced_label]
+    jmp .render_find_status_draw
+.render_find_status_empty:
+    lea rdx, [rip + ui_find_empty_label]
+.render_find_status_draw:
+    mov edi, 20
+    mov esi, 137
+    call draw_text
+    # Buttons share a single row and the same transform as the text fields.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 16
+    mov edx, 150
+    mov ecx, 72
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 34
+    mov esi, 158
+    lea rdx, [rip + ui_find_prev_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 96
+    mov edx, 150
+    mov ecx, 72
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 118
+    mov esi, 158
+    lea rdx, [rip + ui_find_next_label]
+    call draw_text
+    cmp dword ptr [rip + find_replace_mode], 2
+    jne .render_find_close_button
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 184
+    mov edx, 150
+    mov ecx, 88
+    mov r8d, 28
+    mov r9d, 0xff526b55
+    call draw_rect
+    mov edi, 194
+    mov esi, 158
+    lea rdx, [rip + ui_replace_one_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 280
+    mov edx, 150
+    mov ecx, 72
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 304
+    mov esi, 158
+    lea rdx, [rip + ui_replace_all_label]
+    call draw_text
+.render_find_close_button:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 368
+    mov edx, 150
+    mov ecx, 64
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 376
+    mov esi, 158
+    lea rdx, [rip + ui_find_close_label]
+    call draw_text
+    mov dword ptr [rip + ui_transform_active], 0
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+.render_find_replace_done:
+    ret
+.size render_find_replace, . - render_find_replace
 
 .type render_path_prompt, @function
 render_path_prompt:
