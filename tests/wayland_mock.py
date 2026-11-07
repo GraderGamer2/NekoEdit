@@ -500,7 +500,7 @@ def run(
                 if not (
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
-                    or gap_buffer_test or dynamic_growth_test
+                    or gap_buffer_test or dynamic_growth_test or font_parser_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
