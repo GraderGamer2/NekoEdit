@@ -4626,7 +4626,7 @@ wl_send_request_fd:
     jmp .send_fd_done
 .send_fd_success:
     xor eax, eax
- .send_fd_done:
+.send_fd_done:
     test rax, rax
     js .send_fd_failed
     mov dword ptr [rip + last_request_object], r12d
