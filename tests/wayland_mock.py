@@ -1920,8 +1920,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(f"picker did not fit the 720x480 window: {picker_720!r}")
                     cancel_x_720 = 16 + ((636 - 40) * 688 // 720)
                     cancel_y_720 = 36 + ((412 - 36) * 408 // 408)
-                    if struct.unpack_from("<I", pixels, cancel_y_720 * 2880 + cancel_x_720 * 4)[0] != 0xFF414B5A:
-                        raise AssertionError("resized picker Cancel button was not drawn at its fitted location")
+                    cancel_pixel_x_720 = 16 + ((605 - 40) * 688 // 720)
+                    cancel_pixel_y_720 = 36 + ((400 - 36) * 408 // 408)
+                    if struct.unpack_from("<I", pixels, cancel_pixel_y_720 * 2880 + cancel_pixel_x_720 * 4)[0] != 0xFF414B5A:
+                        raise AssertionError("resized picker Cancel button background was not drawn at its fitted location")
                     resized_ui_click(
                         cancel_x_720, cancel_y_720, serial + 180,
                         "cancel fitted picker at 720px", resize_buffer_base + 2, 720, 480,
@@ -2010,8 +2012,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(f"picker did not open at minimum size: {picker_small!r}")
                     cancel_x_small = 16 + ((636 - 40) * 448 // 720)
                     cancel_y_small = 16 + ((412 - 36) * 328 // 408)
-                    if struct.unpack_from("<I", pixels, cancel_y_small * 1920 + cancel_x_small * 4)[0] != 0xFF414B5A:
-                        raise AssertionError("minimum-size picker Cancel button was not drawn at its fitted location")
+                    cancel_pixel_x_small = 16 + ((605 - 40) * 448 // 720)
+                    cancel_pixel_y_small = 16 + ((400 - 36) * 328 // 408)
+                    if struct.unpack_from("<I", pixels, cancel_pixel_y_small * 1920 + cancel_pixel_x_small * 4)[0] != 0xFF414B5A:
+                        raise AssertionError("minimum-size picker Cancel background was not drawn at its fitted location")
                     resized_ui_click(
                         cancel_x_small, cancel_y_small, serial + 220,
                         "cancel fitted picker at minimum size", resize_buffer_base + 3, 480, 360,
