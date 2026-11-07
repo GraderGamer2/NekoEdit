@@ -232,6 +232,7 @@ def run(
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
     word_navigation_test: bool = False,
+    pointer_drag_test: bool = False,
     line_navigation_test: bool = False,
     find_replace_test: bool = False,
     font_test_path: str | None = None,
@@ -1711,6 +1712,89 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if pointer_drag_test:
+                    # A very long first line exercises no-wrap horizontal edge
+                    # scrolling; following lines provide a vertical scroll range.
+                    contents = (b"x" * 1800) + b"\n" + (b"line\n" * 120)
+                    initial = read_document_state()
+                    if initial["doc_contents"] != contents:
+                        raise AssertionError("pointer drag fixture contents mismatch")
+
+                    # A single-click selection is allowed to leave the surface.
+                    # Simulate pointer_leave during the implicit grab, followed
+                    # by motion below the bottom edge of the window.
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 3002, 20 * 256, 98 * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", 3003, 3004, 0x110, 1))
+                    )
+                    workflow_redraw("begin selection before leaving the window")
+                    if child_u32("pointer_button_down") != 1:
+                        raise AssertionError("document press did not begin a selection drag")
+                    client.sendall(
+                        wire_message(15, 1, struct.pack("<II", 3005, 8))
+                        + wire_message(15, 2, struct.pack("<Iii", 3006, 40 * 256, 520 * 256))
+                    )
+                    workflow_redraw("drag below the bottom edge while pointer focus is outside")
+                    immediate_top = child_u32("doc_view_top_row")
+                    if immediate_top <= 0 or child_u32("doc_selection_active") != 1:
+                        raise AssertionError(
+                            "dragging beyond the bottom edge did not scroll and extend selection: "
+                            f"top={immediate_top}, cursor={child_u32('doc_cursor')}, "
+                            f"active={child_u32('doc_selection_active')}"
+                        )
+                    # Free the just-presented buffer, then leave the pointer
+                    # stationary outside. The independent drag timer must keep
+                    # advancing the viewport until button release.
+                    client.sendall(wire_message(12, 0))
+                    time.sleep(0.25)
+                    continued_top = child_u32("doc_view_top_row")
+                    if continued_top <= immediate_top:
+                        raise AssertionError(
+                            "edge auto-scroll stopped when the pointer became stationary: "
+                            f"initial={immediate_top}, after_timer={continued_top}"
+                        )
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", 3010, 3011, 0x110, 0))
+                    )
+                    if child_u32("pointer_button_down") != 0:
+                        raise AssertionError("selection drag did not stop when the mouse button was released")
+
+                    # Return pointer focus, turn wrapping off, then drag past the
+                    # right edge. The horizontal viewport must follow the drag.
+                    client.sendall(
+                        wire_message(15, 0, struct.pack("<Iiii", 3020, 8, 20 * 256, 16 * 256))
+                    )
+                    workflow_click(200, 16, 3030, "open Settings before horizontal drag test")
+                    workflow_settings_click(200, 124, 3040, "disable Wrap Lines before horizontal drag")
+                    if child_u32("doc_wrap_enabled") != 0:
+                        raise AssertionError("Settings did not disable Wrap Lines for horizontal drag test")
+
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 3052, 20 * 256, 98 * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", 3053, 3054, 0x110, 1))
+                    )
+                    workflow_redraw("begin horizontal selection drag")
+                    client.sendall(
+                        wire_message(15, 1, struct.pack("<II", 3055, 8))
+                        + wire_message(15, 2, struct.pack("<Iii", 3056, 900 * 256, 98 * 256))
+                    )
+                    workflow_redraw("drag beyond the right edge with Wrap Lines disabled")
+                    horizontal_left = child_u32("doc_view_left_px")
+                    if horizontal_left <= 0 or child_u32("doc_selection_active") != 1:
+                        raise AssertionError(
+                            "no-wrap selection did not horizontally auto-scroll beyond the right edge: "
+                            f"left={horizontal_left}, active={child_u32('doc_selection_active')}"
+                        )
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", 3060, 3061, 0x110, 0))
+                        + wire_message(12, 0)
+                        + wire_message(10, 1)
+                    )
+                    observations.append(
+                        "selection auto-scroll follows pointer_leave and stationary edge holds; horizontal dragging scrolls with Wrap Lines disabled"
+                    )
+                    return
+
                 if word_navigation_test:
                     initial = read_document_state()
                     if initial["doc_contents"] != b"one two three":
@@ -1750,8 +1834,58 @@ xkb_symbols "nekoedit-sparse" {
                             "double-click did not select the full second word: "
                             f"range=({start},{end}), active={child_u32('doc_selection_active')}"
                         )
+
+                    # Begin another double-click but keep its second press held.
+                    # Dragging that active word selection must extend by whole
+                    # words, rather than dropping back to character selection.
+                    workflow_click(58, 98, 1820, "word-drag first click")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 1832, 58 * 256, 98 * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", 1833, 1834, 0x110, 1))
+                    )
+                    workflow_redraw("word-drag double-click press")
+                    if child_u32("pointer_button_down") != 1 or child_u32("doc_word_drag_active") != 1:
+                        raise AssertionError("double-click did not retain the pointer grab for word dragging")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 1840, 100 * 256, 98 * 256))
+                    )
+                    workflow_redraw("extend word selection through the third word")
+                    start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
+                    if (start, end) != (4, 13):
+                        raise AssertionError(
+                            f"dragging a double-click selection did not extend by whole words: ({start},{end})"
+                        )
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", 1843, 1844, 0x110, 0))
+                        + wire_message(12, 0)
+                    )
+                    if child_u32("doc_word_drag_active") != 0 or child_u32("pointer_button_down") != 0:
+                        raise AssertionError("releasing a word drag did not clear its active state")
+
+                    # Repeat in reverse: start on the final word and drag to the
+                    # first word; the fixed edge remains the original word end.
+                    workflow_click(100, 98, 1850, "reverse word-drag first click")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 1862, 100 * 256, 98 * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", 1863, 1864, 0x110, 1))
+                    )
+                    workflow_redraw("reverse word-drag double-click press")
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", 1870, 20 * 256, 98 * 256))
+                    )
+                    workflow_redraw("extend word selection backwards to the first word")
+                    if child_u32("doc_selection_anchor") != 13 or child_u32("doc_cursor") != 0:
+                        raise AssertionError(
+                            "reverse word dragging did not retain the original right edge: "
+                            f"anchor={child_u32('doc_selection_anchor')}, cursor={child_u32('doc_cursor')}"
+                        )
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", 1873, 1874, 0x110, 0))
+                        + wire_message(12, 0)
+                    )
                     observations.append(
-                        "Ctrl+Left/Right word navigation, Ctrl+Shift+Left selection, Ctrl+Home/End, and double-click word selection verified"
+                        "Ctrl word navigation, double-click word selection, and forward/reverse whole-word drag selection verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -5413,6 +5547,20 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(line_path)
+        except FileNotFoundError:
+            pass
+
+    # Pointer selection must remain active through double-click word drags
+    # and auto-scroll beyond all sides of the document viewport.
+    drag_fd, drag_path = tempfile.mkstemp(prefix="nekoedit-pointer-drag-")
+    drag_contents = (b"x" * 1800) + b"\n" + (b"line\n" * 120)
+    try:
+        with os.fdopen(drag_fd, "wb") as drag_file:
+            drag_file.write(drag_contents)
+        run(sys.argv[1], initial_file=drag_path, pointer_drag_test=True)
+    finally:
+        try:
+            os.unlink(drag_path)
         except FileNotFoundError:
             pass
 
