@@ -3354,9 +3354,24 @@ xkb_symbols "nekoedit-sparse" {
                         "<I", pixels, 104 * 800 * 4 + x * 4
                     )[0]
                     if selected_pixel != 0xFF5E81AC:
+                        debug_names = {
+                            "doc_selection_start", "doc_selection_end",
+                            "doc_selection_anchor", "doc_cursor", "doc_selection_active",
+                            "doc_length", "pointer_x", "pointer_y",
+                        }
+                        debug_addresses = {}
+                        for debug_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                            debug_fields = debug_line.split()
+                            if len(debug_fields) == 3 and debug_fields[2] in debug_names:
+                                debug_addresses[debug_fields[2]] = int(debug_fields[0], 16)
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as debug_memory:
+                            debug_state = {
+                                name: struct.unpack("<i", os.pread(debug_memory.fileno(), 4, address))[0]
+                                for name, address in debug_addresses.items()
+                            }
                         raise AssertionError(
                             "drag selection did not highlight both selected characters; "
-                            f"x={x}, pixel={hex(selected_pixel)}"
+                            f"x={x}, pixel={hex(selected_pixel)}, state={debug_state!r}"
                         )
 
                 # Typing replaces the selected byte range rather than inserting
