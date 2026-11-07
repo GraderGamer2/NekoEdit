@@ -1804,7 +1804,7 @@ xkb_symbols "nekoedit-sparse" {
                     def picker_bytes(name: str, length: int) -> bytes:
                         with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
                             raw = os.pread(memory.fileno(), length, font_picker_symbols[name])
-                        return raw.split(b"\\0", 1)[0]
+                        return raw.split(bytes((0,)), 1)[0]
 
                     workflow_click(120, 12, 2600, "font picker: open File menu")
                     workflow_click(120, 44, 2610, "font picker: open Open dialog")
@@ -1814,8 +1814,19 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("800x480 picker should retain its 10px UI font")
 
                     workflow_click(200, 374, 2620, "focus filename search field")
-                    key_step(2630, 30, "type A in font picker field")
-                    key_step(2632, 48, "type B in font picker field")
+                    # The fixture maps uppercase A/B to distinct 7px/4px advances.
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 2628, 2628, 42, 1))
+                        + wire_message(16, 4, struct.pack("<IIIII", 2629, 1, 0, 0, 0))
+                    )
+                    key_step(2630, 30, "type uppercase A in font picker field")
+                    key_step(2632, 48, "type uppercase B in font picker field")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 2634, 2634, 42, 0))
+                        + wire_message(16, 4, struct.pack("<IIIII", 2635, 0, 0, 0, 0))
+                        + wire_message(12, 0)
+                    )
+                    workflow_redraw("release Shift after proportional filename input")
                     name = picker_bytes("picker_name_buffer", 64)
                     cursor = picker_u32("picker_name_cursor")
                     if name != b"AB" or cursor != 2 or picker_u32("picker_focus") != 2:
