@@ -1599,8 +1599,8 @@ xkb_symbols "nekoedit-sparse" {
                                 f"client sent data before the resize sync callback: {unexpected!r}"
                             )
                         message = b"mock rejected resized wl_buffer"
-                        encoded = message + b"\\0"
-                        padded = encoded + b"\\0" * (-len(encoded) % 4)
+                        encoded = message + b"\0"
+                        padded = encoded + b"\0" * (-len(encoded) % 4)
                         error_payload = (
                             struct.pack("<II", 11, 1)
                             + struct.pack("<I", len(encoded))
