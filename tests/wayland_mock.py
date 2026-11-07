@@ -1813,7 +1813,7 @@ xkb_symbols "nekoedit-sparse" {
                         "picker_mode", "picker_focus", "picker_name_length",
                         "picker_name_cursor", "picker_name_view_start",
                         "picker_name_buffer", "picker_ui_font_size", "ui_transform_font_size", "picker_selected",
-                        "doc_font_size", "window_doc_line_height", "settings_menu_open",
+                        "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                     }
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
@@ -2011,10 +2011,17 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("synthetic font should start at 12px with a 15px metric-derived line pitch")
 
                     serial = 2700
+                    if picker_u32("ui_font_size") != 10:
+                        raise AssertionError("UI font size must start at its independent 10px default")
+                    workflow_click(200, 20, serial, "open Settings for document font-size adjustment")
+                    serial += 10
+                    if picker_u32("settings_menu_open") != 1:
+                        raise AssertionError("Settings did not remain open after opening")
                     for index in range(6):
-                        workflow_click(200, 20, serial, f"open Settings for font-size increase {index + 1}")
-                        workflow_click(400, 68, serial + 10, f"increase document font size {index + 1}")
-                        serial += 20
+                        workflow_click(400, 76, serial, f"increase document font size {index + 1} without closing Settings")
+                        serial += 10
+                        if picker_u32("settings_menu_open") != 1:
+                            raise AssertionError("document font-size adjustment unexpectedly closed Settings")
                     if (
                         picker_u32("doc_font_size") != 24
                         or picker_u32("window_doc_line_height") != 29
@@ -2035,9 +2042,10 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     for index in range(6):
-                        workflow_click(200, 20, serial, f"open Settings for font-size decrease {index + 1}")
-                        workflow_click(360, 68, serial + 10, f"decrease document font size {index + 1}")
-                        serial += 20
+                        workflow_click(360, 76, serial, f"decrease document font size {index + 1} without closing Settings")
+                        serial += 10
+                        if picker_u32("settings_menu_open") != 1:
+                            raise AssertionError("document font-size decrease unexpectedly closed Settings")
                     if (
                         picker_u32("doc_font_size") != 12
                         or picker_u32("window_doc_line_height") != 15
@@ -2057,8 +2065,27 @@ xkb_symbols "nekoedit-sparse" {
                             f"restoring the 12px em did not restore the visual-row index: {default_size_record!r}"
                         )
 
+                    if picker_u32("doc_font_size") != 12:
+                        raise AssertionError("UI font-size controls must not modify document font size")
+                    for index in range(4):
+                        workflow_click(400, 100, serial, f"increase independent UI font size {index + 1}")
+                        serial += 10
+                        if picker_u32("settings_menu_open") != 1:
+                            raise AssertionError("UI font-size increase unexpectedly closed Settings")
+                    if picker_u32("ui_font_size") != 14 or picker_u32("doc_font_size") != 12:
+                        raise AssertionError("UI font size did not reach 14px independently of document size")
+                    for index in range(4):
+                        workflow_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
+                        serial += 10
+                        if picker_u32("settings_menu_open") != 1:
+                            raise AssertionError("UI font-size decrease unexpectedly closed Settings")
+                    if picker_u32("ui_font_size") != 10 or picker_u32("doc_font_size") != 12:
+                        raise AssertionError("UI font size did not return to 10px independently")
+                    key_step(serial, 1, "close Settings after font-size adjustments")
+                    if picker_u32("settings_menu_open") != 0:
+                        raise AssertionError("Escape did not close Settings after adjustment")
                     observations.append(
-                        "picker layout and runtime 12–24px document font sizing with metric/index reflow verified"
+                        "picker layout; persistent-open Settings; independent 12–24px document and 8–14px UI font sizing verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return

@@ -130,6 +130,7 @@ ui_menu_confirm_save_label: .asciz "Confirm before saving"
 ui_menu_state_on:      .asciz "ON"
 ui_menu_state_off:     .asciz "OFF"
 ui_menu_font_size_label: .asciz "FONT SIZE"
+ui_menu_ui_font_size_label: .asciz "UI FONT"
 ui_menu_minus_label:   .asciz "-"
 ui_menu_plus_label:    .asciz "+"
 ui_menu_px_label:      .asciz "px"
@@ -2021,7 +2022,9 @@ ctrl_down:              .long 0
 doc_length:             .long 0
 doc_cursor:             .long 0
 .global doc_font_size
-doc_font_size:          .long 0
+ doc_font_size:         .long 0
+.global ui_font_size
+ui_font_size:           .long 0
 # Logical document bytes are stored before and after [doc_gap_start, doc_gap_end).
 doc_gap_start:          .long 0
 doc_gap_end:            .long 0
@@ -2145,6 +2148,7 @@ wayland_main:
     mov dword ptr [rip + window_width], WIDTH
     mov dword ptr [rip + window_height], HEIGHT
     mov dword ptr [rip + doc_font_size], 12
+    mov dword ptr [rip + ui_font_size], 10
     mov dword ptr [rip + window_buffer_id], 12
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -3138,7 +3142,22 @@ wayland_main:
     cmp edx, 64
     jb .pointer_settings_confirm_toggle
     cmp edx, 88
+    jb .pointer_settings_document_font
+    cmp edx, 112
     jae .pointer_menu_outside
+    cmp dword ptr [rip + font_loaded], 0
+    je .pointer_menu_outside
+    cmp eax, 344
+    jb .pointer_menu_outside
+    cmp eax, 376
+    jb .pointer_settings_ui_font_decrease
+    cmp eax, 384
+    jb .pointer_menu_outside
+    cmp eax, 416
+    jae .pointer_menu_outside
+    jmp .pointer_settings_ui_font_increase
+
+.pointer_settings_document_font:
     cmp dword ptr [rip + font_loaded], 0
     je .pointer_menu_outside
     cmp eax, 344
@@ -3179,8 +3198,25 @@ wayland_main:
     call doc_ensure_cursor_visible
 
 .pointer_settings_font_close:
-    mov dword ptr [rip + settings_menu_open], 0
+    # Font controls are repeatable: keep the Settings dropdown visible.
     jmp .keyboard_changed
+
+.pointer_settings_ui_font_decrease:
+    mov eax, dword ptr [rip + ui_font_size]
+    cmp eax, 8
+    jbe .pointer_settings_font_close
+    dec eax
+    mov dword ptr [rip + ui_font_size], eax
+    jmp .pointer_settings_font_close
+
+.pointer_settings_ui_font_increase:
+    mov eax, dword ptr [rip + ui_font_size]
+    cmp eax, 14
+    jae .pointer_settings_font_close
+    inc eax
+    mov dword ptr [rip + ui_font_size], eax
+    jmp .pointer_settings_font_close
+
 .pointer_menu_open:
     call start_open_prompt
     jmp .keyboard_changed
@@ -11031,7 +11067,11 @@ ui_font_advance_pixels:
     jmp .ui_font_advance_done
 .ui_font_advance_legacy:
     mov edi, ebx
+    mov esi, dword ptr [rip + ui_font_size]
+    test esi, esi
+    jnz .ui_font_advance_size_ready_default
     mov esi, 10
+.ui_font_advance_size_ready_default:
     call font_codepoint_advance_pixels_size
 .ui_font_advance_done:
     pop rbx
@@ -11054,7 +11094,11 @@ draw_text:
     jz .Lneko_draw_text_done
     mov edi, r12d
     mov esi, r13d
+    mov ecx, dword ptr [rip + ui_font_size]
+    test ecx, ecx
+    jnz .Lneko_draw_text_default_size_ready
     mov ecx, 10
+.Lneko_draw_text_default_size_ready:
     cmp dword ptr [rip + ui_transform_active], 0
     je .Lneko_draw_text_size_ready
     mov ecx, dword ptr [rip + ui_transform_font_size]
@@ -12086,7 +12130,7 @@ render_file_menu:
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 88
+    mov r8d, 112
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -12115,6 +12159,18 @@ render_file_menu:
     mov esi, 68
     lea rdx, [rip + ui_menu_px_label]
     call draw_text
+    mov edi, 172
+    mov esi, 92
+    lea rdx, [rip + ui_menu_ui_font_size_label]
+    call draw_text
+    mov edi, 260
+    mov esi, 92
+    mov eax, dword ptr [rip + ui_font_size]
+    call draw_decimal
+    mov edi, 282
+    mov esi, 92
+    lea rdx, [rip + ui_menu_px_label]
+    call draw_text
     cmp dword ptr [rip + font_loaded], 0
     je .render_settings_size_controls_done
     mov rdi, qword ptr [rip + shm_mapping]
@@ -12137,6 +12193,28 @@ render_file_menu:
     call draw_text
     mov edi, 394
     mov esi, 72
+    lea rdx, [rip + ui_menu_plus_label]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 344
+    mov edx, 90
+    mov ecx, 28
+    mov r8d, 22
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 384
+    mov edx, 90
+    mov ecx, 28
+    mov r8d, 22
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 354
+    mov esi, 96
+    lea rdx, [rip + ui_menu_minus_label]
+    call draw_text
+    mov edi, 394
+    mov esi, 96
     lea rdx, [rip + ui_menu_plus_label]
     call draw_text
 .render_settings_size_controls_done:
