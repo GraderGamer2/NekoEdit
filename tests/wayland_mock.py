@@ -1294,6 +1294,15 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("save_confirm_open") == 1:
                         key_step(serial + 5, 28, label + " — confirm pending save")
 
+                def workflow_settings_click(design_x: int, design_y: int, serial: int, label: str) -> None:
+                    panel_x = child_u32("settings_panel_x")
+                    panel_y = child_u32("settings_panel_y")
+                    panel_width = child_u32("settings_panel_width")
+                    panel_height = child_u32("settings_panel_height")
+                    surface_x = panel_x + (design_x - 160) * panel_width // 256
+                    surface_y = panel_y + (design_y - 32) * panel_height // 168
+                    workflow_click(surface_x, surface_y, serial, label)
+
                 def workflow_axis(axis: int, value: int, serial: int, label: str) -> None:
                     client.sendall(
                         wire_message(15, 4, struct.pack("<IIi", serial, axis, value))
@@ -1333,7 +1342,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(200, 20, 3100, "open Settings for wrap toggle")
                     if read_document_state()["settings_menu_open"] != 1:
                         raise AssertionError("Settings did not open for the wrap-lines test")
-                    workflow_click(200, 124, 3110, "disable Wrap Lines")
+                    workflow_settings_click(200, 124, 3110, "disable Wrap Lines")
                     state = read_document_state()
                     if (
                         state["doc_wrap_enabled"] != 0
@@ -1400,7 +1409,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(200, 20, 3145, "reopen Settings after horizontal hit-testing")
                     if read_document_state()["settings_menu_open"] != 1:
                         raise AssertionError("Settings did not reopen after document hit-testing")
-                    workflow_click(200, 124, 3150, "re-enable Wrap Lines")
+                    workflow_settings_click(200, 124, 3150, "re-enable Wrap Lines")
                     state = read_document_state()
                     if (
                         state["doc_wrap_enabled"] != 1
@@ -2524,7 +2533,7 @@ xkb_symbols "nekoedit-sparse" {
                     if picker_u32("settings_menu_open") != 1:
                         raise AssertionError("Settings did not remain open after opening")
                     for index in range(10):
-                        workflow_click(400, 76, serial, f"increase document font size {index + 1} without closing Settings")
+                        workflow_settings_click(400, 76, serial, f"increase document font size {index + 1} without closing Settings")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("document font-size adjustment unexpectedly closed Settings")
@@ -2548,7 +2557,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     for index in range(10):
-                        workflow_click(360, 76, serial, f"decrease document font size {index + 1} without closing Settings")
+                        workflow_settings_click(360, 76, serial, f"decrease document font size {index + 1} without closing Settings")
                         serial += 10
                         if picker_u32("settings_menu_open") != 1:
                             raise AssertionError("document font-size decrease unexpectedly closed Settings")
@@ -3968,14 +3977,14 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(190, 20, 1750, "open Settings menu")
                     if child_u32("settings_menu_open") != 1:
                         raise AssertionError("Settings dropdown did not open")
-                    workflow_click(248, 56, 1754, "disable confirm-before-save")
+                    workflow_settings_click(248, 56, 1754, "disable confirm-before-save")
                     if (
                         child_u32("save_confirm_enabled") != 0
                         or child_u32("settings_menu_open") != 0
                     ):
                         raise AssertionError("Settings toggle did not disable save confirmation")
                     workflow_click(190, 20, 1760, "reopen Settings menu")
-                    workflow_click(248, 56, 1764, "enable confirm-before-save")
+                    workflow_settings_click(248, 56, 1764, "enable confirm-before-save")
                     if child_u32("save_confirm_enabled") != 1:
                         raise AssertionError("Settings toggle did not re-enable save confirmation")
 
