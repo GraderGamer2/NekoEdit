@@ -945,7 +945,30 @@ xkb_symbols "nekoedit-sparse" {
                             state["doc_line_index_records"] = []
                         return state
 
-                def key_step(serial: int, code: int, label: str) -> None:
+                child_symbol_addresses: dict[str, int] = {}
+
+                def child_u32(name: str) -> int:
+                    if name not in child_symbol_addresses:
+                        for symbol_line in subprocess.check_output(
+                            ["nm", "-n", binary], text=True
+                        ).splitlines():
+                            fields = symbol_line.split()
+                            if len(fields) == 3 and fields[2] == name:
+                                child_symbol_addresses[name] = int(fields[0], 16)
+                                break
+                    if name not in child_symbol_addresses:
+                        raise AssertionError("child state symbol missing: " + name)
+                    with open(
+                        f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0
+                    ) as memory:
+                        raw = os.pread(memory.fileno(), 4, child_symbol_addresses[name])
+                    if len(raw) != 4:
+                        raise AssertionError("short child state read for " + name)
+                    return struct.unpack("<I", raw)[0]
+
+                def key_step(
+                    serial: int, code: int, label: str, auto_confirm: bool = True
+                ) -> None:
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", serial, serial, code, 1))
                     )
@@ -962,6 +985,11 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         + wire_message(12, 0)
                     )
+                    if auto_confirm and child_u32("save_confirm_open") == 1:
+                        key_step(
+                            serial + 2, 28, label + " — confirm pending save",
+                            auto_confirm=False,
+                        )
 
                 def workflow_redraw(label: str) -> None:
                     expect_message(
@@ -986,6 +1014,8 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         + wire_message(12, 0)
                     )
+                    if child_u32("save_confirm_open") == 1:
+                        key_step(serial + 5, 28, label + " — confirm pending save")
 
                 def workflow_axis(axis: int, value: int, serial: int, label: str) -> None:
                     client.sendall(
@@ -1134,6 +1164,8 @@ xkb_symbols "nekoedit-sparse" {
                         struct.pack("<IIII", serial + 5, serial + 5, 29, 0)
                     )
                     client.sendall(releases + wire_message(12, 0))
+                    if child_u32("save_confirm_open") == 1:
+                        key_step(serial + 6, 28, label + " — confirm pending save")
 
                 evdev = {
                     "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33,
@@ -2716,24 +2748,76 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(16, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
                         + wire_message(12, 0)
                     )
+                    # Settings is a real upper-menu item. Verify the default-on
+                    # save warning can be disabled and re-enabled in this session.
+                    if child_u32("save_confirm_enabled") != 1:
+                        raise AssertionError("save confirmation must default to enabled")
+                    workflow_click(190, 20, 1750, "open Settings menu")
+                    if child_u32("settings_menu_open") != 1:
+                        raise AssertionError("Settings dropdown did not open")
+                    workflow_click(248, 56, 1754, "disable confirm-before-save")
+                    if (
+                        child_u32("save_confirm_enabled") != 0
+                        or child_u32("settings_menu_open") != 0
+                    ):
+                        raise AssertionError("Settings toggle did not disable save confirmation")
+                    workflow_click(190, 20, 1760, "reopen Settings menu")
+                    workflow_click(248, 56, 1764, "enable confirm-before-save")
+                    if child_u32("save_confirm_enabled") != 1:
+                        raise AssertionError("Settings toggle did not re-enable save confirmation")
+
                     key_step(1810, 44, "replace loaded text with z")
+                    if os.path.exists(initial_file):
+                        with open(initial_file, "rb") as saved_file:
+                            before_save = saved_file.read()
+                    if before_save != b"I":
+                        raise AssertionError("test fixture changed before Ctrl+S confirmation")
+
+                    # Ctrl+S must display the confirmation without writing the
+                    # destination. Escape cancels; a second Enter accepts.
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
                         + wire_message(16, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
                     )
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", 12, 0, 0)), "Ctrl+S attach"
-                    )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "Ctrl+S damage"
-                    )
-                    expect_message(client, (8, 6, b""), "Ctrl+S commit")
+                    workflow_redraw("Ctrl+S confirmation dialog")
+                    if child_u32("save_confirm_open") != 1:
+                        raise AssertionError("Ctrl+S did not open the save confirmation")
+                    with open(initial_file, "rb") as saved_file:
+                        if saved_file.read() != b"I":
+                            raise AssertionError("file was written before save confirmation")
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
                         + wire_message(16, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
                         + wire_message(12, 0)
                     )
-                    observations.append("launch-time load, selection replacement, and Ctrl+S write verified")
+                    key_step(1830, 1, "cancel save confirmation with Escape")
+                    if child_u32("save_confirm_open") != 0:
+                        raise AssertionError("Escape did not cancel the save confirmation")
+                    with open(initial_file, "rb") as saved_file:
+                        if saved_file.read() != b"I":
+                            raise AssertionError("cancelled save modified the destination")
+
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1840, 1840, 29, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1841, 1841, 31, 1))
+                    )
+                    workflow_redraw("reopen Ctrl+S confirmation")
+                    if child_u32("save_confirm_open") != 1:
+                        raise AssertionError("second Ctrl+S did not reopen confirmation")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1842, 1842, 31, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 1843, 1843, 29, 0))
+                        + wire_message(12, 0)
+                    )
+                    key_step(1850, 28, "accept save confirmation with Enter")
+                    if child_u32("save_confirm_open") != 0:
+                        raise AssertionError("Enter did not accept the save confirmation")
+                    observations.append(
+                        "Settings toggles confirm-before-save; Ctrl+S shows a default-on modal, "
+                        "Escape leaves the file untouched, and Enter commits the save"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
                     client.sendall(wire_message(10, 1))
                     return
 
