@@ -365,6 +365,22 @@ Initial command-line loading can now exceed 64 KiB. Picker Open reads into its o
 
 The mock suite fills the initial 65,536-byte document exactly, inserts at byte zero, checks that capacity doubles to 131,072 bytes, verifies that all original suffix bytes survive, and saves the split gap as the exact expected byte stream. A second workflow opens and saves a 65,537-byte file through the native picker, confirming the active path, length, full contents, and on-disk result. Actions #312 also reruns the existing file-picker, UTF-8, gap-buffer, window-management, responsive-layout, protocol, and both Wayland-transport regressions.
 
-Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user has not yet tested large-file editing on the live GNOME/Mutter desktop; CI validation does not substitute for that check.
+Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user subsequently confirmed that a 70 KB file opens, accepts edits, and saves correctly on the live GNOME/Mutter desktop without crashing or behaving anomalously. This completes the real-desktop dynamic-storage/large-file verification.
 
-The next document-core steps are a line-start index and grapheme-aware navigation. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, and clipboard integration remain unfinished.
+The next document-core steps are a per-line byte-length/visual-row index and grapheme-aware navigation. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, horizontal scrolling, and clipboard integration remain unfinished.
+
+---
+
+## 20. Phase O — editor vertical scrollbar and mouse-wheel navigation
+
+**Implementation:** [e3489badd178](https://github.com/GraderGamer2/NekoEdit/commit/e3489badd178d4db59c30e6660f9768f224f7e35), with initialization correction [028379b66a6b](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96).
+**Regression coverage:** [d4c0fcc5710b](https://github.com/GraderGamer2/NekoEdit/commit/d4c0fcc5710b0ab5ff49bc5831a3a334ecfaa01e).
+**Verification:** [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563), all eight workflow steps successful.
+
+The document area now has a proportional vertical scrollbar when its visual content exceeds the viewport. Thumb height reflects visible visual rows relative to total rows, including soft-wrapped text, and the track is omitted when scrolling is unnecessary. The user can drag the thumb or click another point on the track to reposition it. Wayland vertical-axis events scroll the editor when the picker and path prompt are inactive; the directory picker keeps its independent scrolling. Manual scrolling redraws the viewport without forcing the caret back into view.
+
+The editor reserves a 24-pixel gutter for the scrollbar, and line wrapping, selection clipping, and caret clipping use the reduced text width. Mock-compositor tests check empty-document hiding, the rendered thumb pixel on a 65,537-byte wrapped file, three-row wheel movement, drag-to-bottom, and one-row reverse scrolling. The full existing wrapping, resizing, selection, file, and protocol suite passes in Actions #316.
+
+Artifact [13557973435](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492/artifacts/13557973435) contains the freestanding Linux x86-64 executable (32,919 bytes; SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`). The live GNOME/Mutter scrollbar check has not yet been performed. The user's separate 70 KB file edit/save test confirms the preceding dynamic-storage phase, but does not validate this new pointer and wheel interaction.
+
+The next document-core milestone is a dynamic per-line index for byte lengths and visual-row counts, using prefix-sum trees so normal character edits do not shift all subsequent line offsets. Grapheme-aware cursor movement and Unicode input/rendering follow. The custom system-font parser and glyph rasterizer remain in the later rendering/font phase.

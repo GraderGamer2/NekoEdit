@@ -1,13 +1,23 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the fixed-capacity gap-buffer milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 169 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the editor-scrollbar milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **261** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit + 1 diagnostic-cleanup commit + 2 interactive edge-resize commits + 1 cursor-shape protocol fix/test commit + 4 responsive-layout implementation and regression-test commits + 7 dynamic-storage implementation and regression-test commits).
+- Recorded implementation commits: **264** (261 previously indexed commits + 3 editor-scrollbar implementation/fix/regression-test commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Editor vertical scrollbar and wheel scrolling
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 03:11:20 UTC | [e3489badd178](https://github.com/GraderGamer2/NekoEdit/commit/e3489badd178d4db59c30e6660f9768f224f7e35) | feat: add editor vertical scrollbar and wheel scrolling |
+| 2026-11-07 03:12:09 UTC | [028379b66a6b](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96) | fix: zero-initialize editor scrollbar cache |
+| 2026-11-07 03:13:25 UTC | [d4c0fcc5710b](https://github.com/GraderGamer2/NekoEdit/commit/d4c0fcc5710b0ab5ff49bc5831a3a334ecfaa01e) | test: account for editor scrollbar gutter in wrapping |
+
+Actions [#316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563) passed all eight workflow steps on the final feature/test commit. The editor scrollbar is proportional to total visual rows, hidden when no scrolling is needed, supports thumb dragging and track-click repositioning, and consumes wheel input independently of the picker. Tests use a 65,537-byte wrapped document. The final branch-head rebuild [#318](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492) also passed all eight steps and uploaded artifact [13557973435](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492/artifacts/13557973435), 32,919 bytes, SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`, expiring 2026-11-14.
 
 ## Dynamic gap-buffer growth and large-file Open
 
