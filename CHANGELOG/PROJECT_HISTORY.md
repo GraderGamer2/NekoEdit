@@ -505,3 +505,18 @@ The dedicated 200-byte-line mock-compositor scenario verifies the Settings toggl
 **Find/Replace:** [`a8bd382bbd75`](https://github.com/GraderGamer2/NekoEdit/commit/a8bd382bbd75b4fb99786ae8c83cf91a83cfd3f2) adds a centered Find/Replace modal. Ctrl+F/ Ctrl+H open Find and Replace, Enter/F3/Shift+F3 navigate literal matches, Ctrl+Enter replaces a selected match, and Replace All iterates through the document. Query text entry follows the currently supported ASCII XKB subset.
 
 **Verification:** the full Wayland mock-compositor suite checks horizontal track dragging and both wheel paths, panel centering and UI-font scale, Ctrl+word and logical-line movement, Shift-extended selection, double-click word selection, and Find/Replace byte results. Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed all workflow stages and uploaded artifact [13581805940](https://github.com/GraderGamer2/NekoEdit/NekoEdit/actions/runs/42391111760/artifacts/13581805940), 67,298 bytes. The user has manually confirmed runtime font selection; the newly added interactions still need a GNOME/Mutter desktop smoke test.
+
+
+---
+
+## 28. Phase X — persistent typography, font, and editor preferences
+
+The responsive editor controls and search interactions were followed by a small persistent-settings layer. The implementation lives in `src/editor/preferences.c` and follows the project's freestanding design: it uses raw Linux syscalls rather than libc or a third-party configuration dependency.
+
+The preference file is stored at `$XDG_CONFIG_HOME/nekoedit/preferences`, or `~/.config/nekoedit/preferences` when `XDG_CONFIG_HOME` is unset. It records document font size, UI font size, Wrap Lines, Confirm before saving, and the last successfully loaded TrueType path. Startup restores these values before the first layout calculation and before font initialization. An explicit `NEKOEDIT_FONT` environment setting continues to take priority over the saved font; the saved path is tried before the deterministic system-font candidates.
+
+Values are parsed with bounded input and range checks. Font paths must be absolute and cannot contain carriage returns or newlines. The application directory is created with mode 0700 and the file is mode 0600. Updates go to a same-directory temporary file, handle partial writes and EINTR, fsync the file, atomically rename it, and fsync the containing directory. `NEKOEDIT_DISABLE_PREFERENCES=1` leaves runtime defaults/settings alone and bypasses persistence.
+
+The preference-specific unit test verifies initial defaults, persistence and reload of every supported setting, the TTF path, restrictive file mode, invalid/range-out-of-bounds values, path-format rejection, and the disable switch. The Wayland mock-compositor test sets the disable switch so machine-specific user settings cannot change the expected pixel/input fixtures.
+
+GitHub Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed the full build, ELF, CLI, preferences, Wayland, executable-inspection, and artifact-upload workflow on commit [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7). The artifact is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. This remains mock-compositor/automated verification; manual GNOME/Mutter testing of the scrollbar, responsive overlays, Find/Replace, and preference restoration is still required.
