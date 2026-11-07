@@ -978,7 +978,7 @@ xkb_symbols "nekoedit-sparse" {
                         # (B starts at x=24), so the caret is before the third A.
                         "doc_cursor": 2,
                         "pointer_x": 27,
-                        "pointer_y": 110,
+                        "pointer_y": 98,
                         "window_doc_pixel_width": 760,
                         "doc_pointer_debug_target_x": 11,
                         "doc_pointer_debug_actual_x": 11,
