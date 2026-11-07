@@ -779,6 +779,30 @@ Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425
 
 Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed the complete workflow on `aa473842d6c1`. Artifact [13581805940](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760/artifacts/13581805940) is 67,298 bytes; SHA-256 `b19ddfb04d6d269949ecb993cf211ed91d5269d84ee6ce5ae0c06fd008b164c0`. Mock-compositor verification does not replace manual GNOME/Mutter testing.
 
+
+## 2026-11-07 — Responsive editor documentation and persistent preferences
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 16:27:14 UTC | [`b97359f9eac4`](https://github.com/GraderGamer2/NekoEdit/commit/b97359f9eac43dd5cb75e06cebb6ef5617bf9d10) | docs: record responsive editing and search milestone |
+| 2026-11-07 16:27:41 UTC | [`ccf7aac3a825`](https://github.com/GraderGamer2/NekoEdit/commit/ccf7aac3a82565ebdb141f402832f42b6140d1bf) | feat: add atomic persistent user preferences |
+| 2026-11-07 16:28:02 UTC | [`4c2aad1c6353`](https://github.com/GraderGamer2/NekoEdit/commit/4c2aad1c6353612fdc7cf886d0fa77cdf8a1ed8a) | fix: validate preference keys and serialized lengths |
+| 2026-11-07 16:28:21 UTC | [`fbea1c90833c`](https://github.com/GraderGamer2/NekoEdit/commit/fbea1c90833cf7129241f8d7b82fe77c14dc971d) | test: cover persistent preference roundtrip and validation |
+| 2026-11-07 16:28:34 UTC | [`9e1c3e749298`](https://github.com/GraderGamer2/NekoEdit/commit/9e1c3e74929830493b25ff378581665a4e68a12b) | test: remove unreachable preference test expression |
+| 2026-11-07 16:28:41 UTC | [`f89f2c1dd422`](https://github.com/GraderGamer2/NekoEdit/commit/f89f2c1dd42251f98bc6d7bfe5e508aa0b50f0f5) | build: add persistent preference module and unit tests |
+| 2026-11-07 16:29:01 UTC | [`7be2dccc98be`](https://github.com/GraderGamer2/NekoEdit/commit/7be2dccc98bed29132a069544d040bcc32056065) | feat: persist typography and editor view settings |
+| 2026-11-07 16:29:08 UTC | [`4a5e90e47128`](https://github.com/GraderGamer2/NekoEdit/commit/4a5e90e471289d55bf5b669b5868fced78f5838f) | feat: restore the previously selected font at startup |
+| 2026-11-07 16:29:18 UTC | [`b217e926ee53`](https://github.com/GraderGamer2/NekoEdit/commit/b217e926ee531ac6e885616eb111eb9efaf52de2) | test: isolate Wayland fixtures from persisted preferences |
+| 2026-11-07 16:30:27 UTC | [`d71b0d97681a`](https://github.com/GraderGamer2/NekoEdit/commit/d71b0d97681aa52eb327da50b949cba405181771) | fix: pass complete renameat syscall arguments |
+| 2026-11-07 16:31:50 UTC | [`39c815748a3a`](https://github.com/GraderGamer2/NekoEdit/commit/39c815748a3ab92570f423d0e501c7a6b3995be3) | fix: reject newline characters in stored font paths |
+| 2026-11-07 16:31:55 UTC | [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7) | test: reject newline injection in persisted font paths |
+| 2026-11-07 16:32:35 UTC | [`91bb7db843b2`](https://github.com/GraderGamer2/NekoEdit/commit/91bb7db843b20b1871d69ed122b2f5feaab31d56) | docs: document responsive editor features and persistent settings |
+| 2026-11-07 16:32:48 UTC | [`5e748a346b9b`](https://github.com/GraderGamer2/NekoEdit/commit/5e748a346b9b78c82363a0fe80daf0980f491af2) | docs: refresh current editor and preference status |
+| 2026-11-07 16:33:02 UTC | [`90d3009ec282`](https://github.com/GraderGamer2/NekoEdit/commit/90d3009ec2824a0cb5705aea221457bce4ec9a59) | docs: record persistent preferences implementation and validation |
+| 2026-11-07 16:33:19 UTC | [`0c3226175f84`](https://github.com/GraderGamer2/NekoEdit/commit/0c3226175f84bdfb6af449410d5fbe8f4fbcb982) | docs: add persistent preferences project-history milestone |
+
+Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed on application/test tip `8dc43ea3a1a3`; artifact [13582086670](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592/artifacts/13582086670) is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. The following commits in this section update repository documentation only.
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
