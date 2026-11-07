@@ -123,6 +123,326 @@
     .byte 32
     .byte 0
 
+# Selected common X11/XKB named non-ASCII keysyms. Record encoding:
+# one-byte name length, exact case-sensitive symbol name, uint32 Unicode scalar.
+.Lxkb_unicode_symbols:
+    .byte 12
+    .ascii "nobreakspace"
+    .long 0xa0
+    .byte 10
+    .ascii "exclamdown"
+    .long 0xa1
+    .byte 4
+    .ascii "cent"
+    .long 0xa2
+    .byte 8
+    .ascii "sterling"
+    .long 0xa3
+    .byte 8
+    .ascii "currency"
+    .long 0xa4
+    .byte 3
+    .ascii "yen"
+    .long 0xa5
+    .byte 9
+    .ascii "brokenbar"
+    .long 0xa6
+    .byte 7
+    .ascii "section"
+    .long 0xa7
+    .byte 9
+    .ascii "diaeresis"
+    .long 0xa8
+    .byte 9
+    .ascii "copyright"
+    .long 0xa9
+    .byte 11
+    .ascii "ordfeminine"
+    .long 0xaa
+    .byte 13
+    .ascii "guillemotleft"
+    .long 0xab
+    .byte 7
+    .ascii "notsign"
+    .long 0xac
+    .byte 10
+    .ascii "registered"
+    .long 0xae
+    .byte 6
+    .ascii "macron"
+    .long 0xaf
+    .byte 6
+    .ascii "degree"
+    .long 0xb0
+    .byte 9
+    .ascii "plusminus"
+    .long 0xb1
+    .byte 11
+    .ascii "twosuperior"
+    .long 0xb2
+    .byte 13
+    .ascii "threesuperior"
+    .long 0xb3
+    .byte 5
+    .ascii "acute"
+    .long 0xb4
+    .byte 2
+    .ascii "mu"
+    .long 0xb5
+    .byte 9
+    .ascii "paragraph"
+    .long 0xb6
+    .byte 14
+    .ascii "periodcentered"
+    .long 0xb7
+    .byte 7
+    .ascii "cedilla"
+    .long 0xb8
+    .byte 11
+    .ascii "onesuperior"
+    .long 0xb9
+    .byte 9
+    .ascii "masculine"
+    .long 0xba
+    .byte 14
+    .ascii "guillemotright"
+    .long 0xbb
+    .byte 10
+    .ascii "onequarter"
+    .long 0xbc
+    .byte 7
+    .ascii "onehalf"
+    .long 0xbd
+    .byte 13
+    .ascii "threequarters"
+    .long 0xbe
+    .byte 12
+    .ascii "questiondown"
+    .long 0xbf
+    .byte 6
+    .ascii "Agrave"
+    .long 0xc0
+    .byte 6
+    .ascii "Aacute"
+    .long 0xc1
+    .byte 11
+    .ascii "Acircumflex"
+    .long 0xc2
+    .byte 6
+    .ascii "Atilde"
+    .long 0xc3
+    .byte 10
+    .ascii "Adiaeresis"
+    .long 0xc4
+    .byte 5
+    .ascii "Aring"
+    .long 0xc5
+    .byte 2
+    .ascii "AE"
+    .long 0xc6
+    .byte 8
+    .ascii "Ccedilla"
+    .long 0xc7
+    .byte 6
+    .ascii "Egrave"
+    .long 0xc8
+    .byte 6
+    .ascii "Eacute"
+    .long 0xc9
+    .byte 11
+    .ascii "Ecircumflex"
+    .long 0xca
+    .byte 10
+    .ascii "Ediaeresis"
+    .long 0xcb
+    .byte 6
+    .ascii "Igrave"
+    .long 0xcc
+    .byte 6
+    .ascii "Iacute"
+    .long 0xcd
+    .byte 11
+    .ascii "Icircumflex"
+    .long 0xce
+    .byte 10
+    .ascii "Idiaeresis"
+    .long 0xcf
+    .byte 3
+    .ascii "ETH"
+    .long 0xd0
+    .byte 6
+    .ascii "Ntilde"
+    .long 0xd1
+    .byte 6
+    .ascii "Ograve"
+    .long 0xd2
+    .byte 6
+    .ascii "Oacute"
+    .long 0xd3
+    .byte 11
+    .ascii "Ocircumflex"
+    .long 0xd4
+    .byte 6
+    .ascii "Otilde"
+    .long 0xd5
+    .byte 10
+    .ascii "Odiaeresis"
+    .long 0xd6
+    .byte 8
+    .ascii "multiply"
+    .long 0xd7
+    .byte 6
+    .ascii "Oslash"
+    .long 0xd8
+    .byte 6
+    .ascii "Ugrave"
+    .long 0xd9
+    .byte 6
+    .ascii "Uacute"
+    .long 0xda
+    .byte 11
+    .ascii "Ucircumflex"
+    .long 0xdb
+    .byte 10
+    .ascii "Udiaeresis"
+    .long 0xdc
+    .byte 6
+    .ascii "Yacute"
+    .long 0xdd
+    .byte 5
+    .ascii "THORN"
+    .long 0xde
+    .byte 6
+    .ascii "ssharp"
+    .long 0xdf
+    .byte 6
+    .ascii "agrave"
+    .long 0xe0
+    .byte 6
+    .ascii "aacute"
+    .long 0xe1
+    .byte 11
+    .ascii "acircumflex"
+    .long 0xe2
+    .byte 6
+    .ascii "atilde"
+    .long 0xe3
+    .byte 10
+    .ascii "adiaeresis"
+    .long 0xe4
+    .byte 5
+    .ascii "aring"
+    .long 0xe5
+    .byte 2
+    .ascii "ae"
+    .long 0xe6
+    .byte 8
+    .ascii "ccedilla"
+    .long 0xe7
+    .byte 6
+    .ascii "egrave"
+    .long 0xe8
+    .byte 6
+    .ascii "eacute"
+    .long 0xe9
+    .byte 11
+    .ascii "ecircumflex"
+    .long 0xea
+    .byte 10
+    .ascii "ediaeresis"
+    .long 0xeb
+    .byte 6
+    .ascii "igrave"
+    .long 0xec
+    .byte 6
+    .ascii "iacute"
+    .long 0xed
+    .byte 11
+    .ascii "icircumflex"
+    .long 0xee
+    .byte 10
+    .ascii "idiaeresis"
+    .long 0xef
+    .byte 3
+    .ascii "eth"
+    .long 0xf0
+    .byte 6
+    .ascii "ntilde"
+    .long 0xf1
+    .byte 6
+    .ascii "ograve"
+    .long 0xf2
+    .byte 6
+    .ascii "oacute"
+    .long 0xf3
+    .byte 11
+    .ascii "ocircumflex"
+    .long 0xf4
+    .byte 6
+    .ascii "otilde"
+    .long 0xf5
+    .byte 10
+    .ascii "odiaeresis"
+    .long 0xf6
+    .byte 8
+    .ascii "division"
+    .long 0xf7
+    .byte 6
+    .ascii "oslash"
+    .long 0xf8
+    .byte 6
+    .ascii "ugrave"
+    .long 0xf9
+    .byte 6
+    .ascii "uacute"
+    .long 0xfa
+    .byte 11
+    .ascii "ucircumflex"
+    .long 0xfb
+    .byte 10
+    .ascii "udiaeresis"
+    .long 0xfc
+    .byte 6
+    .ascii "yacute"
+    .long 0xfd
+    .byte 5
+    .ascii "thorn"
+    .long 0xfe
+    .byte 10
+    .ascii "ydiaeresis"
+    .long 0xff
+    .byte 8
+    .ascii "EuroSign"
+    .long 0x20ac
+    .byte 6
+    .ascii "endash"
+    .long 0x2013
+    .byte 6
+    .ascii "emdash"
+    .long 0x2014
+    .byte 19
+    .ascii "leftsinglequotemark"
+    .long 0x2018
+    .byte 20
+    .ascii "rightsinglequotemark"
+    .long 0x2019
+    .byte 19
+    .ascii "leftdoublequotemark"
+    .long 0x201c
+    .byte 20
+    .ascii "rightdoublequotemark"
+    .long 0x201d
+    .byte 6
+    .ascii "bullet"
+    .long 0x2022
+    .byte 8
+    .ascii "ellipsis"
+    .long 0x2026
+    .byte 9
+    .ascii "trademark"
+    .long 0x2122
+    .byte 0
+
 .section .bss
 .balign 16
 .Lxkb_text_ptr:         .quad 0
@@ -800,6 +1120,9 @@ xkb_reset_keymap:
     jmp .Lxkb_unicode_done
 .Lxkb_unicode_ascii:
     call .Lxkb_keysym_ascii
+    test eax, eax
+    jnz .Lxkb_unicode_done
+    call .Lxkb_keysym_named_unicode
     jmp .Lxkb_unicode_done
 .Lxkb_unicode_invalid:
     xor eax, eax
@@ -809,6 +1132,42 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_keysym_unicode, . - .Lxkb_keysym_unicode
+
+# Resolve a bounded set of common named X11/XKB Unicode keysyms.
+# EAX is the mapped scalar, or zero when the token is not in this alias table.
+.type .Lxkb_keysym_named_unicode, @function
+.Lxkb_keysym_named_unicode:
+    push rbx
+    push r12
+    push r13
+    mov r13d, dword ptr [rip + .Lxkb_token_length]
+    lea rbx, [rip + .Lxkb_unicode_symbols]
+.Lxkb_named_unicode_loop:
+    movzx eax, byte ptr [rbx]
+    test eax, eax
+    jz .Lxkb_named_unicode_none
+    mov r12d, eax
+    cmp r12d, r13d
+    jne .Lxkb_named_unicode_next
+    lea rsi, [rbx + 1]
+    lea rdi, [rip + .Lxkb_token]
+    mov ecx, r12d
+    repe cmpsb
+    je .Lxkb_named_unicode_found
+.Lxkb_named_unicode_next:
+    lea rbx, [rbx + r12 + 5]
+    jmp .Lxkb_named_unicode_loop
+.Lxkb_named_unicode_found:
+    mov eax, dword ptr [rbx + r12 + 1]
+    jmp .Lxkb_named_unicode_done
+.Lxkb_named_unicode_none:
+    xor eax, eax
+.Lxkb_named_unicode_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_keysym_named_unicode, . - .Lxkb_keysym_named_unicode
 
 # Parse the symbols array following symbols[GroupN] = [ ... ].
 .type .Lxkb_parse_symbol_array, @function
