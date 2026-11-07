@@ -16,13 +16,15 @@
 ### Regression coverage
 
 - The Wayland test opens Settings, toggles the save confirmation off and back on, and verifies the state.
+- It exercises the dialog with both keyboard and pointer input: Escape and the pointer Cancel button leave the file untouched; Enter and the pointer Save button commit it.
 - The test edits a loaded file, triggers Ctrl+S, confirms the file bytes remain unchanged while the dialog is open, cancels with Escape and verifies no write occurred, then repeats and accepts with Enter to verify the expected saved bytes.
 - Existing Save As overwrite, direct Save, file-picker, large-file, line-index, grapheme, keyboard, resize, and protocol workflows run in the same suite.
 
 ### Verification and artifact
 
 - GitHub Actions [Build and test #352](https://github.com/GraderGamer2/NekoEdit/actions/runs/42343675670) passed all eight workflow steps on commit [e1b52bd03b3a](https://github.com/GraderGamer2/NekoEdit/commit/e1b52bd03b3a5a532ddaccae7f106d94e60b15f3).
-- Artifact nekoedit-linux-x86_64: 48,371 bytes, SHA-256 223486a12cdf8f91201a7bc25639477d463321ee6bc82cebd8fb659464368482, artifact ID 13562438616, expires 2026-11-14 05:40:12 UTC.
+- Branch-head GitHub Actions [Build and test #355](https://github.com/GraderGamer2/NekoEdit/actions/runs/42343878770) passed all eight workflow steps on commit [a91de1c697ad](https://github.com/GraderGamer2/NekoEdit/commit/a91de1c697adb856764cb23d7d9c2d1981249664), including pointer Save/Cancel assertions.
+- Artifact nekoedit-linux-x86_64: 48,371 bytes, SHA-256 ff4f0a5b72039cf1db91bfae4607c8feff236f2d26e56008461c26fcbfa91786, artifact ID 13562204322, expires 2026-11-14 05:42:53 UTC.
 - Persistent preference storage remains a follow-up; the current toggle is session-only.
 
 ---
