@@ -39,6 +39,9 @@
 font_env_key:
     .ascii "NEKOEDIT_FONT"
 font_env_key_end:
+font_disable_env_key:
+    .ascii "NEKOEDIT_DISABLE_FONT"
+font_disable_env_key_end:
 font_default_candidates:
     .quad font_path_dejavu_mono
     .quad font_path_liberation_mono
@@ -1943,8 +1946,9 @@ font_glyph_load_outline_internal:
     ret
 .size font_glyph_load_outline_internal, . - font_glyph_load_outline_internal
 
-# Initialize the optional font engine. Explicit NEKOEDIT_FONT takes precedence;
-# otherwise try deterministic common system-font paths. EAX=0 on success.
+# Initialize the optional font engine. NEKOEDIT_DISABLE_FONT=1 forces the
+# embedded bitmap for deterministic legacy tests. Otherwise explicit
+# NEKOEDIT_FONT takes precedence over deterministic common system-font paths.
 .global font_init
 .type font_init, @function
 font_init:
@@ -1956,6 +1960,40 @@ font_init:
     mov dword ptr [rip + font_loaded], 0
     mov dword ptr [rip + font_probe_A_glyph], 0
     mov dword ptr [rip + font_probe_A_advance], 0
+    # The test harness can request the legacy embedded renderer explicitly.
+    # This keeps old pixel-level UI tests deterministic while the font fixture
+    # separately exercises the real outline-to-framebuffer path.
+    mov r12, qword ptr [rip + process_envp]
+    test r12, r12
+    jz .Lfont_find_override
+.Lfont_disable_next:
+    mov r13, qword ptr [r12]
+    test r13, r13
+    jz .Lfont_find_override
+    lea r14, [rip + font_disable_env_key]
+    mov r15d, font_disable_env_key_end - font_disable_env_key
+.Lfont_disable_compare:
+    test r15d, r15d
+    jz .Lfont_disable_equal
+    mov al, byte ptr [r13]
+    cmp al, byte ptr [r14]
+    jne .Lfont_disable_advance
+    inc r13
+    inc r14
+    dec r15d
+    jmp .Lfont_disable_compare
+.Lfont_disable_equal:
+    cmp byte ptr [r13], '='
+    jne .Lfont_disable_advance
+    cmp byte ptr [r13 + 1], '1'
+    jne .Lfont_disable_advance
+    cmp byte ptr [r13 + 2], 0
+    je .Lfont_init_failed
+.Lfont_disable_advance:
+    add r12, 8
+    jmp .Lfont_disable_next
+
+.Lfont_find_override:
     # Walk the process environment for NEKOEDIT_FONT.
     mov r12, qword ptr [rip + process_envp]
     test r12, r12

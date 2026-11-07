@@ -402,7 +402,7 @@ def run(
                                 return True
                     return False
 
-                if not antialiased_ink_present(16, 464, 88, 14):
+                if not font_parser_test and not antialiased_ink_present(16, 464, 88, 14):
                     raise AssertionError("logical line status label was not rendered")
                 editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if initial_file is None:
@@ -1030,8 +1030,12 @@ xkb_symbols "nekoedit-sparse" {
                             "synthetic TrueType outline/rasterization validation failed: "
                             + repr({"mismatch": mismatch, "state": values})
                         )
+                    if not antialiased_ink_present(12, 88, 24, 16):
+                        raise AssertionError(
+                            "synthetic TrueType glyph A was rasterized but not painted into the Wayland framebuffer"
+                        )
                     observations.append(
-                        "explicit NEKOEDIT_FONT path validated SFNT tables/cmap/metrics, simple and transformed composite outlines, cycle rejection, straight-edge rasterization, and quadratic flattening with implicit off-curve midpoints"
+                        "explicit NEKOEDIT_FONT path validated SFNT tables/cmap/metrics, simple and transformed composite outlines, cycle rejection, straight-edge rasterization, quadratic flattening with implicit off-curve midpoints, and compositor-visible glyph pixels"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -3727,6 +3731,9 @@ xkb_symbols "nekoedit-sparse" {
     environment = os.environ.copy()
     if font_test_path is not None:
         environment["NEKOEDIT_FONT"] = os.path.abspath(font_test_path)
+        environment.pop("NEKOEDIT_DISABLE_FONT", None)
+    else:
+        environment["NEKOEDIT_DISABLE_FONT"] = "1"
     pass_fds = ()
     if use_wayland_socket:
         environment.pop("XDG_RUNTIME_DIR", None)
@@ -4041,20 +4048,24 @@ if __name__ == "__main__":
     # SFNT reader: use a deterministic tiny TrueType fixture so CI does not
     # depend on whichever fonts happen to be installed on the runner.
     font_fd, font_path = tempfile.mkstemp(prefix="nekoedit-sfnt-", suffix=".ttf")
+    render_fd, render_path = tempfile.mkstemp(prefix="nekoedit-font-visible-", suffix=".txt")
     try:
         with os.fdopen(font_fd, "wb") as font_file:
             font_file.write(synthetic_true_type_font())
+        with os.fdopen(render_fd, "wb") as render_file:
+            render_file.write(b"A")
         run(
             sys.argv[1],
-            initial_file=None,
+            initial_file=render_path,
             font_parser_test=True,
             font_test_path=font_path,
         )
     finally:
-        try:
-            os.unlink(font_path)
-        except FileNotFoundError:
-            pass
+        for path in (font_path, render_path):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
 
     # Malformed sequences are treated as one-byte replacement units; editing
     # must not consume adjacent valid ASCII characters.
