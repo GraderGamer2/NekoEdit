@@ -104,6 +104,9 @@
 .equ DOC_SCROLL_TRACK_WIDTH, 6
 .equ DOC_SCROLL_TRACK_X_OFFSET, 24
 .equ DOC_SCROLL_MIN_THUMB, 20
+.equ DOC_HSCROLL_HEIGHT, 14
+.equ DOC_HSCROLL_TRACK_HEIGHT, 6
+.equ DOC_HSCROLL_MIN_THUMB, 24
 .equ DOC_SCROLL_WHEEL_ROW_FIXED, (14 * 256)
 .equ DOC_LEFT,           16
 .equ DOC_TOP,            92
@@ -1944,11 +1947,12 @@ doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
 window_status_top:      .long 0
+window_doc_bottom:       .long 0
 window_status_bytes_x:  .long 0
 window_status_mode_x:   .long 0
 window_doc_pixel_width: .long 0
@@ -2020,6 +2024,11 @@ doc_scroll_drag:        .long 0
 doc_scroll_drag_offset: .long 0
 doc_scroll_thumb_top:   .long 0
 doc_scroll_thumb_height: .long 0
+doc_hscroll_drag:       .long 0
+doc_hscroll_drag_offset: .long 0
+doc_hscroll_thumb_left: .long 0
+doc_hscroll_thumb_width: .long 0
+doc_max_line_width:     .long 0
 doc_total_visual_rows:  .long 0
 doc_wheel_remainder:    .long 0
 doc_grapheme_newline_flag: .long 0
@@ -2837,6 +2846,8 @@ wayland_main:
     js .protocol_error
     cmp dword ptr [rip + picker_mode], 0
     jne .pointer_picker_motion
+    cmp dword ptr [rip + doc_hscroll_drag], 1
+    je .pointer_document_hscroll_motion
     cmp dword ptr [rip + doc_scroll_drag], 1
     je .pointer_document_scroll_motion
     cmp dword ptr [rip + pointer_button_down], 1
@@ -2877,6 +2888,10 @@ wayland_main:
     mov esi, eax
     call picker_scrollbar_drag_to_y
     jmp .keyboard_changed
+.pointer_document_hscroll_motion:
+    mov esi, dword ptr [rip + pointer_x]
+    call doc_hscrollbar_drag_to_x
+    jmp .document_scroll_redraw
 .pointer_document_scroll_motion:
     mov esi, dword ptr [rip + pointer_y]
     call doc_scrollbar_drag_to_y
@@ -2969,6 +2984,11 @@ wayland_main:
     mov dword ptr [rip + picker_scroll_drag], 0
     jmp .keyboard_changed
 .pointer_button_release_document:
+    cmp dword ptr [rip + doc_hscroll_drag], 1
+    jne .pointer_button_release_vertical_scroll
+    mov dword ptr [rip + doc_hscroll_drag], 0
+    jmp .document_scroll_redraw
+.pointer_button_release_vertical_scroll:
     cmp dword ptr [rip + doc_scroll_drag], 1
     jne .pointer_button_release_selection
     mov dword ptr [rip + doc_scroll_drag], 0
@@ -2997,6 +3017,30 @@ wayland_main:
     # document caret or insert text into the document.
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .event_loop
+    # Bottom horizontal scrolling is a separate document control, not a resize edge.
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .pointer_check_vertical_scrollbar
+    mov edx, dword ptr [rip + pointer_y]
+    cmp edx, dword ptr [rip + window_doc_bottom]
+    jb .pointer_check_vertical_scrollbar
+    cmp edx, dword ptr [rip + window_status_top]
+    jae .pointer_check_vertical_scrollbar
+    mov eax, dword ptr [rip + pointer_x]
+    cmp eax, DOC_LEFT
+    jb .pointer_check_vertical_scrollbar
+    mov ecx, DOC_LEFT
+    add ecx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, ecx
+    jae .pointer_check_vertical_scrollbar
+    call doc_hscrollbar_geometry
+    cmp dword ptr [rip + doc_hscroll_thumb_width], 0
+    je .pointer_document_hscroll_empty
+    mov esi, dword ptr [rip + pointer_x]
+    call doc_hscrollbar_begin_drag
+    jmp .document_scroll_redraw
+.pointer_document_hscroll_empty:
+    jmp .event_loop
+.pointer_check_vertical_scrollbar:
     # The editor scrollbar sits just inside the right-edge resize band.
     # Test its narrow gutter before edge hit-testing to avoid stealing resize.
     mov eax, dword ptr [rip + pointer_x]
@@ -3010,7 +3054,7 @@ wayland_main:
     mov edx, dword ptr [rip + pointer_y]
     cmp edx, DOC_TOP
     jb .pointer_check_window_resize
-    cmp edx, dword ptr [rip + window_status_top]
+    cmp edx, dword ptr [rip + window_doc_bottom]
     jae .pointer_check_window_resize
     call doc_scrollbar_geometry
     cmp dword ptr [rip + doc_scroll_thumb_height], 0
@@ -3243,6 +3287,7 @@ wayland_main:
     mov dword ptr [rip + doc_view_left_px], 0
     mov dword ptr [rip + doc_view_top_row], 0
     mov dword ptr [rip + doc_line_index_valid], 0
+    call window_update_geometry
     call doc_line_index_rebuild
     call doc_ensure_cursor_visible
     jmp .keyboard_changed
@@ -3326,8 +3371,7 @@ wayland_main:
 .pointer_document_click:
     cmp edx, DOC_TOP
     jl .event_loop
-    mov ecx, dword ptr [rip + window_height]
-    sub ecx, 20
+    mov ecx, dword ptr [rip + window_doc_bottom]
     cmp edx, ecx
     jae .event_loop
     test eax, eax
@@ -7736,9 +7780,11 @@ render_surface:
     call draw_text
 
     call doc_scrollbar_geometry
+    call doc_hscrollbar_geometry
     call render_selection
     call render_document
     call render_document_scrollbar
+    call render_document_hscrollbar
     call render_status_bar
     call render_file_menu
     call render_window_controls
@@ -7968,6 +8014,12 @@ window_update_geometry:
     mov eax, dword ptr [rip + window_height]
     sub eax, 20
     mov dword ptr [rip + window_status_top], eax
+    mov eax, dword ptr [rip + window_status_top]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .window_geometry_bottom_ready
+    sub eax, DOC_HSCROLL_HEIGHT
+.window_geometry_bottom_ready:
+    mov dword ptr [rip + window_doc_bottom], eax
     mov eax, dword ptr [rip + window_width]
     sub eax, DOC_LEFT + DOC_SCROLL_TRACK_X_OFFSET
     test eax, eax
@@ -8010,7 +8062,7 @@ window_update_geometry:
     mov eax, LINE_HEIGHT
 .window_geometry_line_height_ready:
     mov dword ptr [rip + window_doc_line_height], eax
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, DOC_TOP
     xor edx, edx
     mov ecx, dword ptr [rip + window_doc_line_height]
@@ -9162,7 +9214,58 @@ doc_line_index_reserve:
 doc_line_index_measure_rows:
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .Ldoc_index_measure_wrapped
+    push rbx
+    push r12
+    push r13
+    mov r12d, edi
+    lea r13d, [rdi + rsi]
+    test esi, esi
+    jz .Ldoc_index_unwrapped_end_ready
+    lea edi, [r13d - 1]
+    call doc_byte_at
+    cmp eax, 10
+    jne .Ldoc_index_unwrapped_end_ready
+    dec r13d
+.Ldoc_index_unwrapped_end_ready:
+    xor ebx, ebx
+.Ldoc_index_unwrapped_loop:
+    cmp r12d, r13d
+    jae .Ldoc_index_unwrapped_done
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 9
+    je .Ldoc_index_unwrapped_tab
+    cmp eax, 32
+    jb .Ldoc_index_unwrapped_control
+    cmp eax, 128
+    jb .Ldoc_index_unwrapped_glyph
+    mov edi, r12d
+    call doc_utf8_decode_at
+.Ldoc_index_unwrapped_glyph:
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    add ebx, eax
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r12d, eax
+    jmp .Ldoc_index_unwrapped_loop
+.Ldoc_index_unwrapped_tab:
+    lea ebx, [rbx + 32]
+    and ebx, -32
+    inc r12d
+    jmp .Ldoc_index_unwrapped_loop
+.Ldoc_index_unwrapped_control:
+    inc r12d
+    jmp .Ldoc_index_unwrapped_loop
+.Ldoc_index_unwrapped_done:
+    cmp ebx, dword ptr [rip + doc_max_line_width]
+    jbe .Ldoc_index_unwrapped_return
+    mov dword ptr [rip + doc_max_line_width], ebx
+.Ldoc_index_unwrapped_return:
     mov eax, 1
+    pop r13
+    pop r12
+    pop rbx
     ret
 .Ldoc_index_measure_wrapped:
     push rbx
@@ -9484,6 +9587,7 @@ doc_line_index_rebuild:
     test rax, rax
     js .Ldoc_index_rebuild_failed
     mov dword ptr [rip + doc_line_count], ebx
+    mov dword ptr [rip + doc_max_line_width], 0
     xor r12d, r12d              # logical line start
     xor r13d, r13d              # byte scan offset
     xor r14d, r14d              # zero-based line index
@@ -10706,7 +10810,7 @@ doc_scrollbar_geometry:
     mov dword ptr [rip + doc_scroll_thumb_top], DOC_TOP
     jmp .Ldoc_scrollbar_geometry_done
 .Ldoc_scrollbar_overflow:
-    mov r14d, dword ptr [rip + window_status_top]
+    mov r14d, dword ptr [rip + window_doc_bottom]
     sub r14d, DOC_TOP
     mov eax, r14d
     imul eax, r13d
@@ -10812,6 +10916,12 @@ doc_scroll_horizontal_by:
     jns .Ldoc_scroll_horizontal_nonnegative
     xor eax, eax
 .Ldoc_scroll_horizontal_nonnegative:
+    mov r12d, dword ptr [rip + doc_max_line_width]
+    sub r12d, dword ptr [rip + window_doc_pixel_width]
+    test r12d, r12d
+    jg .Ldoc_scroll_horizontal_max_ready
+    xor r12d, r12d
+.Ldoc_scroll_horizontal_max_ready:
     cmp eax, r12d
     jbe .Ldoc_scroll_horizontal_clamped
     mov eax, r12d
@@ -10830,6 +10940,183 @@ doc_scroll_horizontal_by:
 .size doc_scroll_horizontal_by, . - doc_scroll_horizontal_by
 
 # ESI=surface-local pointer y; map the captured thumb position to a visual row.
+# Horizontal scrollbar maps the widest logical line into the document viewport.
+.type doc_hscrollbar_geometry, @function
+doc_hscrollbar_geometry:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldoc_hscroll_hidden
+    mov r12d, dword ptr [rip + window_doc_pixel_width]
+    mov r13d, dword ptr [rip + doc_max_line_width]
+    cmp r13d, r12d
+    ja .Ldoc_hscroll_overflow
+.Ldoc_hscroll_hidden:
+    mov dword ptr [rip + doc_hscroll_thumb_width], 0
+    mov dword ptr [rip + doc_hscroll_thumb_left], DOC_LEFT
+    mov dword ptr [rip + doc_view_left_px], 0
+    jmp .Ldoc_hscroll_geometry_done
+.Ldoc_hscroll_overflow:
+    mov eax, r12d
+    imul rax, r12
+    xor edx, edx
+    mov ecx, r13d
+    div rcx
+    cmp eax, DOC_HSCROLL_MIN_THUMB
+    jae .Ldoc_hscroll_thumb_minimum_ready
+    mov eax, DOC_HSCROLL_MIN_THUMB
+.Ldoc_hscroll_thumb_minimum_ready:
+    cmp eax, r12d
+    jbe .Ldoc_hscroll_thumb_width_ready
+    mov eax, r12d
+.Ldoc_hscroll_thumb_width_ready:
+    mov dword ptr [rip + doc_hscroll_thumb_width], eax
+    mov r14d, r12d
+    sub r14d, eax
+    mov r15d, r13d
+    sub r15d, r12d
+    mov eax, dword ptr [rip + doc_view_left_px]
+    cmp eax, r15d
+    jbe .Ldoc_hscroll_offset_ready
+    mov eax, r15d
+    mov dword ptr [rip + doc_view_left_px], eax
+.Ldoc_hscroll_offset_ready:
+    test r14d, r14d
+    jz .Ldoc_hscroll_thumb_at_origin
+    imul rax, r14
+    xor edx, edx
+    mov ecx, r15d
+    div rcx
+    add eax, DOC_LEFT
+    jmp .Ldoc_hscroll_thumb_store
+.Ldoc_hscroll_thumb_at_origin:
+    mov eax, DOC_LEFT
+.Ldoc_hscroll_thumb_store:
+    mov dword ptr [rip + doc_hscroll_thumb_left], eax
+.Ldoc_hscroll_geometry_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_hscrollbar_geometry, . - doc_hscrollbar_geometry
+
+# ESI=x; update horizontal pixel offset while preserving the thumb grab point.
+.type doc_hscrollbar_drag_to_x, @function
+doc_hscrollbar_drag_to_x:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, esi
+    call doc_hscrollbar_geometry
+    mov eax, r12d
+    sub eax, DOC_LEFT
+    sub eax, dword ptr [rip + doc_hscroll_drag_offset]
+    test eax, eax
+    jns .Ldoc_hscroll_drag_nonnegative
+    xor eax, eax
+.Ldoc_hscroll_drag_nonnegative:
+    mov r13d, dword ptr [rip + window_doc_pixel_width]
+    sub r13d, dword ptr [rip + doc_hscroll_thumb_width]
+    cmp eax, r13d
+    jbe .Ldoc_hscroll_drag_track_ready
+    mov eax, r13d
+.Ldoc_hscroll_drag_track_ready:
+    mov r14d, dword ptr [rip + doc_max_line_width]
+    sub r14d, dword ptr [rip + window_doc_pixel_width]
+    test r14d, r14d
+    jg .Ldoc_hscroll_drag_range_ready
+    xor r14d, r14d
+.Ldoc_hscroll_drag_range_ready:
+    test r13d, r13d
+    jz .Ldoc_hscroll_drag_zero
+    imul rax, r14
+    xor edx, edx
+    mov ecx, r13d
+    div rcx
+    jmp .Ldoc_hscroll_drag_store
+.Ldoc_hscroll_drag_zero:
+    xor eax, eax
+.Ldoc_hscroll_drag_store:
+    mov dword ptr [rip + doc_view_left_px], eax
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_hscrollbar_drag_to_x, . - doc_hscrollbar_drag_to_x
+
+# ESI=x; clicking the track centers the thumb at the pointer.
+.type doc_hscrollbar_begin_drag, @function
+doc_hscrollbar_begin_drag:
+    push rbx
+    push r12
+    mov r12d, esi
+    call doc_hscrollbar_geometry
+    cmp dword ptr [rip + doc_hscroll_thumb_width], 0
+    je .Ldoc_hscroll_begin_done
+    mov eax, r12d
+    cmp eax, dword ptr [rip + doc_hscroll_thumb_left]
+    jl .Ldoc_hscroll_begin_center
+    mov edx, dword ptr [rip + doc_hscroll_thumb_left]
+    add edx, dword ptr [rip + doc_hscroll_thumb_width]
+    cmp eax, edx
+    jae .Ldoc_hscroll_begin_center
+    sub eax, dword ptr [rip + doc_hscroll_thumb_left]
+    jmp .Ldoc_hscroll_begin_offset_ready
+.Ldoc_hscroll_begin_center:
+    mov eax, dword ptr [rip + doc_hscroll_thumb_width]
+    shr eax, 1
+.Ldoc_hscroll_begin_offset_ready:
+    mov dword ptr [rip + doc_hscroll_drag_offset], eax
+    mov dword ptr [rip + doc_hscroll_drag], 1
+    mov esi, r12d
+    call doc_hscrollbar_drag_to_x
+.Ldoc_hscroll_begin_done:
+    pop r12
+    pop rbx
+    ret
+.size doc_hscrollbar_begin_drag, . - doc_hscrollbar_begin_drag
+
+.type render_document_hscrollbar, @function
+render_document_hscrollbar:
+    cmp dword ptr [rip + doc_hscroll_thumb_width], 0
+    jle .Lrender_document_hscrollbar_done
+    sub rsp, 8
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, DOC_LEFT
+    mov eax, dword ptr [rip + window_doc_bottom]
+    add eax, 4
+    mov edx, eax
+    mov ecx, dword ptr [rip + window_doc_pixel_width]
+    mov r8d, DOC_HSCROLL_TRACK_HEIGHT
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, dword ptr [rip + doc_hscroll_thumb_left]
+    mov eax, dword ptr [rip + window_doc_bottom]
+    add eax, 5
+    mov edx, eax
+    mov ecx, dword ptr [rip + doc_hscroll_thumb_width]
+    mov r8d, DOC_HSCROLL_TRACK_HEIGHT - 2
+    cmp dword ptr [rip + doc_hscroll_drag], 0
+    je .Lrender_document_hscroll_thumb_normal
+    mov r9d, 0xff9bb9d8
+    jmp .Lrender_document_hscroll_thumb_draw
+.Lrender_document_hscroll_thumb_normal:
+    mov r9d, 0xff78a9d4
+.Lrender_document_hscroll_thumb_draw:
+    call draw_rect
+    add rsp, 8
+.Lrender_document_hscrollbar_done:
+    ret
+.size render_document_hscrollbar, . - render_document_hscrollbar
+
 .type doc_scrollbar_drag_to_y, @function
 doc_scrollbar_drag_to_y:
     push rbx
@@ -10843,7 +11130,7 @@ doc_scrollbar_drag_to_y:
     sub eax, dword ptr [rip + doc_scroll_drag_offset]
     sub eax, DOC_TOP
     mov r13d, eax
-    mov r14d, dword ptr [rip + window_status_top]
+    mov r14d, dword ptr [rip + window_doc_bottom]
     sub r14d, DOC_TOP
     sub r14d, dword ptr [rip + doc_scroll_thumb_height]
     test r13d, r13d
@@ -10927,7 +11214,7 @@ render_document_scrollbar:
     mov esi, eax
     mov edx, DOC_TOP
     mov ecx, DOC_SCROLL_TRACK_WIDTH
-    mov r8d, dword ptr [rip + window_status_top]
+    mov r8d, dword ptr [rip + window_doc_bottom]
     sub r8d, DOC_TOP
     mov r9d, 0xff343d4b
     call draw_rect
@@ -12987,7 +13274,7 @@ render_selection:
     jb .Lneko_render_selection_character_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_character_advance
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_character_advance
@@ -13025,7 +13312,7 @@ render_selection:
     jb .Lneko_render_selection_tab_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_tab_advance
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_tab_advance
@@ -13047,7 +13334,7 @@ render_selection:
     jb .Lneko_render_selection_newline_advance
     cmp r13d, DOC_TOP
     jl .Lneko_render_selection_newline_advance
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jae .Lneko_render_selection_newline_advance
@@ -13164,7 +13451,7 @@ render_selection_unwrapped:
     jb .Lselection_unwrapped_advance
     cmp r14d, DOC_TOP
     jl .Lselection_unwrapped_advance
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r14d, eax
     jae .Lselection_unwrapped_advance
@@ -13187,7 +13474,7 @@ render_selection_unwrapped:
     jb .Lselection_unwrapped_newline_next
     cmp r14d, DOC_TOP
     jl .Lselection_unwrapped_newline_next
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r14d, eax
     jae .Lselection_unwrapped_newline_next
@@ -13370,7 +13657,7 @@ render_document:
 .Ldocument_render_loop:
     cmp r14d, dword ptr [rip + doc_length]
     jae .document_draw_cursor
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jge .document_draw_cursor
@@ -13405,7 +13692,7 @@ render_document:
     jbe .document_printable_fit
     mov r12d, DOC_LEFT
     add r13d, dword ptr [rip + window_doc_line_height]
-    mov eax, dword ptr [rip + window_status_top]
+    mov eax, dword ptr [rip + window_doc_bottom]
     sub eax, dword ptr [rip + window_doc_line_height]
     cmp r13d, eax
     jge .document_draw_cursor
@@ -13447,7 +13734,7 @@ render_document:
     jbe .document_tab_fit
     mov r12d, DOC_LEFT + 32
     add r13d, dword ptr [rip + window_doc_line_height]
-    mov edx, dword ptr [rip + window_status_top]
+    mov edx, dword ptr [rip + window_doc_bottom]
     sub edx, dword ptr [rip + window_doc_line_height]
     cmp r13d, edx
     jge .document_draw_cursor
