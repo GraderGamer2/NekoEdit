@@ -1929,7 +1929,7 @@ active_document_name:   .ascii "Untitled"
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_stride, window_status_top, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
 window_stride:          .long 0
@@ -1939,6 +1939,7 @@ window_status_mode_x:   .long 0
 window_doc_pixel_width: .long 0
 window_doc_line_height: .long 0
 window_doc_visible_rows: .long 0
+picker_ui_font_size: .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
 window_pending_height:  .long 0
@@ -5807,12 +5808,18 @@ picker_handle_pointer:
     jae .picker_pointer_done
     mov dword ptr [rip + picker_focus], 1
     mov dword ptr [rip + picker_edit_select_all], 0
-    mov eax, r12d
-    sub eax, 64
-    jns .picker_pointer_path_offset
-    xor eax, eax
-.picker_pointer_path_offset:
-    shr eax, 3
+    lea rdi, [rip + picker_path_buffer]
+    mov eax, dword ptr [rip + picker_path_view_start]
+    add rdi, rax
+    mov esi, dword ptr [rip + picker_path_length]
+    sub esi, eax
+    mov edx, r12d
+    sub edx, 64
+    test edx, edx
+    jns .picker_pointer_path_target_ready
+    xor edx, edx
+.picker_pointer_path_target_ready:
+    call picker_hit_test_ascii
     add eax, dword ptr [rip + picker_path_view_start]
     cmp eax, dword ptr [rip + picker_path_length]
     jbe .picker_pointer_path_cursor_store
@@ -5890,7 +5897,7 @@ picker_handle_pointer:
     jmp .picker_pointer_done
 .picker_pointer_list_rows:
     mov eax, r13d
-    sub eax, 132
+    sub eax, 130
     xor edx, edx
     mov ecx, 14
     div ecx
@@ -5940,12 +5947,18 @@ picker_handle_pointer:
     jae .picker_pointer_done
     mov dword ptr [rip + picker_focus], 2
     mov dword ptr [rip + picker_edit_select_all], 0
-    mov eax, r12d
-    sub eax, 176
-    jns .picker_pointer_name_offset
-    xor eax, eax
-.picker_pointer_name_offset:
-    shr eax, 3
+    lea rdi, [rip + picker_name_buffer]
+    mov eax, dword ptr [rip + picker_name_view_start]
+    add rdi, rax
+    mov esi, dword ptr [rip + picker_name_length]
+    sub esi, eax
+    mov edx, r12d
+    sub edx, 176
+    test edx, edx
+    jns .picker_pointer_name_target_ready
+    xor edx, edx
+.picker_pointer_name_target_ready:
+    call picker_hit_test_ascii
     add eax, dword ptr [rip + picker_name_view_start]
     cmp eax, dword ptr [rip + picker_name_length]
     jbe .picker_pointer_name_cursor_store
@@ -7701,6 +7714,37 @@ window_update_layout_geometry:
     sub edx, eax
     shr edx, 1
     mov dword ptr [rip + picker_panel_y], edx
+
+    # Scale picker glyph bitmaps with the tighter axis so they remain inside
+    # the transformed 720x408 design controls at minimum window dimensions.
+    mov eax, dword ptr [rip + picker_panel_width]
+    imul eax, 408
+    mov edx, dword ptr [rip + picker_panel_height]
+    imul edx, 720
+    cmp eax, edx
+    ja .window_layout_picker_font_height
+    mov eax, dword ptr [rip + picker_panel_width]
+    imul eax, 10
+    xor edx, edx
+    mov ecx, 720
+    div ecx
+    jmp .window_layout_picker_font_clamp
+.window_layout_picker_font_height:
+    mov eax, dword ptr [rip + picker_panel_height]
+    imul eax, 10
+    xor edx, edx
+    mov ecx, 408
+    div ecx
+.window_layout_picker_font_clamp:
+    cmp eax, 6
+    jae .window_layout_picker_font_min_ready
+    mov eax, 6
+.window_layout_picker_font_min_ready:
+    cmp eax, 10
+    jbe .window_layout_picker_font_store
+    mov eax, 10
+.window_layout_picker_font_store:
+    mov dword ptr [rip + picker_ui_font_size], eax
 
     # The path prompt uses the same fit-and-center policy with its 704x176
     # design dimensions. Its original four-pixel upward bias is retained.
@@ -10585,6 +10629,11 @@ draw_glyph:
     mov r12d, edi
     mov r13d, esi
     mov r15d, edx
+    mov r14d, ecx
+    test r14d, r14d
+    jnz .glyph_size_ready
+    mov r14d, 12
+.glyph_size_ready:
     cmp dword ptr [rip + ui_transform_active], 0
     je .glyph_transform_done
     mov eax, r12d
@@ -10623,7 +10672,8 @@ draw_glyph:
     sub rsp, 16
     mov eax, dword ptr [rip + window_stride]
     mov dword ptr [rsp], eax
-    call font_draw_codepoint
+    mov dword ptr [rsp + 8], r14d
+    call font_draw_codepoint_size
     add rsp, 16
     test eax, eax
     jnz .glyph_done
@@ -10876,9 +10926,15 @@ draw_text:
     jz .Lneko_draw_text_done
     mov edi, r12d
     mov esi, r13d
+    mov ecx, 10
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .Lneko_draw_text_size_ready
+    mov ecx, dword ptr [rip + picker_ui_font_size]
+.Lneko_draw_text_size_ready:
     call draw_glyph
     movzx edi, byte ptr [rbx]
-    call font_codepoint_advance_pixels
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
     add r12d, eax
     inc rbx
     jmp .Lneko_draw_text_loop
@@ -10922,9 +10978,15 @@ draw_decimal:
     jz .Lneko_draw_decimal_done
     mov edi, r13d
     mov esi, r14d
+    mov ecx, 10
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .Lneko_draw_decimal_size_ready
+    mov ecx, dword ptr [rip + picker_ui_font_size]
+.Lneko_draw_decimal_size_ready:
     call draw_glyph
     movzx edi, byte ptr [r12]
-    call font_codepoint_advance_pixels
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
     add r13d, eax
     inc r12
     jmp .Lneko_draw_decimal_paint
@@ -11091,9 +11153,15 @@ draw_bounded_ascii:
     mov r15d, edx
     mov edi, r12d
     mov esi, r13d
+    mov ecx, 10
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .draw_bounded_ascii_size_ready
+    mov ecx, dword ptr [rip + picker_ui_font_size]
+.draw_bounded_ascii_size_ready:
     call draw_glyph
     mov edi, r15d
-    call font_codepoint_advance_pixels
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
     add r12d, eax
     inc rbx
     dec r14d
@@ -11107,6 +11175,164 @@ draw_bounded_ascii:
     pop rbx
     ret
 .size draw_bounded_ascii, . - draw_bounded_ascii
+
+
+# RDI=ASCII text pointer, ESI=character count. EAX=prefix width in logical UI pixels.
+.type picker_measure_ascii_prefix, @function
+picker_measure_ascii_prefix:
+    push rbx
+    push r12
+    push r13
+    mov rbx, rdi
+    mov r12d, esi
+    xor r13d, r13d
+.picker_measure_ascii_prefix_loop:
+    test r12d, r12d
+    jz .picker_measure_ascii_prefix_done
+    movzx edi, byte ptr [rbx]
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+    add r13d, eax
+    inc rbx
+    dec r12d
+    jmp .picker_measure_ascii_prefix_loop
+.picker_measure_ascii_prefix_done:
+    mov eax, r13d
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_measure_ascii_prefix, . - picker_measure_ascii_prefix
+
+# RDI=ASCII text pointer, ESI=length, EDX=target X in logical UI pixels.
+# Return the nearest insertion boundary using the same glyph-advance midpoint as drawing.
+.type picker_hit_test_ascii, @function
+picker_hit_test_ascii:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rbx, rdi
+    mov r12d, esi
+    mov r13d, edx
+    xor r14d, r14d
+    xor r15d, r15d
+.picker_hit_test_ascii_loop:
+    cmp r14d, r12d
+    jae .picker_hit_test_ascii_done
+    movzx edi, byte ptr [rbx + r14]
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+    mov ecx, eax
+    shr eax, 1
+    add eax, r15d
+    cmp r13d, eax
+    jb .picker_hit_test_ascii_done
+    add r15d, ecx
+    inc r14d
+    jmp .picker_hit_test_ascii_loop
+.picker_hit_test_ascii_done:
+    mov eax, r14d
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size picker_hit_test_ascii, . - picker_hit_test_ascii
+
+# RDI=ASCII text pointer, ESI=cursor offset, EDX=max visible width.
+# Walk backward from the cursor so it remains visible in a proportional text field.
+.type picker_field_view_start, @function
+picker_field_view_start:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov rbx, rdi
+    mov r13d, esi
+    mov r14d, edx
+    xor ebp, ebp
+.picker_field_view_start_loop:
+    test r13d, r13d
+    jz .picker_field_view_start_done
+    movzx edi, byte ptr [rbx + r13 - 1]
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+    lea ecx, [rbp + rax]
+    cmp ecx, r14d
+    ja .picker_field_view_start_done
+    mov ebp, ecx
+    dec r13d
+    jmp .picker_field_view_start_loop
+.picker_field_view_start_done:
+    mov eax, r13d
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size picker_field_view_start, . - picker_field_view_start
+
+# RDI=x, ESI=y, RDX=NUL-terminated ASCII, ECX=max logical pixel width.
+# Truncate at glyph boundaries so a long proportional name cannot enter adjacent controls.
+.type draw_bounded_ascii_width, @function
+draw_bounded_ascii_width:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov rbx, rdx
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, ecx
+.draw_bounded_ascii_width_loop:
+    movzx edx, byte ptr [rbx]
+    test dl, dl
+    jz .draw_bounded_ascii_width_done
+    cmp dl, 32
+    jb .draw_bounded_ascii_width_replacement
+    cmp dl, 126
+    ja .draw_bounded_ascii_width_replacement
+    jmp .draw_bounded_ascii_width_advance
+.draw_bounded_ascii_width_replacement:
+    mov edx, '?'
+.draw_bounded_ascii_width_advance:
+    mov r15d, edx
+    mov edi, r15d
+    mov esi, 10
+    call font_codepoint_advance_pixels_size
+    cmp eax, r14d
+    ja .draw_bounded_ascii_width_done
+    mov ebp, eax
+    mov edi, r12d
+    mov esi, r13d
+    mov ecx, 10
+    cmp dword ptr [rip + ui_transform_active], 0
+    je .draw_bounded_ascii_width_size_ready
+    mov ecx, dword ptr [rip + picker_ui_font_size]
+.draw_bounded_ascii_width_size_ready:
+    mov edx, r15d
+    call draw_glyph
+    add r12d, ebp
+    sub r14d, ebp
+    inc rbx
+    jmp .draw_bounded_ascii_width_loop
+.draw_bounded_ascii_width_done:
+    mov eax, r12d
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.size draw_bounded_ascii_width, . - draw_bounded_ascii_width
 
 .type render_picker, @function
 render_picker:
@@ -11154,13 +11380,13 @@ render_picker:
     cmp dword ptr [rip + picker_mode], 1
     jne .render_picker_title_save
     mov edi, 56
-    mov esi, 46
+    mov esi, 44
     lea rdx, [rip + ui_picker_open_title]
     call draw_text
     jmp .render_picker_path
 .render_picker_title_save:
     mov edi, 56
-    mov esi, 46
+    mov esi, 44
     lea rdx, [rip + ui_picker_save_title]
     call draw_text
 
@@ -11198,29 +11424,29 @@ render_picker:
     mov r9d, 0xff414b5a
     call draw_rect
 .render_picker_path_window:
-    mov eax, dword ptr [rip + picker_path_cursor]
-    cmp eax, PICKER_PATH_VISIBLE_CHARS
-    jbe .render_picker_path_window_start
-    sub eax, PICKER_PATH_VISIBLE_CHARS
-    jmp .render_picker_path_window_store
-.render_picker_path_window_start:
-    xor eax, eax
-.render_picker_path_window_store:
+    lea rdi, [rip + picker_path_buffer]
+    mov esi, dword ptr [rip + picker_path_cursor]
+    mov edx, 672
+    call picker_field_view_start
     mov dword ptr [rip + picker_path_view_start], eax
+    lea rdi, [rip + picker_path_buffer]
+    add rdi, rax
+    mov esi, dword ptr [rip + picker_path_cursor]
+    sub esi, dword ptr [rip + picker_path_view_start]
+    call picker_measure_ascii_prefix
+    mov r12d, eax
     lea rdx, [rip + picker_path_buffer]
+    mov eax, dword ptr [rip + picker_path_view_start]
     add rdx, rax
     mov edi, 64
-    mov esi, 74
-    mov ecx, PICKER_PATH_VISIBLE_CHARS
-    call draw_bounded_ascii
+    mov esi, 72
+    mov ecx, 672
+    call draw_bounded_ascii_width
     cmp dword ptr [rip + picker_focus], 1
     jne .render_picker_path_done
     cmp dword ptr [rip + picker_edit_select_all], 0
     jne .render_picker_path_done
-    mov eax, dword ptr [rip + picker_path_cursor]
-    sub eax, dword ptr [rip + picker_path_view_start]
-    shl eax, 3
-    add eax, 64
+    lea eax, [r12d + 64]
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, eax
     mov edx, 68
@@ -11239,7 +11465,7 @@ render_picker:
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 68
-    mov esi, 105
+    mov esi, 103
     lea rdx, [rip + ui_picker_up_label]
     call draw_text
     mov rdi, qword ptr [rip + shm_mapping]
@@ -11250,11 +11476,11 @@ render_picker:
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 116
-    mov esi, 105
+    mov esi, 103
     lea rdx, [rip + ui_picker_home_label]
     call draw_text
     mov edi, 600
-    mov esi, 105
+    mov esi, 103
     lea rdx, [rip + ui_picker_hidden_label]
     call draw_text
     # Bordered 16x16 checkbox, with a filled interior and visible check mark.
@@ -11282,7 +11508,7 @@ render_picker:
     mov r9d, 0xff78a9d4
     call draw_rect
     mov edi, 718
-    mov esi, 101
+    mov esi, 102
     lea rdx, [rip + ui_picker_check_mark]
     call draw_text
 
@@ -11346,7 +11572,7 @@ render_picker:
     mov edi, 64
     mov eax, r13d
     imul eax, 14
-    lea esi, [rax + 133]
+    lea esi, [rax + 131]
     cmp byte ptr [rbx], 1
     jne .render_picker_file_marker
     lea rdx, [rip + ui_picker_dir_marker]
@@ -11360,9 +11586,9 @@ render_picker:
     mov edi, 96
     mov eax, r13d
     imul eax, 14
-    lea esi, [rax + 133]
-    mov ecx, 76
-    call draw_bounded_ascii
+    lea esi, [rax + 131]
+    mov ecx, 612
+    call draw_bounded_ascii_width
     inc r13d
     jmp .render_picker_rows
 
@@ -11432,10 +11658,10 @@ render_picker:
     mov edi, 184
     mov eax, r13d
     imul eax, PICKER_SUGGESTION_ROW_HEIGHT
-    lea esi, [rax + PICKER_SUGGESTION_TOP + 5]
+    lea esi, [rax + PICKER_SUGGESTION_TOP + 4]
     lea rdx, [rbx + 4]
-    mov ecx, 50
-    call draw_bounded_ascii
+    mov ecx, 416
+    call draw_bounded_ascii_width
     inc r13d
     jmp .render_picker_suggestion_rows
 
@@ -11476,29 +11702,29 @@ render_picker:
     mov r9d, 0xff414b5a
     call draw_rect
 .render_picker_name_window:
-    mov eax, dword ptr [rip + picker_name_cursor]
-    cmp eax, PICKER_NAME_VISIBLE_CHARS
-    jbe .render_picker_name_window_start
-    sub eax, PICKER_NAME_VISIBLE_CHARS
-    jmp .render_picker_name_window_store
-.render_picker_name_window_start:
-    xor eax, eax
-.render_picker_name_window_store:
+    lea rdi, [rip + picker_name_buffer]
+    mov esi, dword ptr [rip + picker_name_cursor]
+    mov edx, 424
+    call picker_field_view_start
     mov dword ptr [rip + picker_name_view_start], eax
+    lea rdi, [rip + picker_name_buffer]
+    add rdi, rax
+    mov esi, dword ptr [rip + picker_name_cursor]
+    sub esi, dword ptr [rip + picker_name_view_start]
+    call picker_measure_ascii_prefix
+    mov r12d, eax
     lea rdx, [rip + picker_name_buffer]
+    mov eax, dword ptr [rip + picker_name_view_start]
     add rdx, rax
     mov edi, 176
-    mov esi, 370
-    mov ecx, PICKER_NAME_VISIBLE_CHARS
-    call draw_bounded_ascii
+    mov esi, 368
+    mov ecx, 424
+    call draw_bounded_ascii_width
     cmp dword ptr [rip + picker_focus], 2
     jne .render_picker_name_text_done
     cmp dword ptr [rip + picker_edit_select_all], 0
     jne .render_picker_name_text_done
-    mov eax, dword ptr [rip + picker_name_cursor]
-    sub eax, dword ptr [rip + picker_name_view_start]
-    shl eax, 3
-    add eax, 176
+    lea eax, [r12d + 176]
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, eax
     mov edx, 365
@@ -11662,6 +11888,7 @@ render_window_controls:
     lea edi, [rbx + 8]
     mov esi, 12
     mov edx, 'X'
+    mov ecx, 10
     call draw_glyph
     pop r12
     pop rbx
@@ -12294,6 +12521,7 @@ render_document:
     mov edi, r12d
     mov esi, r13d
     mov edx, ebx
+    mov ecx, 12
     call draw_glyph
 .document_printable_skip_draw:
     add r12d, r15d

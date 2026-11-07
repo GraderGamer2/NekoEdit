@@ -31,7 +31,7 @@ static uint32_t flat_ends[MAX_CONTOURS], flat_count;
 struct cache_entry {
     uint32_t glyph_id, stamp;
     int16_t left, top;
-    uint8_t width, height, valid, reserved;
+    uint8_t width, height, size, valid;
     uint8_t pixels[BITMAP_BYTES];
 };
 static struct cache_entry cache[CACHE_SLOTS];
@@ -206,11 +206,11 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     return 0;
 }
 
-static struct cache_entry *cached(uint32_t glyph_id) {
+static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
     struct cache_entry *slot=&cache[0];
     for (uint32_t i=0;i<CACHE_SLOTS;++i) {
         struct cache_entry *e=&cache[i];
-        if (e->valid && e->glyph_id==glyph_id) {
+        if (e->valid && e->glyph_id==glyph_id && e->size==size) {
             e->stamp=++cache_clock;
             return e;
         }
@@ -221,11 +221,11 @@ static struct cache_entry *cached(uint32_t glyph_id) {
         cache_clock=1;
         for (uint32_t i=0;i<CACHE_SLOTS;++i) cache[i].stamp=0;
     }
-    if (font_rasterize_glyph(glyph_id,12)<0) return (struct cache_entry *)0;
+    if (font_rasterize_glyph(glyph_id,size)<0) return (struct cache_entry *)0;
     slot->glyph_id=glyph_id; slot->stamp=cache_clock;
     slot->left=(int16_t)font_bitmap_left; slot->top=(int16_t)font_bitmap_top;
     slot->width=(uint8_t)font_bitmap_width; slot->height=(uint8_t)font_bitmap_height;
-    slot->valid=1;
+    slot->size=(uint8_t)size; slot->valid=1;
     for (uint32_t i=0;i<BITMAP_BYTES;++i) slot->pixels[i]=font_bitmap_pixels[i];
     return slot;
 }
@@ -239,10 +239,10 @@ static struct cache_entry *cached(uint32_t glyph_id) {
  * advance remains active when no supported font is loaded.
  */
 int32_t font_probe_advance_A, font_probe_advance_B;
-int font_codepoint_advance_pixels(uint32_t codepoint) {
+int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     uint32_t glyph_id, advance, upem;
     uint64_t scaled;
-    if (!font_loaded) return 8;
+    if (!font_loaded || !size || size>32) return 8;
     if (codepoint == 0x20) {
         glyph_id = 0;
     } else {
@@ -254,23 +254,29 @@ int font_codepoint_advance_pixels(uint32_t codepoint) {
     advance = font_glyph_advance(glyph_id);
     upem = (uint32_t)font_units_per_em;
     if (!advance || upem < 16 || upem > 16384) return 8;
-    scaled = (uint64_t)advance * 12u + upem / 2u;
+    scaled = (uint64_t)advance * size + upem / 2u;
     scaled /= upem;
     if (scaled < 1) scaled = 1;
     if (scaled > 32) scaled = 32;
     return (int)scaled;
 }
 
-int font_draw_codepoint(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
-                        int32_t width,int32_t height,int32_t stride) {
+int font_codepoint_advance_pixels(uint32_t codepoint) {
+    return font_codepoint_advance_pixels_size(codepoint,12);
+}
+
+int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
+                             int32_t width,int32_t height,int32_t stride,
+                             uint32_t size) {
     uint32_t gid;
     struct cache_entry *e;
     if (cp==0x20) return 1;
-    if (!font_loaded || !surface || width<=0 || height<=0 || stride<width*4) return 0;
+    if (!font_loaded || !surface || width<=0 || height<=0 || stride<width*4 ||
+        !size || size>32) return 0;
     gid=font_cmap_lookup(cp);
     if (!gid && cp!=0x3f) gid=font_cmap_lookup(0x3f);
     if (gid>=(uint32_t)font_num_glyphs) return 0;
-    e=cached(gid);
+    e=cached(gid,size);
     if (!e) return 0;
     for (uint32_t row=0;row<e->height;++row) {
         int32_t py=y+e->top+(int32_t)row;
@@ -288,4 +294,9 @@ int font_draw_codepoint(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
         }
     }
     return 1;
+}
+
+int font_draw_codepoint(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
+                        int32_t width,int32_t height,int32_t stride) {
+    return font_draw_codepoint_size(cp,x,y,surface,width,height,stride,12);
 }

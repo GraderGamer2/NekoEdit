@@ -208,6 +208,7 @@ def run(
     line_index_test: bool = False,
     grapheme_test: bool = False,
     font_parser_test: bool = False,
+    font_picker_test: bool = False,
     font_test_path: str | None = None,
     sparse_keymap_test: bool = False,
     expected_saved_bytes: bytes = b"z",
@@ -266,6 +267,9 @@ def run(
         for index in range(32):
             with open(os.path.join(runtime_dir, f"scroll-entry-{index:02d}.txt"), "wb") as document:
                 document.write(b"S")
+        if font_picker_test:
+            with open(os.path.join(runtime_dir, "AB"), "wb") as document:
+                document.write(b"AB")
 
     def fake_compositor():
         client = None
@@ -1772,6 +1776,98 @@ xkb_symbols "nekoedit-sparse" {
                         key_step(serial, evdev[character], f"path character {character!r}")
                         serial += 2
                     return serial
+
+
+                if font_picker_test:
+                    # Open the picker with the synthetic font active. The name
+                    # field must use hmtx advances for both pointer mapping and
+                    # the visible caret, and the file row must align with its
+                    # selected background band.
+                    font_picker_symbols = {}
+                    wanted = {
+                        "picker_mode", "picker_focus", "picker_name_length",
+                        "picker_name_cursor", "picker_name_view_start",
+                        "picker_name_buffer", "picker_ui_font_size", "picker_selected",
+                    }
+                    for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in wanted:
+                            font_picker_symbols[fields[2]] = int(fields[0], 16)
+                    if set(font_picker_symbols) != wanted:
+                        raise AssertionError(f"picker font-test symbols missing: {font_picker_symbols!r}")
+
+                    def picker_u32(name: str) -> int:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            raw = os.pread(memory.fileno(), 4, font_picker_symbols[name])
+                        return struct.unpack("<I", raw)[0]
+
+                    def picker_bytes(name: str, length: int) -> bytes:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            raw = os.pread(memory.fileno(), length, font_picker_symbols[name])
+                        return raw.split(b"\\0", 1)[0]
+
+                    workflow_click(120, 12, 2600, "font picker: open File menu")
+                    workflow_click(120, 44, 2610, "font picker: open Open dialog")
+                    if picker_u32("picker_mode") != 1:
+                        raise AssertionError("font picker test could not open the Open dialog")
+                    if picker_u32("picker_ui_font_size") != 10:
+                        raise AssertionError("800x480 picker should retain its 10px UI font")
+
+                    workflow_click(200, 374, 2620, "focus filename search field")
+                    key_step(2630, 30, "type A in font picker field")
+                    key_step(2632, 48, "type B in font picker field")
+                    name = picker_bytes("picker_name_buffer", 64)
+                    cursor = picker_u32("picker_name_cursor")
+                    if name != b"AB" or cursor != 2 or picker_u32("picker_focus") != 2:
+                        raise AssertionError(
+                            f"font picker input state mismatch: name={name!r}, cursor={cursor}, "
+                            f"focus={picker_u32('picker_focus')}"
+                        )
+
+                    # Synthetic hmtx: A=650/1000em and B=400/1000em.
+                    # At a 10px UI em these round to 7px + 4px, not 8px*2.
+                    expected_caret_x = 176 + ((650 * 10 + 500) // 1000) + ((400 * 10 + 500) // 1000)
+                    caret_pixel = struct.unpack_from("<I", pixels, 365 * 800 * 4 + expected_caret_x * 4)[0]
+                    focus_line_pixel = struct.unpack_from("<I", pixels, 360 * 800 * 4 + 200 * 4)[0]
+                    if caret_pixel != 0xFFF0F3F7 or focus_line_pixel != 0xFF78A9D4:
+                        raise AssertionError(
+                            f"font picker caret/focus geometry mismatch: caret=({expected_caret_x},{hex(caret_pixel)}), "
+                            f"focus_line={hex(focus_line_pixel)}"
+                        )
+
+                    # x=186 is past the midpoint of B (A starts at 176), but
+                    # still inside the old fixed 8px character cell. It must
+                    # resolve to the insertion boundary after B.
+                    workflow_click(186, 374, 2640, "proportional click after second glyph")
+                    if picker_u32("picker_name_cursor") != 2:
+                        raise AssertionError(
+                            f"picker hit-testing did not use proportional advances: cursor={picker_u32('picker_name_cursor')}"
+                        )
+
+                    # Select row 1 (the fixture file named AB, after nested-dir).
+                    workflow_click(120, 150, 2650, "select AB row in Open picker")
+                    if picker_u32("picker_selected") != 1 or picker_u32("picker_focus") != 0:
+                        raise AssertionError("picker row click did not select the expected AB entry")
+                    top_fill = struct.unpack_from("<I", pixels, 144 * 800 * 4 + 58 * 4)[0]
+                    bottom_fill = struct.unpack_from("<I", pixels, 157 * 800 * 4 + 58 * 4)[0]
+                    if top_fill != 0xFF414B5A or bottom_fill != 0xFF414B5A:
+                        raise AssertionError(
+                            f"selected row highlight is not aligned to its 14px row: {hex(top_fill)}/{hex(bottom_fill)}"
+                        )
+                    glyph_rows = [
+                        y for y in range(144, 158)
+                        for x in range(94, 118)
+                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] != 0xFF414B5A
+                    ]
+                    if not glyph_rows or min(glyph_rows) < 144 or max(glyph_rows) >= 158:
+                        raise AssertionError(
+                            f"AB filename glyphs escaped their selected row: rows={glyph_rows!r}"
+                        )
+                    observations.append(
+                        "10px UI font, proportional filename caret and mouse hit-testing, and selected-row text/highlight alignment verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if file_workflow:
                     # The File control must remain available in the compact editor header.
@@ -4138,6 +4234,14 @@ if __name__ == "__main__":
             initial_file=render_path,
             font_parser_test=True,
             font_test_path=font_path,
+        )
+        # Reuse the same deterministic face to validate UI-sized glyph caching,
+        # pixel-accurate field editing, and selected file-row geometry.
+        run(
+            sys.argv[1],
+            font_picker_test=True,
+            font_test_path=font_path,
+            file_workflow=True,
         )
     finally:
         for path in (font_path, render_path):
