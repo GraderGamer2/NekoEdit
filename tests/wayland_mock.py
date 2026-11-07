@@ -3722,7 +3722,7 @@ if __name__ == "__main__":
     try:
         with os.fdopen(file_descriptor, "wb") as initial_document:
             initial_document.write(b"I")
-        run(sys.argv[1], initial_file=file_path, save_roundtrip=True)
+        run(sys.argv[1], initial_file=file_path, save_roundtrip=True, expected_saved_bytes=b"za")
     finally:
         try:
             os.unlink(file_path)
