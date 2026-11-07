@@ -22,6 +22,17 @@ NekoEdit now recognizes the XKB `Multi_key` symbol as an editor-side Compose act
 
 Compose state is transient: Backspace and Escape cancel an unfinished sequence without deleting document text, and losing keyboard focus clears the pending sequence. Mock-compositor tests verify successful composition, literal fallback, and both cancellation keys. This is not general Compose support: multi-stage/longer sequences, locale-provided Compose tables, full XKB type/modifier/action semantics, and Wayland text-input/IME are still future work.
 
+
+## 2026-11-08 — Selection confirmed; clipboard persistence and scalable history requested
+
+The user manually confirmed that the latest selection behavior now feels like a conventional text editor: selecting text works as expected, and edge auto-scroll follows the drag correctly. This is a user-reported desktop result and should not be conflated with mock-compositor CI.
+
+The user requested a future improvement to make sequential copy/paste effectively unlimited and keep the latest copied text available after NekoEdit closes. Current clipboard code already snapshots selected bytes independently and recycles bounded source/send records, but clipboard data is not guaranteed to survive process exit unless a desktop clipboard manager captures the offer. The review direction is to investigate manager handoff first and consider a first-party companion only if necessary.
+
+The user also requested practically unlimited Undo/Redo. Current history stores full-document snapshots, with a 4 MiB per-snapshot ceiling, a 32 MiB aggregate memory budget, and 16 entries per stack; it clears history when a new snapshot cannot be captured. A delta-based, preferably disk-backed journal is the recommended direction to reduce RAM usage and avoid an arbitrary operation-count limit.
+
+These requirements were reviewed and documented only. No clipboard, history, editor, or test implementation was changed. Undo history surviving NekoEdit restart remains an unresolved scope question. Wait for explicit user authorization before implementing either feature.
+
 ---
 
 ## 1. Original project goals and constraints
