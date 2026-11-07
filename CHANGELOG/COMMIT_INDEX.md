@@ -724,6 +724,13 @@ Actions [#403](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355664022
 
 Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed the full build, CLI, Wayland mock-compositor, ELF inspection and artifact-upload workflow on the current code tip. Artifact [`13572958390`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390), 61,359 bytes, SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`, expires 2026-11-14. Mock-compositor verification does not replace manual GNOME/Mutter testing.
 
+
+## 2026-11-07 — Documentation and continuity update
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 | [`d68e304d985e`](https://github.com/GraderGamer2/NekoEdit/commit/d68e304d985e5b6cdadb7b0fe68c4b83a22d004f) | docs: record clipboard history and settings milestones |
+
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
