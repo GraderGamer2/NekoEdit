@@ -133,6 +133,8 @@ ui_menu_state_off:     .asciz "OFF"
 ui_menu_font_size_label: .asciz "FONT SIZE"
 ui_menu_ui_font_size_label: .asciz "UI FONT"
 ui_menu_wrap_lines_label: .asciz "WRAP LINES"
+ui_menu_font_file_label: .asciz "FONT FILE"
+ui_menu_select_label:   .asciz "SELECT"
 ui_menu_minus_label:   .asciz "-"
 ui_menu_plus_label:    .asciz "+"
 ui_menu_px_label:      .asciz "px"
@@ -147,6 +149,7 @@ ui_prompt_help:        .asciz "ENTER: CONFIRM   ESC: CANCEL"
 ui_open_error:         .asciz "OPEN ERR"
 ui_picker_open_title:  .asciz "OPEN FILE"
 ui_picker_save_title:  .asciz "SAVE FILE AS"
+ui_picker_font_title:  .asciz "SELECT TRUE TYPE FONT"
 ui_picker_path_label:  .asciz "LOCATION"
 ui_picker_name_label:  .asciz "FILE NAME"
 ui_picker_search_label: .asciz "SEARCH"
@@ -156,6 +159,7 @@ ui_picker_hidden_label: .asciz "SHOW HIDDEN"
 ui_picker_check_mark: .asciz "x"
 ui_picker_cancel_label: .asciz "CANCEL"
 ui_picker_open_label: .asciz "OPEN"
+ui_picker_load_label: .asciz "LOAD"
 ui_picker_save_label: .asciz "SAVE"
 ui_picker_dir_marker: .asciz "[D]"
 ui_picker_file_marker: .asciz "[F]"
@@ -164,6 +168,7 @@ ui_picker_truncated: .asciz "LIST LIMITED TO FIRST 128 ENTRIES"
 ui_picker_error_path: .asciz "CANNOT OPEN DIRECTORY"
 ui_picker_error_file: .asciz "CANNOT OPEN FILE"
 ui_picker_error_save: .asciz "SAVE FAILED"
+ui_picker_error_font: .asciz "INVALID FONT FILE"
 ui_picker_overwrite: .asciz "FILE EXISTS - OVERWRITE?  Y / N"
 ui_picker_home_env: .asciz "HOME"
 ui_picker_dot: .asciz "."
@@ -3205,12 +3210,14 @@ wayland_main:
     jae .pointer_menu_outside
     cmp edx, 32
     jb .pointer_menu_outside
+    cmp edx, 200
+    jae .pointer_menu_outside
+    cmp edx, 136
+    jae .pointer_settings_font_file
     cmp edx, 64
     jb .pointer_settings_confirm_toggle
     cmp edx, 88
     jb .pointer_settings_document_font
-    cmp edx, 136
-    jae .pointer_menu_outside
     cmp edx, 112
     jae .pointer_settings_wrap_toggle
     cmp dword ptr [rip + font_loaded], 0
@@ -3224,6 +3231,12 @@ wayland_main:
     cmp eax, 416
     jae .pointer_menu_outside
     jmp .pointer_settings_ui_font_increase
+
+.pointer_settings_font_file:
+    # Font selection is available even when the embedded bitmap fallback is active.
+    mov edi, 3
+    call picker_start
+    jmp .keyboard_changed
 
 .pointer_settings_wrap_toggle:
     xor dword ptr [rip + doc_wrap_enabled], 1
@@ -4416,7 +4429,10 @@ picker_scan_directory:
     # A previous query must not become a literal target after navigation or a
     # Show-hidden rescan, especially when that name exists in the new directory.
     cmp dword ptr [rip + picker_mode], 1
+    je .picker_scan_clear_name_field
+    cmp dword ptr [rip + picker_mode], 3
     jne .picker_scan_keep_name_field
+.picker_scan_clear_name_field:
     mov dword ptr [rip + picker_name_length], 0
     mov dword ptr [rip + picker_name_cursor], 0
     mov dword ptr [rip + picker_name_view_start], 0
@@ -4508,6 +4524,29 @@ picker_scan_directory:
 .picker_scan_name_ready:
     test ebx, ebx
     jz .picker_scan_advance
+    # Font mode includes directories and regular .ttf files only.
+    cmp dword ptr [rip + picker_mode], 3
+    jne .picker_scan_name_copy
+    cmp byte ptr [rip + picker_candidate], 1
+    je .picker_scan_name_copy
+    cmp ebx, 4
+    jb .picker_scan_advance
+    lea rax, [r14 + rbx - 4]
+    cmp byte ptr [rax], '.'
+    jne .picker_scan_advance
+    movzx edx, byte ptr [rax + 1]
+    or dl, 0x20
+    cmp dl, 't'
+    jne .picker_scan_advance
+    movzx edx, byte ptr [rax + 2]
+    or dl, 0x20
+    cmp dl, 't'
+    jne .picker_scan_advance
+    movzx edx, byte ptr [rax + 3]
+    or dl, 0x20
+    cmp dl, 'f'
+    jne .picker_scan_advance
+.picker_scan_name_copy:
     lea rdi, [rip + picker_candidate + 4]
     mov rsi, r14
     mov ecx, ebx
@@ -5144,7 +5183,10 @@ picker_edit_insert_byte:
     cmp dword ptr [rip + picker_focus], 2
     jne .picker_edit_insert_done
     cmp dword ptr [rip + picker_mode], 1
+    je .picker_edit_insert_find_prefix
+    cmp dword ptr [rip + picker_mode], 3
     jne .picker_edit_insert_done
+.picker_edit_insert_find_prefix:
     call picker_find_name_prefix
 .picker_edit_insert_done:
     cld
@@ -5217,7 +5259,10 @@ picker_edit_delete_byte:
     mov dword ptr [rip + picker_name_cursor], r14d
     mov dword ptr [rip + picker_name_match], 0
     cmp dword ptr [rip + picker_mode], 1
+    je .picker_edit_delete_find_prefix
+    cmp dword ptr [rip + picker_mode], 3
     jne .picker_edit_delete_done
+.picker_edit_delete_find_prefix:
     call picker_find_name_prefix
 .picker_edit_delete_done:
     cld
@@ -5327,6 +5372,54 @@ picker_commit_active_path:
     ret
 .size picker_commit_active_path, . - picker_commit_active_path
 
+.type picker_load_font, @function
+picker_load_font:
+    push r12
+    call picker_build_target
+    test rax, rax
+    jz .picker_load_font_error
+    mov r12, rax
+    # Reject directories, symlinks and special files before mapping the font.
+    mov eax, SYS_newfstatat
+    mov edi, dword ptr [rip + picker_dir_fd]
+    lea rsi, [rip + picker_name_buffer]
+    cmp byte ptr [rip + picker_name_buffer], '/'
+    jne .picker_load_font_stat_relative
+    mov edi, AT_FDCWD
+    mov rsi, r12
+.picker_load_font_stat_relative:
+    lea rdx, [rip + picker_stat_buffer]
+    mov r10d, AT_SYMLINK_NOFOLLOW
+    syscall
+    test rax, rax
+    js .picker_load_font_error
+    mov eax, dword ptr [rip + picker_stat_buffer + 24]
+    and eax, STAT_S_IFMT
+    cmp eax, STAT_S_IFREG
+    jne .picker_load_font_error
+    mov rdi, r12
+    call font_replace_path
+    test rax, rax
+    js .picker_load_font_error
+    mov dword ptr [rip + picker_error], 0
+    # Face metrics affect every document advance and line box. Rebuild the
+    # width-dependent index before returning to the document surface.
+    mov dword ptr [rip + doc_line_index_valid], 0
+    call window_update_geometry
+    call doc_line_index_rebuild
+    call doc_ensure_cursor_visible
+    call picker_close
+    xor eax, eax
+    jmp .picker_load_font_done
+.picker_load_font_error:
+    # font_replace_path is transactional: the previous face and cache survive.
+    mov dword ptr [rip + picker_error], 4
+    mov rax, -5
+.picker_load_font_done:
+    pop r12
+    ret
+.size picker_load_font, . - picker_load_font
+
 .type picker_open_file, @function
 picker_open_file:
     push r12
@@ -5432,8 +5525,11 @@ picker_confirm_overwrite:
 
 .type picker_confirm_action, @function
 picker_confirm_action:
+    cmp dword ptr [rip + picker_mode], 3
+    je .picker_confirm_action_open
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_confirm_action_save
+.picker_confirm_action_open:
     # When the directory list has focus, Open must operate on the explicitly
     # selected regular-file row. Never fall back to an old search-field value.
     cmp dword ptr [rip + picker_focus], 0
@@ -5450,6 +5546,8 @@ picker_confirm_action:
 .picker_confirm_action_open_ready:
     cmp dword ptr [rip + picker_name_length], 0
     je .picker_confirm_action_error
+    cmp dword ptr [rip + picker_mode], 3
+    je picker_load_font
     jmp picker_open_file
 .picker_confirm_action_save:
     cmp dword ptr [rip + picker_name_length], 0
@@ -5786,9 +5884,14 @@ picker_handle_key:
     add rdx, rax
     cmp byte ptr [rdx], 1
     je .picker_key_enter_directory
+    cmp dword ptr [rip + picker_mode], 3
+    je .picker_key_enter_font_file
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_key_enter_action
     call picker_open_file
+    jmp .picker_key_done
+.picker_key_enter_font_file:
+    call picker_load_font
     jmp .picker_key_done
 .picker_key_enter_directory:
     lea rdi, [rdx + 4]
@@ -6145,9 +6248,14 @@ picker_handle_pointer:
     add rdx, rax
     cmp byte ptr [rdx], 1
     je .picker_pointer_double_directory
+    cmp dword ptr [rip + picker_mode], 3
+    je .picker_pointer_load_font
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_pointer_record_click
     call picker_open_file
+    jmp .picker_pointer_done
+.picker_pointer_load_font:
+    call picker_load_font
     jmp .picker_pointer_done
 .picker_pointer_double_directory:
     lea rdi, [rdx + 4]
@@ -11863,7 +11971,15 @@ render_picker:
     mov r9d, 0xff343d4b
     call draw_rect
     cmp dword ptr [rip + picker_mode], 1
+    je .render_picker_title_open
+    cmp dword ptr [rip + picker_mode], 3
     jne .render_picker_title_save
+    mov edi, 56
+    mov esi, 40
+    lea rdx, [rip + ui_picker_font_title]
+    call draw_text
+    jmp .render_picker_path
+.render_picker_title_open:
     mov edi, 56
     mov esi, 40
     lea rdx, [rip + ui_picker_open_title]
@@ -12087,7 +12203,10 @@ render_picker:
 
 .render_picker_suggestions:
     cmp dword ptr [rip + picker_mode], 1
+    je .render_picker_suggestions_open
+    cmp dword ptr [rip + picker_mode], 3
     jne .render_picker_name
+.render_picker_suggestions_open:
     cmp dword ptr [rip + picker_focus], 2
     jne .render_picker_name
     mov r12d, dword ptr [rip + picker_suggestion_count]
@@ -12154,7 +12273,10 @@ render_picker:
     mov edi, 56
     mov esi, 368
     cmp dword ptr [rip + picker_mode], 1
+    je .render_picker_name_label_search
+    cmp dword ptr [rip + picker_mode], 3
     jne .render_picker_name_label_file
+.render_picker_name_label_search:
     lea rdx, [rip + ui_picker_search_label]
     jmp .render_picker_name_label_draw
 .render_picker_name_label_file:
@@ -12241,7 +12363,12 @@ render_picker:
     mov edi, 692
     mov esi, 407
     cmp dword ptr [rip + picker_mode], 1
+    je .render_picker_open_label
+    cmp dword ptr [rip + picker_mode], 3
     jne .render_picker_save_label
+    lea rdx, [rip + ui_picker_load_label]
+    jmp .render_picker_action_label
+.render_picker_open_label:
     lea rdx, [rip + ui_picker_open_label]
     jmp .render_picker_action_label
 .render_picker_save_label:
@@ -12265,9 +12392,14 @@ render_picker:
     lea rdx, [rip + ui_picker_error_path]
     jmp .render_picker_error_draw
 .render_picker_error_file:
+    cmp dword ptr [rip + picker_error], 4
+    je .render_picker_error_font
     cmp dword ptr [rip + picker_error], 2
     jne .render_picker_error_save
     lea rdx, [rip + ui_picker_error_file]
+    jmp .render_picker_error_draw
+.render_picker_error_font:
+    lea rdx, [rip + ui_picker_error_font]
     jmp .render_picker_error_draw
 .render_picker_error_save:
     lea rdx, [rip + ui_picker_error_save]
@@ -12416,7 +12548,7 @@ render_file_menu:
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 136
+    mov r8d, 168
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -12518,6 +12650,21 @@ render_file_menu:
     lea rdx, [rip + ui_menu_plus_label]
     call draw_text
 .render_settings_size_controls_done:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 344
+    mov edx, 140
+    mov ecx, 72
+    mov r8d, 22
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 172
+    mov esi, 148
+    lea rdx, [rip + ui_menu_font_file_label]
+    call draw_text
+    mov edi, 360
+    mov esi, 146
+    lea rdx, [rip + ui_menu_select_label]
+    call draw_text
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
