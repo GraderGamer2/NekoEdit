@@ -71,7 +71,7 @@ int main(void)
         fail("mkdtemp failed");
     if (setenv("HOME", root, 1) < 0)
         fail("could not set HOME");
-    if (setenv("XDG_CONFIG_HOME", "/tmp/nekoedit-xdg-must-be-ignored", 1) < 0)
+    if (setenv("XDG_CONFIG_HOME", root, 1) < 0)
         fail("could not set the ignored XDG_CONFIG_HOME fixture");
     unsetenv("NEKOEDIT_DISABLE_PREFERENCES");
     refresh_environment();
@@ -102,7 +102,9 @@ int main(void)
         fail("preferences file was not created");
     if ((st.st_mode & 0777) != 0600)
         fail("preferences file permissions are not 0600");
-    if (stat("/tmp/nekoedit-xdg-must-be-ignored", &st) == 0)
+    if (snprintf(contents, sizeof(contents), "%s/nekoedit", root) <= 0)
+        fail("could not construct ignored XDG path");
+    if (stat(contents, &st) == 0)
         fail("XDG_CONFIG_HOME should not be used for preference storage");
 
     read_config(file_path, contents, sizeof(contents));
