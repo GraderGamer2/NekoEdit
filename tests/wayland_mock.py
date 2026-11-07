@@ -1827,16 +1827,27 @@ xkb_symbols "nekoedit-sparse" {
                     # O's top-row second pixel is known in the embedded fallback face.
                     title_y = 16 + ((48 - 36) * 328 // 408)
                     old_title_y = 16 + ((44 - 36) * 328 // 408)
-                    title_pixel = struct.unpack_from(
-                        "<I", pixels, title_y * 800 * 4 + 34 * 4
-                    )[0]
-                    old_position_pixel = struct.unpack_from(
-                        "<I", pixels, old_title_y * 800 * 4 + 34 * 4
-                    )[0]
-                    if title_pixel != 0xFFD8DEE9 or old_position_pixel != 0xFF343D4B:
+                    title_ink_rows = [
+                        y for y in range(16, 39)
+                        for x in range(32, 176)
+                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                        == 0xFFD8DEE9
+                    ]
+                    old_position_ink = any(
+                        struct.unpack_from("<I", pixels, old_title_y * 800 * 4 + x * 4)[0]
+                        == 0xFFD8DEE9
+                        for x in range(32, 176)
+                    )
+                    if (
+                        not title_ink_rows
+                        or min(title_ink_rows) < title_y
+                        or min(title_ink_rows) >= title_y + 3
+                        or old_position_ink
+                    ):
                         raise AssertionError(
                             f"picker title is not vertically clear in its header: "
-                            f"new={hex(title_pixel)}, old={hex(old_position_pixel)}"
+                            f"expected_top={title_y}, ink_rows={title_ink_rows!r}, "
+                            f"old_position_ink={old_position_ink}"
                         )
 
                     # Leave breathing room between the Bytes label and its value.
