@@ -1790,6 +1790,10 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_settings_click(200, 124, 3040, "disable Wrap Lines before horizontal drag")
                     if child_u32("doc_wrap_enabled") != 0:
                         raise AssertionError("Settings did not disable Wrap Lines for horizontal drag test")
+                    # Settings intentionally stays open after toggling. The
+                    # first click outside its panel closes it; a second press
+                    # can then begin a real document selection drag.
+                    workflow_click(20, 98, 3980, "close persistent Settings before document drag")
 
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", 4002, 20 * 256, 98 * 256))
