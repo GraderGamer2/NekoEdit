@@ -1857,8 +1857,8 @@ xkb_symbols "nekoedit-sparse" {
                             f"focus_line={hex(focus_line_pixel)}"
                         )
 
-                    # x=186 is past the midpoint of B (A starts at 176), but
-                    # still inside the old fixed 8px character cell. It must
+                    # x=183 is past the B midpoint with the 8px rendered font,
+                    # but before it with the old fixed 10px advance. It must
                     # resolve to the insertion boundary after B.
                     workflow_click(183, 286, 2640, "proportional click after second glyph")
                     if picker_u32("picker_name_cursor") != 2:
@@ -1881,7 +1881,7 @@ xkb_symbols "nekoedit-sparse" {
                         for x in range(94, 110)
                         if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] != 0xFF414B5A
                     ]
-                    if not glyph_rows or min(glyph_rows) < 144 or max(glyph_rows) >= 158:
+                    if not glyph_rows or min(glyph_rows) < 103 or max(glyph_rows) >= 114:
                         raise AssertionError(
                             f"AB filename glyphs escaped their selected row: rows={glyph_rows!r}"
                         )

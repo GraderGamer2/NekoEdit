@@ -1,3 +1,11 @@
+## 2026-11-07 — Compare selected-row glyph pixels in screen coordinates
+
+CI [Build and test #413](https://github.com/GraderGamer2/NekoEdit/actions/runs/42360895800) reached the new compact-window picker assertions. The 8px font-size assertion, caret/focus-line pixel check, proportional mouse hit-test, selected-row click, and top/bottom highlight pixels all passed. The final glyph-containment assertion still compared screen-space glyph rows (103–109) against the old unscaled design-space row interval (144–158).
+
+The assertion now compares glyph ink against the transformed 103–113 screen-space selected-row interval. This is a test-coordinate correction; the reported glyph pixels were already inside the selected highlight. The CI run for this correction is pending.
+
+---
+
 ## 2026-11-07 — Make shared Wayland test helpers height-aware
 
 CI [Build and test #412](https://github.com/GraderGamer2/NekoEdit/actions/runs/42360656059) confirmed the synthetic font parser/rasterizer checks passed, then the new 800×360 picker test stopped before reaching its caret assertions: the generic mock-compositor redraw checks still expected an 800×480 damage rectangle. The application correctly redrew at 800×360.
