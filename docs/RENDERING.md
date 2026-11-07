@@ -26,6 +26,16 @@ The implementation should avoid following symlink loops, handle unreadable direc
 
 Do not assume that a `.ttf` or `.otf` filename proves a font is supported. Inspect the SFNT table directory and accept only fonts with the required tables and TrueType `glyf`/`loca` outlines in the initial implementation. CFF/CFF2, bitmap-only, color, and variable font support are deferred.
 
+## Editor preferences and font controls
+
+The upper title bar will contain File and Settings menus. Settings owns user-facing preferences rather than scattering them across document commands.
+
+- **Confirm before saving** controls the Save/Cancel warning shown for ordinary Save and new Save As targets. Existing-file overwrite confirmation remains a separate safety prompt.
+- **Font…** opens an in-application picker populated from supported fonts discovered in the user's font directories. Do not depend on Fontconfig; validate each candidate through the SFNT parser and initially offer TrueType-outline fonts only.
+- **Font size…** changes the requested glyph pixel size. It must update glyph rasterization and advances, recalculate cell/line metrics, reflow wrapped lines, rebuild the visual-row index, and update caret hit-testing and scrollbar geometry. Merely scaling the old 5×7 bitmap while leaving layout unchanged is not acceptable.
+
+The Save/Cancel dialog and a session-only Confirm before saving toggle are implemented. The Font… and Font size… entries are intentionally deferred until outline rasterization is connected to the live renderer. Persist all user preferences in a small NekoEdit config file under XDG_CONFIG_HOME (falling back to ~/.config) when preference storage is implemented.
+
 ## Initial font parser
 
 The initial parser layer now loads an explicit font file supplied through NEKOEDIT_FONT. It accepts single-face TrueType-outline SFNT files and validates the bounded table directory and required cmap, head, hhea, maxp, hmtx, loca, and glyf tables. Unicode cmap formats 4 and 12, glyph-index lookup, and horizontal advance metrics are implemented.

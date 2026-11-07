@@ -83,6 +83,16 @@ No allocator library is required. A small internal allocator may be introduced o
 
 A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement decode UTF-8 safely and never use encoded bytes as visible character positions. Dynamic storage growth, the per-line Fenwick index, grapheme-aware editing, and the vertical editor scrollbar are implemented. Rendering begins at the indexed byte offset for the first visible visual row; caret mapping, scrollbar geometry, and logical line status also use the index. The index has an explicit maximum line count and falls back to scan-based mapping if it cannot be maintained. The document's separate 1 GiB byte-capacity ceiling is an implementation bound, not a claim of unlimited files. Unicode glyph rasterization, non-ASCII keyboard/IME input, and shaping remain future work.
 
+## User preferences
+
+User-facing preferences belong in the Settings menu and must be separate from document bytes. The initial preferences are:
+
+- Confirm before saving: enabled by default. Save and new Save As operations ask before writing; overwriting an existing file retains an explicit overwrite decision.
+- Font: choose a validated supported font from the user's installed font directories without Fontconfig or a shared font library.
+- Font size: change glyph pixel size and recompute layout metrics, wrapped visual rows, pointer hit-testing, caret placement, and scrollbar ranges.
+
+Preferences should be stored in a small per-user config file under XDG_CONFIG_HOME, falling back to ~/.config, with safe defaults if the file is absent or malformed. The current Confirm before saving toggle is a session-only implementation; persistent config I/O is a remaining task. Font and font-size controls must not be exposed until the outline renderer and dynamic layout metrics can honor them.
+
 ## Platform backends
 
 ### Wayland: implemented prototype

@@ -1,5 +1,32 @@
 # NekoEdit development log
 
+## 2026-11-07 — Settings dropdown and save confirmation
+
+**User-facing milestone:** add a top-level Settings dropdown and make ordinary saves explicit, cancellable actions rather than writing immediately when Ctrl+S or File > Save is selected.
+
+### Implementation
+
+- Added a Settings button beside File in the application title bar, with a dropdown containing **Confirm before saving** and a live ON/OFF state.
+- The option defaults to ON at startup. Toggling it changes the current session's behavior; it is not yet persisted across application restarts.
+- File > Save and Ctrl+S now open a centered modal with Save and Cancel actions. Escape cancels, while Enter or Y accepts; N cancels. The document is not written until the user accepts.
+- Saving a new target from Save As uses the same confirmation. Saving over an existing regular file retains the existing dedicated overwrite confirmation.
+- The save dialog is modal for pointer and keyboard input and is rendered above either the editor or the Save As picker. It is centered against the current surface dimensions.
+- No Font or Font size menu entries are shown yet. They are planned for Settings after TrueType outlines are rasterized and integrated into document layout, so those controls can affect the actual glyphs and reflow instead of being decorative.
+
+### Regression coverage
+
+- The Wayland test opens Settings, toggles the save confirmation off and back on, and verifies the state.
+- The test edits a loaded file, triggers Ctrl+S, confirms the file bytes remain unchanged while the dialog is open, cancels with Escape and verifies no write occurred, then repeats and accepts with Enter to verify the expected saved bytes.
+- Existing Save As overwrite, direct Save, file-picker, large-file, line-index, grapheme, keyboard, resize, and protocol workflows run in the same suite.
+
+### Verification and artifact
+
+- GitHub Actions [Build and test #352](https://github.com/GraderGamer2/NekoEdit/actions/runs/42343675670) passed all eight workflow steps on commit [e1b52bd03b3a](https://github.com/GraderGamer2/NekoEdit/commit/e1b52bd03b3a5a532ddaccae7f106d94e60b15f3).
+- Artifact nekoedit-linux-x86_64: 48,371 bytes, SHA-256 223486a12cdf8f91201a7bc25639477d463321ee6bc82cebd8fb659464368482, artifact ID 13562438616, expires 2026-11-14 05:40:12 UTC.
+- Persistent preference storage remains a follow-up; the current toggle is session-only.
+
+---
+
 ## 2026-11-07 — Bounded TrueType parsing and simple-glyph outline decoding
 
 **Roadmap milestone:** establish the first usable data path for a dependency-free TrueType font engine without changing the current on-screen bitmap renderer yet.
