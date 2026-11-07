@@ -4,12 +4,13 @@
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
 **Latest window-management/layout fix:** [`6eec3c4f13c2`](https://github.com/GraderGamer2/NekoEdit/commit/6eec3c4f13c2798909b64e1a166ba836cc12f9c3) — recalculates footer anchors and fits/centers the file picker and path prompt to the current surface while preserving compositor-driven Maximize and edge resizing  
-**Latest implementation-code tip:** [`78db904b063f`](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c) — implements the per-line byte/visual-row index and invalidates stale metadata when transactional Open replaces a document  
+**Latest implementation-code tip:** [`fd8020b4fe67`](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e) — adds Unicode 18.0 grapheme-aware navigation/deletion and prevents pointer hit-testing inside CRLF clusters  
 **Confirmed desktop window management:** the user has confirmed on GNOME/Mutter that Maximize, interactive edge resizing, and corner resizing all work without crashes; the dense-ID root-cause fix is [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b), with resize hit-testing/cursor fixes in [`064af05090c4`](https://github.com/GraderGamer2/NekoEdit/commit/064af05090c455e5effe02a20bc1e1b9a9942f27)  
 **Latest layout validation:** GitHub Actions [Build and test #302](https://github.com/GraderGamer2/NekoEdit/actions/runs/42328775920) passed all eight steps on `4a333cf636ae`. It verifies responsive footer and modal geometry, and the user confirmed this build resizes correctly on GNOME/Mutter. Artifact `nekoedit-linux-x86_64`, 31,328 bytes, SHA-256 `f8c811db9d6e589a7447960fedaa65469bcf32992632c820094a0c5aaa1624aa`, artifact ID `13556526553`  
 **Latest document-storage desktop verification:** The user opened a 70 KB text file on GNOME/Mutter, edited it, and saved the changes successfully without crashing or anomalous behavior. This confirms the dynamic document growth/Open milestone beyond the 64 KiB boundary on the real desktop. Mock-compositor coverage remains in Actions [#312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234) and [#313](https://github.com/GraderGamer2/NekoEdit/actions/runs/42331219008).  
 **Latest editor-scrollbar validation:** GitHub Actions [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563) passed the scrollbar-specific integration suite, including empty-document hiding, thumb rendering on the 65,537-byte wrapped document, three-row wheel movement, drag-to-bottom, and wheel-up. The branch-head rebuild [#318](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492) passed all eight workflow steps and uploaded artifact `nekoedit-linux-x86_64`, 32,919 bytes, SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`, artifact ID `13557973435`. Manual scrollbar interaction on GNOME/Mutter remains the next desktop check.  
-**Latest indexed document-navigation validation:** GitHub Actions [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320) passed all eight workflow steps. Tests inspect line records and both Fenwick trees, verify ordinary insertion/deletion point updates and newline split/merge, and re-run the 65,537-byte wrapped-file scrollbar plus the existing picker/window/input regressions. Artifact `nekoedit-linux-x86_64`: 34,965 bytes, SHA-256 `e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a`, artifact ID `13559973130`, expires 2026-11-14. Live GNOME/Mutter index validation remains pending.
+**Latest indexed document-navigation validation:** GitHub Actions [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320) passed all eight workflow steps. Tests inspect line records and both Fenwick trees, verify ordinary insertion/deletion point updates and newline split/merge, and re-run the 65,537-byte wrapped-file scrollbar plus the existing picker/window/input regressions. Artifact `nekoedit-linux-x86_64`: 34,965 bytes, SHA-256 `e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a`, artifact ID `13559973130`, expires 2026-11-14. Live GNOME/Mutter index validation remains pending.  
+**Latest grapheme-editing validation:** GitHub Actions [Build and test #331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462) passed all eight workflow steps. The Wayland suite checks Unicode 18.0 combining marks, emoji modifiers and ZWJ family sequences, regional-indicator pairing, Hangul, Indic conjuncts, Prepend, SpacingMark, CRLF navigation and deletion, pointer positioning at the CRLF boundary, and the complete existing editor/file/scrollbar/protocol regressions. Artifact `nekoedit-linux-x86_64`: 43,886 bytes, SHA-256 `25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c`, artifact ID `13561405061`, expires 2026-11-14 04:35:48 UTC. Manual GNOME/Mutter validation of the new grapheme behavior remains pending.
 **Latest responsive-layout regression test:** [`3ae9583d34bc`](https://github.com/GraderGamer2/NekoEdit/commit/3ae9583d34bccfddfeb2d5e6e2a03f4b326186a9) — checks responsive footer positions, centered/scaled picker geometry, and the real Cancel hit target at 720×480 and 480×360  
 **Latest picker implementation-code tip:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — hide the scrollbar when all directory entries fit in the visible rows  
 **Latest picker integration-test commit:** [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) — non-overflow scrollbar visibility and non-draggable gutter regression coverage  
@@ -21,7 +22,7 @@
 
 The editor now draws a proportional vertical scrollbar only when visual content exceeds the viewport. Wayland wheel deltas scroll the document independently of the picker; the thumb can be dragged or repositioned by clicking elsewhere on its track. The text layout reserves a 24-pixel gutter, and the mock suite verifies thumb rendering and navigation against a 65,537-byte wrapped document. Actions #316 passes all eight workflow steps. Manual scrollbar interaction on GNOME/Mutter remains the next desktop check.
 
-**Next document-core priority:** grapheme-aware cursor movement and deletion, followed by broader Unicode handling. The custom system-font parser and glyph rasterizer remain in Phase 6; they were intentionally not pulled ahead of the completed line-index milestone.
+**Next roadmap priority:** the custom installed-font parser and software glyph rasterizer (Phase 6). Grapheme-aware editing and indexed document navigation are implemented; non-ASCII input/IME and shaping remain separate future work.
 
 ## Start here when continuing development
 
@@ -133,18 +134,18 @@ Do not change the existing `--backend=wayland` launch behavior as a shortcut for
 | File saving | Save/Save As, same-directory temporary file, write loop, fsync, close, atomic rename; picker overwrite confirmation |
 | Shortcuts | Ctrl+A, Ctrl+O, Ctrl+S, Ctrl+Shift+S |
 | Native file picker | In-process Open/Save browser; vertical wheel scrolling and draggable scrollbar; real Show hidden checkbox; directory-first list; single/double-click activation; editable location and filename/search fields with caret, Home/End, Left/Right, Backspace/Delete, Ctrl+A; case-insensitive filename-prefix search; up to five selectable autocomplete suggestions (Up/Down, Tab, mouse, Enter); overwrite confirmation |
-| UTF-8 document operations | Valid code-point-aware cursor movement, pointer hit-testing, selection, Backspace and Delete; malformed bytes remain individually editable |
+| UTF-8 document operations | Unicode 18.0 extended grapheme-aware cursor movement, pointer hit-testing, selection, Backspace and Delete; malformed bytes remain individually editable |
 
 ## Important UTF-8 boundary
 
-The latest implementation is an initial **code-point-safe editing** milestone, not full Unicode support:
+The document core now implements **extended grapheme-cluster-aware editing**, but this is not full Unicode input/rendering support:
 
-- Valid 2-, 3-, and 4-byte UTF-8 code points are moved/deleted/selected as complete units.
+- UTF-8 is decoded as valid 1-, 2-, 3-, and 4-byte scalar values, then segmented into Unicode 18.0 extended grapheme clusters for navigation, hit-testing, selection, Backspace, and Delete. The embedded tables cover UAX #29 rules including combining/spacing marks, Hangul, Prepend, Indic conjuncts, emoji ZWJ sequences, modifiers and regional-indicator pairing.
 - Malformed bytes remain individually addressable/editable.
 - Non-ASCII code points and malformed bytes currently render as a single `?` placeholder cell.
 - Physical keyboard/XKB text insertion remains ASCII-only.
 - No Wayland text-input/IME, compose/dead-key system, or non-ASCII keysyms.
-- No grapheme-cluster-aware navigation. Combining marks and multi-code-point emoji may still require multiple cursor positions.
+- Non-ASCII text entry remains ASCII-only; no Wayland text-input/IME, compose/dead-key system, or non-ASCII keysyms.
 - The byte-oriented gap buffer and separate Open staging mapping now grow geometrically from 64 KiB up to a 1 GiB safety ceiling. Actions #312 verifies exact-capacity insertion and 65,537-byte picker Open/save. Files above that explicit ceiling remain unsupported.
 
 ## Known unfinished work
@@ -152,7 +153,6 @@ The latest implementation is an initial **code-point-safe editing** milestone, n
 
 - Unicode glyph lookup/font rendering.
 - Non-ASCII keyboard text input, IME, compose and dead-key handling.
-- Grapheme-cluster-aware movement and deletion.
 - Undo/redo.
 - Clipboard copy/cut/paste using the Wayland data-device protocol and immutable snapshots.
 - Horizontal scrolling and fuller viewport controls.

@@ -367,7 +367,7 @@ The mock suite fills the initial 65,536-byte document exactly, inserts at byte z
 
 Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user subsequently confirmed that a 70 KB file opens, accepts edits, and saves correctly on the live GNOME/Mutter desktop without crashing or behaving anomalously. This completes the real-desktop dynamic-storage/large-file verification.
 
-The next document-core step is grapheme-aware cursor movement and deletion. Unicode glyph rendering, non-ASCII text input/IME, undo/redo, horizontal scrolling, and clipboard integration remain unfinished. The indexed line-navigation implementation and its verification are recorded in Phase P below.
+The indexed line-navigation implementation is recorded in Phase P and grapheme-aware editing in Phase Q. The next rendering milestone is the installed-font parser and software glyph rasterizer; Unicode input/IME, shaping, undo/redo, horizontal scrolling, and clipboard integration remain unfinished.
 
 ---
 
@@ -403,3 +403,23 @@ The index is integrated into caret/visual mapping, pointer hit-testing, scrollba
 The regression suite inspects the actual per-line records and independently verifies both Fenwick node arrays on a document containing hard newlines, a soft-wrapped line, and a tab. It exercises ordinary insert/delete, newline split/merge, and exact save preservation. The complete Actions #326 run also confirms the existing 65,537-byte Open/save and editor-scrollbar path, including visibility, proportional thumb geometry, wheel movement, and thumb dragging. The live GNOME/Mutter index path still requires manual confirmation.
 
 Artifact [13559973130](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320/artifacts/13559973130) contains the freestanding Linux x86-64 executable (34,965 bytes; SHA-256 e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a).
+
+
+---
+
+## 22. Phase Q — Unicode 18.0 extended grapheme-cluster editing
+
+**Implementation:** [1eb5894443aa](https://github.com/GraderGamer2/NekoEdit/commit/1eb5894443aafcccd73e2463e91e7d85787dfaf1), navigate and delete extended grapheme clusters.  
+**CRLF pointer correction:** [fd8020b4fe67](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e), keep hit-testing outside CRLF graphemes.  
+**Verification:** [Build and test #331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462), all eight workflow steps successful.
+
+The document model now distinguishes UTF-8 scalar decoding from user-visible cursor positions. Valid scalar sequences are segmented into Unicode 18.0 extended grapheme clusters using embedded Grapheme_Cluster_Break, Indic_Conjunct_Break, and Extended_Pictographic property tables. The implementation follows the extended grapheme boundary rules in UAX #29, including CRLF, combining and spacing marks, Hangul syllable composition, Prepend, Indic conjuncts, emoji modifier and ZWJ sequences, and regional-indicator pairing. The tables are embedded in the assembly read-only section; no third-party runtime library or external property file is needed.
+
+Left/Right and Shift+Left/Right now move between grapheme boundaries. Backspace and Delete remove the entire previous/next cluster, including clusters formed from several scalars. The same segmentation is used by visual-row measurement, byte/visual mapping, pointer hit-testing, selection painting, document rendering, and status-bar column counting. This keeps the line index and the rendered text layout consistent with the editing model. A grapheme occupies one cell in the current bitmap renderer; non-ASCII clusters still render as a question-mark placeholder until the custom font phase.
+
+CRLF is one extended grapheme cluster. Deleting it removes both bytes, and the line-index merge uses the complete deleted byte span. Pointer hit-testing at the end of a CRLF-terminated line lands before the pair rather than between CR and LF.
+
+The mock-compositor regression uses mixed UTF-8 cases for combining marks, emoji modifiers, family ZWJ, regional-indicator pairing, Hangul, Indic conjuncts, Prepend, SpacingMark, and CRLF. It checks each expected forward/backward boundary, pointer placement, whole-cluster Backspace/Delete, and line-index state after CRLF removal. The complete Actions #331 run also passes the existing line-index, large-file Open/scrollbar, picker, selection, keyboard, resize, and Wayland protocol regressions. Manual GNOME/Mutter validation of grapheme editing remains pending.
+
+Artifact [13561405061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462/artifacts/13561405061) contains the freestanding Linux x86-64 executable (43,886 bytes; SHA-256 25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c).
+

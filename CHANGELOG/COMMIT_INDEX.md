@@ -1,13 +1,26 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 176 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the indexed-document-navigation milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 180 implementation-history commits on the development branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the Unicode 18.0 grapheme-editing milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **271** (264 previously indexed commits + 7 indexed-document-navigation implementation, regression, diagnostic, and correction commits).
+- Recorded implementation commits: **275** (271 previously indexed commits + 4 Unicode 18.0 grapheme-editing implementation, regression, and CRLF correction commits).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Unicode 18.0 grapheme-aware editing
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 04:32:37 UTC | [1eb5894443aa](https://github.com/GraderGamer2/NekoEdit/commit/1eb5894443aafcccd73e2463e91e7d85787dfaf1) | feat: navigate and delete extended grapheme clusters |
+| 2026-11-07 04:33:24 UTC | [ac74062cc8a1](https://github.com/GraderGamer2/NekoEdit/commit/ac74062cc8a19f60e9c7dd31f7e3abbae071b74a) | test: correct grapheme deletion cursor setup |
+| 2026-11-07 04:34:44 UTC | [fd8020b4fe67](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e) | fix: keep pointer hit-testing outside CRLF graphemes |
+| 2026-11-07 04:35:25 UTC | [d7cd3f9bfed4](https://github.com/GraderGamer2/NekoEdit/commit/d7cd3f9bfed41cdf8a359c0bb188e415a26555ca) | test: reset grapheme caret after CRLF pointer check |
+
+Actions [#331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462) passed all eight workflow steps. The assembly embeds Unicode 18.0 GCB, InCB and Extended_Pictographic property tables, and applies UAX #29 boundaries to movement, hit-testing, selection, wrapping, status columns and cluster deletion. Regression cases cover combining sequences, emoji modifiers/ZWJ, RI pairing, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF. The same run retains the document-line-index, large-file Open/scrollbar, file-picker, keyboard, resize and Wayland protocol regressions.
+
+Artifact [13561405061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462/artifacts/13561405061) contains nekoedit-linux-x86_64, 43,886 bytes; SHA-256 25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c; expires 2026-11-14.
 
 ## Indexed document line navigation
 

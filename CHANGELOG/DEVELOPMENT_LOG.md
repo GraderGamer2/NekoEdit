@@ -1,5 +1,34 @@
 # NekoEdit development log
 
+## 2026-11-07 — Unicode 18.0 grapheme-aware editing
+
+**Roadmap milestone:** make navigation, hit-testing, selection, wrapping, Backspace and Delete operate on extended grapheme clusters rather than treating every valid UTF-8 scalar as an independent cursor position.
+
+### Implementation
+
+- Embedded sorted Unicode 18.0 property ranges in the assembly read-only data section, sourced from the official Unicode Character Database files GraphemeBreakProperty.txt, DerivedCoreProperties.txt, and emoji-data.txt. The runtime has no new shared-library or external-data dependency.
+- Added a binary-search property lookup, scalar decoder, forward/backward grapheme-boundary helpers, and UAX #29 extended grapheme segmentation. The implementation includes CRLF, Control boundaries, Hangul composition, Extend/SpacingMark, Prepend, Indic conjunct GB9c, Extended_Pictographic + Extend* + ZWJ sequences, and regional-indicator pairing.
+- Kept UTF-8 scalar decoding as the low-level primitive. Invalid UTF-8 bytes remain individually addressable as one-byte replacement units; grapheme rules apply to valid scalar sequences.
+- Switched Left/Right, Shift+Left/Right, Backspace and Delete to complete grapheme boundaries. A Delete or Backspace can remove multiple UTF-8 scalars as one user-visible cluster.
+- Updated line-row measurement, indexed and fallback visual mapping, pointer hit-testing, selection painting, document rendering, and status-bar column counting to use the same grapheme boundaries. Each cluster occupies one visual cell for this renderer; non-ASCII clusters still display as a question-mark placeholder until the font phase.
+- Treated CRLF as one deletion/navigation unit. The line index detects LF anywhere in the deleted cluster and merges line records by the complete deleted byte count. Pointer hit-testing and End placement never expose the interior boundary between CR and LF.
+
+### Regression coverage
+
+- Added targeted UTF-8 sequences for base + combining marks, multiple combining marks, emoji skin-tone modifiers, a family ZWJ sequence, regional-indicator pairs and an odd RI run, Hangul Jamo, an Indic conjunct, Prepend, SpacingMark, and CRLF.
+- Verified every expected Right/Left boundary, mouse hit-testing after a multi-byte grapheme, full-cluster Backspace and Delete, CRLF navigation/deletion and the resulting line-index merge.
+- Re-ran the existing indexed line metadata/Fenwick assertions, 65,537-byte Open/save and scrollbar tests, picker, selection, keyboard, resize, Wayland protocol, and both Wayland transport paths.
+
+### Verification and artifact
+
+- Grapheme segmentation implementation: [1eb5894443aa](https://github.com/GraderGamer2/NekoEdit/commit/1eb5894443aafcccd73e2463e91e7d85787dfaf1), feat: navigate and delete extended grapheme clusters.
+- CRLF pointer-boundary correction: [fd8020b4fe67](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e).
+- GitHub Actions [Build and test #331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462) passed all eight workflow steps.
+- Artifact: nekoedit-linux-x86_64, 43,886 bytes; SHA-256 25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c; artifact ID 13561405061; expires 2026-11-14 04:35:48 UTC. [Actions #331 artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462/artifacts/13561405061).
+- The mock-compositor tests do not replace manual validation on GNOME/Mutter; live desktop validation of grapheme editing remains pending.
+
+---
+
 ## 2026-11-07 — Indexed document line navigation
 
 **Roadmap milestone:** replace whole-document scans for byte-offset/visual-row mapping with an indexed logical-line model while keeping UTF-8 byte offsets and the existing gap buffer as canonical storage.
