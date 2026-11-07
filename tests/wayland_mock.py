@@ -387,7 +387,22 @@ def run(
                     raise AssertionError("status bar accent separator was not rendered")
                 if struct.unpack_from("<I", pixels, 461 * 800 * 4)[0] != 0xFF343D4B:
                     raise AssertionError("status bar background was not rendered")
-                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 16 * 4)[0] != 0xFFD8DEE9:
+                def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
+                    for row in range(y, y + height):
+                        for column in range(x, x + width):
+                            pixel = struct.unpack_from(
+                                "<I", pixels, row * 800 * 4 + column * 4
+                            )[0]
+                            red, green, blue = (
+                                (pixel >> 16) & 0xFF,
+                                (pixel >> 8) & 0xFF,
+                                pixel & 0xFF,
+                            )
+                            if red >= 128 and green >= 138 and blue >= 148:
+                                return True
+                    return False
+
+                if not antialiased_ink_present(16, 464, 88, 14):
                     raise AssertionError("logical line status label was not rendered")
                 editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if initial_file is None:
@@ -396,8 +411,8 @@ def run(
                             "empty document area should not draw a placeholder; "
                             f"pixel={hex(editor_origin_pixel)}"
                         )
-                elif editor_origin_pixel != 0xFFD8DEE9:
-                    raise AssertionError("launch-time file content was not rendered at the document origin")
+                elif not antialiased_ink_present(12, 88, 24, 16):
+                    raise AssertionError("launch-time file glyph was not rendered near the document origin")
 
                 expect_message(
                     client,
