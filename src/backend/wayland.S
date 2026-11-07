@@ -2029,6 +2029,10 @@ doc_hscroll_drag_offset: .long 0
 doc_hscroll_thumb_left: .long 0
 doc_hscroll_thumb_width: .long 0
 doc_max_line_width:     .long 0
+doc_last_click_time:    .long 0
+doc_last_click_x:       .long 0
+doc_last_click_y:       .long 0
+doc_last_click_valid:   .long 0
 doc_total_visual_rows:  .long 0
 doc_wheel_remainder:    .long 0
 doc_grapheme_newline_flag: .long 0
@@ -3386,9 +3390,47 @@ wayland_main:
     js .event_loop
     cmp eax, dword ptr [rip + window_width]
     ja .event_loop
+    # Two nearby primary presses select the complete word at the caret.
+    mov ecx, dword ptr [rip + event_payload + 4]
+    sub ecx, dword ptr [rip + doc_last_click_time]
+    cmp dword ptr [rip + doc_last_click_valid], 1
+    jne .Lpointer_document_single_click
+    cmp ecx, 400
+    jae .Lpointer_document_single_click
+    mov ecx, dword ptr [rip + pointer_x]
+    sub ecx, dword ptr [rip + doc_last_click_x]
+    test ecx, ecx
+    jns .Lpointer_double_click_x_ready
+    neg ecx
+.Lpointer_double_click_x_ready:
+    cmp ecx, 5
+    ja .Lpointer_document_single_click
+    mov ecx, dword ptr [rip + pointer_y]
+    sub ecx, dword ptr [rip + doc_last_click_y]
+    test ecx, ecx
+    jns .Lpointer_double_click_y_ready
+    neg ecx
+.Lpointer_double_click_y_ready:
+    cmp ecx, 5
+    ja .Lpointer_document_single_click
+    mov dword ptr [rip + doc_last_click_valid], 0
+    mov dword ptr [rip + pointer_button_down], 0
+    mov edi, dword ptr [rip + pointer_x]
+    mov esi, dword ptr [rip + pointer_y]
+    call doc_place_cursor_from_pointer
+    call doc_select_word_at_cursor
+    jmp .keyboard_changed
+.Lpointer_document_single_click:
+    mov eax, dword ptr [rip + event_payload + 4]
+    mov dword ptr [rip + doc_last_click_time], eax
+    mov eax, dword ptr [rip + pointer_x]
+    mov dword ptr [rip + doc_last_click_x], eax
+    mov eax, dword ptr [rip + pointer_y]
+    mov dword ptr [rip + doc_last_click_y], eax
+    mov dword ptr [rip + doc_last_click_valid], 1
     mov dword ptr [rip + pointer_button_down], 1
-    mov edi, eax
-    mov esi, edx
+    mov edi, dword ptr [rip + pointer_x]
+    mov esi, dword ptr [rip + pointer_y]
     call doc_place_cursor_from_pointer
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
@@ -3575,6 +3617,18 @@ wayland_main:
     je .keyboard_open_command
     cmp eax, 30
     je .keyboard_select_all
+    cmp eax, 105
+    je .keyboard_ctrl_left
+    cmp eax, 106
+    je .keyboard_ctrl_right
+    cmp eax, 102
+    je .keyboard_ctrl_home
+    cmp eax, 107
+    je .keyboard_ctrl_end
+    cmp eax, 14
+    je .keyboard_ctrl_backspace
+    cmp eax, 111
+    je .keyboard_ctrl_delete
     cmp eax, 31
     jne .keyboard_ctrl_clipboard
     cmp dword ptr [rip + shift_down], 0
@@ -3622,6 +3676,77 @@ wayland_main:
     test eax, eax
     jnz .keyboard_changed
     jmp .event_loop
+
+.keyboard_ctrl_left:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_left_plain
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_word
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_left_plain:
+    xor edi, edi
+    call doc_move_word
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_right:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_right_plain
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_word
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_right_plain:
+    mov edi, 1
+    call doc_move_word
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_home:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_home_plain
+    call doc_begin_keyboard_selection
+    mov dword ptr [rip + doc_cursor], 0
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_home_plain:
+    mov dword ptr [rip + doc_cursor], 0
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_end:
+    cmp dword ptr [rip + shift_down], 0
+    je .Lkeyboard_ctrl_end_plain
+    call doc_begin_keyboard_selection
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_finish_keyboard_selection
+    jmp .keyboard_changed
+.Lkeyboard_ctrl_end_plain:
+    mov eax, dword ptr [rip + doc_length]
+    mov dword ptr [rip + doc_cursor], eax
+    call doc_clear_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_backspace:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lkeyboard_ctrl_backspace_delete
+    call doc_begin_keyboard_selection
+    xor edi, edi
+    call doc_move_word
+    call doc_finish_keyboard_selection
+.Lkeyboard_ctrl_backspace_delete:
+    call doc_delete_selection
+    jmp .keyboard_changed
+.keyboard_ctrl_delete:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lkeyboard_ctrl_delete_word
+    call doc_begin_keyboard_selection
+    mov edi, 1
+    call doc_move_word
+    call doc_finish_keyboard_selection
+.Lkeyboard_ctrl_delete_word:
+    call doc_delete_selection
+    jmp .keyboard_changed
 
 .keyboard_unmodified:
     cmp eax, 1
@@ -13614,6 +13739,210 @@ render_selection_unwrapped:
     pop rbx
     ret
 .size render_selection_unwrapped, . - render_selection_unwrapped
+
+# ASCII alphanumerics/underscore and non-ASCII scalars form word runs.
+# Keeping Unicode scripts together is preferable to splitting multibyte words.
+.type doc_codepoint_is_word, @function
+doc_codepoint_is_word:
+    cmp edi, '0'
+    jb .Ldoc_word_non_ascii
+    cmp edi, '9'
+    jbe .Ldoc_word_yes
+    cmp edi, 'A'
+    jb .Ldoc_word_ascii_other
+    cmp edi, 'Z'
+    jbe .Ldoc_word_yes
+    cmp edi, 'a'
+    jb .Ldoc_word_ascii_other
+    cmp edi, 'z'
+    jbe .Ldoc_word_yes
+.Ldoc_word_ascii_other:
+    cmp edi, '_'
+    je .Ldoc_word_yes
+    cmp edi, 128
+    jb .Ldoc_word_no
+.Ldoc_word_non_ascii:
+    cmp edi, 128
+    jb .Ldoc_word_no
+    cmp edi, 0x10ffff
+    ja .Ldoc_word_no
+.Ldoc_word_yes:
+    mov eax, 1
+    ret
+.Ldoc_word_no:
+    xor eax, eax
+    ret
+.size doc_codepoint_is_word, . - doc_codepoint_is_word
+
+# EDI=0: previous word start. EDI=1: next word start.
+.type doc_move_word, @function
+doc_move_word:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, dword ptr [rip + doc_cursor]
+    mov r13d, edi
+    test r13d, r13d
+    jnz .Ldoc_move_word_right
+    xor r14d, r14d
+.Ldoc_move_word_left_loop:
+    test r12d, r12d
+    jz .Ldoc_move_word_store
+    mov edi, r12d
+    call doc_grapheme_prev
+    mov r15d, eax
+    mov edi, r15d
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test r14d, r14d
+    jnz .Ldoc_move_word_left_in_word
+    mov r12d, r15d
+    test eax, eax
+    jnz .Ldoc_move_word_left_found_word
+    jmp .Ldoc_move_word_left_loop
+.Ldoc_move_word_left_found_word:
+    mov r14d, 1
+    jmp .Ldoc_move_word_left_loop
+.Ldoc_move_word_left_in_word:
+    test eax, eax
+    jz .Ldoc_move_word_store
+    mov r12d, r15d
+    jmp .Ldoc_move_word_left_loop
+.Ldoc_move_word_right:
+    xor r14d, r14d
+.Ldoc_move_word_right_loop:
+    cmp r12d, dword ptr [rip + doc_length]
+    jae .Ldoc_move_word_store
+    mov edi, r12d
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test r14d, r14d
+    jnz .Ldoc_move_word_right_in_word
+    test eax, eax
+    jz .Ldoc_move_word_right_separator
+    mov r14d, 1
+    jmp .Ldoc_move_word_right_advance
+.Ldoc_move_word_right_separator:
+    mov r14d, 2
+    jmp .Ldoc_move_word_right_advance
+.Ldoc_move_word_right_in_word:
+    cmp r14d, 1
+    jne .Ldoc_move_word_right_after_word
+    test eax, eax
+    jnz .Ldoc_move_word_right_advance
+    mov r14d, 2
+    jmp .Ldoc_move_word_right_advance
+.Ldoc_move_word_right_after_word:
+    test eax, eax
+    jnz .Ldoc_move_word_store
+.Ldoc_move_word_right_advance:
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r12d, eax
+    jmp .Ldoc_move_word_right_loop
+.Ldoc_move_word_store:
+    mov dword ptr [rip + doc_cursor], r12d
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_move_word, . - doc_move_word
+
+# Double-click word selection. A click landing just after a word is associated
+# with the preceding word, matching the pointer's nearest-boundary hit test.
+.type doc_select_word_at_cursor, @function
+doc_select_word_at_cursor:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, dword ptr [rip + doc_cursor]
+    cmp r12d, dword ptr [rip + doc_length]
+    jb .Ldoc_select_word_probe
+    test r12d, r12d
+    jz .Ldoc_select_word_empty
+    mov edi, r12d
+    call doc_grapheme_prev
+    mov r12d, eax
+    jmp .Ldoc_select_word_probe
+.Ldoc_select_word_empty:
+    mov dword ptr [rip + doc_selection_active], 0
+    jmp .Ldoc_select_word_done
+.Ldoc_select_word_probe:
+    mov edi, r12d
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test eax, eax
+    jnz .Ldoc_select_word_is_word
+    test r12d, r12d
+    jz .Ldoc_select_word_single
+    mov edi, r12d
+    call doc_grapheme_prev
+    mov ebx, eax
+    mov edi, ebx
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test eax, eax
+    jz .Ldoc_select_word_single
+    mov r12d, ebx
+.Ldoc_select_word_is_word:
+    mov r14d, r12d
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r15d, eax
+.Ldoc_select_word_left:
+    test r14d, r14d
+    jz .Ldoc_select_word_right
+    mov edi, r14d
+    call doc_grapheme_prev
+    mov ebx, eax
+    mov edi, ebx
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test eax, eax
+    jz .Ldoc_select_word_right
+    mov r14d, ebx
+    jmp .Ldoc_select_word_left
+.Ldoc_select_word_right:
+    cmp r15d, dword ptr [rip + doc_length]
+    jae .Ldoc_select_word_store
+    mov edi, r15d
+    call doc_utf8_decode_at
+    mov edi, eax
+    call doc_codepoint_is_word
+    test eax, eax
+    jz .Ldoc_select_word_store
+    mov edi, r15d
+    call doc_grapheme_next
+    mov r15d, eax
+    jmp .Ldoc_select_word_right
+.Ldoc_select_word_single:
+    mov r14d, r12d
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r15d, eax
+.Ldoc_select_word_store:
+    mov dword ptr [rip + doc_selection_anchor], r14d
+    mov dword ptr [rip + doc_cursor], r15d
+    mov dword ptr [rip + doc_selection_active], 1
+.Ldoc_select_word_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_select_word_at_cursor, . - doc_select_word_at_cursor
 
 # Decode one validated UTF-8 scalar at a logical document byte offset.
 # EDI=offset; EAX=Unicode scalar, or '?' for malformed/truncated input.
