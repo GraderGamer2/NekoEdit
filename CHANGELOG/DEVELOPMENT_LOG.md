@@ -25,7 +25,9 @@ Wayland send failed: object=8, opcode=1, errno=32
 
 ### Verification status
 
-- The earlier SIGPIPE-safe artifact passed Actions #261. The additional preceding-request/event diagnostic code has not yet been verified by a new CI run or real GNOME retest. Do not infer that Maximize or resizing is fixed.
+- GitHub Actions [Build and test #270](https://github.com/GraderGamer2/NekoEdit/actions/runs/42320683568) passed all eight workflow steps on branch head [`f7fd732d7d2fd01b67826f2b9a43c3ef767001d0`](https://github.com/GraderGamer2/NekoEdit/commit/f7fd732d7d2fd01b67826f2b9a43c3ef767001d0): assembly/link and ELF checks, CLI smoke tests, the complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,387 bytes; SHA-256 `b49e824bc3aba908a025286d2e54ed76c0db4e26bc338858d5f748eb1ceea9bf`; artifact ID `13552837524`; expires 2026-11-14 00:50:55 UTC. [Download from Actions #270](https://github.com/GraderGamer2/NekoEdit/actions/runs/42320683568/artifacts/13552837524).
+- The user's real GNOME/Mutter retest is still pending. CI verifies assembly and mock protocol behavior; it does not establish why Mutter closed the socket or prove Maximize/resize work.
 
 ## 2026-11-07 — Report failed Wayland sends instead of terminating on SIGPIPE
 
