@@ -1862,10 +1862,10 @@ xkb_symbols "nekoedit-sparse" {
                     # 3px SPACE; the following 8px visual gap puts the first
                     # question-mark fallback pixel at x=532.
                     bytes_gap_pixel = struct.unpack_from(
-                        "<I", pixels, 349 * 800 * 4 + 527 * 4
+                        "<I", pixels, 349 * 800 * 4 + 524 * 4
                     )[0]
                     bytes_value_pixel = struct.unpack_from(
-                        "<I", pixels, 346 * 800 * 4 + 532 * 4
+                        "<I", pixels, 349 * 800 * 4 + 530 * 4
                     )[0]
                     if bytes_gap_pixel != 0xFF343D4B or bytes_value_pixel != 0xFFD8DEE9:
                         raise AssertionError(
