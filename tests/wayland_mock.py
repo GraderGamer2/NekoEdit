@@ -900,6 +900,37 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_redraw(f"{label}: release")
                     client.sendall(wire_message(12, 0))
 
+                def workflow_editor_scrollbar_drag(
+                    start_x: int, start_y: int, end_x: int, end_y: int,
+                    serial: int, label: str
+                ) -> None:
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                    )
+                    workflow_redraw(f"{label}: press")
+                    client.sendall(wire_message(12, 0))
+                    press_state = picker_state()
+                    if press_state.get("doc_scroll_drag") != 1:
+                        raise AssertionError(
+                            f"{label}: editor scrollbar press did not start a drag; state={press_state!r}"
+                        )
+                    client.sendall(
+                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                    )
+                    try:
+                        workflow_redraw(f"{label}: drag")
+                    except Exception as error:
+                        raise AssertionError(
+                            f"{label}: editor scrollbar motion did not redraw; state={picker_state()!r}"
+                        ) from error
+                    client.sendall(wire_message(12, 0))
+                    client.sendall(
+                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                    )
+                    workflow_redraw(f"{label}: release")
+                    client.sendall(wire_message(12, 0))
+
                 def workflow_shortcut(serial: int, code: int, label: str, shift: bool = False) -> None:
                     events = wire_message(16, 3, struct.pack("<IIII", serial, serial, 29, 1))
                     if shift:
@@ -1086,7 +1117,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_columns", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_columns", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -1118,6 +1149,15 @@ xkb_symbols "nekoedit-sparse" {
                                 suffix = os.pread(fd, max(0, length - gap_start), pointer + gap_end)
                                 result["doc_contents"] = prefix + suffix
                             return result
+
+                    initial_editor_state = picker_state()
+                    if (
+                        initial_editor_state.get("doc_scroll_thumb_height") != 0
+                        or initial_editor_state.get("doc_view_top_row") != 0
+                    ):
+                        raise AssertionError(
+                            f"an empty document should not expose an active editor scrollbar: {initial_editor_state!r}"
+                        )
 
                     def assert_picker(label: str) -> None:
                         panel_pixel = struct.unpack_from("<I", pixels, 70 * 800 * 4 + 40 * 4)[0]
@@ -1672,7 +1712,68 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "native picker Open and Ctrl+S save verified for a 65,537-byte document"
                     )
-                    serial = large_open_serial + 12
+                    serial = large_open_serial + 42
+
+                    # The 65,537-byte single-line fixture wraps into hundreds of
+                    # visual rows. Verify editor scrolling is independent of the
+                    # directory picker's separate scroll model.
+                    editor_scroll_state = picker_state()
+                    if (
+                        editor_scroll_state.get("doc_total_visual_rows", 0)
+                            <= editor_scroll_state.get("window_doc_visible_rows", 0)
+                        or editor_scroll_state.get("doc_scroll_thumb_height", 0) <= 0
+                    ):
+                        raise AssertionError(
+                            f"large wrapped document did not expose an editor scrollbar: {editor_scroll_state!r}"
+                        )
+                    scrollbar_x = editor_scroll_state["window_width"] - 21
+                    thumb_top = editor_scroll_state["doc_scroll_thumb_top"]
+                    thumb_height = editor_scroll_state["doc_scroll_thumb_height"]
+                    thumb_pixel = struct.unpack_from(
+                        "<I", pixels,
+                        (thumb_top + thumb_height // 2) * 800 * 4 + scrollbar_x * 4
+                    )[0]
+                    if thumb_pixel != 0xFF78A9D4:
+                        raise AssertionError(
+                            f"editor scrollbar thumb was not rendered at its computed position: {thumb_pixel:#010x}"
+                        )
+                    workflow_axis(0, 42 * 256, large_open_serial + 6, "editor wheel scrolls down three visual rows")
+                    editor_scroll_state = picker_state()
+                    if editor_scroll_state.get("doc_view_top_row") != 3:
+                        raise AssertionError(
+                            f"editor wheel did not advance the visual viewport by three rows: {editor_scroll_state!r}"
+                        )
+                    if editor_scroll_state.get("doc_scroll_thumb_top", 92) <= 92:
+                        raise AssertionError(
+                            f"editor wheel did not move the thumb downward: {editor_scroll_state!r}"
+                        )
+                    thumb_top = editor_scroll_state["doc_scroll_thumb_top"]
+                    thumb_height = editor_scroll_state["doc_scroll_thumb_height"]
+                    track_height = editor_scroll_state["window_status_top"] - 92
+                    bottom_center = 92 + track_height - thumb_height // 2
+                    workflow_editor_scrollbar_drag(
+                        scrollbar_x, thumb_top + thumb_height // 2,
+                        scrollbar_x, bottom_center, large_open_serial + 16,
+                        "drag editor scrollbar to document bottom"
+                    )
+                    editor_scroll_state = picker_state()
+                    expected_editor_max = (
+                        editor_scroll_state["doc_total_visual_rows"]
+                        - editor_scroll_state["window_doc_visible_rows"]
+                    )
+                    if editor_scroll_state.get("doc_view_top_row") != expected_editor_max:
+                        raise AssertionError(
+                            f"editor scrollbar drag did not reach the final visual rows: {editor_scroll_state!r}"
+                        )
+                    workflow_axis(0, -14 * 256, large_open_serial + 26, "editor wheel scrolls up one visual row")
+                    editor_scroll_state = picker_state()
+                    if editor_scroll_state.get("doc_view_top_row") != expected_editor_max - 1:
+                        raise AssertionError(
+                            f"editor wheel-up did not move toward the document start: {editor_scroll_state!r}"
+                        )
+                    observations.append(
+                        "editor scrollbar visibility, proportional thumb rendering, pointer drag, and wheel scrolling verified"
+                    )
 
                     # Minimize is a real xdg_toplevel request, not a decorative
                     # titlebar control. The normal buffer remains valid after it.
