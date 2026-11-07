@@ -189,6 +189,8 @@ font_find_table:
 # Uses the best available Unicode platform/encoding record; rejects unsafe lengths.
 .type font_parse_cmap, @function
 font_parse_cmap:
+    mov edi, 'a'
+    call font_debug_mark
     push rbx
     push rbp
     push r12
@@ -212,6 +214,8 @@ font_parse_cmap:
     jz .Lfont_cmap_failed
     cmp eax, FONT_MAX_CMAP_RECORDS
     ja .Lfont_cmap_failed
+    mov edi, 'b'
+    call font_debug_mark
     mov ebx, eax
     lea eax, [rbx * 8 + 4]
     cmp eax, r13d
@@ -220,6 +224,8 @@ font_parse_cmap:
     xor r14d, r14d              # chosen format
     xor r15d, r15d              # chosen relative offset
     mov dword ptr [rsp], 0      # chosen subtable length
+    mov edi, 'c'
+    call font_debug_mark
     lea r12, [r12 + 4]
 .Lfont_cmap_record_loop:
     test ebx, ebx
@@ -239,12 +245,16 @@ font_parse_cmap:
     sub eax, ecx
     cmp eax, 2
     jb .Lfont_cmap_record_next
+    mov edi, 'd'
+    call font_debug_mark
     mov r8, qword ptr [rip + font_file_map]
     add r8, qword ptr [rip + font_cmap_offset]
     add r8, rcx
     mov rdi, r8
     call font_be16
     mov r9d, eax                # format
+    mov edi, 'e'
+    call font_debug_mark
     xor r10d, r10d              # score
     cmp r9d, 12
     je .Lfont_cmap_score_format12
@@ -328,6 +338,8 @@ font_parse_cmap:
     add eax, 16
     cmp r11d, eax
     jb .Lfont_cmap_record_next
+    mov edi, 'f'
+    call font_debug_mark
 .Lfont_cmap_store:
     mov ebp, r10d
     mov r14d, r9d
@@ -338,6 +350,8 @@ font_parse_cmap:
     dec ebx
     jmp .Lfont_cmap_record_loop
 .Lfont_cmap_records_done:
+    mov edi, 'g'
+    call font_debug_mark
     cmp r14d, 4
     je .Lfont_cmap_selected
     cmp r14d, 12
@@ -349,6 +363,8 @@ font_parse_cmap:
     mov dword ptr [rip + font_cmap_subtable_offset], eax
     mov eax, dword ptr [rsp]
     mov dword ptr [rip + font_cmap_subtable_length], eax
+    mov edi, 'h'
+    call font_debug_mark
     xor eax, eax
     jmp .Lfont_cmap_return
 .Lfont_cmap_failed:
