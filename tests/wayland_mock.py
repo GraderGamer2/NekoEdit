@@ -1829,7 +1829,7 @@ xkb_symbols "nekoedit-sparse" {
                     old_title_y = 16 + ((44 - 36) * 328 // 408)
                     title_ink_rows = [
                         y for y in range(16, 39)
-                        for x in range(32, 176)
+                        for x in range(32, 110)
                         if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
                         == 0xFFD8DEE9
                     ]
