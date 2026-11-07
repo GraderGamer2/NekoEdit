@@ -1,4 +1,4 @@
-## 2026-11-07 — Whole-word pointer dragging, edge auto-scroll, and named XKB Unicode aliases
+## 2026-11-07 — Whole-word pointer dragging, edge auto-scroll, named XKB aliases, and bounded dead-key composition
 
 ### Pointer selection behavior
 
@@ -11,20 +11,27 @@
 
 - Added 105 case-sensitive common non-ASCII keysym aliases covering Latin-1 symbols/letters plus EuroSign and common punctuation (en/em dashes, quotation marks, bullet, ellipsis, trademark).
 - Named aliases use the same per-key/group/level Unicode-scalar table and UTF-8 document insertion path as explicit Uxxxx/Uxxxxx/Uxxxxxx keysyms. The US-QWERTY fallback and existing ASCII/group/modifier lookup remain intact.
-- This remains a bounded named-symbol table, not complete xkbcommon compatibility: arbitrary custom type maps, full virtual-modifier/action semantics, compose/dead-key processing, and Wayland text-input/IME are not yet implemented.
+- This remains a bounded named-symbol table, not complete xkbcommon compatibility: arbitrary custom type maps, full virtual-modifier/action semantics, general Compose sequences, and Wayland text-input/IME are not yet implemented.
+
+### Bounded dead-key composition
+
+- Added six recognized XKB dead-key actions: dead_grave, dead_acute, dead_circumflex, dead_tilde, dead_diaeresis, and dead_cedilla. These use reserved action values above the Unicode scalar range and are intercepted before UTF-8 encoding.
+- The editor stores one pending combining mark. On the next printable scalar, a 52-pair table composes common Latin-1 combinations into their precomposed code points. Unsupported pairs preserve the input as base scalar followed by its combining mark rather than dropping the accent or character.
+- Backspace or Escape cancels a pending mark without deleting document text. Losing keyboard focus also clears pending state. A second dead key flushes the previous mark before arming the next.
+- This is a constrained compose subset, not a complete Compose table: multi-key compose sequences, arbitrary XKB actions, locale-specific sequences, and Wayland text-input/IME remain future work.
 
 ### Regression coverage
 
 - The mock compositor double-clicks a middle word, holds the second press, and drags forward through later words; it repeats in reverse from the final word toward the first. Both selection boundaries are checked.
 - A long-document scenario drags below the document and outside pointer focus, verifies the viewport moves, holds the pointer stationary and verifies timer-driven scrolling continues, then releases and verifies the timer/word-drag state clears.
 - The same scenario disables Wrap Lines, dismisses the persistent Settings panel, and verifies horizontal edge auto-scroll plus an active selection.
-- The XKB Unicode fixture inspects the scalar table at AC02/AC03 and verifies explicit U+00E9/U+1F600 plus named EuroSign/eacute/emdash produce the expected UTF-8 bytes.
+- The XKB Unicode fixture inspects the scalar/action table at AC02/AC03/AC04 and verifies explicit U+00E9/U+1F600 plus named EuroSign/eacute/emdash produce the expected UTF-8 bytes. It verifies dead_acute+e inserts precomposed U+00E9, unsupported acute+g inserts g followed by U+0301, and Backspace/Escape cancellation leaves the document unchanged.
 - Existing ASCII mapping, group switching, Shift, LevelThree, keyboard repeat, grapheme, file-picker, clipboard, history, Find/Replace, preferences, resize, and protocol regressions remain in the complete suite.
 
 ### Verification
 
-- GitHub Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed every workflow step on test head [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a): freestanding build/link, ELF checks (no PT_INTERP/no DT_NEEDED), CLI, preferences, full Wayland mock, executable inspection, and artifact upload.
-- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881): 72,303 bytes; artifact ID 13583613881; ZIP SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`; expires 2026-11-14.
+- GitHub Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed every workflow step on test head [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad): freestanding build/link, ELF checks (no PT_INTERP/no DT_NEEDED), CLI, preferences, full Wayland mock, executable inspection, and artifact upload.
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417): 72,887 bytes; artifact ID 13584292417; ZIP SHA-256 `947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8`; expires 2026-11-14.
 - Automated mock-compositor validation is complete. Manual GNOME/Mutter testing of word-drag selection and edge scrolling remains outstanding.
 
 ---
