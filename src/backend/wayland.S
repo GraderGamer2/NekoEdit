@@ -131,6 +131,7 @@ ui_menu_state_on:      .asciz "ON"
 ui_menu_state_off:     .asciz "OFF"
 ui_menu_font_size_label: .asciz "FONT SIZE"
 ui_menu_ui_font_size_label: .asciz "UI FONT"
+ui_menu_wrap_lines_label: .asciz "WRAP LINES"
 ui_menu_minus_label:   .asciz "-"
 ui_menu_plus_label:    .asciz "+"
 ui_menu_px_label:      .asciz "px"
@@ -1932,6 +1933,8 @@ repeat_delay_ms:        .long REPEAT_DEFAULT_DELAY_MS
 active_document_name:   .ascii "Untitled"
                         .byte 0
                         .zero 24
+.global doc_wrap_enabled
+doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
@@ -2005,6 +2008,8 @@ doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
 doc_view_top_row:       .long 0
+doc_view_left_px:       .long 0
+doc_hwheel_remainder:   .long 0
 doc_scroll_drag:        .long 0
 doc_scroll_drag_offset: .long 0
 doc_scroll_thumb_top:   .long 0
@@ -2874,12 +2879,16 @@ wayland_main:
 .pointer_axis:
     cmp dword ptr [rip + last_size], 12
     jb .event_loop
+    cmp dword ptr [rip + event_payload + 4], 1
+    je .pointer_axis_horizontal
     cmp dword ptr [rip + event_payload + 4], 0
     jne .event_loop
     cmp dword ptr [rip + picker_mode], 0
     jne .pointer_axis_picker
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .event_loop
+    cmp dword ptr [rip + shift_down], 0
+    jne .pointer_axis_horizontal
     # Accumulate Wayland's signed 24.8 vertical distance in the editor.
     # One 14-pixel unit advances the document by one visual row.
     movsxd rax, dword ptr [rip + doc_wheel_remainder]
@@ -2896,6 +2905,29 @@ wayland_main:
     jmp .document_scroll_redraw
 .pointer_axis_doc_store_remainder:
     mov dword ptr [rip + doc_wheel_remainder], edx
+    jmp .event_loop
+
+.pointer_axis_horizontal:
+    cmp dword ptr [rip + picker_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .event_loop
+    movsxd rax, dword ptr [rip + doc_hwheel_remainder]
+    movsxd rcx, dword ptr [rip + event_payload + 8]
+    add rax, rcx
+    mov ecx, DOC_SCROLL_WHEEL_ROW_FIXED
+    cqo
+    idiv rcx
+    test eax, eax
+    jz .pointer_axis_hdoc_store_remainder
+    mov dword ptr [rip + doc_hwheel_remainder], edx
+    imul edi, eax, 14
+    call doc_scroll_horizontal_by
+    jmp .document_scroll_redraw
+.pointer_axis_hdoc_store_remainder:
+    mov dword ptr [rip + doc_hwheel_remainder], edx
     jmp .event_loop
 .pointer_axis_picker:
     # The directory picker retains its independent row-based scroll state.
@@ -3176,8 +3208,10 @@ wayland_main:
     jb .pointer_settings_confirm_toggle
     cmp edx, 88
     jb .pointer_settings_document_font
-    cmp edx, 112
+    cmp edx, 136
     jae .pointer_menu_outside
+    cmp edx, 112
+    jae .pointer_settings_wrap_toggle
     cmp dword ptr [rip + font_loaded], 0
     je .pointer_menu_outside
     cmp eax, 344
@@ -3189,6 +3223,15 @@ wayland_main:
     cmp eax, 416
     jae .pointer_menu_outside
     jmp .pointer_settings_ui_font_increase
+
+.pointer_settings_wrap_toggle:
+    xor dword ptr [rip + doc_wrap_enabled], 1
+    mov dword ptr [rip + doc_view_left_px], 0
+    mov dword ptr [rip + doc_view_top_row], 0
+    mov dword ptr [rip + doc_line_index_valid], 0
+    call doc_line_index_rebuild
+    call doc_ensure_cursor_visible
+    jmp .keyboard_changed
 
 .pointer_settings_document_font:
     cmp dword ptr [rip + font_loaded], 0
@@ -9005,6 +9048,11 @@ doc_line_index_reserve:
 .type doc_line_index_measure_rows, @function
 .type doc_line_index_measure_rows, @function
 doc_line_index_measure_rows:
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldoc_index_measure_wrapped
+    mov eax, 1
+    ret
+.Ldoc_index_measure_wrapped:
     push rbx
     push r12
     push r13
@@ -10040,6 +10088,8 @@ doc_offset_to_visual_legacy:
     mov edi, eax
     call font_codepoint_advance_pixels
     lea edx, [ebx + eax]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_offset_visual_glyph_fit
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_glyph_fit
     inc r14d
@@ -10058,6 +10108,8 @@ doc_offset_to_visual_legacy:
 .Lneko_offset_visual_tab:
     lea eax, [rbx + 32]
     and eax, -32
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_offset_visual_tab_fit
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_offset_visual_tab_fit
     inc r14d
@@ -10072,6 +10124,8 @@ doc_offset_to_visual_legacy:
     inc r15d
     jmp .Lneko_offset_visual_scan
 .Lneko_offset_visual_boundary:
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_offset_visual_done
     cmp r12d, r13d
     jae .Lneko_offset_visual_done
     mov edi, r12d
@@ -10166,6 +10220,8 @@ doc_offset_to_visual_indexed:
     mov edi, eax
     call font_codepoint_advance_pixels
     lea edx, [r14d + eax]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Ldoc_offset_indexed_glyph_fit
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_offset_indexed_glyph_fit
     inc ebx
@@ -10179,6 +10235,8 @@ doc_offset_to_visual_indexed:
 .Ldoc_offset_indexed_tab:
     lea eax, [r14d + 32]
     and eax, -32
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Ldoc_offset_indexed_tab_fit
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_offset_indexed_tab_fit
     inc ebx
@@ -10193,6 +10251,8 @@ doc_offset_to_visual_indexed:
     inc r13d
     jmp .Ldoc_offset_indexed_scan
 .Ldoc_offset_indexed_boundary:
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Ldoc_offset_indexed_done
     cmp r12d, dword ptr [rip + doc_length]
     jae .Ldoc_offset_indexed_done
     mov edi, r12d
@@ -10287,6 +10347,8 @@ doc_visual_to_offset_indexed:
     call font_codepoint_advance_pixels
     mov dword ptr [rsp], eax
     lea edx, [r14d + eax]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Ldoc_visual_indexed_glyph_row_ready
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_visual_indexed_glyph_row_ready
     inc ebx
@@ -10316,6 +10378,8 @@ doc_visual_to_offset_indexed:
 .Ldoc_visual_indexed_tab:
     lea eax, [r14d + 32]
     and eax, -32
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Ldoc_visual_indexed_tab_fit
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Ldoc_visual_indexed_tab_fit
     inc ebx
@@ -10426,6 +10490,8 @@ doc_visual_to_offset_legacy:
     mov edi, eax
     call font_codepoint_advance_pixels
     lea edx, [ebp + eax]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_visual_offset_glyph_row_ready
     cmp edx, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_visual_offset_glyph_row_ready
     inc ebx
@@ -10455,6 +10521,8 @@ doc_visual_to_offset_legacy:
 .Lneko_visual_offset_tab:
     lea eax, [rbp + 32]
     and eax, -32
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_visual_offset_tab_fit
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_visual_offset_tab_fit
     inc ebx
@@ -10612,6 +10680,43 @@ doc_scroll_by:
     ret
 .size doc_scroll_by, . - doc_scroll_by
 
+# EDI=signed pixel delta; horizontal movement is bounded by the active caret.
+.type doc_scroll_horizontal_by, @function
+doc_scroll_horizontal_by:
+    push rbx
+    push r12
+    mov ebx, edi
+    test ebx, ebx
+    jz .Ldoc_scroll_horizontal_unchanged
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldoc_scroll_horizontal_unchanged
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov r12d, edx
+    movsxd rax, dword ptr [rip + doc_view_left_px]
+    movsxd rdx, ebx
+    add rax, rdx
+    test rax, rax
+    jns .Ldoc_scroll_horizontal_nonnegative
+    xor eax, eax
+.Ldoc_scroll_horizontal_nonnegative:
+    cmp eax, r12
+    jbe .Ldoc_scroll_horizontal_clamped
+    mov eax, r12d
+.Ldoc_scroll_horizontal_clamped:
+    cmp eax, dword ptr [rip + doc_view_left_px]
+    je .Ldoc_scroll_horizontal_unchanged
+    mov dword ptr [rip + doc_view_left_px], eax
+    mov eax, 1
+    jmp .Ldoc_scroll_horizontal_done
+.Ldoc_scroll_horizontal_unchanged:
+    xor eax, eax
+.Ldoc_scroll_horizontal_done:
+    pop r12
+    pop rbx
+    ret
+.size doc_scroll_horizontal_by, . - doc_scroll_horizontal_by
+
 # ESI=surface-local pointer y; map the captured thumb position to a visual row.
 .type doc_scrollbar_drag_to_y, @function
 doc_scrollbar_drag_to_y:
@@ -10728,12 +10833,33 @@ render_document_scrollbar:
     ret
 .size render_document_scrollbar, . - render_document_scrollbar
 
-# Keep the active insertion point within the vertically visible document rows.
+# Keep the active insertion point within both visible document axes.
 .global doc_ensure_cursor_visible
 .type doc_ensure_cursor_visible, @function
 doc_ensure_cursor_visible:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
+    mov r8d, eax
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_ensure_horizontal
+    mov dword ptr [rip + doc_view_left_px], 0
+    jmp .Lneko_ensure_vertical
+.Lneko_ensure_horizontal:
+    mov eax, edx
+    cmp eax, dword ptr [rip + doc_view_left_px]
+    jae .Lneko_ensure_horizontal_right
+    mov dword ptr [rip + doc_view_left_px], eax
+    jmp .Lneko_ensure_vertical
+.Lneko_ensure_horizontal_right:
+    mov ecx, dword ptr [rip + doc_view_left_px]
+    add ecx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, ecx
+    jb .Lneko_ensure_vertical
+    sub eax, dword ptr [rip + window_doc_pixel_width]
+    inc eax
+    mov dword ptr [rip + doc_view_left_px], eax
+.Lneko_ensure_vertical:
+    mov eax, r8d
     mov edx, dword ptr [rip + doc_view_top_row]
     cmp eax, edx
     jae .Lneko_ensure_cursor_lower
@@ -10760,6 +10886,10 @@ doc_place_cursor_from_pointer:
     jns .Lneko_pointer_x_nonnegative
     xor eax, eax
 .Lneko_pointer_x_nonnegative:
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Lneko_pointer_x_ready
+    add eax, dword ptr [rip + doc_view_left_px]
+.Lneko_pointer_x_ready:
     mov esi, eax
     mov eax, dword ptr [rip + pointer_y]
     sub eax, DOC_TOP
@@ -12243,7 +12373,7 @@ render_file_menu:
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 112
+    mov r8d, 136
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -12283,6 +12413,20 @@ render_file_menu:
     mov edi, 282
     mov esi, 92
     lea rdx, [rip + ui_menu_px_label]
+    call draw_text
+    mov edi, 172
+    mov esi, 120
+    lea rdx, [rip + ui_menu_wrap_lines_label]
+    call draw_text
+    mov edi, 372
+    mov esi, 120
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .render_settings_wrap_off
+    lea rdx, [rip + ui_menu_state_on]
+    jmp .render_settings_wrap_draw
+.render_settings_wrap_off:
+    lea rdx, [rip + ui_menu_state_off]
+.render_settings_wrap_draw:
     call draw_text
     cmp dword ptr [rip + font_loaded], 0
     je .render_settings_size_controls_done
@@ -12543,6 +12687,42 @@ render_path_prompt:
 .size render_path_prompt, . - render_path_prompt
 
 
+# Clip selection rectangles to the text viewport. Arguments follow draw_rect.
+.type draw_document_selection_rect, @function
+draw_document_selection_rect:
+    push rbx
+    movsxd rbx, esi
+    movsxd r10, ecx
+    add r10, rbx
+    cmp r10, DOC_LEFT
+    jle .Ldoc_selection_rect_done
+    cmp rbx, DOC_LEFT
+    jge .Ldoc_selection_rect_left_ready
+    mov eax, DOC_LEFT
+    sub rax, rbx
+    sub ecx, eax
+    mov esi, DOC_LEFT
+    mov rbx, DOC_LEFT
+.Ldoc_selection_rect_left_ready:
+    mov eax, DOC_LEFT
+    add eax, dword ptr [rip + window_doc_pixel_width]
+    movsxd r11, eax
+    cmp rbx, r11
+    jae .Ldoc_selection_rect_done
+    cmp r10, r11
+    jbe .Ldoc_selection_rect_draw
+    mov eax, r11d
+    sub eax, esi
+    mov ecx, eax
+.Ldoc_selection_rect_draw:
+    test ecx, ecx
+    jle .Ldoc_selection_rect_done
+    call draw_rect
+.Ldoc_selection_rect_done:
+    pop rbx
+    ret
+.size draw_document_selection_rect, . - draw_document_selection_rect
+
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
 render_selection:
@@ -12553,6 +12733,8 @@ render_selection:
     push r15
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lneko_render_selection_done
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lneko_render_selection_unwrapped
 
     mov eax, dword ptr [rip + doc_selection_anchor]
     mov edx, dword ptr [rip + doc_cursor]
@@ -12710,6 +12892,10 @@ render_selection:
     mov r14d, eax
     jmp .Lneko_render_selection_scan
 
+.Lneko_render_selection_unwrapped:
+    call render_selection_unwrapped
+    jmp .Lneko_render_selection_done
+
 .Lneko_render_selection_done:
     pop r15
     pop r14
@@ -12717,6 +12903,132 @@ render_selection:
     pop r12
     pop rbx
     ret
+
+
+# Paint selected bytes in no-wrap mode using absolute line-pixel columns.
+.type render_selection_unwrapped, @function
+render_selection_unwrapped:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, dword ptr [rip + doc_cursor]
+    cmp eax, edx
+    jbe .Lselection_unwrapped_bounds
+    xchg eax, edx
+.Lselection_unwrapped_bounds:
+    mov dword ptr [rip + doc_selection_start], eax
+    mov dword ptr [rip + doc_selection_end], edx
+    xor r12d, r12d
+    mov r13d, DOC_LEFT
+    sub r13d, dword ptr [rip + doc_view_left_px]
+    mov r14d, DOC_TOP
+    mov eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    sub r14d, eax
+.Lselection_unwrapped_scan:
+    cmp r12d, dword ptr [rip + doc_length]
+    jae .Lselection_unwrapped_done
+    mov eax, dword ptr [rip + doc_selection_end]
+    cmp r12d, eax
+    jae .Lselection_unwrapped_done
+    mov edi, r12d
+    call doc_byte_at
+    mov ebx, eax
+    cmp ebx, 10
+    je .Lselection_unwrapped_newline
+    cmp ebx, 13
+    jne .Lselection_unwrapped_not_cr
+    lea edi, [r12d + 1]
+    call doc_byte_at
+    cmp eax, 10
+    je .Lselection_unwrapped_newline
+.Lselection_unwrapped_not_cr:
+    cmp ebx, 9
+    je .Lselection_unwrapped_tab
+    cmp ebx, 32
+    jb .Lselection_unwrapped_control
+    cmp ebx, 128
+    jb .Lselection_unwrapped_character
+    mov edi, r12d
+    call doc_utf8_decode_at
+    mov ebx, eax
+.Lselection_unwrapped_character:
+    mov edi, ebx
+    call font_codepoint_advance_pixels
+    mov r15d, eax
+    jmp .Lselection_unwrapped_paint
+.Lselection_unwrapped_tab:
+    mov eax, r13d
+    sub eax, DOC_LEFT
+    add eax, dword ptr [rip + doc_view_left_px]
+    lea edx, [eax + 32]
+    and edx, -32
+    sub edx, eax
+    mov r15d, edx
+.Lselection_unwrapped_paint:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r12d, eax
+    jb .Lselection_unwrapped_advance
+    cmp r14d, DOC_TOP
+    jl .Lselection_unwrapped_advance
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, dword ptr [rip + window_doc_line_height]
+    cmp r14d, eax
+    jae .Lselection_unwrapped_advance
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r13d
+    mov edx, r14d
+    mov ecx, r15d
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    mov r9d, 0xff5e81ac
+    call draw_document_selection_rect
+.Lselection_unwrapped_advance:
+    add r13d, r15d
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r12d, eax
+    jmp .Lselection_unwrapped_scan
+.Lselection_unwrapped_newline:
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp r12d, eax
+    jb .Lselection_unwrapped_newline_next
+    cmp r14d, DOC_TOP
+    jl .Lselection_unwrapped_newline_next
+    mov eax, dword ptr [rip + window_status_top]
+    sub eax, dword ptr [rip + window_doc_line_height]
+    cmp r14d, eax
+    jae .Lselection_unwrapped_newline_next
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r13d
+    mov edx, r14d
+    mov ecx, 8
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    mov r9d, 0xff5e81ac
+    call draw_document_selection_rect
+.Lselection_unwrapped_newline_next:
+    mov r13d, DOC_LEFT
+    sub r13d, dword ptr [rip + doc_view_left_px]
+    add r14d, dword ptr [rip + window_doc_line_height]
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r12d, eax
+    jmp .Lselection_unwrapped_scan
+.Lselection_unwrapped_control:
+    mov edi, r12d
+    call doc_grapheme_next
+    mov r12d, eax
+    jmp .Lselection_unwrapped_scan
+.Lselection_unwrapped_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_selection_unwrapped, . - render_selection_unwrapped
 
 # Decode one validated UTF-8 scalar at a logical document byte offset.
 # EDI=offset; EAX=Unicode scalar, or '?' for malformed/truncated input.
@@ -12856,6 +13168,10 @@ render_document:
     push r14
     push r15
     mov r12d, DOC_LEFT
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_render_origin_ready
+    sub r12d, dword ptr [rip + doc_view_left_px]
+.Ldocument_render_origin_ready:
     mov edi, dword ptr [rip + doc_view_top_row]
     xor esi, esi
     call doc_visual_to_offset
@@ -12893,6 +13209,8 @@ render_document:
     lea eax, [r12d + r15d]
     mov edx, DOC_LEFT
     add edx, dword ptr [rip + window_doc_pixel_width]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .document_printable_fit
     cmp eax, edx
     jbe .document_printable_fit
     mov r12d, DOC_LEFT
@@ -12904,6 +13222,12 @@ render_document:
 .document_printable_fit:
     cmp r13d, DOC_TOP
     jl .document_printable_skip_draw
+    cmp r12d, DOC_LEFT
+    jl .document_printable_skip_draw
+    mov eax, DOC_LEFT
+    add eax, dword ptr [rip + window_doc_pixel_width]
+    cmp r12d, eax
+    jae .document_printable_skip_draw
     mov edi, r12d
     mov esi, r13d
     mov edx, ebx
@@ -12919,6 +13243,14 @@ render_document:
 .document_tab:
     mov eax, r12d
     sub eax, DOC_LEFT
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_tab_wrapped
+    add eax, dword ptr [rip + doc_view_left_px]
+    add eax, 32
+    and eax, -32
+    sub eax, dword ptr [rip + doc_view_left_px]
+    jmp .document_tab_fit
+.Ldocument_tab_wrapped:
     add eax, 32
     and eax, -32
     cmp eax, dword ptr [rip + window_doc_pixel_width]
@@ -12936,6 +13268,10 @@ render_document:
 
 .document_newline:
     mov r12d, DOC_LEFT
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_newline_origin_ready
+    sub r12d, dword ptr [rip + doc_view_left_px]
+.Ldocument_newline_origin_ready:
     add r13d, dword ptr [rip + window_doc_line_height]
 .document_next_byte:
     inc r14d
@@ -12945,6 +13281,10 @@ render_document:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
     lea r12d, [rdx + DOC_LEFT]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_cursor_x_ready
+    sub r12d, dword ptr [rip + doc_view_left_px]
+.Ldocument_cursor_x_ready:
     mov r13d, eax
     sub r13d, dword ptr [rip + doc_view_top_row]
     test r13d, r13d
@@ -12953,6 +13293,12 @@ render_document:
     jae .document_render_done
     imul r13d, dword ptr [rip + window_doc_line_height]
     add r13d, DOC_TOP
+    cmp r12d, DOC_LEFT
+    jl .document_render_done
+    mov eax, DOC_LEFT
+    add eax, dword ptr [rip + window_doc_pixel_width]
+    cmp r12d, eax
+    jae .document_render_done
     mov eax, dword ptr [rip + window_width]
     sub eax, DOC_SCROLL_TRACK_X_OFFSET + 1
     cmp r12d, eax
