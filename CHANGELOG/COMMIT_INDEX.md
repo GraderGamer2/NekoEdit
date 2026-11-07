@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **245** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits).
+- Recorded implementation commits: **246** (234 previously indexed commits + 11 resize-sync diagnostic and regression-test commits + 1 dense object-ID fix/test commit).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -461,6 +461,14 @@ The event-label write length was corrected, the decimal writer's trailing NUL by
 | 2026-11-07 01:07:58 UTC | [`593ec1cdd82d`](https://github.com/GraderGamer2/NekoEdit/commit/593ec1cdd82dce7ae540818f6eae14ea610341d4) | test: verify sync probe is one-shot |
 
 Actions [#290](https://github.com/GraderGamer2/NekoEdit/actions/runs/42322351170) passed all eight workflow steps and uploaded artifact `13552914100` (30,652 bytes; SHA-256 `d59b82c487e5262745e4590a9204bcb4bebe431b0f2a09a0edf841dd434b8961`). The new test proves that a simulated compositor error on replacement-buffer creation is reported before attach; the real GNOME/Mutter result remains unverified.
+
+## 2026-11-07 Dense Wayland client object-ID allocation
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 01:20:45 UTC | [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b) | fix: allocate Wayland client object IDs densely |
+
+Actions [#292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724) passed all eight workflow steps on this commit and uploaded artifact `13553938172` (30,659 bytes; SHA-256 `e51c74154c953d696d95bd7fe41fc3d82b42bbef3280b3428ec7c2d0a99ff65b`). The fix unifies pointer, keyboard, replacement-buffer, and sync-callback allocation so every new client object receives the next available dense ID. The mock suite checks the Maximize/Restore/edge-resize sequence using IDs 17, 18, 19, and 20. The GNOME/Mutter retest remains pending.
 
 ## Maintenance
 

@@ -1,5 +1,31 @@
 # NekoEdit development log
 
+## 2026-11-07 — Fix dense Wayland client object IDs for resized buffers
+
+**User retest and root cause:** The Actions #290 binary returned:
+
+```text
+Wayland previous request: object=1, opcode=0
+Wayland last event: object=1, opcode=0, payload bytes=64
+Wayland buffer attach deferred: sync callback=257, buffer=256
+NekoEdit: Wayland compositor protocol error: invalid arguments for wl_shm_pool#11.create_buffer
+```
+
+The compositor's explicit protocol error finally identified the actual fault. The resize path used a separate counter initialized to 256, then assigned callback ID 257. Those IDs skipped the unused client-object IDs 17 through 255. Wayland client-created object IDs must be allocated densely; libwayland rejected the new object ID while decoding `wl_shm_pool.create_buffer`, before checking the replacement buffer's dimensions or stride. This was not a buffer-size/stride defect.
+
+### Fix
+
+- Replaced the independent `next_input_object` and `window_next_buffer_id` counters with one `next_client_object_id` counter shared by pointer, keyboard, resized-buffer, and sync-callback creation.
+- Initialize the shared counter to 15 after the fixed setup objects through ID 14 have been created. In the normal mock scenario the pointer and keyboard consume 15 and 16, so the first resized buffer receives 17 and the sync callback receives 18. Restore and edge resize then receive 19 and 20.
+- Updated the Wayland integration tests to assert the dense ID sequence rather than repeating the previous sparse-ID assumption. The simulated compositor-rejection case now expects callback 18 and buffer 17.
+
+### Verification and artifact
+
+- Source and test changes were committed on `early-alpha` as [`2273306b519d`](https://github.com/GraderGamer2/NekoEdit/commit/2273306b519d2787d387d2013e7f32a416ff3a4b).
+- GitHub Actions [Build and test #292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724) passed all eight workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact: `nekoedit-linux-x86_64`, 30,659 bytes; SHA-256 `e51c74154c953d696d95bd7fe41fc3d82b42bbef3280b3428ec7c2d0a99ff65b`; artifact ID `13553938172`; expires 2026-11-14 01:21:03 UTC. [Download from Actions #292](https://github.com/GraderGamer2/NekoEdit/actions/runs/42323572724/artifacts/13553938172).
+- This is a protocol-level root-cause fix, not merely instrumentation. The real GNOME/Mutter retest is still needed to confirm that Maximize no longer disconnects; the original launch command remains unchanged.
+
 ## 2026-11-07 — Isolate the first resized-buffer request with a one-shot sync barrier
 
 **Observed failure sequence:** The user's clean #278 retest reproduced the same EPIPE trace: NekoEdit's first failed send was `wl_surface.attach` (object 8/opcode 1), while its last successfully written request was `wl_shm_pool.create_buffer` (object 11/opcode 0), and its last received event was `xdg_surface.configure` (object 9/opcode 0). The compositor had already closed the socket by the time attach was attempted. This narrows the issue to the configure-driven replacement-buffer sequence, but does not prove whether the compositor accepted the new buffer.
