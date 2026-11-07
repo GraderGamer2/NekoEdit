@@ -3360,6 +3360,10 @@ xkb_symbols "nekoedit-sparse" {
                             "doc_length", "pointer_x", "pointer_y",
                             "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                             "doc_line_index_columns",
+                            "doc_pointer_press_input_x", "doc_pointer_press_target_x",
+                            "doc_pointer_press_output", "doc_pointer_press_map_x",
+                            "doc_pointer_press_midpoint", "doc_pointer_press_actual_x",
+                            "doc_pointer_press_codepoint", "doc_pointer_press_advance",
                         }
                         debug_addresses = {}
                         for debug_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():

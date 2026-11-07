@@ -1951,8 +1951,23 @@ doc_pointer_debug_midpoint: .long 0
 doc_pointer_debug_codepoint: .long 0
 doc_pointer_debug_advance: .long 0
 doc_pointer_debug_target_x: .long 0
-.global doc_pointer_debug_actual_x
+.global doc_pointer_debug_actual_x, doc_pointer_press_input_x, doc_pointer_press_target_x
+.global doc_pointer_press_output, doc_pointer_press_map_x
+.global doc_pointer_press_midpoint, doc_pointer_press_actual_x
+.global doc_pointer_press_codepoint, doc_pointer_press_advance
 doc_pointer_debug_actual_x: .long 0
+.global doc_pointer_press_input_x, doc_pointer_press_target_x
+.global doc_pointer_press_output, doc_pointer_press_map_x
+.global doc_pointer_press_midpoint, doc_pointer_press_actual_x
+.global doc_pointer_press_codepoint, doc_pointer_press_advance
+doc_pointer_press_input_x: .long 0
+doc_pointer_press_target_x: .long 0
+doc_pointer_press_output: .long 0
+doc_pointer_press_map_x: .long 0
+doc_pointer_press_midpoint: .long 0
+doc_pointer_press_actual_x: .long 0
+doc_pointer_press_codepoint: .long 0
+doc_pointer_press_advance: .long 0
 .global doc_visual_debug_map_x, doc_visual_debug_midpoint
 .global doc_visual_debug_codepoint, doc_visual_debug_advance, doc_visual_debug_target_x
 doc_visual_debug_target_x: .long 0
@@ -3181,6 +3196,22 @@ wayland_main:
     mov edi, eax
     mov esi, edx
     call doc_place_cursor_from_pointer
+    mov eax, dword ptr [rip + doc_pointer_debug_input_x]
+    mov dword ptr [rip + doc_pointer_press_input_x], eax
+    mov eax, dword ptr [rip + doc_visual_debug_target_x]
+    mov dword ptr [rip + doc_pointer_press_target_x], eax
+    mov eax, dword ptr [rip + doc_pointer_debug_output]
+    mov dword ptr [rip + doc_pointer_press_output], eax
+    mov eax, dword ptr [rip + doc_visual_debug_map_x]
+    mov dword ptr [rip + doc_pointer_press_map_x], eax
+    mov eax, dword ptr [rip + doc_visual_debug_midpoint]
+    mov dword ptr [rip + doc_pointer_press_midpoint], eax
+    mov eax, dword ptr [rip + doc_visual_debug_actual_x]
+    mov dword ptr [rip + doc_pointer_press_actual_x], eax
+    mov eax, dword ptr [rip + doc_visual_debug_codepoint]
+    mov dword ptr [rip + doc_pointer_press_codepoint], eax
+    mov eax, dword ptr [rip + doc_visual_debug_advance]
+    mov dword ptr [rip + doc_pointer_press_advance], eax
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
