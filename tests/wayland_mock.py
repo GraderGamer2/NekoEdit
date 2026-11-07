@@ -389,8 +389,37 @@ def run(
                             for x in (16 + column * 8,)
                         )
                     if not caret_visible:
+                        debug_names = {
+                            "doc_cursor", "doc_view_top_row", "doc_line_index_valid",
+                            "doc_line_count", "doc_total_visual_rows", "doc_scroll_thumb_height",
+                        }
+                        debug_symbols = {}
+                        for symbol_line in subprocess.check_output(
+                            ["nm", "-n", binary], text=True
+                        ).splitlines():
+                            fields = symbol_line.split()
+                            if len(fields) == 3 and fields[2] in debug_names:
+                                debug_symbols[fields[2]] = int(fields[0], 16)
+                        debug_state = {}
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            for name, address in debug_symbols.items():
+                                debug_state[name] = struct.unpack(
+                                    "<I", os.pread(memory.fileno(), 4, address)
+                                )[0]
+                        caret_candidates = []
+                        for candidate_y in range(92, 460 - 9, 12):
+                            for candidate_x in range(16, 800 - 1, 8):
+                                if all(
+                                    struct.unpack_from(
+                                        "<I", pixels, (candidate_y + row) * 800 * 4 + candidate_x * 4
+                                    )[0] == 0xFFFFFFFF
+                                    for row in range(9)
+                                ):
+                                    caret_candidates.append((candidate_x, candidate_y))
                         raise AssertionError(
-                            "document click did not keep the caret visible after clamping to the document"
+                            "document click did not keep the caret visible after clamping to the document; "
+                            + repr({"debug_state": debug_state, "caret_candidates": caret_candidates,
+                                    "expected": (clicked_caret_x, 92)})
                         )
                 observations.append("document-area click was routed to the editor and safely redrew the buffer")
 
