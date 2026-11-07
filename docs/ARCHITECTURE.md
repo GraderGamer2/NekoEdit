@@ -55,15 +55,9 @@ Every assembly module should document input registers, output registers, clobber
 
 ## Event loop
 
-The first Wayland window proof of concept uses a blocking socket read loop because it has no interactive widgets or outstanding asynchronous clipboard transfers yet. The editor implementation must move to a nonblocking event loop using poll or ppoll.
+The active Wayland backend uses a nonblocking `poll()` event loop. It services the display socket, the keyboard-repeat timerfd, a separate pointer-selection auto-scroll timerfd, and the bounded clipboard send/receive descriptors. The auto-scroll timer is armed only during an active document selection drag and is disarmed on button release; keyboard repeat and selection scrolling therefore progress independently while the compositor socket is otherwise idle.
 
-The future event loop must service:
-
-- Display-server socket readability and writability.
-- Pending clipboard pipe/file-descriptor transfers.
-- Timers only when required for blinking or deferred UI work.
-
-Do not block while waiting for a clipboard transfer or while loading a large file. Use nonblocking descriptors and process bounded chunks per event-loop iteration. Redraw requests should be coalesced so repeated input events do not trigger redundant full-window rendering.
+Clipboard and document I/O use nonblocking descriptors and bounded chunks rather than waiting for a transfer or a large file read to complete. Redraw requests are coalesced, and a shared-memory buffer is not rewritten while the compositor owns it.
 
 ## Memory
 
@@ -81,7 +75,7 @@ No allocator library is required. A small internal allocator may be introduced o
 - Line index: implemented as a dynamically mmap-backed array of 16-byte logical-line records. Each record stores its byte span (including a terminating LF), visual-row count, and one node from each of two Fenwick prefix trees. With Wrap Lines enabled, the visual-row count reflects soft wrapping at the current document width; when disabled, each logical line contributes exactly one visual row. Byte-offset-to-line and visual-row-to-line lookup use O(log N) prefix searches, followed by a scan within the selected logical line for the exact character boundary. Ordinary byte insertions/deletions update the affected line and the corresponding Fenwick paths. LF insertion/deletion splits or merges records and rebuilds the trees after shifting later records; a window-width change remeasures every line because soft wrapping depends on available columns. The mapping grows geometrically from 256 records up to 0x01000000 lines. If allocation fails or that bound is reached, the index is marked unavailable and the previous scan-based mapping remains as a correctness fallback. Replacing a document invalidates the prior index before the next lookup rebuilds it.
 - Line endings: detect and preserve LF or CRLF for existing files; define a consistent default for new files.
 
-A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement decode UTF-8 safely and never use encoded bytes as visible character positions. Dynamic storage growth, the per-line Fenwick index, grapheme-aware editing, vertical scrolling/scrollbar, and horizontal viewport scrolling for unwrapped lines are implemented. The no-wrap viewport uses a pixel offset and supports a dedicated bottom thumb, track clicks, dragging, horizontal-wheel, and Shift+vertical-wheel input. Rendering begins at the indexed byte offset for the first visible visual row; caret mapping, scrollbar geometry, and logical line status also use the index. The index has an explicit maximum line count and falls back to scan-based mapping if it cannot be maintained. The document's separate 1 GiB byte-capacity ceiling is an implementation bound, not a claim of unlimited files. Direct XKB Unicode keysyms are inserted as UTF-8, but compose/dead-key input, IME, and advanced shaping remain future work.
+A byte-oriented gap buffer is intentionally simpler than a rope or piece table for the target workload. Rendering and cursor movement decode UTF-8 safely and never use encoded bytes as visible character positions. Dynamic storage growth, the per-line Fenwick index, grapheme-aware editing, vertical scrolling/scrollbar, and horizontal viewport scrolling for unwrapped lines are implemented. Mouse selection includes character-range drags and double-click whole-word drags in either direction. When a drag crosses a viewport edge, vertical scrolling follows the pointer in both wrap modes; horizontal scrolling follows it in no-wrap mode, driven by a timer while the pointer remains stationary. The no-wrap viewport also supports a dedicated bottom thumb, track clicks, dragging, horizontal-wheel, and Shift+vertical-wheel input. Rendering begins at the indexed byte offset for the first visible visual row; caret mapping, scrollbar geometry, and logical line status also use the index. The index has an explicit maximum line count and falls back to scan-based mapping if it cannot be maintained. The document's separate 1 GiB byte-capacity ceiling is an implementation bound, not a claim of unlimited files. Direct XKB Unicode keysyms and a curated set of 105 common named non-ASCII aliases are inserted as UTF-8, but broader XKB semantics, compose/dead-key input, IME, and advanced shaping remain future work.
 
 ## User preferences
 
@@ -112,7 +106,7 @@ The current prototype implements a deliberately small part of the stable core pr
 - Draw Minimize, Maximize/Restore, and Close controls in the application title bar and serialize the corresponding xdg_toplevel requests or clean client shutdown.
 - Answer xdg_wm_base.ping and exit on xdg_toplevel.close.
 
-The Wayland prototype now has a single active release-tracked buffer rather than a static-size buffer set; configure-driven resizing is implemented but output-scale changes and multi-buffer/frame scheduling are not. The event loop waits in poll for socket or repeat-timer activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
+The Wayland prototype now has a single active release-tracked buffer rather than a static-size buffer set; configure-driven resizing is implemented but output-scale changes and multi-buffer/frame scheduling are not. The event loop waits in poll for socket, keyboard-repeat timer, pointer-selection auto-scroll timer, or clipboard activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
 
 See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
