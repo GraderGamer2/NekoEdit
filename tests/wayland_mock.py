@@ -1402,16 +1402,19 @@ xkb_symbols "nekoedit-sparse" {
                             f"before={before_shift_wheel}, after={after_shift_wheel}"
                         )
                     key_step(3144, 1, "close Settings before document pointer hit-testing")
-                    workflow_click(40, 98, 3145, "pointer hit-testing with horizontal offset")
+                    key_step(3145, 1, "close Settings before document pointer hit-testing")
+                    if read_document_state()["settings_menu_open"] != 0:
+                        raise AssertionError("Escape did not close Settings before document pointer hit-testing")
+                    workflow_click(58, 98, 3150, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
                         raise AssertionError(
                             f"pointer hit-testing ignored the horizontal viewport offset: {state!r}"
                         )
-                    workflow_click(200, 20, 3145, "reopen Settings after horizontal hit-testing")
+                    workflow_click(200, 20, 3160, "open Settings after horizontal hit-testing")
                     if read_document_state()["settings_menu_open"] != 1:
-                        raise AssertionError("Settings did not reopen after document hit-testing")
-                    workflow_settings_click(200, 124, 3150, "re-enable Wrap Lines")
+                        raise AssertionError("Settings did not open after document hit-testing")
+                    workflow_settings_click(200, 124, 3170, "re-enable Wrap Lines")
                     state = read_document_state()
                     if (
                         state["doc_wrap_enabled"] != 1
@@ -1422,7 +1425,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"re-enabling Wrap Lines did not restore wrapping and reset horizontal scroll: {state!r}"
                         )
-                    key_step(3160, 1, "close Settings after wrap test")
+                    key_step(3180, 1, "close Settings after wrap test")
                     observations.append(
                         "Wrap Lines toggle, unwrapped line indexing, caret-following scroll, horizontal wheel, bottom thumb drag, Shift+wheel and offset pointer hit-testing verified"
                     )
