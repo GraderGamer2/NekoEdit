@@ -1401,9 +1401,14 @@ xkb_symbols "nekoedit-sparse" {
                             "Shift+vertical wheel did not scroll the no-wrap viewport left by 14px: "
                             f"before={before_shift_wheel}, after={after_shift_wheel}"
                         )
-                    key_step(3144, 1, "close Settings before document pointer hit-testing")
+                    state = read_document_state()
+                    if state["settings_menu_open"] != 1:
+                        raise AssertionError(
+                            "Settings unexpectedly closed during horizontal scrolling: " + repr(state)
+                        )
+                    workflow_click(200, 20, 3145, "close Settings before document pointer hit-testing")
                     if read_document_state()["settings_menu_open"] != 0:
-                        raise AssertionError("Escape did not close Settings before document pointer hit-testing")
+                        raise AssertionError("clicking Settings did not close the menu before document pointer hit-testing")
                     workflow_click(58, 98, 3150, "pointer hit-testing with horizontal offset")
                     state = read_document_state()
                     if not (50 <= state["doc_cursor"] <= 150):
