@@ -1826,7 +1826,6 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(16, 4, struct.pack("<IIIII", 2635, 0, 0, 0, 0))
                         + wire_message(12, 0)
                     )
-                    workflow_redraw("release Shift after proportional filename input")
                     name = picker_bytes("picker_name_buffer", 64)
                     cursor = picker_u32("picker_name_cursor")
                     if name != b"AB" or cursor != 2 or picker_u32("picker_focus") != 2:
