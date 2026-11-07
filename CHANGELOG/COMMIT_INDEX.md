@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **281** (275 previously indexed commits + 6 TrueType metric, dialog text-scale, and regression-test commits; the continuity-only status commit is indexed separately below).
+- Recorded implementation commits: **290** (281 previously indexed commits + 9 Settings, clipboard, history, and regression-test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -706,6 +706,23 @@ Actions [#401](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355483305
 | 2026-11-07 08:28:51 UTC | [`55a96a9e999a`](https://github.com/GraderGamer2/NekoEdit/commit/55a96a9e999a5ad2ab14bd2a0f3dcf0c444ea865) | docs: record final branch validation and history |
 
 Actions [#403](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355664022) passed the complete build, CLI, Wayland mock, ELF inspection, and artifact-upload workflow on this commit. Artifact ID `13567696113`, 54,527 bytes, expires 2026-11-14 08:29:10 UTC.
+
+
+## 2026-11-07 — Settings, Wayland clipboard, and undo/redo
+
+| Date (UTC) | Commit | Subject |
+|---|---|---|
+| 2026-11-07 | [`6a1db52996c8`](https://github.com/GraderGamer2/NekoEdit/commit/6a1db52996c8c134f11736d0f173eaf70ca1af11) | feat: keep font settings open and add UI font sizing |
+| 2026-11-07 | [`b5c52ecca8a1`](https://github.com/GraderGamer2/NekoEdit/commit/b5c52ecca8a1973ffb97f5541b119103887cad46) | feat: add Wayland clipboard ownership and transfer backend |
+| 2026-11-07 | [`38a5e5c05d08`](https://github.com/GraderGamer2/NekoEdit/commit/38a5e5c05d081439c1940c087dd3512e95bfc801) | test: exercise Wayland clipboard copy cut and paste |
+| 2026-11-07 | [`86f2d6396aad`](https://github.com/GraderGamer2/NekoEdit/commit/86f2d6396aad1d0856ede7cb98aeed81fdd47ce1) | test: correct clipboard text fixture escapes |
+| 2026-11-07 | [`14ed84ac4a0a`](https://github.com/GraderGamer2/NekoEdit/commit/14ed84ac4a0a89579a411e4394cb57b6a48479fa) | test: isolate clipboard fixture from generic caret assertion |
+| 2026-11-07 | [`78a67be968b3`](https://github.com/GraderGamer2/NekoEdit/commit/78a67be968b39bf9b123952fcef311584be73170) | fix: dispatch unmatched Wayland objects to clipboard handlers |
+| 2026-11-07 | [`4fa444ef96d8`](https://github.com/GraderGamer2/NekoEdit/commit/4fa444ef96d8a3f9ef70ede628db6d1b34ec28af) | feat: add bounded document undo and redo history |
+| 2026-11-07 | [`672cc4c90de9`](https://github.com/GraderGamer2/NekoEdit/commit/672cc4c90de9922507262caa63f0b84b9b6d98a5) | test: verify undo caret state and redo branch invalidation |
+| 2026-11-07 | [`67a7e5c66603`](https://github.com/GraderGamer2/NekoEdit/commit/67a7e5c666037fc9823bd16362ad4d2439622f48) | test: assert undo selection restoration before branching |
+
+Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed the full build, CLI, Wayland mock-compositor, ELF inspection and artifact-upload workflow on the current code tip. Artifact [`13572958390`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390), 61,359 bytes, SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`, expires 2026-11-14. Mock-compositor verification does not replace manual GNOME/Mutter testing.
 
 ## Maintenance
 

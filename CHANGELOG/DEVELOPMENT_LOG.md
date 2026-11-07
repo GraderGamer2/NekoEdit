@@ -1157,3 +1157,35 @@ No feature development is being started in this entry. The next development task
 ## 2026-11-07 — Repeat full workflow after documentation refresh
 
 GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355664022) passed on [`55a96a9e999a`](https://github.com/GraderGamer2/NekoEdit/commit/55a96a9e999a5ad2ab14bd2a0f3dcf0c444ea865), a documentation/changelog-only commit after #402. The complete freestanding build, CLI smoke, Wayland mock integration, ELF inspection, and artifact upload stages succeeded. This is a second successful full workflow after the non-reproduced #401 20-second mock-test timeout; no executable source change was made between #400 and #403. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355664022/artifacts/13567696113) is 54,527 bytes, ID `13567696113`, and expires 2026-11-14 08:29:10 UTC.
+
+
+---
+
+## 2026-11-07 — Settings refinements, Wayland clipboard, and undo/redo
+
+### Settings behavior and independent UI font size
+
+- Changed document font-size steppers so increment/decrement no longer closes the Settings dropdown. Repeated clicks work without reopening it, including when the configured size reaches either bound.
+- Added a separate UI font-size value, defaulting to 10px and adjustable from 8–14px in one-pixel steps. Document font remains 8–24px in two-pixel steps. UI-size changes affect ordinary interface text metrics and raster size without mutating document font metrics or the line index; picker-specific height fitting remains separately scaled.
+- Expanded the Settings integration regression to exercise repeated button clicks while the dropdown stays open, verify both bounds, and assert that changing UI size does not change document size. Actions [#432](https://github.com/GraderGamer2/NekoEdit/actions/runs/42367881187) passed all workflow stages.
+
+### Wayland clipboard integration
+
+- Added `src/backend/clipboard.c` and connected it to `wl_data_device_manager`, `wl_data_device`, `wl_data_source`, and `wl_data_offer`. Added Ctrl+C, Ctrl+X, and Ctrl+V for the document editor.
+- Copy/cut allocate independent immutable snapshots rather than borrowing bytes from the gap buffer. Cut publishes the source first and deletes the selection only after ownership requests succeed. MIME targets include `text/plain;charset=utf-8` and `text/plain`; Paste prefers the UTF-8 type and inserts received bytes at the caret or over the active selection.
+- Added asynchronous pipe state machines to the existing poll loop: four outgoing send slots and one incoming receive slot, nonblocking reads/writes, bounded 16 KiB chunks, and a 64 MiB payload ceiling. Transfers handle short reads/writes, retryable errors, EOF and peer closure without blocking keyboard dispatch.
+- Initial CI iterations exposed test-fixture newline/NUL escaping, an unrelated caret-pixel assertion unsuitable for the clipboard fixture, and a dispatcher branch that skipped the clipboard handler for non-keyboard objects. These were corrected and retained as explicit regression context; none of the actual copy/cut/paste assertions were removed.
+- The end-to-end mock test uses a separate receiver for Copy/Cut, verifies that copied bytes remain available after Cut empties the document, and simulates an external MIME offer for Paste. Actions [#437](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369161877) passed the full workflow. Clipboard integration is currently Wayland-only; X11 selection support remains planned.
+
+### Bounded undo/redo history
+
+- Added `src/editor/history.c`, a freestanding/no-libc snapshot manager with independent mmap-backed states. Pre/post input checkpoints group a key or clipboard paste into one history operation. The history records bytes, caret position and selection state, and resets after a successful document load.
+- Added Ctrl+Z Undo, Ctrl+Y Redo, and Ctrl+Shift+Z Redo. A content revision counter prevents navigation-only events from creating history entries; a same-revision checkpoint refreshes baseline caret/selection metadata. A new edit after Undo clears the redo branch.
+- Explicit limits: 16 Undo/Redo states per stack, 32 MiB total retained snapshot mappings, and 4 MiB per snapshot. A document beyond the snapshot ceiling remains editable, but a full snapshot history is unavailable for that state.
+- The integration test verifies selection replacement, exact Undo/Redo bytes, caret/selection restoration, collapsing the restored selection before a new edit, and Redo invalidation after branching. An intermediate #439 failure was a test expectation error: it expected the next typed character to append even though Undo correctly restored an active full-document selection. The test now verifies that selection and explicitly collapses it before typing.
+- Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed build/ELF verification, CLI smoke tests, the full Wayland mock suite, executable inspection, and artifact upload on branch tip [`67a7e5c66603`](https://github.com/GraderGamer2/NekoEdit/commit/67a7e5c666037fc9823bd16362ad4d2439622f48). Artifact [`13572958390`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390): 61,359 bytes, SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`, expires 2026-11-14. This is mock-compositor verification only; manual GNOME/Mutter verification remains outstanding.
+
+### Roadmap handoff
+
+- Settings steppers, Wayland document clipboard, and bounded Undo/Redo are now implemented. The next major editor-core milestone is horizontal scrolling, which should be designed together with soft-wrap behavior, text-origin offsets, selection/caret clipping, pointer hit-testing, and scrollbar/viewport policy.
+- After that, continue runtime font-family/file switching and persistent preferences, then non-ASCII keyboard text/IME and fuller shaping, output/fractional scaling and multi-buffer scheduling, and X11.

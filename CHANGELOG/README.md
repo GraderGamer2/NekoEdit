@@ -20,6 +20,7 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
+- The current implementation also includes `src/backend/clipboard.c` for Wayland clipboard transfers and `src/editor/history.c` for bounded Undo/Redo snapshots.
 
 ## Wayland window management and resize behavior
 

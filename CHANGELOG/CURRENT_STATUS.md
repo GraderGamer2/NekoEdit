@@ -2,6 +2,27 @@
 
 **Snapshot date:** 2026-11-07  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
+**Development branch:** `early-alpha`  
+**Current source tip:** [`67a7e5c66603`](https://github.com/GraderGamer2/NekoEdit/commit/67a7e5c666037fc9823bd16362ad4d2439622f48).  
+**Latest full workflow:** [Build and test #440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed the freestanding build/ELF verification, CLI smoke tests, full Wayland mock-compositor suite, executable inspection, and artifact upload. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390): 61,359 bytes, SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`, artifact ID `13572958390`, expires 2026-11-14. This is mock-compositor verification; the user has not yet manually tested this exact clipboard/history build on GNOME/Mutter.
+**Settings typography:** the Settings dropdown remains open during repeated document font adjustments (8–24px, 2px steps) and has a separate UI font-size control (8–14px, 1px steps). Both remain session-only.
+**Clipboard:** Wayland Ctrl+C/X/V use immutable snapshots and asynchronous nonblocking data-device transfers with UTF-8 plain-text MIME types and a 64 MiB transfer ceiling. The integration test verifies external copy/cut and paste.
+**Undo/redo:** Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z use bounded snapshots that restore bytes, caret and selection; 16 entries per stack, 32 MiB aggregate history budget, and 4 MiB maximum per snapshot. Opening a new document resets history; editing after Undo clears Redo.
+**Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged, targeting `main`.
+
+## Current next priorities
+
+1. Horizontal document scrolling and a deliberate wrap/overflow behavior for long lines.
+2. Runtime font-family/file selection with safe SFNT state replacement, metric/cache refresh, and index reflow.
+3. Persistent typography and UI preferences.
+4. Non-ASCII keyboard text input, compose/dead keys, and Wayland text-input/IME.
+5. Output/fractional scaling and release-tracked multi-buffer scheduling; then X11 and X11 clipboard.
+6. Find/replace and remaining picker-field editing improvements.
+
+The historical milestone notes below are retained as chronology. Their "latest" labels and next-work descriptions reflect the state at the time each note was written; use the branch tip and summary above as the current source of truth.
+
+**Snapshot date:** 2026-11-07  
+**Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** `early-alpha` (renamed from `feat/wayland-socket-error-handling`)  
 **Latest runtime typography milestone:** Settings now adjusts the document em size from 8px to 24px in two-pixel steps. Changes share the active em size across hmtx advances, glyph rasterization, OS/2/hhea line pitch, and a rebuilt visual-row index. Font-family selection and persistent preferences remain unfinished; the synthetic-font regression verifies 12→24→12px reflow.  
 **Latest visual polish fix:** [5ec45df](https://github.com/GraderGamer2/NekoEdit/commit/5ec45df48d589210f38013a87788c72266a87236) aligned picker captions and field underlines; this follow-up moves Open/Save titles down four design pixels and adds an eight-pixel gap before the byte-count value. The new framebuffer assertions are covered by the current CI run.  
@@ -174,14 +195,15 @@ The document core now implements **extended grapheme-cluster-aware editing**, bu
 ## Known unfinished work
 
 
-- Unicode glyph lookup/font rendering.
-- Non-ASCII keyboard text input, IME, compose and dead-key handling.
-- Undo/redo.
-- Clipboard copy/cut/paste using the Wayland data-device protocol and immutable snapshots.
+- Non-ASCII keyboard text input, Wayland text-input/IME, compose and dead-key handling; physical keyboard insertion remains ASCII-only.
 - Horizontal scrolling and fuller viewport controls.
-- Output scale handling, fractional scaling, and multi-buffer/frame scheduling. Window resize/reconfigure and dynamic wl_buffer replacement are now implemented; the current renderer keeps one active buffer and waits for release before reusing or replacing it.
+- Output/fractional-scale handling and release-tracked multi-buffer scheduling; window resize/reconfigure and dynamic wl_buffer replacement are implemented, but only one active buffer is used.
+- Runtime font-family/file selection, persistent typography/UI preferences, kerning, complex shaping and grapheme mark positioning.
+- Full XKB type/modifier/action semantics, non-ASCII keysyms and keypad behavior.
+- X11 backend and X11 clipboard support.
+- Find/replace and unsaved-document confirmation before Open replaces edited content.
 - Unsaved-document confirmation before Open replaces an edited document.
-- Clipboard paste and Shift-based partial selection in picker fields are not implemented. Path and filename fields now support mouse-positioned cursors, insertion, Left/Right, Home/End, Backspace/Delete, Ctrl+A replacement, and horizontal cursor-follow rendering.
+- Clipboard paste into picker/path/name fields and Shift-based partial selection in those fields are not implemented. The editor document supports Wayland clipboard shortcuts; picker fields retain their separate ASCII editing path.
 - Directory listings are capped at 128 entries (15 visible rows). Open-mode filename search is a case-insensitive prefix match over the currently loaded regular-file entries; there is no recursive/fuzzy search, bookmarks, filters, or incremental large-directory browsing.
 - Symbolic-link navigation is not implemented; the picker navigates directories and opens regular files.
 - Full XKB type/modifier/virtual-modifier/action semantics and broader non-ASCII keysyms.
@@ -194,7 +216,9 @@ File-operation limitations: picker path and filename typing is ASCII-only; non-A
 
 - `src/entry.S` — freestanding entry point, command-line parsing, backend launch, help/version.
 - `src/linux/syscall.S` — low-level syscall helpers.
-- `src/backend/wayland.S` — Wayland protocol, window/UI, input, mmap-backed dynamically growing gap-buffer storage, per-line byte/visual-row index with Fenwick trees, rendering, file operations, and UTF-8 code-point helpers.
+- `src/backend/wayland.S` — Wayland protocol, window/UI, input, mmap-backed gap buffer, per-line index/Fenwick trees, editor rendering, file operations, and UTF-8/grapheme helpers.
+- `src/backend/clipboard.c` — Wayland data-device copy/cut/paste and asynchronous pipe transfers.
+- `src/editor/history.c` — bounded document undo/redo snapshots.
 - `src/backend/xkb.S` — bounded XKB text-v1 parser and ASCII symbol lookup.
 - `tests/smoke.sh` — CLI smoke tests.
 - `tests/wayland_mock.py` — mock compositor and end-to-end protocol/editor regression tests.
@@ -205,7 +229,7 @@ File-operation limitations: picker path and filename typing is ASCII-only; non-A
 
 ## User-reported desktop validation
 
-Keep these separate from the automated test results:
+The #440 clipboard/history artifact has not yet been reported as manually tested on GNOME/Mutter. Prior real-desktop confirmations below apply only to the builds and features described in those entries. Keep manual reports separate from automated mock-compositor results:
 
 - The user confirmed that typing the previously problematic printable symbol sequence `!@#$%^&*()_+{}|:"<>?` works in the tested Actions build.
 - After the UTF-8 code-point-safe milestone, the user reported that the UTF-8 formatting looked fine and earlier implementations remained usable.
