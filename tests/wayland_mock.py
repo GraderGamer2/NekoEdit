@@ -320,8 +320,8 @@ def run(
                         "bind cursor-shape manager",
                     )
                     expect_message(
-                        client, (17, 1, struct.pack("<I", 15)),
-                        "get cursor-shape pointer",
+                        client, (17, 1, struct.pack("<II", 18, 15)),
+                        "get cursor-shape pointer (new device ID 18, wl_pointer ID 15)",
                     )
                     expect_message(
                         client, (18, 1, struct.pack("<II", 777, 1)),

@@ -5308,12 +5308,14 @@ cursor_shape_setup:
     lea edx, [rax + 1]
     mov dword ptr [rip + next_client_object_id], edx
     mov dword ptr [rip + cursor_shape_device], eax
-    mov eax, dword ptr [rip + pointer_object]
+    # get_pointer arguments are (new cursor-shape device ID, existing wl_pointer ID).
     mov dword ptr [rip + payload_buffer], eax
+    mov eax, dword ptr [rip + pointer_object]
+    mov dword ptr [rip + payload_buffer + 4], eax
     mov edi, r12d
     mov esi, 1                  # wp_cursor_shape_manager_v1.get_pointer
     lea rdx, [rip + payload_buffer]
-    mov ecx, 4
+    mov ecx, 8
     call wl_send_request
     test rax, rax
     js .cursor_shape_setup_return
