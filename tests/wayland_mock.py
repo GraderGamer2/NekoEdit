@@ -1529,6 +1529,7 @@ xkb_symbols "nekoedit-sparse" {
                     end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
                     if (start, end) != (13, 17):
                         raise AssertionError(f"F3 did not select the next fish: range=({start},{end})")
+                    key_step(1915, 1, "Escape closes Find before opening Replace")
                     workflow_shortcut(1920, 35, "Ctrl+H opens Find/Replace")
                     if child_u32("find_replace_mode") != 2:
                         raise AssertionError("Ctrl+H did not open Find/Replace mode")
@@ -1543,7 +1544,6 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     if child_u32("find_status") != 3:
                         raise AssertionError("Replace Current did not report a replacement")
-                    workflow_shortcut(1970, 35, "Ctrl+H reopens Find/Replace for Replace All")
                     panel_x = child_u32("find_panel_x")
                     panel_y = child_u32("find_panel_y")
                     panel_width = child_u32("find_panel_width")
