@@ -4368,7 +4368,9 @@ write_stderr_u32:
     test eax, eax
     jnz .write_stderr_u32_loop
 .write_stderr_u32_ready:
-    lea rdx, [rsp + 16]
+    # RSP+15 is the exclusive end of the 16-byte scratch area; do not
+    # include the unused terminator/padding byte after the final digit.
+    lea rdx, [rsp + 15]
     sub rdx, rbx
     mov edi, 2
     mov rsi, rbx
