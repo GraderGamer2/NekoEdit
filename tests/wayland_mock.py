@@ -489,7 +489,7 @@ def run(
                         struct.pack(
                             "<Iii", 777,
                             (50 if utf8_pointer_test else (34 if gap_buffer_test else (18 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or dynamic_growth_test or grapheme_test) else (27 if font_parser_test else 98)))) * 256,
-                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test or grapheme_test) else 110) * 256,
+                            (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test or grapheme_test or font_parser_test) else 110) * 256,
                         ),
                     )
                     + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
