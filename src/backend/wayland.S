@@ -4506,6 +4506,8 @@ load_document_from_path:
     mov ecx, r13d
     rep movsb
     mov dword ptr [rip + doc_length], r13d
+    mov dword ptr [rip + doc_line_index_valid], 0
+    mov dword ptr [rip + doc_line_count], 0
     mov dword ptr [rip + doc_gap_start], r13d
     mov eax, dword ptr [rip + doc_capacity]
     mov dword ptr [rip + doc_gap_end], eax
