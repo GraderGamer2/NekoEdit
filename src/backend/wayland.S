@@ -9771,6 +9771,15 @@ doc_visual_to_offset_indexed:
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_control:
+    # A CRLF pair is one grapheme. A click at the logical line end must
+    # remain before CR rather than returning the invalid boundary between CR/LF.
+    cmp eax, 13
+    jne .Ldoc_visual_indexed_control_byte
+    lea edi, [r13d + 1]
+    call doc_byte_at
+    cmp eax, 10
+    je .Ldoc_visual_indexed_done
+.Ldoc_visual_indexed_control_byte:
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_done:
@@ -9885,6 +9894,20 @@ doc_visual_to_offset_legacy:
     inc r14d
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_skip:
+    # The scan fallback also keeps pointer hit-testing outside a CRLF pair.
+    cmp eax, 13
+    jne .Lneko_visual_offset_skip_byte
+    lea edi, [r14d + 1]
+    call doc_byte_at
+    cmp eax, 10
+    jne .Lneko_visual_offset_skip_byte
+    cmp ebx, r12d
+    je .Lneko_visual_offset_end
+    inc ebx
+    xor ecx, ecx
+    add r14d, 2
+    jmp .Lneko_visual_offset_scan
+.Lneko_visual_offset_skip_byte:
     inc r14d
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_end:

@@ -1162,6 +1162,26 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     serial += 20
 
+                    # Clicking after the final visible grapheme on the first
+                    # line must land before CRLF, never between CR and LF.
+                    workflow_click(96, 98, serial, "pointer before CRLF line ending")
+                    crlf_pointer_state = read_document_state()
+                    if crlf_pointer_state["doc_cursor"] != offsets[10]:
+                        raise AssertionError(
+                            "pointer hit-testing exposed the interior of a CRLF cluster: "
+                            + repr({"cursor": crlf_pointer_state["doc_cursor"],
+                                    "expected": offsets[10]})
+                        )
+                    serial += 10
+                    key_step(serial, 106, "Right across CRLF grapheme")
+                    serial += 2
+                    if read_document_state()["doc_cursor"] != offsets[11]:
+                        raise AssertionError("Right did not cross CRLF as one grapheme")
+                    key_step(serial, 105, "Left across CRLF grapheme")
+                    serial += 2
+                    if read_document_state()["doc_cursor"] != offsets[10]:
+                        raise AssertionError("Left did not return to the boundary before CRLF")
+
                     # Backspace removes the entire preceding emoji modifier
                     # cluster, not just the modifier or base scalar.
                     target_cluster = 3
