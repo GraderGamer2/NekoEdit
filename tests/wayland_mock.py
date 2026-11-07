@@ -937,6 +937,10 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_byte_points", "font_probe_byte_first_x",
                         "font_probe_byte_first_y", "font_probe_byte_last_x",
                         "font_probe_byte_last_y",
+                        "font_probe_raster_result", "font_probe_raster_width",
+                        "font_probe_raster_height", "font_probe_raster_pixels",
+                        "font_probe_curve_result", "font_probe_curve_width",
+                        "font_probe_curve_height", "font_probe_curve_pixels",
                     }
                     for symbol_line in nm_text.splitlines():
                         fields = symbol_line.split()
@@ -1028,7 +1032,7 @@ xkb_symbols "nekoedit-sparse" {
                     if not values["font_file_map"] or not values["font_file_size"] or mismatch or raster_errors:
                         raise AssertionError(
                             "synthetic TrueType outline/rasterization validation failed: "
-                            + repr({"mismatch": mismatch, "state": values})
+                            + repr({"mismatch": mismatch, "raster_errors": raster_errors, "state": values})
                         )
                     if not antialiased_ink_present(12, 88, 24, 16):
                         raise AssertionError(
