@@ -9472,6 +9472,7 @@ text_input_update_state:
     je .Lti_cursor_rect_document
     call text_input_preedit_caret_position
     mov r13d, eax
+    mov eax, edx
     jmp .Lti_cursor_rect_ready
 .Lti_cursor_rect_document:
     mov edi, dword ptr [rip + doc_cursor]
