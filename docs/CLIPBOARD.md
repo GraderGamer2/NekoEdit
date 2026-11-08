@@ -14,7 +14,7 @@ Paste targets the document editor, not file-picker or path fields. Clipboard his
 
 ## Persistence after editor exit
 
-The Clipboard Service setting is in Settings and is enabled by default. It is persisted in ~/.nekoedit/preferences as clipboard_persistence=1 (or 0 when disabled).
+The Clipboard Service setting is in Settings and is enabled by default. It is persisted in ~/.nekoedit/preferences as clipboard_persistence=1 (or 0 when disabled). The toggle is evaluated when the editor closes; it does not leave a helper running while the editor is open.
 
 When enabled and NekoEdit owns a clipboard source at window close, NekoEdit forks a very small helper from the same executable. The child inherits the original Wayland connection, clipboard source object, and immutable snapshot. This is important: it does not connect as a second Wayland client and attempt to steal selection ownership, which the core data-device protocol does not authorize without a new valid input serial.
 
