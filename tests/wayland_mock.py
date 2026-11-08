@@ -1439,10 +1439,12 @@ xkb_symbols "nekoedit-sparse" {
                             "delete_surrounding_text(0, 0) did not remove the active selection"
                         )
 
-                    # Delete the remaining scalar before the caret as one action.
+                    # Ask to delete one byte from inside the remaining
+                    # three-byte scalar. The client must expand the range to
+                    # a UTF-8 boundary instead of leaving a broken sequence.
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
-                        wire_message(18, 4, struct.pack("<II", 3, 0))
+                        wire_message(18, 4, struct.pack("<II", 1, 0))
                         + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     expect_state(b"", 0, "delete-surrounding update")
@@ -1450,8 +1452,8 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_length") != 0:
                         raise AssertionError("delete_surrounding_text did not remove the requested bytes")
 
-                    # An out-of-range request on an empty document must be a
-                    # no-op and must not create an empty history transaction.
+                    # An out-of-range request on an empty document is clamped
+                    # to the available bytes and remains a no-op.
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         wire_message(18, 4, struct.pack("<II", 1, 0))
