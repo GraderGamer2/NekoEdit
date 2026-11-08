@@ -9238,8 +9238,12 @@ window_apply_pending_resize:
 
 .type application_exit, @function
 application_exit:
+    # This leaf exit path is entered through CALL with RSP=8 mod 16.
+    # Align the stack before calling the C handoff routine.
+    sub rsp, 8
     mov edi, dword ptr [rip + socket_fd]
     call clipboard_service_handoff
+    add rsp, 8
     mov edi, dword ptr [rip + socket_fd]
     cmp edi, 0
     jl .application_exit_now
