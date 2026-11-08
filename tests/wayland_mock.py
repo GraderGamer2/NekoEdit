@@ -2032,7 +2032,39 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(12, 0))
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("stale redo changed document contents after a new edit")
-                    # Ctrl+Shift+Z is also a conventional redo binding.
+
+                    # Exercise the visible History tab and its controls, not
+                    # only the keyboard shortcuts and the lower-level journal.
+                    workflow_click(240, 60, 2070, "open the History tab")
+                    if child_u32("history_tab_open") != 1:
+                        raise AssertionError("clicking the History tab did not switch pages")
+                    workflow_click(100, 316, 2080, "History page Undo button")
+                    if read_document_state()["doc_contents"] != b"abc":
+                        raise AssertionError("History page Undo button did not undo the latest edit")
+                    workflow_click(190, 316, 2090, "History page Redo button")
+                    if read_document_state()["doc_contents"] != b"abcq":
+                        raise AssertionError("History page Redo button did not redo the latest edit")
+
+                    # Export must open the existing native Save picker in
+                    # history-export mode; Escape safely returns to the page.
+                    workflow_click(280, 316, 2100, "History page Export button")
+                    if child_u32("picker_mode") != 2 or child_u32("history_export_mode") != 1:
+                        raise AssertionError("History Export did not open its Save picker")
+                    key_step(2110, 1, "Escape cancels History export")
+                    if child_u32("picker_mode") != 0 or child_u32("history_export_mode") != 0:
+                        raise AssertionError("cancelling History Export did not close the picker cleanly")
+
+                    # Delete removes only the journal. The document stays
+                    # intact and Ctrl+Z becomes a no-op until a fresh edit.
+                    workflow_click(368, 316, 2120, "History page Delete button")
+                    if read_document_state()["doc_contents"] != b"abcq":
+                        raise AssertionError("History Delete modified document bytes")
+                    workflow_shortcut(2130, 44, "Ctrl+Z after deleting History")
+                    if read_document_state()["doc_contents"] != b"abcq":
+                        raise AssertionError("History Delete left an undo record behind")
+                    observations.append(
+                        "History tab switching, Undo/Redo buttons, Export picker mode, cancellation, and Delete verified"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
