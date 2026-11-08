@@ -1662,3 +1662,12 @@ The XKB reader now supports the direct text-v1 virtual-modifier map mechanisms u
 The mock fixture declares `V03 = none`, associates two keys with V03, and binds those keys to Mod4 and Mod2. It verifies the resulting V03 mask is `0x50`, checks each key's individual real/virtual maps, inspects the reparsed custom type mask and Level2 entry, then sends a compositor state with Mod2+Mod4 and verifies the key inserts the second-level symbol. The existing explicit LevelThree/NumLock mappings, combined explicit mask, unbound names, bit-31 mask, duplicate declarations, custom eight-level type, Unicode input, and IME cases remain covered.
 
 This is intentionally a direct-map subset: keysyms used as indirect `modifier_map` targets are not resolved, and automatic virtual-modifier assignment from `xkb_compat` interpretation rules is not implemented. General key actions and `preserve[]` consumed-modifier semantics remain future work. This source/test snapshot awaits its complete Actions run.
+
+
+### Direct implicit virtual-modifier aggregation — Actions #659 passed
+
+Actions [Build and test #659](https://github.com/GraderGamer2/NekoEdit/actions/runs/42477515039) passed all eight workflow steps on [`e1f835b6ad8f`](https://github.com/GraderGamer2/NekoEdit/commit/e1f835b6ad8f1f6a1f021f6be0ab7f5117bc9603). The mock verifies direct key `virtualModifiers` properties, direct keycode `modifier_map` entries, effective-mask OR across two keys, reparsed type masks/maps, and actual Level2 insertion under a Mod2+Mod4 state. It also reruns all prior XKB explicit mapping, arbitrary type, eight-level, Unicode, IME, clipboard, editing, History, font, host, install, and ELF checks.
+
+For V03, the fixture begins with explicit encoding `none`; one key associates V03 with Mod4 and another with Mod2. The effective mask is asserted as `0x50`. The artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42477515039/artifacts/13615747665) is 91,922 bytes, artifact ID 13615747665, SHA-256 `8b58ca484f0012aa2c55837fce148915b176dbe2ea92c073bbae4ab4ebbf4bcc`, expiring 2026-11-15 11:51:02 UTC.
+
+Indirect keysym-based `modifier_map` resolution and `xkb_compat` interpretation/action binding remain unsupported; live GNOME/Mutter validation remains outstanding.

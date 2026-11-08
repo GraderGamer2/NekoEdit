@@ -25,7 +25,9 @@ This is not a replacement for libxkbcommon. The client does not resolve indirect
 
 The previous implementation snapshot passed [Actions #657](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064) on [`fb8d02836361`](https://github.com/GraderGamer2/NekoEdit/commit/fb8d02836361da3d15371ba26dd894672bc645f1). That run validated explicit virtual-modifier encodings, custom XKB types, the complete Wayland mock suite (including text-input-v3), host tests, freestanding ELF checks, install tests, executable inspection, and artifact upload. Artifact `13615510231` was 91,474 bytes; SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`.
 
-The current direct implicit-binding parser and its new two-key OR fixture are a later source/test snapshot and require their own complete PR Actions run before being marked validated. Live GNOME/Mutter testing with a real input method remains outstanding.
+Actions [Build and test #659](https://github.com/GraderGamer2/NekoEdit/actions/runs/42477515039) passed all eight workflow steps on [`e1f835b6ad8f`](https://github.com/GraderGamer2/NekoEdit/commit/e1f835b6ad8f1f6a1f021f6be0ab7f5117bc9603). The complete Wayland mock verified two key-level `virtualModifiers = V03` bindings, direct `modifier_map` bindings of one key to Mod4 and another to Mod2, the resulting effective V03 mask of 0x50, the reparsed custom type map, and actual Level2 insertion when the mock compositor sends Mod2+Mod4. The same run passed the existing explicit encoding, custom type, eight-level, Unicode, IME, editing, clipboard, history, font, host, install, and freestanding ELF checks. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42477515039/artifacts/13615747665) is 91,922 bytes (artifact ID `13615747665`), SHA-256 `8b58ca484f0012aa2c55837fce148915b176dbe2ea92c073bbae4ab4ebbf4bcc`, expiry 2026-11-15 11:51:02 UTC.
+
+Live GNOME/Mutter testing with a real input method remains outstanding.
 
 ### Deferred, unchanged areas
 
@@ -37,7 +39,7 @@ The current direct implicit-binding parser and its new two-key OR fixture are a 
 
 ### Next roadmap items
 
-1. Validate direct virtual-modifier aggregation and then test real GNOME/Mutter keymaps and an actual input method.
+1. Test direct virtual-modifier aggregation against real GNOME/Mutter keymaps and an actual input method.
 2. Add indirect keysym-based `modifier_map` resolution and `xkb_compat` interpretation-based virtual-modifier bindings.
 3. Implement modifier/key action semantics and preserve/consumed-modifier tracking; expand keyboard and Compose coverage.
 4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
