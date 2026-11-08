@@ -2117,17 +2117,17 @@ text_input_object: .long 0
 text_input_entered: .long 0
 text_input_enabled: .long 0
 text_input_commit_serial: .long 0
-text_input_state_ready: .long 1
+text_input_state_ready: .long 0
 text_input_pending_flags: .long 0
 text_input_pending_delete_before: .long 0
 text_input_pending_delete_after: .long 0
 text_input_pending_commit_length: .long 0
 text_input_pending_preedit_length: .long 0
-text_input_pending_preedit_cursor_begin: .long -1
-text_input_pending_preedit_cursor_end: .long -1
+text_input_pending_preedit_cursor_begin: .long 0
+text_input_pending_preedit_cursor_end: .long 0
 text_input_preedit_length: .long 0
-text_input_preedit_cursor_begin: .long -1
-text_input_preedit_cursor_end: .long -1
+text_input_preedit_cursor_begin: .long 0
+text_input_preedit_cursor_end: .long 0
 .balign 8
 text_input_commit_buffer: .zero 4096
 text_input_pending_preedit_buffer: .zero 4096
@@ -9145,6 +9145,11 @@ text_input_setup:
     lea edx, [rax + 1]
     mov dword ptr [rip + next_client_object_id], edx
     mov dword ptr [rip + text_input_object], eax
+    mov dword ptr [rip + text_input_state_ready], 1
+    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_pending_preedit_cursor_end], -1
+    mov dword ptr [rip + text_input_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_preedit_cursor_end], -1
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 13
     mov edi, r12d
