@@ -2,7 +2,7 @@
 
 ## Storage model
 
-src/editor/history.c implements a per-document, disk-backed delta journal. Journals live in ~/.nekoedit and use the .history extension. The filename is a stable hash of the document's absolute path; the journal also stores and verifies that path identity.
+src/editor/history.c implements a per-document, disk-backed delta journal. Journals live in ~/.nekoedit and use the .history extension. The filename is a stable hash of the document path string supplied by the editor; the journal also stores and verifies that path identity. A path opened under a different spelling (for example, a different symlink path) has a different journal identity.
 
 The directory is created with mode 0700; journal files and exported copies use mode 0600. NekoEdit does not create a central history database or copy the full document for every keystroke.
 
@@ -12,7 +12,7 @@ Each journal contains:
 - Grouped edit records containing byte offsets, removed bytes, inserted bytes, and the before/after caret and selection state.
 - A current Undo/Redo cursor and the checksum of the last successfully saved document.
 
-A keyboard editing action becomes one record. Replacement of a selection, typing a multi-byte UTF-8 scalar, deletion, and paste therefore undo as one grouped action when the operation completes within that input action. The journal is delta-based: disk growth follows the bytes changed and per-action metadata rather than document size multiplied by undo depth. It has no former 16-entry stack or 32 MiB RAM snapshot ceiling. The file format uses checked 32-bit record lengths and 64-bit file offsets, so it remains bounded by available disk space and addressable journal size rather than being literally infinite.
+A keyboard editing action becomes one record. Replacement of a selection, typing a multi-byte UTF-8 scalar, deletion, and local paste undo as one grouped action. External Wayland paste completes asynchronously, so `insert_text()` explicitly opens and commits a single history transaction when the received bytes are finally inserted. The journal is delta-based: disk growth follows the bytes changed and per-action metadata rather than document size multiplied by undo depth. It has no former 16-entry stack or 32 MiB RAM snapshot ceiling. The file format uses checked 32-bit record lengths and 64-bit file offsets, so it remains bounded by available disk space and addressable journal size rather than being literally infinite.
 
 ## Restart recovery and safety
 
@@ -37,3 +37,6 @@ This makes the active document's history exportable or removable without opening
 ## Validation
 
 make test includes a host-side journal test covering grouped replacement, branch invalidation, more than 16 edits, save/checksum-based restart recovery, export, delete, and file permissions. The Wayland mock suite separately exercises the editor's keyboard and UI routes.
+
+
+The Wayland mock additionally verifies the visible History tab (Undo/Redo buttons, Export picker opening/cancellation, and Delete) and that an asynchronous external clipboard paste is undoable/redoable as one action. The host-side journal test verifies that Delete removes the journal without changing document bytes and that subsequent edits create a fresh journal.

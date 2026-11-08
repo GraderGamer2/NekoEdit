@@ -20,7 +20,7 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
-- The current implementation also includes `src/backend/clipboard.c` for Wayland clipboard transfers and `src/editor/history.c` for bounded Undo/Redo snapshots. `docs/CLIPBOARD.md` records clipboard ownership/persistence requirements, and `docs/UNDO.md` records the current snapshot limits plus the proposed delta-journal design.
+- The current implementation includes `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for per-document disk-backed delta journals. `docs/CLIPBOARD.md` records the helper lifecycle and session limits; `docs/UNDO.md` describes journal format, recovery validation, permissions, and History-tab management.
 
 ## Wayland window management and resize behavior
 

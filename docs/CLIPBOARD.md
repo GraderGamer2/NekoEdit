@@ -10,7 +10,7 @@ The Wayland backend uses the core wl_data_device_manager, wl_data_device, wl_dat
 
 The snapshot is independent of the document gap buffer and stays valid after the source text is deleted, edited, reallocated, or its document is closed. The active implementation currently has eight reusable source records, four concurrent outgoing-send slots, and a 64 MiB payload/receive ceiling. These are bounded resource/concurrency limits, not a lifetime count of sequential clipboard operations. Completed and retired slots can be reused.
 
-Paste targets the document editor, not file-picker or path fields. Clipboard history is not accumulated: the service retains the current clipboard selection only.
+Paste targets the document editor, not file-picker or path fields. Clipboard history is not accumulated: the service retains the current clipboard selection only. Both local paste and asynchronous external paste are committed as one Undo/Redo transaction.
 
 ## Persistence after editor exit
 
@@ -29,3 +29,8 @@ Turn Clipboard Service OFF in Settings to skip the handoff on subsequent editor 
 The text source offers standard UTF-8 plain-text MIME types. As with any Wayland data source, the compositor and receiving clients control when they request the bytes. A compositor that disconnects the client or ends the session terminates the helper. The service does not provide X11 clipboard interoperability; X11 support belongs to the future X11 backend.
 
 See the implementation in src/backend/clipboard.c.
+
+
+## Regression coverage
+
+The Wayland mock compositor verifies Ctrl+C/X snapshot independence, asynchronous external Ctrl+V, Undo/Redo of the completed asynchronous paste, and the post-exit helper lifecycle: it requests the data only after the editor closes, then replaces the selection and verifies the helper disconnects. GitHub Actions [Build and test #600](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445630695) passed the helper lifecycle test; [#601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) also passed asynchronous-paste Undo/Redo. The helper is mock-compositor tested; a live GNOME/Mutter clipboard-manager interoperability check remains a separate manual desktop test.

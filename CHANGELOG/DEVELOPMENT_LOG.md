@@ -1,3 +1,37 @@
+## 2026-11-08 — process-exit clipboard helper, disk-backed Undo/Redo, and History UI
+
+### Implementation
+
+- Replaced the bounded full-document Undo/Redo snapshot stacks with per-document delta journals in src/editor/history.c. Journals are stored as ~/.nekoedit/*.history, with private directory/file modes 0700/0600. The format records baseline bytes, inserted/removed ranges, caret/selection state, journal cursor, and last-saved document hash. Named-document restart recovery validates the saved file hash before replay; externally modified files reset the journal rather than receiving stale edits.
+- Added the bundled clipboard helper to src/backend/clipboard.c. When enabled and a source is owned, closing the toplevel forks the same executable and inherits the original Wayland client socket and immutable source snapshot. The process is named nekoedit-clip; it answers future send events and exits when ownership changes, the source is cancelled, or the compositor disconnects.
+- Added the default-on Clipboard Service preference to ~/.nekoedit/preferences and the Settings context menu. The helper is not active while the editor is open; it is created only as the editor closes. Setting it OFF skips handoff on later exits.
+- Added the History tab next to the document tab, with Undo/Redo counts and Undo, Redo, Export, and Delete controls. Export uses the existing native Save picker and atomic file replacement; Delete removes the active document's journal without changing its text.
+- Wrapped the delayed external Wayland paste insertion in its own history transaction. Since the received bytes arrive after the Ctrl+V key event, the history action begins at the actual asynchronous insertion boundary; Ctrl+Z/Ctrl+Y now undo/redo the complete received payload as one action.
+
+### Regression tests
+
+- Added tests/history_test.c to make test: grouped selection replacement, Undo/Redo, branch invalidation, more than 16 edits, saved-file checksum recovery after simulated restart, Export, Delete, and filesystem permissions.
+- Extended the Wayland mock to copy/cut immutable snapshots, serve clipboard data after the parent editor has closed, replace the selection and observe helper shutdown, and Undo/Redo an asynchronous external paste.
+- Added History-page interaction coverage: switch tabs, use visible Undo/Redo buttons, open/cancel Export picker, and Delete. The first UI test passed its interaction assertions but its redundant no-op Ctrl+Z following Delete caused a teardown failure; that extra shortcut was removed while the host journal test continues to verify empty history after deletion.
+
+### Build iterations and verification
+
+- The first clipboard helper run (#599) built but returned an empty transfer pipe after parent exit. Inspection traced this to stack alignment at the assembly-to-C call in application_exit; adding the required eight-byte adjustment fixed the handoff.
+- Actions [Build and test #600](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445630695) passed all workflow steps and explicitly verified that the helper served the selection after parent exit and then exited after selection replacement.
+- Actions [Build and test #601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) passed all workflow steps, including disk history recovery, async paste Undo/Redo, the post-exit helper lifecycle, and artifact upload (80,540 bytes; artifact ID 13603671857).
+- Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) passed all eight workflow steps on ae633fa5d654, including the full History-page interaction test and artifact upload (80,540 bytes; artifact ID 13602839495).
+- Manual GNOME/Mutter validation is still outstanding: verify helper visibility/name in the task manager, clipboard retention after closing the editor, the Settings toggle, and History-page layout/actions in the actual desktop session.
+
+### Remaining limitations and next work
+
+- Clipboard persistence is session-scoped and retains only the current selection. It does not preserve clipboard entries across logout, reboot, or compositor shutdown; it is not a clipboard history manager. Payload and simultaneous transfer limits remain.
+- Untitled documents use a per-process history identity; restart recovery is intended for named document paths. For named documents, recovery is guarded by the last-saved on-disk checksum. Disk-full/corruption reporting is surfaced in the History page; storage remains bounded by journal record/file-format limits.
+- Test the new features on the user's live GNOME Wayland desktop before considering the manual milestone complete. Continue the existing XKB/Compose, shaping/layout, scaling, multi-buffer, and X11 roadmap afterward.
+
+Implementation/test commit sequence: 898f2a6a5f80, 209757e87da8, cfa1207375fb, 83885552453a, a6a9ee97ac14, 1f8b52484607, 9a8bca854431, 53102440c5de, c8b9f5d992e0, 7584a126b1e4, 5c2a097d5d2b, 2eaa9eb54fcb, ae633fa5d654.
+
+---
+
 ## 2026-11-08 — Manual selection confirmation and clipboard/history review (documentation only)
 
 ### User-reported desktop result

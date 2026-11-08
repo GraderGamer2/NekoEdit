@@ -5,9 +5,29 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **347** (333 earlier implementation commits + seven dead-key recognition/composition and regression/fix commits + two Greek/Cyrillic alias commits + five Multi_key Compose implementation/fix/test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **360** (347 earlier implementation/test commits + 13 clipboard-service, disk-history, History UI, regression, and fix commits in the 2026-11-08 follow-up; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Clipboard service and disk-backed Undo/Redo (2026-11-08)
+
+| Commit | Subject |
+|---|---|
+| [898f2a6a5f80](https://github.com/GraderGamer2/NekoEdit/commit/898f2a6a5f80e563f86765a46adca06d93105e24) | feat: add disk-backed edit journal and clipboard handoff service |
+| [209757e87da8](https://github.com/GraderGamer2/NekoEdit/commit/209757e87da87634de1042482cb6eef0b5a77ad3) | feat: expose clipboard service preference in Settings |
+| [cfa1207375fb](https://github.com/GraderGamer2/NekoEdit/commit/cfa1207375fb4a30c5ca87c7d4f87f8790ed5a56) | feat: add active-document History manager and journal export |
+| [83885552453a](https://github.com/GraderGamer2/NekoEdit/commit/83885552453a2583ec6ec8d7d6c8e86f0066d9b5) | fix: route History controls and preserve renderer registers |
+| [a6a9ee97ac14](https://github.com/GraderGamer2/NekoEdit/commit/a6a9ee97ac14d7cf9df0d382817ad260b388c585) | test: cover clipboard settings and persistent history; document new workflows |
+| [1f8b52484607](https://github.com/GraderGamer2/NekoEdit/commit/1f8b5248460778af1f59742fc3b6258f62d9b8df) | test: mirror editor mutation hooks in journal fixture |
+| [9a8bca854431](https://github.com/GraderGamer2/NekoEdit/commit/9a8bca854431d68c79889bac1fc84b4de9d3279b) | test: fix recovered journal record count assertion |
+| [53102440c5de](https://github.com/GraderGamer2/NekoEdit/commit/53102440c5dec6bb23832ce278a5068cbbe74874) | test: report journal recovery counters on failure |
+| [c8b9f5d992e0](https://github.com/GraderGamer2/NekoEdit/commit/c8b9f5d992e0c2fd4c34e1a6f4d9c6be56e2cf7c) | test: verify clipboard owner serves data after editor exit |
+| [7584a126b1e4](https://github.com/GraderGamer2/NekoEdit/commit/7584a126b1e46ef034b16a56a1a1fc2cbc075aa9) | fix: align stack before clipboard service handoff |
+| [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) | fix: record asynchronous clipboard paste in edit history |
+| [2eaa9eb54fcb](https://github.com/GraderGamer2/NekoEdit/commit/2eaa9eb54fcb503456eaf902103d918650b10d10) | test: exercise History tab controls in Wayland mock |
+| [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440) | test: avoid a redundant no-op shortcut after History deletion |
+
+Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) passed all eight workflow steps, including the History-tab UI, external clipboard helper lifetime, asynchronous paste Undo/Redo, and host journal tests. Artifact [13602839495](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495) is 80,540 bytes.
 
 ## Bounded XKB dead-key composition
 

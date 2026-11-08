@@ -604,3 +604,34 @@ Six common XKB dead-key names are now recognized: grave, acute, circumflex, tild
 The mock compositor verifies that AC04 maps to the reserved dead_acute action, dead acute followed by e inserts UTF-8 for é, dead acute followed by g preserves g plus U+0301, and Backspace/Escape cancellation leaves document bytes and length unchanged. This is a deliberately bounded first compose implementation: general Compose sequences/tables, locale-specific mappings, full XKB actions/types, and Wayland text-input/IME remain unimplemented.
 
 GitHub Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the full build/ELF, CLI, preferences, Wayland mock-compositor, executable-inspection, and artifact-upload workflow on [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad). Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes with uploaded ZIP SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8. Automated verification is complete; live GNOME/Mutter testing remains outstanding.
+
+
+---
+
+## 32. Phase AB — process-exit clipboard service and disk-backed edit history
+
+### Clipboard service bundled into NekoEdit
+
+The optional Clipboard Service preference is stored in ~/.nekoedit/preferences and defaults to enabled. When NekoEdit owns a clipboard selection at window close, the existing executable forks a small child and labels the process nekoedit-clip. It inherits the original Wayland connection, existing wl_data_source, and independent immutable clipboard snapshot; it does not reconnect as another client or attempt to reacquire ownership. The service handles future wl_data_source.send requests through the existing nonblocking transfer state machine.
+
+The helper exits when the compositor reports that the selection has changed, the source is cancelled, or the Wayland connection closes. It only retains the latest selection for the current session; it is not a clipboard manager or persistent clipboard history. The helper is not running beside the editor during normal editing; the fork occurs in the editor's window-close path. The feature is disabled when the persisted setting is off.
+
+The first post-exit integration test failed with an empty transfer pipe. Inspection found that the assembly application_exit call site did not align the stack for the nested C handoff call under the SysV x86-64 ABI. The call is now bracketed by an eight-byte stack adjustment. Actions [Build and test #600](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445630695) then passed and the mock log confirmed the helper served the copied bytes after the parent exited, then disconnected after selection replacement.
+
+### Disk-backed per-document Undo/Redo
+
+Replaced the former full-document snapshot stacks with a disk-backed delta journal in src/editor/history.c. Each named document receives a private .history file under ~/.nekoedit/, keyed by a hash of the pathname identity. The journal stores baseline bytes, grouped changed ranges, the bytes removed/inserted, before/after caret and selection state, an Undo/Redo cursor, and a checksum of the last successfully saved document. The directory is created mode 0700; journal/export files use 0600.
+
+Undo/Redo now scales with changed bytes and edit metadata instead of copying the entire document for each history entry. New edits after Undo discard the obsolete Redo branch. A saved-document checksum protects recovery: on restart, the journal is replayed only if the current file still matches the last successful save. External modifications reset the journal rather than allowing stale edits to replace external content. Untitled documents use a per-process identity, so restart recovery requires a named document path.
+
+The History tab beside the document tab displays Undo/Redo counts and exposes Undo, Redo, Export, and Delete. Export copies the current journal through the native Save picker with atomic replacement. Delete removes the journal without changing the open document; future edits start a new journal. An isolated host test covers grouping/replacement, Redo invalidation, more than 16 actions, restart recovery, export, deletion, and permissions.
+
+External Wayland paste arrives asynchronously after the Ctrl+V key event, so the insertion routine now wraps the actual received-byte mutation in its own history transaction. This makes delayed external paste one Undo/Redo action, like local paste. The Wayland mock checks Ctrl+Z removes that paste and Ctrl+Y restores it.
+
+### Regression coverage and verification
+
+The Wayland mock now verifies the helper lifetime after parent exit and selection replacement, asynchronous paste Undo/Redo, and the visible History-tab controls (tab switch, Undo/Redo buttons, Export picker open/cancel, Delete). The host history test verifies persistent journal recovery and file management independently of Wayland.
+
+Actions [Build and test #601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) passed the complete suite after the asynchronous paste transaction fix. The first History-page test iteration passed its UI assertions but failed during teardown after a redundant no-op Ctrl+Z following Delete; that extra shortcut was removed because the host test already verifies that a deleted journal no longer has Undo entries. Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) then passed all eight workflow steps on [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440), including build/ELF checks, CLI/preferences/history tests, the entire Wayland mock, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495) is 80,540 bytes (artifact ID 13602839495).
+
+The helper and History tab are validated by the mock compositor. A live GNOME/Mutter session check remains outstanding; do not claim user-side desktop behavior until the user reports it.
