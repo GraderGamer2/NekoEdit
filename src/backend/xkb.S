@@ -68,6 +68,22 @@
 .Lxkb_sym_iso5_shift:   .asciz "ISO_Level5_Shift"
 .Lxkb_sym_iso5_latch:   .asciz "ISO_Level5_Latch"
 .Lxkb_sym_iso5_lock:    .asciz "ISO_Level5_Lock"
+.Lxkb_sym_shift_lock:  .asciz "Shift_Lock"
+.Lxkb_sym_iso_lock:    .asciz "ISO_Lock"
+.Lxkb_sym_iso2_latch:  .asciz "ISO_Level2_Latch"
+.Lxkb_sym_iso_group_shift: .asciz "ISO_Group_Shift"
+.Lxkb_sym_greek_switch: .asciz "Greek_switch"
+.Lxkb_sym_script_switch: .asciz "script_switch"
+.Lxkb_sym_iso_group_latch: .asciz "ISO_Group_Latch"
+.Lxkb_sym_iso_group_lock: .asciz "ISO_Group_Lock"
+.Lxkb_sym_iso_next_group: .asciz "ISO_Next_Group"
+.Lxkb_sym_iso_next_group_lock: .asciz "ISO_Next_Group_Lock"
+.Lxkb_sym_iso_prev_group: .asciz "ISO_Prev_Group"
+.Lxkb_sym_iso_prev_group_lock: .asciz "ISO_Prev_Group_Lock"
+.Lxkb_sym_iso_first_group: .asciz "ISO_First_Group"
+.Lxkb_sym_iso_first_group_lock: .asciz "ISO_First_Group_Lock"
+.Lxkb_sym_iso_last_group: .asciz "ISO_Last_Group"
+.Lxkb_sym_iso_last_group_lock: .asciz "ISO_Last_Group_Lock"
 .Lxkb_mod_none:         .asciz "None"
 .Lxkb_mod_none_lower:   .asciz "none"
 .Lxkb_mod_all:          .asciz "all"
@@ -2823,6 +2839,71 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jnz .Lxkb_keysym_id_iso5_lock
+
+    lea rdi, [rip + .Lxkb_sym_shift_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_shift_lock
+    lea rdi, [rip + .Lxkb_sym_iso_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_lock
+    lea rdi, [rip + .Lxkb_sym_iso2_latch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso2_latch
+    lea rdi, [rip + .Lxkb_sym_iso_group_shift]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_group_shift
+    lea rdi, [rip + .Lxkb_sym_greek_switch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_group_shift
+    lea rdi, [rip + .Lxkb_sym_script_switch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_group_shift
+    lea rdi, [rip + .Lxkb_sym_iso_group_latch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_group_latch
+    lea rdi, [rip + .Lxkb_sym_iso_group_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_group_lock
+    lea rdi, [rip + .Lxkb_sym_iso_next_group]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_next_group
+    lea rdi, [rip + .Lxkb_sym_iso_next_group_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_next_group_lock
+    lea rdi, [rip + .Lxkb_sym_iso_prev_group]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_prev_group
+    lea rdi, [rip + .Lxkb_sym_iso_prev_group_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_prev_group_lock
+    lea rdi, [rip + .Lxkb_sym_iso_first_group]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_first_group
+    lea rdi, [rip + .Lxkb_sym_iso_first_group_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_first_group_lock
+    lea rdi, [rip + .Lxkb_sym_iso_last_group]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_last_group
+    lea rdi, [rip + .Lxkb_sym_iso_last_group_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso_last_group_lock
     xor eax, eax
     ret
 .Lxkb_keysym_id_shift_l:      mov eax, 0xffe1; ret
@@ -2847,6 +2928,20 @@ xkb_reset_keymap:
 .Lxkb_keysym_id_iso5_shift:   mov eax, 0xfe11; ret
 .Lxkb_keysym_id_iso5_latch:   mov eax, 0xfe12; ret
 .Lxkb_keysym_id_iso5_lock:    mov eax, 0xfe13; ret
+.Lxkb_keysym_id_shift_lock:   mov eax, 0xffe6; ret
+.Lxkb_keysym_id_iso_lock:     mov eax, 0xfe01; ret
+.Lxkb_keysym_id_iso2_latch:   mov eax, 0xfe02; ret
+.Lxkb_keysym_id_iso_group_shift: mov eax, 0xff7e; ret
+.Lxkb_keysym_id_iso_group_latch: mov eax, 0xfe06; ret
+.Lxkb_keysym_id_iso_group_lock:  mov eax, 0xfe07; ret
+.Lxkb_keysym_id_iso_next_group:  mov eax, 0xfe08; ret
+.Lxkb_keysym_id_iso_next_group_lock: mov eax, 0xfe09; ret
+.Lxkb_keysym_id_iso_prev_group:  mov eax, 0xfe0a; ret
+.Lxkb_keysym_id_iso_prev_group_lock: mov eax, 0xfe0b; ret
+.Lxkb_keysym_id_iso_first_group: mov eax, 0xfe0c; ret
+.Lxkb_keysym_id_iso_first_group_lock: mov eax, 0xfe0d; ret
+.Lxkb_keysym_id_iso_last_group:  mov eax, 0xfe0e; ret
+.Lxkb_keysym_id_iso_last_group_lock: mov eax, 0xfe0f; ret
 .size .Lxkb_keysym_modifier_id, . - .Lxkb_keysym_modifier_id
 
 .type .Lxkb_keysym_unicode, @function
