@@ -2902,17 +2902,26 @@ xkb_reset_keymap:
     inc r14d
     jmp .Lxkb_key_block_infer_group
 .Lxkb_key_block_infer_done:
-    # Count only real Group1 alphabetic keys with a base symbol.
-    lea rbx, [rip + xkb_group_types]
-    mov eax, r15d
-    shl eax, 2
-    cmp byte ptr [rbx + rax], 1
-    jne .Lxkb_key_block_return
-    lea rbx, [rip + xkb_ascii_levels]
+    # Count alphabetic keys from their actual Group1 symbols, not from the
+    # conventional type name/ID. Real layouts commonly assign types such as
+    # FOUR_LEVEL_ALPHABETIC or a user-defined type to letter keys.
     mov eax, r15d
     shl eax, 5
-    cmp byte ptr [rbx + rax], 0
-    je .Lxkb_key_block_return
+    lea rbx, [rip + xkb_ascii_levels]
+    movzx edx, byte ptr [rbx + rax]
+    cmp edx, 'a'
+    jb .Lxkb_key_block_return
+    cmp edx, 'z'
+    ja .Lxkb_key_block_return
+    movzx ecx, byte ptr [rbx + rax + 1]
+    cmp ecx, 'A'
+    jb .Lxkb_key_block_return
+    cmp ecx, 'Z'
+    ja .Lxkb_key_block_return
+    sub edx, 'a'
+    sub ecx, 'A'
+    cmp edx, ecx
+    jne .Lxkb_key_block_return
     inc dword ptr [rip + .Lxkb_alpha_key_count]
 .Lxkb_key_block_return:
     xor eax, eax

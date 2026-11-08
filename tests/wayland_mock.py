@@ -703,6 +703,10 @@ xkb_types "nekoedit-test" {
         map[Shift] = Level2;
         map[Lock] = Level2;
     };
+    type "CUSTOM_ALPHA" {
+        modifiers = Shift;
+        map[Shift] = Level2;
+    };
     type "FOUR_LEVEL" {
         modifiers = Shift+LevelThree;
         map[Shift] = Level2;
@@ -747,22 +751,22 @@ xkb_symbols "nekoedit-test" {
         type = "ALPHABETIC",
         symbols[Group1] = [ s, S ]
     };
-    key <AD02> { [ w, W ] };
-    key <AD03> { [ e, E ] };
-    key <AD04> { [ r, R ] };
-    key <AD05> { [ t, T ] };
+    key <AD02> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ w, W ] };
+    key <AD03> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ e, E ] };
+    key <AD04> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ r, R ] };
+    key <AD05> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ t, T ] };
     key <AD06> {
         type = "SEPARATE_CAPS_AND_SHIFT_ALPHABETIC",
         symbols[Group1] = [ y, Y, at, quotedbl ]
     };
-    key <AD07> { [ u, U ] };
-    key <AD08> { [ i, I ] };
-    key <AD09> { [ o, O ] };
-    key <AD10> { [ p, P ] };
-    key <AC01> { [ a, A ] };
-    key <AC03> { [ d, D ] };
-    key <AC04> { [ f, F ] };
-    key <AC05> { [ g, G ] };
+    key <AD07> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ u, U ] };
+    key <AD08> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ i, I ] };
+    key <AD09> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ o, O ] };
+    key <AD10> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ p, P ] };
+    key <AC01> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ a, A ] };
+    key <AC03> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ d, D ] };
+    key <AC04> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ f, F ] };
+    key <AC05> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ g, G ] };
     key <AC06> { [ h, H ] };
     key <AC07> { [ j, J ] };
     key <AC08> { [ k, K ] };
@@ -989,14 +993,20 @@ xkb_symbols "nekoedit-sparse" {
                         ae01_levels = child_memory("xkb_ascii_levels", 10 * 32, 32)
                         ae02_name = child_memory("xkb_key_names", 11 * 4, 4)
                         ae02_levels = child_memory("xkb_ascii_levels", 11 * 32, 32)
+                        custom_alpha_type_id = child_memory("xkb_group_types", 25 * 4, 1)[0]
+                        custom_alpha_name = child_memory("xkb_type_names", 6 * 64, 64).split(bytes([0]), 1)[0]
+                        custom_alpha_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 6 * 4, 4))[0]
+                        custom_alpha_map_count = child_memory("xkb_type_map_counts", 6, 1)[0]
+                        custom_alpha_map_mask = struct.unpack("<I", child_memory("xkb_type_map_masks", 6 * 128, 4))[0]
+                        custom_alpha_map_level = child_memory("xkb_type_map_levels", 6 * 32, 1)[0]
                         custom_type_id = child_memory("xkb_group_types", 58 * 4, 1)[0]
-                        custom_type_name = child_memory("xkb_type_names", 6 * 64, 64).split(bytes([0]), 1)[0]
-                        custom_type_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 6 * 4, 4))[0]
-                        custom_map_count = child_memory("xkb_type_map_counts", 6, 1)[0]
+                        custom_type_name = child_memory("xkb_type_names", 7 * 64, 64).split(bytes([0]), 1)[0]
+                        custom_type_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 7 * 4, 4))[0]
+                        custom_map_count = child_memory("xkb_type_map_counts", 7, 1)[0]
                         custom_map_masks = struct.unpack(
-                            "<9I", child_memory("xkb_type_map_masks", 6 * 128, 36)
+                            "<9I", child_memory("xkb_type_map_masks", 7 * 128, 36)
                         )
-                        custom_map_levels = child_memory("xkb_type_map_levels", 6 * 32, 9)
+                        custom_map_levels = child_memory("xkb_type_map_levels", 7 * 32, 9)
                         virtual_count = struct.unpack("<I", child_memory("xkb_virtual_count", 0, 4))[0]
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
@@ -1013,7 +1023,13 @@ xkb_symbols "nekoedit-sparse" {
                             f"{levels!r}"
                         )
                     if (
-                        custom_type_id != 6
+                        custom_alpha_type_id != 6
+                        or custom_alpha_name != b"CUSTOM_ALPHA"
+                        or custom_alpha_mask != 1
+                        or custom_alpha_map_count != 1
+                        or custom_alpha_map_mask != 1
+                        or custom_alpha_map_level != 2
+                        or custom_type_id != 7
                         or custom_type_name != b"CUSTOM_EIGHT_LEVEL"
                         or custom_type_mask != 0x80000023
                         or custom_map_count != 9
@@ -1023,6 +1039,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
                             + repr({
+                                "alpha_type_id": custom_alpha_type_id,
+                                "alpha_name": custom_alpha_name,
+                                "alpha_mask": custom_alpha_mask,
+                                "alpha_map": (custom_alpha_map_count, custom_alpha_map_mask, custom_alpha_map_level),
                                 "type_id": custom_type_id,
                                 "name": custom_type_name,
                                 "mask": custom_type_mask,
@@ -3258,6 +3278,16 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     # This name is intentionally unlike every conventional type.
                     # The exact parsed map must choose all eight XKB levels.
+                    # A key assigned an arbitrary type name still counts as
+                    # alphabetic for keymap usability, and its declared Shift
+                    # map must select Level2 instead of a name-derived family.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1174, 1, 0, 0, 0))
+                    )
+                    key_step(1175, 17, "CUSTOM_ALPHA Shift selects its declared Level2")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1177, 0, 0, 0, 0))
+                    )
                     custom_states = (
                         (0, 0, "base"),
                         (1, 0, "Shift"),
@@ -6063,7 +6093,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9",
             keyboard_layout_test=True,
         )
     finally:
