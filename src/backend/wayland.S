@@ -9776,10 +9776,6 @@ text_input_apply_done:
     cmp dword ptr [rip + text_input_enabled], 1
     jne .Lti_apply_clear
     mov ebx, dword ptr [rip + text_input_pending_flags]
-    test ebx, 5
-    jz .Lti_apply_edit_ready
-    call history_begin_action
-.Lti_apply_edit_ready:
     test ebx, 4
     jz .Lti_apply_commit_text
     mov r12d, dword ptr [rip + text_input_pending_delete_before]
@@ -9811,6 +9807,10 @@ text_input_apply_done:
     cmp eax, 0x80
     je .Lti_apply_delete_invalid
 .Lti_apply_delete_bounds_ok:
+    mov eax, r12d
+    or eax, r13d
+    jz .Lti_apply_commit_text
+    call history_begin_action
     mov eax, r14d
     sub eax, r12d
     mov dword ptr [rip + doc_selection_anchor], eax
@@ -9831,6 +9831,12 @@ text_input_apply_done:
 .Lti_apply_commit_text:
     test ebx, 1
     jz .Lti_apply_history_end
+    cmp dword ptr [rip + text_input_pending_commit_length], 0
+    je .Lti_apply_history_end
+    test r15d, r15d
+    jnz .Lti_apply_commit_history_ready
+    call history_begin_action
+.Lti_apply_commit_history_ready:
     mov dword ptr [rip + doc_pending_dead_mark], 0
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
@@ -9850,7 +9856,7 @@ text_input_apply_done:
     inc r12d
     jmp .Lti_apply_insert_loop
 .Lti_apply_history_end:
-    test ebx, 5
+    test r15d, r15d
     jz .Lti_apply_preedit
     call history_commit_action
 .Lti_apply_preedit:
