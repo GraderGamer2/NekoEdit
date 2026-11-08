@@ -682,3 +682,12 @@ The implementation sends bounded UTF-8 surrounding text with caret/anchor byte o
 The mock compositor now exercises the complete protocol lifecycle, including enable/disable, preedit, a multibyte commit, valid and invalid deletion, serial handling, and redraw sequencing. Actions #621 passed all eight steps on the initial fully tested IME snapshot. A subsequent audit moved history transaction creation after deletion validation and added a dedicated invalid-range test; those last hardening changes await a fresh CI run. Live GNOME/Mutter testing with a real input method remains necessary.
 
 This is basic text-input-v3 integration, not complete IME presentation or Unicode text layout. Preedit attributes/cursor-end styling, candidate positioning at the preedit caret, complex shaping, and bidirectional layout remain future work. Clipboard, History UI/storage, and source-independent desktop installation packaging are unaffected by this milestone.
+
+ 
+## 2026-11-08 — XKB declared modifier maps and eight-level key types
+
+The physical keyboard path now evaluates declared XKB text-v1 key types from their actual modifier maps. Each key retains per-group type assignment, and type-map selection uses the full 32-bit modifier-index state delivered by Wayland. The parser supports up to four groups, eight symbol levels per group, 64 type definitions, 32 map entries per type, and 24 declared virtual modifiers. It handles named and numeric modifier masks and both numeric and `LevelN` level values.
+
+A deliberately custom eight-level fixture exercises combinations that cannot be inferred from conventional type names, including a virtual modifier at bit 31. Assertions inspect the parsed type tables and verify actual UTF-8 output for each level. Built-in family records remain as fallback for conventional keymaps; unknown/malformed types do not silently fall through to a guessed type.
+
+This remains a bounded XKB implementation rather than a reimplementation of libxkbcommon. The compositor supplies the modifier state; NekoEdit does not yet interpret `xkb_compat` rules, derive automatic virtual-modifier bindings, evaluate arbitrary key actions, or implement preserve/consumed-modifier reporting. The new source/test snapshot awaits its own complete Actions validation; live GNOME/Mutter and real IME behavior remain user-side checks.

@@ -70,8 +70,8 @@ The initial history was reconstructed from GitHub on 2026-11-06 and includes **1
 The project state in these files must be refreshed with every future development change. The compact-journal encoder declaration correction and inactive-selection-anchor size correction are recorded in `CHANGELOG/DEVELOPMENT_LOG.md`. Actions #608 and #609 stopped before the Wayland tests; corrected Actions #610 then passed the full build, host, install, Wayland mock, and artifact workflow. Live GNOME/Mutter verification remains separate.
 
 
-## Current IME milestone
+## Current keyboard-input milestone
 
-The current branch has optional `zwp_text_input_manager_v3` discovery/binding, document-scoped enable/disable, surrounding-text state, preedit/commit/delete event staging, UTF-8 validation, and mock coverage. Read the newest section in `CURRENT_STATUS.md` and `DEVELOPMENT_LOG.md` before continuing. Actions #621 passed the initial complete mock snapshot; the subsequent invalid-deletion transaction guard and test still require a fresh run at the current head. Live GNOME/Mutter input-method testing remains outstanding.
+The current branch has optional `zwp_text_input_manager_v3` discovery/binding, document-scoped enable/disable, surrounding-text state, preedit/commit/delete event staging, UTF-8 validation, and mock coverage. Its XKB text-v1 reader now parses declared per-key/per-group type maps, exact modifier filters, up to eight levels, and 32-bit real/virtual modifier-index masks. Read the newest section in `CURRENT_STATUS.md` and `DEVELOPMENT_LOG.md` before continuing. Actions #647 passed the preceding IME/type-family snapshot; the declared-map parser and its custom eight-level fixture need a fresh complete workflow run. Live GNOME/Mutter input-method testing remains outstanding.
 
 The History path filter is user-reported nonfunctional, and deeper journal compaction remains deferred. Do not describe the filter as working or mix History fixes into the input/shaping roadmap unless the user changes that priority.

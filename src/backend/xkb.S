@@ -1,11 +1,11 @@
 .intel_syntax noprefix
 
-# Bounded, dependency-free reader for the common XKB text-v1 subset used by
-# keyboard layouts. This intentionally handles compiled xkbcomp sections,
-# keycodes, symbols[GroupN], and the common TWO_LEVEL/ALPHABETIC/FOUR_LEVEL
-# type families. It is not a replacement for libxkbcommon: actions, virtual
-# modifier resolution, compose/dead keys, and Unicode text input are outside
-# this ASCII editor's current document model.
+# Bounded, dependency-free XKB text-v1 reader. It parses keycodes, symbols,
+# virtual-modifier indices, per-group key types, 32-bit modifier masks, and
+# exact modifiers-to-Level1..Level8 maps. It is not a replacement for
+# libxkbcommon: explicit modifier encodings, preserve[] consumed-modifier
+# semantics, xkb_compat action resolution, and general key actions are outside
+# this bounded reader.
 
 .section .rodata
 .Lxkb_section_keycodes: .asciz "xkb_keycodes"
@@ -13,6 +13,26 @@
 .Lxkb_word_key:         .asciz "key"
 .Lxkb_word_type:        .asciz "type"
 .Lxkb_word_symbols:     .asciz "symbols"
+.Lxkb_section_types:    .asciz "xkb_types"
+.Lxkb_word_virtual_modifiers: .asciz "virtual_modifiers"
+.Lxkb_word_map:         .asciz "map"
+.Lxkb_word_modifiers:   .asciz "modifiers"
+.Lxkb_word_preserve:    .asciz "preserve"
+.Lxkb_word_level_name:  .asciz "level_name"
+.Lxkb_mod_shift:        .asciz "Shift"
+.Lxkb_mod_lock:         .asciz "Lock"
+.Lxkb_mod_control:      .asciz "Control"
+.Lxkb_mod_mod1:         .asciz "Mod1"
+.Lxkb_mod_mod2:         .asciz "Mod2"
+.Lxkb_mod_mod3:         .asciz "Mod3"
+.Lxkb_mod_mod4:         .asciz "Mod4"
+.Lxkb_mod_mod5:         .asciz "Mod5"
+.Lxkb_mod_level_three:  .asciz "LevelThree"
+.Lxkb_mod_level_five:   .asciz "LevelFive"
+.Lxkb_mod_num_lock:     .asciz "NumLock"
+.Lxkb_mod_none:         .asciz "None"
+.Lxkb_mod_none_lower:   .asciz "none"
+.Lxkb_mod_all:          .asciz "all"
 .Lxkb_type_one_level:    .asciz "ONE_LEVEL"
 .Lxkb_type_alphabetic:  .asciz "ALPHABETIC"
 .Lxkb_type_four_level:  .asciz "FOUR_LEVEL"
@@ -969,6 +989,20 @@
     .long 0x110006
     .byte 0
 
+.Lxkb_builtin_type_names:
+.Lxkb_builtin_type_0: .asciz "TWO_LEVEL"
+    .zero 64 - (. - .Lxkb_builtin_type_0)
+.Lxkb_builtin_type_1: .asciz "ALPHABETIC"
+    .zero 64 - (. - .Lxkb_builtin_type_1)
+.Lxkb_builtin_type_2: .asciz "ONE_LEVEL"
+    .zero 64 - (. - .Lxkb_builtin_type_2)
+.Lxkb_builtin_type_3: .asciz "FOUR_LEVEL"
+    .zero 64 - (. - .Lxkb_builtin_type_3)
+.Lxkb_builtin_type_4: .asciz "KEYPAD"
+    .zero 64 - (. - .Lxkb_builtin_type_4)
+.Lxkb_builtin_type_5: .asciz "SEPARATE_CAPS_AND_SHIFT_ALPHABETIC"
+    .zero 64 - (. - .Lxkb_builtin_type_5)
+
 .section .bss
 .balign 16
 .Lxkb_text_ptr:         .quad 0
@@ -986,17 +1020,50 @@
 .Lxkb_number:           .long 0
 .Lxkb_keyname_tmp:      .zero 4
 .Lxkb_keyname_alias:    .zero 4
+.Lxkb_type_id:          .long 0
+.Lxkb_type_group:       .long 0
+.Lxkb_type_tmp_mask:    .long 0
+.Lxkb_type_tmp_level:   .long 0
+.Lxkb_type_map_slot:    .long 0
+.Lxkb_mask_delimiter:   .long 0
+.Lxkb_mask_accum:       .long 0
+.Lxkb_vmod_index:       .long 0
+.Lxkb_group_index:      .long 0
 .Lxkb_token:            .zero 64
 .balign 16
 .global xkb_key_names
 xkb_key_names:          .zero 1024        # 256 XKB keycodes, four-byte names
 .global xkb_ascii_levels
-xkb_ascii_levels:       .zero 16384       # 256 codes * 4 groups * 4 levels
+xkb_ascii_levels:       .zero 32768       # 256 codes * 4 groups * 8 levels plus guard space
 .balign 16
 .global xkb_unicode_levels
-xkb_unicode_levels:     .zero 65536       # uint32 scalars; 0x110001..0x110006 are dead-key actions
+xkb_unicode_levels:     .zero 131072      # uint32 scalars; 256 * 4 groups * 8 levels plus guard space
 .global xkb_key_types
-xkb_key_types:          .zero 256         # bit 0: alphabetic, bit 1: LevelThree, bit 2: ONE_LEVEL, bit 3: KEYPAD, bit 4: separate Caps/Shift
+xkb_key_types:          .zero 256         # legacy family flags retained for diagnostics
+.global xkb_group_types
+xkb_group_types:        .zero 1024        # 256 keys * 4 groups; 0xff means infer default
+.global xkb_group_symbol_counts
+xkb_group_symbol_counts: .zero 1024
+.global xkb_type_names
+xkb_type_names:         .zero 4096        # 64 type names * 64 bytes
+.global xkb_type_modifiers
+xkb_type_modifiers:     .zero 256         # 64 effective 32-bit modifier masks
+.global xkb_type_map_counts
+xkb_type_map_counts:    .zero 64
+.global xkb_type_map_masks
+xkb_type_map_masks:     .zero 8192        # 64 types * 32 exact modifier combinations
+.global xkb_type_map_levels
+xkb_type_map_levels:    .zero 2048        # 64 types * 32 one-byte LevelN values
+.global xkb_virtual_names
+xkb_virtual_names:     .zero 1536        # 24 virtual modifier names * 64 bytes
+.global xkb_virtual_count
+xkb_virtual_count:     .long 0
+.global xkb_level_three_mask
+xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
+.global xkb_num_lock_mask
+xkb_num_lock_mask:     .long 0           # initialized by xkb_reset_keymap
+.global xkb_type_count
+xkb_type_count:        .long 0
 .global xkb_keymap_ready
 xkb_keymap_ready:       .long 0
 
@@ -1005,25 +1072,104 @@ xkb_keymap_ready:       .long 0
 .type xkb_reset_keymap, @function
 xkb_reset_keymap:
     push rdi
+    push rsi
     push rcx
     xor eax, eax
     lea rdi, [rip + xkb_key_names]
     mov ecx, 1024
     rep stosb
     lea rdi, [rip + xkb_ascii_levels]
-    mov ecx, 16384
+    mov ecx, 32768
     rep stosb
     lea rdi, [rip + xkb_unicode_levels]
-    mov ecx, 65536
+    mov ecx, 131072
     rep stosb
     lea rdi, [rip + xkb_key_types]
     mov ecx, 256
     rep stosb
+    lea rdi, [rip + xkb_group_symbol_counts]
+    mov ecx, 1024
+    rep stosb
+    lea rdi, [rip + xkb_type_names]
+    mov ecx, 4096
+    rep stosb
+    lea rdi, [rip + xkb_type_modifiers]
+    mov ecx, 256
+    rep stosb
+    lea rdi, [rip + xkb_type_map_counts]
+    mov ecx, 64
+    rep stosb
+    lea rdi, [rip + xkb_type_map_masks]
+    mov ecx, 8192
+    rep stosb
+    lea rdi, [rip + xkb_type_map_levels]
+    mov ecx, 2048
+    rep stosb
+    lea rdi, [rip + xkb_virtual_names]
+    mov ecx, 1536
+    rep stosb
+    lea rdi, [rip + xkb_group_types]
+    mov al, 255
+    mov ecx, 1024
+    rep stosb
+    lea rsi, [rip + .Lxkb_builtin_type_names]
+    lea rdi, [rip + xkb_type_names]
+    mov ecx, 384
+    rep movsb
+    mov dword ptr [rip + xkb_type_count], 6
+    mov dword ptr [rip + xkb_type_modifiers + 0], 1
+    mov dword ptr [rip + xkb_type_modifiers + 4], 3
+    mov dword ptr [rip + xkb_type_modifiers + 8], 0
+    mov dword ptr [rip + xkb_type_modifiers + 12], 129
+    mov dword ptr [rip + xkb_type_modifiers + 16], 17
+    mov dword ptr [rip + xkb_type_modifiers + 20], 131
+    mov byte ptr [rip + xkb_type_map_counts + 0], 1
+    mov byte ptr [rip + xkb_type_map_counts + 1], 2
+    mov byte ptr [rip + xkb_type_map_counts + 2], 1
+    mov byte ptr [rip + xkb_type_map_counts + 3], 3
+    mov byte ptr [rip + xkb_type_map_counts + 4], 3
+    mov byte ptr [rip + xkb_type_map_counts + 5], 6
+    mov dword ptr [rip + xkb_type_map_masks + 0], 1
+    mov dword ptr [rip + xkb_type_map_masks + 128], 1
+    mov dword ptr [rip + xkb_type_map_masks + 132], 2
+    mov dword ptr [rip + xkb_type_map_masks + 256], 0
+    mov dword ptr [rip + xkb_type_map_masks + 384], 1
+    mov dword ptr [rip + xkb_type_map_masks + 388], 128
+    mov dword ptr [rip + xkb_type_map_masks + 392], 129
+    mov dword ptr [rip + xkb_type_map_masks + 512], 1
+    mov dword ptr [rip + xkb_type_map_masks + 516], 16
+    mov dword ptr [rip + xkb_type_map_masks + 520], 17
+    mov dword ptr [rip + xkb_type_map_masks + 640], 1
+    mov dword ptr [rip + xkb_type_map_masks + 644], 2
+    mov dword ptr [rip + xkb_type_map_masks + 648], 128
+    mov dword ptr [rip + xkb_type_map_masks + 652], 129
+    mov dword ptr [rip + xkb_type_map_masks + 656], 130
+    mov dword ptr [rip + xkb_type_map_masks + 660], 131
+    mov byte ptr [rip + xkb_type_map_levels + 0], 2
+    mov byte ptr [rip + xkb_type_map_levels + 32], 2
+    mov byte ptr [rip + xkb_type_map_levels + 33], 2
+    mov byte ptr [rip + xkb_type_map_levels + 64], 1
+    mov byte ptr [rip + xkb_type_map_levels + 96], 2
+    mov byte ptr [rip + xkb_type_map_levels + 97], 3
+    mov byte ptr [rip + xkb_type_map_levels + 98], 4
+    mov byte ptr [rip + xkb_type_map_levels + 128], 2
+    mov byte ptr [rip + xkb_type_map_levels + 129], 2
+    mov byte ptr [rip + xkb_type_map_levels + 130], 1
+    mov byte ptr [rip + xkb_type_map_levels + 160], 2
+    mov byte ptr [rip + xkb_type_map_levels + 161], 4
+    mov byte ptr [rip + xkb_type_map_levels + 162], 3
+    mov byte ptr [rip + xkb_type_map_levels + 163], 4
+    mov byte ptr [rip + xkb_type_map_levels + 164], 3
+    mov byte ptr [rip + xkb_type_map_levels + 165], 3
+    mov dword ptr [rip + xkb_virtual_count], 0
+    mov dword ptr [rip + xkb_level_three_mask], 128
+    mov dword ptr [rip + xkb_num_lock_mask], 16
     mov dword ptr [rip + xkb_keymap_ready], 0
     mov dword ptr [rip + .Lxkb_key_block_first], 0
     mov dword ptr [rip + .Lxkb_symbol_count], 0
     mov dword ptr [rip + .Lxkb_alpha_key_count], 0
     pop rcx
+    pop rsi
     pop rdi
     ret
 .size xkb_reset_keymap, . - xkb_reset_keymap
@@ -1495,6 +1641,778 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_token_contains, . - .Lxkb_token_contains
 
+# Resolve the current token to a previously declared XKB type; EAX=-1 if absent.
+.type .Lxkb_find_type, @function
+.Lxkb_find_type:
+    push rbx
+    push r12
+    push r13
+    push r14
+    xor r12d, r12d
+    mov r13d, dword ptr [rip + xkb_type_count]
+.Lxkb_find_type_loop:
+    cmp r12d, r13d
+    jae .Lxkb_find_type_missing
+    mov eax, r12d
+    shl eax, 6
+    lea rbx, [rip + xkb_type_names]
+    add rbx, rax
+    lea r14, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_find_type_compare:
+    mov al, byte ptr [rbx]
+    cmp al, byte ptr [r14]
+    jne .Lxkb_find_type_next
+    test al, al
+    jz .Lxkb_find_type_found
+    inc rbx
+    inc r14
+    dec ecx
+    jnz .Lxkb_find_type_compare
+.Lxkb_find_type_next:
+    inc r12d
+    jmp .Lxkb_find_type_loop
+.Lxkb_find_type_found:
+    mov eax, r12d
+    jmp .Lxkb_find_type_done
+.Lxkb_find_type_missing:
+    mov eax, -1
+.Lxkb_find_type_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_find_type, . - .Lxkb_find_type
+
+# Register the current token as a virtual-modifier name. EAX=index or -1.
+.type .Lxkb_register_virtual, @function
+.Lxkb_register_virtual:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12d, dword ptr [rip + xkb_virtual_count]
+    xor r13d, r13d
+.Lxkb_register_virtual_find:
+    cmp r13d, r12d
+    jae .Lxkb_register_virtual_add
+    mov eax, r13d
+    shl eax, 6
+    lea rbx, [rip + xkb_virtual_names]
+    add rbx, rax
+    lea r14, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_register_virtual_compare:
+    mov al, byte ptr [rbx]
+    cmp al, byte ptr [r14]
+    jne .Lxkb_register_virtual_next
+    test al, al
+    jz .Lxkb_register_virtual_found
+    inc rbx
+    inc r14
+    dec ecx
+    jnz .Lxkb_register_virtual_compare
+.Lxkb_register_virtual_next:
+    inc r13d
+    jmp .Lxkb_register_virtual_find
+.Lxkb_register_virtual_found:
+    mov eax, r13d
+    jmp .Lxkb_register_virtual_done
+.Lxkb_register_virtual_add:
+    cmp r12d, 24
+    jae .Lxkb_register_virtual_fail
+    mov eax, r12d
+    shl eax, 6
+    lea rbx, [rip + xkb_virtual_names]
+    add rbx, rax
+    lea r14, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_register_virtual_copy:
+    mov al, byte ptr [r14]
+    mov byte ptr [rbx], al
+    inc r14
+    inc rbx
+    dec ecx
+    jnz .Lxkb_register_virtual_copy
+    mov eax, r12d
+    inc r12d
+    mov dword ptr [rip + xkb_virtual_count], r12d
+    mov ecx, eax
+    add ecx, 8
+    mov edx, 1
+    shl edx, cl
+    lea rdi, [rip + .Lxkb_mod_level_three]
+    lea rsi, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_register_virtual_level_three_compare:
+    mov bl, byte ptr [rdi]
+    cmp bl, byte ptr [rsi]
+    jne .Lxkb_register_virtual_check_numlock
+    test bl, bl
+    jz .Lxkb_register_virtual_set_level_three
+    inc rdi
+    inc rsi
+    dec ecx
+    jnz .Lxkb_register_virtual_level_three_compare
+.Lxkb_register_virtual_check_numlock:
+    lea rdi, [rip + .Lxkb_mod_num_lock]
+    lea rsi, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_register_virtual_numlock_compare:
+    mov bl, byte ptr [rdi]
+    cmp bl, byte ptr [rsi]
+    jne .Lxkb_register_virtual_added
+    test bl, bl
+    jz .Lxkb_register_virtual_set_numlock
+    inc rdi
+    inc rsi
+    dec ecx
+    jnz .Lxkb_register_virtual_numlock_compare
+    jmp .Lxkb_register_virtual_added
+.Lxkb_register_virtual_set_level_three:
+    mov dword ptr [rip + xkb_level_three_mask], edx
+    jmp .Lxkb_register_virtual_added
+.Lxkb_register_virtual_set_numlock:
+    mov dword ptr [rip + xkb_num_lock_mask], edx
+.Lxkb_register_virtual_added:
+    mov eax, r12d
+    dec eax
+    jmp .Lxkb_register_virtual_done
+.Lxkb_register_virtual_fail:
+    mov eax, -1
+.Lxkb_register_virtual_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_register_virtual, . - .Lxkb_register_virtual
+
+# Scan all sections before parsing types so virtual modifier indices reflect
+# declaration order across the complete text-v1 keymap.
+.type .Lxkb_parse_virtual_modifiers, @function
+.Lxkb_parse_virtual_modifiers:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, qword ptr [rip + .Lxkb_text_ptr]
+.Lxkb_vmod_scan:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_vmod_scan_done
+    lea rdi, [rip + .Lxkb_word_virtual_modifiers]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_vmod_scan
+.Lxkb_vmod_name:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_vmod_scan_done
+    cmp eax, ';'
+    je .Lxkb_vmod_scan
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_vmod_statement_skip
+    call .Lxkb_register_virtual
+    test eax, eax
+    js .Lxkb_vmod_scan_fail
+.Lxkb_vmod_after_name:
+    call .Lxkb_next_token
+    cmp eax, ';'
+    je .Lxkb_vmod_scan
+    cmp eax, ','
+    je .Lxkb_vmod_name
+    cmp eax, '='
+    jne .Lxkb_vmod_statement_skip
+.Lxkb_vmod_skip_encoding:
+    call .Lxkb_next_token
+    cmp eax, ';'
+    je .Lxkb_vmod_scan
+    cmp eax, ','
+    jne .Lxkb_vmod_skip_encoding
+    jmp .Lxkb_vmod_name
+.Lxkb_vmod_statement_skip:
+    cmp eax, ';'
+    je .Lxkb_vmod_scan
+    call .Lxkb_next_token
+    jmp .Lxkb_vmod_statement_skip
+.Lxkb_vmod_scan_fail:
+    mov eax, -1
+    jmp .Lxkb_vmod_scan_done_restore
+.Lxkb_vmod_scan_done:
+    xor eax, eax
+.Lxkb_vmod_scan_done_restore:
+    mov qword ptr [rip + .Lxkb_text_ptr], r12
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_virtual_modifiers, . - .Lxkb_parse_virtual_modifiers
+
+# Convert a modifier name token into its 32-bit XKB modifier bit.
+# Rebase built-in fallback type maps after virtual modifier declarations
+# have assigned LevelThree and NumLock their XKB 32-bit modifier-index bits.
+.type .Lxkb_rebase_builtin_types, @function
+.Lxkb_rebase_builtin_types:
+    mov eax, dword ptr [rip + xkb_level_three_mask]
+    mov ecx, eax
+    or ecx, 1
+    mov dword ptr [rip + xkb_type_modifiers + 12], ecx
+    mov dword ptr [rip + xkb_type_map_masks + 388], eax
+    mov ecx, eax
+    or ecx, 1
+    mov dword ptr [rip + xkb_type_map_masks + 392], ecx
+
+    mov eax, dword ptr [rip + xkb_num_lock_mask]
+    mov ecx, eax
+    or ecx, 1
+    mov dword ptr [rip + xkb_type_modifiers + 16], ecx
+    mov dword ptr [rip + xkb_type_map_masks + 516], eax
+    mov ecx, eax
+    or ecx, 1
+    mov dword ptr [rip + xkb_type_map_masks + 520], ecx
+
+    mov eax, dword ptr [rip + xkb_level_three_mask]
+    mov ecx, eax
+    or ecx, 3
+    mov dword ptr [rip + xkb_type_modifiers + 20], ecx
+    mov ecx, eax
+    or ecx, 1
+    mov dword ptr [rip + xkb_type_map_masks + 648], eax
+    mov dword ptr [rip + xkb_type_map_masks + 652], ecx
+    mov ecx, eax
+    or ecx, 2
+    mov dword ptr [rip + xkb_type_map_masks + 656], ecx
+    mov ecx, eax
+    or ecx, 3
+    mov dword ptr [rip + xkb_type_map_masks + 660], ecx
+    ret
+.size .Lxkb_rebase_builtin_types, . - .Lxkb_rebase_builtin_types
+
+# Parse an unsigned 32-bit decimal or 0x-prefixed modifier mask.
+# EAX=mask, EDX=1 on success. Overflow and malformed literals fail closed.
+.type .Lxkb_parse_mask_literal, @function
+.Lxkb_parse_mask_literal:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    lea rbx, [rip + .Lxkb_token]
+    mov ecx, dword ptr [rip + .Lxkb_token_length]
+    test ecx, ecx
+    jz .Lxkb_mask_literal_bad
+    mov r15d, ecx
+    mov r13d, 10
+    xor r12d, r12d
+    cmp ecx, 3
+    jb .Lxkb_mask_literal_loop
+    cmp byte ptr [rbx], '0'
+    jne .Lxkb_mask_literal_loop
+    mov al, byte ptr [rbx + 1]
+    cmp al, 'x'
+    je .Lxkb_mask_literal_hex
+    cmp al, 'X'
+    jne .Lxkb_mask_literal_loop
+.Lxkb_mask_literal_hex:
+    mov r13d, 16
+    add rbx, 2
+    sub r15d, 2
+.Lxkb_mask_literal_loop:
+    xor eax, eax
+    mov r12d, 0
+.Lxkb_mask_literal_digit:
+    movzx r14d, byte ptr [rbx + r12]
+    cmp r14b, '0'
+    jb .Lxkb_mask_literal_bad
+    cmp r14b, '9'
+    jbe .Lxkb_mask_literal_decimal_digit
+    cmp r13d, 16
+    jne .Lxkb_mask_literal_bad
+    cmp r14b, 'a'
+    jb .Lxkb_mask_literal_upper_hex
+    cmp r14b, 'f'
+    jbe .Lxkb_mask_literal_lower_hex
+.Lxkb_mask_literal_upper_hex:
+    cmp r14b, 'A'
+    jb .Lxkb_mask_literal_bad
+    cmp r14b, 'F'
+    ja .Lxkb_mask_literal_bad
+    sub r14d, 'A'
+    add r14d, 10
+    jmp .Lxkb_mask_literal_accumulate
+.Lxkb_mask_literal_lower_hex:
+    sub r14d, 'a'
+    add r14d, 10
+    jmp .Lxkb_mask_literal_accumulate
+.Lxkb_mask_literal_decimal_digit:
+    sub r14d, '0'
+.Lxkb_mask_literal_accumulate:
+    mov ecx, r13d
+    mul ecx
+    test edx, edx
+    jnz .Lxkb_mask_literal_bad
+    add eax, r14d
+    jc .Lxkb_mask_literal_bad
+    inc r12d
+    cmp r12d, r15d
+    jb .Lxkb_mask_literal_digit
+    mov edx, 1
+    jmp .Lxkb_mask_literal_done
+.Lxkb_mask_literal_bad:
+    xor eax, eax
+    xor edx, edx
+.Lxkb_mask_literal_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_mask_literal, . - .Lxkb_parse_mask_literal
+
+.type .Lxkb_modifier_bit, @function
+.Lxkb_modifier_bit:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    movzx eax, byte ptr [rip + .Lxkb_token]
+    cmp al, '0'
+    jb .Lxkb_modifier_named
+    cmp al, '9'
+    ja .Lxkb_modifier_named
+    call .Lxkb_parse_mask_literal
+    test edx, edx
+    jnz .Lxkb_modifier_done
+    jmp .Lxkb_modifier_unknown_return
+.Lxkb_modifier_named:
+    lea rdi, [rip + .Lxkb_mod_shift]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_shift
+    lea rdi, [rip + .Lxkb_mod_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_lock
+    lea rdi, [rip + .Lxkb_mod_control]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_control
+    lea rdi, [rip + .Lxkb_mod_mod1]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_mod1
+    lea rdi, [rip + .Lxkb_mod_mod2]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_mod2
+    lea rdi, [rip + .Lxkb_mod_mod3]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_mod3
+    lea rdi, [rip + .Lxkb_mod_mod4]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_mod4
+    lea rdi, [rip + .Lxkb_mod_mod5]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_mod5
+    lea rdi, [rip + .Lxkb_mod_none]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_none
+    lea rdi, [rip + .Lxkb_mod_none_lower]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_none
+    lea rdi, [rip + .Lxkb_mod_all]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_all
+    lea rdi, [rip + .Lxkb_mod_level_three]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_level_three
+    lea rdi, [rip + .Lxkb_mod_num_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_num_lock
+    xor r12d, r12d
+    mov r13d, dword ptr [rip + xkb_virtual_count]
+.Lxkb_modifier_virtual_loop:
+    cmp r12d, r13d
+    jae .Lxkb_modifier_unknown
+    mov eax, r12d
+    shl eax, 6
+    lea rbx, [rip + xkb_virtual_names]
+    add rbx, rax
+    lea r14, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_modifier_virtual_compare:
+    mov al, byte ptr [rbx]
+    cmp al, byte ptr [r14]
+    jne .Lxkb_modifier_virtual_next
+    test al, al
+    jz .Lxkb_modifier_virtual_found
+    inc rbx
+    inc r14
+    dec ecx
+    jnz .Lxkb_modifier_virtual_compare
+.Lxkb_modifier_virtual_next:
+    inc r12d
+    jmp .Lxkb_modifier_virtual_loop
+.Lxkb_modifier_virtual_found:
+    # Real modifiers occupy bits 0..7; declared virtual modifiers follow in
+    # first-declaration order at bits 8..31, matching the Wayland XKB mask.
+    mov ecx, r12d
+    add ecx, 8
+    mov eax, 1
+    shl eax, cl
+    jmp .Lxkb_modifier_done
+    # Undeclared convenience fallback only; declared LevelFive uses its own
+    # keymap-wide virtual bit through the lookup above.
+.Lxkb_modifier_shift:       mov eax, 1; jmp .Lxkb_modifier_done
+.Lxkb_modifier_lock:        mov eax, 2; jmp .Lxkb_modifier_done
+.Lxkb_modifier_control:     mov eax, 4; jmp .Lxkb_modifier_done
+.Lxkb_modifier_mod1:        mov eax, 8; jmp .Lxkb_modifier_done
+.Lxkb_modifier_mod2:        mov eax, 16; jmp .Lxkb_modifier_done
+.Lxkb_modifier_mod3:        mov eax, 32; jmp .Lxkb_modifier_done
+.Lxkb_modifier_mod4:        mov eax, 64; jmp .Lxkb_modifier_done
+.Lxkb_modifier_mod5:        mov eax, 128; jmp .Lxkb_modifier_done
+.Lxkb_modifier_level_three:
+    mov eax, dword ptr [rip + xkb_level_three_mask]
+    jmp .Lxkb_modifier_done
+.Lxkb_modifier_num_lock:
+    mov eax, dword ptr [rip + xkb_num_lock_mask]
+    jmp .Lxkb_modifier_done
+.Lxkb_modifier_level_five:
+    mov eax, 32
+    jmp .Lxkb_modifier_done
+.Lxkb_modifier_none:        xor eax, eax; jmp .Lxkb_modifier_done
+.Lxkb_modifier_all:         mov eax, -1; jmp .Lxkb_modifier_done
+.Lxkb_modifier_unknown:
+    lea rdi, [rip + .Lxkb_mod_level_five]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_modifier_unknown_return
+    mov eax, 32
+    jmp .Lxkb_modifier_done
+.Lxkb_modifier_done:
+    mov edx, 1                 # EDX distinguishes a valid mask from failure
+    jmp .Lxkb_modifier_exit
+.Lxkb_modifier_unknown_return:
+    xor eax, eax
+    xor edx, edx
+.Lxkb_modifier_exit:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_modifier_bit, . - .Lxkb_modifier_bit
+
+# Parse a plus-separated modifier list through the requested delimiter in EDI.
+.type .Lxkb_parse_modmask, @function
+.Lxkb_parse_modmask:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    xor r13d, r13d
+.Lxkb_modmask_loop:
+    call .Lxkb_next_token
+    cmp eax, r12d
+    je .Lxkb_modmask_done
+    cmp eax, '+'
+    je .Lxkb_modmask_loop
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_modmask_bad
+    call .Lxkb_modifier_bit
+    test edx, edx
+    jz .Lxkb_modmask_bad
+    or r13d, eax
+    jmp .Lxkb_modmask_loop
+.Lxkb_modmask_bad:
+    xor eax, eax
+    xor edx, edx
+    jmp .Lxkb_modmask_exit
+.Lxkb_modmask_done:
+    mov eax, r13d
+    mov edx, 1
+.Lxkb_modmask_exit:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_modmask, . - .Lxkb_parse_modmask
+
+.type .Lxkb_parse_level_number, @function
+.Lxkb_parse_level_number:
+    cmp dword ptr [rip + .Lxkb_token_length], 1
+    jne .Lxkb_level_number_long
+    movzx eax, byte ptr [rip + .Lxkb_token]
+    cmp al, '1'
+    jb .Lxkb_level_number_bad
+    cmp al, '8'
+    ja .Lxkb_level_number_bad
+    sub eax, '0'
+    ret
+.Lxkb_level_number_long:
+    cmp dword ptr [rip + .Lxkb_token_length], 6
+    jne .Lxkb_level_number_bad
+    lea rdx, [rip + .Lxkb_token]
+    cmp dword ptr [rdx], 0x6576654c
+    jne .Lxkb_level_number_bad
+    cmp byte ptr [rdx + 4], 'l'
+    jne .Lxkb_level_number_bad
+    movzx eax, byte ptr [rdx + 5]
+    cmp al, '1'
+    jb .Lxkb_level_number_bad
+    cmp al, '8'
+    ja .Lxkb_level_number_bad
+    sub eax, '0'
+    ret
+.Lxkb_level_number_bad:
+    mov eax, -1
+    ret
+.size .Lxkb_parse_level_number, . - .Lxkb_parse_level_number
+
+# Parse one xkb_types type body into the bounded exact modifier-to-level table.
+.type .Lxkb_parse_type_body, @function
+.Lxkb_parse_type_body:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    lea rbx, [rip + xkb_type_map_counts]
+    mov byte ptr [rbx + r12], 0
+.Lxkb_type_body_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_type_body_fail
+    cmp eax, '}'
+    je .Lxkb_type_body_done
+    lea rdi, [rip + .Lxkb_word_modifiers]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_type_body_modifiers
+    lea rdi, [rip + .Lxkb_word_map]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_type_body_map
+.Lxkb_type_body_skip_statement:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_type_body_fail
+    cmp eax, ';'
+    jne .Lxkb_type_body_skip_statement
+    jmp .Lxkb_type_body_loop
+
+.Lxkb_type_body_modifiers:
+.Lxkb_type_body_modifiers_equals:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_type_body_fail
+    cmp eax, '='
+    jne .Lxkb_type_body_modifiers_equals
+    mov edi, ';'
+    call .Lxkb_parse_modmask
+    test edx, edx
+    jz .Lxkb_type_body_fail
+    mov edx, r12d
+    shl edx, 2
+    lea rbx, [rip + xkb_type_modifiers]
+    mov dword ptr [rbx + rdx], eax
+    jmp .Lxkb_type_body_loop
+
+.Lxkb_type_body_map:
+    call .Lxkb_next_token
+    cmp eax, '['
+    jne .Lxkb_type_body_fail
+    mov edi, ']'
+    call .Lxkb_parse_modmask
+    test edx, edx
+    jz .Lxkb_type_body_fail
+    mov dword ptr [rip + .Lxkb_type_tmp_mask], eax
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_type_body_fail
+    call .Lxkb_next_token
+    call .Lxkb_parse_level_number
+    test eax, eax
+    jle .Lxkb_type_body_fail
+    mov dword ptr [rip + .Lxkb_type_tmp_level], eax
+    call .Lxkb_next_token
+    cmp eax, ';'
+    jne .Lxkb_type_body_fail
+    lea rbx, [rip + xkb_type_map_counts]
+    movzx r13d, byte ptr [rbx + r12]
+    cmp r13d, 32
+    jae .Lxkb_type_body_fail
+    mov eax, r12d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_masks]
+    add rbx, rax
+    mov edx, r13d
+    shl edx, 2
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_mask]
+    mov dword ptr [rbx + rdx], eax
+    mov eax, r12d
+    shl eax, 5
+    lea rbx, [rip + xkb_type_map_levels]
+    add rbx, rax
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_level]
+    mov byte ptr [rbx + r13], al
+    inc r13d
+    lea rbx, [rip + xkb_type_map_counts]
+    mov byte ptr [rbx + r12], r13b
+    jmp .Lxkb_type_body_loop
+
+.Lxkb_type_body_done:
+    xor eax, eax
+    jmp .Lxkb_type_body_exit
+.Lxkb_type_body_fail:
+    mov eax, -1
+.Lxkb_type_body_exit:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_type_body, . - .Lxkb_parse_type_body
+
+.type .Lxkb_parse_types, @function
+.Lxkb_parse_types:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12, qword ptr [rip + .Lxkb_text_ptr]
+.Lxkb_types_find_section:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_missing
+    lea rdi, [rip + .Lxkb_section_types]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_types_find_section
+.Lxkb_types_find_open:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_fail
+    cmp eax, '{'
+    jne .Lxkb_types_find_open
+.Lxkb_types_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_fail
+    cmp eax, '}'
+    je .Lxkb_types_done
+    cmp eax, ';'
+    je .Lxkb_types_loop
+    cmp dword ptr [rip + .Lxkb_token_length], 4
+    jne .Lxkb_types_skip_statement
+    lea rdi, [rip + .Lxkb_token]
+    cmp dword ptr [rdi], 0x65707974
+    jne .Lxkb_types_skip_statement
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_fail
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_types_fail
+    call .Lxkb_find_type
+    cmp eax, -1
+    jne .Lxkb_types_type_found
+    mov r12d, dword ptr [rip + xkb_type_count]
+    cmp r12d, 64
+    jae .Lxkb_types_fail
+    mov eax, r12d
+    shl eax, 6
+    lea rbx, [rip + xkb_type_names]
+    add rbx, rax
+    lea rsi, [rip + .Lxkb_token]
+    mov ecx, 64
+    mov rdi, rbx
+    rep movsb
+    inc r12d
+    mov dword ptr [rip + xkb_type_count], r12d
+    dec r12d
+    jmp .Lxkb_types_have_type
+.Lxkb_types_type_found:
+    mov r12d, eax
+    mov eax, r12d
+    shl eax, 7
+    lea rdi, [rip + xkb_type_map_masks]
+    add rdi, rax
+    xor eax, eax
+    mov ecx, 128
+    rep stosb
+    mov eax, r12d
+    shl eax, 5
+    lea rdi, [rip + xkb_type_map_levels]
+    add rdi, rax
+    xor eax, eax
+    mov ecx, 32
+    rep stosb
+    lea rbx, [rip + xkb_type_map_counts]
+    mov byte ptr [rbx + r12], 0
+    lea rbx, [rip + xkb_type_modifiers]
+    mov dword ptr [rbx + r12*4], 0
+.Lxkb_types_have_type:
+.Lxkb_types_find_type_open:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_fail
+    cmp eax, '{'
+    jne .Lxkb_types_find_type_open
+    mov edi, r12d
+    call .Lxkb_parse_type_body
+    test eax, eax
+    js .Lxkb_types_fail
+    jmp .Lxkb_types_loop
+.Lxkb_types_skip_statement:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_types_fail
+    cmp eax, ';'
+    jne .Lxkb_types_skip_statement
+    jmp .Lxkb_types_loop
+.Lxkb_types_missing:
+    # The section is optional; preserve the cursor so xkb_symbols can still
+    # be found and conventional built-in type records remain available.
+    mov qword ptr [rip + .Lxkb_text_ptr], r12
+    xor eax, eax
+    jmp .Lxkb_types_exit
+.Lxkb_types_done:
+    xor eax, eax
+    jmp .Lxkb_types_exit
+.Lxkb_types_fail:
+    mov eax, -1
+.Lxkb_types_exit:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_types, . - .Lxkb_parse_types
+
 .type .Lxkb_classify_type, @function
 .Lxkb_classify_type:
     push rbx
@@ -1743,20 +2661,20 @@ xkb_reset_keymap:
     call .Lxkb_keysym_unicode
     mov r12d, eax
     mov eax, dword ptr [rip + .Lxkb_level]
-    cmp eax, 4
+    cmp eax, 8
     jae .Lxkb_symbol_array_advance
     mov r13d, dword ptr [rip + .Lxkb_keycode]
     mov r14d, dword ptr [rip + .Lxkb_group]
-    shl r13d, 4
-    lea eax, [r13d + r14d*4]
+    shl r13d, 5
+    lea eax, [r13d + r14d*8]
     add eax, dword ptr [rip + .Lxkb_level]
     lea rbx, [rip + xkb_unicode_levels]
     mov dword ptr [rbx + rax*4], r12d
-    # Keep the legacy byte table for existing ASCII layout heuristics and
-    # callers; non-ASCII symbols are retained in the parallel scalar table.
+    # Keep the byte table for ASCII lookup; Unicode scalars share the same
+    # key/group/eight-level cell layout.
     lea rbx, [rip + xkb_ascii_levels]
     add rbx, r13
-    lea rbx, [rbx + r14*4]
+    lea rbx, [rbx + r14*8]
     mov eax, dword ptr [rip + .Lxkb_level]
     cmp r12d, 0x7e
     ja .Lxkb_symbol_array_ascii_done
@@ -1765,6 +2683,11 @@ xkb_reset_keymap:
     test r12d, r12d
     jz .Lxkb_symbol_array_advance
     inc dword ptr [rip + .Lxkb_symbol_count]
+    lea rbx, [rip + xkb_group_symbol_counts]
+    mov eax, dword ptr [rip + .Lxkb_keycode]
+    shl eax, 2
+    add eax, dword ptr [rip + .Lxkb_group]
+    inc byte ptr [rbx + rax]
 .Lxkb_symbol_array_advance:
     inc dword ptr [rip + .Lxkb_level]
     jmp .Lxkb_symbol_array_loop
@@ -1829,19 +2752,85 @@ xkb_reset_keymap:
     jnz .Lxkb_key_block_symbols
     jmp .Lxkb_key_block_loop
 .Lxkb_key_block_type:
-.Lxkb_key_block_type_seek_equals:
+    mov dword ptr [rip + .Lxkb_type_group], -1
     call .Lxkb_next_token
+    cmp eax, '['
+    jne .Lxkb_key_block_type_expect_equals
+    call .Lxkb_next_token
+    call .Lxkb_parse_group
     test eax, eax
-    jz .Lxkb_key_block_fail
+    js .Lxkb_key_block_fail
+    mov dword ptr [rip + .Lxkb_type_group], eax
+    call .Lxkb_next_token
+    cmp eax, ']'
+    jne .Lxkb_key_block_fail
+    call .Lxkb_next_token
+.Lxkb_key_block_type_expect_equals:
     cmp eax, '='
-    jne .Lxkb_key_block_type_seek_equals
+    jne .Lxkb_key_block_fail
     call .Lxkb_next_token
     call .Lxkb_classify_type
     mov dword ptr [rip + .Lxkb_type_flags], eax
+    call .Lxkb_find_type
+    cmp eax, -1
+    jne .Lxkb_key_block_type_resolved
+    # Older keymaps sometimes use a compound conventional name whose
+    # canonical type body is not repeated in the serialized type section.
+    mov eax, dword ptr [rip + .Lxkb_type_flags]
+    test eax, 4
+    jnz .Lxkb_key_block_type_one_level
+    test eax, 8
+    jnz .Lxkb_key_block_type_keypad
+    test eax, 16
+    jnz .Lxkb_key_block_type_separate
+    test eax, 2
+    jnz .Lxkb_key_block_type_four
+    test eax, 1
+    jnz .Lxkb_key_block_type_alpha
+    # A genuinely unknown type must not be silently treated as TWO_LEVEL.
+    # Reject this keymap so the caller can keep the known-good US fallback.
+    jmp .Lxkb_key_block_fail
+.Lxkb_key_block_type_one_level:
+    mov eax, 2
+    jmp .Lxkb_key_block_type_resolved
+.Lxkb_key_block_type_keypad:
+    mov eax, 4
+    jmp .Lxkb_key_block_type_resolved
+.Lxkb_key_block_type_separate:
+    mov eax, 5
+    jmp .Lxkb_key_block_type_resolved
+.Lxkb_key_block_type_four:
+    mov eax, 3
+    jmp .Lxkb_key_block_type_resolved
+.Lxkb_key_block_type_alpha:
+    mov eax, 1
+.Lxkb_key_block_type_resolved:
+    mov dword ptr [rip + .Lxkb_type_id], eax
     mov eax, dword ptr [rip + .Lxkb_keycode]
     lea rbx, [rip + xkb_key_types]
     mov ecx, dword ptr [rip + .Lxkb_type_flags]
     mov byte ptr [rbx + rax], cl
+    mov r13d, eax
+    shl r13d, 2
+    mov r12d, dword ptr [rip + .Lxkb_type_id]
+    mov edx, dword ptr [rip + .Lxkb_type_group]
+    cmp edx, -1
+    jne .Lxkb_key_block_type_single_group
+    xor edx, edx
+.Lxkb_key_block_type_all_groups:
+    lea rbx, [rip + xkb_group_types]
+    mov eax, r13d
+    add eax, edx
+    mov byte ptr [rbx + rax], r12b
+    inc edx
+    cmp edx, 4
+    jb .Lxkb_key_block_type_all_groups
+    jmp .Lxkb_key_block_loop
+.Lxkb_key_block_type_single_group:
+    lea rbx, [rip + xkb_group_types]
+    mov eax, r13d
+    add eax, edx
+    mov byte ptr [rbx + rax], r12b
     jmp .Lxkb_key_block_loop
 .Lxkb_key_block_symbols:
     call .Lxkb_parse_symbol_array
@@ -1854,40 +2843,74 @@ xkb_reset_keymap:
     js .Lxkb_key_block_fail
     jmp .Lxkb_key_block_loop
 .Lxkb_key_block_done:
-    # If the key has no explicit type, infer the common alphabetic two-level
-    # case from [lowercase, uppercase]. Other unspecified keys use Shift.
+    # A key type belongs to a group. Explicit type[GroupN] assignments above
+    # win; otherwise infer ONE_LEVEL, ALPHABETIC, or TWO_LEVEL independently
+    # from each group's parsed symbols.
     mov r15d, dword ptr [rip + .Lxkb_keycode]
-    lea rbx, [rip + xkb_key_types]
-    cmp byte ptr [rbx + r15], 0
-    jne .Lxkb_key_block_success
-    lea rbx, [rip + xkb_ascii_levels]
+    xor r14d, r14d
+.Lxkb_key_block_infer_group:
+    cmp r14d, 4
+    jae .Lxkb_key_block_infer_done
+    lea rbx, [rip + xkb_group_types]
     mov eax, r15d
-    shl eax, 4
-    lea rbx, [rbx + rax]
-    movzx eax, byte ptr [rbx]
-    cmp al, 'a'
-    jb .Lxkb_key_block_success
-    cmp al, 'z'
-    ja .Lxkb_key_block_success
-    movzx edx, byte ptr [rbx + 1]
-    cmp edx, eax
-    je .Lxkb_key_block_success
-    sub eax, 'a'
-    sub edx, 'A'
-    cmp eax, edx
-    jne .Lxkb_key_block_success
+    shl eax, 2
+    add eax, r14d
+    cmp byte ptr [rbx + rax], 255
+    jne .Lxkb_key_block_infer_next
+    lea rbx, [rip + xkb_group_symbol_counts]
+    movzx ecx, byte ptr [rbx + rax]
+    mov r12d, 0
+    cmp ecx, 1
+    je .Lxkb_key_block_infer_one
+    cmp ecx, 2
+    jb .Lxkb_key_block_infer_store
+    mov eax, r15d
+    shl eax, 5
+    lea eax, [rax + r14*8]
+    lea rbx, [rip + xkb_unicode_levels]
+    mov edx, dword ptr [rbx + rax*4]
+    cmp edx, 'a'
+    jb .Lxkb_key_block_infer_store
+    cmp edx, 'z'
+    ja .Lxkb_key_block_infer_store
+    mov ecx, dword ptr [rbx + rax*4 + 4]
+    cmp ecx, 'A'
+    jb .Lxkb_key_block_infer_store
+    cmp ecx, 'Z'
+    ja .Lxkb_key_block_infer_store
+    sub edx, 'a'
+    sub ecx, 'A'
+    cmp edx, ecx
+    jne .Lxkb_key_block_infer_store
+    mov r12d, 1
+    jmp .Lxkb_key_block_infer_store
+.Lxkb_key_block_infer_one:
+    mov r12d, 2
+.Lxkb_key_block_infer_store:
+    lea rbx, [rip + xkb_group_types]
+    mov eax, r15d
+    shl eax, 2
+    add eax, r14d
+    mov byte ptr [rbx + rax], r12b
+    cmp r14d, 0
+    jne .Lxkb_key_block_infer_next
+    cmp r12d, 1
+    jne .Lxkb_key_block_infer_next
     lea rbx, [rip + xkb_key_types]
     mov byte ptr [rbx + r15], 1
-.Lxkb_key_block_success:
-    # Count real Group1 ASCII alphabetic keys. A sparse or malformed parse
-    # must not disable the working US fallback just because punctuation was
-    # understood successfully.
-    lea rbx, [rip + xkb_key_types]
-    test byte ptr [rbx + r15], 1
-    jz .Lxkb_key_block_return
+.Lxkb_key_block_infer_next:
+    inc r14d
+    jmp .Lxkb_key_block_infer_group
+.Lxkb_key_block_infer_done:
+    # Count only real Group1 alphabetic keys with a base symbol.
+    lea rbx, [rip + xkb_group_types]
+    mov eax, r15d
+    shl eax, 2
+    cmp byte ptr [rbx + rax], 1
+    jne .Lxkb_key_block_return
     lea rbx, [rip + xkb_ascii_levels]
     mov eax, r15d
-    shl eax, 4
+    shl eax, 5
     cmp byte ptr [rbx + rax], 0
     je .Lxkb_key_block_return
     inc dword ptr [rip + .Lxkb_alpha_key_count]
@@ -2010,10 +3033,19 @@ xkb_parse_keymap:
     mov qword ptr [rip + .Lxkb_text_ptr], r12
     lea rax, [r12 + r13]
     mov qword ptr [rip + .Lxkb_text_end], rax
+    call .Lxkb_parse_virtual_modifiers
+    test eax, eax
+    js .Lxkb_parse_keymap_fail
+    call .Lxkb_rebase_builtin_types
+    mov qword ptr [rip + .Lxkb_text_ptr], r12
     call .Lxkb_parse_keycodes
     test eax, eax
     js .Lxkb_parse_keymap_fail
-    # Start section search from the current token cursor.
+    # xkb_types is optional; when present, actual modifiers/map entries
+    # replace conventional defaults before key groups resolve their types.
+    call .Lxkb_parse_types
+    test eax, eax
+    js .Lxkb_parse_keymap_fail
     call .Lxkb_parse_symbols
     test eax, eax
     js .Lxkb_parse_keymap_fail
@@ -2031,7 +3063,78 @@ xkb_parse_keymap:
     ret
 .size xkb_parse_keymap, . - xkb_parse_keymap
 
-# RDI=evdev keycode, ESI=Shift, EDX=Caps, ECX=LevelThree, R8D=group.
+# RDI=internal XKB keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
+# Return zero-based level by exact lookup in the key group's declared type.
+.type .Lxkb_select_level, @function
+.Lxkb_select_level:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, edx
+    cmp r14d, 3
+    jbe .Lxkb_select_group_ok
+    xor r14d, r14d
+.Lxkb_select_group_ok:
+    mov eax, r12d
+    shl eax, 2
+    add eax, r14d
+    lea rbx, [rip + xkb_group_types]
+    movzx r15d, byte ptr [rbx + rax]
+    cmp r15d, 64
+    jb .Lxkb_select_type_ok
+    xor r15d, r15d
+.Lxkb_select_type_ok:
+    lea rbx, [rip + xkb_type_modifiers]
+    mov eax, r15d
+    shl eax, 2
+    mov eax, dword ptr [rbx + rax]
+    and eax, r13d
+    mov r13d, eax
+    lea rbx, [rip + xkb_type_map_counts]
+    movzx r14d, byte ptr [rbx + r15]
+    test r14d, r14d
+    jz .Lxkb_select_default
+    mov eax, r15d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_masks]
+    add rbx, rax
+    xor r12d, r12d
+.Lxkb_select_map_loop:
+    cmp r12d, r14d
+    jae .Lxkb_select_default
+    mov eax, r12d
+    shl eax, 2
+    cmp dword ptr [rbx + rax], r13d
+    je .Lxkb_select_map_found
+    inc r12d
+    jmp .Lxkb_select_map_loop
+.Lxkb_select_map_found:
+    mov eax, r15d
+    shl eax, 5
+    lea rbx, [rip + xkb_type_map_levels]
+    add rbx, rax
+    movzx eax, byte ptr [rbx + r12]
+    test eax, eax
+    jz .Lxkb_select_default
+    dec eax
+    cmp eax, 7
+    jbe .Lxkb_select_done
+.Lxkb_select_default:
+    xor eax, eax
+.Lxkb_select_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_select_level, . - .Lxkb_select_level
+
+# RDI=evdev keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
 # Returns an ASCII byte or zero. Wayland keycodes need the XKB +8 offset.
 .global xkb_lookup_ascii
 .type xkb_lookup_ascii, @function
@@ -2048,50 +3151,35 @@ xkb_lookup_ascii:
     lea r12d, [rdi + 8]
     mov r13d, esi
     mov r14d, edx
-    mov r15d, ecx
-    mov ebx, r8d
-    cmp ebx, 3
-    jbe .Lxkb_group_in_range
-    xor ebx, ebx
-.Lxkb_group_in_range:
-    lea rax, [rip + xkb_key_types]
-    movzx eax, byte ptr [rax + r12]
-    # ONE_LEVEL has no modifier-selected alternatives. Do not try to read
-    # Level 2 when Shift or Caps Lock is active on a one-symbol key.
-    test eax, 4
-    jnz .Lxkb_level_one
-    test eax, 1
-    jz .Lxkb_caps_done
-    xor r13d, r14d
-.Lxkb_caps_done:
-    and r13d, 1
-    test eax, 2
-    jz .Lxkb_level_done
-    test r15d, r15d
-    jz .Lxkb_level_done
-    add r13d, 2
-    jmp .Lxkb_level_ready
-.Lxkb_level_one:
-    xor r13d, r13d
-.Lxkb_level_done:
-.Lxkb_level_ready:
+    cmp r14d, 3
+    jbe .Lxkb_lookup_group_ok
+    xor r14d, r14d
+.Lxkb_lookup_group_ok:
+    mov edi, r12d
+    mov esi, r13d
+    mov edx, r14d
+    call .Lxkb_select_level
+    mov r15d, eax
     mov eax, r12d
-    shl eax, 4
+    shl eax, 5
+    lea eax, [rax + r14*8]
+    add eax, r15d
     lea rdx, [rip + xkb_ascii_levels]
-    lea rdx, [rdx + rax]
-    lea rdx, [rdx + rbx*4]
-    movzx eax, byte ptr [rdx + r13]
+    movzx eax, byte ptr [rdx + rax]
     test eax, eax
     jnz .Lxkb_lookup_done
-    # If the compositor reports a group with no symbols for this key, retry
-    # group one rather than injecting a US-QWERTY character for that key.
-    test ebx, ebx
+    test r14d, r14d
     jz .Lxkb_lookup_done
-    lea rdx, [rip + xkb_ascii_levels]
+    mov edi, r12d
+    mov esi, r13d
+    xor edx, edx
+    call .Lxkb_select_level
+    mov r15d, eax
     mov eax, r12d
-    shl eax, 4
-    add rdx, rax
-    movzx eax, byte ptr [rdx + r13]
+    shl eax, 5
+    add eax, r15d
+    lea rdx, [rip + xkb_ascii_levels]
+    movzx eax, byte ptr [rdx + rax]
     jmp .Lxkb_lookup_done
 .Lxkb_lookup_none:
     xor eax, eax
@@ -2104,8 +3192,8 @@ xkb_lookup_ascii:
     ret
 .size xkb_lookup_ascii, . - xkb_lookup_ascii
 
-# RDI=evdev keycode, ESI=Shift, EDX=Caps, ECX=LevelThree, R8D=group,
-# R9D=NumLock. Returns an XKB Unicode keysym scalar or zero.
+# RDI=evdev keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
+# Returns an XKB Unicode keysym scalar or zero.
 .global xkb_lookup_unicode
 .type xkb_lookup_unicode, @function
 xkb_lookup_unicode:
@@ -2121,90 +3209,33 @@ xkb_lookup_unicode:
     lea r12d, [rdi + 8]
     mov r13d, esi
     mov r14d, edx
-    mov r15d, ecx
-    mov r10d, r9d
-    mov ebx, r8d
-    cmp ebx, 3
-    jbe .Lxkb_unicode_group_ready
-    xor ebx, ebx
-.Lxkb_unicode_group_ready:
-    lea rax, [rip + xkb_key_types]
-    movzx eax, byte ptr [rax + r12]
-    test eax, 4
-    jnz .Lxkb_unicode_level_one
-    test eax, 16
-    jnz .Lxkb_unicode_level_separate_caps
-    test eax, 8
-    jnz .Lxkb_unicode_level_keypad
-    test eax, 1
-    jz .Lxkb_unicode_caps_done
-    xor r13d, r14d
-.Lxkb_unicode_caps_done:
-    and r13d, 1
-    test eax, 2
-    jz .Lxkb_unicode_level_done
-    test r15d, r15d
-    jz .Lxkb_unicode_level_done
-    add r13d, 2
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_level_separate_caps:
-    # Canonical SEPARATE_CAPS_AND_SHIFT_ALPHABETIC:
-    # Shift -> level 2; Lock -> level 4; LevelThree -> level 3;
-    # Shift+LevelThree -> level 4; Lock+LevelThree variants -> level 3.
-    test r15d, r15d
-    jz .Lxkb_unicode_separate_base
-    test r13d, r13d
-    jz .Lxkb_unicode_separate_level3
-    test r14d, r14d
-    jnz .Lxkb_unicode_separate_level3
-    mov r13d, 3
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_separate_level3:
-    mov r13d, 2
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_separate_base:
-    test r14d, r14d
-    jz .Lxkb_unicode_separate_shift
-    test r13d, r13d
-    jnz .Lxkb_unicode_separate_base_only
-    mov r13d, 3
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_separate_base_only:
-    xor r13d, r13d
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_separate_shift:
-    and r13d, 1
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_level_keypad:
-    # Canonical KEYPAD: Shift and NumLock are alternatives. Either selects
-    # level 2; both or neither select level 1. FOUR_LEVEL_KEYPAD also adds
-    # the LevelThree pair at levels 3/4.
-    xor r13d, r10d
-    and r13d, 1
-    test eax, 2
-    jz .Lxkb_unicode_level_ready
-    test r15d, r15d
-    jz .Lxkb_unicode_level_ready
-    add r13d, 2
-    jmp .Lxkb_unicode_level_ready
-.Lxkb_unicode_level_one:
-    xor r13d, r13d
-.Lxkb_unicode_level_done:
-.Lxkb_unicode_level_ready:
+    cmp r14d, 3
+    jbe .Lxkb_unicode_group_ok
+    xor r14d, r14d
+.Lxkb_unicode_group_ok:
+    mov edi, r12d
+    mov esi, r13d
+    mov edx, r14d
+    call .Lxkb_select_level
+    mov r15d, eax
     mov eax, r12d
-    shl eax, 4
-    lea eax, [rax + rbx*4]
-    add eax, r13d
+    shl eax, 5
+    lea eax, [rax + r14*8]
+    add eax, r15d
     lea rdx, [rip + xkb_unicode_levels]
     mov eax, dword ptr [rdx + rax*4]
     test eax, eax
     jnz .Lxkb_unicode_lookup_done
-    # Preserve the same Group1 retry used by the ASCII lookup path.
-    test ebx, ebx
+    test r14d, r14d
     jz .Lxkb_unicode_lookup_done
+    mov edi, r12d
+    mov esi, r13d
+    xor edx, edx
+    call .Lxkb_select_level
+    mov r15d, eax
     mov eax, r12d
-    shl eax, 4
-    add eax, r13d
+    shl eax, 5
+    add eax, r15d
     lea rdx, [rip + xkb_unicode_levels]
     mov eax, dword ptr [rdx + rax*4]
     jmp .Lxkb_unicode_lookup_done

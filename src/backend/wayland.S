@@ -2147,6 +2147,8 @@ keyboard_focused:       .long 0
 .global keyboard_serial
 keyboard_serial:        .long 0
 keyboard_group:         .long 0
+.global xkb_modifiers
+xkb_modifiers:          .long 0
 level3_down:            .long 0
 level3_physical_down:   .long 0
 level3_mod5_down:       .long 0
@@ -2384,6 +2386,8 @@ recv_msg_control:      .zero 64
 .extern xkb_parse_keymap
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
+.extern xkb_level_three_mask
+.extern xkb_num_lock_mask
 .extern font_init
 .extern preferences_load
 .extern preferences_save
@@ -3947,6 +3951,12 @@ wayland_main:
     and eax, 16
     shr eax, 4
     mov dword ptr [rip + num_lock], eax
+    # Preserve the complete 32-bit XKB state: type maps can refer to any
+    # declared virtual modifier, not only the traditional low eight bits.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    or eax, dword ptr [rip + event_payload + 12]
+    mov dword ptr [rip + xkb_modifiers], eax
     mov eax, dword ptr [rip + event_payload + 16]
     mov dword ptr [rip + keyboard_group], eax
     # The standard XKB Control modifier is bit 2. Physical Ctrl key
@@ -3959,9 +3969,9 @@ wayland_main:
     movzx eax, al
     mov dword ptr [rip + ctrl_down], eax
 
-    # The compositor sends effective real modifier masks, not XKB virtual
-    # modifier names. LevelThree commonly resolves to Mod5 (bit 7); consume
-    # that state as well as the physical Right-Alt fallback below.
+    # Keep the legacy real-Mod5 diagnostic/fallback state separately. The
+    # XKB lookup path below receives the full 32-bit modifier-index mask,
+    # including declared virtual modifiers from wl_keyboard.modifiers.
     mov eax, dword ptr [rip + event_payload + 4]
     or eax, dword ptr [rip + event_payload + 8]
     and eax, 128
@@ -3991,6 +4001,7 @@ wayland_main:
     mov dword ptr [rip + level3_down], 0
     mov dword ptr [rip + level3_physical_down], 0
     mov dword ptr [rip + level3_mod5_down], 0
+    mov dword ptr [rip + xkb_modifiers], 0
     call repeat_cancel
     cmp dword ptr [rip + text_input_object], 0
     je .event_loop
@@ -4017,8 +4028,18 @@ wayland_main:
     test edx, edx
     jz .keyboard_key_release
     cmp eax, 58
-    jne .keyboard_key_pressed
+    jne .keyboard_key_check_numlock
     xor dword ptr [rip + caps_lock], 1
+    xor dword ptr [rip + xkb_modifiers], 2
+    jmp .keyboard_changed
+.keyboard_key_check_numlock:
+    cmp eax, 69
+    jne .keyboard_key_pressed
+    test edx, edx
+    jz .keyboard_key_release
+    xor dword ptr [rip + num_lock], 1
+    mov ecx, dword ptr [rip + xkb_num_lock_mask]
+    xor dword ptr [rip + xkb_modifiers], ecx
     jmp .keyboard_changed
 .keyboard_key_pressed:
     cmp dword ptr [rip + ctrl_down], 0
@@ -4035,12 +4056,32 @@ wayland_main:
     jmp .event_loop
 .keyboard_shift:
     mov dword ptr [rip + shift_down], edx
+    mov eax, dword ptr [rip + xkb_modifiers]
+    test edx, edx
+    jz .keyboard_shift_clear_mask
+    or eax, 1
+    jmp .keyboard_shift_store_mask
+.keyboard_shift_clear_mask:
+    and eax, 0xfffffffe
+.keyboard_shift_store_mask:
+    mov dword ptr [rip + xkb_modifiers], eax
     jmp .event_loop
 .keyboard_level3:
     mov dword ptr [rip + level3_physical_down], edx
     mov eax, dword ptr [rip + level3_mod5_down]
     or eax, edx
     mov dword ptr [rip + level3_down], eax
+    mov ecx, dword ptr [rip + xkb_level_three_mask]
+    mov eax, dword ptr [rip + xkb_modifiers]
+    test edx, edx
+    jz .keyboard_level3_clear_mask
+    or eax, ecx
+    jmp .keyboard_level3_store_mask
+.keyboard_level3_clear_mask:
+    not ecx
+    and eax, ecx
+.keyboard_level3_store_mask:
+    mov dword ptr [rip + xkb_modifiers], eax
     jmp .event_loop
 .keyboard_control:
     mov dword ptr [rip + ctrl_down], edx
@@ -14632,10 +14673,8 @@ keycode_to_ascii:
     cmp dword ptr [rip + keymap_format], 1
     jne .Lneko_keymap_fallback
     mov edi, ebx
-    mov esi, dword ptr [rip + shift_down]
-    mov edx, dword ptr [rip + caps_lock]
-    mov ecx, dword ptr [rip + level3_down]
-    mov r8d, dword ptr [rip + keyboard_group]
+    mov esi, dword ptr [rip + xkb_modifiers]
+    mov edx, dword ptr [rip + keyboard_group]
     call xkb_lookup_ascii
     pop rbx
     ret
@@ -14685,11 +14724,8 @@ keycode_to_unicode:
     cmp dword ptr [rip + keymap_format], 1
     jne .Lkeycode_unicode_fallback
     mov edi, ebx
-    mov esi, dword ptr [rip + shift_down]
-    mov edx, dword ptr [rip + caps_lock]
-    mov ecx, dword ptr [rip + level3_down]
-    mov r8d, dword ptr [rip + keyboard_group]
-    mov r9d, dword ptr [rip + num_lock]
+    mov esi, dword ptr [rip + xkb_modifiers]
+    mov edx, dword ptr [rip + keyboard_group]
     call xkb_lookup_unicode
     pop rbx
     ret

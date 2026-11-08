@@ -1,43 +1,46 @@
 # NekoEdit current status
 
-## 2026-11-08 — optional Wayland text-input-v3 integration
+## 2026-11-08 — Wayland text-input-v3 and declared XKB type-map integration
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
 
-**Latest implementation commits:** [e121e13dceb7](https://github.com/GraderGamer2/NekoEdit/commit/e121e13dceb70fb548389d051c7d142aa6a3bb29) introduced text-input-v3; [cd896a7430ba](https://github.com/GraderGamer2/NekoEdit/commit/cd896a7430ba5a621fc16059b5d4032527684bea), [323d908c78ef](https://github.com/GraderGamer2/NekoEdit/commit/323d908c78ef1a4390163d76c691739435f6155e), [0cf677e8e0f4](https://github.com/GraderGamer2/NekoEdit/commit/0cf677e8e0f4867d5abb303da2f1da98715e5b6d), [34e1676067e9](https://github.com/GraderGamer2/NekoEdit/commit/34e1676067e981f3c3287ee1f040df1b35a821ac), [faac078d0d6f](https://github.com/GraderGamer2/NekoEdit/commit/faac078d0d6ff4df67e6bf8c33066796132815f8), and [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) contain protocol-state, fallback, UTF-8 validation, addressing, and journal-boundary corrections. Mock additions are in [345fb2e6b628](https://github.com/GraderGamer2/NekoEdit/commit/345fb2e6b628800b6bcf944062951e9bc07556c3), [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456), and [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509).
+### Implemented input behavior
 
-### Current implementation
+- Optional `zwp_text_input_manager_v3` discovery/binding. The text-input object is enabled only while the focused document is the active text target; prompts, the picker, History, and other panels retain their physical-key path.
+- `preedit_string`, `commit_string`, `delete_surrounding_text`, and `done` staging/handling, bounded UTF-8 surrounding text, caret/anchor byte offsets, content purpose, cursor rectangle, and monotonic serials.
+- Preedit is rendered as a transient underline overlay; committed UTF-8 and delete-surrounding ranges are validated before a grouped history mutation. The physical-key Unicode path remains the fallback when the optional protocol is unavailable.
+- XKB text-v1 now parses the declared `xkb_types` modifier filter and exact `map[modifier-combination] = LevelN` entries instead of using only type-name inference.
+- Type definitions are bounded to 64 names and 32 map entries per type. The symbol tables hold four groups with up to eight levels each. `type[GroupN]` assignment is retained independently for each key/group.
+- Real modifier bits (0–7) and up to 24 declared virtual-modifier indices (bits 8–31) are retained in a full 32-bit state mask. Numeric masks and numeric/`LevelN` level values are accepted. Each key's active state is filtered by its type's `modifiers` mask and matched exactly against the declared map.
+- Built-in fallback type records preserve TWO_LEVEL, ALPHABETIC, ONE_LEVEL, FOUR_LEVEL, KEYPAD, and separate Caps/Shift behavior for maps that omit explicit type definitions. Unknown or malformed custom types fail closed, leaving the built-in US-QWERTY fallback available.
+- Existing Unicode keysym aliases, six dead-key actions, bounded Compose, grapheme-aware editing, and TrueType glyph metrics remain in place.
 
-- Optional `zwp_text_input_manager_v3` discovery/binding. The text-input object is enabled only after the surface enters the input target and the document is focused; prompts, picker, History, and other panels keep the physical-key path.
-- `preedit_string`, `commit_string`, `delete_surrounding_text`, and `done` staging/handling. Preedit is a transient underlined overlay; committed UTF-8 is validated before insertion.
-- Bounded UTF-8 surrounding text, caret/anchor byte offsets, normal content purpose, cursor rectangle, and monotonic commit serials.
-- UTF-8 boundary/range validation for delete-surrounding; invalid ranges are ignored before starting a history transaction. Delete plus commit is recorded as one undo action.
-- The raw `wl_keyboard` fallback remains active when the optional interface is not advertised. With text-input-v3 enabled, printable key-to-Unicode insertion is suppressed to avoid duplicate input while navigation and shortcuts remain on the keyboard path.
-- XKB named Unicode keysyms, grapheme-aware editing, six dead-key actions, bounded Compose, and TrueType glyph metrics predate this change; this milestone integrates compositor text rather than replacing those paths.
+### Scope not yet implemented
+
+This is not a replacement for libxkbcommon. The client does not interpret `xkb_compat` rules or general key actions, derive virtual modifiers from `modifier_map`/key `virtualModifier` bindings, calculate explicit real-modifier encodings, or implement `preserve[]` consumed-modifier semantics. It relies on the compositor to apply keymap actions and send the serialized 32-bit modifier-index state. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 
-Actions [Build and test #621](https://github.com/GraderGamer2/NekoEdit/actions/runs/42457144443) passed all eight workflow steps on the text-input test snapshot [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456). It verified the build/ELF checks, CLI/preferences/history host tests, install smoke test, and the full Wayland mock suite including text-input-v3 manager binding, focus/enable, surrounding text, matching `done`, preedit staging, multibyte commit, delete-surrounding, and leave/disable. Follow-up source hardening for invalid deletion transaction boundaries ([4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81)) and a regression assertion ([d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509)) were added after #621 and still require a fresh workflow run.
+The previous Actions [Build and test #647](https://github.com/GraderGamer2/NekoEdit/actions/runs/42459551390) passed all eight workflow steps on the preceding branch head `50cc1df`, including the text-input-v3 mock and the then-current named-family XKB tests. This newer declared-type parser adds a custom eight-level fixture, all 24 virtual-modifier indices (including bit 31), numeric mask/level parsing, per-group type assertions, and saved UTF-8 output checks. Its validation is tied to the current PR's latest Actions checks; do not treat #647 as validation of this later parser change.
 
-**Not yet verified:** live GNOME/Mutter composition with an actual input method. The mock verifies wire protocol and document state; it does not prove candidate-popup placement, real IME behavior, or multi-language shaping. The current preedit cursor/attribute rendering is intentionally basic and is a follow-up within this milestone.
+Live GNOME/Mutter testing with a real input method remains outstanding. The mock verifies protocol and document-state behavior but not real candidate placement or compositor-side action resolution.
 
 ### Deferred, unchanged areas
 
-- History path search is still reported by the user as nonfunctional; the current History layout also needs refinement. These are deferred as requested.
-- History storage still needs deeper compaction/checkpoint/limit work; do not change it during the IME/XKB/shaping milestones.
+- History path search is still reported by the user as nonfunctional; the current History layout also needs refinement. These remain deferred.
+- History storage still needs deeper compaction/checkpoint/limit work; do not mix it into the input/shaping milestone.
 - Clipboard persistence is user-confirmed working, including paste after the editor closes and helper exit after another application takes ownership.
-- The standalone ELF remains directly runnable, but GNOME application-menu registration still uses the repository-based `make install-user`; release-package installation without a source checkout remains separate packaging work.
-- The intermittent `poll(EINTR)` event-loop fix remains a concrete correction, but the original roughly one-in-six desktop failure still needs live GNOME/Mutter confirmation.
+- The standalone ELF is directly runnable, but source-independent desktop packaging remains separate release work.
+- The intermittent `poll(EINTR)` desktop issue still needs live GNOME/Mutter confirmation.
 
 ### Next roadmap items
 
-1. Finish remaining text-input-v3 details and validate against GNOME/Mutter.
-2. Expand XKB types, virtual modifiers, and action semantics beyond the current simplified text-v1 subset.
-3. Improve keyboard behavior and coverage for remaining key classes/actions.
-4. Add shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
+1. Run the complete build/host/Wayland mock workflow on the declared XKB-map parser, then perform live GNOME/Mutter input-method checks.
+2. Add `xkb_compat` interpretation, explicit/implicit modifier bindings, modifier/key action semantics, and preserve/consumed-modifier tracking.
+3. Expand keyboard coverage for remaining key classes/actions and broader Compose behavior.
+4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
 
-**Snapshot date:** 2026-11-08 (Asia/Jakarta). Source and test changes after Actions #621 require revalidation before being called green.
-
+**Snapshot date:** 2026-11-08 (Asia/Jakarta).
 ---
 
 ## Previous snapshot retained for historical context

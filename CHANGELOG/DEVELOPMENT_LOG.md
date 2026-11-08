@@ -1593,3 +1593,14 @@ The final source audit confirmed that Undo/Redo and Export operate on the curren
 - Complex shaping, combining-mark placement, bidirectional layout, advanced XKB type/action/virtual-modifier semantics, and general locale Compose remain later roadmap tasks.
 - History search/layout/storage and standalone desktop installer packaging are unchanged and intentionally deferred.
 
+
+
+## 2026-11-08 — declared XKB type maps, per-group assignment, and 32-bit modifier state
+
+The keyboard-input roadmap now moves beyond matching a few conventional type names. The text-v1 reader parses the `xkb_types` section and stores each named type's `modifiers` filter plus exact `map[combination] = LevelN` entries. Key blocks can assign different types to different groups through `type[GroupN]`. Symbol storage was expanded from four to eight levels per group, preserving four groups.
+
+The bounded tables accept up to 64 type definitions, 32 map entries per type, and 24 declared virtual modifiers. Real modifier indices occupy bits 0–7; declared virtual-modifier indices occupy bits 8–31. The Wayland backend now passes the complete 32-bit depressed/latched/locked mask to the lookup functions. Numeric modifier masks and numeric or `LevelN` level values are also parsed. The selected level is obtained by masking the compositor state with the type's declared modifier filter and matching the exact resulting combination against its map.
+
+The built-in fallback types remain available for TWO_LEVEL, ALPHABETIC, ONE_LEVEL, FOUR_LEVEL, KEYPAD, and separate Caps/Shift cases. Unknown custom types and unsupported/malformed masks fail closed instead of being silently treated as a two-level type. This work does not implement libxkbcommon's `xkb_compat` interpretation engine, automatic virtual-modifier/key bindings, general key actions, explicit virtual-modifier real encodings, or `preserve[]` consumed-modifier behavior; those remain a separate roadmap layer.
+
+The Wayland mock fixture now defines a deliberately nonstandard eight-level type and asserts its parsed table, per-group assignment, virtual modifier count through bit 31, numeric masks/levels, and resulting UTF-8 document bytes. Existing group, Shift, LevelThree, Caps, keypad, ONE_LEVEL, punctuation, Unicode and IME cases remain in the full suite. The preceding Actions #647 run validated the previous branch snapshot only; this expanded parser and fixture require the next complete workflow run. Live GNOME/Mutter validation remains separate.
