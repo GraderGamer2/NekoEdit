@@ -1,19 +1,32 @@
 # NekoEdit current status
 
+## 2026-11-08 follow-up — clipboard/History fixes, compact journals, launcher and Compose expansion
+
+**Source implementation commit:** [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). This source update is awaiting the next complete Actions run; the last verified baseline is the prior branch head below.
+
+- The main Wayland event loop now treats `poll()` returning `-EINTR` as a transient wake-up and rebuilds the poll set instead of reporting a fatal Wayland setup error. This addresses the observed intermittent `Wayland stage: event loop` failure; the underlying desktop occurrence still needs live GNOME/Mutter confirmation.
+- The process-exit clipboard helper now starts a detached session, closes inherited terminal standard streams, releases the history journal state, and destroys the inherited xdg toplevel/surface/buffer objects. It retains the original Wayland data-device ownership and clipboard snapshot so another application can still paste after the editor window disappears.
+- The History page now separates path filtering from Browse-to-Open-picker, provides a working Open Selected button, lays out counters above the action row, scales the four action buttons to the available width, and clips long result paths for the maximum UI font. Delete targets the highlighted history journal, including a non-active document, without deleting the source document.
+- New journals use version 2: a 24-byte fixed record header and variable-length operation offsets/lengths. A one-byte insertion at a short offset occupies a 28-byte record rather than the 49-byte version-1 equivalent, reducing common per-keystroke record size by about 43%. Existing version-1 journals remain readable and writable; the host test converts a compact record to the legacy layout and verifies recovery/Undo/Redo.
+- `make install-user` installs `~/.local/bin/nekoedit`, a GNOME-compatible desktop launcher, icon, and `text/plain` Open With association metadata. `MAKE_DEFAULT=1` also changes the user's default text/plain handler. `make uninstall-user` removes the per-user installation; `sudo make install` provides a system-wide install.
+- The bounded `Multi_key` Compose table has expanded from 20 to 40 two-symbol sequences. The mock test now asserts additional degree, paragraph, registered-mark, and ø sequences.
+
+The new host/Wayland tests cover compact v2 size, legacy v1 compatibility, deletion of a non-active journal, History filter typing/Browse/Open Selected/Delete Selected, post-exit surface teardown, the added Compose sequences, and a temporary-prefix install/uninstall smoke test. Live GNOME/Mutter verification remains separate from mock-compositor results.
+
 **Snapshot date:** 2026-11-08 (Asia/Jakarta)  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** early-alpha  
-**Latest tested source/test snapshot before the current follow-up:** [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440) — validated by Actions #603. The current branch follow-up adds clipboard key-transaction cleanup, lazy journal creation, and searchable History; it is not yet validated.
+**Latest tested source/test snapshot before the current follow-up:** [0aa15506bce4](https://github.com/GraderGamer2/NekoEdit/commit/0aa15506bce49e3374b351eeda44d1c2811598b7) — validated by Actions #607; the next full run will validate source commit f3f6da21af1c and its documentation commits.
 **Latest application implementation commit:** [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) — record delayed external Wayland paste as one Undo/Redo transaction.  
-**Latest full validation:** GitHub Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) passed all eight workflow steps on ae633fa5d654: freestanding build, ELF checks (no PT_INTERP/no DT_NEEDED), CLI smoke tests, persistent preferences, disk-backed journal host tests, full Wayland mock suite, executable inspection, and artifact upload.  
-**Build artifact:** [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495), 80,540 bytes; artifact ID 13602839495.  
+**Latest full validation:** GitHub Actions [Build and test #607](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602) passed all eight workflow steps on 0aa15506bce4: freestanding build, ELF checks, CLI smoke tests, preferences/history host tests, complete Wayland mock, executable inspection, and artifact upload.  
+**Build artifact:** [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602/artifacts/13605155538), 83,845 bytes; artifact ID 13605155538.  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
 
 ## Implemented clipboard persistence
 
 - Ctrl+C and Ctrl+X publish an independent immutable mmap-backed snapshot. Ctrl+V prefers UTF-8 plain text and receives external data asynchronously. Source records and send slots are reusable: eight source records, four concurrent outgoing transfers, and a 64 MiB payload/receive ceiling. These are resource and concurrency bounds, not a lifetime copy/paste operation counter.
 - Settings contains a default-on Clipboard Service preference, persisted as clipboard_persistence=1 in ~/.nekoedit/preferences. Turning it off skips the handoff at the next editor close. NEKOEDIT_DISABLE_PREFERENCES=1 disables the preference and helper for isolated tests.
-- When enabled and NekoEdit owns a selection at window close, the existing executable forks a small helper named nekoedit-clip. It inherits the original Wayland client connection, wl_data_source, and immutable snapshot; it does not create a second client or attempt to retake selection ownership. The helper runs only after the editor window closes, serves subsequent wl_data_source.send requests, and exits when another client replaces the selection, the source is cancelled, or the compositor connection closes.
+- When enabled and NekoEdit owns a selection at window close, the executable forks a helper named nekoedit-clip. It inherits the original Wayland connection, data source, and immutable snapshot; detaches from the terminal; releases journal state; and destroys the editor toplevel/surface/buffer objects while continuing to serve later clipboard requests. It exits when another client replaces the selection, the source is cancelled, or the compositor connection closes.
 - This is current-selection persistence for the rest of the Wayland session, not a clipboard-history database and not persistence across logout, compositor shutdown, or reboot. No separate helper executable or runtime library is installed.
 
 ## Implemented disk-backed Undo/Redo
@@ -21,13 +34,13 @@
 - src/editor/history.c stores a per-document delta journal under ~/.nekoedit/<path-hash>.history. The directory is mode 0700; journal files and exported copies are mode 0600. A journal records the baseline document bytes, changed byte ranges, inserted/removed bytes, caret/selection state, Undo/Redo cursor, and checksum of the last successfully saved document.
 - Editing actions are grouped, including selection replacement, typing, deletion, local paste, and asynchronous external paste. New edits after Undo truncate the abandoned Redo branch. No 16-entry snapshot stack, 4 MiB snapshot limit, or 32 MiB aggregate snapshot budget remains. History size follows changed bytes and per-action metadata, bounded by disk availability and checked file-format/address limits.
 - For a named document, restart recovery is performed only when the current on-disk file hash matches the journal's last-saved hash. External file changes cause the journal to be reinitialized from the current file rather than replaying stale edits. Untitled documents use a per-process identity and therefore do not promise history recovery across process restarts; save to a named path for a stable identity.
-- The History tab includes a path search built from validated journal headers. It filters source paths and opens the selected document to restore that document's Undo/Redo state; Undo/Redo/Export/Delete then apply to the loaded document.
+- The History tab includes a working source-path filter, a separate Browse picker, Open Selected, separate Undo/Redo counters, responsive Undo/Redo/Export/Delete controls, and Delete Selected History for the highlighted journal. The delete action can remove a non-active document's journal without disturbing the open document.
 - A .history file is created only when the first document byte is inserted or deleted. Opening a file, navigating/selecting, copying, and other no-op actions do not create empty history files.
 - History is practically extensive rather than mathematically infinite: storage is bounded by available disk space, 32-bit record lengths, 64-bit file offsets, and memory needed to apply an individual record. An I/O or malformed-record problem is surfaced as a History-page storage error instead of claiming the failed record was saved.
 
 ## Verification details
 
-Actions #600 verified the post-exit helper serving text and exiting on selection replacement. Actions #601 verified asynchronous external paste Undo/Redo. Actions #603 passed the combined full suite and uploaded the latest artifact. The Wayland mock on the previous tested snapshot exercised History tab switching, Undo/Redo buttons, Export picker opening/cancellation, and Delete. The pending follow-up extends it to History search/opening and repeated Ctrl+C source replacement. The host journal test is extended for lazy creation, multi-document search, independent deletion, and existing grouping/branch/recovery/export/permission cases.
+Actions #600, #601, #603 and #607 verified the earlier clipboard, history, and editor milestones. Source commit f3f6da21af1c adds the new host and Wayland assertions listed above; its Actions run is pending at the time of this status entry.
 
 The helper and UI have been protocol/mock tested, not yet manually tested against GNOME/Mutter in the user's live session. Manual desktop verification of actual clipboard retention after closing NekoEdit, task-manager process naming, Settings toggle persistence, and the History-page layout is still outstanding.
 
@@ -35,8 +48,9 @@ The helper and UI have been protocol/mock tested, not yet manually tested agains
 
 1. Manually verify the new helper and History tab in the user's GNOME Wayland session, including task-manager visibility and Settings toggle behavior.
 2. Check clipboard-manager interoperability and behavior if compositor selection ownership changes during an in-flight transfer; the helper currently serves one current selection, not clipboard history.
-3. Continue the bounded XKB work: broaden Compose tables, then Wayland text-input/IME and more complete key-type/action semantics.
-4. Continue shaping/layout, output/fractional scaling, release-tracked multi-buffer scheduling, and the X11 backend.
+3. Manually verify the new helper, History layout/actions, Settings toggle, and per-user launcher in the user's GNOME Wayland session; protocol tests do not replace this desktop check.
+4. Continue the bounded XKB roadmap with Wayland text-input/IME and more complete key-type/action semantics; the 40-pair Compose table is now implemented.
+5. Continue shaping/layout, output/fractional scaling, release-tracked multi-buffer scheduling, and the X11 backend.
 
 The historical milestone notes below are retained as chronology. Their "latest" labels and next-work descriptions reflect the state at the time each note was written; use this snapshot and the active branch as the current source of truth.
 

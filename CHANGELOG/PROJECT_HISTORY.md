@@ -643,3 +643,16 @@ The History subsystem now creates a document journal only when a byte is first i
 A new History search reads and validates original paths stored in the journal headers. It lists named document histories, filters by path, and opens the selected document so its own Undo/Redo state can be managed. Untitled process identities are omitted from the reopenable search list. The page is arranged to fit the default 800×480 window.
 
 The keyboard path now closes the empty history transaction after Ctrl+C, and the Wayland mock repeats Ctrl+C while verifying superseded Wayland data sources are retired. These changes target the reported crash path and improve regression coverage, but live GNOME/Mutter validation is still necessary to establish whether the desktop crash is fixed.
+
+
+---
+
+## 33. Phase AC — clipboard-helper teardown, compact History records, launcher and expanded Compose input (2026-11-08)
+
+The latest user review found three usability issues that the existing mock suite did not fully cover: the clipboard helper could leave the inherited editor window objects alive; the History page's fixed controls and search affordances did not form a usable layout; and small edits still accumulated substantial record metadata. The editor now destroys the inherited xdg_toplevel/xdg_surface/wl_surface/wl_buffer in the post-exit clipboard child, detaches that child from the launching terminal, and clears its history-journal state while retaining the original clipboard data-device/source and snapshot. The event loop treats `poll()` interruption by EINTR as a retry rather than a fatal Wayland failure.
+
+The History page now has a true path filter, a separate Browse picker, Open Selected, visible Undo/Redo counters, responsive action controls, and Delete Selected History semantics. Deleting a highlighted non-active history removes only that hashed journal. New version-2 journals compress the common per-action metadata with a 24-byte record header and variable-length operation fields; a one-byte typing action at a short offset takes 28 bytes, compared with 49 bytes for the previous v1 record. Version-1 journals remain readable and writable. Host tests assert the compact record size, simulate a v1 legacy journal and test its recovery/Undo/Redo path, and delete a non-active journal without disturbing the active history.
+
+The build now includes a per-user install/uninstall workflow and desktop launcher/icon, with an install smoke test integrated into `make test`. The XKB `Multi_key` subset has advanced from 20 to 40 two-symbol pairs; extra tests validate degree, paragraph, registered-mark and ø output. This remains a bounded subset, not complete locale XCompose, XKB actions, or an IME.
+
+Implementation commit: [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). Automated validation of this follow-up is pending on the final PR branch update. GNOME/Mutter live testing remains the user's desktop milestone.

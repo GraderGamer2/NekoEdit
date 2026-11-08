@@ -20,7 +20,7 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
-- The current implementation includes `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for per-document disk-backed delta journals. `docs/CLIPBOARD.md` records the helper lifecycle and session limits; `docs/UNDO.md` describes journal format, recovery validation, permissions, and History-tab management.
+- The current implementation includes `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for compact version-2 per-document delta journals with version-1 compatibility. `docs/CLIPBOARD.md` records helper teardown/lifecycle and session limits; `docs/UNDO.md` describes compact record formats, recovery validation, permissions, and History-tab management. `make install-user` installs a per-user executable and desktop-menu launcher; `make test` includes an install/uninstall smoke test.
 
 ## Wayland window management and resize behavior
 
@@ -61,7 +61,7 @@ A small typo or truly documentation-only correction still receives a commit entr
 - Explicitly state what is implemented, partially implemented, planned, and unsupported.
 - Do not call code "full Unicode support" merely because UTF-8 byte sequences are preserved or code-point boundaries are respected. Record grapheme handling, Unicode rendering, text input, and IME separately.
 - Preserve the project's design constraints: Linux x86-64, GNU assembly, direct syscalls, no third-party runtime/shared-library dependency, and native Wayland/X11 protocols. Do not introduce dependencies or change the established launch interface without an explicit reason and a documented decision.
-- Keep the executable's supported launch command working. Current user-validated Wayland launch form: `./nekoedit --backend=wayland` (the Makefile build output is `./build/nekoedit`).
+- Keep the executable's supported launch command working. Direct build launch: `./build/nekoedit [FILE]` (explicit backend selection remains available as `./build/nekoedit --backend=wayland`). The per-user desktop/terminal install is `make install-user`, which adds `~/.local/bin/nekoedit [FILE]` and a NekoEdit application-menu launcher; `make uninstall-user` removes it.
 
 ## Historical coverage
 

@@ -930,4 +930,12 @@ Append every subsequent NekoEdit commit to this index as part of the same develo
 
 ## 2026-11-08 follow-up — clipboard transaction, lazy journal, and History search
 
-This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal creation until a real byte mutation, adds source-path search/opening to the History page, and expands host/Wayland regression coverage. Source/test validation is pending; its implementation commit and Actions run will be recorded here after completion.
+This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal creation until a real byte mutation, adds source-path search/opening to the History page, and expands host/Wayland regression coverage. The prior validation snapshot is Actions #607 on 0aa15506bce4.
+
+## 2026-11-08 follow-up — event-loop, clipboard teardown, compact history, install and Compose
+
+| Commit | Subject |
+|---|---|
+| [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333) | fix: harden clipboard shutdown, compact history, and launch integration |
+
+This implementation commit updates the Wayland EINTR path, helper/window-object teardown, History page and selected-delete behavior, version-2 journal encoding with v1 compatibility, per-user/system install targets, and the 40-pair Compose table. The source/test commit is awaiting the next full Actions run. Its separate continuity/index commits are recorded in the next index refresh.

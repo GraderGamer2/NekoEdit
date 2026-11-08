@@ -1512,3 +1512,27 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 ### CI follow-up — first mock timeout was a redundant fixture wait
 
 The first run for this change set passed the freestanding build and host history test, but its Wayland test timed out because the new test called `workflow_redraw()` immediately after `workflow_click()`; the click helper already consumes the redraw. Removed the duplicate wait. Added an integration assertion that repeated Ctrl+C on an unmodified document does not create any `.history` file. The next run is the validation attempt for the corrected fixture.
+
+
+## 2026-11-08 — clipboard shutdown, History polish, compact journal records, launcher and Compose expansion
+
+**Source commit:** [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). The complete branch Actions validation is pending; prior baseline Actions #607 passed on 0aa15506bce4.
+
+### Implementation
+- In `src/backend/wayland.S`, an interrupted main-loop `poll()` now retries the event-loop iteration on `-EINTR` rather than routing a transient signal interruption to the fatal protocol-setup error path.
+- In `src/backend/clipboard.c`, the post-exit helper now calls `setsid()`, changes its process name to `nekoedit-clip`, closes stdin/stdout/stderr, drops the inherited history journal state, and destroys the inherited xdg_toplevel, xdg_surface, wl_surface, and wl_buffer. It retains the original Wayland data-device/source and immutable selection so clipboard data remains available after the editor window closes. Selection replacement still causes the service to exit after in-flight sends drain.
+- Rebuilt the History page in `src/backend/wayland.S`: separate path filter and Browse action, Open Selected control, counters in a dedicated row, four responsive buttons and corresponding hit regions, plus a shorter Delete caption and clipped path presentation for the supported UI font/window range. Delete now targets the highlighted result path rather than unconditionally deleting the currently open document's journal.
+- In `src/editor/history.c`, new journals use version-2 records: a 24-byte common record header and variable-length unsigned integers for offset/removed/inserted lengths. A one-byte insertion at a small offset occupies 28 bytes on disk versus 49 bytes in the version-1 record layout. Existing version-1 journals continue to be read and appended in version 1; no journal mixes encodings. The History search validates both versions. The selected-delete API removes other document histories by their hashed path while leaving the active document journal open.
+- Added `make install-user`, `make uninstall-user`, and system-wide `make install`. The user install creates the executable, desktop-menu launcher, icon and plain-text Open With metadata; setting `MAKE_DEFAULT=1` opts into changing the default `text/plain` handler.
+- Continued the XKB roadmap by extending the bounded two-symbol `Multi_key` table from 20 to 40 pairs, covering extra mathematical comparisons, arrows, typographic signs and common symbols.
+
+### Regression coverage
+- `tests/history_test.c` now asserts that a simple v2 insertion is exactly 28 bytes, converts that record into the previous v1 encoding, then verifies legacy recovery/Undo/Redo. It also deletes a non-active document's journal from the selected-results API and checks that the open document's journal remains intact.
+- `tests/wayland_mock.py` exercises History filter typing, Browse picker open/cancel, Open Selected, responsive Undo/Redo/Export/Delete History controls, clipboard-helper surface teardown before the post-exit transfer, and four additional Compose outputs.
+- Added `tests/install_user.sh`; `make test` now invokes it to verify a temporary per-user install, desktop-entry Exec/TryExec/MIME/icon metadata, installed `--version`, and clean uninstall.
+- Updated README and the clipboard, Wayland and Undo guides. Live GNOME/Mutter confirmation is still outstanding.
+
+### Verification and remaining work
+- The preceding baseline Actions [Build and test #607](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602) passed all eight workflow steps on 0aa15506bce4 and uploaded artifact 13605155538 (83,845 bytes).
+- The new complete build/test run is to be checked on the final updated PR head. Do not treat the newly added tests as passed until that run completes.
+- The intermittent event-loop error is handled for EINTR but still needs live session retesting. Verify clipboard persistence and task-manager naming, the History page at the user's font/window sizes, and the installed desktop launcher with GNOME/Mutter. Text-input/IME, broader XKB type/action semantics, complex shaping, fractional scaling, multi-buffer scheduling and X11 remain future work.
