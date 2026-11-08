@@ -950,3 +950,21 @@ This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal 
 Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428) passed all eight steps on 5a5ea78458e4, including compact v2 journal size, v1 compatibility, selected deletion, per-user installation, History/Browse UI, clipboard-helper teardown, and expanded Compose. Artifact [13606921648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648) is 86,304 bytes.
 
 Source/test implementation commit f3f6da21af1c includes the Wayland EINTR path, helper/window-object teardown, History page and selected-delete behavior, compact version-2 journal encoding with v1 compatibility, per-user/system install targets, and 40-pair Compose. Commit 10e80acca944 updates the continuity/status/history records. The index-refresh commit that follows is itself a documentation maintenance commit; it is recorded by the next index refresh.
+
+
+## Wayland text-input-v3 / IME integration (2026-11-08)
+
+| Commit | Subject |
+|---|---|
+| [e121e13dceb7](https://github.com/GraderGamer2/NekoEdit/commit/e121e13dceb70fb548389d051c7d142aa6a3bb29) | feat: integrate Wayland text-input v3 IME |
+| [cd896a7430ba](https://github.com/GraderGamer2/NekoEdit/commit/cd896a7430ba5a621fc16059b5d4032527684bea) | fix: initialize IME state outside BSS |
+| [323d908c78ef](https://github.com/GraderGamer2/NekoEdit/commit/323d908c78ef1a4390163d76c691739435f6155e) | fix: preserve keyboard fallback without IME |
+| [0cf677e8e0f4](https://github.com/GraderGamer2/NekoEdit/commit/0cf677e8e0f4867d5abb303da2f1da98715e5b6d) | fix: honor text-input-v3 done serials without feedback loop |
+| [345fb2e6b628](https://github.com/GraderGamer2/NekoEdit/commit/345fb2e6b628800b6bcf944062951e9bc07556c3) | test: verify text-input-v3 state and frame sequencing |
+| [34e1676067e9](https://github.com/GraderGamer2/NekoEdit/commit/34e1676067e981f3c3287ee1f040df1b35a821ac) | fix: validate IME preedit UTF-8 and cursor boundaries |
+| [faac078d0d6f](https://github.com/GraderGamer2/NekoEdit/commit/faac078d0d6ff4df67e6bf8c33066796132815f8) | fix: use valid indexed addressing for IME buffers |
+| [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456) | test: pad IME commit-string event correctly |
+| [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) | fix: avoid opening history for invalid IME edits |
+| [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509) | test: reject invalid IME deletion without editing |
+
+Actions [Build and test #621](https://github.com/GraderGamer2/NekoEdit/actions/runs/42457144443) passed the source and mock state through commit [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456). The two later commits [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) and [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509) must be revalidated before calling the current head green.
