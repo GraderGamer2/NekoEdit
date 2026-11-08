@@ -1,9 +1,9 @@
 # NekoEdit current status
 
-## 2026-11-08 — bounded XKB compatibility interpretation and virtual-modifier resolution
+## 2026-11-08 — XKB compatibility specificity tests and ISO group/level keysyms
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
-**Latest application commit:** [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e) — `feat: apply bounded XKB compatibility virtual modifiers`.
+**Latest application commit:** [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6) — `test: cover XKB compatibility specificity and group keysyms`.
 
 ### Implemented input behavior
 
@@ -12,24 +12,27 @@
 - Preedit is rendered as a transient underline overlay; committed UTF-8 and delete-surrounding ranges are validated before a grouped history mutation. The physical-key Unicode path remains the fallback when the optional protocol is unavailable.
 - XKB text-v1 parses declared per-key/per-group type assignment, exact `modifiers` filters, and `map[combination] = LevelN` lookup. Tables are bounded to 64 types and 32 entries per type; symbols support four groups and eight levels.
 - Up to 24 virtual-modifier names are retained separately from their effective 32-bit masks. Explicit `virtual_modifiers NAME = ...` encodings accept real-modifier combinations, numeric masks, and `none`.
-- Real `modifier_map` supports direct keycode targets and recognized indirect modifier-keysyms. Indirect lookup is deferred until symbols have been read, then resolves in group/level/keycode order. `modifier_map None` removes only an earlier entry with the same original target kind and value.
+- Real `modifier_map` supports direct keycode targets and recognized indirect modifier-keysyms. Indirect lookup is deferred until symbols have been read, then resolves in group/level/keycode order. `modifier_map None` removes only an earlier entry with the same original target kind and value. The mock follows the XKB constraint that each key is assigned to at most one real modifier.
 - Direct key-level `virtualModifiers` properties and virtual-modifier bindings inferred from `xkb_compat` interpretations contribute to each key's virtual map. Effective virtual-modifier encodings OR the explicit encoding with real modifier maps of all associated keys; declared types are reparsed after aggregation.
 - The bounded `xkb_compat` subset parses up to 128 interpretation rules with `Any`/`NoSymbol` or recognized modifier-keysyms, `AnyOfOrNone`, `AnyOf`, `NoneOf`, `AllOf`, and `Exactly` real-modifier predicates, `virtualModifier`, and `useModMapMods = level1|any`. Specific keysyms outrank wildcard rules; matching-predicate specificity breaks ties; equal-specificity ties retain the first declaration. Predicates compare against the key's real modifier map.
+- The bounded modifier-keysym table now includes `Shift_Lock`, `ISO_Lock`, `ISO_Level2_Latch`, `ISO_Group_Shift` and its `Greek_switch`/`script_switch` aliases, ISO group latch/lock, and ISO next/previous/first/last group symbols with their lock variants.
 - A direct key-level `virtualModifiers` property takes precedence over inferred compatibility virtual modifiers. Unsupported nested action statements are skipped safely and are not executed.
-- The XKB fixture verifies explicit encodings, direct and indirect modifier maps, keysym lookup ordering, exact `None` target deletion, five compatibility interpretations, `AnyOf`/`NoneOf` selection, nested-action skipping, direct-property precedence, and Group 1/Level 1 restriction.
+- The Wayland mock has 12 interpretation rules. It now tests `AllOf`, `Exactly` outranking `AllOf`, first-declaration precedence for two equally specific matching `NoneOf` rules, and indirect `ISO_Group_Shift`/`ISO_Next_Group` modifier-map bindings, in addition to the previous explicit/direct/indirect mapping and scope cases.
 - Type-map selection filters the complete 32-bit Wayland XKB state through each type's declared modifier mask and matches exact map entries. Numeric masks and numeric/`LevelN` level values are supported. Unknown or malformed custom types fail closed to the built-in US-QWERTY fallback.
 - Keymap usability is based on actual Group 1 lowercase/uppercase symbol pairs, not the conventional `ALPHABETIC` type ID. This supports layouts using compound or user-defined letter types.
 - Existing Unicode keysym aliases, six dead-key actions, bounded 40-pair Compose, grapheme-aware editing, and TrueType glyph metrics remain in place.
 
 ### Scope not yet implemented
 
-This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup recognizes only the modifier/system keysym names in the internal table; arbitrary keysym aliases and full keysym canonicalization are not implemented. The compatibility reader recognizes the same bounded modifier-keysyms and supports virtual-modifier assignment through the listed real-modifier predicates. It does not execute `action` or `repeat` statements, evaluate compatibility indicators/defaults, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
+This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates and virtual-modifier assignment but does not execute `action` or `repeat` statements, evaluate compatibility indicators/defaults, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 
-Actions [Build and test #662](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332) passed all nine job steps on [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e). The run passed the freestanding build/ELF checks, CLI smoke tests, complete Wayland protocol mock, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332/artifacts/13619186848) is 94,032 bytes, artifact ID 13619186848, SHA-256 `8f013c5c6ae54dfca8e57dba489fecfcc8e39632d262bea554615bb7547ff25d`, expiring 2026-11-15 13:33:01 UTC.
+Actions [Build and test #664](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592) passed all nine job steps on [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6). The run passed the freestanding build/ELF checks, CLI smoke tests, complete Wayland protocol mock, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592/artifacts/13619847523) is 94,317 bytes, artifact ID 13619847523, SHA-256 `54d23fd997cd19fbec58a9281b4e3bf75a2afb443e3cd2638a792de0ae8257a4`, expiring 2026-11-15 13:51:59 UTC.
 
-The previous Actions #661 run on commit `04970844` reported a Wayland event-loop exit in the legacy seat-v3 socket scenario. The full mock suite passed again in #662 on the new implementation; no targeted source change was made to that event-loop path, so the earlier failure is recorded as not reproduced rather than as a confirmed lifecycle fix.
+Actions #662 had already validated the initial bounded interpretation resolver. This #664 run adds regression coverage for the predicate-priority and first-match rules plus the newly recognized ISO group/level modifier keysyms.
+
+The earlier Actions #661 run on commit `04970844` reported a Wayland event-loop exit in the legacy seat-v3 socket scenario. The full mock suite passed again in #662 and #664; no targeted source change was made to that event-loop path, so the earlier failure remains not reproduced rather than a confirmed lifecycle fix.
 
 Live GNOME/Mutter testing with a real input method remains outstanding.
 
@@ -43,8 +46,8 @@ Live GNOME/Mutter testing with a real input method remains outstanding.
 
 ### Next roadmap items
 
-1. Validate indirect modifier maps and compatibility-derived virtual modifiers against real GNOME/Mutter keymaps and an actual input method.
-2. Expand real-key-keysym compatibility coverage and add dedicated `AllOf`/`Exactly` predicate and equal-specificity precedence fixtures.
+1. Validate the new modifier-keysyms, indirect modifier maps, and compatibility-derived virtual modifiers against real GNOME/Mutter keymaps and an actual input method.
+2. Extend supported keysym canonicalization and compare the bounded interpretation evaluator against additional real compatibility maps.
 3. Implement modifier/key action semantics, repeat interpretation, and preserve/consumed-modifier tracking; expand keyboard and Compose coverage.
 4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
 

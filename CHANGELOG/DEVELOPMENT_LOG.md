@@ -1697,3 +1697,27 @@ Indirect keysym-based `modifier_map` resolution and `xkb_compat` interpretation/
 
 **Implementation commit:** [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e).  
 **PR:** [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`.
+
+
+## 2026-11-08 — expand XKB compatibility predicates and ISO group/level modifier keysyms
+
+### Implementation and tests
+
+- Expanded the recognized modifier/system keysym table in `src/backend/xkb.S` to include `Shift_Lock`, `ISO_Lock`, `ISO_Level2_Latch`, `ISO_Group_Shift` (also `Greek_switch` and `script_switch` aliases), ISO group latch/lock, and ISO next/previous/first/last group symbols with lock variants.
+- Expanded the `tests/wayland_mock.py` XKB fixture from five to twelve `xkb_compat` interpretations.
+- Added assertions for `AllOf`, `Exactly` outranking `AllOf`, and first-declaration precedence when two same-specificity `NoneOf` rules both match. Added indirect `modifier_map` bindings for `ISO_Group_Shift` and `ISO_Next_Group`, and verified their raw keysym values, real modifier masks, inferred virtual maps, and effective virtual-modifier encodings.
+- Kept each fixture key in at most one real modifier map, consistent with the XKB text format. No multi-real-modifier-per-key resolver change was made; the existing resolver's conflict rejection remains intentional.
+- The implementation remains bounded: recognized modifier/system keysyms only, no general action execution, repeat handling, indicator/default evaluation, or `preserve[]` consumed-modifier semantics.
+
+### Validation
+
+- GitHub Actions [Build and test #664](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592) passed all nine job steps on implementation commit [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6), including build/ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, and artifact upload.
+- Artifact [13619847523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592/artifacts/13619847523) is 94,317 bytes; SHA-256 `54d23fd997cd19fbec58a9281b4e3bf75a2afb443e3cd2638a792de0ae8257a4`, expiring 2026-11-15 13:51:59 UTC.
+
+### Remaining work
+
+- Live GNOME/Mutter and real-IME testing remains outstanding.
+- Expand the keysym canonicalization subset and compare interpretation precedence with more real keymaps before attempting general action/repeat and `preserve[]` semantics.
+
+**Implementation commit:** [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6).  
+**PR:** [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`.

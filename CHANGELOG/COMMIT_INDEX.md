@@ -1049,3 +1049,14 @@ Actions [Build and test #659](https://github.com/GraderGamer2/NekoEdit/actions/r
 Added a bounded `xkb_compat` interpretation table/parser with real-modifier predicates, recognized modifier-keysyms and wildcards, virtual-modifier assignment, specificity ordering, and `useModMapMods=level1` scope. Expanded the Wayland mock to verify predicate selection, direct-property precedence, skipped nested actions, and level/group scope. The previous indirect `modifier_map` resolution is preserved.
 
 Actions [Build and test #662](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332) passed all nine steps on this commit. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332/artifacts/13619186848) is 94,032 bytes; SHA-256 `8f013c5c6ae54dfca8e57dba489fecfcc8e39632d262bea554615bb7547ff25d`.
+
+
+## 2026-11-08 — XKB compatibility specificity and ISO group/level keysyms
+
+| Commit | Subject |
+|---|---|
+| [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6) | test: cover XKB compatibility specificity and group keysyms |
+
+Expanded the recognized modifier keysym table with ISO group/level selectors and lock variants. Extended the Wayland mock to twelve interpretations, adding `AllOf`, `Exactly` specificity, equal-specificity first-match behavior, and indirect `ISO_Group_Shift`/`ISO_Next_Group` modifier-map coverage. The fixture obeys XKB's one-real-modifier-per-key constraint.
+
+Actions [Build and test #664](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592) passed all nine steps on this commit. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592/artifacts/13619847523) is 94,317 bytes; SHA-256 `54d23fd997cd19fbec58a9281b4e3bf75a2afb443e3cd2638a792de0ae8257a4`.
