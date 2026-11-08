@@ -1,12 +1,54 @@
 # NekoEdit current status
 
-## 2026-11-08 follow-up — clipboard/History fixes, compact journals, launcher and Compose expansion
+## 2026-11-08 — optional Wayland text-input-v3 integration
+
+**Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
+
+**Latest implementation commits:** [e121e13dceb7](https://github.com/GraderGamer2/NekoEdit/commit/e121e13dceb70fb548389d051c7d142aa6a3bb29) introduced text-input-v3; [cd896a7430ba](https://github.com/GraderGamer2/NekoEdit/commit/cd896a7430ba5a621fc16059b5d4032527684bea), [323d908c78ef](https://github.com/GraderGamer2/NekoEdit/commit/323d908c78ef1a4390163d76c691739435f6155e), [0cf677e8e0f4](https://github.com/GraderGamer2/NekoEdit/commit/0cf677e8e0f4867d5abb303da2f1da98715e5b6d), [34e1676067e9](https://github.com/GraderGamer2/NekoEdit/commit/34e1676067e981f3c3287ee1f040df1b35a821ac), [faac078d0d6f](https://github.com/GraderGamer2/NekoEdit/commit/faac078d0d6ff4df67e6bf8c33066796132815f8), and [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) contain protocol-state, fallback, UTF-8 validation, addressing, and journal-boundary corrections. Mock additions are in [345fb2e6b628](https://github.com/GraderGamer2/NekoEdit/commit/345fb2e6b628800b6bcf944062951e9bc07556c3), [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456), and [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509).
+
+### Current implementation
+
+- Optional `zwp_text_input_manager_v3` discovery/binding. The text-input object is enabled only after the surface enters the input target and the document is focused; prompts, picker, History, and other panels keep the physical-key path.
+- `preedit_string`, `commit_string`, `delete_surrounding_text`, and `done` staging/handling. Preedit is a transient underlined overlay; committed UTF-8 is validated before insertion.
+- Bounded UTF-8 surrounding text, caret/anchor byte offsets, normal content purpose, cursor rectangle, and monotonic commit serials.
+- UTF-8 boundary/range validation for delete-surrounding; invalid ranges are ignored before starting a history transaction. Delete plus commit is recorded as one undo action.
+- The raw `wl_keyboard` fallback remains active when the optional interface is not advertised. With text-input-v3 enabled, printable key-to-Unicode insertion is suppressed to avoid duplicate input while navigation and shortcuts remain on the keyboard path.
+- XKB named Unicode keysyms, grapheme-aware editing, six dead-key actions, bounded Compose, and TrueType glyph metrics predate this change; this milestone integrates compositor text rather than replacing those paths.
+
+### Verification state
+
+Actions [Build and test #621](https://github.com/GraderGamer2/NekoEdit/actions/runs/42457144443) passed all eight workflow steps on the text-input test snapshot [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456). It verified the build/ELF checks, CLI/preferences/history host tests, install smoke test, and the full Wayland mock suite including text-input-v3 manager binding, focus/enable, surrounding text, matching `done`, preedit staging, multibyte commit, delete-surrounding, and leave/disable. Follow-up source hardening for invalid deletion transaction boundaries ([4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81)) and a regression assertion ([d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509)) were added after #621 and still require a fresh workflow run.
+
+**Not yet verified:** live GNOME/Mutter composition with an actual input method. The mock verifies wire protocol and document state; it does not prove candidate-popup placement, real IME behavior, or multi-language shaping. The current preedit cursor/attribute rendering is intentionally basic and is a follow-up within this milestone.
+
+### Deferred, unchanged areas
+
+- History path search is still reported by the user as nonfunctional; the current History layout also needs refinement. These are deferred as requested.
+- History storage still needs deeper compaction/checkpoint/limit work; do not change it during the IME/XKB/shaping milestones.
+- Clipboard persistence is user-confirmed working, including paste after the editor closes and helper exit after another application takes ownership.
+- The standalone ELF remains directly runnable, but GNOME application-menu registration still uses the repository-based `make install-user`; release-package installation without a source checkout remains separate packaging work.
+- The intermittent `poll(EINTR)` event-loop fix remains a concrete correction, but the original roughly one-in-six desktop failure still needs live GNOME/Mutter confirmation.
+
+### Next roadmap items
+
+1. Finish remaining text-input-v3 details and validate against GNOME/Mutter.
+2. Expand XKB types, virtual modifiers, and action semantics beyond the current simplified text-v1 subset.
+3. Improve keyboard behavior and coverage for remaining key classes/actions.
+4. Add shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
+
+**Snapshot date:** 2026-11-08 (Asia/Jakarta). Source and test changes after Actions #621 require revalidation before being called green.
+
+---
+
+## Previous snapshot retained for historical context
+
+## Archived snapshot — clipboard/History fixes, compact journals, launcher and Compose expansion
 
 **Implementation commits:** [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333) (feature fixes), [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6) (compile declaration), and [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1) (compact collapsed-caret metadata).
 
 - The main Wayland event loop now treats `poll()` returning `-EINTR` as a transient wake-up and rebuilds the poll set instead of reporting a fatal Wayland setup error. This addresses the observed intermittent `Wayland stage: event loop` failure; the underlying desktop occurrence still needs live GNOME/Mutter confirmation.
 - The process-exit clipboard helper now starts a detached session, closes inherited terminal standard streams, releases the history journal state, and destroys the inherited xdg toplevel/surface/buffer objects. It retains the original Wayland data-device ownership and clipboard snapshot so another application can still paste after the editor window disappears.
-- The History page now separates path filtering from Browse-to-Open-picker, provides a working Open Selected button, lays out counters above the action row, scales the four action buttons to the available width, and clips long result paths for the maximum UI font. Delete targets the highlighted history journal, including a non-active document, without deleting the source document.
+- The History page has separate path-filter and Browse-to-Open-picker controls (the user later reported that path filtering still does not work), provides a working Open Selected button, lays out counters above the action row, scales the four action buttons to the available width, and clips long result paths for the maximum UI font. Delete targets the highlighted history journal, including a non-active document, without deleting the source document.
 - New journals use version 2: a 24-byte fixed record header and variable-length operation offsets/lengths. A one-byte insertion at a short offset occupies a 28-byte record rather than the 49-byte version-1 equivalent, reducing common per-keystroke record size by about 43%. Existing version-1 journals remain readable and writable; the host test converts a compact record to the legacy layout and verifies recovery/Undo/Redo.
 - `make install-user` installs `~/.local/bin/nekoedit`, a GNOME-compatible desktop launcher, icon, and `text/plain` Open With association metadata. `MAKE_DEFAULT=1` also changes the user's default text/plain handler. `make uninstall-user` removes the per-user installation; `sudo make install` provides a system-wide install.
 - The bounded `Multi_key` Compose table has expanded from 20 to 40 two-symbol sequences. The mock test now asserts additional degree, paragraph, registered-mark, and ø sequences.
