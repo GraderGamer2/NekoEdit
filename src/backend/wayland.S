@@ -2148,6 +2148,8 @@ keyboard_focused:       .long 0
 keyboard_serial:        .long 0
 keyboard_group:         .long 0
 level3_down:            .long 0
+level3_physical_down:   .long 0
+level3_mod5_down:       .long 0
 .global event_fd
 event_fd:               .long 0       # initialized to -1 in wayland_main
 keymap_format:          .long 0
@@ -3951,6 +3953,18 @@ wayland_main:
     setnz al
     movzx eax, al
     mov dword ptr [rip + ctrl_down], eax
+
+    # The compositor sends effective real modifier masks, not XKB virtual
+    # modifier names. LevelThree commonly resolves to Mod5 (bit 7); consume
+    # that state as well as the physical Right-Alt fallback below.
+    mov eax, dword ptr [rip + event_payload + 4]
+    or eax, dword ptr [rip + event_payload + 8]
+    and eax, 128
+    setnz al
+    movzx eax, al
+    mov dword ptr [rip + level3_mod5_down], eax
+    or eax, dword ptr [rip + level3_physical_down]
+    mov dword ptr [rip + level3_down], eax
     jmp .event_loop
 .keyboard_enter:
     cmp dword ptr [rip + last_size], 12
@@ -3970,6 +3984,8 @@ wayland_main:
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + level3_down], 0
+    mov dword ptr [rip + level3_physical_down], 0
+    mov dword ptr [rip + level3_mod5_down], 0
     call repeat_cancel
     cmp dword ptr [rip + text_input_object], 0
     je .event_loop
@@ -4016,7 +4032,10 @@ wayland_main:
     mov dword ptr [rip + shift_down], edx
     jmp .event_loop
 .keyboard_level3:
-    mov dword ptr [rip + level3_down], edx
+    mov dword ptr [rip + level3_physical_down], edx
+    mov eax, dword ptr [rip + level3_mod5_down]
+    or eax, edx
+    mov dword ptr [rip + level3_down], eax
     jmp .event_loop
 .keyboard_control:
     mov dword ptr [rip + ctrl_down], edx
