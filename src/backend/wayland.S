@@ -9686,7 +9686,8 @@ text_input_handle_event:
     cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
     ja .Lti_ignored
     je .Lti_preedit_validate_end
-    movzx eax, byte ptr [rip + text_input_pending_preedit_buffer + rcx]
+    lea rax, [rip + text_input_pending_preedit_buffer]
+    movzx eax, byte ptr [rax + rcx]
     and eax, 0xc0
     cmp eax, 0x80
     je .Lti_ignored
@@ -9698,7 +9699,8 @@ text_input_handle_event:
     cmp edx, dword ptr [rip + text_input_pending_preedit_length]
     ja .Lti_ignored
     je .Lti_preedit_flag
-    movzx eax, byte ptr [rip + text_input_pending_preedit_buffer + rdx]
+    lea rax, [rip + text_input_pending_preedit_buffer]
+    movzx eax, byte ptr [rax + rdx]
     and eax, 0xc0
     cmp eax, 0x80
     je .Lti_ignored
