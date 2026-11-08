@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **361** (347 earlier implementation/test commits + 13 clipboard-service, disk-history, History UI, regression, and fix commits in the 2026-11-08 follow-up; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **362** (347 earlier implementation/test commits + 13 clipboard-service, disk-history, History UI, regression, and fix commits in the 2026-11-08 follow-up; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
@@ -938,5 +938,8 @@ This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal 
 |---|---|
 | [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333) | fix: harden clipboard shutdown, compact history, and launch integration |
 | [10e80acca944](https://github.com/GraderGamer2/NekoEdit/commit/10e80acca944e17e11acc82a5927b41cc06a9b42) | docs: record clipboard, history, and launcher follow-up |
+| [157523eeb139](https://github.com/GraderGamer2/NekoEdit/commit/157523eeb13994751f62eb0b1e7a40a55d73c339) | docs: index latest NekoEdit follow-up commits |
+| [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6) | fix: declare history mapping helper before compact encoder |
+| [e2681eb7df6c](https://github.com/GraderGamer2/NekoEdit/commit/e2681eb7df6ce3d35d38d10ada7653ed4a2ebe01) | docs: record build correction and validation status |
 
 Source/test implementation commit f3f6da21af1c includes the Wayland EINTR path, helper/window-object teardown, History page and selected-delete behavior, compact version-2 journal encoding with v1 compatibility, per-user/system install targets, and 40-pair Compose. Commit 10e80acca944 updates the continuity/status/history records. The index-refresh commit that follows is itself a documentation maintenance commit; it is recorded by the next index refresh.
