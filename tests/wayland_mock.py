@@ -1305,8 +1305,7 @@ xkb_symbols "nekoedit-sparse" {
 
 
                 if text_input_test:
-                    def release_frame(label: str) -> None:
-                        client.sendall(wire_message(12, 0))
+                    def expect_frame(label: str) -> None:
                         expect_message(
                             client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
                         )
@@ -1315,6 +1314,10 @@ xkb_symbols "nekoedit-sparse" {
                             f"{label} damage",
                         )
                         expect_message(client, (8, 6, b""), f"{label} commit")
+
+                    def release_frame(label: str) -> None:
+                        client.sendall(wire_message(12, 0))
+                        expect_frame(label)
 
                     def expect_state(
                         expected_text: bytes, expected_cursor: int, label: str
@@ -1359,7 +1362,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (18, 5, struct.pack("<II", 0, 0)), "set normal content type"
                     )
                     expect_state(b"", 0, "initial text-input state")
-                    release_frame("text-input enable redraw")
+                    expect_frame("text-input enable redraw")
 
                     # A matching empty done acknowledges serial 1 without
                     # triggering another state commit and a feedback loop.
@@ -1413,6 +1416,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(18, 1, struct.pack("<I", 8)))
                     expect_message(client, (18, 2, b""), "disable text input after leave")
                     expect_message(client, (18, 7, b""), "commit disable state")
+                    client.sendall(wire_message(12, 0))
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), "leave redraw attach"
                     )
@@ -5738,6 +5742,9 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1])
+    # Exercise the optional text-input-v3/IME path independently of the
+    # physical-keyboard fallback and without cursor-shape/clipboard globals.
+    run(sys.argv[1], text_input_test=True, cursor_shape_supported=False)
     # A compositor disconnect immediately after xdg_surface.configure must
     # return a controlled protocol error rather than terminate via SIGPIPE.
     disconnect_fd, disconnect_path = tempfile.mkstemp(prefix="nekoedit-disconnect-")
