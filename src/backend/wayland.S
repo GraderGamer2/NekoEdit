@@ -9772,6 +9772,7 @@ text_input_apply_done:
     push r13
     push r14
     push r15
+    sub rsp, 16
     xor r15d, r15d
     cmp dword ptr [rip + text_input_enabled], 1
     jne .Lti_apply_clear
@@ -9788,8 +9789,33 @@ text_input_apply_done:
     jc .Lti_apply_delete_invalid
     cmp eax, dword ptr [rip + doc_length]
     ja .Lti_apply_delete_invalid
+
+    # Start/end are byte offsets in the committed document. If the editor
+    # currently has a selection, the protocol requires that it be deleted too,
+    # even when both surrounding lengths are zero.
     mov edi, r14d
     sub edi, r12d
+    mov dword ptr [rsp], edi
+    mov eax, r14d
+    add eax, r13d
+    mov dword ptr [rsp + 4], eax
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lti_apply_delete_selection_union_done
+    mov eax, dword ptr [rip + doc_selection_anchor]
+    mov edx, r14d
+    cmp eax, edx
+    jbe .Lti_apply_delete_selection_ordered
+    xchg eax, edx
+.Lti_apply_delete_selection_ordered:
+    cmp eax, dword ptr [rsp]
+    jae .Lti_apply_delete_selection_start_ready
+    mov dword ptr [rsp], eax
+.Lti_apply_delete_selection_start_ready:
+    cmp edx, dword ptr [rsp + 4]
+    jbe .Lti_apply_delete_selection_union_done
+    mov dword ptr [rsp + 4], edx
+.Lti_apply_delete_selection_union_done:
+    mov edi, dword ptr [rsp]
     test edi, edi
     jz .Lti_apply_delete_start_ok
     call doc_byte_at
@@ -9797,31 +9823,22 @@ text_input_apply_done:
     cmp eax, 0x80
     je .Lti_apply_delete_invalid
 .Lti_apply_delete_start_ok:
-    mov eax, r14d
-    add eax, r13d
-    cmp eax, dword ptr [rip + doc_length]
+    mov edi, dword ptr [rsp + 4]
+    cmp edi, dword ptr [rip + doc_length]
     jae .Lti_apply_delete_bounds_ok
-    mov edi, eax
     call doc_byte_at
     and eax, 0xc0
     cmp eax, 0x80
     je .Lti_apply_delete_invalid
 .Lti_apply_delete_bounds_ok:
-    mov eax, r12d
-    or eax, r13d
-    jz .Lti_apply_commit_text
+    mov eax, dword ptr [rsp]
+    cmp eax, dword ptr [rsp + 4]
+    jae .Lti_apply_commit_text
     call history_begin_action
-    mov eax, r14d
-    sub eax, r12d
+    mov eax, dword ptr [rsp]
     mov dword ptr [rip + doc_selection_anchor], eax
-    mov eax, r14d
-    add eax, r13d
+    mov eax, dword ptr [rsp + 4]
     mov dword ptr [rip + doc_cursor], eax
-    cmp r12d, 0
-    jne .Lti_apply_delete_mark
-    test r13d, r13d
-    jz .Lti_apply_commit_text
-.Lti_apply_delete_mark:
     mov dword ptr [rip + doc_selection_active], 1
     call doc_delete_selection
     mov r15d, 1
@@ -9885,6 +9902,7 @@ text_input_apply_done:
     mov dword ptr [rip + text_input_pending_commit_length], 0
     mov dword ptr [rip + text_input_pending_preedit_length], 0
     mov eax, r15d
+    add rsp, 16
     pop r15
     pop r14
     pop r13
