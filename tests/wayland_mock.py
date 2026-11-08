@@ -1320,7 +1320,8 @@ xkb_symbols "nekoedit-sparse" {
                         expect_frame(label)
 
                     def expect_state(
-                        expected_text: bytes, expected_cursor: int, label: str
+                        expected_text: bytes, expected_cursor: int, label: str,
+                        expected_anchor: int | None = None,
                     ) -> None:
                         message = recv_wayland_message(client)
                         if message[0:2] != (18, 3) or message[3]:
@@ -1332,8 +1333,11 @@ xkb_symbols "nekoedit-sparse" {
                             raise AssertionError(f"{label}: malformed surrounding-text payload {payload!r}")
                         value = payload[4 : 4 + string_length]
                         cursor, anchor = struct.unpack_from("<II", payload, 4 + padded_length)
+                        anchor_expected = (
+                            expected_cursor if expected_anchor is None else expected_anchor
+                        )
                         if value != expected_text + b"\0" or (cursor, anchor) != (
-                            expected_cursor, expected_cursor
+                            expected_cursor, anchor_expected
                         ):
                             raise AssertionError(
                                 f"{label}: expected text/cursor {expected_text!r}/{expected_cursor}, "
@@ -1407,21 +1411,51 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("text_input_preedit_length") != 0:
                         raise AssertionError("commit_string did not clear the previous preedit")
 
-                    # Delete both UTF-8 scalars before the caret as one transaction.
+                    # Select the final UTF-8 scalar using Shift+Left, then send
+                    # delete_surrounding_text(0, 0). The protocol requires an
+                    # existing editor selection to be removed even with no
+                    # additional surrounding bytes requested.
                     client.sendall(
-                        wire_message(18, 4, struct.pack("<II", 6, 0))
-                        + wire_message(18, 5, struct.pack("<I", 2))
+                        wire_message(16, 3, struct.pack("<IIII", 7001, 7001, 42, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 7002, 7002, 105, 1))
+                    )
+                    expect_state(committed, 3, "selected UTF-8 scalar", 6)
+                    release_frame("IME selection redraw")
+                    if child_u32("doc_selection_active") != 1:
+                        raise AssertionError("Shift+Left did not produce the expected active selection")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 7003, 7003, 105, 0))
+                        + wire_message(16, 3, struct.pack("<IIII", 7004, 7004, 42, 0))
+                    )
+                    client.sendall(
+                        wire_message(18, 4, struct.pack("<II", 0, 0))
+                        + wire_message(18, 5, struct.pack("<I", child_u32("text_input_commit_serial")))
+                    )
+                    expect_state("你".encode("utf-8"), 3, "selected-text deletion")
+                    release_frame("selected-text deletion redraw")
+                    state = read_document_state()
+                    if state["doc_contents"][: state["doc_length"]] != "你".encode("utf-8"):
+                        raise AssertionError(
+                            "delete_surrounding_text(0, 0) did not remove the active selection"
+                        )
+
+                    # Delete the remaining scalar before the caret as one action.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        wire_message(18, 4, struct.pack("<II", 3, 0))
+                        + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     expect_state(b"", 0, "delete-surrounding update")
                     release_frame("delete-surrounding redraw")
                     if child_u32("doc_length") != 0:
                         raise AssertionError("delete_surrounding_text did not remove the requested bytes")
 
-                    # Invalid byte ranges must be ignored before opening a
-                    # history transaction or mutating the UTF-8 document.
+                    # An out-of-range request on an empty document must be a
+                    # no-op and must not create an empty history transaction.
+                    serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         wire_message(18, 4, struct.pack("<II", 1, 0))
-                        + wire_message(18, 5, struct.pack("<I", 3))
+                        + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     release_frame("invalid delete-surrounding redraw")
                     if child_u32("doc_length") != 0:
