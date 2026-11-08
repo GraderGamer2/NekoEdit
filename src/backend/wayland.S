@@ -9650,6 +9650,11 @@ text_input_handle_event:
     test eax, eax
     js .Lti_ignored
     mov dword ptr [rip + text_input_pending_preedit_length], eax
+    lea rdi, [rip + text_input_pending_preedit_buffer]
+    mov esi, eax
+    call text_input_validate_utf8
+    test eax, eax
+    jz .Lti_ignored
     mov eax, dword ptr [rip + event_payload]
     test eax, eax
     jz .Lti_preedit_null
@@ -9669,20 +9674,34 @@ text_input_handle_event:
     mov dword ptr [rip + text_input_pending_preedit_cursor_end], ecx
 .Lti_preedit_validate:
     mov ecx, dword ptr [rip + text_input_pending_preedit_cursor_begin]
+    mov edx, dword ptr [rip + text_input_pending_preedit_cursor_end]
     cmp ecx, -1
+    jne .Lti_preedit_begin_visible
+    cmp edx, -1
+    jne .Lti_ignored
+    jmp .Lti_preedit_flag
+.Lti_preedit_begin_visible:
+    test ecx, ecx
+    js .Lti_ignored
+    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
+    ja .Lti_ignored
     je .Lti_preedit_validate_end
-    test ecx, ecx
-    js .Lti_ignored
-    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
-    ja .Lti_ignored
+    movzx eax, byte ptr [rip + text_input_pending_preedit_buffer + rcx]
+    and eax, 0xc0
+    cmp eax, 0x80
+    je .Lti_ignored
 .Lti_preedit_validate_end:
-    mov ecx, dword ptr [rip + text_input_pending_preedit_cursor_end]
-    cmp ecx, -1
-    je .Lti_preedit_flag
-    test ecx, ecx
+    cmp edx, -1
+    je .Lti_ignored
+    test edx, edx
     js .Lti_ignored
-    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
+    cmp edx, dword ptr [rip + text_input_pending_preedit_length]
     ja .Lti_ignored
+    je .Lti_preedit_flag
+    movzx eax, byte ptr [rip + text_input_pending_preedit_buffer + rdx]
+    and eax, 0xc0
+    cmp eax, 0x80
+    je .Lti_ignored
 .Lti_preedit_flag:
     or dword ptr [rip + text_input_pending_flags], 2
     xor eax, eax
