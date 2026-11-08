@@ -12,6 +12,7 @@ import socket
 import struct
 import subprocess
 import sys
+import shutil
 import tempfile
 import threading
 import time
@@ -229,6 +230,7 @@ def run(
     font_parser_test: bool = False,
     font_picker_test: bool = False,
     clipboard_test: bool = False,
+    clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
     word_navigation_test: bool = False,
@@ -321,7 +323,7 @@ def run(
             )
             if cursor_shape_supported:
                 globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
-            if clipboard_test:
+            if clipboard_test or clipboard_persistence_test:
                 globals_payload += registry_global(6, "wl_data_device_manager", version=1)
             client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
@@ -517,7 +519,7 @@ def run(
                         "set initial default cursor shape",
                     )
                     observations.append("optional cursor-shape manager bound; startup pointer.enter retained and applied")
-                if clipboard_test:
+                if clipboard_test or clipboard_persistence_test:
                     manager_name = b"wl_data_device_manager\0"
                     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
                     expect_message(
@@ -553,7 +555,7 @@ def run(
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
-                    or clipboard_test or history_test or horizontal_scroll_test or word_navigation_test or pointer_drag_test
+                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or word_navigation_test or pointer_drag_test
                     or line_navigation_test or find_replace_test
                 ):
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
@@ -2179,6 +2181,100 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     observations.append("Ctrl+V received an external Wayland MIME offer asynchronously and inserted its text")
                     client.sendall(wire_message(10, 1))
+                    return
+
+                if clipboard_persistence_test:
+                    expected_clipboard = b"keep me after close\n"
+                    state = read_document_state()
+                    if state["doc_contents"] != expected_clipboard:
+                        raise AssertionError(
+                            "clipboard persistence test did not start with its document bytes: "
+                            + repr(state["doc_contents"])
+                        )
+
+                    def clipboard_string(value: str) -> bytes:
+                        encoded = value.encode("ascii") + b"\0"
+                        return struct.pack("<I", len(encoded)) + encoded + (b"\0" * (-len(encoded) % 4))
+
+                    def ctrl_event(serial: int, code: int, down: bool) -> bytes:
+                        return wire_message(
+                            16, 3, struct.pack("<IIII", serial, serial, code, int(down))
+                        )
+
+                    def expect_source_creation(source_id: int, serial: int) -> None:
+                        expect_message(
+                            client, (17, 0, struct.pack("<I", source_id)),
+                            "clipboard persistence: create data source",
+                        )
+                        expect_message(
+                            client, (source_id, 0, clipboard_string("text/plain;charset=utf-8")),
+                            "clipboard persistence: offer UTF-8 MIME",
+                        )
+                        expect_message(
+                            client, (source_id, 0, clipboard_string("text/plain")),
+                            "clipboard persistence: offer plain-text MIME",
+                        )
+                        expect_message(
+                            client, (18, 1, struct.pack("<II", source_id, serial)),
+                            "clipboard persistence: set selection",
+                        )
+
+                    workflow_shortcut(2190, 30, "Ctrl+A before persistent clipboard copy")
+                    client.sendall(
+                        ctrl_event(2200, 29, True)
+                        + ctrl_event(2201, 46, True)
+                        + ctrl_event(2202, 46, False)
+                        + ctrl_event(2203, 29, False)
+                    )
+                    expect_source_creation(19, 2201)
+
+                    # Close the toplevel and request the data after the parent
+                    # process exits. The helper must have inherited the source.
+                    client.sendall(wire_message(10, 1))
+                    read_fd, write_fd = os.pipe()
+                    try:
+                        transfer = wire_message(
+                            19, 1, clipboard_string("text/plain;charset=utf-8")
+                        )
+                        client.sendmsg(
+                            [transfer],
+                            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", write_fd))],
+                        )
+                    finally:
+                        os.close(write_fd)
+
+                    received = bytearray()
+                    deadline = time.monotonic() + 5
+                    try:
+                        while time.monotonic() < deadline:
+                            readable, _, _ = select.select(
+                                [read_fd], [], [], max(0, deadline - time.monotonic())
+                            )
+                            if not readable:
+                                break
+                            chunk = os.read(read_fd, 4096)
+                            if not chunk:
+                                break
+                            received.extend(chunk)
+                    finally:
+                        os.close(read_fd)
+                    if bytes(received) != expected_clipboard:
+                        raise AssertionError(
+                            "post-exit helper did not serve the inherited clipboard snapshot: "
+                            + repr(bytes(received))
+                        )
+
+                    # The compositor now reports another client owns the
+                    # selection. The helper must release its socket and exit.
+                    client.sendall(wire_message(18, 5, struct.pack("<I", 0)))
+                    client.settimeout(5)
+                    while True:
+                        chunk = client.recv(1024)
+                        if not chunk:
+                            break
+                    observations.append(
+                        "clipboard helper served the selection after editor exit and exited after selection replacement"
+                    )
                     return
 
                 if line_index_test:
@@ -5251,9 +5347,14 @@ xkb_symbols "nekoedit-sparse" {
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
-    # The preference unit test covers persistence separately; keep protocol
-    # fixtures independent of the developer machine's per-user config.
-    environment["NEKOEDIT_DISABLE_PREFERENCES"] = "1"
+    # Each mock receives an isolated HOME so preferences and journals never
+    # enter the CI runner account. Only this test enables preferences to exercise
+    # the default-on clipboard service setting.
+    environment["HOME"] = runtime_dir
+    if clipboard_persistence_test:
+        environment.pop("NEKOEDIT_DISABLE_PREFERENCES", None)
+    else:
+        environment["NEKOEDIT_DISABLE_PREFERENCES"] = "1"
     if font_test_path is not None:
         environment["NEKOEDIT_FONT"] = os.path.abspath(font_test_path)
         environment.pop("NEKOEDIT_DISABLE_FONT", None)
@@ -5315,6 +5416,7 @@ xkb_symbols "nekoedit-sparse" {
                 os.unlink(absolute_file_path)
             except FileNotFoundError:
                 pass
+        shutil.rmtree(runtime_dir, ignore_errors=True)
 
     if thread.is_alive():
         raise AssertionError("mock compositor did not finish the protocol exchange")
@@ -5470,6 +5572,24 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(clipboard_path)
+        except FileNotFoundError:
+            pass
+
+    # The bundled clipboard owner must serve the current selection after
+    # the editor exits, then terminate when the compositor changes ownership.
+    persistent_fd, persistent_path = tempfile.mkstemp(prefix="nekoedit-clipboard-persist-")
+    try:
+        with os.fdopen(persistent_fd, "wb") as persistent_file:
+            persistent_file.write(b"keep me after close\n")
+        run(
+            sys.argv[1],
+            initial_file=persistent_path,
+            clipboard_persistence_test=True,
+            cursor_shape_supported=False,
+        )
+    finally:
+        try:
+            os.unlink(persistent_path)
         except FileNotFoundError:
             pass
 
