@@ -1382,6 +1382,10 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(18, 5, struct.pack("<I", 1))
                     )
                     release_frame("preedit redraw")
+                    if not rendered_color_present(24, 92, 8, 12, 3200, 0xff5e81ac):
+                        raise AssertionError(
+                            "cursor_begin/cursor_end preedit selection was not painted behind its glyph"
+                        )
                     if child_u32("text_input_preedit_length") != 3:
                         raise AssertionError("preedit_string was not retained until done")
                     if child_u32("text_input_preedit_cursor_begin") != 1:
