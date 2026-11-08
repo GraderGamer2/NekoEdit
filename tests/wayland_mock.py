@@ -1322,6 +1322,7 @@ xkb_symbols "nekoedit-sparse" {
                     def expect_state(
                         expected_text: bytes, expected_cursor: int, label: str,
                         expected_anchor: int | None = None,
+                        expected_rectangle: tuple[int, int, int, int] | None = None,
                     ) -> None:
                         message = recv_wayland_message(client)
                         if message[0:2] != (18, 3) or message[3]:
@@ -1346,6 +1347,15 @@ xkb_symbols "nekoedit-sparse" {
                         rectangle = recv_wayland_message(client)
                         if rectangle[0:2] != (18, 6) or len(rectangle[2]) != 16 or rectangle[3]:
                             raise AssertionError(f"{label}: malformed cursor rectangle {rectangle!r}")
+                        rectangle_values = struct.unpack("<4i", rectangle[2])
+                        if (
+                            expected_rectangle is not None
+                            and rectangle_values != expected_rectangle
+                        ):
+                            raise AssertionError(
+                                f"{label}: expected cursor rectangle {expected_rectangle}, "
+                                f"got {rectangle_values}"
+                            )
                         expect_message(client, (18, 7, b""), f"{label} state commit")
 
                     # The keyboard is focused, but the IME must remain off until
@@ -1381,6 +1391,10 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         + wire_message(18, 5, struct.pack("<I", 1))
                     )
+                    expect_state(
+                        b"", 0, "preedit cursor rectangle",
+                        expected_rectangle=(24, 92, 1, 12),
+                    )
                     release_frame("preedit redraw")
                     if not rendered_color_present(24, 92, 8, 12, 3200, 0xff5e81ac):
                         raise AssertionError(
@@ -1401,9 +1415,10 @@ xkb_symbols "nekoedit-sparse" {
                         struct.pack("<I", len(commit)) + commit
                         + (b"\0" * (-len(commit) % 4))
                     )
+                    serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         wire_message(18, 3, commit_payload)
-                        + wire_message(18, 5, struct.pack("<I", 1))
+                        + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     expect_state(committed, 6, "committed UTF-8 text")
                     release_frame("committed text redraw")
