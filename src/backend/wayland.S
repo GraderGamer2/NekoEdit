@@ -141,6 +141,17 @@ ui_menu_state_off:     .asciz "OFF"
 ui_menu_font_size_label: .asciz "FONT SIZE"
 ui_menu_ui_font_size_label: .asciz "UI FONT"
 ui_menu_wrap_lines_label: .asciz "WRAP LINES"
+ui_menu_clipboard_label: .asciz "CLIPBOARD SERVICE"
+ui_history_label: .asciz "History"
+ui_history_title: .asciz "DOCUMENT HISTORY"
+ui_history_undo_label: .asciz "UNDO"
+ui_history_redo_label: .asciz "REDO"
+ui_history_export_label: .asciz "EXPORT"
+ui_history_delete_label: .asciz "DELETE"
+ui_history_undo_count_label: .asciz "UNDO RECORDS"
+ui_history_redo_count_label: .asciz "REDO RECORDS"
+ui_history_storage_error: .asciz "JOURNAL STORAGE ERROR"
+ui_history_message: .asciz "Stored in ~/.nekoedit as a .history file."
 ui_menu_font_file_label: .asciz "FONT FILE"
 ui_menu_select_label:   .asciz "SELECT"
 ui_menu_minus_label:   .asciz "-"
@@ -2177,6 +2188,9 @@ doc_save_error:         .long 0
 doc_open_error:         .long 0
 file_menu_open:         .long 0
 settings_menu_open:     .long 0
+.global history_tab_open, history_export_mode
+history_tab_open:       .long 0
+history_export_mode:    .long 0
 .global save_confirm_enabled
 save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
@@ -3408,8 +3422,10 @@ wayland_main:
     jae .pointer_menu_outside
     cmp edx, 32
     jb .pointer_menu_outside
-    cmp edx, 200
+    cmp edx, 224
     jae .pointer_menu_outside
+    cmp edx, 160
+    jae .pointer_settings_clipboard_toggle
     cmp edx, 136
     jae .pointer_settings_font_file
     cmp edx, 64
@@ -3429,6 +3445,11 @@ wayland_main:
     cmp eax, 416
     jae .pointer_menu_outside
     jmp .pointer_settings_ui_font_increase
+
+.pointer_settings_clipboard_toggle:
+    xor dword ptr [rip + clipboard_persistence_enabled], 1
+    call preferences_save
+    jmp .keyboard_changed
 
 .pointer_settings_font_file:
     # Font selection is available even when the embedded bitmap fallback is active.
@@ -8718,7 +8739,7 @@ window_update_layout_geometry:
     imul ebx, 256
     mov eax, ebx
     xor edx, edx
-    mov ecx, 168
+    mov ecx, 192
     div ecx
     cmp r8d, eax
     jbe .window_layout_settings_scale_ready
@@ -8726,7 +8747,7 @@ window_update_layout_geometry:
 .window_layout_settings_scale_ready:
     mov eax, r8d
     mov dword ptr [rip + settings_panel_width], eax
-    imul eax, 168
+    imul eax, 192
     xor edx, edx
     mov ecx, 256
     div ecx
@@ -8881,7 +8902,7 @@ settings_pointer_to_design:
     mov ebx, eax
     mov eax, r12d
     sub eax, dword ptr [rip + settings_panel_y]
-    imul eax, 168
+    imul eax, 192
     cdq
     mov ecx, dword ptr [rip + settings_panel_height]
     test ecx, ecx
@@ -14691,12 +14712,12 @@ render_file_menu:
     mov dword ptr [rip + ui_transform_x_den], 256
     mov eax, dword ptr [rip + settings_panel_height]
     mov dword ptr [rip + ui_transform_y_num], eax
-    mov dword ptr [rip + ui_transform_y_den], 168
+    mov dword ptr [rip + ui_transform_y_den], 192
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 160
     mov edx, 32
     mov ecx, 256
-    mov r8d, 168
+    mov r8d, 192
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 172
@@ -14808,6 +14829,20 @@ render_file_menu:
     mov edi, 172
     mov esi, 148
     lea rdx, [rip + ui_menu_font_file_label]
+    call draw_text
+    mov edi, 172
+    mov esi, 176
+    lea rdx, [rip + ui_menu_clipboard_label]
+    call draw_text
+    mov edi, 372
+    mov esi, 176
+    cmp dword ptr [rip + clipboard_persistence_enabled], 0
+    je .render_settings_clipboard_off
+    lea rdx, [rip + ui_menu_state_on]
+    jmp .render_settings_clipboard_draw
+.render_settings_clipboard_off:
+    lea rdx, [rip + ui_menu_state_off]
+.render_settings_clipboard_draw:
     call draw_text
 .render_file_menu_settings_finish:
     mov edi, 360
