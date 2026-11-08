@@ -41,7 +41,7 @@ This makes histories searchable, exportable, and removable without opening the h
 make test includes a host-side journal test covering grouped replacement, branch invalidation, more than 16 edits, save/checksum-based restart recovery, export, delete, and file permissions. The Wayland mock suite separately exercises the editor's keyboard and UI routes.
 
 
-The Wayland mock additionally verifies the visible History tab (Undo/Redo buttons, Export picker opening/cancellation, and Delete) and that an asynchronous external clipboard paste is undoable/redoable as one action. The host-side journal test verifies that Delete removes the journal without changing document bytes and that subsequent edits create a fresh journal.
+The Wayland mock additionally verifies the visible History tab (search results, opening a selected document, Undo/Redo buttons, Export picker opening/cancellation, and Delete). It also confirms repeated Ctrl+C leaves no .history file when the editor document has not been modified. The host-side journal test verifies lazy creation, multi-document search, and independent deletion.
 
 ## Lazy creation and search validation
 

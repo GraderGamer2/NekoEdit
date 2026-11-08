@@ -2038,7 +2038,7 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(240, 60, 2070, "open the History tab")
                     if child_u32("history_tab_open") != 1:
                         raise AssertionError("clicking the History tab did not switch pages")
-                    workflow_redraw("History search lists the edited source document")
+                    # workflow_click() has already waited for the tab redraw.
                     if child_u32("history_search_match_count") != 1:
                         raise AssertionError(
                             "History search did not find the one edited source document: "
@@ -2171,7 +2171,19 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(19, 2))
                     expect_message(client, (19, 1, b""), "destroy the replaced first Ctrl+C source")
                     receive_source_bytes(20, "repeated Ctrl+C")
-                    observations.append("repeated Ctrl+C replaced and retired the previous immutable Wayland source")
+                    history_directory = os.path.join(runtime_dir, ".nekoedit")
+                    history_files = [
+                        name for name in os.listdir(history_directory)
+                        if name.endswith(".history")
+                    ] if os.path.isdir(history_directory) else []
+                    if history_files:
+                        raise AssertionError(
+                            "Ctrl+C created an unnecessary history journal: "
+                            + repr(history_files)
+                        )
+                    observations.append(
+                        "repeated Ctrl+C replaced the previous source without creating a .history file"
+                    )
 
                     # Ctrl+X must publish its own snapshot before deleting the
                     # selection, and that snapshot must survive the deletion.

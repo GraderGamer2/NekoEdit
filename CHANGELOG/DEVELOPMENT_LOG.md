@@ -1508,3 +1508,7 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 - Added a freestanding `getdents64` search over validated `.history` headers. The History page filters original source paths, supports keyboard editing and selection, and opens the selected document with its own history. Its revised layout keeps the search and controls inside the default 800×480 window.
 - Extended host tests for no-op journal absence, first-edit creation, two independent document histories, case-insensitive path search, and deleting one history without removing another.
 - The user reports that Ctrl+C currently crashes NekoEdit in GNOME. This patch addresses the history-transaction leak and adds repeated-copy coverage, but the exact GNOME/Mutter trigger is not yet confirmed. Live desktop retest remains required. No journald, systemd, kernel-log or coredump dependency was introduced.
+
+### CI follow-up — first mock timeout was a redundant fixture wait
+
+The first run for this change set passed the freestanding build and host history test, but its Wayland test timed out because the new test called `workflow_redraw()` immediately after `workflow_click()`; the click helper already consumes the redraw. Removed the duplicate wait. Added an integration assertion that repeated Ctrl+C on an unmodified document does not create any `.history` file. The next run is the validation attempt for the corrected fixture.
