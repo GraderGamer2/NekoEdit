@@ -4917,8 +4917,18 @@ wayland_main:
     jne .check_clipboard_event
     mov edi, dword ptr [rip + last_opcode]
     call text_input_handle_event
-    test eax, eax
-    jnz .keyboard_changed
+    cmp eax, 2
+    je .keyboard_changed
+    cmp eax, 1
+    je .text_input_redraw_only
+    jmp .event_loop
+.text_input_redraw_only:
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 
 .check_clipboard_event:
@@ -9616,7 +9626,7 @@ text_input_handle_event:
     mov dword ptr [rip + text_input_entered], 1
     mov dword ptr [rip + text_input_state_ready], 1
     mov dword ptr [rip + text_input_pending_flags], 0
-    mov eax, 1
+    mov eax, 2
     ret
 .Lti_leave:
     cmp dword ptr [rip + last_size], 4
@@ -9628,7 +9638,7 @@ text_input_handle_event:
     mov dword ptr [rip + text_input_preedit_length], 0
     mov dword ptr [rip + text_input_preedit_cursor_begin], -1
     mov dword ptr [rip + text_input_preedit_cursor_end], -1
-    mov eax, 1
+    mov eax, 2
     ret
 .Lti_preedit:
     cmp dword ptr [rip + last_size], 12
@@ -9706,13 +9716,27 @@ text_input_handle_event:
 .Lti_done:
     cmp dword ptr [rip + last_size], 4
     jb .Lti_ignored
+    push r12
+    mov r12d, dword ptr [rip + text_input_state_ready]
     mov eax, dword ptr [rip + event_payload]
     cmp eax, dword ptr [rip + text_input_commit_serial]
     sete dl
     movzx edx, dl
     mov dword ptr [rip + text_input_state_ready], edx
     call text_input_apply_done
+    cmp dword ptr [rip + text_input_state_ready], 1
+    jne .Lti_done_redraw_only
+    test r12d, r12d
+    jz .Lti_done_resync
+    test eax, eax
+    jnz .Lti_done_resync
+.Lti_done_redraw_only:
     mov eax, 1
+    pop r12
+    ret
+.Lti_done_resync:
+    mov eax, 2
+    pop r12
     ret
 .Lti_ignored:
     xor eax, eax
@@ -9726,6 +9750,8 @@ text_input_apply_done:
     push r12
     push r13
     push r14
+    push r15
+    xor r15d, r15d
     cmp dword ptr [rip + text_input_enabled], 1
     jne .Lti_apply_clear
     mov ebx, dword ptr [rip + text_input_pending_flags]
@@ -9777,6 +9803,7 @@ text_input_apply_done:
 .Lti_apply_delete_mark:
     mov dword ptr [rip + doc_selection_active], 1
     call doc_delete_selection
+    mov r15d, 1
     jmp .Lti_apply_commit_text
 .Lti_apply_delete_invalid:
     and ebx, -5
@@ -9789,11 +9816,13 @@ text_input_apply_done:
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lti_apply_insert
     call doc_delete_selection
+    mov r15d, 1
 .Lti_apply_insert:
     xor r12d, r12d
 .Lti_apply_insert_loop:
     cmp r12d, dword ptr [rip + text_input_pending_commit_length]
     jae .Lti_apply_history_end
+    mov r15d, 1
     lea rax, [rip + text_input_commit_buffer]
     movzx edi, byte ptr [rax + r12]
     call doc_insert_byte
@@ -9828,6 +9857,8 @@ text_input_apply_done:
     mov dword ptr [rip + text_input_pending_delete_after], 0
     mov dword ptr [rip + text_input_pending_commit_length], 0
     mov dword ptr [rip + text_input_pending_preedit_length], 0
+    mov eax, r15d
+    pop r15
     pop r14
     pop r13
     pop r12
