@@ -209,6 +209,7 @@ iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
 iface_seat:            .asciz "wl_seat"
 iface_cursor_shape:   .asciz "wp_cursor_shape_manager_v1"
+iface_text_input_manager_v3: .asciz "zwp_text_input_manager_v3"
 keymap_base:
     .byte 0, 0, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 45, 61, 0, 0
     .byte 113, 119, 101, 114, 116, 121, 117, 105, 111, 112, 91, 93, 0, 0, 97, 115
@@ -2107,6 +2108,31 @@ cursor_shape_global:   .long 0
 cursor_shape_version:  .long 0
 cursor_shape_manager:  .long 0
 cursor_shape_device:   .long 0
+.global text_input_manager_global, text_input_manager_object, text_input_object
+.global text_input_entered, text_input_enabled, text_input_commit_serial
+.global text_input_preedit_length, text_input_preedit_cursor_begin, text_input_preedit_cursor_end
+text_input_manager_global: .long 0
+text_input_manager_object: .long 0
+text_input_object: .long 0
+text_input_entered: .long 0
+text_input_enabled: .long 0
+text_input_commit_serial: .long 0
+text_input_state_ready: .long 1
+text_input_pending_flags: .long 0
+text_input_pending_delete_before: .long 0
+text_input_pending_delete_after: .long 0
+text_input_pending_commit_length: .long 0
+text_input_pending_preedit_length: .long 0
+text_input_pending_preedit_cursor_begin: .long -1
+text_input_pending_preedit_cursor_end: .long -1
+text_input_preedit_length: .long 0
+text_input_preedit_cursor_begin: .long -1
+text_input_preedit_cursor_end: .long -1
+.balign 8
+text_input_commit_buffer: .zero 4096
+text_input_pending_preedit_buffer: .zero 4096
+text_input_preedit_buffer: .zero 4096
+text_input_request_buffer: .zero 4112
 pointer_enter_serial:  .long 0
 cursor_shape_current:  .long 0
 pointer_x:             .long 0
@@ -2920,6 +2946,9 @@ wayland_main:
     call clipboard_setup
     test rax, rax
     js .protocol_error
+    call text_input_setup
+    test rax, rax
+    js .protocol_error
 
     # Main event loop: pointer input edits the document. The single
     # wl_buffer is only rewritten after wl_buffer.release.
@@ -3025,6 +3054,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call cursor_shape_setup
+    test rax, rax
+    js .protocol_error
+    call text_input_setup
     test rax, rax
     js .protocol_error
     jmp .event_loop
@@ -3805,9 +3837,9 @@ wayland_main:
 .check_keyboard_event:
     mov eax, dword ptr [rip + keyboard_object]
     test eax, eax
-    jz .check_clipboard_event
+    jz .check_text_input_event
     cmp dword ptr [rip + last_object], eax
-    jne .check_clipboard_event
+    jne .check_text_input_event
     cmp dword ptr [rip + last_opcode], 0
     je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
@@ -3926,7 +3958,7 @@ wayland_main:
     cmp dword ptr [rip + event_payload + 4], 8
     jne .event_loop
     mov dword ptr [rip + keyboard_focused], 1
-    jmp .event_loop
+    jmp .keyboard_changed
 .keyboard_leave:
     cmp dword ptr [rip + last_size], 8
     jb .event_loop
@@ -3937,7 +3969,7 @@ wayland_main:
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + level3_down], 0
     call repeat_cancel
-    jmp .event_loop
+    jmp .keyboard_changed
 .keyboard_key:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
@@ -4422,6 +4454,8 @@ wayland_main:
     je .keyboard_enter_key
     cmp eax, 15
     je .keyboard_tab
+    cmp dword ptr [rip + text_input_enabled], 1
+    je .event_loop
     mov edi, eax
     call keycode_to_unicode
     test eax, eax
@@ -4841,6 +4875,9 @@ wayland_main:
 .keyboard_changed:
     call history_commit_action
     call doc_ensure_cursor_visible
+    call text_input_update_state
+    test rax, rax
+    js .protocol_error
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
@@ -4851,12 +4888,27 @@ wayland_main:
 .document_scroll_redraw:
     # Manual viewport motion must not call doc_ensure_cursor_visible: the
     # caret may remain outside the viewport until the next keyboard navigation.
+    call text_input_update_state
+    test rax, rax
+    js .protocol_error
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
+    jmp .event_loop
+
+.check_text_input_event:
+    mov eax, dword ptr [rip + text_input_object]
+    test eax, eax
+    jz .check_clipboard_event
+    cmp dword ptr [rip + last_object], eax
+    jne .check_clipboard_event
+    mov edi, dword ptr [rip + last_opcode]
+    call text_input_handle_event
+    test eax, eax
+    jnz .keyboard_changed
     jmp .event_loop
 
 .check_clipboard_event:
@@ -8544,10 +8596,9 @@ registry_capture_global:
     lea rsi, [rip + iface_cursor_shape]
     call string_equal
     test eax, eax
-    jz .registry_done
+    jz .registry_try_text_input
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + cursor_shape_global], eax
-    # Bind only v1; all resize shape values used by NekoEdit are available in v1.
     mov eax, dword ptr [rip + event_payload + 4]
     add eax, 3
     and eax, -4
@@ -8557,6 +8608,15 @@ registry_capture_global:
     test edx, edx
     jz .registry_done
     mov dword ptr [rip + cursor_shape_version], 1
+    jmp .registry_done
+.registry_try_text_input:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_text_input_manager_v3]
+    call string_equal
+    test eax, eax
+    jz .registry_done
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + text_input_manager_global], eax
 .registry_done:
     pop rbp
     ret
@@ -9058,6 +9118,868 @@ cursor_shape_setup:
     pop r12
     ret
 .size cursor_shape_setup, . - cursor_shape_setup
+
+
+# Optional Wayland text-input-v3 client. The manager is absent on some desktops;
+# in that case the existing XKB key-to-Unicode path remains unchanged.
+.type text_input_setup, @function
+text_input_setup:
+    push r12
+    cmp dword ptr [rip + text_input_manager_global], 0
+    je .Lti_setup_done
+    cmp dword ptr [rip + text_input_manager_object], 0
+    jne .Lti_setup_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    lea eax, [r12d + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    mov dword ptr [rip + text_input_manager_object], r12d
+    mov edi, dword ptr [rip + text_input_manager_global]
+    lea rsi, [rip + iface_text_input_manager_v3]
+    mov edx, 26
+    mov ecx, 1
+    mov r8d, r12d
+    call wl_registry_bind
+    test rax, rax
+    js .Lti_setup_return
+    mov eax, dword ptr [rip + next_client_object_id]
+    lea edx, [rax + 1]
+    mov dword ptr [rip + next_client_object_id], edx
+    mov dword ptr [rip + text_input_object], eax
+    mov dword ptr [rip + payload_buffer], eax
+    mov dword ptr [rip + payload_buffer + 4], 13
+    mov edi, r12d
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    jmp .Lti_setup_return
+.Lti_setup_done:
+    xor eax, eax
+.Lti_setup_return:
+    pop r12
+    ret
+.size text_input_setup, . - text_input_setup
+
+.type text_input_commit_request, @function
+text_input_commit_request:
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 7
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .Lti_commit_request_return
+    inc dword ptr [rip + text_input_commit_serial]
+.Lti_commit_request_return:
+    ret
+.size text_input_commit_request, . - text_input_commit_request
+
+# Keep text input enabled only while the document itself is the focused target.
+.type text_input_update_state, @function
+text_input_update_state:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    cmp dword ptr [rip + text_input_object], 0
+    je .Lti_update_done
+    xor ebx, ebx
+    cmp dword ptr [rip + text_input_entered], 1
+    jne .Lti_update_choose
+    cmp dword ptr [rip + keyboard_focused], 1
+    jne .Lti_update_choose
+    cmp dword ptr [rip + picker_mode], 0
+    jne .Lti_update_choose
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .Lti_update_choose
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .Lti_update_choose
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .Lti_update_choose
+    cmp dword ptr [rip + history_tab_open], 0
+    jne .Lti_update_choose
+    mov ebx, 1
+.Lti_update_choose:
+    cmp ebx, dword ptr [rip + text_input_enabled]
+    je .Lti_update_same_mode
+    test ebx, ebx
+    jz .Lti_update_disable
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 1
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
+    mov dword ptr [rip + text_input_enabled], 1
+    mov dword ptr [rip + text_input_state_ready], 1
+    mov dword ptr [rip + text_input_preedit_length], 0
+    mov dword ptr [rip + text_input_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_preedit_cursor_end], -1
+    mov dword ptr [rip + payload_buffer], 0
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 5
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
+    jmp .Lti_update_send_state
+.Lti_update_disable:
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 2
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
+    mov dword ptr [rip + text_input_enabled], 0
+    mov dword ptr [rip + text_input_preedit_length], 0
+    mov dword ptr [rip + text_input_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_preedit_cursor_end], -1
+    call text_input_commit_request
+    jmp .Lti_update_return
+.Lti_update_same_mode:
+    cmp ebx, 1
+    jne .Lti_update_done
+.Lti_update_send_state:
+    cmp dword ptr [rip + text_input_state_ready], 1
+    jne .Lti_update_done
+
+    # Keep no more than 4000 bytes around the caret; offsets remain UTF-8 boundaries.
+    mov r12d, dword ptr [rip + doc_cursor]
+    mov eax, r12d
+    cmp eax, 2000
+    ja .Lti_surround_start_ready
+    xor eax, eax
+    jmp .Lti_surround_start_store
+.Lti_surround_start_ready:
+    sub eax, 2000
+.Lti_surround_start_store:
+    mov r13d, eax
+.Lti_surround_align_start:
+    test r13d, r13d
+    jz .Lti_surround_end_init
+    mov edi, r13d
+    call doc_byte_at
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    jne .Lti_surround_end_init
+    dec r13d
+    jmp .Lti_surround_align_start
+.Lti_surround_end_init:
+    mov eax, r13d
+    add eax, 4000
+    cmp eax, dword ptr [rip + doc_length]
+    jbe .Lti_surround_end_ready
+    mov eax, dword ptr [rip + doc_length]
+.Lti_surround_end_ready:
+    mov r14d, eax
+.Lti_surround_align_end:
+    cmp r14d, r13d
+    jbe .Lti_surround_validate
+    cmp r14d, dword ptr [rip + doc_length]
+    jae .Lti_surround_validate
+    mov edi, r14d
+    call doc_byte_at
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    jne .Lti_surround_validate
+    dec r14d
+    jmp .Lti_surround_align_end
+.Lti_surround_validate:
+    mov r15d, r13d
+.Lti_surround_validate_loop:
+    cmp r15d, r14d
+    jae .Lti_surround_valid
+    mov edi, r15d
+    call doc_byte_at
+    test eax, eax
+    jz .Lti_surround_invalid
+    mov ebx, eax
+    mov edi, r15d
+    call doc_utf8_next
+    cmp eax, r15d
+    jbe .Lti_surround_invalid
+    lea edx, [r15d + 1]
+    cmp eax, edx
+    jne .Lti_surround_validate_step
+    cmp ebx, 0x80
+    jae .Lti_surround_invalid
+.Lti_surround_validate_step:
+    cmp eax, r14d
+    ja .Lti_surround_invalid
+    mov r15d, eax
+    jmp .Lti_surround_validate_loop
+.Lti_surround_invalid:
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+.Lti_surround_valid:
+    mov eax, r14d
+    sub eax, r13d
+    inc eax
+    mov dword ptr [rip + text_input_request_buffer], eax
+    mov r15d, r13d
+.Lti_surround_copy:
+    cmp r15d, r14d
+    jae .Lti_surround_copy_done
+    mov edi, r15d
+    call doc_byte_at
+    lea rdx, [rip + text_input_request_buffer + 4]
+    mov ecx, r15d
+    sub ecx, r13d
+    mov byte ptr [rdx + rcx], al
+    inc r15d
+    jmp .Lti_surround_copy
+.Lti_surround_copy_done:
+    mov eax, r14d
+    sub eax, r13d
+    mov ecx, eax
+    lea rdx, [rip + text_input_request_buffer + 4]
+    mov byte ptr [rdx + rcx], 0
+    inc ecx
+    lea eax, [rcx + 3]
+    and eax, -4
+    mov r15d, eax
+    mov eax, r12d
+    sub eax, r13d
+    mov dword ptr [rdx + r15], eax
+    mov eax, r12d
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lti_surround_anchor_ready
+    mov eax, dword ptr [rip + doc_selection_anchor]
+.Lti_surround_anchor_ready:
+    sub eax, r13d
+    test eax, eax
+    jns .Lti_surround_anchor_low
+    xor eax, eax
+.Lti_surround_anchor_low:
+    mov ecx, dword ptr [rip + text_input_request_buffer]
+    dec ecx
+    cmp eax, ecx
+    jbe .Lti_surround_anchor_clamped
+    mov eax, ecx
+.Lti_surround_anchor_clamped:
+    mov dword ptr [rdx + r15 + 4], eax
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 3
+    lea rdx, [rip + text_input_request_buffer]
+    mov ecx, r15d
+    add ecx, 12
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
+
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov r12d, eax
+    mov r13d, edx
+    add r13d, DOC_LEFT
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Lti_cursor_x_ready
+    sub r13d, dword ptr [rip + doc_view_left_px]
+.Lti_cursor_x_ready:
+    mov eax, r12d
+    sub eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov dword ptr [rip + payload_buffer], r13d
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov dword ptr [rip + payload_buffer + 8], 1
+    mov eax, dword ptr [rip + window_doc_line_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 6
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
+    call text_input_commit_request
+    jmp .Lti_update_return
+.Lti_update_done:
+    xor eax, eax
+.Lti_update_return:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size text_input_update_state, . - text_input_update_state
+
+# A Wayland string is length-prefixed and NUL-terminated; copy it before the
+# protocol event buffer can be reused. RDI=destination, ESI=capacity, EDX=tail bytes.
+.type text_input_copy_event_string, @function
+text_input_copy_event_string:
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13d, esi
+    mov r14d, edx
+    cmp dword ptr [rip + last_size], 4
+    jb .Lti_string_bad
+    mov ebx, dword ptr [rip + event_payload]
+    test ebx, ebx
+    jz .Lti_string_empty
+    cmp ebx, r13d
+    ja .Lti_string_bad
+    mov eax, ebx
+    add eax, 3
+    and eax, -4
+    add eax, 4
+    add eax, r14d
+    cmp eax, dword ptr [rip + last_size]
+    ja .Lti_string_bad
+    lea rsi, [rip + event_payload + 4]
+    movzx eax, byte ptr [rsi + rbx - 1]
+    test eax, eax
+    jnz .Lti_string_bad
+    dec ebx
+    xor ecx, ecx
+.Lti_string_copy:
+    cmp ecx, ebx
+    jae .Lti_string_done
+    mov al, byte ptr [rsi + rcx]
+    test al, al
+    jz .Lti_string_bad
+    mov byte ptr [r12 + rcx], al
+    inc ecx
+    jmp .Lti_string_copy
+.Lti_string_done:
+    mov eax, ebx
+    jmp .Lti_string_return
+.Lti_string_empty:
+    xor eax, eax
+.Lti_string_return:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.Lti_string_bad:
+    mov eax, -1
+    jmp .Lti_string_return
+.size text_input_copy_event_string, . - text_input_copy_event_string
+
+# Reject malformed UTF-8 from protocol strings before they enter the gap buffer.
+.type text_input_validate_utf8, @function
+text_input_validate_utf8:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13d, esi
+    xor ebx, ebx
+.Lti_utf8_loop:
+    cmp ebx, r13d
+    jae .Lti_utf8_valid
+    movzx eax, byte ptr [r12 + rbx]
+    test eax, eax
+    jz .Lti_utf8_invalid
+    cmp eax, 0x80
+    jb .Lti_utf8_one
+    cmp eax, 0xc2
+    jb .Lti_utf8_invalid
+    cmp eax, 0xdf
+    jbe .Lti_utf8_two
+    cmp eax, 0xef
+    jbe .Lti_utf8_three
+    cmp eax, 0xf4
+    jbe .Lti_utf8_four
+    jmp .Lti_utf8_invalid
+.Lti_utf8_one:
+    inc ebx
+    jmp .Lti_utf8_loop
+.Lti_utf8_two:
+    lea edx, [rbx + 2]
+    cmp edx, r13d
+    ja .Lti_utf8_invalid
+    movzx eax, byte ptr [r12 + rbx + 1]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .Lti_utf8_invalid
+    add ebx, 2
+    jmp .Lti_utf8_loop
+.Lti_utf8_three:
+    lea edx, [rbx + 3]
+    cmp edx, r13d
+    ja .Lti_utf8_invalid
+    movzx eax, byte ptr [r12 + rbx + 1]
+    cmp eax, 0x80
+    jb .Lti_utf8_invalid
+    cmp eax, 0xbf
+    ja .Lti_utf8_invalid
+    movzx edx, byte ptr [r12 + rbx]
+    cmp edx, 0xe0
+    jne .Lti_utf8_three_ed
+    cmp eax, 0xa0
+    jb .Lti_utf8_invalid
+.Lti_utf8_three_ed:
+    cmp edx, 0xed
+    jne .Lti_utf8_three_third
+    cmp eax, 0x9f
+    ja .Lti_utf8_invalid
+.Lti_utf8_three_third:
+    movzx eax, byte ptr [r12 + rbx + 2]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .Lti_utf8_invalid
+    add ebx, 3
+    jmp .Lti_utf8_loop
+.Lti_utf8_four:
+    lea edx, [rbx + 4]
+    cmp edx, r13d
+    ja .Lti_utf8_invalid
+    movzx eax, byte ptr [r12 + rbx + 1]
+    cmp eax, 0x80
+    jb .Lti_utf8_invalid
+    cmp eax, 0xbf
+    ja .Lti_utf8_invalid
+    movzx edx, byte ptr [r12 + rbx]
+    cmp edx, 0xf0
+    jne .Lti_utf8_four_f4
+    cmp eax, 0x90
+    jb .Lti_utf8_invalid
+    jmp .Lti_utf8_four_tail
+.Lti_utf8_four_f4:
+    cmp edx, 0xf4
+    jne .Lti_utf8_four_tail
+    cmp eax, 0x8f
+    ja .Lti_utf8_invalid
+.Lti_utf8_four_tail:
+    movzx eax, byte ptr [r12 + rbx + 2]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .Lti_utf8_invalid
+    movzx eax, byte ptr [r12 + rbx + 3]
+    and eax, 0xc0
+    cmp eax, 0x80
+    jne .Lti_utf8_invalid
+    add ebx, 4
+    jmp .Lti_utf8_loop
+.Lti_utf8_valid:
+    mov eax, 1
+    jmp .Lti_utf8_done
+.Lti_utf8_invalid:
+    xor eax, eax
+.Lti_utf8_done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size text_input_validate_utf8, . - text_input_validate_utf8
+
+.type text_input_handle_event, @function
+text_input_handle_event:
+    cmp edi, 0
+    je .Lti_enter
+    cmp edi, 1
+    je .Lti_leave
+    cmp edi, 2
+    je .Lti_preedit
+    cmp edi, 3
+    je .Lti_commit
+    cmp edi, 4
+    je .Lti_delete
+    cmp edi, 5
+    je .Lti_done
+    xor eax, eax
+    ret
+.Lti_enter:
+    cmp dword ptr [rip + last_size], 4
+    jb .Lti_ignored
+    cmp dword ptr [rip + event_payload], 8
+    jne .Lti_ignored
+    mov dword ptr [rip + text_input_entered], 1
+    mov dword ptr [rip + text_input_state_ready], 1
+    mov dword ptr [rip + text_input_pending_flags], 0
+    mov eax, 1
+    ret
+.Lti_leave:
+    cmp dword ptr [rip + last_size], 4
+    jb .Lti_ignored
+    cmp dword ptr [rip + event_payload], 8
+    jne .Lti_ignored
+    mov dword ptr [rip + text_input_entered], 0
+    mov dword ptr [rip + text_input_pending_flags], 0
+    mov dword ptr [rip + text_input_preedit_length], 0
+    mov dword ptr [rip + text_input_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_preedit_cursor_end], -1
+    mov eax, 1
+    ret
+.Lti_preedit:
+    cmp dword ptr [rip + last_size], 12
+    jb .Lti_ignored
+    lea rdi, [rip + text_input_pending_preedit_buffer]
+    mov esi, 4096
+    mov edx, 8
+    call text_input_copy_event_string
+    test eax, eax
+    js .Lti_ignored
+    mov dword ptr [rip + text_input_pending_preedit_length], eax
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jz .Lti_preedit_null
+    add eax, 3
+    and eax, -4
+    lea rdx, [rip + event_payload + 4]
+    mov ecx, dword ptr [rdx + rax]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], ecx
+    mov ecx, dword ptr [rdx + rax + 4]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_end], ecx
+    jmp .Lti_preedit_validate
+.Lti_preedit_null:
+    lea rdx, [rip + event_payload + 4]
+    mov ecx, dword ptr [rdx]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], ecx
+    mov ecx, dword ptr [rdx + 4]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_end], ecx
+.Lti_preedit_validate:
+    mov ecx, dword ptr [rip + text_input_pending_preedit_cursor_begin]
+    cmp ecx, -1
+    je .Lti_preedit_validate_end
+    test ecx, ecx
+    js .Lti_ignored
+    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
+    ja .Lti_ignored
+.Lti_preedit_validate_end:
+    mov ecx, dword ptr [rip + text_input_pending_preedit_cursor_end]
+    cmp ecx, -1
+    je .Lti_preedit_flag
+    test ecx, ecx
+    js .Lti_ignored
+    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
+    ja .Lti_ignored
+.Lti_preedit_flag:
+    or dword ptr [rip + text_input_pending_flags], 2
+    xor eax, eax
+    ret
+.Lti_commit:
+    lea rdi, [rip + text_input_commit_buffer]
+    mov esi, 4096
+    xor edx, edx
+    call text_input_copy_event_string
+    test eax, eax
+    js .Lti_ignored
+    mov dword ptr [rip + text_input_pending_commit_length], eax
+    lea rdi, [rip + text_input_commit_buffer]
+    mov esi, eax
+    call text_input_validate_utf8
+    test eax, eax
+    jz .Lti_ignored
+    or dword ptr [rip + text_input_pending_flags], 1
+    xor eax, eax
+    ret
+.Lti_delete:
+    cmp dword ptr [rip + last_size], 8
+    jb .Lti_ignored
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + text_input_pending_delete_before], eax
+    mov eax, dword ptr [rip + event_payload + 4]
+    mov dword ptr [rip + text_input_pending_delete_after], eax
+    or dword ptr [rip + text_input_pending_flags], 4
+    xor eax, eax
+    ret
+.Lti_done:
+    cmp dword ptr [rip + last_size], 4
+    jb .Lti_ignored
+    mov eax, dword ptr [rip + event_payload]
+    cmp eax, dword ptr [rip + text_input_commit_serial]
+    sete dl
+    movzx edx, dl
+    mov dword ptr [rip + text_input_state_ready], edx
+    call text_input_apply_done
+    mov eax, 1
+    ret
+.Lti_ignored:
+    xor eax, eax
+    ret
+.size text_input_handle_event, . - text_input_handle_event
+
+# Apply delete-surrounding and commit-string as a single journal operation.
+.type text_input_apply_done, @function
+text_input_apply_done:
+    push rbx
+    push r12
+    push r13
+    push r14
+    cmp dword ptr [rip + text_input_enabled], 1
+    jne .Lti_apply_clear
+    mov ebx, dword ptr [rip + text_input_pending_flags]
+    test ebx, 5
+    jz .Lti_apply_edit_ready
+    call history_begin_action
+.Lti_apply_edit_ready:
+    test ebx, 4
+    jz .Lti_apply_commit_text
+    mov r12d, dword ptr [rip + text_input_pending_delete_before]
+    mov r13d, dword ptr [rip + text_input_pending_delete_after]
+    mov r14d, dword ptr [rip + doc_cursor]
+    cmp r12d, r14d
+    ja .Lti_apply_delete_invalid
+    mov eax, r14d
+    add eax, r13d
+    jc .Lti_apply_delete_invalid
+    cmp eax, dword ptr [rip + doc_length]
+    ja .Lti_apply_delete_invalid
+    mov edi, r14d
+    sub edi, r12d
+    test edi, edi
+    jz .Lti_apply_delete_start_ok
+    call doc_byte_at
+    and eax, 0xc0
+    cmp eax, 0x80
+    je .Lti_apply_delete_invalid
+.Lti_apply_delete_start_ok:
+    mov eax, r14d
+    add eax, r13d
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lti_apply_delete_bounds_ok
+    mov edi, eax
+    call doc_byte_at
+    and eax, 0xc0
+    cmp eax, 0x80
+    je .Lti_apply_delete_invalid
+.Lti_apply_delete_bounds_ok:
+    mov eax, r14d
+    sub eax, r12d
+    mov dword ptr [rip + doc_selection_anchor], eax
+    mov eax, r14d
+    add eax, r13d
+    mov dword ptr [rip + doc_cursor], eax
+    cmp r12d, 0
+    jne .Lti_apply_delete_mark
+    test r13d, r13d
+    jz .Lti_apply_commit_text
+.Lti_apply_delete_mark:
+    mov dword ptr [rip + doc_selection_active], 1
+    call doc_delete_selection
+    jmp .Lti_apply_commit_text
+.Lti_apply_delete_invalid:
+    and ebx, -5
+.Lti_apply_commit_text:
+    test ebx, 1
+    jz .Lti_apply_history_end
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_active], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    cmp dword ptr [rip + doc_selection_active], 0
+    je .Lti_apply_insert
+    call doc_delete_selection
+.Lti_apply_insert:
+    xor r12d, r12d
+.Lti_apply_insert_loop:
+    cmp r12d, dword ptr [rip + text_input_pending_commit_length]
+    jae .Lti_apply_history_end
+    lea rax, [rip + text_input_commit_buffer]
+    movzx edi, byte ptr [rax + r12]
+    call doc_insert_byte
+    inc r12d
+    jmp .Lti_apply_insert_loop
+.Lti_apply_history_end:
+    test ebx, 5
+    jz .Lti_apply_preedit
+    call history_commit_action
+.Lti_apply_preedit:
+    test ebx, 1
+    jz .Lti_apply_new_preedit
+    mov dword ptr [rip + text_input_preedit_length], 0
+    mov dword ptr [rip + text_input_preedit_cursor_begin], -1
+    mov dword ptr [rip + text_input_preedit_cursor_end], -1
+.Lti_apply_new_preedit:
+    test ebx, 2
+    jz .Lti_apply_clear
+    mov eax, dword ptr [rip + text_input_pending_preedit_length]
+    mov dword ptr [rip + text_input_preedit_length], eax
+    mov eax, dword ptr [rip + text_input_pending_preedit_cursor_begin]
+    mov dword ptr [rip + text_input_preedit_cursor_begin], eax
+    mov eax, dword ptr [rip + text_input_pending_preedit_cursor_end]
+    mov dword ptr [rip + text_input_preedit_cursor_end], eax
+    lea rsi, [rip + text_input_pending_preedit_buffer]
+    lea rdi, [rip + text_input_preedit_buffer]
+    mov ecx, dword ptr [rip + text_input_preedit_length]
+    rep movsb
+.Lti_apply_clear:
+    mov dword ptr [rip + text_input_pending_flags], 0
+    mov dword ptr [rip + text_input_pending_delete_before], 0
+    mov dword ptr [rip + text_input_pending_delete_after], 0
+    mov dword ptr [rip + text_input_pending_commit_length], 0
+    mov dword ptr [rip + text_input_pending_preedit_length], 0
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size text_input_apply_done, . - text_input_apply_done
+
+.type text_input_decode_scalar, @function
+text_input_decode_scalar:
+    movzx eax, byte ptr [rdi + rsi]
+    cmp eax, 0x80
+    jb .Lti_decode_one
+    cmp eax, 0xe0
+    jb .Lti_decode_two
+    cmp eax, 0xf0
+    jb .Lti_decode_three
+    and eax, 7
+    shl eax, 18
+    movzx ecx, byte ptr [rdi + rsi + 1]
+    and ecx, 0x3f
+    shl ecx, 12
+    or eax, ecx
+    movzx ecx, byte ptr [rdi + rsi + 2]
+    and ecx, 0x3f
+    shl ecx, 6
+    or eax, ecx
+    movzx ecx, byte ptr [rdi + rsi + 3]
+    and ecx, 0x3f
+    or eax, ecx
+    mov edx, 4
+    ret
+.Lti_decode_three:
+    and eax, 0x0f
+    shl eax, 12
+    movzx ecx, byte ptr [rdi + rsi + 1]
+    and ecx, 0x3f
+    shl ecx, 6
+    or eax, ecx
+    movzx ecx, byte ptr [rdi + rsi + 2]
+    and ecx, 0x3f
+    or eax, ecx
+    mov edx, 3
+    ret
+.Lti_decode_two:
+    and eax, 0x1f
+    shl eax, 6
+    movzx ecx, byte ptr [rdi + rsi + 1]
+    and ecx, 0x3f
+    or eax, ecx
+    mov edx, 2
+    ret
+.Lti_decode_one:
+    mov edx, 1
+    ret
+.size text_input_decode_scalar, . - text_input_decode_scalar
+
+# Render the pending composition as underlined text at the document caret.
+# The input-method cursor offset is measured in UTF-8 bytes.
+.type render_text_input_preedit, @function
+render_text_input_preedit:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+    mov r12d, edi
+    mov r13d, esi
+    mov dword ptr [rsp], edi
+    mov dword ptr [rsp + 4], esi
+    mov dword ptr [rsp + 8], 0
+    mov dword ptr [rsp + 12], 1
+    cmp dword ptr [rip + text_input_enabled], 1
+    jne .Lti_preedit_return_base
+    mov r15d, dword ptr [rip + text_input_preedit_length]
+    test r15d, r15d
+    jz .Lti_preedit_return_base
+    mov ebx, dword ptr [rip + text_input_preedit_cursor_begin]
+    cmp ebx, -1
+    je .Lti_preedit_hide_caret
+    xor r14d, r14d
+.Lti_preedit_render_loop:
+    cmp r14d, r15d
+    jae .Lti_preedit_render_end
+    cmp r14d, ebx
+    jne .Lti_preedit_decode
+    mov dword ptr [rsp], r12d
+    mov dword ptr [rsp + 4], r13d
+    mov dword ptr [rsp + 8], 1
+.Lti_preedit_decode:
+    lea rdi, [rip + text_input_preedit_buffer]
+    mov esi, r14d
+    mov edx, r15d
+    call text_input_decode_scalar
+    mov dword ptr [rsp + 16], eax
+    mov dword ptr [rsp + 20], edx
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    mov ebp, eax
+    mov eax, r12d
+    add eax, ebp
+    mov edx, DOC_LEFT
+    add edx, dword ptr [rip + window_doc_pixel_width]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lti_preedit_render_fit
+    cmp eax, edx
+    jbe .Lti_preedit_render_fit
+    mov r12d, DOC_LEFT
+    add r13d, dword ptr [rip + window_doc_line_height]
+.Lti_preedit_render_fit:
+    cmp r13d, DOC_TOP
+    jl .Lti_preedit_render_advance
+    mov eax, dword ptr [rip + window_doc_bottom]
+    cmp r13d, eax
+    jae .Lti_preedit_render_advance
+    mov edi, r12d
+    mov esi, r13d
+    mov edx, dword ptr [rsp + 16]
+    mov ecx, dword ptr [rip + doc_font_size]
+    call draw_glyph
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    add edx, dword ptr [rip + window_doc_line_height]
+    sub edx, 2
+    mov ecx, ebp
+    test ecx, ecx
+    jnz .Lti_preedit_underline_width
+    mov ecx, 1
+.Lti_preedit_underline_width:
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+.Lti_preedit_render_advance:
+    add r12d, ebp
+    mov eax, dword ptr [rsp + 20]
+    add r14d, eax
+    jmp .Lti_preedit_render_loop
+.Lti_preedit_render_end:
+    cmp dword ptr [rsp + 8], 1
+    je .Lti_preedit_render_return
+    cmp ebx, r15d
+    jne .Lti_preedit_render_return
+    mov dword ptr [rsp], r12d
+    mov dword ptr [rsp + 4], r13d
+    mov dword ptr [rsp + 8], 1
+    jmp .Lti_preedit_render_return
+.Lti_preedit_hide_caret:
+    mov dword ptr [rsp + 12], 0
+    jmp .Lti_preedit_render_return
+.Lti_preedit_return_base:
+    mov dword ptr [rsp], r12d
+    mov dword ptr [rsp + 4], r13d
+.Lti_preedit_render_return:
+    mov eax, dword ptr [rsp]
+    mov edx, dword ptr [rsp + 4]
+    mov ecx, dword ptr [rsp + 12]
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size render_text_input_preedit, . - render_text_input_preedit
 
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
@@ -17100,6 +18022,13 @@ render_document:
     sub eax, DOC_SCROLL_TRACK_X_OFFSET + 1
     cmp r12d, eax
     ja .document_render_done
+    mov edi, r12d
+    mov esi, r13d
+    call render_text_input_preedit
+    test ecx, ecx
+    jz .document_render_done
+    mov r12d, eax
+    mov r13d, edx
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
