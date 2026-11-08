@@ -1563,3 +1563,33 @@ The first run for this change set passed the freestanding build and host history
 ### History action-target documentation clarification
 
 The final source audit confirmed that Undo/Redo and Export operate on the currently open document's journal; users should choose Open Selected before applying those controls to another search result. Delete History is intentionally different: it removes the highlighted result's journal, including a non-active document. Updated `docs/UNDO.md` to distinguish those targets. No executable code or test behavior changed.
+
+
+## 2026-11-08 — optional Wayland text-input-v3 / IME integration
+
+### Implementation
+
+- Added optional discovery and version-1 binding for `zwp_text_input_manager_v3`. The implementation stays in the freestanding Wayland assembly client and adds no linked runtime dependency.
+- Created a text-input object for the seat; enables it only when the text-input object enters the surface and the document is the active target. It disables the object when focus leaves the document or the surface leaves the input-method target. Without the manager global, the original XKB key-to-Unicode path remains unchanged.
+- Added surrounding-text state (up to 4000 bytes, aligned to UTF-8 boundaries), caret/anchor byte offsets, normal content type, cursor rectangle, and commit serial accounting.
+- Added staged handling for `preedit_string`, `commit_string`, `delete_surrounding_text`, and `done`. Committed and preedit strings are UTF-8 validated; delete byte ranges must remain within the document and on scalar boundaries.
+- Preedit is rendered as a transient underlined overlay and is not written to the document/journal. Delete plus commit is grouped into one history action. Follow-up hardening defers `history_begin_action` until a valid, nonempty mutation is known, so malformed/out-of-bounds deletion requests cannot leave a transaction open.
+- Fixed the `done` serial handling to avoid sending a fresh identical state commit after a no-op matching `done` event. Keyboard-only input remains gated from the new protocol code when the text-input manager is absent.
+
+### Regression coverage and CI iterations
+
+- Extended `tests/wayland_mock.py` with a compositor that advertises the optional manager and verifies manager/object binding, enter/leave, enable/disable, content type, surrounding text, cursor rectangle, serial stability, staged preedit, a multibyte UTF-8 commit (`你好`), delete-surrounding, out-of-range deletion rejection, and redraw order.
+- Actions #613/#614 caught nonzero initializers placed in `.bss`; moved sentinel initialization to object setup.
+- Actions #615/#616 passed after gating IME operations so the pre-existing keyboard-only mock remains unchanged and after fixing the `done` feedback-loop behavior.
+- Actions #618 caught an intentionally malformed mock packet: the test fixture omitted Wayland four-byte string padding. The fixture was corrected.
+- Actions #619 caught invalid RIP-relative indexed memory operands in the new validation path; replaced them with explicit base-address calculation.
+- Actions #620 failed in the legacy Wayland mock's initial Tab assertion; #621 then passed all eight workflow steps on [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456), including the complete optional IME mock.
+- After #621, a code review found that an invalid deletion could open a history transaction before range validation. Commit [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) defers the transaction until the validated mutation. Commit [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509) adds explicit invalid-range coverage. These two follow-ups are not yet covered by a completed Actions run at this entry's time.
+
+### Limitations and next work
+
+- Mock validation is not live compositor/IME validation; GNOME/Mutter must still be tested with a real input method.
+- Preedit rendering is simple underline text. It does not render the full preedit attribute/cursor-end styling model, and the candidate-window cursor rectangle still follows the document caret rather than a shaped composition caret.
+- Complex shaping, combining-mark placement, bidirectional layout, advanced XKB type/action/virtual-modifier semantics, and general locale Compose remain later roadmap tasks.
+- History search/layout/storage and standalone desktop installer packaging are unchanged and intentionally deferred.
+
