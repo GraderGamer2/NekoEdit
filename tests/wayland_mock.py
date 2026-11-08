@@ -1417,6 +1417,16 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_length") != 0:
                         raise AssertionError("delete_surrounding_text did not remove the requested bytes")
 
+                    # Invalid byte ranges must be ignored before opening a
+                    # history transaction or mutating the UTF-8 document.
+                    client.sendall(
+                        wire_message(18, 4, struct.pack("<II", 1, 0))
+                        + wire_message(18, 5, struct.pack("<I", 3))
+                    )
+                    release_frame("invalid delete-surrounding redraw")
+                    if child_u32("doc_length") != 0:
+                        raise AssertionError("out-of-range IME deletion changed the document")
+
                     client.sendall(wire_message(18, 1, struct.pack("<I", 8)))
                     expect_message(client, (18, 2, b""), "disable text input after leave")
                     expect_message(client, (18, 7, b""), "commit disable state")
