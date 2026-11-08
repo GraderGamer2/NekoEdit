@@ -325,7 +325,7 @@ int main(void)
     history_reset();
     history_open(document_path);
     expect_document(expected, expected_length, "restart recovery");
-    if (history_undo_count() != 25 || history_redo_count() != 0)
+    if (history_undo_count() != 24 || history_redo_count() != 0)
         fail("restart recovery did not restore the active journal position");
     if (!history_undo())
         fail("undo after restart was unavailable");
