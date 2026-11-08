@@ -817,7 +817,7 @@ xkb_symbols "nekoedit-test" {
 \0"""
                     if unicode_keyboard_test:
                         keymap_data = keymap_data.replace(
-                            b"key <AC01> { [ a, A ] };",
+                            b'key <AC01> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ a, A ] };',
                             b"key <AC01> { [ U00E9, U1F600 ] };",
                         )
                         keymap_data = keymap_data.replace(
@@ -825,11 +825,11 @@ xkb_symbols "nekoedit-test" {
                             b'key <AC02> {\n        type = "ALPHABETIC",\n        symbols[Group1] = [ EuroSign, eacute ]\n    };',
                         )
                         keymap_data = keymap_data.replace(
-                            b"key <AC03> { [ d, D ] };",
+                            b'key <AC03> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ d, D ] };',
                             b'key <AC03> { type = "ONE_LEVEL", symbols[Group1] = [ emdash ] };',
                         )
                         keymap_data = keymap_data.replace(
-                            b"key <AC04> { [ f, F ] };",
+                            b'key <AC04> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ f, F ] };',
                             b'key <AC04> { type = "ONE_LEVEL", symbols[Group1] = [ dead_acute ] };',
                         )
                         keymap_data = keymap_data.replace(
