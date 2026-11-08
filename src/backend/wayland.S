@@ -3958,6 +3958,8 @@ wayland_main:
     cmp dword ptr [rip + event_payload + 4], 8
     jne .event_loop
     mov dword ptr [rip + keyboard_focused], 1
+    cmp dword ptr [rip + text_input_object], 0
+    je .event_loop
     jmp .keyboard_changed
 .keyboard_leave:
     cmp dword ptr [rip + last_size], 8
@@ -3969,6 +3971,8 @@ wayland_main:
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + level3_down], 0
     call repeat_cancel
+    cmp dword ptr [rip + text_input_object], 0
+    je .event_loop
     jmp .keyboard_changed
 .keyboard_key:
     cmp dword ptr [rip + last_size], 16
@@ -4875,9 +4879,12 @@ wayland_main:
 .keyboard_changed:
     call history_commit_action
     call doc_ensure_cursor_visible
+    cmp dword ptr [rip + text_input_object], 0
+    je .Lkeyboard_changed_without_ime
     call text_input_update_state
     test rax, rax
     js .protocol_error
+.Lkeyboard_changed_without_ime:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
@@ -4888,9 +4895,12 @@ wayland_main:
 .document_scroll_redraw:
     # Manual viewport motion must not call doc_ensure_cursor_visible: the
     # caret may remain outside the viewport until the next keyboard navigation.
+    cmp dword ptr [rip + text_input_object], 0
+    je .Ldocument_scroll_without_ime
     call text_input_update_state
     test rax, rax
     js .protocol_error
+.Ldocument_scroll_without_ime:
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
@@ -18027,6 +18037,8 @@ render_document:
     sub eax, DOC_SCROLL_TRACK_X_OFFSET + 1
     cmp r12d, eax
     ja .document_render_done
+    cmp dword ptr [rip + text_input_enabled], 1
+    jne .Ldocument_draw_normal_caret
     mov edi, r12d
     mov esi, r13d
     call render_text_input_preedit
@@ -18034,6 +18046,7 @@ render_document:
     jz .document_render_done
     mov r12d, eax
     mov r13d, edx
+.Ldocument_draw_normal_caret:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, r13d
