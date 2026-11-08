@@ -2180,6 +2180,25 @@ xkb_symbols "nekoedit-sparse" {
                             + repr(paste_state["doc_contents"])
                         )
                     observations.append("Ctrl+V received an external Wayland MIME offer asynchronously and inserted its text")
+
+                    # The receive completes later than the Ctrl+V key event.
+                    # Its inserted bytes must still be one ordinary Undo/Redo
+                    # record, rather than escaping the edit journal.
+                    workflow_shortcut(1970, 44, "Ctrl+Z undo asynchronous clipboard paste")
+                    undo_paste_state = read_document_state()
+                    if undo_paste_state["doc_contents"] != b"":
+                        raise AssertionError(
+                            "Ctrl+Z did not undo the asynchronous external paste: "
+                            + repr(undo_paste_state["doc_contents"])
+                        )
+                    workflow_shortcut(1980, 21, "Ctrl+Y redo asynchronous clipboard paste")
+                    redo_paste_state = read_document_state()
+                    if redo_paste_state["doc_contents"] != pasted:
+                        raise AssertionError(
+                            "Ctrl+Y did not redo the asynchronous external paste: "
+                            + repr(redo_paste_state["doc_contents"])
+                        )
+                    observations.append("asynchronous external paste was recorded as one Undo/Redo action")
                     client.sendall(wire_message(10, 1))
                     return
 
