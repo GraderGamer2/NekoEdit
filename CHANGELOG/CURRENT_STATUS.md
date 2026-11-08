@@ -21,9 +21,13 @@ This is not a replacement for libxkbcommon. The client does not interpret `xkb_c
 
 ### Verification state
 
-The previous Actions [Build and test #647](https://github.com/GraderGamer2/NekoEdit/actions/runs/42459551390) passed all eight workflow steps on the preceding branch head `50cc1df`, including the text-input-v3 mock and the then-current named-family XKB tests. This newer declared-type parser adds a custom eight-level fixture, all 24 virtual-modifier indices (including bit 31), numeric mask/level parsing, per-group type assertions, and saved UTF-8 output checks. Its validation is tied to the current PR's latest Actions checks; do not treat #647 as validation of this later parser change.
+Actions [Build and test #649](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599) passed all eight workflow steps on [`7d02040`](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d). The run covered the freestanding build and ELF checks, CLI/preferences/history host tests, install/uninstall smoke test, the complete Wayland mock suite, executable inspection, and artifact upload. The Wayland suite includes the custom eight-level XKB type, exact map-table assertions, 24 virtual-modifier indices including bit 31, numeric masks/levels, and actual saved UTF-8 bytes.
 
-Live GNOME/Mutter testing with a real input method remains outstanding. The mock verifies protocol and document-state behavior but not real candidate placement or compositor-side action resolution.
+The artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599/artifacts/13612459035) is 91,295 bytes (artifact ID `13612459035`), SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`, and expires 2026-11-15 10:10:22 UTC.
+
+The first run on the new parser snapshot, Actions #648, stopped at a generic soft-wrap caret pixel assertion before reaching the dedicated XKB fixture. The complete suite passed on #649 without an executable-source change; a targeted state dump was added to the mock failure path so a recurrence reports the document cursor, line-index records, modifier state, and visible caret candidates. Treat the #648 observation as an unreproduced test failure, not as proof of a fixed runtime defect.
+
+Automated mock-compositor validation is not live compositor verification. GNOME/Mutter with a real input method, candidate placement, and compositor-side modifier/action resolution still need desktop testing.
 
 ### Deferred, unchanged areas
 
@@ -35,7 +39,7 @@ Live GNOME/Mutter testing with a real input method remains outstanding. The mock
 
 ### Next roadmap items
 
-1. Run the complete build/host/Wayland mock workflow on the declared XKB-map parser, then perform live GNOME/Mutter input-method checks.
+1. Perform live GNOME/Mutter input-method checks and verify modifier/keymap behavior against a real desktop layout.
 2. Add `xkb_compat` interpretation, explicit/implicit modifier bindings, modifier/key action semantics, and preserve/consumed-modifier tracking.
 3. Expand keyboard coverage for remaining key classes/actions and broader Compose behavior.
 4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.

@@ -977,3 +977,13 @@ Actions [Build and test #621](https://github.com/GraderGamer2/NekoEdit/actions/r
 | [949365533a03](https://github.com/GraderGamer2/NekoEdit/commit/949365533a0353ced4786afdb77cdf55e65391ab) | feat: parse declared XKB type maps and modifier masks |
 
 This implementation parses declared per-key/per-group type assignments and exact modifier-to-level maps, expands symbol storage to eight levels per group, and preserves the full 32-bit real/virtual modifier-index state. The mock adds an arbitrary custom eight-level type, numeric modifier/level masks, and a 24th virtual modifier at bit 31. README, Wayland backend documentation, current status, development log, and project history were updated in the implementation snapshot. The complete workflow result for this snapshot is reported by the PR's latest Actions check.
+
+
+## 2026-11-08 — declared XKB type maps: validation and mock diagnostics
+
+| Commit | Subject |
+|---|---|
+| [116acc7bbd4a](https://github.com/GraderGamer2/NekoEdit/commit/116acc7bbd4a079e4c2bca3e6e77e1ec50ed8ff0) | docs: index declared XKB type-map milestone |
+| [7d02040aabea](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d) | test: report live caret state on wrap regression |
+
+Actions [Build and test #649](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599) passed all eight workflow steps on 7d02040aabea. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599/artifacts/13612459035) is 91,295 bytes; SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`. Actions #648's preceding generic soft-wrap caret assertion did not recur; the diagnostic path remains in the mock to make any future recurrence actionable.

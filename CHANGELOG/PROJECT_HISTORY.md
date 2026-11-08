@@ -691,3 +691,10 @@ The physical keyboard path now evaluates declared XKB text-v1 key types from the
 A deliberately custom eight-level fixture exercises combinations that cannot be inferred from conventional type names, including a virtual modifier at bit 31. Assertions inspect the parsed type tables and verify actual UTF-8 output for each level. Built-in family records remain as fallback for conventional keymaps; unknown/malformed types do not silently fall through to a guessed type.
 
 This remains a bounded XKB implementation rather than a reimplementation of libxkbcommon. The compositor supplies the modifier state; NekoEdit does not yet interpret `xkb_compat` rules, derive automatic virtual-modifier bindings, evaluate arbitrary key actions, or implement preserve/consumed-modifier reporting. The new source/test snapshot awaits its own complete Actions validation; live GNOME/Mutter and real IME behavior remain user-side checks.
+
+
+### Declared XKB type-map implementation — Actions #649 passed
+
+Actions #648 first stopped in the generic Wayland mock at the soft-wrap caret pixel check, before the custom XKB fixture ran. The test failure path was made more diagnostic in commit [7d02040aabea](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d). Actions #649 then passed the complete eight-step workflow on that snapshot, including custom eight-level type-map assertions, the high virtual-modifier bit, saved UTF-8 verification, all existing Wayland/IME cases, host tests, ELF checks, and artifact upload. No executable-source change was made between the #648 and #649 workflow attempts, so the first pixel failure remains an unreproduced test observation rather than a confirmed fix.
+
+The resulting artifact is 91,295 bytes with SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`. Live GNOME/Mutter input-method and candidate-position testing remains outstanding.
