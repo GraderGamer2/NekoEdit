@@ -5659,7 +5659,40 @@ xkb_symbols "nekoedit-sparse" {
                     "<I", pixels, 104 * 800 * 4 + 56 * 4
                 )[0]
                 if wrapped_caret != 0xFFFFFFFF:
-                    raise AssertionError("caret did not follow the text onto its soft-wrapped row")
+                    debug_state = read_document_state()
+                    caret_candidates = []
+                    for candidate_y in range(92, initial_height - 9, 12):
+                        for candidate_x in range(16, 800 - 1, 8):
+                            if all(
+                                struct.unpack_from(
+                                    "<I", pixels,
+                                    (candidate_y + row) * 800 * 4 + candidate_x * 4
+                                )[0] == 0xFFFFFFFF
+                                for row in range(9)
+                            ):
+                                caret_candidates.append((candidate_x, candidate_y))
+                    modifier_state = {
+                        name: child_u32(name)
+                        for name in (
+                            "keymap_format", "xkb_modifiers", "shift_down",
+                            "caps_lock", "num_lock", "keyboard_group",
+                            "repeat_keycode", "doc_selection_active",
+                        )
+                    }
+                    raise AssertionError(
+                        "caret did not follow the text onto its soft-wrapped row: "
+                        + repr({
+                            "expected_pixel": hex(wrapped_caret),
+                            "cursor": debug_state.get("doc_cursor"),
+                            "length": debug_state.get("doc_length"),
+                            "contents": debug_state.get("doc_contents"),
+                            "line_records": debug_state.get("doc_line_index_records"),
+                            "total_visual_rows": debug_state.get("doc_total_visual_rows"),
+                            "view_top": debug_state.get("doc_view_top_row"),
+                            "caret_candidates": caret_candidates,
+                            "modifier_state": modifier_state,
+                        })
+                    )
 
                 # A click on the wrapped row must map back to the same visual
                 # insertion point, not to a logical hard-newline-only row.
