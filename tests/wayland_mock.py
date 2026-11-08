@@ -3059,11 +3059,19 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
                         + wire_message(12, 0)
                     )
-                    # Verify every remaining ASCII letter using its evdev
-                    # position and the parsed XKB keycode/symbol entries.
+                    # LevelThree is commonly a virtual modifier resolved to
+                    # real Mod5 by the compositor. It must work even when a
+                    # different physical key generated that modifier state.
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", 1010, 0, 0, 0, 0))
+                        + wire_message(16, 4, struct.pack("<IIIII", 1011, 128, 0, 0, 0))
                     )
+                    key_step(1012, 16, "XKB LevelThree from compositor Mod5 mask")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1014, 0, 0, 0, 0))
+                    )
+                    # Verify every remaining ASCII letter using its evdev
+                    # position and the parsed XKB keycode/symbol entries.
                     key_step(1020, 17, "XKB letter w")
                     key_step(1022, 18, "XKB letter e")
                     key_step(1024, 19, "XKB letter r")
@@ -5866,7 +5874,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,",
             keyboard_layout_test=True,
         )
     finally:
