@@ -2055,13 +2055,11 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("cancelling History Export did not close the picker cleanly")
 
                     # Delete removes only the journal. The document stays
-                    # intact and Ctrl+Z becomes a no-op until a fresh edit.
+                    # intact; the host-side journal test separately checks
+                    # that the deleted journal exposes zero Undo/Redo records.
                     workflow_click(368, 316, 2120, "History page Delete button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History Delete modified document bytes")
-                    workflow_shortcut(2130, 44, "Ctrl+Z after deleting History")
-                    if read_document_state()["doc_contents"] != b"abcq":
-                        raise AssertionError("History Delete left an undo record behind")
                     observations.append(
                         "History tab switching, Undo/Redo buttons, Export picker mode, cancellation, and Delete verified"
                     )
