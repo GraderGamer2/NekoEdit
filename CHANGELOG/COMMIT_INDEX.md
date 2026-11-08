@@ -5,9 +5,17 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **364** (363 previously recorded implementation/test commits + the 2026-11-09 physical-typing regression fix; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **365** (363 previously recorded commits + the 2026-11-09 physical-typing fix and its one-shot key-release regression-test follow-up; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Wayland mock one-shot key-repeat synchronization (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880) | test: synchronize one-shot key releases before grapheme edits |
+
+The generic mock key-step helper now queues key-up with key-down and waits for the client to clear its repeat key before continuing. This prevents frame-acknowledgement latency from turning a one-shot grapheme Backspace into a repeated edit. Dedicated held-key repetition scenarios are unchanged. Actions #666 exposed the race after the new XKB/IME coverage had passed; the corrected full workflow is pending.
 
 ## Physical typing fallback and opt-in text-input-v3 (2026-11-09)
 

@@ -3,7 +3,8 @@
 ## 2026-11-09 — restore physical typing; make text-input-v3 explicitly opt-in
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
-**Latest application commit:** [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f) — `fix: keep physical typing active unless IME is explicitly enabled`.
+**Latest application commit:** [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f) — `fix: keep physical typing active unless IME is explicitly enabled`.  
+**Latest regression-test follow-up:** [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880) — `test: synchronize one-shot key releases before grapheme edits`.
 
 ### User-reported regression and cause
 
@@ -24,10 +25,12 @@
 - The complete XKB physical-key integration test now advertises `zwp_text_input_manager_v3` while leaving the opt-in unset. It inspects child state to ensure the global was discovered but no manager/object was bound and `text_input_enabled` remains zero, then continues the existing real XKB-to-document typing assertions.
 - The dedicated text-input-v3 mock explicitly sets the opt-in and retains its existing manager, preedit, UTF-8 commit, delete-surrounding, serial, and redraw checks.
 - This regression test distinguishes protocol advertisement from a real IME commit and prevents the previous no-typing failure from returning.
+- The first run, Actions [#666](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531482671), passed the new advertisement/physical-XKB test and the opt-in IME test, then exposed a timing race in the generic one-shot `key_step` helper during a later grapheme Backspace case. The helper waited for frame acknowledgement before sending key-up, leaving a window for the 300 ms repeat timer to add another deletion.
+- Test-only follow-up [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880) now queues key-up with key-down and waits for `repeat_keycode` to clear. Dedicated held-key repeat scenarios are unchanged.
 
 ### Validation and next work
 
-- Source/test changes are committed as [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f). Full GitHub Actions validation is to be checked on the resulting branch tip.
+- Source/test changes are committed as [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f); the test synchronization follow-up is [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880). Full GitHub Actions validation is pending for the corrected branch tip; Actions #666 did not complete successfully because of the one-shot key-release timing race described above.
 - Live GNOME/Mutter verification remains necessary. First verify normal typing with the default environment; then separately test the experimental IME path with `NEKOEDIT_ENABLE_TEXT_INPUT=1`.
 - Continue broader XKB action/repeat and preserve/consumed-modifier work only after the default physical-key path is confirmed working on the desktop.
 

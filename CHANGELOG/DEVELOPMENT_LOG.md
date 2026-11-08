@@ -1,3 +1,13 @@
+## 2026-11-09 — synchronize one-shot Wayland mock key releases
+
+- Actions [Build and test #666](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531482671) compiled the application and passed the preferences test, default physical XKB typing with an advertised-but-unbound text-input manager, and the opt-in text-input-v3 mock.
+- The same run later failed in the existing Unicode grapheme scenario: the generic `key_step` helper waited for the redraw before sending key-up. Under scheduler delay, that left a window for the 300 ms repeat timer to issue an extra Backspace; the resulting state showed two preceding grapheme clusters removed.
+- Changed `key_step` to queue key-down and key-up together before waiting for the frame, then wait for `repeat_keycode=0`. This helper represents one-shot key input; the dedicated held-key repeat tests remain unchanged.
+- Test-only follow-up commit: [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880).
+- The corrected full workflow has not yet completed; do not treat Actions #666 as a green validation.
+
+---
+
 ## 2026-11-09 — restore physical keyboard typing and gate text-input-v3
 
 ### User-reported failure
