@@ -3182,6 +3182,12 @@ wayland_main:
     # document caret or insert text into the document.
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    mov edx, dword ptr [rip + pointer_y]
+    cmp dword ptr [rip + file_menu_open], 1
+    je .pointer_check_horizontal_scroll
+    cmp dword ptr [rip + settings_menu_open], 1
+    je .pointer_check_horizontal_scroll
     cmp dword ptr [rip + history_tab_open], 0
     je .pointer_check_horizontal_scroll
     cmp edx, 92
@@ -14955,7 +14961,7 @@ render_file_menu:
     mov esi, 344
     mov edx, 140
     mov ecx, 72
-    mov r8d, 22
+    mov r8d, 18
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 172
@@ -14990,6 +14996,7 @@ render_file_menu:
 render_history_manager:
     push rbx
     push r12
+    push r13
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 32
     mov edx, 104
@@ -15045,13 +15052,13 @@ render_history_manager:
     mov edx, 300
     mov ecx, 80
     mov r8d, 32
-    mov r9d, 0xff414b5a
+    mov r13d, 0xff414b5a
     cmp ebx, 0
     jne .render_history_button_not_undo
     call history_undo_count
     test eax, eax
     jnz .render_history_button_draw
-    mov r9d, 0xff343d4b
+    mov r13d, 0xff343d4b
     jmp .render_history_button_draw
 .render_history_button_not_undo:
     cmp ebx, 1
@@ -15059,8 +15066,9 @@ render_history_manager:
     call history_redo_count
     test eax, eax
     jnz .render_history_button_draw
-    mov r9d, 0xff343d4b
+    mov r13d, 0xff343d4b
 .render_history_button_draw:
+    mov r9d, r13d
     call draw_rect
     lea edi, [r12 + 16]
     mov esi, 312
@@ -15086,6 +15094,7 @@ render_history_manager:
     inc ebx
     jmp .render_history_button_loop
 .render_history_manager_done:
+    pop r13
     pop r12
     pop rbx
     ret
