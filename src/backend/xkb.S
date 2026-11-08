@@ -996,7 +996,7 @@ xkb_ascii_levels:       .zero 16384       # 256 codes * 4 groups * 4 levels
 .global xkb_unicode_levels
 xkb_unicode_levels:     .zero 65536       # uint32 scalars; 0x110001..0x110006 are dead-key actions
 .global xkb_key_types
-xkb_key_types:          .zero 256         # bit 0: alphabetic, bit 1: level-three
+xkb_key_types:          .zero 256         # bit 0: alphabetic, bit 1: LevelThree, bit 2: ONE_LEVEL, bit 3: KEYPAD, bit 4: separate Caps/Shift
 .global xkb_keymap_ready
 xkb_keymap_ready:       .long 0
 
