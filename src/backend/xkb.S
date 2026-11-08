@@ -19,6 +19,7 @@
 .Lxkb_type_eight_level: .asciz "EIGHT_LEVEL"
 .Lxkb_type_three_level: .asciz "THREE_LEVEL"
 .Lxkb_type_separate:    .asciz "SEPARATE_CAPS_AND_SHIFT_ALPHABETIC"
+.Lxkb_type_keypad:      .asciz "KEYPAD"
 
 # Encoded as: one-byte name length, name bytes, one-byte ASCII value.
 .Lxkb_ascii_symbols:
@@ -1531,6 +1532,12 @@ xkb_reset_keymap:
     jz .Lxkb_type_done
 .Lxkb_type_level3:
     or ebx, 2
+.Lxkb_type_check_keypad:
+    lea rdi, [rip + .Lxkb_type_keypad]
+    call .Lxkb_token_contains
+    test eax, eax
+    jz .Lxkb_type_done
+    or ebx, 8
 .Lxkb_type_done:
     mov eax, ebx
     pop rbx
@@ -2095,8 +2102,8 @@ xkb_lookup_ascii:
     ret
 .size xkb_lookup_ascii, . - xkb_lookup_ascii
 
-# RDI=evdev keycode, ESI=Shift, EDX=Caps, ECX=LevelThree, R8D=group.
-# Returns an XKB Unicode keysym scalar or zero.
+# RDI=evdev keycode, ESI=Shift, EDX=Caps, ECX=LevelThree, R8D=group,
+# R9D=NumLock. Returns an XKB Unicode keysym scalar or zero.
 .global xkb_lookup_unicode
 .type xkb_lookup_unicode, @function
 xkb_lookup_unicode:
@@ -2113,6 +2120,7 @@ xkb_lookup_unicode:
     mov r13d, esi
     mov r14d, edx
     mov r15d, ecx
+    mov r10d, r9d
     mov ebx, r8d
     cmp ebx, 3
     jbe .Lxkb_unicode_group_ready
@@ -2122,6 +2130,8 @@ xkb_lookup_unicode:
     movzx eax, byte ptr [rax + r12]
     test eax, 4
     jnz .Lxkb_unicode_level_one
+    test eax, 8
+    jnz .Lxkb_unicode_level_keypad
     test eax, 1
     jz .Lxkb_unicode_caps_done
     xor r13d, r14d
@@ -2131,6 +2141,18 @@ xkb_lookup_unicode:
     jz .Lxkb_unicode_level_done
     test r15d, r15d
     jz .Lxkb_unicode_level_done
+    add r13d, 2
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_level_keypad:
+    # Canonical KEYPAD: Shift and NumLock are alternatives. Either selects
+    # level 2; both or neither select level 1. FOUR_LEVEL_KEYPAD also adds
+    # the LevelThree pair at levels 3/4.
+    xor r13d, r10d
+    and r13d, 1
+    test eax, 2
+    jz .Lxkb_unicode_level_ready
+    test r15d, r15d
+    jz .Lxkb_unicode_level_ready
     add r13d, 2
     jmp .Lxkb_unicode_level_ready
 .Lxkb_unicode_level_one:
