@@ -1023,3 +1023,12 @@ Actions [Build and test #657](https://github.com/GraderGamer2/NekoEdit/actions/r
 | Documentation commit | Subject |
 |---|---|
 | [fb8d02836361](https://github.com/GraderGamer2/NekoEdit/commit/fb8d02836361da3d15371ba26dd894672bc645f1) | docs: index explicit XKB virtual modifier support |
+
+
+## 2026-11-08 — direct implicit virtual-modifier aggregation
+
+| Commit | Subject |
+|---|---|
+| [982a252e017e](https://github.com/GraderGamer2/NekoEdit/commit/982a252e017e7c1f758127a55931dd0ff0462a9e) | feat: resolve direct XKB virtual modifier bindings |
+
+The parser now reads direct key `virtualModifiers` properties and direct keycode entries in `modifier_map`, stores those maps independently, and computes each virtual modifier's effective encoding as its explicit mask OR all real modifier maps associated with keys in its virtual map. Type definitions are reparsed after aggregation. The new fixture verifies two keys contribute Mod4 and Mod2 to V03, producing effective mask 0x50 and a real Level2 insertion through the mock Wayland state.
