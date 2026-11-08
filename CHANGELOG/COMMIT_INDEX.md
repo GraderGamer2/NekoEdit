@@ -1008,3 +1008,12 @@ Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/r
 | [9824b62d8507](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a) | test: wait for key repeat cancellation between keys |
 
 Actions [Build and test #655](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636) passed all eight workflow steps on 9824b62d8507. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes; SHA-256 `b120de8d3e0d49e2054ce6f9b8ced600e309fbdcf8fc41259eb1a031270adec1`.
+
+
+## 2026-11-08 — explicit XKB virtual-modifier encodings
+
+| Commit | Subject |
+|---|---|
+| [51bcc46949f0](https://github.com/GraderGamer2/NekoEdit/commit/51bcc46949f00b4cfe1f7741b17aa1ac212d9d37) | fix: parse explicit XKB virtual modifier encodings |
+
+The parser now stores effective virtual-modifier masks independently from declaration indices and accepts explicit text-v1 assignments using real modifier names, plus-separated masks, numeric masks, and `none`. The Wayland fixture verifies Mod5/Mod2 mappings, a combined Mod4+Mod5 mapping, a high-bit mask, unbound declarations, and repeated declarations across keymap components. The complete PR workflow for this snapshot is the validation gate.
