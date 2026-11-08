@@ -1653,3 +1653,12 @@ Actions [Build and test #657](https://github.com/GraderGamer2/NekoEdit/actions/r
 The mock asserts `LevelThree = Mod5` (0x80), `NumLock = Mod2` (0x10), `V02 = Mod4+Mod5` (0xC0), `V23 = 0x80000000`, unbound declarations, and duplicate declarations in a later keymap component. This confirms that effective masks are not synthesized from virtual-modifier declaration order.
 
 Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064/artifacts/13615510231) is 91,474 bytes, artifact ID 13615510231, SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`, expiring 2026-11-15 11:21:21 UTC. Live GNOME/Mutter input-method and candidate-position testing remains outstanding.
+
+
+## 2026-11-08 — direct implicit XKB virtual-modifier bindings
+
+The XKB reader now supports the direct text-v1 virtual-modifier map mechanisms used by ordinary serialized keymaps. A key's `virtualModifiers` property records the declared virtual modifier names associated with that key. A direct keycode entry in `modifier_map` records that key's real modifier. After the symbols section has been parsed, the reader ORs the real modifier masks of all keys associated with each virtual modifier into that modifier's explicit encoding, then reparses `xkb_types` so the type's `modifiers` and `map[]` masks use the effective result.
+
+The mock fixture declares `V03 = none`, associates two keys with V03, and binds those keys to Mod4 and Mod2. It verifies the resulting V03 mask is `0x50`, checks each key's individual real/virtual maps, inspects the reparsed custom type mask and Level2 entry, then sends a compositor state with Mod2+Mod4 and verifies the key inserts the second-level symbol. The existing explicit LevelThree/NumLock mappings, combined explicit mask, unbound names, bit-31 mask, duplicate declarations, custom eight-level type, Unicode input, and IME cases remain covered.
+
+This is intentionally a direct-map subset: keysyms used as indirect `modifier_map` targets are not resolved, and automatic virtual-modifier assignment from `xkb_compat` interpretation rules is not implemented. General key actions and `preserve[]` consumed-modifier semantics remain future work. This source/test snapshot awaits its complete Actions run.

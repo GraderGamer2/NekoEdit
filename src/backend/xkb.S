@@ -19,6 +19,10 @@
 .Lxkb_word_modifiers:   .asciz "modifiers"
 .Lxkb_word_preserve:    .asciz "preserve"
 .Lxkb_word_level_name:  .asciz "level_name"
+.Lxkb_word_key_virtual_modifiers: .asciz "virtualModifiers"
+.Lxkb_word_modifier_map: .asciz "modifier_map"
+.Lxkb_word_mod_map:     .asciz "mod_map"
+.Lxkb_word_modmap:      .asciz "modmap"
 .Lxkb_mod_shift:        .asciz "Shift"
 .Lxkb_mod_lock:         .asciz "Lock"
 .Lxkb_mod_control:      .asciz "Control"
@@ -1061,7 +1065,11 @@ xkb_virtual_names:     .zero 1536        # 24 virtual modifier names * 64 bytes
 .global xkb_virtual_count
 xkb_virtual_count:     .long 0
 .global xkb_virtual_masks
-xkb_virtual_masks:    .zero 96         # 24 effective 32-bit encodings; declaration index is separate
+xkb_virtual_masks:    .zero 96         # explicit plus implicit effective 32-bit encodings
+.global xkb_key_real_masks
+xkb_key_real_masks:   .zero 1024       # 256 keys * one real modifier map
+.global xkb_key_virtual_maps
+xkb_key_virtual_maps: .zero 1024       # 256 keys * 32-bit virtual modifier map
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1114,6 +1122,12 @@ xkb_reset_keymap:
     rep stosb
     lea rdi, [rip + xkb_virtual_masks]
     mov ecx, 96
+    rep stosb
+    lea rdi, [rip + xkb_key_real_masks]
+    mov ecx, 1024
+    rep stosb
+    lea rdi, [rip + xkb_key_virtual_maps]
+    mov ecx, 1024
     rep stosb
     lea rdi, [rip + xkb_group_types]
     mov al, 255
@@ -1791,6 +1805,51 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_register_virtual, . - .Lxkb_register_virtual
+
+# Find a previously declared virtual modifier by the current token.
+# EAX=index or -1. Unlike register_virtual this never creates a declaration.
+.type .Lxkb_find_virtual, @function
+.Lxkb_find_virtual:
+    push rbx
+    push r12
+    push r13
+    push r14
+    xor r12d, r12d
+    mov r13d, dword ptr [rip + xkb_virtual_count]
+.Lxkb_find_virtual_loop:
+    cmp r12d, r13d
+    jae .Lxkb_find_virtual_missing
+    mov eax, r12d
+    shl eax, 6
+    lea rbx, [rip + xkb_virtual_names]
+    add rbx, rax
+    lea r14, [rip + .Lxkb_token]
+    mov ecx, 64
+.Lxkb_find_virtual_compare:
+    mov al, byte ptr [rbx]
+    cmp al, byte ptr [r14]
+    jne .Lxkb_find_virtual_next
+    test al, al
+    jz .Lxkb_find_virtual_found
+    inc rbx
+    inc r14
+    dec ecx
+    jnz .Lxkb_find_virtual_compare
+.Lxkb_find_virtual_next:
+    inc r12d
+    jmp .Lxkb_find_virtual_loop
+.Lxkb_find_virtual_found:
+    mov eax, r12d
+    jmp .Lxkb_find_virtual_done
+.Lxkb_find_virtual_missing:
+    mov eax, -1
+.Lxkb_find_virtual_done:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_find_virtual, . - .Lxkb_find_virtual
 
 # Scan all sections before parsing types so virtual modifier indices reflect
 # declaration order across the complete text-v1 keymap.
@@ -2821,7 +2880,42 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jnz .Lxkb_key_block_symbols
+    lea rdi, [rip + .Lxkb_word_key_virtual_modifiers]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_key_block_virtual_modifiers
     jmp .Lxkb_key_block_loop
+.Lxkb_key_block_virtual_modifiers:
+    # Direct key-level virtualModifiers property. Names must already have been
+    # declared in the keymap's virtual_modifiers statements.
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_key_block_fail
+.Lxkb_key_block_virtual_modifiers_next:
+    call .Lxkb_next_token
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_key_block_fail
+    call .Lxkb_find_virtual
+    test eax, eax
+    js .Lxkb_key_block_fail
+    mov ecx, eax
+    mov eax, dword ptr [rip + .Lxkb_keycode]
+    shl eax, 2
+    lea rbx, [rip + xkb_key_virtual_maps]
+    mov edx, 1
+    shl edx, cl
+    or dword ptr [rbx + rax], edx
+.Lxkb_key_block_virtual_modifiers_delimiter:
+    call .Lxkb_next_token
+    cmp eax, '+'
+    je .Lxkb_key_block_virtual_modifiers_next
+    cmp eax, ','
+    je .Lxkb_key_block_loop
+    cmp eax, '}'
+    je .Lxkb_key_block_done
+    jmp .Lxkb_key_block_fail
+
+
 .Lxkb_key_block_type:
     mov dword ptr [rip + .Lxkb_type_group], -1
     call .Lxkb_next_token
@@ -3008,6 +3102,156 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_parse_key_block, . - .Lxkb_parse_key_block
 
+# Parse a direct keycode real-modifier binding:
+# modifier_map Mod5 { <RALT>, <RCTL> };. Indirect keysym bindings are skipped.
+# EAX=0 on success, negative on malformed input.
+.type .Lxkb_parse_modifier_map, @function
+.Lxkb_parse_modifier_map:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_modifier_map_fail
+    lea rdi, [rip + .Lxkb_mod_none]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_map_none
+    lea rdi, [rip + .Lxkb_mod_none_lower]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_modifier_map_none
+    call .Lxkb_modifier_bit
+    test edx, edx
+    jz .Lxkb_modifier_map_fail
+    mov r12d, eax
+    test r12d, 0xffffff00
+    jnz .Lxkb_modifier_map_fail
+    test r12d, r12d
+    jz .Lxkb_modifier_map_fail
+    lea eax, [r12 - 1]
+    test eax, r12d
+    jnz .Lxkb_modifier_map_fail
+    jmp .Lxkb_modifier_map_find_open
+.Lxkb_modifier_map_none:
+    mov r12d, 0
+.Lxkb_modifier_map_find_open:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_modifier_map_fail
+    cmp eax, '{'
+    jne .Lxkb_modifier_map_find_open
+.Lxkb_modifier_map_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_modifier_map_fail
+    cmp eax, '}'
+    je .Lxkb_modifier_map_done
+    cmp eax, ','
+    je .Lxkb_modifier_map_loop
+    cmp dword ptr [rip + .Lxkb_token_kind], 2
+    jne .Lxkb_modifier_map_loop
+    mov eax, dword ptr [rip + .Lxkb_token]
+    mov dword ptr [rip + .Lxkb_keyname_tmp], eax
+    call .Lxkb_find_keycode
+    test eax, eax
+    jz .Lxkb_modifier_map_loop
+    mov r13d, eax
+    shl eax, 2
+    lea rbx, [rip + xkb_key_real_masks]
+    add rbx, rax
+    test r12d, r12d
+    jnz .Lxkb_modifier_map_set
+    mov dword ptr [rbx], 0
+    jmp .Lxkb_modifier_map_loop
+.Lxkb_modifier_map_set:
+    mov eax, dword ptr [rbx]
+    test eax, eax
+    jz .Lxkb_modifier_map_store
+    cmp eax, r12d
+    jne .Lxkb_modifier_map_fail
+.Lxkb_modifier_map_store:
+    mov dword ptr [rbx], r12d
+    jmp .Lxkb_modifier_map_loop
+.Lxkb_modifier_map_done:
+    xor eax, eax
+    jmp .Lxkb_modifier_map_exit
+.Lxkb_modifier_map_fail:
+    mov eax, -1
+.Lxkb_modifier_map_exit:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_modifier_map, . - .Lxkb_parse_modifier_map
+
+# Aggregate each key's real modifier map into the effective encodings of all
+# virtual modifiers in that key's virtual map.
+.type .Lxkb_apply_virtual_modifier_maps, @function
+.Lxkb_apply_virtual_modifier_maps:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, 8
+.Lxkb_apply_vmod_key_loop:
+    cmp r12d, 256
+    jae .Lxkb_apply_vmod_special_masks
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_key_real_masks]
+    mov r13d, dword ptr [rbx + rax]
+    test r13d, r13d
+    jz .Lxkb_apply_vmod_next_key
+    lea rbx, [rip + xkb_key_virtual_maps]
+    mov r14d, dword ptr [rbx + rax]
+    xor r15d, r15d
+.Lxkb_apply_vmod_bit_loop:
+    cmp r15d, dword ptr [rip + xkb_virtual_count]
+    jae .Lxkb_apply_vmod_next_key
+    bt r14d, r15d
+    jnc .Lxkb_apply_vmod_next_bit
+    mov eax, r15d
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    or dword ptr [rbx + rax], r13d
+.Lxkb_apply_vmod_next_bit:
+    inc r15d
+    jmp .Lxkb_apply_vmod_bit_loop
+.Lxkb_apply_vmod_next_key:
+    inc r12d
+    jmp .Lxkb_apply_vmod_key_loop
+.Lxkb_apply_vmod_special_masks:
+    mov eax, dword ptr [rip + .Lxkb_level_three_index]
+    cmp eax, -1
+    je .Lxkb_apply_vmod_numlock
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov edx, dword ptr [rbx + rax]
+    mov dword ptr [rip + xkb_level_three_mask], edx
+.Lxkb_apply_vmod_numlock:
+    mov eax, dword ptr [rip + .Lxkb_num_lock_index]
+    cmp eax, -1
+    je .Lxkb_apply_vmod_done
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov edx, dword ptr [rbx + rax]
+    mov dword ptr [rip + xkb_num_lock_mask], edx
+.Lxkb_apply_vmod_done:
+    xor eax, eax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_apply_virtual_modifier_maps, . - .Lxkb_apply_virtual_modifier_maps
+
 # Parse xkb_symbols key definitions.
 .type .Lxkb_parse_symbols, @function
 .Lxkb_parse_symbols:
@@ -3036,6 +3280,18 @@ xkb_reset_keymap:
     jz .Lxkb_symbols_fail
     cmp eax, '}'
     je .Lxkb_symbols_done
+    lea rdi, [rip + .Lxkb_word_modifier_map]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_symbols_modifier_map
+    lea rdi, [rip + .Lxkb_word_mod_map]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_symbols_modifier_map
+    lea rdi, [rip + .Lxkb_word_modmap]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_symbols_modifier_map
     lea rdi, [rip + .Lxkb_word_key]
     call .Lxkb_token_is
     test eax, eax
@@ -3056,6 +3312,11 @@ xkb_reset_keymap:
     cmp eax, '{'
     jne .Lxkb_symbols_find_key_open
     call .Lxkb_parse_key_block
+    test eax, eax
+    js .Lxkb_symbols_fail
+    jmp .Lxkb_symbols_loop
+.Lxkb_symbols_modifier_map:
+    call .Lxkb_parse_modifier_map
     test eax, eax
     js .Lxkb_symbols_fail
     jmp .Lxkb_symbols_loop
@@ -3127,6 +3388,17 @@ xkb_parse_keymap:
     test eax, eax
     js .Lxkb_parse_keymap_fail
     call .Lxkb_parse_symbols
+    test eax, eax
+    js .Lxkb_parse_keymap_fail
+    # Resolve explicit plus key-bound implicit virtual-modifier encodings.
+    call .Lxkb_apply_virtual_modifier_maps
+    test eax, eax
+    js .Lxkb_parse_keymap_fail
+    call .Lxkb_rebase_builtin_types
+    # Reparse declared types now that implicit virtual-modifier encodings are
+    # known, so their effective masks include both explicit and implicit maps.
+    mov qword ptr [rip + .Lxkb_text_ptr], r12
+    call .Lxkb_parse_types
     test eax, eax
     js .Lxkb_parse_keymap_fail
     xor eax, eax

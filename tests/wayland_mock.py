@@ -743,10 +743,18 @@ xkb_types "nekoedit-test" {
         map[Shift+Mod3+Lock] = 8;
         map[0x80000000] = 8;
     };
+    type "CUSTOM_IMPLICIT" {
+        modifiers = V03;
+        map[V03] = Level2;
+    };
 };
 xkb_symbols "nekoedit-test" {
     # Repeated declarations in later components must retain explicit masks.
     virtual_modifiers LevelThree, NumLock, V23;
+    # V03 has explicit encoding none above; this real key binding contributes
+    # Mod4 to its effective virtual-modifier encoding.
+    modifier_map Mod4 { <AB06> };
+    modifier_map Mod2 { <AB05> };
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
         symbols[Group1] = [ a, A, at, quotedbl ],
@@ -780,8 +788,15 @@ xkb_symbols "nekoedit-test" {
     key <AB02> { [ x, X ] };
     key <AB03> { [ c, C ] };
     key <AB04> { [ v, V ] };
-    key <AB05> { [ b, B ] };
-    key <AB06> { [ n, N ] };
+    key <AB05> {
+        virtualModifiers = V03,
+        symbols[Group1] = [ b, B ]
+    };
+    key <AB06> {
+        type[Group1] = "CUSTOM_IMPLICIT",
+        virtualModifiers = V03,
+        symbols[Group1] = [ n, N ]
+    };
     key <AB07> {
         type[Group1] = "CUSTOM_EIGHT_LEVEL",
         symbols[Group1] = [ m, M, at, quotedbl, q, Q, EuroSign, eacute ]
@@ -960,6 +975,8 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_type_map_levels",
                         "xkb_virtual_count",
                         "xkb_virtual_masks",
+                        "xkb_key_real_masks",
+                        "xkb_key_virtual_maps",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
@@ -1013,6 +1030,16 @@ xkb_symbols "nekoedit-sparse" {
                             "<9I", child_memory("xkb_type_map_masks", 7 * 128, 36)
                         )
                         custom_map_levels = child_memory("xkb_type_map_levels", 7 * 32, 9)
+                        implicit_type_id = child_memory("xkb_group_types", 57 * 4, 1)[0]
+                        implicit_type_name = child_memory("xkb_type_names", 8 * 64, 64).split(bytes([0]), 1)[0]
+                        implicit_type_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 8 * 4, 4))[0]
+                        implicit_map_count = child_memory("xkb_type_map_counts", 8, 1)[0]
+                        implicit_map_mask = struct.unpack("<I", child_memory("xkb_type_map_masks", 8 * 128, 4))[0]
+                        implicit_map_level = child_memory("xkb_type_map_levels", 8 * 32, 1)[0]
+                        ab05_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 56 * 4, 4))[0]
+                        ab05_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 56 * 4, 4))[0]
+                        ab06_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 57 * 4, 4))[0]
+                        ab06_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 57 * 4, 4))[0]
                         virtual_count = struct.unpack("<I", child_memory("xkb_virtual_count", 0, 4))[0]
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
@@ -1042,6 +1069,16 @@ xkb_symbols "nekoedit-sparse" {
                         or custom_map_count != 9
                         or custom_map_masks != (0, 1, 32, 33, 2, 3, 34, 35, 0x80000000)
                         or custom_map_levels != bytes((1, 2, 3, 4, 5, 6, 7, 8, 8))
+                        or implicit_type_id != 8
+                        or implicit_type_name != b"CUSTOM_IMPLICIT"
+                        or implicit_type_mask != 80
+                        or implicit_map_count != 1
+                        or implicit_map_mask != 80
+                        or implicit_map_level != 2
+                        or ab05_real_mask != 16
+                        or ab05_virtual_map != 8
+                        or ab06_real_mask != 64
+                        or ab06_virtual_map != 8
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -1056,9 +1093,18 @@ xkb_symbols "nekoedit-sparse" {
                                 "count": custom_map_count,
                                 "maps": custom_map_masks,
                                 "levels": custom_map_levels,
+                                "implicit": {
+                                    "type_id": implicit_type_id,
+                                    "name": implicit_type_name,
+                                    "type_mask": implicit_type_mask,
+                                    "map": (implicit_map_count, implicit_map_mask, implicit_map_level),
+                                    "type_mask": implicit_type_mask,
+                                    "real_key_masks": (ab05_real_mask, ab06_real_mask),
+                                    "key_vmods": (ab05_virtual_map, ab06_virtual_map),
+                                },
                             })
                         )
-                    expected_virtual_masks = (128, 16, 192) + (0,) * 20 + (0x80000000,)
+                    expected_virtual_masks = (128, 16, 192, 80) + (0,) * 19 + (0x80000000,)
                     if (
                         (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
                         or virtual_masks != expected_virtual_masks
@@ -3330,6 +3376,15 @@ xkb_symbols "nekoedit-sparse" {
                         custom_serial += 10
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", custom_serial, 0, 0, 0, 0))
+                    )
+                    # The key's virtualModifiers entry plus modifier_map Mod4
+                    # must produce effective V03=Mod4 and select Level2.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 2, 80, 0, 0, 0))
+                    )
+                    key_step(custom_serial + 3, 49, "implicit V03 from modifier_map selects CUSTOM_IMPLICIT Level2")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 5, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1300, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
@@ -6133,7 +6188,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9N",
             keyboard_layout_test=True,
         )
     finally:

@@ -722,3 +722,10 @@ The expanded mock uses `LevelThree = Mod5`, `NumLock = Mod2`, `V02 = Mod4+Mod5`,
 ### Explicit virtual-modifier encoding validation — Actions #657
 
 Actions #657 passed all eight workflow steps on the explicit virtual-modifier parser snapshot. The Wayland mock verified independent effective masks for LevelThree/Mod5, NumLock/Mod2, a combined Mod4+Mod5 virtual modifier, an unbound virtual modifier, and a bit-31 numeric mask; it also verified that repeated declarations in later components preserve earlier encodings. The same run passed the type-map, arbitrary alphabetic type, eight-level, IME, editing, clipboard, history, font, host, ELF, and installation checks. Artifact 13615510231 is 91,474 bytes with SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`. Live GNOME/Mutter validation remains outstanding.
+
+
+## 2026-11-08 — direct implicit virtual-modifier mapping
+
+The reader now parses direct `virtualModifiers` properties on keys and direct keycode `modifier_map` entries. It stores the per-key virtual map and real modifier separately, then computes each virtual modifier's effective encoding by ORing the explicit encoding with the real modifiers attached to all keys in that virtual map. Declared XKB types are reparsed against those effective masks, ensuring custom type maps resolve the same way as the compositor's state.
+
+The regression fixture assigns a virtual modifier with explicit encoding `none` to two keys, binds one key to Mod4 and the other to Mod2, and asserts the effective mask becomes `0x50`. It also sends Mod2+Mod4 through the Wayland mock and checks the associated custom type selects Level2 and inserts the expected symbol. Indirect keysym-based modifier-map lookup, `xkb_compat`-driven virtual binding, general key actions, and preserve/consumed-modifier behavior remain deferred. The current implementation snapshot awaits its complete Actions run.
