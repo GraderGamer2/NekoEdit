@@ -2214,6 +2214,7 @@ buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
 caps_lock:              .long 0
+num_lock:               .long 0
 ctrl_down:              .long 0
 .global doc_length
 doc_length:             .long 0
@@ -3942,6 +3943,10 @@ wayland_main:
     and eax, 2
     shr eax, 1
     mov dword ptr [rip + caps_lock], eax
+    mov eax, dword ptr [rip + event_payload + 12]
+    and eax, 16
+    shr eax, 4
+    mov dword ptr [rip + num_lock], eax
     mov eax, dword ptr [rip + event_payload + 16]
     mov dword ptr [rip + keyboard_group], eax
     # The standard XKB Control modifier is bit 2. Physical Ctrl key
@@ -14684,6 +14689,7 @@ keycode_to_unicode:
     mov edx, dword ptr [rip + caps_lock]
     mov ecx, dword ptr [rip + level3_down]
     mov r8d, dword ptr [rip + keyboard_group]
+    mov r9d, dword ptr [rip + num_lock]
     call xkb_lookup_unicode
     pop rbx
     ret
