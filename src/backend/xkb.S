@@ -1,11 +1,10 @@
 .intel_syntax noprefix
 
 # Bounded, dependency-free XKB text-v1 reader. It parses keycodes, symbols,
-# virtual-modifier indices, per-group key types, 32-bit modifier masks, and
-# exact modifiers-to-Level1..Level8 maps. It is not a replacement for
-# libxkbcommon: explicit modifier encodings, preserve[] consumed-modifier
-# semantics, xkb_compat action resolution, and general key actions are outside
-# this bounded reader.
+# per-group key types, 32-bit modifier masks, virtual-modifier encodings, and
+# a limited xkb_compat interpretation subset for keysym/modmap matching and
+# virtualModifier assignment. It does not implement general key actions or
+# preserve[] consumed-modifier semantics and is not a replacement for libxkbcommon.
 
 .section .rodata
 .Lxkb_section_keycodes: .asciz "xkb_keycodes"
@@ -14,6 +13,19 @@
 .Lxkb_word_type:        .asciz "type"
 .Lxkb_word_symbols:     .asciz "symbols"
 .Lxkb_section_types:    .asciz "xkb_types"
+.Lxkb_section_compat:   .asciz "xkb_compat"
+.Lxkb_word_interpret:   .asciz "interpret"
+.Lxkb_word_virtual_modifier: .asciz "virtualModifier"
+.Lxkb_word_use_mod_map_mods: .asciz "useModMapMods"
+.Lxkb_compat_any:       .asciz "Any"
+.Lxkb_compat_no_symbol: .asciz "NoSymbol"
+.Lxkb_compat_anyofornone: .asciz "AnyOfOrNone"
+.Lxkb_compat_anyof:     .asciz "AnyOf"
+.Lxkb_compat_noneof:    .asciz "NoneOf"
+.Lxkb_compat_allof:     .asciz "AllOf"
+.Lxkb_compat_exactly:   .asciz "Exactly"
+.Lxkb_compat_level1:    .asciz "level1"
+.Lxkb_compat_any_level: .asciz "any"
 .Lxkb_word_virtual_modifiers: .asciz "virtual_modifiers"
 .Lxkb_word_map:         .asciz "map"
 .Lxkb_word_modifiers:   .asciz "modifiers"
@@ -1103,6 +1115,18 @@ xkb_key_real_map_targets: .zero 1024   # exact original target for modifier_map 
 xkb_pending_modmap_targets: .zero 1024 # 256 deferred modifier_map targets
 xkb_pending_modmap_masks: .zero 1024
 xkb_pending_modmap_kinds: .zero 256    # 1=keycode target, 2=keysym target
+.global xkb_key_virtual_explicit
+xkb_key_virtual_explicit: .zero 256      # direct key property overrides compat interprets
+.global xkb_compat_rule_count
+xkb_compat_rule_count: .long 0
+.global xkb_compat_rules
+xkb_compat_rules: .zero 2048             # 128 records * 16 bytes
+.Lxkb_compat_tmp_keysym: .long 0
+.Lxkb_compat_tmp_mask: .long 0
+.Lxkb_compat_tmp_vmod: .long 0
+.Lxkb_compat_tmp_predicate: .long 0
+.Lxkb_compat_tmp_scope: .long 0
+.Lxkb_compat_tmp_valid: .long 0
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1180,6 +1204,19 @@ xkb_reset_keymap:
     lea rdi, [rip + xkb_pending_modmap_kinds]
     mov ecx, 256
     rep stosb
+    lea rdi, [rip + xkb_key_virtual_explicit]
+    mov ecx, 256
+    rep stosb
+    mov dword ptr [rip + xkb_compat_rule_count], 0
+    lea rdi, [rip + xkb_compat_rules]
+    mov ecx, 2048
+    rep stosb
+    mov dword ptr [rip + .Lxkb_compat_tmp_keysym], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_mask], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_vmod], -1
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_valid], 0
     mov dword ptr [rip + .Lxkb_pending_modmap_count], 0
     mov dword ptr [rip + .Lxkb_keysym_tmp], 0
     lea rdi, [rip + xkb_group_types]
@@ -3068,6 +3105,10 @@ xkb_reset_keymap:
     call .Lxkb_next_token
     cmp eax, '='
     jne .Lxkb_key_block_fail
+    # Explicit key-level virtualModifiers overrides xkb_compat interpretations.
+    mov eax, dword ptr [rip + .Lxkb_keycode]
+    lea rbx, [rip + xkb_key_virtual_explicit]
+    mov byte ptr [rbx + rax], 1
 .Lxkb_key_block_virtual_modifiers_next:
     call .Lxkb_next_token
     cmp dword ptr [rip + .Lxkb_token_kind], 1
@@ -3279,8 +3320,8 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_parse_key_block, . - .Lxkb_parse_key_block
 
-# Parse a direct keycode real-modifier binding:
-# modifier_map Mod5 { <RALT>, <RCTL> };. Indirect keysym bindings are skipped.
+# Queue direct keycode and recognized indirect keysym real-modifier bindings:
+# modifier_map Mod5 { <RALT>, <RCTL> }; modifier_map Mod1 { Alt_L };.
 # EAX=0 on success, negative on malformed input.
 # Resolve an indirect modifier_map keysym using XKB's specified ordering:
 # lowest group first, then lowest level, then lowest keycode.
@@ -3543,6 +3584,570 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_resolve_modifier_maps, . - .Lxkb_resolve_modifier_maps
 
+
+# Skip an unsupported statement while respecting nested action/indicator blocks.
+# EAX=0 at ';', 1 when the containing section/rule '}' is consumed, -1 at EOF.
+.type .Lxkb_compat_skip_statement, @function
+.Lxkb_compat_skip_statement:
+    push r12
+    xor r12d, r12d
+.Lxkb_compat_skip_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_compat_skip_fail
+    cmp eax, '{'
+    je .Lxkb_compat_skip_open
+    cmp eax, '}'
+    je .Lxkb_compat_skip_close
+    cmp eax, ';'
+    jne .Lxkb_compat_skip_loop
+    test r12d, r12d
+    jnz .Lxkb_compat_skip_loop
+    xor eax, eax
+    jmp .Lxkb_compat_skip_done
+.Lxkb_compat_skip_open:
+    inc r12d
+    cmp r12d, 16
+    ja .Lxkb_compat_skip_fail
+    jmp .Lxkb_compat_skip_loop
+.Lxkb_compat_skip_close:
+    test r12d, r12d
+    jz .Lxkb_compat_skip_section_close
+    dec r12d
+    jmp .Lxkb_compat_skip_loop
+.Lxkb_compat_skip_section_close:
+    mov eax, 1
+    jmp .Lxkb_compat_skip_done
+.Lxkb_compat_skip_fail:
+    mov eax, -1
+.Lxkb_compat_skip_done:
+    pop r12
+    ret
+.size .Lxkb_compat_skip_statement, . - .Lxkb_compat_skip_statement
+
+# Resolve a real-modifier token used by an xkb_compat predicate.
+# EAX=mask, EDX=1 on success; virtual names and numeric masks are rejected.
+.type .Lxkb_compat_real_modifier_bit, @function
+.Lxkb_compat_real_modifier_bit:
+    lea rdi, [rip + .Lxkb_mod_shift]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_shift
+    lea rdi, [rip + .Lxkb_mod_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_lock
+    lea rdi, [rip + .Lxkb_mod_control]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_control
+    lea rdi, [rip + .Lxkb_mod_mod1]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_mod1
+    lea rdi, [rip + .Lxkb_mod_mod2]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_mod2
+    lea rdi, [rip + .Lxkb_mod_mod3]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_mod3
+    lea rdi, [rip + .Lxkb_mod_mod4]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_mod4
+    lea rdi, [rip + .Lxkb_mod_mod5]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_mod5
+    lea rdi, [rip + .Lxkb_mod_all]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_all
+    lea rdi, [rip + .Lxkb_mod_none]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_none
+    lea rdi, [rip + .Lxkb_mod_none_lower]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_real_none
+    xor eax, eax
+    xor edx, edx
+    ret
+.Lxkb_compat_real_shift:   mov eax, 1; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_lock:    mov eax, 2; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_control: mov eax, 4; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_mod1:    mov eax, 8; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_mod2:    mov eax, 16; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_mod3:    mov eax, 32; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_mod4:    mov eax, 64; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_mod5:    mov eax, 128; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_all:     mov eax, 255; jmp .Lxkb_compat_real_ok
+.Lxkb_compat_real_none:    xor eax, eax
+.Lxkb_compat_real_ok:
+    mov edx, 1
+    ret
+.size .Lxkb_compat_real_modifier_bit, . - .Lxkb_compat_real_modifier_bit
+
+# Parse the parenthesized real-modifier mask of AnyOf/NoneOf/AllOf/Exactly.
+.type .Lxkb_compat_parse_real_mask, @function
+.Lxkb_compat_parse_real_mask:
+    push rbx
+    push r12
+    push r13
+    xor r12d, r12d
+    xor r13d, r13d
+.Lxkb_compat_real_mask_loop:
+    call .Lxkb_next_token
+    cmp eax, ')'
+    je .Lxkb_compat_real_mask_done
+    cmp eax, '+'
+    je .Lxkb_compat_real_mask_loop
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_compat_real_mask_fail
+    call .Lxkb_compat_real_modifier_bit
+    test edx, edx
+    jz .Lxkb_compat_real_mask_fail
+    or r12d, eax
+    inc r13d
+    jmp .Lxkb_compat_real_mask_loop
+.Lxkb_compat_real_mask_done:
+    test r13d, r13d
+    jz .Lxkb_compat_real_mask_fail
+    mov eax, r12d
+    mov edx, 1
+    jmp .Lxkb_compat_real_mask_exit
+.Lxkb_compat_real_mask_fail:
+    xor eax, eax
+    xor edx, edx
+.Lxkb_compat_real_mask_exit:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_compat_parse_real_mask, . - .Lxkb_compat_parse_real_mask
+
+# Parse one interpret body. Unknown attributes (notably general actions) are
+# skipped as nested statements, but virtualModifier and useModMapMods are kept.
+.type .Lxkb_compat_parse_body, @function
+.Lxkb_compat_parse_body:
+.Lxkb_compat_body_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_compat_body_fail
+    cmp eax, '}'
+    je .Lxkb_compat_body_done
+    lea rdi, [rip + .Lxkb_word_virtual_modifier]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_body_virtual_modifier
+    lea rdi, [rip + .Lxkb_word_use_mod_map_mods]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_body_use_modmap
+    call .Lxkb_compat_skip_statement
+    cmp eax, 1
+    je .Lxkb_compat_body_done
+    test eax, eax
+    js .Lxkb_compat_body_fail
+    jmp .Lxkb_compat_body_loop
+.Lxkb_compat_body_virtual_modifier:
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_compat_body_fail
+    call .Lxkb_next_token
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_compat_body_fail
+    call .Lxkb_find_virtual
+    test eax, eax
+    js .Lxkb_compat_body_fail
+    cmp dword ptr [rip + .Lxkb_compat_tmp_vmod], -1
+    jne .Lxkb_compat_body_fail
+    mov dword ptr [rip + .Lxkb_compat_tmp_vmod], eax
+    call .Lxkb_compat_skip_statement
+    cmp eax, 1
+    je .Lxkb_compat_body_done
+    test eax, eax
+    js .Lxkb_compat_body_fail
+    jmp .Lxkb_compat_body_loop
+.Lxkb_compat_body_use_modmap:
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_compat_body_fail
+    call .Lxkb_next_token
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_compat_body_fail
+    lea rdi, [rip + .Lxkb_compat_level1]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_body_scope_level1
+    lea rdi, [rip + .Lxkb_compat_any_level]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_compat_body_fail
+    mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
+    jmp .Lxkb_compat_body_scope_done
+.Lxkb_compat_body_scope_level1:
+    mov dword ptr [rip + .Lxkb_compat_tmp_scope], 1
+.Lxkb_compat_body_scope_done:
+    call .Lxkb_compat_skip_statement
+    cmp eax, 1
+    je .Lxkb_compat_body_done
+    test eax, eax
+    js .Lxkb_compat_body_fail
+    jmp .Lxkb_compat_body_loop
+.Lxkb_compat_body_done:
+    xor eax, eax
+    ret
+.Lxkb_compat_body_fail:
+    mov eax, -1
+    ret
+.size .Lxkb_compat_parse_body, . - .Lxkb_compat_parse_body
+
+# Parse one "interpret keysym + predicate { ... }" rule.
+.type .Lxkb_compat_parse_interpret, @function
+.Lxkb_compat_parse_interpret:
+    mov dword ptr [rip + .Lxkb_compat_tmp_keysym], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_mask], 255
+    mov dword ptr [rip + .Lxkb_compat_tmp_vmod], -1
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_valid], 1
+    call .Lxkb_next_token
+    cmp eax, '.'
+    je .Lxkb_compat_interpret_global_property
+    cmp eax, '{'
+    je .Lxkb_compat_interpret_body
+    cmp eax, '+'
+    je .Lxkb_compat_interpret_predicate
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_compat_interpret_fail
+    lea rdi, [rip + .Lxkb_compat_any]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_keysym_done
+    lea rdi, [rip + .Lxkb_compat_no_symbol]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_keysym_done
+    call .Lxkb_keysym_modifier_id
+    test eax, eax
+    jnz .Lxkb_compat_interpret_store_keysym
+    # This parser intentionally stores only modifier keysyms; unsupported
+    # keysym interpretations are skipped, never treated as wildcards.
+    mov dword ptr [rip + .Lxkb_compat_tmp_valid], 0
+    jmp .Lxkb_compat_interpret_keysym_done
+.Lxkb_compat_interpret_store_keysym:
+    mov dword ptr [rip + .Lxkb_compat_tmp_keysym], eax
+.Lxkb_compat_interpret_keysym_done:
+    call .Lxkb_next_token
+    cmp eax, '{'
+    je .Lxkb_compat_interpret_body
+    cmp eax, '+'
+    jne .Lxkb_compat_interpret_fail
+.Lxkb_compat_interpret_predicate:
+    call .Lxkb_next_token
+    lea rdi, [rip + .Lxkb_compat_any]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_any
+    lea rdi, [rip + .Lxkb_compat_anyofornone]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_anyofornone
+    lea rdi, [rip + .Lxkb_compat_anyof]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_anyof
+    lea rdi, [rip + .Lxkb_compat_noneof]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_noneof
+    lea rdi, [rip + .Lxkb_compat_allof]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_allof
+    lea rdi, [rip + .Lxkb_compat_exactly]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_predicate_exactly
+    jmp .Lxkb_compat_interpret_fail
+.Lxkb_compat_interpret_predicate_any:
+    # Any is the AnyOf(all) alias.
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 1
+    mov dword ptr [rip + .Lxkb_compat_tmp_mask], 255
+    jmp .Lxkb_compat_interpret_predicate_expect_body
+.Lxkb_compat_interpret_predicate_anyofornone:
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
+    jmp .Lxkb_compat_interpret_predicate_parenthesis
+.Lxkb_compat_interpret_predicate_anyof:
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 1
+    jmp .Lxkb_compat_interpret_predicate_parenthesis
+.Lxkb_compat_interpret_predicate_noneof:
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 2
+    jmp .Lxkb_compat_interpret_predicate_parenthesis
+.Lxkb_compat_interpret_predicate_allof:
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 3
+    jmp .Lxkb_compat_interpret_predicate_parenthesis
+.Lxkb_compat_interpret_predicate_exactly:
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 4
+.Lxkb_compat_interpret_predicate_parenthesis:
+    call .Lxkb_next_token
+    cmp eax, '('
+    jne .Lxkb_compat_interpret_fail
+    call .Lxkb_compat_parse_real_mask
+    test edx, edx
+    jz .Lxkb_compat_interpret_fail
+    mov dword ptr [rip + .Lxkb_compat_tmp_mask], eax
+.Lxkb_compat_interpret_predicate_expect_body:
+    call .Lxkb_next_token
+    cmp eax, '{'
+    jne .Lxkb_compat_interpret_fail
+.Lxkb_compat_interpret_body:
+    call .Lxkb_compat_parse_body
+    test eax, eax
+    js .Lxkb_compat_interpret_fail
+    cmp dword ptr [rip + .Lxkb_compat_tmp_valid], 0
+    je .Lxkb_compat_interpret_success
+    mov ecx, dword ptr [rip + xkb_compat_rule_count]
+    cmp ecx, 128
+    jae .Lxkb_compat_interpret_fail
+    mov eax, ecx
+    shl eax, 4
+    lea rbx, [rip + xkb_compat_rules]
+    add rbx, rax
+    mov eax, dword ptr [rip + .Lxkb_compat_tmp_keysym]
+    mov dword ptr [rbx], eax
+    mov eax, dword ptr [rip + .Lxkb_compat_tmp_mask]
+    mov dword ptr [rbx + 4], eax
+    mov eax, dword ptr [rip + .Lxkb_compat_tmp_vmod]
+    mov dword ptr [rbx + 8], eax
+    mov al, byte ptr [rip + .Lxkb_compat_tmp_predicate]
+    mov byte ptr [rbx + 12], al
+    mov al, byte ptr [rip + .Lxkb_compat_tmp_scope]
+    mov byte ptr [rbx + 13], al
+    inc ecx
+    mov dword ptr [rip + xkb_compat_rule_count], ecx
+.Lxkb_compat_interpret_success:
+    xor eax, eax
+    ret
+.Lxkb_compat_interpret_global_property:
+    # "interpret.repeat = False;" is a section default, not an interpretation.
+    call .Lxkb_compat_skip_statement
+    ret
+.Lxkb_compat_interpret_fail:
+    mov eax, -1
+    ret
+.size .Lxkb_compat_parse_interpret, . - .Lxkb_compat_parse_interpret
+
+# Parse the optional xkb_compat component after key symbols are available.
+.type .Lxkb_parse_compat, @function
+.Lxkb_parse_compat:
+    push rbx
+.Lxkb_compat_find_section:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_compat_parse_done
+    lea rdi, [rip + .Lxkb_section_compat]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_find_open
+    jmp .Lxkb_compat_find_section
+.Lxkb_compat_find_open:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_compat_parse_fail
+    cmp eax, '{'
+    jne .Lxkb_compat_find_open
+.Lxkb_compat_parse_loop:
+    call .Lxkb_next_token
+    test eax, eax
+    jz .Lxkb_compat_parse_fail
+    cmp eax, '}'
+    je .Lxkb_compat_parse_done
+    cmp eax, ';'
+    je .Lxkb_compat_parse_loop
+    lea rdi, [rip + .Lxkb_word_interpret]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_parse_compat_interpret_rule
+    call .Lxkb_compat_skip_statement
+    cmp eax, 1
+    je .Lxkb_compat_parse_done
+    test eax, eax
+    js .Lxkb_compat_parse_fail
+    jmp .Lxkb_compat_parse_loop
+.Lxkb_parse_compat_interpret_rule:
+    call .Lxkb_compat_parse_interpret
+    cmp eax, 1
+    je .Lxkb_compat_parse_done
+    test eax, eax
+    js .Lxkb_compat_parse_fail
+    jmp .Lxkb_compat_parse_loop
+.Lxkb_compat_parse_done:
+    xor eax, eax
+    jmp .Lxkb_compat_parse_exit
+.Lxkb_compat_parse_fail:
+    mov eax, -1
+.Lxkb_compat_parse_exit:
+    pop rbx
+    ret
+.size .Lxkb_parse_compat, . - .Lxkb_parse_compat
+
+# Apply the best matching interpretation to each represented keysym level.
+# Specific keysyms outrank wildcard rules; predicate rank breaks those ties.
+# Equal-specificity ties retain the first declaration. Explicit key vmods win.
+.type .Lxkb_apply_compat_virtual_maps, @function
+.Lxkb_apply_compat_virtual_maps:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, 8
+.Lxkb_compat_apply_key_loop:
+    cmp r12d, 256
+    jae .Lxkb_compat_apply_done
+    lea rsi, [rip + xkb_key_virtual_explicit]
+    cmp byte ptr [rsi + r12], 0
+    jne .Lxkb_compat_apply_next_key
+    xor r13d, r13d
+.Lxkb_compat_apply_group_loop:
+    cmp r13d, 4
+    jae .Lxkb_compat_apply_next_key
+    xor r14d, r14d
+.Lxkb_compat_apply_level_loop:
+    cmp r14d, 8
+    jae .Lxkb_compat_apply_next_group
+    mov eax, r12d
+    shl eax, 5
+    lea eax, [rax + r13*8]
+    add eax, r14d
+    lea rsi, [rip + xkb_keysym_levels]
+    mov r8d, dword ptr [rsi + rax*4]
+    lea rsi, [rip + xkb_unicode_levels]
+    mov edx, dword ptr [rsi + rax*4]
+    or edx, r8d
+    jz .Lxkb_compat_apply_next_level
+    mov eax, r12d
+    shl eax, 2
+    lea rsi, [rip + xkb_key_real_masks]
+    mov r9d, dword ptr [rsi + rax]
+    mov ebp, -1
+    mov ebx, -1
+    xor r15d, r15d
+.Lxkb_compat_apply_rule_loop:
+    cmp r15d, dword ptr [rip + xkb_compat_rule_count]
+    jae .Lxkb_compat_apply_rule_done
+    mov eax, r15d
+    shl eax, 4
+    lea rsi, [rip + xkb_compat_rules]
+    add rsi, rax
+    mov eax, dword ptr [rsi]
+    test eax, eax
+    jz .Lxkb_compat_apply_scope
+    cmp eax, r8d
+    jne .Lxkb_compat_apply_next_rule
+.Lxkb_compat_apply_scope:
+    cmp byte ptr [rsi + 13], 1
+    jne .Lxkb_compat_apply_predicate
+    test r13d, r13d
+    jnz .Lxkb_compat_apply_next_rule
+    test r14d, r14d
+    jnz .Lxkb_compat_apply_next_rule
+.Lxkb_compat_apply_predicate:
+    movzx ecx, byte ptr [rsi + 12]
+    mov edx, dword ptr [rsi + 4]
+    cmp ecx, 0
+    je .Lxkb_compat_apply_anyofornone
+    cmp ecx, 1
+    je .Lxkb_compat_apply_anyof
+    cmp ecx, 2
+    je .Lxkb_compat_apply_noneof
+    cmp ecx, 3
+    je .Lxkb_compat_apply_allof
+    cmp ecx, 4
+    je .Lxkb_compat_apply_exactly
+    jmp .Lxkb_compat_apply_next_rule
+.Lxkb_compat_apply_anyofornone:
+    test r9d, r9d
+    jz .Lxkb_compat_apply_match
+    mov eax, r9d
+    and eax, edx
+    test eax, eax
+    jnz .Lxkb_compat_apply_match
+    jmp .Lxkb_compat_apply_next_rule
+.Lxkb_compat_apply_anyof:
+    mov eax, r9d
+    and eax, edx
+    test eax, eax
+    jz .Lxkb_compat_apply_next_rule
+    jmp .Lxkb_compat_apply_match
+.Lxkb_compat_apply_noneof:
+    mov eax, r9d
+    and eax, edx
+    test eax, eax
+    jnz .Lxkb_compat_apply_next_rule
+    jmp .Lxkb_compat_apply_match
+.Lxkb_compat_apply_allof:
+    mov eax, r9d
+    and eax, edx
+    cmp eax, edx
+    jne .Lxkb_compat_apply_next_rule
+    jmp .Lxkb_compat_apply_match
+.Lxkb_compat_apply_exactly:
+    cmp r9d, edx
+    jne .Lxkb_compat_apply_next_rule
+.Lxkb_compat_apply_match:
+    xor ecx, ecx
+    cmp dword ptr [rsi], 0
+    je .Lxkb_compat_apply_score
+    mov ecx, 16
+.Lxkb_compat_apply_score:
+    movzx eax, byte ptr [rsi + 12]
+    add ecx, eax
+    cmp ecx, ebp
+    jle .Lxkb_compat_apply_next_rule
+    mov ebp, ecx
+    mov ebx, dword ptr [rsi + 8]
+.Lxkb_compat_apply_next_rule:
+    inc r15d
+    jmp .Lxkb_compat_apply_rule_loop
+.Lxkb_compat_apply_rule_done:
+    cmp ebx, -1
+    je .Lxkb_compat_apply_next_level
+    cmp ebx, 24
+    jae .Lxkb_compat_apply_next_level
+    mov ecx, ebx
+    mov edx, 1
+    shl edx, cl
+    mov eax, r12d
+    shl eax, 2
+    lea rsi, [rip + xkb_key_virtual_maps]
+    or dword ptr [rsi + rax], edx
+.Lxkb_compat_apply_next_level:
+    inc r14d
+    jmp .Lxkb_compat_apply_level_loop
+.Lxkb_compat_apply_next_group:
+    inc r13d
+    jmp .Lxkb_compat_apply_group_loop
+.Lxkb_compat_apply_next_key:
+    inc r12d
+    jmp .Lxkb_compat_apply_key_loop
+.Lxkb_compat_apply_done:
+    xor eax, eax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size .Lxkb_apply_compat_virtual_maps, . - .Lxkb_apply_compat_virtual_maps
+
 .type .Lxkb_apply_virtual_modifier_maps, @function
 .Lxkb_apply_virtual_modifier_maps:
     push rbx
@@ -3551,6 +4156,9 @@ xkb_reset_keymap:
     push r14
     push r15
     call .Lxkb_resolve_modifier_maps
+    test eax, eax
+    js .Lxkb_apply_vmod_fail
+    call .Lxkb_apply_compat_virtual_maps
     test eax, eax
     js .Lxkb_apply_vmod_fail
     mov r12d, 8
@@ -3749,7 +4357,13 @@ xkb_parse_keymap:
     call .Lxkb_parse_symbols
     test eax, eax
     js .Lxkb_parse_keymap_fail
-    # Resolve explicit plus key-bound implicit virtual-modifier encodings.
+    # Compatibility rules are evaluated after all key/group/level keysyms and
+    # real modifier maps are available.
+    mov qword ptr [rip + .Lxkb_text_ptr], r12
+    call .Lxkb_parse_compat
+    test eax, eax
+    js .Lxkb_parse_keymap_fail
+    # Resolve explicit plus key-bound/compatibility virtual-modifier maps.
     call .Lxkb_apply_virtual_modifier_maps
     test eax, eax
     js .Lxkb_parse_keymap_fail

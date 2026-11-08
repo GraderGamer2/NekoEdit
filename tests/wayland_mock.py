@@ -695,6 +695,9 @@ xkb_keycodes "nekoedit-test" {
     <AB09> = 60;
     <RCTL> = 105;
     <RALT> = 108;
+    <LVL3> = 200;
+    <LVL2> = 201;
+    <GRP2> = 202;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -754,11 +757,34 @@ xkb_types "nekoedit-test" {
         map[V04] = Level2;
     };
 };
+xkb_compat "nekoedit-test" {
+    # Specific predicates outrank the generic Alt_L rule.
+    interpret.repeat = False;
+    interpret Alt_L {
+        virtualModifier = V05;
+        action = { SetMods(modifiers=Alt), SetGroup(group=2) };
+    };
+    interpret Alt_L + NoneOf(Mod1) {
+        virtualModifier = V06;
+    };
+    interpret Any + AnyOf(Mod1) {
+        virtualModifier = V08;
+    };
+    interpret ISO_Level3_Shift + Any {
+        useModMapMods = level1;
+        virtualModifier = V07;
+    };
+    # Action-only rules are retained for precedence but never executed.
+    interpret Shift_L + AnyOf(Shift) {
+        action = { SetMods(modifiers=Shift), SetGroup(group=2) };
+    };
+};
 xkb_symbols "nekoedit-test" {
     # Repeated declarations in later components must retain explicit masks.
     virtual_modifiers LevelThree, NumLock, V23;
     # V03 has explicit encoding none above; this real key binding contributes
     # Mod4 to its effective virtual-modifier encoding.
+    modifier_map Mod1 { <AB03> };
     modifier_map Mod4 { <AB06> };
     modifier_map Mod2 { <AB05> };
     # A matching keycode None removes a previously direct binding.
@@ -768,6 +794,8 @@ xkb_symbols "nekoedit-test" {
     # keycode None entry must not delete this keysym-kind binding.
     modifier_map Mod1 { Alt_L };
     modifier_map None { <RALT> };
+    # Same keysym at Group1/Level1, Group1/Level2 and Group2/Level1.
+    modifier_map Mod5 { <LVL3>, <LVL2>, <GRP2> };
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
         symbols[Group1] = [ a, A, at, quotedbl ],
@@ -810,6 +838,13 @@ xkb_symbols "nekoedit-test" {
     key <RALT> {
         virtualModifiers = V04,
         symbols[Group1] = [ NoSymbol, Alt_L ]
+    };
+    key <LVL3> { symbols[Group1] = [ ISO_Level3_Shift ] };
+    key <LVL2> { symbols[Group1] = [ NoSymbol, ISO_Level3_Shift ] };
+    key <GRP2> {
+        type = "ONE_LEVEL",
+        symbols[Group1] = [ x ],
+        symbols[Group2] = [ ISO_Level3_Shift ]
     };
     key <AB05> {
         virtualModifiers = V03,
@@ -1006,6 +1041,8 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_key_virtual_maps",
                         "xkb_key_real_map_kinds",
                         "xkb_key_real_map_targets",
+                        "xkb_key_virtual_explicit",
+                        "xkb_compat_rule_count",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
@@ -1086,6 +1123,14 @@ xkb_symbols "nekoedit-sparse" {
                         rctl_map_kind = child_memory("xkb_key_real_map_kinds", 105, 1)[0]
                         rctl_map_target = struct.unpack("<I", child_memory("xkb_key_real_map_targets", 105 * 4, 4))[0]
                         ad12_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 35 * 4, 4))[0]
+                        rctl_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 105 * 4, 4))[0]
+                        ad12_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 35 * 4, 4))[0]
+                        ab03_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 54 * 4, 4))[0]
+                        lvl3_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 200 * 4, 4))[0]
+                        lvl2_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 201 * 4, 4))[0]
+                        grp2_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 202 * 4, 4))[0]
+                        ralt_explicit_virtual = child_memory("xkb_key_virtual_explicit", 108, 1)[0]
+                        compat_rule_count = struct.unpack("<I", child_memory("xkb_compat_rule_count", 0, 4))[0]
                         virtual_count = struct.unpack("<I", child_memory("xkb_virtual_count", 0, 4))[0]
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
@@ -1142,6 +1187,14 @@ xkb_symbols "nekoedit-sparse" {
                         or rctl_map_kind != 0
                         or rctl_map_target != 0
                         or ad12_real_mask != 0
+                        or rctl_virtual_map != 64
+                        or ad12_virtual_map != 64
+                        or ab03_virtual_map != 256
+                        or lvl3_virtual_map != 128
+                        or lvl2_virtual_map != 0
+                        or grp2_virtual_map != 0
+                        or ralt_explicit_virtual != 1
+                        or compat_rule_count != 5
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -1172,11 +1225,21 @@ xkb_symbols "nekoedit-sparse" {
                                         "ralt": (ralt_raw_keysym, ralt_real_mask, ralt_virtual_map, ralt_map_kind, ralt_map_target),
                                         "rctl": (rctl_raw_keysym, rctl_real_mask, rctl_map_kind, rctl_map_target),
                                         "ad12": (ad12_raw_keysym, ad12_real_mask),
+                                        "compat_virtual_maps": {
+                                            "rctl": rctl_virtual_map,
+                                            "ad12": ad12_virtual_map,
+                                            "ab03": ab03_virtual_map,
+                                            "level1": lvl3_virtual_map,
+                                            "level2": lvl2_virtual_map,
+                                            "group2": grp2_virtual_map,
+                                            "ralt_explicit": ralt_explicit_virtual,
+                                            "rule_count": compat_rule_count,
+                                        },
                                     },
                                 },
                             })
                         )
-                    expected_virtual_masks = (128, 16, 192, 80, 8) + (0,) * 18 + (0x80000000,)
+                    expected_virtual_masks = (128, 16, 192, 80, 8, 0, 0, 128, 8) + (0,) * 14 + (0x80000000,)
                     if (
                         (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
                         or virtual_masks != expected_virtual_masks
