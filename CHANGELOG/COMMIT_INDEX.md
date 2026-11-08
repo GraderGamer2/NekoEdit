@@ -999,3 +999,12 @@ Actions [Build and test #649](https://github.com/GraderGamer2/NekoEdit/actions/r
 | [7d15c5af2d53](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc) | test: update Unicode fixtures for custom alpha type |
 
 Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on 7d15c5af2d53. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes; SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`.
+
+## 2026-11-08 — key-repeat mock release synchronization
+
+| Commit | Subject |
+|---|---|
+| [fca8df9a6691](https://github.com/GraderGamer2/NekoEdit/commit/fca8df9a66913b911cde65bc3035de4b1c111e17) | docs: record custom XKB type validation |
+| [9824b62d8507](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a) | test: wait for key repeat cancellation between keys |
+
+Actions [Build and test #655](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636) passed all eight workflow steps on 9824b62d8507. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes; SHA-256 `b120de8d3e0d49e2054ce6f9b8ced600e309fbdcf8fc41259eb1a031270adec1`.

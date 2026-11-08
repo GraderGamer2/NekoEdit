@@ -24,9 +24,14 @@ This is not a replacement for libxkbcommon. The client does not interpret `xkb_c
 
 Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on [`7d15c5a`](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc). This final run covers the freestanding build/ELF checks, CLI/preferences/history tests, install/uninstall smoke, the full Wayland mock suite, executable inspection, and artifact upload. The XKB fixture now includes 12 letter keys assigned to an arbitrary `CUSTOM_ALPHA` type, verifies its Shift-to-Level2 mapping and actual uppercase insertion, and separately exercises the custom eight-level type, all 24 virtual-modifier indices through bit 31, numeric masks/levels, and saved UTF-8 bytes. Keymap readiness is based on actual Group 1 lowercase/uppercase symbol pairs, not conventional type IDs.
 
-Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes (artifact ID `13613378978`), SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`, and expires 2026-11-15 10:29:21 UTC.
+Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes (artifact ID `13614540028`), SHA-256 `b120de8d3e0d49e2054ce6f9b8ced600e309fbdcf8fc41259eb1a031270adec1`, and expires 2026-11-15 10:39:31 UTC.
 
-The preceding validation iterations exposed test-maintenance issues, not an editor-source failure: #651 showed the caret at x=48 on the expected wrapped row while the mock hard-coded x=56; #652 then reached the XKB tests successfully but hit stale Unicode fixture string substitutions after the letter definitions were changed to a custom type. The test now checks caret presence anywhere on the wrapped row and updates all three affected Unicode fixture substitutions. The complete corrected suite passed on #653.
+The preceding validation iterations exposed test-maintenance issues and a key-repeat synchronization race in the mock:
+- #651 showed the caret at x=48 on the expected wrapped row while the mock hard-coded x=56. The test now checks caret presence anywhere on the expected wrapped row.
+- #652 reached and passed the custom XKB tests, then hit stale Unicode fixture strings after three letter keys were switched to `CUSTOM_ALPHA`. All three substitution strings were updated.
+- #654 caught a held-Enter repeat at the boundary before the next Tab action. The mock sent the Enter release but inspected process state without waiting for the client event loop to consume it. The test now waits until `repeat_keycode` is cleared by the release handler before starting the next key; it does not weaken the repeat assertions.
+
+Actions #653 passed the parser/readiness and expanded keyboard fixtures. Actions #655 then passed all eight workflow steps on the repeat-release synchronization change.
 
 ### Deferred, unchanged areas
 
