@@ -987,3 +987,15 @@ This implementation parses declared per-key/per-group type assignments and exact
 | [7d02040aabea](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d) | test: report live caret state on wrap regression |
 
 Actions [Build and test #649](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599) passed all eight workflow steps on 7d02040aabea. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599/artifacts/13612459035) is 91,295 bytes; SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`. Actions #648's preceding generic soft-wrap caret assertion did not recur; the diagnostic path remains in the mock to make any future recurrence actionable.
+
+
+## 2026-11-08 — arbitrary alphabetic XKB types and final mock corrections
+
+| Commit | Subject |
+|---|---|
+| [7757471d03fd](https://github.com/GraderGamer2/NekoEdit/commit/7757471d03fd557ef0dafcf861a31b2d02ce5aef) | docs: record declared XKB map validation result |
+| [f82619a03062](https://github.com/GraderGamer2/NekoEdit/commit/f82619a03062e169c126253d6a846609d878928a) | fix: detect alphabetic keys from custom XKB types |
+| [3bc39479c223](https://github.com/GraderGamer2/NekoEdit/commit/3bc39479c223050def6f1901b23c0186aa1ac376) | test: verify caret anywhere on wrapped row |
+| [7d15c5af2d53](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc) | test: update Unicode fixtures for custom alpha type |
+
+Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on 7d15c5af2d53. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes; SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`.

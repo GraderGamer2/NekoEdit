@@ -13,6 +13,7 @@
 - Type definitions are bounded to 64 names and 32 map entries per type. The symbol tables hold four groups with up to eight levels each. `type[GroupN]` assignment is retained independently for each key/group.
 - Real modifier bits (0–7) and up to 24 declared virtual-modifier indices (bits 8–31) are retained in a full 32-bit state mask. Numeric masks and numeric/`LevelN` level values are accepted. Each key's active state is filtered by its type's `modifiers` mask and matched exactly against the declared map.
 - Built-in fallback type records preserve TWO_LEVEL, ALPHABETIC, ONE_LEVEL, FOUR_LEVEL, KEYPAD, and separate Caps/Shift behavior for maps that omit explicit type definitions. Unknown or malformed custom types fail closed, leaving the built-in US-QWERTY fallback available.
+- Keymap usability checks count actual Group 1 lowercase/uppercase symbol pairs rather than requiring the conventional `ALPHABETIC` type ID. This supports layouts that put letters on `FOUR_LEVEL_ALPHABETIC` or user-named custom types.
 - Existing Unicode keysym aliases, six dead-key actions, bounded Compose, grapheme-aware editing, and TrueType glyph metrics remain in place.
 
 ### Scope not yet implemented
@@ -21,13 +22,11 @@ This is not a replacement for libxkbcommon. The client does not interpret `xkb_c
 
 ### Verification state
 
-Actions [Build and test #649](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599) passed all eight workflow steps on [`7d02040`](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d). The run covered the freestanding build and ELF checks, CLI/preferences/history host tests, install/uninstall smoke test, the complete Wayland mock suite, executable inspection, and artifact upload. The Wayland suite includes the custom eight-level XKB type, exact map-table assertions, 24 virtual-modifier indices including bit 31, numeric masks/levels, and actual saved UTF-8 bytes.
+Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on [`7d15c5a`](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc). This final run covers the freestanding build/ELF checks, CLI/preferences/history tests, install/uninstall smoke, the full Wayland mock suite, executable inspection, and artifact upload. The XKB fixture now includes 12 letter keys assigned to an arbitrary `CUSTOM_ALPHA` type, verifies its Shift-to-Level2 mapping and actual uppercase insertion, and separately exercises the custom eight-level type, all 24 virtual-modifier indices through bit 31, numeric masks/levels, and saved UTF-8 bytes. Keymap readiness is based on actual Group 1 lowercase/uppercase symbol pairs, not conventional type IDs.
 
-The artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599/artifacts/13612459035) is 91,295 bytes (artifact ID `13612459035`), SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`, and expires 2026-11-15 10:10:22 UTC.
+Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes (artifact ID `13613378978`), SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`, and expires 2026-11-15 10:29:21 UTC.
 
-The first run on the new parser snapshot, Actions #648, stopped at a generic soft-wrap caret pixel assertion before reaching the dedicated XKB fixture. The complete suite passed on #649 without an executable-source change; a targeted state dump was added to the mock failure path so a recurrence reports the document cursor, line-index records, modifier state, and visible caret candidates. Treat the #648 observation as an unreproduced test failure, not as proof of a fixed runtime defect.
-
-Automated mock-compositor validation is not live compositor verification. GNOME/Mutter with a real input method, candidate placement, and compositor-side modifier/action resolution still need desktop testing.
+The preceding validation iterations exposed test-maintenance issues, not an editor-source failure: #651 showed the caret at x=48 on the expected wrapped row while the mock hard-coded x=56; #652 then reached the XKB tests successfully but hit stale Unicode fixture string substitutions after the letter definitions were changed to a custom type. The test now checks caret presence anywhere on the wrapped row and updates all three affected Unicode fixture substitutions. The complete corrected suite passed on #653.
 
 ### Deferred, unchanged areas
 

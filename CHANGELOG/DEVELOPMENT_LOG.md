@@ -1613,3 +1613,16 @@ The first complete workflow attempt on the declared-type parser, [Actions #648](
 The complete retry, [Actions #649](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599), passed all eight steps without changes to executable source. This validates the declared XKB type parser and mock fixture together with the existing Wayland, IME, clipboard, editing, History, font, build, and install tests. The original #648 pixel failure did not recur in #649; its cause remains unlocalized and should not be represented as a confirmed code fix.
 
 Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42470252599/artifacts/13612459035) is 91,295 bytes, artifact ID 13612459035, SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`, expiry 2026-11-15 10:10:22 UTC. Live GNOME/Mutter/IME validation remains a separate desktop check.
+
+
+## 2026-11-08 — custom-type alphabetic readiness and final XKB validation
+
+A review after Actions #650 found that the parser's minimum-usable-layout threshold counted alphabetic keys only when their assigned type ID was the built-in `ALPHABETIC`. Real layouts may assign `FOUR_LEVEL_ALPHABETIC` or arbitrary user-defined type names to ordinary letters. The readiness check now inspects the actual Group 1 first two ASCII symbols and counts corresponding lowercase/uppercase pairs independently of the type name.
+
+The mock fixture now assigns 12 letter keys to a deliberately named `CUSTOM_ALPHA` type and asserts the parsed type/group assignment, its Shift-to-Level2 map, and actual uppercase insertion. The separate `CUSTOM_EIGHT_LEVEL` fixture remains in place, including the high virtual-modifier bit 31 and UTF-8 output checks.
+
+Two test-only corrections were also made during validation:
+- Actions #651 showed that the caret was correctly at x=48 on the second visual row of the empty-document socket test; the previous assertion incorrectly required x=56. The test now requires a complete visible caret glyph somewhere on that wrapped row while keeping the second-row text and row-index checks.
+- Actions #652 reached and passed the keyboard-layout custom XKB tests, then failed because the Unicode-keysym fixture still searched for the old shorthand `AC01`, `AC03`, and `AC04` declarations. Those three replacement strings now match the explicit `CUSTOM_ALPHA` key definitions.
+
+Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on [7d15c5af2d53](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc), including the complete Wayland mock suite, host tests, ELF checks, install smoke test, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes, SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`. Live GNOME/Mutter input-method and candidate-position validation remains outstanding.
