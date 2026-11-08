@@ -1529,7 +1529,7 @@ xkb_reset_keymap:
     lea rdi, [rip + .Lxkb_type_separate]
     call .Lxkb_token_is
     test eax, eax
-    jz .Lxkb_type_done
+    jz .Lxkb_type_check_keypad
 .Lxkb_type_level3:
     or ebx, 2
 .Lxkb_type_check_keypad:
