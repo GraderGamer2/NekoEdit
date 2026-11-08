@@ -1530,6 +1530,8 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jz .Lxkb_type_check_keypad
+    or ebx, 16
+    jmp .Lxkb_type_check_keypad
 .Lxkb_type_level3:
     or ebx, 2
 .Lxkb_type_check_keypad:
@@ -2130,6 +2132,8 @@ xkb_lookup_unicode:
     movzx eax, byte ptr [rax + r12]
     test eax, 4
     jnz .Lxkb_unicode_level_one
+    test eax, 16
+    jnz .Lxkb_unicode_level_separate_caps
     test eax, 8
     jnz .Lxkb_unicode_level_keypad
     test eax, 1
@@ -2142,6 +2146,34 @@ xkb_lookup_unicode:
     test r15d, r15d
     jz .Lxkb_unicode_level_done
     add r13d, 2
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_level_separate_caps:
+    # Canonical SEPARATE_CAPS_AND_SHIFT_ALPHABETIC:
+    # Shift -> level 2; Lock -> level 4; LevelThree -> level 3;
+    # Shift+LevelThree -> level 4; Lock+LevelThree variants -> level 3.
+    test r15d, r15d
+    jz .Lxkb_unicode_separate_base
+    test r13d, r13d
+    jz .Lxkb_unicode_separate_level3
+    test r14d, r14d
+    jnz .Lxkb_unicode_separate_level3
+    mov r13d, 3
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_separate_level3:
+    mov r13d, 2
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_separate_base:
+    test r14d, r14d
+    jz .Lxkb_unicode_separate_shift
+    test r13d, r13d
+    jnz .Lxkb_unicode_separate_base_only
+    mov r13d, 3
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_separate_base_only:
+    xor r13d, r13d
+    jmp .Lxkb_unicode_level_ready
+.Lxkb_unicode_separate_shift:
+    and r13d, 1
     jmp .Lxkb_unicode_level_ready
 .Lxkb_unicode_level_keypad:
     # Canonical KEYPAD: Shift and NumLock are alternatives. Either selects
