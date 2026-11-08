@@ -1389,8 +1389,12 @@ xkb_symbols "nekoedit-sparse" {
                     # surrounding text and cursor are transmitted exactly once.
                     committed = "你好".encode("utf-8")
                     commit = committed + b"\0"
+                    commit_payload = (
+                        struct.pack("<I", len(commit)) + commit
+                        + (b"\0" * (-len(commit) % 4))
+                    )
                     client.sendall(
-                        wire_message(18, 3, struct.pack("<I", len(commit)) + commit)
+                        wire_message(18, 3, commit_payload)
                         + wire_message(18, 5, struct.pack("<I", 1))
                     )
                     expect_state(committed, 6, "committed UTF-8 text")
