@@ -9783,12 +9783,15 @@ text_input_apply_done:
     mov r13d, dword ptr [rip + text_input_pending_delete_after]
     mov r14d, dword ptr [rip + doc_cursor]
     cmp r12d, r14d
-    ja .Lti_apply_delete_invalid
-    mov eax, r14d
-    add eax, r13d
-    jc .Lti_apply_delete_invalid
-    cmp eax, dword ptr [rip + doc_length]
-    ja .Lti_apply_delete_invalid
+    jbe .Lti_apply_delete_before_clamped
+    mov r12d, r14d
+.Lti_apply_delete_before_clamped:
+    mov eax, dword ptr [rip + doc_length]
+    sub eax, r14d
+    cmp r13d, eax
+    jbe .Lti_apply_delete_after_clamped
+    mov r13d, eax
+.Lti_apply_delete_after_clamped:
 
     # Start/end are byte offsets in the committed document. If the editor
     # currently has a selection, the protocol requires that it be deleted too,
@@ -9815,21 +9818,31 @@ text_input_apply_done:
     jbe .Lti_apply_delete_selection_union_done
     mov dword ptr [rsp + 4], edx
 .Lti_apply_delete_selection_union_done:
+    # Expand a byte range outwards when the input method's requested index
+    # falls inside a UTF-8 scalar. This guarantees that at least the requested
+    # number of bytes is removed without leaving a truncated code point.
+.Lti_apply_delete_align_start:
     mov edi, dword ptr [rsp]
     test edi, edi
-    jz .Lti_apply_delete_start_ok
+    jz .Lti_apply_delete_align_end
     call doc_byte_at
-    and eax, 0xc0
-    cmp eax, 0x80
-    je .Lti_apply_delete_invalid
-.Lti_apply_delete_start_ok:
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    jne .Lti_apply_delete_align_end
+    dec dword ptr [rsp]
+    jmp .Lti_apply_delete_align_start
+.Lti_apply_delete_align_end:
     mov edi, dword ptr [rsp + 4]
     cmp edi, dword ptr [rip + doc_length]
     jae .Lti_apply_delete_bounds_ok
     call doc_byte_at
-    and eax, 0xc0
-    cmp eax, 0x80
-    je .Lti_apply_delete_invalid
+    mov edx, eax
+    and edx, 0xc0
+    cmp edx, 0x80
+    jne .Lti_apply_delete_bounds_ok
+    inc dword ptr [rsp + 4]
+    jmp .Lti_apply_delete_align_end
 .Lti_apply_delete_bounds_ok:
     mov eax, dword ptr [rsp]
     cmp eax, dword ptr [rsp + 4]
@@ -9843,8 +9856,6 @@ text_input_apply_done:
     call doc_delete_selection
     mov r15d, 1
     jmp .Lti_apply_commit_text
-.Lti_apply_delete_invalid:
-    and ebx, -5
 .Lti_apply_commit_text:
     test ebx, 1
     jz .Lti_apply_history_end
