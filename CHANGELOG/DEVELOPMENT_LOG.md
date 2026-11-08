@@ -1558,3 +1558,8 @@ The first run for this change set passed the freestanding build and host history
 - Passed: freestanding build and ELF inspection (no interpreter/dynamic runtime dependencies), command-line smoke, persistent preferences, full disk-history host test (including exact 28-byte v2 record, legacy v1 rewrite/recovery/Undo/Redo, and non-active selected-history deletion), per-user install/uninstall smoke, complete Wayland mock suite, executable inspection, and artifact upload.
 - Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648): 86,304 bytes, artifact ID 13606921648, SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`, expires 2026-11-15 06:12:27 UTC.
 - The earlier #608 and #609 failures are retained above as build-history entries; #610 confirms the corrected source. Live GNOME/Mutter verification is still user-side and has not been claimed.
+
+
+### History action-target documentation clarification
+
+The final source audit confirmed that Undo/Redo and Export operate on the currently open document's journal; users should choose Open Selected before applying those controls to another search result. Delete History is intentionally different: it removes the highlighted result's journal, including a non-active document. Updated `docs/UNDO.md` to distinguish those targets. No executable code or test behavior changed.

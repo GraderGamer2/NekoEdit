@@ -34,11 +34,11 @@ A new edit after Undo truncates the abandoned Redo branch. Undo and Redo restore
 
 The History tab beside the document tab includes a built-in path search over document identities stored in existing journals. Results display the original source path rather than the opaque hashed journal filename. Type to filter (ASCII case-insensitively), select a result with the mouse or Up/Down, and choose Open Selected (or press Enter while the filter is focused) to load that document and its own Undo/Redo state. The separate Browse control opens the ordinary file picker when the user wants to browse for a document instead of filtering existing history. Up to 64 results are displayed at once; searching narrows the complete set. Documents without journals do not appear, and Untitled per-process identities are excluded because they cannot be reliably reopened by path.
 
-The highlighted result is the target of the History action buttons:
+The History search row selects a source path; **Open Selected** loads that document and makes it the active document. The action targets are:
 
-- Undo / Redo: apply the selected document's journal operations. Opening the result first is not required for deletion, but it is required before editing that document.
-- Export: opens NekoEdit's normal Save picker and atomically copies the highlighted .history file to the chosen destination. The exported file retains the .history format.
-- Delete History: removes only the highlighted document's journal, never the document itself. If it is the active document's journal, the in-memory history state is reset as well. The next actual byte edit creates a fresh journal.
+- Undo / Redo: operate on the currently open document's journal, using the same operations as Ctrl+Z and Ctrl+Y. To apply Undo/Redo to another search result, open that result first.
+- Export: opens NekoEdit's normal Save picker and atomically copies the currently open document's .history file to the chosen destination. Open a different result first to export its journal.
+- Delete History: is the exception: it removes the highlighted result's journal, even when that document is not currently open. It never deletes the source document. If the highlighted path is the active document's journal, the in-memory history state is reset as well. The next actual byte edit creates a fresh journal.
 
 This makes histories searchable, exportable, and removable without opening the hidden ~/.nekoedit directory. The search uses only validated journal headers; it does not scan document contents.
 
