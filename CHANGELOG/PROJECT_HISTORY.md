@@ -710,3 +710,10 @@ The test suite also replaces the old fixed wrapped-caret x coordinate with a row
 ### Repeat-test synchronization and Actions #655
 
 The mock now waits for the client to consume an Enter key release and clear the active repeat key before beginning the following Tab repeat case. This prevents a queued release/timer race in the test harness and preserves the same repeat behavior assertions. Actions #655 passed the complete workflow on commit [9824b62d8507](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a), including the custom XKB type-map tests and Wayland text-input-v3 mock. Artifact [13614540028](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes.
+
+
+## 2026-11-08 — explicit virtual-modifier masks
+
+The XKB reader no longer equates a virtual modifier's declaration order with the bit used in the compositor's state mask. It keeps a separate effective 32-bit encoding per declared virtual modifier and parses explicit text-v1 assignments from real modifier names, plus-separated masks, numeric literals, and `none`. The lookup path uses that effective mask when expanding a virtual name in a key type's `modifiers` or `map[]` statement.
+
+The expanded mock uses `LevelThree = Mod5`, `NumLock = Mod2`, `V02 = Mod4+Mod5`, and a high-bit `V23 = 0x80000000`; remaining declared virtual names are explicitly unbound. It verifies the mask table, modifier-to-level lookup, and repeated declarations in a later component. Automatic virtual-modifier bindings through key `virtualModifiers`/`modifier_map` and `xkb_compat` remain deferred, as do general actions and `preserve[]` semantics. The new parser/test snapshot is pending its complete Actions run.

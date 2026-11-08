@@ -1029,6 +1029,8 @@
 .Lxkb_mask_accum:       .long 0
 .Lxkb_vmod_index:       .long 0
 .Lxkb_group_index:      .long 0
+.Lxkb_level_three_index: .long 0
+.Lxkb_num_lock_index:   .long 0
 .Lxkb_token:            .zero 64
 .balign 16
 .global xkb_key_names
@@ -1058,6 +1060,8 @@ xkb_type_map_levels:    .zero 2048        # 64 types * 32 one-byte LevelN values
 xkb_virtual_names:     .zero 1536        # 24 virtual modifier names * 64 bytes
 .global xkb_virtual_count
 xkb_virtual_count:     .long 0
+.global xkb_virtual_masks
+xkb_virtual_masks:    .zero 96         # 24 effective 32-bit encodings; declaration index is separate
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1107,6 +1111,9 @@ xkb_reset_keymap:
     rep stosb
     lea rdi, [rip + xkb_virtual_names]
     mov ecx, 1536
+    rep stosb
+    lea rdi, [rip + xkb_virtual_masks]
+    mov ecx, 96
     rep stosb
     lea rdi, [rip + xkb_group_types]
     mov al, 255
@@ -1164,6 +1171,9 @@ xkb_reset_keymap:
     mov dword ptr [rip + xkb_virtual_count], 0
     mov dword ptr [rip + xkb_level_three_mask], 128
     mov dword ptr [rip + xkb_num_lock_mask], 16
+    mov dword ptr [rip + .Lxkb_level_three_index], -1
+    mov dword ptr [rip + .Lxkb_num_lock_index], -1
+    mov dword ptr [rip + .Lxkb_vmod_index], 0
     mov dword ptr [rip + xkb_keymap_ready], 0
     mov dword ptr [rip + .Lxkb_key_block_first], 0
     mov dword ptr [rip + .Lxkb_symbol_count], 0
@@ -1717,6 +1727,8 @@ xkb_reset_keymap:
     inc r13d
     jmp .Lxkb_register_virtual_find
 .Lxkb_register_virtual_found:
+    # A repeated declaration must not overwrite an explicit encoding already
+    # parsed from an earlier section.
     mov eax, r13d
     jmp .Lxkb_register_virtual_done
 .Lxkb_register_virtual_add:
@@ -1738,46 +1750,37 @@ xkb_reset_keymap:
     mov eax, r12d
     inc r12d
     mov dword ptr [rip + xkb_virtual_count], r12d
-    mov ecx, eax
-    add ecx, 8
-    mov edx, 1
-    shl edx, cl
+    mov r13d, eax
+    mov ecx, r13d
+    shl ecx, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov dword ptr [rbx + rcx], 0
+    jmp .Lxkb_register_virtual_note_special
+.Lxkb_register_virtual_note_special:
     lea rdi, [rip + .Lxkb_mod_level_three]
-    lea rsi, [rip + .Lxkb_token]
-    mov ecx, 64
-.Lxkb_register_virtual_level_three_compare:
-    mov bl, byte ptr [rdi]
-    cmp bl, byte ptr [rsi]
-    jne .Lxkb_register_virtual_check_numlock
-    test bl, bl
-    jz .Lxkb_register_virtual_set_level_three
-    inc rdi
-    inc rsi
-    dec ecx
-    jnz .Lxkb_register_virtual_level_three_compare
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_register_virtual_check_numlock
+    mov dword ptr [rip + .Lxkb_level_three_index], r13d
+    mov dword ptr [rip + xkb_level_three_mask], 128
+    mov eax, r13d
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov dword ptr [rbx + rax], 128
+    jmp .Lxkb_register_virtual_added
 .Lxkb_register_virtual_check_numlock:
     lea rdi, [rip + .Lxkb_mod_num_lock]
-    lea rsi, [rip + .Lxkb_token]
-    mov ecx, 64
-.Lxkb_register_virtual_numlock_compare:
-    mov bl, byte ptr [rdi]
-    cmp bl, byte ptr [rsi]
-    jne .Lxkb_register_virtual_added
-    test bl, bl
-    jz .Lxkb_register_virtual_set_numlock
-    inc rdi
-    inc rsi
-    dec ecx
-    jnz .Lxkb_register_virtual_numlock_compare
-    jmp .Lxkb_register_virtual_added
-.Lxkb_register_virtual_set_level_three:
-    mov dword ptr [rip + xkb_level_three_mask], edx
-    jmp .Lxkb_register_virtual_added
-.Lxkb_register_virtual_set_numlock:
-    mov dword ptr [rip + xkb_num_lock_mask], edx
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_register_virtual_added
+    mov dword ptr [rip + .Lxkb_num_lock_index], r13d
+    mov dword ptr [rip + xkb_num_lock_mask], 16
+    mov eax, r13d
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov dword ptr [rbx + rax], 16
 .Lxkb_register_virtual_added:
-    mov eax, r12d
-    dec eax
+    mov eax, r13d
     jmp .Lxkb_register_virtual_done
 .Lxkb_register_virtual_fail:
     mov eax, -1
@@ -1791,6 +1794,59 @@ xkb_reset_keymap:
 
 # Scan all sections before parsing types so virtual modifier indices reflect
 # declaration order across the complete text-v1 keymap.
+# Parse one explicit virtual-modifier encoding. Accept real modifier names,
+# numeric masks, or none, joined by '+'. Stop after ',' or ';' and return the
+# delimiter in EDX; the virtual modifier's declaration index remains separate
+# from the effective wire mask.
+.type .Lxkb_parse_vmod_encoding, @function
+.Lxkb_parse_vmod_encoding:
+    push rbx
+    push r12
+    push r13
+    push r14
+    xor r12d, r12d
+    xor r13d, r13d
+.Lxkb_vmod_encoding_loop:
+    call .Lxkb_next_token
+    cmp eax, '+'
+    je .Lxkb_vmod_encoding_loop
+    cmp eax, ','
+    je .Lxkb_vmod_encoding_comma
+    cmp eax, ';'
+    je .Lxkb_vmod_encoding_semicolon
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_vmod_encoding_fail
+    call .Lxkb_modifier_bit
+    test edx, edx
+    jz .Lxkb_vmod_encoding_fail
+    or r12d, eax
+    inc r13d
+    jmp .Lxkb_vmod_encoding_loop
+.Lxkb_vmod_encoding_comma:
+    cmp r13d, 0
+    je .Lxkb_vmod_encoding_fail
+    mov edx, ','
+    jmp .Lxkb_vmod_encoding_done
+.Lxkb_vmod_encoding_semicolon:
+    cmp r13d, 0
+    je .Lxkb_vmod_encoding_fail
+    mov edx, ';'
+.Lxkb_vmod_encoding_done:
+    mov eax, r12d
+    mov ecx, 1
+    jmp .Lxkb_vmod_encoding_exit
+.Lxkb_vmod_encoding_fail:
+    xor eax, eax
+    xor edx, edx
+    xor ecx, ecx
+.Lxkb_vmod_encoding_exit:
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_parse_vmod_encoding, . - .Lxkb_parse_vmod_encoding
+
 .type .Lxkb_parse_virtual_modifiers, @function
 .Lxkb_parse_virtual_modifiers:
     push rbx
@@ -1818,6 +1874,7 @@ xkb_reset_keymap:
     call .Lxkb_register_virtual
     test eax, eax
     js .Lxkb_vmod_scan_fail
+    mov dword ptr [rip + .Lxkb_vmod_index], eax
 .Lxkb_vmod_after_name:
     call .Lxkb_next_token
     cmp eax, ';'
@@ -1826,13 +1883,26 @@ xkb_reset_keymap:
     je .Lxkb_vmod_name
     cmp eax, '='
     jne .Lxkb_vmod_statement_skip
-.Lxkb_vmod_skip_encoding:
-    call .Lxkb_next_token
-    cmp eax, ';'
-    je .Lxkb_vmod_scan
-    cmp eax, ','
-    jne .Lxkb_vmod_skip_encoding
-    jmp .Lxkb_vmod_name
+    call .Lxkb_parse_vmod_encoding
+    test ecx, ecx
+    jz .Lxkb_vmod_scan_fail
+    mov r15d, edx
+    mov ecx, dword ptr [rip + .Lxkb_vmod_index]
+    mov edx, ecx
+    shl edx, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov dword ptr [rbx + rdx], eax
+    cmp ecx, dword ptr [rip + .Lxkb_level_three_index]
+    jne .Lxkb_vmod_not_level_three
+    mov dword ptr [rip + xkb_level_three_mask], eax
+.Lxkb_vmod_not_level_three:
+    cmp ecx, dword ptr [rip + .Lxkb_num_lock_index]
+    jne .Lxkb_vmod_encoding_complete
+    mov dword ptr [rip + xkb_num_lock_mask], eax
+.Lxkb_vmod_encoding_complete:
+    cmp r15d, ','
+    je .Lxkb_vmod_name
+    jmp .Lxkb_vmod_scan
 .Lxkb_vmod_statement_skip:
     cmp eax, ';'
     je .Lxkb_vmod_scan
@@ -1855,7 +1925,7 @@ xkb_reset_keymap:
 
 # Convert a modifier name token into its 32-bit XKB modifier bit.
 # Rebase built-in fallback type maps after virtual modifier declarations
-# have assigned LevelThree and NumLock their XKB 32-bit modifier-index bits.
+# have supplied the effective XKB 32-bit masks for LevelThree and NumLock.
 .type .Lxkb_rebase_builtin_types, @function
 .Lxkb_rebase_builtin_types:
     mov eax, dword ptr [rip + xkb_level_three_mask]
@@ -2069,12 +2139,13 @@ xkb_reset_keymap:
     inc r12d
     jmp .Lxkb_modifier_virtual_loop
 .Lxkb_modifier_virtual_found:
-    # Real modifiers occupy bits 0..7; declared virtual modifiers follow in
-    # first-declaration order at bits 8..31, matching the Wayland XKB mask.
-    mov ecx, r12d
-    add ecx, 8
-    mov eax, 1
-    shl eax, cl
+    # The declaration index is only an internal name-table index. The
+    # compositor's XKB state uses the virtual modifier's effective encoding,
+    # which may be a real modifier mask, a canonical high bit, or zero.
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_virtual_masks]
+    mov eax, dword ptr [rbx + rax]
     jmp .Lxkb_modifier_done
     # Undeclared convenience fallback only; declared LevelFive uses its own
     # keymap-wide virtual bit through the lookup above.

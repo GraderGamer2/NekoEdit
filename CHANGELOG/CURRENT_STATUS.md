@@ -1,6 +1,6 @@
 # NekoEdit current status
 
-## 2026-11-08 — Wayland text-input-v3 and declared XKB type-map integration
+## 2026-11-08 — declared XKB type maps and explicit virtual-modifier encodings
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
 
@@ -9,29 +9,23 @@
 - Optional `zwp_text_input_manager_v3` discovery/binding. The text-input object is enabled only while the focused document is the active text target; prompts, the picker, History, and other panels retain their physical-key path.
 - `preedit_string`, `commit_string`, `delete_surrounding_text`, and `done` staging/handling, bounded UTF-8 surrounding text, caret/anchor byte offsets, content purpose, cursor rectangle, and monotonic serials.
 - Preedit is rendered as a transient underline overlay; committed UTF-8 and delete-surrounding ranges are validated before a grouped history mutation. The physical-key Unicode path remains the fallback when the optional protocol is unavailable.
-- XKB text-v1 now parses the declared `xkb_types` modifier filter and exact `map[modifier-combination] = LevelN` entries instead of using only type-name inference.
-- Type definitions are bounded to 64 names and 32 map entries per type. The symbol tables hold four groups with up to eight levels each. `type[GroupN]` assignment is retained independently for each key/group.
-- Real modifier bits (0–7) and up to 24 declared virtual-modifier indices (bits 8–31) are retained in a full 32-bit state mask. Numeric masks and numeric/`LevelN` level values are accepted. Each key's active state is filtered by its type's `modifiers` mask and matched exactly against the declared map.
-- Built-in fallback type records preserve TWO_LEVEL, ALPHABETIC, ONE_LEVEL, FOUR_LEVEL, KEYPAD, and separate Caps/Shift behavior for maps that omit explicit type definitions. Unknown or malformed custom types fail closed, leaving the built-in US-QWERTY fallback available.
-- Keymap usability checks count actual Group 1 lowercase/uppercase symbol pairs rather than requiring the conventional `ALPHABETIC` type ID. This supports layouts that put letters on `FOUR_LEVEL_ALPHABETIC` or user-named custom types.
-- Existing Unicode keysym aliases, six dead-key actions, bounded Compose, grapheme-aware editing, and TrueType glyph metrics remain in place.
+- XKB text-v1 parses declared per-key/per-group type assignment, exact `modifiers` filters, and `map[combination] = LevelN` lookup. Tables are bounded to 64 types and 32 entries per type; symbols support four groups and eight levels.
+- Up to 24 virtual-modifier names are retained separately from their effective 32-bit masks. Explicit `virtual_modifiers NAME = ...` encodings accept real-modifier combinations, numeric masks, or `none`. The fixture checks `LevelThree = Mod5`, `NumLock = Mod2`, `V02 = Mod4+Mod5`, `V23 = 0x80000000`, and duplicate declarations in a later component.
+- Type-map selection filters the complete 32-bit Wayland XKB state through each type's declared modifier mask and matches exact map entries. Numeric masks and numeric/`LevelN` level values are supported. Unknown or malformed custom types fail closed to the built-in US-QWERTY fallback.
+- Keymap usability is based on actual Group 1 lowercase/uppercase symbol pairs, not the conventional `ALPHABETIC` type ID. This supports layouts using compound or user-defined letter types.
+- Existing Unicode keysym aliases, six dead-key actions, bounded 40-pair Compose, grapheme-aware editing, and TrueType glyph metrics remain in place.
 
 ### Scope not yet implemented
 
-This is not a replacement for libxkbcommon. The client does not interpret `xkb_compat` rules or general key actions, derive virtual modifiers from `modifier_map`/key `virtualModifier` bindings, calculate explicit real-modifier encodings, or implement `preserve[]` consumed-modifier semantics. It relies on the compositor to apply keymap actions and send the serialized 32-bit modifier-index state. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
+This is not a replacement for libxkbcommon. The client does not resolve implicit virtual-modifier bindings from key `virtualModifiers` properties, `modifier_map`, or `xkb_compat` interpretations; it does not evaluate general modifier/key actions or `preserve[]` consumed-modifier semantics. Explicit text-v1 virtual-modifier encodings are parsed. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 
-Actions [Build and test #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) passed all eight workflow steps on [`7d15c5a`](https://github.com/GraderGamer2/NekoEdit/commit/7d15c5af2d53fab810adc596a1f19e931af671cc). This final run covers the freestanding build/ELF checks, CLI/preferences/history tests, install/uninstall smoke, the full Wayland mock suite, executable inspection, and artifact upload. The XKB fixture now includes 12 letter keys assigned to an arbitrary `CUSTOM_ALPHA` type, verifies its Shift-to-Level2 mapping and actual uppercase insertion, and separately exercises the custom eight-level type, all 24 virtual-modifier indices through bit 31, numeric masks/levels, and saved UTF-8 bytes. Keymap readiness is based on actual Group 1 lowercase/uppercase symbol pairs, not conventional type IDs.
+Actions [Build and test #655](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636) passed all eight workflow steps on [`9824b62d8507`](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a), including build/ELF, host, install, complete Wayland mock, inspection, and artifact upload. The explicit virtual-modifier encoding parser and fixture in the next implementation snapshot require their own complete PR Actions run before this status can be marked green.
 
-Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes (artifact ID `13614540028`), SHA-256 `b120de8d3e0d49e2054ce6f9b8ced600e309fbdcf8fc41259eb1a031270adec1`, and expires 2026-11-15 10:39:31 UTC.
+The preceding diagnostics were test-harness corrections rather than executable-source failures: #651 fixed a wrapped-caret coordinate assumption; #652 corrected Unicode fixture substitutions after custom type assignments; #654 added release synchronization between adjacent key-repeat cases. Actions #653 and #655 passed the full suite after those corrections.
 
-The preceding validation iterations exposed test-maintenance issues and a key-repeat synchronization race in the mock:
-- #651 showed the caret at x=48 on the expected wrapped row while the mock hard-coded x=56. The test now checks caret presence anywhere on the expected wrapped row.
-- #652 reached and passed the custom XKB tests, then hit stale Unicode fixture strings after three letter keys were switched to `CUSTOM_ALPHA`. All three substitution strings were updated.
-- #654 caught a held-Enter repeat at the boundary before the next Tab action. The mock sent the Enter release but inspected process state without waiting for the client event loop to consume it. The test now waits until `repeat_keycode` is cleared by the release handler before starting the next key; it does not weaken the repeat assertions.
-
-Actions #653 passed the parser/readiness and expanded keyboard fixtures. Actions #655 then passed all eight workflow steps on the repeat-release synchronization change.
+Live GNOME/Mutter testing with a real input method remains outstanding. The mock verifies protocol and document-state behavior but not real candidate placement or compositor-side action resolution.
 
 ### Deferred, unchanged areas
 
@@ -43,8 +37,8 @@ Actions #653 passed the parser/readiness and expanded keyboard fixtures. Actions
 
 ### Next roadmap items
 
-1. Perform live GNOME/Mutter input-method checks and verify modifier/keymap behavior against a real desktop layout.
-2. Add `xkb_compat` interpretation, explicit/implicit modifier bindings, modifier/key action semantics, and preserve/consumed-modifier tracking.
+1. Validate explicit modifier encodings, then test against real GNOME/Mutter keymaps and an actual input method.
+2. Add implicit `virtualModifiers`/`modifier_map` and `xkb_compat` binding resolution, modifier/key action semantics, and preserve/consumed-modifier tracking.
 3. Expand keyboard coverage for remaining key classes/actions and broader Compose behavior.
 4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
 

@@ -695,9 +695,12 @@ xkb_keycodes "nekoedit-test" {
     <AB09> = 60;
 };
 xkb_types "nekoedit-test" {
-    virtual_modifiers LevelThree, NumLock,
-        V02, V03, V04, V05, V06, V07, V08, V09, V10, V11, V12,
-        V13, V14, V15, V16, V17, V18, V19, V20, V21, V22, V23;
+    virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
+        V02 = Mod4+Mod5, V03 = none, V04 = none, V05 = none,
+        V06 = none, V07 = none, V08 = none, V09 = none, V10 = none,
+        V11 = none, V12 = none, V13 = none, V14 = none, V15 = none,
+        V16 = none, V17 = none, V18 = none, V19 = none, V20 = none,
+        V21 = none, V22 = none, V23 = 0x80000000;
     type "ALPHABETIC" {
         modifiers = Shift+Lock;
         map[Shift] = Level2;
@@ -742,6 +745,8 @@ xkb_types "nekoedit-test" {
     };
 };
 xkb_symbols "nekoedit-test" {
+    # Repeated declarations in later components must retain explicit masks.
+    virtual_modifiers LevelThree, NumLock, V23;
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
         symbols[Group1] = [ a, A, at, quotedbl ],
@@ -954,6 +959,7 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_type_map_masks",
                         "xkb_type_map_levels",
                         "xkb_virtual_count",
+                        "xkb_virtual_masks",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
@@ -1010,6 +1016,7 @@ xkb_symbols "nekoedit-sparse" {
                         virtual_count = struct.unpack("<I", child_memory("xkb_virtual_count", 0, 4))[0]
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
+                        virtual_masks = struct.unpack("<24I", child_memory("xkb_virtual_masks", 0, 96))
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -1051,10 +1058,19 @@ xkb_symbols "nekoedit-sparse" {
                                 "levels": custom_map_levels,
                             })
                         )
-                    if (virtual_count, level_three_mask, num_lock_mask) != (24, 256, 512):
+                    expected_virtual_masks = (128, 16, 192) + (0,) * 20 + (0x80000000,)
+                    if (
+                        (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
+                        or virtual_masks != expected_virtual_masks
+                    ):
                         raise AssertionError(
-                            "XKB virtual modifier indices were not retained: "
-                            + repr((virtual_count, level_three_mask, num_lock_mask))
+                            "XKB virtual modifier encodings were not retained independently of declaration indices: "
+                            + repr({
+                                "count": virtual_count,
+                                "LevelThree": level_three_mask,
+                                "NumLock": num_lock_mask,
+                                "masks": virtual_masks,
+                            })
                         )
                     if ae01_name != b"AE01" or ae01_levels[:2] != b"1!":
                         raise AssertionError(
@@ -3169,7 +3185,7 @@ xkb_symbols "nekoedit-sparse" {
                     # different physical key generated that modifier state.
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", 1010, 0, 0, 0, 0))
-                        + wire_message(16, 4, struct.pack("<IIIII", 1011, 256, 0, 0, 0))
+                        + wire_message(16, 4, struct.pack("<IIIII", 1011, 128, 0, 0, 0))
                     )
                     key_step(1012, 16, "XKB LevelThree from compositor Mod5 mask")
                     client.sendall(
@@ -3215,19 +3231,19 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1076, 21, "SEPARATE type Shift+Caps selects level 1")
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", 1078, 0, 0, 0, 0))
-                        + wire_message(16, 4, struct.pack("<IIIII", 1080, 256, 0, 0, 0))
+                        + wire_message(16, 4, struct.pack("<IIIII", 1080, 128, 0, 0, 0))
                     )
                     key_step(1082, 21, "SEPARATE type LevelThree selects level 3")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1084, 257, 0, 0, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1084, 129, 0, 0, 0))
                     )
                     key_step(1086, 21, "SEPARATE type Shift+LevelThree selects level 4")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1088, 256, 0, 2, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1088, 128, 0, 2, 0))
                     )
                     key_step(1090, 21, "SEPARATE type Caps+LevelThree selects level 3")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1092, 257, 0, 2, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1092, 129, 0, 2, 0))
                     )
                     key_step(1094, 21, "SEPARATE type Shift+Caps+LevelThree selects level 3")
                     client.sendall(
@@ -3266,11 +3282,11 @@ xkb_symbols "nekoedit-sparse" {
                     # either alone selects level 2; both select level 1.
                     key_step(1162, 82, "XKB KEYPAD Shift selects numeric level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1164, 0, 0, 512, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1164, 0, 0, 16, 0))
                     )
                     key_step(1166, 82, "XKB KEYPAD NumLock selects numeric level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1168, 1, 0, 512, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1168, 1, 0, 16, 0))
                     )
                     key_step(1170, 82, "XKB KEYPAD Shift cancels NumLock")
                     client.sendall(
