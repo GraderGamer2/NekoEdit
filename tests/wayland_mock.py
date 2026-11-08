@@ -1892,8 +1892,14 @@ xkb_symbols "nekoedit-sparse" {
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
                 ) -> None:
+                    # This helper models a tap, not a held key. Queue key-up
+                    # with key-down so slow frame acknowledgement cannot let
+                    # the 300 ms repeat timer fire an extra editing action.
                     client.sendall(
                         wire_message(16, 3, struct.pack("<IIII", serial, serial, code, 1))
+                        + wire_message(
+                            16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
+                        )
                     )
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
@@ -1902,12 +1908,8 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
-                    client.sendall(
-                        wire_message(
-                            16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
-                        )
-                        + wire_message(12, 0)
-                    )
+                    client.sendall(wire_message(12, 0))
+                    wait_child_u32("repeat_keycode", 0, f"{label} key release")
                     if auto_confirm and child_u32("save_confirm_open") == 1:
                         key_step(
                             serial + 2, 28, label + " — confirm pending save",
