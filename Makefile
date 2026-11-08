@@ -7,6 +7,7 @@ CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin 
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
+HISTORY_TEST := $(BUILD_DIR)/history_test
 
 ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
@@ -45,11 +46,16 @@ inspect: $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
 
-test: $(APP_BINARY) $(PREFERENCES_TEST)
+test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST)
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
+	./$(HISTORY_TEST)
 
 $(PREFERENCES_TEST): tests/preferences_test.c src/editor/preferences.c
+	@mkdir -p $(@D)
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $^
+
+$(HISTORY_TEST): tests/history_test.c src/editor/history.c
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $^
 

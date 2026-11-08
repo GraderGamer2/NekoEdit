@@ -13,6 +13,7 @@ int32_t doc_font_size = 12;
 int32_t ui_font_size = 10;
 int32_t doc_wrap_enabled = 1;
 int32_t save_confirm_enabled = 1;
+extern int32_t clipboard_persistence_enabled;
 extern char *preferences_font_path_ptr;
 
 int preferences_load(void);
@@ -36,13 +37,15 @@ static void reset_defaults(void)
     ui_font_size = 10;
     doc_wrap_enabled = 1;
     save_confirm_enabled = 1;
+    clipboard_persistence_enabled = 1;
     preferences_font_path_ptr = NULL;
 }
 
 static void expect_defaults(void)
 {
     if (doc_font_size != 12 || ui_font_size != 10 ||
-        doc_wrap_enabled != 1 || save_confirm_enabled != 1)
+        doc_wrap_enabled != 1 || save_confirm_enabled != 1 ||
+        clipboard_persistence_enabled != 1)
         fail("invalid entries changed one or more default preferences");
 }
 
@@ -85,6 +88,7 @@ int main(void)
     ui_font_size = 15;
     doc_wrap_enabled = 0;
     save_confirm_enabled = 0;
+    clipboard_persistence_enabled = 0;
     preferences_set_font_path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
     if (!preferences_font_path_ptr)
         fail("absolute TrueType path was not retained");
@@ -113,6 +117,7 @@ int main(void)
         !strstr(contents, "ui_font_size=15\n") ||
         !strstr(contents, "wrap_lines=0\n") ||
         !strstr(contents, "confirm_before_save=0\n") ||
+        !strstr(contents, "clipboard_persistence=0\n") ||
         !strstr(contents, "font_path=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf\n"))
         fail("saved configuration is missing one or more values");
 
@@ -121,7 +126,8 @@ int main(void)
     if (preferences_load() != 1)
         fail("existing preferences did not load");
     if (doc_font_size != 28 || ui_font_size != 15 ||
-        doc_wrap_enabled != 0 || save_confirm_enabled != 0)
+        doc_wrap_enabled != 0 || save_confirm_enabled != 0 ||
+        clipboard_persistence_enabled != 0)
         fail("preference roundtrip changed one or more values");
     if (!preferences_font_path_ptr ||
         strcmp(preferences_font_path_ptr,
@@ -144,6 +150,7 @@ int main(void)
               "ui_font_size=7\n"
               "wrap_lines=2\n"
               "confirm_before_save=9\n"
+              "clipboard_persistence=9\n"
               "font_path=relative.ttf\n", file);
         fclose(file);
     }
@@ -163,10 +170,12 @@ int main(void)
     doc_wrap_enabled = 0;
     save_confirm_enabled = 0;
     preferences_font_path_ptr = NULL;
+    clipboard_persistence_enabled = 0;
     if (preferences_load() != 0)
         fail("disabled preference load should be a no-op");
     if (doc_font_size != 22 || ui_font_size != 13 ||
-        doc_wrap_enabled != 0 || save_confirm_enabled != 0)
+        doc_wrap_enabled != 0 || save_confirm_enabled != 0 ||
+        clipboard_persistence_enabled != 0)
         fail("disabled preference load overwrote runtime values");
     if (preferences_save() != 0)
         fail("disabled preference save unexpectedly succeeded");

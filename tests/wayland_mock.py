@@ -1369,7 +1369,7 @@ xkb_symbols "nekoedit-sparse" {
                     panel_width = child_u32("settings_panel_width")
                     panel_height = child_u32("settings_panel_height")
                     surface_x = panel_x + (design_x - 160) * panel_width // 256
-                    surface_y = panel_y + (design_y - 32) * panel_height // 168
+                    surface_y = panel_y + (design_y - 32) * panel_height // 192
                     workflow_click(surface_x, surface_y, serial, label)
 
                 def workflow_axis(axis: int, value: int, serial: int, label: str) -> None:
@@ -2747,7 +2747,7 @@ xkb_symbols "nekoedit-sparse" {
                         panel_width = picker_u32("settings_panel_width")
                         panel_height = picker_u32("settings_panel_height")
                         surface_x = panel_x + (design_x - 160) * panel_width // 256
-                        surface_y = panel_y + (design_y - 32) * panel_height // 168
+                        surface_y = panel_y + (design_y - 32) * panel_height // 192
                         workflow_click(surface_x, surface_y, serial, label)
 
                     workflow_click(120, 12, 2600, "font picker: open File menu")
@@ -2996,7 +2996,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("UI font size did not reach 16px independently of document size")
                     if (
                         picker_u32("settings_panel_width") != 256
-                        or picker_u32("settings_panel_height") != 168
+                        or picker_u32("settings_panel_height") != 192
                         or picker_u32("find_panel_width") != 448
                         or picker_u32("find_panel_height") != 192
                     ):

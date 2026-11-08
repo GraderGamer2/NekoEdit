@@ -1,66 +1,39 @@
 # Undo and Redo history
 
-## Current implementation
+## Storage model
 
-The current implementation is in `src/editor/history.c`. It stores complete document snapshots, including the document bytes, caret, selection anchor, selection-active state, and revision.
+src/editor/history.c implements a per-document, disk-backed delta journal. Journals live in ~/.nekoedit and use the .history extension. The filename is a stable hash of the document's absolute path; the journal also stores and verifies that path identity.
 
-Current hard limits:
+The directory is created with mode 0700; journal files and exported copies use mode 0600. NekoEdit does not create a central history database or copy the full document for every keystroke.
 
-- `SNAPSHOT_LIMIT`: 4 MiB for an individual full-document snapshot.
-- `HISTORY_BUDGET`: 32 MiB of mapped snapshot memory across the baseline, Undo stack, and Redo stack.
-- `HISTORY_DEPTH`: 16 entries per stack.
-- A new edit after Undo clears the Redo branch.
+Each journal contains:
 
-These limits are independent: the aggregate memory budget may evict older entries before a stack reaches its depth limit. More importantly, when a new snapshot cannot be captured (including when the document exceeds the 4 MiB snapshot ceiling or memory cannot be allocated), `history_checkpoint()` clears the existing history. This means the current implementation is deliberately bounded and can lose all undo history when it can no longer capture the next full document snapshot.
+- The document's baseline bytes when the journal was created.
+- Grouped edit records containing byte offsets, removed bytes, inserted bytes, and the before/after caret and selection state.
+- A current Undo/Redo cursor and the checksum of the last successfully saved document.
 
-## User-requested goal
+A keyboard editing action becomes one record. Replacement of a selection, typing a multi-byte UTF-8 scalar, deletion, and paste therefore undo as one grouped action when the operation completes within that input action. The journal is delta-based: disk growth follows the bytes changed and per-action metadata rather than document size multiplied by undo depth. It has no former 16-entry stack or 32 MiB RAM snapshot ceiling. The file format uses checked 32-bit record lengths and 64-bit file offsets, so it remains bounded by available disk space and addressable journal size rather than being literally infinite.
 
-The user wants Undo and Redo to be effectively unlimited for ordinary editing, rather than being restricted to 16 operations or a 32 MiB snapshot budget.
+## Restart recovery and safety
 
-This means there should be no arbitrary lifetime operation-count ceiling. It does not mean the history can consume infinite RAM or disk. A practical implementation must account for the finite storage available and must report a storage-limit condition instead of silently presenting a truncated history as unlimited.
+For a named document, NekoEdit records the checksum of the last successful save. On restart, it compares that checksum with the current file before replaying the journal. If they match, it reconstructs the baseline and reapplies committed records up to the saved Undo cursor. If the document was changed outside NekoEdit, it starts a fresh journal from the current file instead of applying stale edits to external content.
 
-## Recommended design for review
+An unsaved file launched by its explicit path can also recover while that path still resolves to the same on-disk baseline. An Untitled document receives a per-process identity and its history is not associated with a durable user filename; save the document to a named path to retain a stable history identity across launches.
 
-Replace repeated full-document snapshots with an append-only edit journal or equivalent delta-based history.
+The journal is synchronously written and checked at each completed editing action. If storage or journal I/O fails, the document edit itself remains applied and NekoEdit reports a history-storage error in the History page; the editor does not silently claim the failed action was recorded. A malformed or truncated tail is ignored when scanning records. The checksum guard prevents a stale journal from replacing a document that changed independently.
 
-A journal record should capture enough information to reverse and replay an edit:
+A new edit after Undo truncates the abandoned Redo branch. Undo and Redo restore the caret and selection state captured for that action. Opening another document switches to that document's own journal.
 
-- Logical document byte offset.
-- Removed bytes and inserted bytes (or a safely encoded reference to their payloads).
-- Pre-edit and post-edit caret positions.
-- Pre-edit and post-edit selection anchor/active state.
-- An operation/group identifier and record length/version for validation.
+## History tab and file management
 
-Undo applies the inverse delta; Redo reapplies the forward delta. Consecutive typing, deletion, and navigation boundaries should be grouped into sensible user-visible undo units. Paste and cut should each be reversible as one operation, including large selections. All offsets and payload lengths must be checked against the document's UTF-8 and storage invariants.
+The History tab beside the document tab shows the active document's Undo and Redo counts and provides:
 
-A disk-backed journal is the preferred direction for long histories:
+- Undo / Redo: the same journal operations as Ctrl+Z and Ctrl+Y.
+- Export: opens NekoEdit's normal file picker and atomically copies the active .history file to the chosen destination. The exported file retains the .history format.
+- Delete: removes the active document's journal without changing the document. The next edit creates a fresh journal for that document.
 
-- Keep only a small active window/index of journal metadata in RAM.
-- Append change payloads to bounded sequential storage rather than copying the entire document for every keystroke.
-- Use periodic recovery checkpoints if needed to avoid replaying the entire edit log after a crash or when opening a saved session.
-- Preserve the current rule that a new edit after Undo invalidates the Redo branch.
-- Define explicit cleanup, corruption detection, and disk-space handling. When storage is exhausted, do not corrupt the document or silently discard history; report the limit and define whether new edits continue without history or are blocked.
-- Avoid a large RAM-only snapshot stack. A delta history should scale mainly with the bytes changed, plus metadata, rather than document size multiplied by operation count.
+This makes the active document's history exportable or removable without opening the hidden ~/.nekoedit directory. Each document has its own journal; open a document and select its History tab to manage that file.
 
-## Persistence scope not yet decided
+## Validation
 
-The user explicitly requested unlimited Undo/Redo, but has not specified whether Undo history must survive closing and reopening NekoEdit. Treat these as separate requirements:
-
-1. **Long-lived session history:** retain history without a fixed operation-count limit while NekoEdit is running.
-2. **Restart-persistent history:** restore Undo/Redo after process exit and application restart, which requires a durable journal, document identity/version checks, recovery rules, and storage cleanup.
-
-Do not assume restart-persistent history is required until the user confirms it. No implementation changes are authorized by this design note.
-
-## Required tests before implementation is considered complete
-
-- More than 16 sequential undoable edits and matching Redo operations.
-- Long typing/deletion runs with grouping boundaries.
-- Copy-independent paste, cut, and large paste undo/redo.
-- Undo/Redo with non-ASCII UTF-8, multi-byte scalars, grapheme clusters, and selections.
-- New edit after Undo clears only the Redo branch.
-- Journal growth across many edits without a fixed operation-count cap.
-- Memory remains bounded as history grows; payload data is stored in the intended journal backing.
-- Disk full, allocation failure, truncated/corrupt journal, and recovery behavior.
-- If restart persistence is later selected: clean close/reopen and crash-recovery cases.
-- File Open/new-document transitions cannot apply history to the wrong document.
-
+make test includes a host-side journal test covering grouped replacement, branch invalidation, more than 16 edits, save/checksum-based restart recovery, export, delete, and file permissions. The Wayland mock suite separately exercises the editor's keyboard and UI routes.
