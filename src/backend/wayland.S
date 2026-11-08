@@ -151,6 +151,11 @@ ui_history_delete_label: .asciz "DELETE"
 ui_history_undo_count_label: .asciz "UNDO RECORDS"
 ui_history_redo_count_label: .asciz "REDO RECORDS"
 ui_history_storage_error: .asciz "JOURNAL STORAGE ERROR"
+ui_history_search_label: .asciz "SEARCH DOCUMENTS"
+ui_history_results_label: .asciz "MATCHING HISTORIES"
+ui_history_no_results_label: .asciz "NO MATCHING HISTORIES"
+ui_history_open_label: .asciz "OPEN SELECTED"
+ui_history_open_error_label: .asciz "COULD NOT OPEN THIS DOCUMENT"
 ui_history_message: .asciz "Stored in ~/.nekoedit as a .history file."
 ui_menu_font_file_label: .asciz "FONT FILE"
 ui_menu_select_label:   .asciz "SELECT"
@@ -2191,6 +2196,16 @@ settings_menu_open:     .long 0
 .global history_tab_open, history_export_mode
 history_tab_open:       .long 0
 history_export_mode:    .long 0
+.global history_search_focus, history_search_length, history_search_cursor
+.global history_search_selected, history_search_scroll, history_search_match_count
+history_search_focus:   .long 0
+history_search_length:  .long 0
+history_search_cursor:  .long 0
+history_search_selected: .long 0
+history_search_scroll:  .long 0
+history_search_match_count: .long 0
+history_open_error:     .long 0
+history_search_query_buffer: .zero 128
 .global save_confirm_enabled
 save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
@@ -2334,6 +2349,10 @@ recv_msg_control:      .zero 64
 .extern history_has_error
 .extern history_delete_current
 .extern history_export_to
+.extern history_search_refresh
+.extern history_search_result_count
+.extern history_search_result
+.extern history_search_display
 .extern clipboard_service_handoff
 .extern clipboard_persistence_enabled
 .global wayland_main
@@ -3192,9 +3211,33 @@ wayland_main:
     je .pointer_check_horizontal_scroll
     cmp edx, 92
     jb .pointer_check_horizontal_scroll
-    cmp edx, 300
+    cmp edx, 168
     jb .event_loop
-    cmp edx, 336
+    cmp edx, 204
+    jb .pointer_history_search_focus
+    cmp edx, 224
+    jb .event_loop
+    cmp edx, 246
+    jb .pointer_history_result_0
+    cmp edx, 249
+    jb .event_loop
+    cmp edx, 272
+    jb .pointer_history_result_1
+    cmp edx, 274
+    jb .event_loop
+    cmp edx, 297
+    jb .pointer_history_result_2
+    cmp edx, 299
+    jb .event_loop
+    cmp edx, 322
+    jb .pointer_history_result_3
+    cmp edx, 330
+    jb .event_loop
+    cmp edx, 358
+    jb .pointer_history_open_selected
+    cmp edx, 414
+    jb .event_loop
+    cmp edx, 444
     jae .event_loop
     cmp eax, 64
     jb .event_loop
@@ -3213,6 +3256,38 @@ wayland_main:
     cmp eax, 408
     jae .event_loop
     call history_delete_current
+    jmp .keyboard_changed
+.pointer_history_search_focus:
+    mov dword ptr [rip + history_search_focus], 1
+    mov eax, dword ptr [rip + history_search_length]
+    mov dword ptr [rip + history_search_cursor], eax
+    jmp .keyboard_changed
+.pointer_history_result_0:
+    xor eax, eax
+    jmp .pointer_history_result_selected
+.pointer_history_result_1:
+    mov eax, 1
+    jmp .pointer_history_result_selected
+.pointer_history_result_2:
+    mov eax, 2
+    jmp .pointer_history_result_selected
+.pointer_history_result_3:
+    mov eax, 3
+.pointer_history_result_selected:
+    add eax, dword ptr [rip + history_search_scroll]
+    mov dword ptr [rip + history_search_selected], eax
+    mov edi, eax
+    call history_search_result
+    test rax, rax
+    jz .event_loop
+    mov dword ptr [rip + history_search_focus], 0
+    jmp .keyboard_changed
+.pointer_history_open_selected:
+    cmp eax, 64
+    jb .event_loop
+    cmp eax, 176
+    jae .event_loop
+    call history_open_selected
     jmp .keyboard_changed
 .pointer_history_undo:
     call history_undo
@@ -3817,7 +3892,6 @@ wayland_main:
     jb .event_loop
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
-    call history_begin_action
     mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
     mov dword ptr [rip + keyboard_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
@@ -3872,7 +3946,19 @@ wayland_main:
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .keyboard_path_prompt
     cmp dword ptr [rip + history_tab_open], 0
-    je .keyboard_history_page_done
+    jne .keyboard_history_page_dispatch
+    # Preserve the current key/state across the C history call. This path is
+    # shared by real key events and repeat-timer events (whose event payload
+    # is no longer the source of the repeated keycode).
+    push rax
+    push rdx
+    call history_begin_action
+    pop rdx
+    pop rax
+    jmp .keyboard_history_page_done
+.keyboard_history_page_dispatch:
+    cmp dword ptr [rip + history_search_focus], 0
+    jne .keyboard_history_search
     cmp eax, 1
     je .keyboard_history_page_close
     cmp dword ptr [rip + ctrl_down], 0
@@ -3890,7 +3976,174 @@ wayland_main:
     jmp .keyboard_changed
 .keyboard_history_page_close:
     mov dword ptr [rip + history_tab_open], 0
+    mov dword ptr [rip + history_search_focus], 0
     jmp .keyboard_changed
+
+.keyboard_history_search:
+    cmp eax, 1
+    je .keyboard_history_search_blur
+    cmp eax, 28
+    je .keyboard_history_search_open
+    cmp eax, 14
+    je .keyboard_history_search_backspace
+    cmp eax, 111
+    je .keyboard_history_search_delete
+    cmp eax, 105
+    je .keyboard_history_search_left
+    cmp eax, 106
+    je .keyboard_history_search_right
+    cmp eax, 102
+    je .keyboard_history_search_home
+    cmp eax, 107
+    je .keyboard_history_search_end
+    cmp eax, 103
+    je .keyboard_history_search_up
+    cmp eax, 108
+    je .keyboard_history_search_down
+    cmp dword ptr [rip + ctrl_down], 0
+    jne .keyboard_history_search_ctrl
+    mov edi, eax
+    call keycode_to_ascii
+    cmp eax, 32
+    jb .event_loop
+    cmp eax, 126
+    ja .event_loop
+    mov r10d, eax
+    mov ecx, dword ptr [rip + history_search_length]
+    cmp ecx, 127
+    jae .keyboard_changed
+    mov eax, dword ptr [rip + history_search_cursor]
+    lea r8, [rip + history_search_query_buffer]
+    mov edx, ecx
+.keyboard_history_search_shift_right:
+    cmp edx, eax
+    jbe .keyboard_history_search_insert
+    mov r9b, byte ptr [r8 + rdx - 1]
+    mov byte ptr [r8 + rdx], r9b
+    dec edx
+    jmp .keyboard_history_search_shift_right
+.keyboard_history_search_insert:
+    mov byte ptr [r8 + rax], r10b
+    inc ecx
+    inc eax
+    mov dword ptr [rip + history_search_length], ecx
+    mov dword ptr [rip + history_search_cursor], eax
+    mov byte ptr [r8 + rcx], 0
+    mov dword ptr [rip + history_search_selected], 0
+    mov dword ptr [rip + history_search_scroll], 0
+    mov dword ptr [rip + history_open_error], 0
+    jmp .keyboard_changed
+.keyboard_history_search_backspace:
+    mov eax, dword ptr [rip + history_search_cursor]
+    test eax, eax
+    jz .keyboard_changed
+    dec eax
+    mov dword ptr [rip + history_search_cursor], eax
+    mov ecx, dword ptr [rip + history_search_length]
+    lea r8, [rip + history_search_query_buffer]
+.keyboard_history_search_backspace_loop:
+    cmp eax, ecx
+    jae .keyboard_history_search_backspace_done
+    mov dl, byte ptr [r8 + rax + 1]
+    mov byte ptr [r8 + rax], dl
+    inc eax
+    jmp .keyboard_history_search_backspace_loop
+.keyboard_history_search_backspace_done:
+    dec ecx
+    mov dword ptr [rip + history_search_length], ecx
+    mov byte ptr [r8 + rcx], 0
+    mov dword ptr [rip + history_search_selected], 0
+    mov dword ptr [rip + history_search_scroll], 0
+    jmp .keyboard_changed
+.keyboard_history_search_delete:
+    mov eax, dword ptr [rip + history_search_cursor]
+    mov ecx, dword ptr [rip + history_search_length]
+    cmp eax, ecx
+    jae .keyboard_changed
+    lea r8, [rip + history_search_query_buffer]
+.keyboard_history_search_delete_loop:
+    mov dl, byte ptr [r8 + rax + 1]
+    mov byte ptr [r8 + rax], dl
+    test dl, dl
+    jz .keyboard_history_search_delete_done
+    inc eax
+    jmp .keyboard_history_search_delete_loop
+.keyboard_history_search_delete_done:
+    dec ecx
+    mov dword ptr [rip + history_search_length], ecx
+    mov dword ptr [rip + history_search_selected], 0
+    mov dword ptr [rip + history_search_scroll], 0
+    jmp .keyboard_changed
+.keyboard_history_search_left:
+    cmp dword ptr [rip + history_search_cursor], 0
+    je .keyboard_changed
+    dec dword ptr [rip + history_search_cursor]
+    jmp .keyboard_changed
+.keyboard_history_search_right:
+    mov eax, dword ptr [rip + history_search_cursor]
+    cmp eax, dword ptr [rip + history_search_length]
+    jae .keyboard_changed
+    inc dword ptr [rip + history_search_cursor]
+    jmp .keyboard_changed
+.keyboard_history_search_home:
+    mov dword ptr [rip + history_search_cursor], 0
+    jmp .keyboard_changed
+.keyboard_history_search_end:
+    mov eax, dword ptr [rip + history_search_length]
+    mov dword ptr [rip + history_search_cursor], eax
+    jmp .keyboard_changed
+.keyboard_history_search_up:
+    lea rdi, [rip + history_search_query_buffer]
+    call history_search_refresh
+    call history_search_result_count
+    test eax, eax
+    jz .keyboard_changed
+    cmp dword ptr [rip + history_search_selected], 0
+    je .keyboard_changed
+    dec dword ptr [rip + history_search_selected]
+    mov eax, dword ptr [rip + history_search_selected]
+    cmp eax, dword ptr [rip + history_search_scroll]
+    jae .keyboard_changed
+    mov dword ptr [rip + history_search_scroll], eax
+    jmp .keyboard_changed
+.keyboard_history_search_down:
+    lea rdi, [rip + history_search_query_buffer]
+    call history_search_refresh
+    call history_search_result_count
+    test eax, eax
+    jz .keyboard_changed
+    mov edx, dword ptr [rip + history_search_selected]
+    lea ecx, [edx + 1]
+    cmp ecx, eax
+    jae .keyboard_changed
+    inc edx
+    mov dword ptr [rip + history_search_selected], edx
+    mov ecx, dword ptr [rip + history_search_scroll]
+    lea ecx, [ecx + 4]
+    cmp edx, ecx
+    jb .keyboard_changed
+    lea ecx, [edx - 3]
+    mov dword ptr [rip + history_search_scroll], ecx
+    jmp .keyboard_changed
+.keyboard_history_search_open:
+    call history_open_selected
+    jmp .keyboard_changed
+.keyboard_history_search_blur:
+    mov dword ptr [rip + history_search_focus], 0
+    jmp .keyboard_changed
+.keyboard_history_search_ctrl:
+    cmp eax, 30
+    je .keyboard_history_search_clear
+    jmp .event_loop
+.keyboard_history_search_clear:
+    mov dword ptr [rip + history_search_length], 0
+    mov dword ptr [rip + history_search_cursor], 0
+    mov dword ptr [rip + history_search_selected], 0
+    mov dword ptr [rip + history_search_scroll], 0
+    mov byte ptr [rip + history_search_query_buffer], 0
+    mov dword ptr [rip + history_open_error], 0
+    jmp .keyboard_changed
+
 .keyboard_history_page_done:
     cmp dword ptr [rip + ctrl_down], 0
     je .keyboard_unmodified
@@ -3940,18 +4193,24 @@ wayland_main:
 .keyboard_clipboard_copy:
     mov edi, 1
     call clipboard_key_command
+    # Copy is not a document mutation; close the no-op history transaction.
+    call history_commit_action
     jmp .event_loop
 .keyboard_clipboard_cut:
     mov edi, 2
     call clipboard_key_command
     test eax, eax
     jnz .keyboard_changed
+    call history_commit_action
     jmp .event_loop
 .keyboard_clipboard_paste:
     mov edi, 3
     call clipboard_key_command
     test eax, eax
     jnz .keyboard_changed
+    # A Wayland paste that is still awaiting data commits when insert_text()
+    # receives the transfer; close the empty key-event transaction here.
+    call history_commit_action
     jmp .event_loop
 .keyboard_history_undo_or_redo:
     cmp dword ptr [rip + shift_down], 0
@@ -6041,6 +6300,38 @@ picker_commit_active_path:
     pop r12
     ret
 .size picker_commit_active_path, . - picker_commit_active_path
+
+
+.type history_open_selected, @function
+history_open_selected:
+    push r12
+    mov edi, dword ptr [rip + history_search_selected]
+    call history_search_result
+    test rax, rax
+    jz .history_open_selected_failed
+    lea rdi, [rip + picker_target_buffer]
+    mov rsi, rax
+    mov edx, PATH_CAPACITY
+    call copy_cstr
+    test rax, rax
+    js .history_open_selected_failed
+    lea rdi, [rip + picker_target_buffer]
+    call load_document_from_path
+    test rax, rax
+    js .history_open_selected_failed
+    call picker_commit_active_path
+    mov dword ptr [rip + history_tab_open], 1
+    mov dword ptr [rip + history_search_focus], 0
+    mov dword ptr [rip + history_open_error], 0
+    xor eax, eax
+    jmp .history_open_selected_done
+.history_open_selected_failed:
+    mov dword ptr [rip + history_open_error], 1
+    mov eax, -5
+.history_open_selected_done:
+    pop r12
+    ret
+.size history_open_selected, . - history_open_selected
 
 .type picker_load_font, @function
 picker_load_font:
@@ -15007,7 +15298,7 @@ render_history_manager:
     mov eax, dword ptr [rip + window_width]
     sub eax, 64
     mov ecx, eax
-    mov r8d, 244
+    mov r8d, 356
     mov r9d, 0xff1f242d
     call draw_rect
     mov edi, 48
@@ -15018,31 +15309,141 @@ render_history_manager:
     mov esi, 156
     lea rdx, [rip + active_document_name]
     call draw_text
+
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 224
+    mov edx, 170
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 272
+    mov ecx, eax
+    mov r8d, 32
+    mov r9d, 0xff343d4b
+    call draw_rect
     mov edi, 48
-    mov esi, 198
+    mov esi, 192
+    lea rdx, [rip + ui_history_search_label]
+    call draw_text
+    mov edi, 236
+    mov esi, 192
+    lea rdx, [rip + history_search_query_buffer]
+    call draw_text
+
+    mov edi, 48
+    mov esi, 216
+    lea rdx, [rip + ui_history_results_label]
+    call draw_text
+    lea rdi, [rip + history_search_query_buffer]
+    call history_search_refresh
+    call history_search_result_count
+    mov dword ptr [rip + history_search_match_count], eax
+    test eax, eax
+    jnz .render_history_has_matches
+    mov dword ptr [rip + history_search_selected], 0
+    mov dword ptr [rip + history_search_scroll], 0
+    jmp .render_history_rows
+.render_history_has_matches:
+    mov edx, dword ptr [rip + history_search_selected]
+    cmp edx, eax
+    jb .render_history_selected_valid
+    mov dword ptr [rip + history_search_selected], 0
+    xor edx, edx
+.render_history_selected_valid:
+    mov ecx, dword ptr [rip + history_search_scroll]
+    cmp edx, ecx
+    jae .render_history_selected_after_top
+    mov dword ptr [rip + history_search_scroll], edx
+    mov ecx, edx
+.render_history_selected_after_top:
+    lea ecx, [ecx + 4]
+    cmp edx, ecx
+    jb .render_history_rows
+    lea ecx, [edx - 3]
+    mov dword ptr [rip + history_search_scroll], ecx
+.render_history_rows:
+    xor ebx, ebx
+    mov r12d, 224
+.render_history_row_loop:
+    cmp ebx, 4
+    jae .render_history_rows_done
+    mov eax, dword ptr [rip + history_search_scroll]
+    add eax, ebx
+    cmp eax, dword ptr [rip + history_search_match_count]
+    jae .render_history_next_row
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, r12d
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 96
+    mov r8d, 22
+    mov r13d, 0xff303844
+    cmp eax, dword ptr [rip + history_search_selected]
+    jne .render_history_row_color_ready
+    mov r13d, 0xff4b6077
+.render_history_row_color_ready:
+    mov r9d, r13d
+    call draw_rect
+    mov eax, dword ptr [rip + history_search_scroll]
+    add eax, ebx
+    mov edi, eax
+    call history_search_display
+    test rax, rax
+    jz .render_history_next_row
+    mov edi, 64
+    lea esi, [r12 + 17]
+    mov rdx, rax
+    call draw_text
+.render_history_next_row:
+    add r12d, 25
+    inc ebx
+    jmp .render_history_row_loop
+.render_history_rows_done:
+    cmp dword ptr [rip + history_search_match_count], 0
+    jne .render_history_draw_open
+    mov edi, 64
+    mov esi, 254
+    lea rdx, [rip + ui_history_no_results_label]
+    call draw_text
+.render_history_draw_open:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 64
+    mov edx, 330
+    mov ecx, 112
+    mov r8d, 28
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 76
+    mov esi, 349
+    lea rdx, [rip + ui_history_open_label]
+    call draw_text
+    mov edi, 48
+    mov esi, 371
     lea rdx, [rip + ui_history_undo_count_label]
     call draw_text
-    mov edi, 156
-    mov esi, 198
+    mov edi, 158
+    mov esi, 448
     call history_undo_count
     call draw_decimal
-    mov edi, 48
-    mov esi, 226
+    mov edi, 248
+    mov esi, 371
     lea rdx, [rip + ui_history_redo_count_label]
     call draw_text
-    mov edi, 156
-    mov esi, 226
+    mov edi, 360
+    mov esi, 448
     call history_redo_count
     call draw_decimal
+    cmp dword ptr [rip + history_open_error], 0
+    je .render_history_check_storage_error
     mov edi, 48
-    mov esi, 258
-    lea rdx, [rip + ui_history_message]
+    mov esi, 389
+    lea rdx, [rip + ui_history_open_error_label]
     call draw_text
+    jmp .render_history_buttons
+.render_history_check_storage_error:
     call history_has_error
     test eax, eax
     jz .render_history_buttons
     mov edi, 48
-    mov esi, 282
+    mov esi, 389
     lea rdx, [rip + ui_history_storage_error]
     call draw_text
 .render_history_buttons:
@@ -15053,9 +15454,9 @@ render_history_manager:
     jae .render_history_manager_done
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
-    mov edx, 300
+    mov edx, 414
     mov ecx, 80
-    mov r8d, 32
+    mov r8d, 30
     mov r13d, 0xff414b5a
     cmp ebx, 0
     jne .render_history_button_not_undo
@@ -15075,7 +15476,7 @@ render_history_manager:
     mov r9d, r13d
     call draw_rect
     lea edi, [r12 + 16]
-    mov esi, 312
+    mov esi, 434
     cmp ebx, 0
     jne .render_history_label_redo
     lea rdx, [rip + ui_history_undo_label]

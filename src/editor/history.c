@@ -16,8 +16,11 @@
 #define SYS_fsync 74
 #define SYS_ftruncate 77
 #define SYS_getpid 39
+#define SYS_getdents64 217
 #define AT_FDCWD (-100)
+#define O_RDONLY 0
 #define O_WRONLY 1
+#define O_DIRECTORY 0x10000
 #define O_RDWR 2
 #define O_CREAT 64
 #define O_EXCL 128
@@ -87,6 +90,24 @@ static uint32_t record_capacity, record_count;
 static uint8_t *tx_buffer;
 static uint32_t tx_capacity, tx_used, tx_operations, tx_active, replaying, tx_error;
 static uint32_t before_cursor, before_anchor, before_active;
+
+#define HISTORY_SEARCH_MAX 64u
+#define HISTORY_SEARCH_QUERY_CAPACITY 128u
+#define HISTORY_SEARCH_DIRENT_CAPACITY 8192u
+static char history_search_results[HISTORY_SEARCH_MAX][PATH_CAPACITY];
+static uint32_t history_search_count;
+static char history_search_query_cache[HISTORY_SEARCH_QUERY_CAPACITY];
+static uint32_t history_search_cache_valid;
+static uint8_t history_search_dirents[HISTORY_SEARCH_DIRENT_CAPACITY];
+static char history_search_display_buffer[256];
+
+typedef struct __attribute__((packed)) {
+    uint64_t inode;
+    int64_t offset;
+    uint16_t record_length;
+    uint8_t type;
+    char name[];
+} linux_dirent64_t;
 
 static long sc6(long n, long a, long b, long c, long d, long e, long f)
 {
@@ -319,7 +340,25 @@ static int reset_file_to_current(void)
     record_count = 0;
     if (!grow_records(1)) return 0;
     ready = 1;
+    history_search_cache_valid = 0;
     return 1;
+}
+static int discard_existing_journal(void)
+{
+    if (journal_fd >= 0) {
+        (void)sc6(SYS_close, journal_fd, 0, 0, 0, 0, 0);
+        journal_fd = -1;
+    }
+    ready = 0;
+    record_count = 0;
+    if (err(sc6(SYS_unlinkat, AT_FDCWD, (long)journal_path, 0, 0, 0, 0)))
+        return 0;
+    return 2; /* No useful history remains; this is not a storage failure. */
+}
+static int discard_or_reset_existing_journal(int create_if_missing)
+{
+    if (create_if_missing) return reset_file_to_current();
+    return discard_existing_journal();
 }
 static int append_op(uint32_t offset, uint32_t removed, uint32_t inserted,
                      const uint8_t *inserted_bytes)
@@ -455,20 +494,30 @@ static int scan_records(uint64_t file_size)
     record_count = found;
     return 1;
 }
-static int open_identity_file(void)
+static int open_identity_file(int create_if_missing)
 {
     long r;
     uint64_t size;
     uint32_t i, base_length;
     char disk_identity[PATH_CAPACITY];
+    long flags = O_RDWR | O_CLOEXEC;
+    if (create_if_missing) flags |= O_CREAT;
     r = sc6(SYS_openat, AT_FDCWD, (long)journal_path,
-            O_RDWR | O_CREAT | O_CLOEXEC, 0600, 0, 0);
-    if (err(r)) return 0;
+            flags, 0600, 0, 0);
+    if (err(r)) return (!create_if_missing && r == -2) ? 2 : 0;
     journal_fd = (int32_t)r;
     r = sc6(SYS_lseek, journal_fd, 0, 2, 0, 0, 0);
     if (err(r)) return 0;
     size = (uint64_t)r;
-    if (size < sizeof(header)) return reset_file_to_current();
+    if (!size && !create_if_missing) {
+        /* Remove a zero-byte remnant from an interrupted older startup. */
+        (void)sc6(SYS_close, journal_fd, 0, 0, 0, 0, 0);
+        journal_fd = -1;
+        (void)sc6(SYS_unlinkat, AT_FDCWD, (long)journal_path, 0, 0, 0, 0);
+        return 2;
+    }
+    if (size < sizeof(header))
+        return discard_or_reset_existing_journal(create_if_missing);
     if (!read_at(journal_fd, 0, &header, sizeof(header)) ||
         header.magic[0]!='N' || header.magic[1]!='E' || header.magic[2]!='K' ||
         header.magic[3]!='O' || header.magic[4]!='H' || header.magic[5]!='S' ||
@@ -478,13 +527,23 @@ static int open_identity_file(void)
         header.base_length > 0x7fffffffu ||
         header.header_size != sizeof(header) + identity_length + header.base_length ||
         header.header_size > size)
-        return reset_file_to_current();
+        return discard_or_reset_existing_journal(create_if_missing);
     if (!read_at(journal_fd, sizeof(header), disk_identity, identity_length))
-        return reset_file_to_current();
+        return discard_or_reset_existing_journal(create_if_missing);
     for (i = 0; i < identity_length; ++i)
-        if (disk_identity[i] != identity[i]) return reset_file_to_current();
-    /* A changed external file must not be overwritten by stale recovery data. */
-    if (hash_doc() != header.saved_hash) return reset_file_to_current();
+        if (disk_identity[i] != identity[i])
+            return discard_or_reset_existing_journal(create_if_missing);
+    /* Older builds eagerly wrote a baseline even when the document was never
+       edited. Such a journal has no useful Undo/Redo state, so remove it
+       regardless of whether the document has since changed externally. */
+    if (!header.record_count && !header.cursor) {
+        if (create_if_missing) return reset_file_to_current();
+        return discard_existing_journal();
+    }
+    /* A changed external file invalidates that journal. Remove it on open;
+       only recreate a baseline when the caller is recording a real edit. */
+    if (hash_doc() != header.saved_hash)
+        return discard_or_reset_existing_journal(create_if_missing);
     base_offset = header.header_size;
     if (!scan_records(size)) return 0;
     if (header.record_count > record_count) header.record_count = record_count;
@@ -524,11 +583,28 @@ static int open_identity_file(void)
     return 1;
 }
 
+static int ensure_journal_for_edit(void)
+{
+    if (ready && journal_fd >= 0) return 1;
+    if (!journal_path[0] || !open_identity_file(1)) return 0;
+    return ready && journal_fd >= 0;
+}
+
 void history_open(const char *path)
 {
+    int opened;
     free_journal_state();
     storage_error = 0;
-    if (!build_paths(path) || !open_identity_file()) {
+    history_search_cache_valid = 0;
+    if (!build_paths(path)) {
+        storage_error = 1;
+        ready = 0;
+        return;
+    }
+    opened = open_identity_file(0);
+    /* Missing history is normal. Create the baseline only before the first
+       actual byte insertion/deletion, never merely because a document opens. */
+    if (!opened) {
         storage_error = 1;
         ready = 0;
     }
@@ -542,8 +618,6 @@ void history_reset(void)
 void history_begin_action(void)
 {
     if (replaying) return;
-    if (!ready && journal_path[0]) (void)open_identity_file();
-    if (!ready) return;
     tx_active = 1;
     tx_error = 0;
     tx_used = 0;
@@ -555,12 +629,16 @@ void history_begin_action(void)
 void history_note_insert(uint32_t offset, uint32_t byte)
 {
     uint8_t b = (uint8_t)byte;
-    if (tx_active && !replaying && !append_op(offset, 0, 1, &b)) storage_error = 1;
+    if (!tx_active || replaying) return;
+    if (!ensure_journal_for_edit() || !append_op(offset, 0, 1, &b))
+        storage_error = tx_error = 1;
 }
 void history_note_delete(uint32_t offset, uint32_t length)
 {
-    if (tx_active && !replaying && !append_op(offset, length, 0, (const uint8_t *)0))
-        storage_error = 1;
+    if (!tx_active || replaying) return;
+    if (!ensure_journal_for_edit() ||
+        !append_op(offset, length, 0, (const uint8_t *)0))
+        storage_error = tx_error = 1;
 }
 void history_commit_action(void)
 {
@@ -649,6 +727,11 @@ uint32_t history_has_error(void) { return storage_error; }
 int history_delete_current(void)
 {
     if (!journal_path[0]) return 0;
+    if (journal_fd < 0 && !ready) {
+        storage_error = 0;
+        history_search_cache_valid = 0;
+        return 1;
+    }
     if (journal_fd >= 0) {
         (void)sc6(SYS_close, journal_fd, 0, 0, 0, 0, 0);
         journal_fd = -1;
@@ -658,8 +741,202 @@ int history_delete_current(void)
     }
     ready = 0; record_count = 0; tx_active = 0;
     tx_used = tx_operations = 0; storage_error = 0;
+    history_search_cache_valid = 0;
     return 1;
 }
+
+static uint8_t history_search_lower(uint8_t value)
+{
+    return value >= 'A' && value <= 'Z' ? (uint8_t)(value + ('a' - 'A')) : value;
+}
+static int history_search_contains(const char *path, uint32_t path_length,
+                                   const char *query, uint32_t query_length)
+{
+    uint32_t i, j;
+    if (!query_length) return 1;
+    if (query_length > path_length) return 0;
+    for (i = 0; i <= path_length - query_length; ++i) {
+        for (j = 0; j < query_length; ++j)
+            if (history_search_lower((uint8_t)path[i + j]) !=
+                history_search_lower((uint8_t)query[j])) break;
+        if (j == query_length) return 1;
+    }
+    return 0;
+}
+static int history_search_ends_with(const char *name, uint32_t length,
+                                    const char *suffix, uint32_t suffix_length)
+{
+    uint32_t i;
+    if (length < suffix_length) return 0;
+    for (i = 0; i < suffix_length; ++i)
+        if (name[length - suffix_length + i] != suffix[i]) return 0;
+    return 1;
+}
+static int history_search_path_before(const char *left, const char *right)
+{
+    uint32_t i = 0;
+    while (left[i] && right[i] && left[i] == right[i]) ++i;
+    return (uint8_t)left[i] < (uint8_t)right[i];
+}
+uint32_t history_search_refresh(const char *query)
+{
+    static const char suffix[] = ".history";
+    static const char untitled[] = "untitled-";
+    uint32_t query_length = slen(query, HISTORY_SEARCH_QUERY_CAPACITY);
+    long directory;
+    if (query_length >= HISTORY_SEARCH_QUERY_CAPACITY)
+        query_length = HISTORY_SEARCH_QUERY_CAPACITY - 1u;
+    if (history_search_cache_valid) {
+        uint32_t i;
+        for (i = 0; i < query_length &&
+             history_search_query_cache[i] == query[i]; ++i) {}
+        if (i == query_length && !history_search_query_cache[i])
+            return history_search_count;
+    }
+    history_search_count = 0;
+    for (uint32_t i = 0; i < query_length; ++i)
+        history_search_query_cache[i] = query[i];
+    history_search_query_cache[query_length] = 0;
+    history_search_cache_valid = 1;
+    if (!app_dir[0]) return 0;
+
+    directory = sc6(SYS_openat, AT_FDCWD, (long)app_dir,
+                    O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0, 0, 0);
+    if (err(directory)) return 0;
+    for (;;) {
+        long bytes = sc6(SYS_getdents64, directory,
+                         (long)history_search_dirents,
+                         HISTORY_SEARCH_DIRENT_CAPACITY, 0, 0, 0);
+        uint32_t offset = 0;
+        if (bytes == 0) break;
+        if (err(bytes)) break;
+        while (offset + 19u < (uint32_t)bytes) {
+            linux_dirent64_t *entry =
+                (linux_dirent64_t *)(void *)(history_search_dirents + offset);
+            uint32_t record_length = entry->record_length;
+            uint32_t name_length = 0;
+            long candidate_fd;
+            journal_header_t candidate_header;
+            char candidate_path[PATH_CAPACITY];
+            uint32_t j;
+            if (record_length < 20u || record_length > (uint32_t)bytes - offset)
+                break;
+            while (name_length < record_length - 19u &&
+                   entry->name[name_length]) ++name_length;
+            if (name_length && history_search_ends_with(
+                    entry->name, name_length, suffix, sizeof(suffix) - 1u)) {
+                candidate_fd = sc6(SYS_openat, directory, (long)entry->name,
+                                   O_RDONLY | O_CLOEXEC, 0, 0, 0);
+                if (!err(candidate_fd)) {
+                    int valid = read_all((int)candidate_fd, &candidate_header,
+                                         sizeof(candidate_header));
+                    long file_size = sc6(SYS_lseek, candidate_fd, 0, 2, 0, 0, 0);
+                    if (valid && !err(file_size) &&
+                        candidate_header.magic[0] == 'N' &&
+                        candidate_header.magic[1] == 'E' &&
+                        candidate_header.magic[2] == 'K' &&
+                        candidate_header.magic[3] == 'O' &&
+                        candidate_header.magic[4] == 'H' &&
+                        candidate_header.magic[5] == 'S' &&
+                        candidate_header.magic[6] == 'T' &&
+                        candidate_header.magic[7] == '1' &&
+                        candidate_header.version == 1u &&
+                        candidate_header.path_length > 0u &&
+                        candidate_header.path_length < PATH_CAPACITY &&
+                        candidate_header.base_length <= 0x7fffffffu &&
+                        candidate_header.header_size ==
+                            sizeof(candidate_header) + candidate_header.path_length +
+                            candidate_header.base_length &&
+                        candidate_header.header_size <= (uint64_t)file_size &&
+                        candidate_header.cursor <= candidate_header.record_count &&
+                        read_at((int)candidate_fd,
+                            sizeof(candidate_header), candidate_path,
+                            candidate_header.path_length)) {
+                        uint32_t path_length = candidate_header.path_length;
+                        candidate_path[path_length] = 0;
+                        valid = hash_identity(candidate_path, path_length) ==
+                                candidate_header.path_hash;
+                        for (j = 0; valid && j < sizeof(untitled) - 1u; ++j)
+                            if (candidate_path[j] != untitled[j]) break;
+                        /* Remove no-op journals left by older eager-create
+                           builds; they contain no recoverable user actions. */
+                        if (valid && !candidate_header.record_count &&
+                            !candidate_header.cursor) {
+                            (void)sc6(SYS_close, candidate_fd, 0, 0, 0, 0, 0);
+                            candidate_fd = -1;
+                            (void)sc6(SYS_unlinkat, directory,
+                                      (long)entry->name, 0, 0, 0, 0);
+                        } else if (valid && candidate_header.record_count > 0u &&
+                            j != sizeof(untitled) - 1u &&
+                            history_search_contains(candidate_path, path_length,
+                                history_search_query_cache, query_length) &&
+                            history_search_count < HISTORY_SEARCH_MAX) {
+                            scopy(history_search_results[history_search_count],
+                                  PATH_CAPACITY, candidate_path, path_length);
+                            ++history_search_count;
+                        }
+                    }
+                    if (candidate_fd >= 0)
+                        (void)sc6(SYS_close, candidate_fd, 0, 0, 0, 0, 0);
+                }
+            }
+            offset += record_length;
+        }
+    }
+    (void)sc6(SYS_close, directory, 0, 0, 0, 0, 0);
+
+    /* Deterministic path order makes keyboard selection stable across refreshes. */
+    for (uint32_t i = 1; i < history_search_count; ++i) {
+        char temporary[PATH_CAPACITY];
+        uint32_t n = slen(history_search_results[i], PATH_CAPACITY);
+        uint32_t j = i;
+        scopy(temporary, PATH_CAPACITY, history_search_results[i], n);
+        while (j && history_search_path_before(
+                    temporary, history_search_results[j - 1u])) {
+            uint32_t previous_length = slen(history_search_results[j - 1u],
+                                            PATH_CAPACITY);
+            scopy(history_search_results[j], PATH_CAPACITY,
+                  history_search_results[j - 1u], previous_length);
+            --j;
+        }
+        scopy(history_search_results[j], PATH_CAPACITY, temporary, n);
+    }
+    return history_search_count;
+}
+uint32_t history_search_result_count(void)
+{
+    return history_search_count;
+}
+const char *history_search_result(uint32_t index)
+{
+    return index < history_search_count ? history_search_results[index] :
+           (const char *)0;
+}
+const char *history_search_display(uint32_t index)
+{
+    const char *path;
+    uint32_t length, head, tail, i, out = 0;
+    if (index >= history_search_count) return (const char *)0;
+    path = history_search_results[index];
+    length = slen(path, PATH_CAPACITY);
+    if (length <= 86u) {
+        for (i = 0; i < length; ++i)
+            history_search_display_buffer[out++] = path[i];
+    } else {
+        head = 38u;
+        tail = 45u;
+        for (i = 0; i < head; ++i)
+            history_search_display_buffer[out++] = path[i];
+        history_search_display_buffer[out++] = '.';
+        history_search_display_buffer[out++] = '.';
+        history_search_display_buffer[out++] = '.';
+        for (i = length - tail; i < length; ++i)
+            history_search_display_buffer[out++] = path[i];
+    }
+    history_search_display_buffer[out] = 0;
+    return history_search_display_buffer;
+}
+
 int history_export_to(const char *destination)
 {
     char temporary[PATH_CAPACITY], digits[10];

@@ -927,3 +927,7 @@ Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/r
 ## Maintenance
 
 Append every subsequent NekoEdit commit to this index as part of the same development change. Do not delete or rewrite older entries; corrections should be added as new commits and explained in the development log.
+
+## 2026-11-08 follow-up — clipboard transaction, lazy journal, and History search
+
+This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal creation until a real byte mutation, adds source-path search/opening to the History page, and expands host/Wayland regression coverage. Source/test validation is pending; its implementation commit and Actions run will be recorded here after completion.

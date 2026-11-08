@@ -635,3 +635,11 @@ The Wayland mock now verifies the helper lifetime after parent exit and selectio
 Actions [Build and test #601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) passed the complete suite after the asynchronous paste transaction fix. The first History-page test iteration passed its UI assertions but failed during teardown after a redundant no-op Ctrl+Z following Delete; that extra shortcut was removed because the host test already verifies that a deleted journal no longer has Undo entries. Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) then passed all eight workflow steps on [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440), including build/ELF checks, CLI/preferences/history tests, the entire Wayland mock, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495) is 80,540 bytes (artifact ID 13602839495).
 
 The helper and History tab are validated by the mock compositor. A live GNOME/Mutter session check remains outstanding; do not claim user-side desktop behavior until the user reports it.
+
+## 2026-11-08 — lazy history files, document path search, and copy regression coverage
+
+The History subsystem now creates a document journal only when a byte is first inserted or removed. Opening an unedited/empty document, navigating, selecting, and copying should not create an empty `.history` file. Existing journals are still recovered when the corresponding document is opened.
+
+A new History search reads and validates original paths stored in the journal headers. It lists named document histories, filters by path, and opens the selected document so its own Undo/Redo state can be managed. Untitled process identities are omitted from the reopenable search list. The page is arranged to fit the default 800×480 window.
+
+The keyboard path now closes the empty history transaction after Ctrl+C, and the Wayland mock repeats Ctrl+C while verifying superseded Wayland data sources are retired. These changes target the reported crash path and improve regression coverage, but live GNOME/Mutter validation is still necessary to establish whether the desktop crash is fixed.

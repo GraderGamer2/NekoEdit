@@ -4,7 +4,7 @@
 
 src/editor/history.c implements a per-document, disk-backed delta journal. Journals live in ~/.nekoedit and use the .history extension. The filename is a stable hash of the document path string supplied by the editor; the journal also stores and verifies that path identity. A path opened under a different spelling (for example, a different symlink path) has a different journal identity.
 
-The directory is created with mode 0700; journal files and exported copies use mode 0600. NekoEdit does not create a central history database or copy the full document for every keystroke.
+The directory is created with mode 0700 when a document identity is opened; **a .history file is not created merely by opening a file**. The journal is created on the first actual byte insertion or deletion, with the pre-edit document as its baseline. Opening, navigating, selecting, copying, or other no-op actions do not leave empty journal files behind. Journal files and exported copies use mode 0600. NekoEdit does not create a central history database or copy the full document for every keystroke.
 
 Each journal contains:
 
@@ -26,13 +26,15 @@ A new edit after Undo truncates the abandoned Redo branch. Undo and Redo restore
 
 ## History tab and file management
 
-The History tab beside the document tab shows the active document's Undo and Redo counts and provides:
+The History tab beside the document tab includes a built-in path search over document identities stored in existing journals. Results display the original source path rather than the opaque hashed journal filename. Type to filter (ASCII case-insensitively), select a result with the mouse or Up/Down, and press Enter or choose Open Selected to reload that document and its own Undo/Redo state. Up to 64 results are displayed at once; searching narrows the complete set. Documents without journals do not appear, and Untitled per-process identities are excluded because they cannot be reliably reopened by path.
+
+The active document's Undo and Redo counts and controls remain available:
 
 - Undo / Redo: the same journal operations as Ctrl+Z and Ctrl+Y.
 - Export: opens NekoEdit's normal file picker and atomically copies the active .history file to the chosen destination. The exported file retains the .history format.
-- Delete: removes the active document's journal without changing the document. The next edit creates a fresh journal for that document.
+- Delete: removes the active document's journal without changing the document. The next actual byte edit creates a fresh journal for the document.
 
-This makes the active document's history exportable or removable without opening the hidden ~/.nekoedit directory. Each document has its own journal; open a document and select its History tab to manage that file.
+This makes histories searchable, exportable, and removable without opening the hidden ~/.nekoedit directory. The search uses only validated journal headers; it does not scan document contents.
 
 ## Validation
 
@@ -40,3 +42,7 @@ make test includes a host-side journal test covering grouped replacement, branch
 
 
 The Wayland mock additionally verifies the visible History tab (Undo/Redo buttons, Export picker opening/cancellation, and Delete) and that an asynchronous external clipboard paste is undoable/redoable as one action. The host-side journal test verifies that Delete removes the journal without changing document bytes and that subsequent edits create a fresh journal.
+
+## Lazy creation and search validation
+
+The host journal test verifies that opening an unedited file and committing a no-op transaction create no `.history` file, while the first actual insertion/deletion creates exactly one journal. It creates two independent histories, filters their original paths case-insensitively, and verifies deleting one journal removes only that document from the search results. The Wayland mock exercises the History search field, opening a selected source path, and then the active document's Undo/Redo and Export/Delete controls.

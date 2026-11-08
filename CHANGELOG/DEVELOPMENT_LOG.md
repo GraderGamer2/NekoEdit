@@ -1499,3 +1499,12 @@ GitHub Actions [Build and test #403](https://github.com/GraderGamer2/NekoEdit/ac
 - XKB Unicode input currently requires explicit Uxxxx/Uxxxxx/Uxxxxxx keysym tokens; named aliases such as eacute/EuroSign are not yet translated. Full modifier/type/action maps and virtual modifiers remain a broader parser task.
 - Add compose/dead-key processing and Wayland text-input/IME integration, then improve shaping (kerning, ligatures, mark positioning and bidi).
 - Continue with fractional/output scaling, release-tracked multi-buffer scheduling, and the X11 backend/clipboard.
+
+## 2026-11-08 — correct clipboard transaction boundaries, lazy journals, and searchable History
+
+- Changed keyboard transaction boundaries so modifier events and modal/picker/search input do not start document edit actions. Ctrl+C explicitly closes its no-op transaction. A pending asynchronous Ctrl+V closes its empty key-event transaction, while the received data is committed later by `insert_text()`.
+- Expanded the Wayland mock to issue repeated Ctrl+C operations, confirm the replaced data source is destroyed, and then test Ctrl+X and external paste. This adds sequential-copy coverage instead of testing only one copy.
+- Changed history opening to look for an existing journal without `O_CREAT`. A missing journal is a normal state. The journal baseline is created only at the first byte insertion/deletion, before the mutation is applied, and a zero-byte remnant from an interrupted old startup is removed.
+- Added a freestanding `getdents64` search over validated `.history` headers. The History page filters original source paths, supports keyboard editing and selection, and opens the selected document with its own history. Its revised layout keeps the search and controls inside the default 800×480 window.
+- Extended host tests for no-op journal absence, first-edit creation, two independent document histories, case-insensitive path search, and deleting one history without removing another.
+- The user reports that Ctrl+C currently crashes NekoEdit in GNOME. This patch addresses the history-transaction leak and adds repeated-copy coverage, but the exact GNOME/Mutter trigger is not yet confirmed. Live desktop retest remains required. No journald, systemd, kernel-log or coredump dependency was introduced.

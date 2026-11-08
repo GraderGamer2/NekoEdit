@@ -2038,16 +2038,30 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(240, 60, 2070, "open the History tab")
                     if child_u32("history_tab_open") != 1:
                         raise AssertionError("clicking the History tab did not switch pages")
-                    workflow_click(100, 316, 2080, "History page Undo button")
+                    workflow_redraw("History search lists the edited source document")
+                    if child_u32("history_search_match_count") != 1:
+                        raise AssertionError(
+                            "History search did not find the one edited source document: "
+                            + str(child_u32("history_search_match_count"))
+                        )
+                    workflow_click(350, 185, 2075, "focus the History search field")
+                    if child_u32("history_search_focus") != 1:
+                        raise AssertionError("History search field did not receive keyboard focus")
+                    key_step(2076, 28, "Enter opens the selected historical document")
+                    if read_document_state()["doc_contents"] != b"abcq":
+                        raise AssertionError("opening a History search result did not restore the edited document")
+                    if child_u32("history_tab_open") != 1:
+                        raise AssertionError("opening a History search result left the History page")
+                    workflow_click(100, 434, 2080, "History page Undo button")
                     if read_document_state()["doc_contents"] != b"abc":
                         raise AssertionError("History page Undo button did not undo the latest edit")
-                    workflow_click(190, 316, 2090, "History page Redo button")
+                    workflow_click(190, 434, 2090, "History page Redo button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History page Redo button did not redo the latest edit")
 
                     # Export must open the existing native Save picker in
                     # history-export mode; Escape safely returns to the page.
-                    workflow_click(280, 316, 2100, "History page Export button")
+                    workflow_click(280, 434, 2100, "History page Export button")
                     if child_u32("picker_mode") != 2 or child_u32("history_export_mode") != 1:
                         raise AssertionError("History Export did not open its Save picker")
                     key_step(2110, 1, "Escape cancels History export")
@@ -2057,7 +2071,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Delete removes only the journal. The document stays
                     # intact; the host-side journal test separately checks
                     # that the deleted journal exposes zero Undo/Redo records.
-                    workflow_click(368, 316, 2120, "History page Delete button")
+                    workflow_click(368, 434, 2120, "History page Delete button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History Delete modified document bytes")
                     observations.append(
@@ -2152,12 +2166,17 @@ xkb_symbols "nekoedit-sparse" {
                     clipboard_combo(1910, 46, "Ctrl+C", redraw=False)
                     expect_source_creation(19, 1911, "Ctrl+C")
                     receive_source_bytes(19, "Ctrl+C")
-                    observations.append("Ctrl+C exported an immutable selected-text snapshot through wl_data_source.send")
+                    clipboard_combo(1915, 46, "Ctrl+C repeated", redraw=False)
+                    expect_source_creation(20, 1916, "repeated Ctrl+C")
+                    client.sendall(wire_message(19, 2))
+                    expect_message(client, (19, 1, b""), "destroy the replaced first Ctrl+C source")
+                    receive_source_bytes(20, "repeated Ctrl+C")
+                    observations.append("repeated Ctrl+C replaced and retired the previous immutable Wayland source")
 
                     # Ctrl+X must publish its own snapshot before deleting the
                     # selection, and that snapshot must survive the deletion.
                     client.sendall(ctrl_event(1930, 29, True) + ctrl_event(1931, 45, True))
-                    expect_source_creation(20, 1931, "Ctrl+X")
+                    expect_source_creation(21, 1931, "Ctrl+X")
                     workflow_redraw("Ctrl+X removes the selected document bytes")
                     client.sendall(
                         ctrl_event(1933, 45, False) + ctrl_event(1934, 29, False)
@@ -2169,14 +2188,15 @@ xkb_symbols "nekoedit-sparse" {
                             "Ctrl+X did not delete the active selection: "
                             + repr(cut_state["doc_contents"])
                         )
-                    receive_source_bytes(20, "Ctrl+X after document deletion")
+                    client.sendall(wire_message(20, 2))
+                    expect_message(client, (20, 1, b""), "destroy the replaced repeated Ctrl+C source")
+                    receive_source_bytes(21, "Ctrl+X after document deletion")
                     observations.append("Ctrl+X deleted the selection only after publishing an independent snapshot")
 
                     # Replacing the selection retires both old source objects;
                     # the client must destroy them rather than retaining them.
-                    client.sendall(wire_message(19, 2) + wire_message(20, 2))
-                    expect_message(client, (19, 1, b""), "destroy retired Ctrl+C source")
-                    expect_message(client, (20, 1, b""), "destroy retired Ctrl+X source")
+                    client.sendall(wire_message(21, 2))
+                    expect_message(client, (21, 1, b""), "destroy retired Ctrl+X source")
 
                     external_offer = 0xFF000020
                     client.sendall(

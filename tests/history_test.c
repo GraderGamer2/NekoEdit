@@ -36,6 +36,9 @@ uint32_t history_redo_count(void);
 uint32_t history_has_error(void);
 int history_delete_current(void);
 int history_export_to(const char *destination);
+uint32_t history_search_refresh(const char *query);
+uint32_t history_search_result_count(void);
+const char *history_search_result(uint32_t index);
 
 static void fail(const char *message)
 {
@@ -219,6 +222,7 @@ int main(void)
 {
     char home[] = "/tmp/nekoedit-history-test-XXXXXX";
     char document_path[512];
+    char second_document_path[512];
     char app_directory[512];
     char exported_path[512];
     char history_path[512] = {0};
@@ -236,6 +240,7 @@ int main(void)
     process_envp = environ;
 
     if (snprintf(document_path, sizeof(document_path), "%s/document.txt", home) <= 0 ||
+        snprintf(second_document_path, sizeof(second_document_path), "%s/another-notes.txt", home) <= 0 ||
         snprintf(app_directory, sizeof(app_directory), "%s/.nekoedit", home) <= 0 ||
         snprintf(exported_path, sizeof(exported_path), "%s/exported.history", home) <= 0)
         fail("could not construct test paths");
@@ -248,7 +253,15 @@ int main(void)
     save_document(document_path);
     history_open(document_path);
     if (history_has_error())
-        fail("initial journal creation failed");
+        fail("opening an unedited document reported a storage error");
+    if (history_file_count(app_directory, NULL, 0) != 0)
+        fail("opening an unedited document eagerly created a .history file");
+    /* A no-op keyboard action such as Ctrl+C must not allocate a journal. */
+    history_begin_action();
+    history_commit_action();
+    if (history_file_count(app_directory, NULL, 0) != 0 ||
+        history_undo_count() != 0 || history_redo_count() != 0)
+        fail("a no-op action created an empty history journal");
 
     /* Replacement of a non-empty selection is one reversible transaction. */
     doc_cursor = 3;
@@ -259,6 +272,8 @@ int main(void)
     if (doc_insert_byte('Z') < 0)
         fail("replacement insertion failed");
     history_commit_action();
+    if (history_file_count(app_directory, NULL, 0) != 1)
+        fail("the first actual document edit did not create its journal");
     expect_document((const uint8_t *)"Z", 1, "selection replacement");
     if (history_undo_count() != 1 || !history_undo())
         fail("replacement was not recorded as one undo operation");
@@ -337,12 +352,47 @@ int main(void)
         fail("redo after restart was unavailable");
     expect_document(expected, expected_length, "redo after restart");
 
+    /* A second named document gets an independent journal. The History search
+       exposes stored source paths, not the opaque hash filenames. */
+    document_reset((const uint8_t *)"notes", 5);
+    save_document(second_document_path);
+    history_reset();
+    history_open(second_document_path);
+    if (history_file_count(app_directory, NULL, 0) != 1)
+        fail("opening a second unedited document created a journal");
+    doc_cursor = doc_length;
+    doc_selection_anchor = doc_cursor;
+    doc_selection_active = 0;
+    history_begin_action();
+    if (doc_insert_byte('!') < 0)
+        fail("second-document insertion failed");
+    history_commit_action();
+    save_document(second_document_path);
+    history_mark_saved();
+    if (history_search_refresh("") != 2 || history_search_result_count() != 2)
+        fail("History search did not enumerate both edited documents");
+    if (history_search_refresh("DOCUMENT.TXT") != 1 ||
+        !history_search_result(0) ||
+        strcmp(history_search_result(0), document_path) != 0)
+        fail("History search did not match source paths case-insensitively");
+    if (history_search_refresh("ANOTHER-NOTES") != 1 ||
+        strcmp(history_search_result(0), second_document_path) != 0)
+        fail("History search did not return the second document path");
+
+    /* Reload the first on-disk file and replay its own history before the
+       export/delete assertions below. */
+    persisted_length = load_document(document_path, persisted, sizeof(persisted));
+    document_reset(persisted, persisted_length);
+    history_reset();
+    history_open(document_path);
+    expect_document(expected, expected_length, "reopen first document after search");
+
     /* Private storage and an exported copy can be managed outside the
        hidden application folder without shell access to ~/.nekoedit. */
     if (stat(app_directory, &st) < 0 || (st.st_mode & 0777) != 0700)
         fail("history directory is not private mode 0700");
-    if (history_file_count(app_directory, history_path, sizeof(history_path)) != 1)
-        fail("expected exactly one active .history file");
+    if (history_file_count(app_directory, history_path, sizeof(history_path)) != 2)
+        fail("expected one .history file for each edited document");
     if (stat(history_path, &st) < 0 || (st.st_mode & 0777) != 0600)
         fail(".history journal is not private mode 0600");
     if (!history_export_to(exported_path))
@@ -358,8 +408,11 @@ int main(void)
 
     if (!history_delete_current())
         fail("History tab delete operation failed");
-    if (history_file_count(app_directory, NULL, 0) != 0)
-        fail("deleted .history journal still exists");
+    if (history_file_count(app_directory, NULL, 0) != 1)
+        fail("deleting the active .history journal removed another document's history");
+    if (history_search_refresh("") != 1 ||
+        strcmp(history_search_result(0), second_document_path) != 0)
+        fail("History search retained a document after its journal was deleted");
     if (history_undo_count() != 0 || history_redo_count() != 0)
         fail("deleted journal still exposes undo or redo entries");
 
@@ -377,15 +430,27 @@ int main(void)
     expect_document(expected, expected_length, "post-delete undo");
     if (history_has_error())
         fail("history storage error flag was unexpectedly set");
+    if (history_search_refresh("") != 2)
+        fail("re-editing after Delete did not add the document back to History search");
+
+    /* Clean both fixtures through the same journal deletion path. */
+    if (!history_delete_current())
+        fail("could not remove the recreated first-document journal");
+    document_reset((const uint8_t *)"notes!", 6);
+    history_reset();
+    history_open(second_document_path);
+    if (!history_delete_current())
+        fail("could not remove the second-document journal");
 
     history_reset();
     free(doc_buffer);
     unlink(document_path);
+    unlink(second_document_path);
     unlink(exported_path);
     if (history_file_count(app_directory, history_path, sizeof(history_path)) == 1)
         unlink(history_path);
     rmdir(app_directory);
     rmdir(home);
-    puts("Disk-backed history tests passed (grouping, branching, >16 edits, recovery, export, delete, permissions).");
+    puts("Disk-backed history tests passed (lazy creation, grouping, branching, recovery, path search, export, delete, permissions).");
     return 0;
 }
