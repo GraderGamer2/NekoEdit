@@ -968,3 +968,12 @@ Source/test implementation commit f3f6da21af1c includes the Wayland EINTR path, 
 | [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509) | test: reject invalid IME deletion without editing |
 
 Actions [Build and test #621](https://github.com/GraderGamer2/NekoEdit/actions/runs/42457144443) passed the source and mock state through commit [30a186205010](https://github.com/GraderGamer2/NekoEdit/commit/30a186205010b29cd1262c573ec8e02e26551456). The two later commits [4e724d7b686a](https://github.com/GraderGamer2/NekoEdit/commit/4e724d7b686a974bc812884060da5d2e9670ac81) and [d2f33f0c41ba](https://github.com/GraderGamer2/NekoEdit/commit/d2f33f0c41ba219e8ed43337a61625f85e519509) must be revalidated before calling the current head green.
+
+
+## 2026-11-08 — declared XKB type maps and full modifier-index state
+
+| Commit | Subject |
+|---|---|
+| [949365533a03](https://github.com/GraderGamer2/NekoEdit/commit/949365533a0353ced4786afdb77cdf55e65391ab) | feat: parse declared XKB type maps and modifier masks |
+
+This implementation parses declared per-key/per-group type assignments and exact modifier-to-level maps, expands symbol storage to eight levels per group, and preserves the full 32-bit real/virtual modifier-index state. The mock adds an arbitrary custom eight-level type, numeric modifier/level masks, and a 24th virtual modifier at bit 31. README, Wayland backend documentation, current status, development log, and project history were updated in the implementation snapshot. The complete workflow result for this snapshot is reported by the PR's latest Actions check.
