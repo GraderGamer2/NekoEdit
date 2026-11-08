@@ -3182,6 +3182,43 @@ wayland_main:
     # document caret or insert text into the document.
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .event_loop
+    cmp dword ptr [rip + history_tab_open], 0
+    je .pointer_check_horizontal_scroll
+    cmp edx, 92
+    jb .pointer_check_horizontal_scroll
+    cmp edx, 300
+    jb .event_loop
+    cmp edx, 336
+    jae .event_loop
+    cmp eax, 64
+    jb .event_loop
+    cmp eax, 144
+    jb .pointer_history_undo
+    cmp eax, 152
+    jb .event_loop
+    cmp eax, 232
+    jb .pointer_history_redo
+    cmp eax, 240
+    jb .event_loop
+    cmp eax, 320
+    jb .pointer_history_export
+    cmp eax, 328
+    jb .event_loop
+    cmp eax, 408
+    jae .event_loop
+    call history_delete_current
+    jmp .keyboard_changed
+.pointer_history_undo:
+    call history_undo
+    jmp .keyboard_changed
+.pointer_history_redo:
+    call history_redo
+    jmp .keyboard_changed
+.pointer_history_export:
+    mov dword ptr [rip + history_export_mode], 1
+    call start_save_as_prompt
+    jmp .keyboard_changed
+.pointer_check_horizontal_scroll:
     # Bottom horizontal scrolling is a separate document control, not a resize edge.
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .pointer_check_vertical_scrollbar
@@ -3396,7 +3433,23 @@ wayland_main:
     je .pointer_file_menu_rows
     cmp dword ptr [rip + settings_menu_open], 1
     je .pointer_settings_menu_rows
-    jmp .pointer_document_click
+    cmp edx, 40
+    jb .pointer_document_click
+    cmp edx, 76
+    jae .pointer_document_click
+    cmp eax, 8
+    jb .pointer_document_click
+    cmp eax, 160
+    jb .pointer_select_document_tab
+    cmp eax, 168
+    jb .pointer_document_click
+    cmp eax, 320
+    jae .pointer_document_click
+    mov dword ptr [rip + history_tab_open], 1
+    jmp .keyboard_changed
+.pointer_select_document_tab:
+    mov dword ptr [rip + history_tab_open], 0
+    jmp .keyboard_changed
 .pointer_file_menu_rows:
     cmp eax, 104
     jb .pointer_menu_outside
@@ -3812,6 +3865,27 @@ wayland_main:
     jne .keyboard_picker
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .keyboard_path_prompt
+    cmp dword ptr [rip + history_tab_open], 0
+    je .keyboard_history_page_done
+    cmp eax, 1
+    je .keyboard_history_page_close
+    cmp dword ptr [rip + ctrl_down], 0
+    je .event_loop
+    cmp eax, 44
+    je .keyboard_history_page_undo
+    cmp eax, 21
+    je .keyboard_history_page_redo
+    jmp .event_loop
+.keyboard_history_page_undo:
+    call history_undo
+    jmp .keyboard_changed
+.keyboard_history_page_redo:
+    call history_redo
+    jmp .keyboard_changed
+.keyboard_history_page_close:
+    mov dword ptr [rip + history_tab_open], 0
+    jmp .keyboard_changed
+.keyboard_history_page_done:
     cmp dword ptr [rip + ctrl_down], 0
     je .keyboard_unmodified
     cmp eax, 33
@@ -5249,6 +5323,7 @@ picker_insert_candidate:
 picker_close:
     mov dword ptr [rip + picker_mode], 0
     mov dword ptr [rip + picker_overwrite_pending], 0
+    mov dword ptr [rip + history_export_mode], 0
     mov eax, dword ptr [rip + picker_dir_fd]
     cmp eax, 0
     jl .picker_close_done
@@ -6100,6 +6175,16 @@ picker_save_file:
 .type picker_confirm_overwrite, @function
 picker_confirm_overwrite:
     push r12
+    cmp dword ptr [rip + history_export_mode], 0
+    je .picker_confirm_overwrite_document
+    lea rdi, [rip + picker_target_buffer]
+    call history_export_to
+    test rax, rax
+    js .picker_overwrite_error
+    call picker_close
+    xor eax, eax
+    jmp .picker_overwrite_done
+.picker_confirm_overwrite_document:
     lea rdi, [rip + picker_target_buffer]
     call save_document_to_path
     test rax, rax
@@ -7374,6 +7459,16 @@ confirm_save_action:
     call save_document_file
     jmp .Lconfirm_save_done
 .Lconfirm_save_picker:
+    cmp dword ptr [rip + history_export_mode], 0
+    je .Lconfirm_save_picker_document
+    lea rdi, [rip + picker_target_buffer]
+    call history_export_to
+    test rax, rax
+    js .Lconfirm_save_picker_error
+    call picker_close
+    xor eax, eax
+    jmp .Lconfirm_save_done
+.Lconfirm_save_picker_document:
     lea rdi, [rip + picker_target_buffer]
     call save_document_to_path
     test rax, rax
@@ -8350,6 +8445,33 @@ render_surface:
     mov esi, 54
     lea rdx, [rip + active_document_name]
     call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 168
+    mov edx, 40
+    mov ecx, 152
+    mov r8d, 36
+    mov r9d, 0xff343d4b
+    cmp dword ptr [rip + history_tab_open], 0
+    je .render_history_tab_background
+    mov r9d, 0xff414b5a
+.render_history_tab_background:
+    call draw_rect
+    mov edi, 184
+    mov esi, 54
+    lea rdx, [rip + ui_history_label]
+    call draw_text
+    cmp dword ptr [rip + history_tab_open], 0
+    je .render_history_tab_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 168
+    mov edx, 74
+    mov ecx, 152
+    mov r8d, 2
+    mov r9d, 0xff78a9d4
+    call draw_rect
+.render_history_tab_done:
+    cmp dword ptr [rip + history_tab_open], 0
+    jne .render_history_page
 
     call doc_scrollbar_geometry
     call doc_hscrollbar_geometry
@@ -8365,6 +8487,16 @@ render_surface:
     call render_picker
     call render_save_confirmation
     call render_find_replace
+    jmp .render_surface_done
+.render_history_page:
+    call render_history_manager
+    call render_file_menu
+    call render_window_controls
+    call render_path_prompt
+    call render_picker
+    call render_save_confirmation
+    call render_find_replace
+.render_surface_done:
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -14853,6 +14985,111 @@ render_file_menu:
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
+
+.type render_history_manager, @function
+render_history_manager:
+    push rbx
+    push r12
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 32
+    mov edx, 104
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 64
+    mov ecx, eax
+    mov r8d, 244
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov edi, 48
+    mov esi, 120
+    lea rdx, [rip + ui_history_title]
+    call draw_text
+    mov edi, 48
+    mov esi, 156
+    lea rdx, [rip + active_document_name]
+    call draw_text
+    mov edi, 48
+    mov esi, 198
+    lea rdx, [rip + ui_history_undo_count_label]
+    call draw_text
+    mov edi, 156
+    mov esi, 198
+    call history_undo_count
+    call draw_decimal
+    mov edi, 48
+    mov esi, 226
+    lea rdx, [rip + ui_history_redo_count_label]
+    call draw_text
+    mov edi, 156
+    mov esi, 226
+    call history_redo_count
+    call draw_decimal
+    mov edi, 48
+    mov esi, 258
+    lea rdx, [rip + ui_history_message]
+    call draw_text
+    call history_has_error
+    test eax, eax
+    jz .render_history_buttons
+    mov edi, 48
+    mov esi, 282
+    lea rdx, [rip + ui_history_storage_error]
+    call draw_text
+.render_history_buttons:
+    mov r12d, 64
+    xor ebx, ebx
+.render_history_button_loop:
+    cmp ebx, 4
+    jae .render_history_manager_done
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, 300
+    mov ecx, 80
+    mov r8d, 32
+    mov r9d, 0xff414b5a
+    cmp ebx, 0
+    jne .render_history_button_not_undo
+    call history_undo_count
+    test eax, eax
+    jnz .render_history_button_draw
+    mov r9d, 0xff343d4b
+    jmp .render_history_button_draw
+.render_history_button_not_undo:
+    cmp ebx, 1
+    jne .render_history_button_draw
+    call history_redo_count
+    test eax, eax
+    jnz .render_history_button_draw
+    mov r9d, 0xff343d4b
+.render_history_button_draw:
+    call draw_rect
+    lea edi, [r12 + 16]
+    mov esi, 312
+    cmp ebx, 0
+    jne .render_history_label_redo
+    lea rdx, [rip + ui_history_undo_label]
+    jmp .render_history_label_draw
+.render_history_label_redo:
+    cmp ebx, 1
+    jne .render_history_label_export
+    lea rdx, [rip + ui_history_redo_label]
+    jmp .render_history_label_draw
+.render_history_label_export:
+    cmp ebx, 2
+    jne .render_history_label_delete
+    lea rdx, [rip + ui_history_export_label]
+    jmp .render_history_label_draw
+.render_history_label_delete:
+    lea rdx, [rip + ui_history_delete_label]
+.render_history_label_draw:
+    call draw_text
+    add r12d, 88
+    inc ebx
+    jmp .render_history_button_loop
+.render_history_manager_done:
+    pop r12
+    pop rbx
+    ret
+.size render_history_manager, . - render_history_manager
 
 .type render_save_confirmation, @function
 render_save_confirmation:
