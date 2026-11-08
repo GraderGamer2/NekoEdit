@@ -5564,7 +5564,15 @@ xkb_symbols "nekoedit-sparse" {
                 after_enter = caret_position()
                 if after_enter != (16, before_enter[1] + 12):
                     raise AssertionError(
-                        f"initial Enter did not move to the next row: before={before_enter}, after={after_enter}"
+                        "initial Enter did not move to the next row: "
+                        f"before={before_enter}, after={after_enter}, "
+                        f"doc_cursor={child_u32('doc_cursor')}, "
+                        f"doc_length={child_u32('doc_length')}, "
+                        f"repeat_keycode={child_u32('repeat_keycode')}, "
+                        f"ctrl_down={child_u32('ctrl_down')}, "
+                        f"text_input_object={child_u32('text_input_object')}, "
+                        f"text_input_enabled={child_u32('text_input_enabled')}, "
+                        f"doc_bytes={read_document_state()['doc_contents'][:24]!r}"
                     )
                 expect_redraw("first repeated Enter")
                 client.sendall(wire_message(12, 0))
