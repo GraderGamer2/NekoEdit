@@ -1,5 +1,40 @@
 # NekoEdit current status
 
+## 2026-11-09 — restore physical typing; make text-input-v3 explicitly opt-in
+
+**Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
+**Latest application commit:** [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f) — `fix: keep physical typing active unless IME is explicitly enabled`.
+
+### User-reported regression and cause
+
+- The user confirmed that the newest build opened without crashing, but ordinary typing did not insert text.
+- The keyboard path showed the regression: when the optional text-input-v3 object was enabled, printable `wl_keyboard` events were intentionally suppressed to avoid duplicate insertion. The client was enabling/binding text-input-v3 automatically whenever the compositor advertised the manager and then entered the document text target. If the compositor/input-method did not deliver `commit_string`, printable input had no insertion path.
+- A global advertisement is not evidence that live IME commit delivery is working. The physical-key path must not be disabled merely because the manager exists.
+
+### Implemented correction
+
+- `NEKOEDIT_ENABLE_TEXT_INPUT=1` is now the explicit opt-in for binding/creating the text-input-v3 object. The default is OFF, including when a compositor advertises `zwp_text_input_manager_v3`.
+- With the default setting, the original physical XKB path remains authoritative, including the existing Unicode-keysyms, dead-key, and `Multi_key` Compose behavior.
+- When explicitly opted in, the existing text-input-v3 preedit/commit/delete implementation and duplicate-prevention behavior remain available. The switch is an environment variable, not a persistent preference or a Settings menu item.
+- Launch command for the experimental IME path: `NEKOEDIT_ENABLE_TEXT_INPUT=1 ./nekoedit --backend=wayland`.
+
+### Regression coverage
+
+- `tests/preferences_test.c` verifies default-off, exact-value opt-in, opt-out when the variable is absent, and that the switch still works with `NEKOEDIT_DISABLE_PREFERENCES=1`.
+- The complete XKB physical-key integration test now advertises `zwp_text_input_manager_v3` while leaving the opt-in unset. It inspects child state to ensure the global was discovered but no manager/object was bound and `text_input_enabled` remains zero, then continues the existing real XKB-to-document typing assertions.
+- The dedicated text-input-v3 mock explicitly sets the opt-in and retains its existing manager, preedit, UTF-8 commit, delete-surrounding, serial, and redraw checks.
+- This regression test distinguishes protocol advertisement from a real IME commit and prevents the previous no-typing failure from returning.
+
+### Validation and next work
+
+- Source/test changes are committed as [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f). Full GitHub Actions validation is to be checked on the resulting branch tip.
+- Live GNOME/Mutter verification remains necessary. First verify normal typing with the default environment; then separately test the experimental IME path with `NEKOEDIT_ENABLE_TEXT_INPUT=1`.
+- Continue broader XKB action/repeat and preserve/consumed-modifier work only after the default physical-key path is confirmed working on the desktop.
+
+**Snapshot date:** 2026-11-09 (Asia/Jakarta).
+
+---
+
 ## 2026-11-08 — XKB compatibility specificity tests and ISO group/level keysyms
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  

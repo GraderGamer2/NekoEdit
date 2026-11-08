@@ -1,3 +1,30 @@
+## 2026-11-09 — restore physical keyboard typing and gate text-input-v3
+
+### User-reported failure
+
+- The user reports that the current build starts without crashing, but ordinary typing produces no document text.
+- Tracing the Wayland keyboard path showed that printable `wl_keyboard` events are suppressed whenever `text_input_enabled=1`. The text-input object was being bound automatically whenever `zwp_text_input_manager_v3` was advertised and entered the document surface. That left no insertion path when an IME commit did not arrive.
+
+### Implementation
+
+- Added the default-off `text_input_opt_in` runtime flag, populated from the exact environment value `NEKOEDIT_ENABLE_TEXT_INPUT=1`. It is independent of the on-disk Settings preferences.
+- `text_input_setup` now returns without binding the manager/object unless that opt-in is present. An advertised global alone no longer switches the editor away from physical XKB input.
+- Retained the existing text-input-v3 protocol implementation for deliberate testing with `NEKOEDIT_ENABLE_TEXT_INPUT=1 ./nekoedit --backend=wayland`.
+
+### Regression coverage
+
+- Extended the persistent-preferences host test to cover default-off, explicit opt-in, and opt-in when persistent preference I/O is disabled.
+- Extended the full XKB layout integration test to advertise text-input-v3 without opting in. The test reads the child process state and requires the global to be discovered while manager/object IDs and the enabled flag remain zero, then verifies the existing physical XKB typing output.
+- The dedicated IME mock sets the opt-in explicitly and continues to exercise manager binding, preedit, UTF-8 commit, surrounding deletion, serial handling, and redraw behavior.
+
+### Validation state
+
+- Implementation/test commit: [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f).
+- Full workflow status is pending the run for the final branch tip. This change has not yet received a live GNOME/Mutter test.
+- The next desktop acceptance check is default physical typing with no environment variable, followed by an explicitly enabled IME test. Keep the bounded XKB action/repeat roadmap behind that baseline check.
+
+---
+
 ## 2026-11-08 — synchronize the implementation handoff and PR description
 
 - Refreshed README.md and the architecture, Wayland backend, clipboard, and Undo/Redo guides so they describe the shipped helper, journal recovery, asynchronous paste grouping, and History-tab workflow instead of the superseded snapshot/planned-service state.

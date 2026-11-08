@@ -2,7 +2,7 @@
 
 ## Purpose and current scope
 
-This document describes the current native Wayland development slice. It is deliberately not a complete Wayland client implementation. The freestanding x86-64 assembly program creates a software-rendered toplevel without GTK, Qt, libwayland, libc, or another third-party runtime library. It supports physical XKB text-v1 input (including explicit Unicode keysyms, 273 curated named non-ASCII aliases, a bounded 40-pair `Multi_key` table, and six dead-key actions) plus optional compositor-provided `zwp_text_input_v3` preedit/commit input. Both paths feed grapheme-aware editing of valid UTF-8 documents; the text-input-v3 path is separately gated by compositor advertisement and text focus.
+This document describes the current native Wayland development slice. It is deliberately not a complete Wayland client implementation. The freestanding x86-64 assembly program creates a software-rendered toplevel without GTK, Qt, libwayland, libc, or another third-party runtime library. It supports physical XKB text-v1 input (including explicit Unicode keysyms, 273 curated named non-ASCII aliases, a bounded 40-pair `Multi_key` table, and six dead-key actions) plus optional compositor-provided `zwp_text_input_v3` preedit/commit input. Both paths feed grapheme-aware editing of valid UTF-8 documents; text-input-v3 is bound only when `NEKOEDIT_ENABLE_TEXT_INPUT=1` is explicitly set and the compositor later grants text focus.
 
 The prototype currently:
 
@@ -46,9 +46,9 @@ The initial surface commit is required to receive the first configure. The buffe
 
 ## Text input and IME (optional text-input-v3)
 
-The client discovers `zwp_text_input_manager_v3` as an optional registry global and binds version 1 only when the compositor advertises it. It creates a `zwp_text_input_v3` object for the active seat. The existing `wl_keyboard` path remains authoritative when the manager is absent; no new runtime library or dependency is introduced.
+The client discovers `zwp_text_input_manager_v3` as an optional registry global, but binds version 1 and creates a `zwp_text_input_v3` object only when `NEKOEDIT_ENABLE_TEXT_INPUT=1` is present in the process environment. The default is deliberately OFF: the text-input-v3 path suppresses printable `wl_keyboard` insertion while it waits for IME commits, and that handoff has not yet been verified on the user's live GNOME/Mutter desktop. Therefore, an advertised manager alone never steals ordinary typing; the physical XKB path remains active by default. To test the current IME implementation, launch with `NEKOEDIT_ENABLE_TEXT_INPUT=1 ./nekoedit --backend=wayland`. This switch is not persisted in `~/.nekoedit/preferences`.
 
-Text input is enabled only after the text-input object enters this surface and the document is the active input target. The client disables it when the surface leaves the input-method target or focus moves to the file picker, path prompt, Find/Replace, save confirmation, or History page. While text-input-v3 is enabled, printable physical-key insertion is suppressed to avoid inserting a key twice; navigation and editor shortcuts continue through `wl_keyboard`.
+When opted in, text input is enabled only after the text-input object enters this surface and the document is the active input target. The client disables it when the surface leaves the input-method target or focus moves to the file picker, path prompt, Find/Replace, save confirmation, or History page. While text-input-v3 is enabled, printable physical-key insertion is suppressed to avoid inserting a key twice; navigation and editor shortcuts continue through `wl_keyboard`.
 
 For each state update, the client sends:
 - `set_content_type` with normal-purpose/default hints;
@@ -95,7 +95,7 @@ make test-wayland runs tests/wayland_mock.py. The mock compositor exercises the 
 - Buffer dimensions, stride, format, and selected pixel colors.
 - Surface attach, damage, commit, and compositor close event.
 - Optional seat binding and pointer/keyboard capability handling with dense client object IDs.
-- Optional text-input-v3 binding, text-input object creation, enter/leave, document-only enable/disable, normal content type, bounded UTF-8 surrounding text, cursor rectangle, and commit serial handling.
+- Default-off text-input-v3 behavior when the manager is advertised: no manager/object binding occurs and physical XKB typing stays active. With `NEKOEDIT_ENABLE_TEXT_INPUT=1`, the mock verifies manager binding, object creation, enter/leave, document-only enable/disable, normal content type, bounded UTF-8 surrounding text, cursor rectangle, and commit serial handling.
 - Preedit staging until `done`, UTF-8 validation and commit insertion, delete-surrounding range validation (including rejection of out-of-bounds requests), one-transaction delete/commit behavior, no feedback loop on an empty matching `done`, and frame redraw sequencing. This remains a mock-protocol test rather than real input-method integration.
 - File menu drawing and pointer hit-testing for Open, Save, and Save As.
 - Modal path entry, character input, Backspace, Enter, Escape, and keyboard focus isolation from document editing.

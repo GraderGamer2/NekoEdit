@@ -1,13 +1,21 @@
 # NekoEdit complete commit index
 
-This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**. It includes the original 20 commits on `main`, all 187 development-history commits on the branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the TrueType metric and responsive picker-alignment milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
+This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**. It includes the original 20 commits on `main`, all 187 development-history commits on the branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the TrueType metric and responsive picker-alignment milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation commits: **363** (347 earlier implementation/test commits + 13 clipboard-service, disk-history, History UI, regression, and fix commits in the 2026-11-08 follow-up; documentation/continuity-only commits remain separate).
+- Recorded implementation commits: **364** (363 previously recorded implementation/test commits + the 2026-11-09 physical-typing regression fix; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Physical typing fallback and opt-in text-input-v3 (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f) | fix: keep physical typing active unless IME is explicitly enabled |
+
+The fix keeps the optional text-input-v3 manager unbound by default, even when advertised, and preserves physical XKB typing unless `NEKOEDIT_ENABLE_TEXT_INPUT=1` is explicitly supplied. The preferences host test covers the switch, while the XKB mock advertises the manager and asserts it is not bound on the default path. The dedicated IME mock opts in explicitly.
 
 ## Clipboard service and disk-backed Undo/Redo (2026-11-08)
 
