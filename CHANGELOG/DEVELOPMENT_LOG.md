@@ -1671,3 +1671,29 @@ Actions [Build and test #659](https://github.com/GraderGamer2/NekoEdit/actions/r
 For V03, the fixture begins with explicit encoding `none`; one key associates V03 with Mod4 and another with Mod2. The effective mask is asserted as `0x50`. The artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42477515039/artifacts/13615747665) is 91,922 bytes, artifact ID 13615747665, SHA-256 `8b58ca484f0012aa2c55837fce148915b176dbe2ea92c073bbae4ab4ebbf4bcc`, expiring 2026-11-15 11:51:02 UTC.
 
 Indirect keysym-based `modifier_map` resolution and `xkb_compat` interpretation/action binding remain unsupported; live GNOME/Mutter validation remains outstanding.
+
+
+## 2026-11-08 — bounded XKB compatibility interpretation and virtual-modifier resolution
+
+### Implementation
+
+- Added a bounded `xkb_compat` interpretation parser and a fixed 128-entry rule table in `src/backend/xkb.S`.
+- Interpret rules accept the bounded modifier/system keysym table or wildcard `Any`/`NoSymbol`, real-modifier predicates `AnyOfOrNone`, `AnyOf`, `NoneOf`, `AllOf`, and `Exactly`, and the `virtualModifier` and `useModMapMods = level1|any` attributes.
+- Matching uses the key's real modifier map. Specific keysyms outrank wildcard matches; predicate matching specificity breaks ties; first declaration wins equal-specificity ties. Direct key-level `virtualModifiers` properties take precedence over compatibility-derived assignments.
+- The parser safely skips nested unsupported action statements and does not execute XKB actions or repeat settings. The existing implicit virtual-modifier aggregation stage now includes compatibility-derived key virtual maps before computing effective masks and reparsing `xkb_types`.
+- Expanded `tests/wayland_mock.py` with five interpretations and assertions for `AnyOf`, `NoneOf`, wildcard/specific keysym handling, action-block skipping, direct-key precedence, and `useModMapMods=level1` Group 1/Level 1 scope. The existing indirect keysym `modifier_map`, exact `None` deletion, and real-modifier aggregation cases remain in the same full fixture.
+
+### Validation
+
+- GitHub Actions [Build and test #662](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332) passed all nine job steps on implementation commit [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e), including build/ELF verification, CLI smoke tests, complete Wayland mock, executable inspection, and artifact upload.
+- Artifact [13619186848](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332/artifacts/13619186848) is 94,032 bytes; SHA-256 `8f013c5c6ae54dfca8e57dba489fecfcc8e39632d262bea554615bb7547ff25d`, expiring 2026-11-15 13:33:01 UTC.
+- The earlier #661 Wayland seat-v3 event-loop failure on `04970844` did not recur in #662. No direct source change targeted that event-loop path; treat #661 as an unreproduced failure, not as a proven root-cause fix.
+
+### Limitations and next work
+
+- Compatibility keysym matching and indirect modifier-map lookup are bounded to the internal common modifier/system keysym table; arbitrary keysym canonicalization is not implemented.
+- General compatibility actions, repeat settings, indicators, `preserve[]` consumed-modifier semantics, live GNOME/Mutter validation, and real-IME validation remain outstanding.
+- Next: compare against actual GNOME/Mutter keymaps, extend the recognized keysym set and dedicated `AllOf`/`Exactly`/tie-precedence fixtures, then address key actions and consumed modifiers.
+
+**Implementation commit:** [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e).  
+**PR:** [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`.

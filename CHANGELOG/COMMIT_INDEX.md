@@ -1038,3 +1038,14 @@ Actions [Build and test #659](https://github.com/GraderGamer2/NekoEdit/actions/r
 | Documentation commit | Subject |
 |---|---|
 | [e1f835b6ad8f](https://github.com/GraderGamer2/NekoEdit/commit/e1f835b6ad8f1f6a1f021f6be0ab7f5117bc9603) | docs: index direct virtual modifier binding milestone |
+
+
+## 2026-11-08 — bounded XKB compatibility interpretation and virtual modifiers
+
+| Commit | Subject |
+|---|---|
+| [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e) | feat: apply bounded XKB compatibility virtual modifiers |
+
+Added a bounded `xkb_compat` interpretation table/parser with real-modifier predicates, recognized modifier-keysyms and wildcards, virtual-modifier assignment, specificity ordering, and `useModMapMods=level1` scope. Expanded the Wayland mock to verify predicate selection, direct-property precedence, skipped nested actions, and level/group scope. The previous indirect `modifier_map` resolution is preserved.
+
+Actions [Build and test #662](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332) passed all nine steps on this commit. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332/artifacts/13619186848) is 94,032 bytes; SHA-256 `8f013c5c6ae54dfca8e57dba489fecfcc8e39632d262bea554615bb7547ff25d`.
