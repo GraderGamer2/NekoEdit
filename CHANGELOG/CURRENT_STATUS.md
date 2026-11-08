@@ -2,7 +2,7 @@
 
 ## 2026-11-08 follow-up — clipboard/History fixes, compact journals, launcher and Compose expansion
 
-**Source implementation commit:** [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). This source update is awaiting the next complete Actions run; the last verified baseline is the prior branch head below.
+**Implementation commits:** [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333) (feature fixes), [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6) (compile declaration), and [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1) (compact collapsed-caret metadata).
 
 - The main Wayland event loop now treats `poll()` returning `-EINTR` as a transient wake-up and rebuilds the poll set instead of reporting a fatal Wayland setup error. This addresses the observed intermittent `Wayland stage: event loop` failure; the underlying desktop occurrence still needs live GNOME/Mutter confirmation.
 - The process-exit clipboard helper now starts a detached session, closes inherited terminal standard streams, releases the history journal state, and destroys the inherited xdg toplevel/surface/buffer objects. It retains the original Wayland data-device ownership and clipboard snapshot so another application can still paste after the editor window disappears.
@@ -15,13 +15,13 @@ The new host/Wayland tests cover compact v2 size, legacy v1 compatibility, delet
 
 **Snapshot date:** 2026-11-08 (Asia/Jakarta)  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
-**History-format follow-up:** Actions [#609](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453639536) passed build/ELF, install-user, CLI smoke and preferences tests, then failed the host history test because a collapsed caret with an inactive but stale anchor still caused the v2 selection extension to be written. Corrected the encoder to preserve anchors only when either side has an active selection in [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1). The host and Wayland tests have not yet passed on this corrected head.  
-**Build follow-up:** Actions [#608](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453524829) failed in the C build because the new compact encoder referenced `map_mem()` before its declaration. The assembly sources compiled; smoke/Wayland tests were skipped. Added the missing forward declaration in [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). The corrected full workflow is pending.  
+**Final validation:** GitHub Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428) passed all eight workflow steps on [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9): freestanding build/ELF checks, CLI smoke, preferences/history/compact-v1 host tests, per-user install/uninstall smoke test, full Wayland mock suite, executable inspection, and artifact upload. Actions #608 and #609 failed at earlier stages; their causes and fixes are retained below and in the development log.  
+**Build correction history:** Actions #608 failed on an implicit `map_mem()` declaration and #609 exposed an inactive collapsed-caret anchor overhead issue; both were corrected in the implementation commits above. Actions #610 confirms the full test matrix passes.  
 **Development branch:** early-alpha  
-**Latest tested source/test snapshot before the current follow-up:** [0aa15506bce4](https://github.com/GraderGamer2/NekoEdit/commit/0aa15506bce49e3374b351eeda44d1c2811598b7) — validated by Actions #607; the next full run will validate source commit f3f6da21af1c and its documentation commits.
-**Latest application implementation commit:** [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) — record delayed external Wayland paste as one Undo/Redo transaction.  
-**Latest full validation:** GitHub Actions [Build and test #607](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602) passed all eight workflow steps on 0aa15506bce4: freestanding build, ELF checks, CLI smoke tests, preferences/history host tests, complete Wayland mock, executable inspection, and artifact upload.  
-**Build artifact:** [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602/artifacts/13605155538), 83,845 bytes; artifact ID 13605155538.  
+**Latest validated source/test snapshot:** [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) — validated by Actions #610; the following commit in this branch is documentation-only.
+**Latest application implementation commit:** [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1) — keep the compact history state extension only for active selections.  
+**Latest full validation:** GitHub Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428) passed all eight workflow steps on 5a5ea78458e4.  
+**Build artifact:** [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648), 86,304 bytes; artifact ID 13606921648; SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`.  
 **Current PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
 
 ## Implemented clipboard persistence
@@ -42,7 +42,7 @@ The new host/Wayland tests cover compact v2 size, legacy v1 compatibility, delet
 
 ## Verification details
 
-Actions #600, #601, #603 and #607 verified the earlier clipboard, history, and editor milestones. Source commit f3f6da21af1c adds the new host and Wayland assertions listed above; its Actions run is pending at the time of this status entry.
+Actions #600, #601, #603 and #607 verified earlier milestones. Actions #610 validates the complete follow-up, including new History search/Browse/Open Selected/selected-delete coverage, compact v2 size and v1 compatibility, helper surface teardown, expanded Compose, and installation.
 
 The helper and UI have been protocol/mock tested, not yet manually tested against GNOME/Mutter in the user's live session. Manual desktop verification of actual clipboard retention after closing NekoEdit, task-manager process naming, Settings toggle persistence, and the History-page layout is still outstanding.
 

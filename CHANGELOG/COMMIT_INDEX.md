@@ -944,5 +944,8 @@ This follow-up changes the Ctrl+C keyboard transaction boundary, defers journal 
 | [abb7b163f757](https://github.com/GraderGamer2/NekoEdit/commit/abb7b163f7575a9f9c7334c2302f757035290ecc) | docs: index compact-history build correction |
 | [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1) | fix: omit inactive selection anchors from compact records |
 | [9de650af7f68](https://github.com/GraderGamer2/NekoEdit/commit/9de650af7f6884f01e7bb8e9c9c4bb9095ecdf6b) | docs: record compact-caret metadata correction |
+| [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) | docs: index compact-caret metadata correction |
+
+Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428) passed all eight steps on 5a5ea78458e4, including compact v2 journal size, v1 compatibility, selected deletion, per-user installation, History/Browse UI, clipboard-helper teardown, and expanded Compose. Artifact [13606921648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648) is 86,304 bytes.
 
 Source/test implementation commit f3f6da21af1c includes the Wayland EINTR path, helper/window-object teardown, History page and selected-delete behavior, compact version-2 journal encoding with v1 compatibility, per-user/system install targets, and 40-pair Compose. Commit 10e80acca944 updates the continuity/status/history records. The index-refresh commit that follows is itself a documentation maintenance commit; it is recorded by the next index refresh.

@@ -666,3 +666,8 @@ The first complete branch Actions attempt for Phase AC stopped in the strict C b
 ### Compact collapsed-caret metadata correction
 
 Actions #609 found that the compact record encoder was writing its optional 10-byte state extension whenever the selection anchor differed from the caret, even when no selection was active. Such an inactive anchor is not semantically used by Undo/Redo. The writer now includes before/after anchors only when either state has an active selection, and playback normalizes the collapsed anchor to the caret. Source correction: [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1). The 28-byte compact-record host test covers a collapsed caret with a stale anchor. Full host and Wayland validation is pending.
+
+
+### Phase AC automated validation result
+
+The corrected branch snapshot [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) passed all eight steps in GitHub Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428). This includes the freestanding/ELF build, CLI and preferences tests, compact-history/legacy-v1 host tests, install/uninstall smoke, full Wayland mock coverage, executable inspection, and artifact upload. Artifact [13606921648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648) is 86,304 bytes, SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`. The mock suite passed; manual GNOME/Mutter verification remains open.

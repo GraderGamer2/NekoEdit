@@ -1550,3 +1550,11 @@ The first run for this change set passed the freestanding build and host history
 - Actions [Build and test #609](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453639536) passed the freestanding build/ELF check, per-user install smoke test, CLI smoke tests and persistent-preference tests. The host journal test then found the compact-record assertion failing: the test leaves a stale anchor after an ordinary insertion while selection is inactive, and the encoder treated any anchor/cursor difference as meaningful selection state, adding the optional 10-byte extension.
 - Corrected the v2 writer in [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1): the 10-byte state extension is now present only when the before or after selection is active. Inactive anchors are semantically unused and replay normalizes the anchor to the caret. The existing 28-byte test now directly checks that case.
 - Wayland tests were skipped in #609 because `make test` stopped in the host history suite; they still need a complete run on the corrected final head.
+
+
+### Final validation — Actions #610 passed
+
+- Corrected head [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) passed all eight GitHub Actions workflow steps in [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428).
+- Passed: freestanding build and ELF inspection (no interpreter/dynamic runtime dependencies), command-line smoke, persistent preferences, full disk-history host test (including exact 28-byte v2 record, legacy v1 rewrite/recovery/Undo/Redo, and non-active selected-history deletion), per-user install/uninstall smoke, complete Wayland mock suite, executable inspection, and artifact upload.
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648): 86,304 bytes, artifact ID 13606921648, SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`, expires 2026-11-15 06:12:27 UTC.
+- The earlier #608 and #609 failures are retained above as build-history entries; #610 confirms the corrected source. Live GNOME/Mutter verification is still user-side and has not been claimed.
