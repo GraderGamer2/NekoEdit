@@ -219,6 +219,7 @@ def run(
     keyboard_layout_test: bool = False,
     unicode_keyboard_test: bool = False,
     text_input_test: bool = False,
+    text_input_advertised: bool = False,
     punctuation_render_test: bool = False,
     utf8_edit_test: bool = False,
     utf8_delete_test: bool = False,
@@ -326,7 +327,7 @@ def run(
                 globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
             if clipboard_test or clipboard_persistence_test:
                 globals_payload += registry_global(6, "wl_data_device_manager", version=1)
-            if text_input_test:
+            if text_input_test or text_input_advertised:
                 globals_payload += registry_global(7, "zwp_text_input_manager_v3", version=1)
             client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
@@ -1073,6 +1074,10 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
                         "keymap_processing_complete",
+                        "text_input_manager_global",
+                        "text_input_manager_object",
+                        "text_input_object",
+                        "text_input_enabled",
                     }
                     for line in nm_text.splitlines():
                         fields = line.split()
@@ -1100,6 +1105,20 @@ xkb_symbols "nekoedit-sparse" {
                             )[0]
                         if complete != 1:
                             raise AssertionError("XKB keymap parser did not finish processing")
+                        if text_input_advertised and not text_input_test:
+                            ime_global = struct.unpack("<I", child_memory("text_input_manager_global", 0, 4))[0]
+                            ime_manager = struct.unpack("<I", child_memory("text_input_manager_object", 0, 4))[0]
+                            ime_object = struct.unpack("<I", child_memory("text_input_object", 0, 4))[0]
+                            ime_enabled = struct.unpack("<I", child_memory("text_input_enabled", 0, 4))[0]
+                            if ime_global == 0 or ime_manager != 0 or ime_object != 0 or ime_enabled != 0:
+                                raise AssertionError(
+                                    "advertised text-input-v3 was bound/enabled without explicit opt-in: "
+                                    f"global={ime_global}, manager={ime_manager}, object={ime_object}, "
+                                    f"enabled={ime_enabled}"
+                                )
+                            observations.append(
+                                "text-input-v3 advertisement leaves the default physical XKB typing path active"
+                            )
                         ready = struct.unpack("<I", child_memory("xkb_keymap_ready", 0, 4))[0]
                         key_name = child_memory("xkb_key_names", 24 * 4, 4)
                         key_type = child_memory("xkb_key_types", 24, 1)
@@ -6219,6 +6238,10 @@ xkb_symbols "nekoedit-sparse" {
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
+    # Never let a caller's shell opt-in leak into the default-path regression.
+    environment.pop("NEKOEDIT_ENABLE_TEXT_INPUT", None)
+    if text_input_test:
+        environment["NEKOEDIT_ENABLE_TEXT_INPUT"] = "1"
     # Each mock receives an isolated HOME so preferences and journals never
     # enter the CI runner account. Only this test enables preferences to exercise
     # the default-on clipboard service setting.
@@ -6392,6 +6415,7 @@ if __name__ == "__main__":
             save_roundtrip=True,
             expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9NV",
             keyboard_layout_test=True,
+            text_input_advertised=True,
         )
     finally:
         try:

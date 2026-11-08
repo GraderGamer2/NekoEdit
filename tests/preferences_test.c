@@ -14,6 +14,7 @@ int32_t ui_font_size = 10;
 int32_t doc_wrap_enabled = 1;
 int32_t save_confirm_enabled = 1;
 extern int32_t clipboard_persistence_enabled;
+extern int32_t text_input_opt_in;
 extern char *preferences_font_path_ptr;
 
 int preferences_load(void);
@@ -38,6 +39,7 @@ static void reset_defaults(void)
     doc_wrap_enabled = 1;
     save_confirm_enabled = 1;
     clipboard_persistence_enabled = 1;
+    text_input_opt_in = 0;
     preferences_font_path_ptr = NULL;
 }
 
@@ -45,7 +47,7 @@ static void expect_defaults(void)
 {
     if (doc_font_size != 12 || ui_font_size != 10 ||
         doc_wrap_enabled != 1 || save_confirm_enabled != 1 ||
-        clipboard_persistence_enabled != 1)
+        clipboard_persistence_enabled != 1 || text_input_opt_in != 0)
         fail("invalid entries changed one or more default preferences");
 }
 
@@ -77,6 +79,7 @@ int main(void)
     if (setenv("XDG_CONFIG_HOME", root, 1) < 0)
         fail("could not set the ignored XDG_CONFIG_HOME fixture");
     unsetenv("NEKOEDIT_DISABLE_PREFERENCES");
+    unsetenv("NEKOEDIT_ENABLE_TEXT_INPUT");
     refresh_environment();
 
     reset_defaults();
@@ -134,6 +137,17 @@ int main(void)
                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf") != 0)
         fail("font path did not roundtrip");
 
+    if (setenv("NEKOEDIT_ENABLE_TEXT_INPUT", "1", 1) < 0)
+        fail("could not enable optional text-input-v3 for test");
+    refresh_environment();
+    if (preferences_load() != 1 || text_input_opt_in != 1)
+        fail("explicit text-input-v3 opt-in was not recognized");
+    if (unsetenv("NEKOEDIT_ENABLE_TEXT_INPUT") < 0)
+        fail("could not clear optional text-input-v3 opt-in");
+    refresh_environment();
+    if (preferences_load() != 1 || text_input_opt_in != 0)
+        fail("text-input-v3 was not disabled by default");
+
     preferences_set_font_path("relative-font.ttf");
     if (preferences_font_path_ptr)
         fail("relative font path should not be persisted");
@@ -164,6 +178,8 @@ int main(void)
 
     if (setenv("NEKOEDIT_DISABLE_PREFERENCES", "1", 1) < 0)
         fail("could not disable preference storage");
+    if (setenv("NEKOEDIT_ENABLE_TEXT_INPUT", "1", 1) < 0)
+        fail("could not enable text-input-v3 with preference storage disabled");
     refresh_environment();
     doc_font_size = 22;
     ui_font_size = 13;
@@ -173,6 +189,8 @@ int main(void)
     clipboard_persistence_enabled = 0;
     if (preferences_load() != 0)
         fail("disabled preference load should be a no-op");
+    if (text_input_opt_in != 1)
+        fail("text-input-v3 opt-in should work when stored preferences are disabled");
     if (doc_font_size != 22 || ui_font_size != 13 ||
         doc_wrap_enabled != 0 || save_confirm_enabled != 0 ||
         clipboard_persistence_enabled != 0)

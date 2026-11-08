@@ -2410,6 +2410,7 @@ recv_msg_control:      .zero 64
 .extern history_search_display
 .extern clipboard_service_handoff
 .extern clipboard_persistence_enabled
+.extern text_input_opt_in
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
@@ -9205,11 +9206,14 @@ cursor_shape_setup:
 .size cursor_shape_setup, . - cursor_shape_setup
 
 
-# Optional Wayland text-input-v3 client. The manager is absent on some desktops;
-# in that case the existing XKB key-to-Unicode path remains unchanged.
+# Optional Wayland text-input-v3 client. It is deliberately opt-in because
+# enabling it suppresses printable wl_keyboard insertion while awaiting IME
+# commits; live GNOME/Mutter handoff must be validated before making it default.
 .type text_input_setup, @function
 text_input_setup:
     push r12
+    cmp dword ptr [rip + text_input_opt_in], 1
+    jne .Lti_setup_done
     cmp dword ptr [rip + text_input_manager_global], 0
     je .Lti_setup_done
     cmp dword ptr [rip + text_input_manager_object], 0

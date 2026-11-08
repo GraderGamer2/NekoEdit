@@ -31,6 +31,9 @@ extern int32_t ui_font_size;
 extern int32_t doc_wrap_enabled;
 extern int32_t save_confirm_enabled;
 int32_t clipboard_persistence_enabled = 1;
+/* text-input-v3 takes over printable input, so require an explicit opt-in
+ * until live GNOME/Mutter IME handoff is verified. */
+int32_t text_input_opt_in = 0;
 
 char *preferences_font_path_ptr;
 
@@ -327,6 +330,8 @@ int preferences_load(void)
 {
     long fd, result;
     uint32_t used = 0, offset = 0;
+    const char *text_input = environment_value("NEKOEDIT_ENABLE_TEXT_INPUT");
+    text_input_opt_in = text_input && text_input[0] == '1' && text_input[1] == 0 ? 1 : 0;
     if (disabled()) {
         preferences_font_path_ptr = (char *)0;
         saved_font_path[0] = 0;
