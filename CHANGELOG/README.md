@@ -20,7 +20,7 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
-- The current implementation includes `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for compact version-2 per-document delta journals with version-1 compatibility. `docs/CLIPBOARD.md` records helper teardown/lifecycle and session limits; `docs/UNDO.md` describes compact record formats, recovery validation, permissions, and History-tab management. `make install-user` installs a per-user executable and desktop-menu launcher; `make test` includes an install/uninstall smoke test.
+- The current implementation includes optional Wayland text-input-v3 integration in `src/backend/wayland.S`, `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for compact version-2 per-document delta journals with version-1 compatibility. `docs/CLIPBOARD.md` records helper teardown/lifecycle and session limits; `docs/UNDO.md` describes compact record formats, recovery validation, permissions, and History-tab management. `make install-user` installs a per-user executable and desktop-menu launcher; `make test` includes an install/uninstall smoke test.
 
 ## Wayland window management and resize behavior
 
@@ -68,3 +68,10 @@ A small typo or truly documentation-only correction still receives a commit entr
 The initial history was reconstructed from GitHub on 2026-11-06 and includes **188 commits**: 20 commits from the original `main` prototype history and 168 commits in development PR #1. See `COMMIT_INDEX.md` for the exact commit-by-commit record and `PROJECT_HISTORY.md` for the functional narrative.
 
 The project state in these files must be refreshed with every future development change. The compact-journal encoder declaration correction and inactive-selection-anchor size correction are recorded in `CHANGELOG/DEVELOPMENT_LOG.md`. Actions #608 and #609 stopped before the Wayland tests; corrected Actions #610 then passed the full build, host, install, Wayland mock, and artifact workflow. Live GNOME/Mutter verification remains separate.
+
+
+## Current IME milestone
+
+The current branch has optional `zwp_text_input_manager_v3` discovery/binding, document-scoped enable/disable, surrounding-text state, preedit/commit/delete event staging, UTF-8 validation, and mock coverage. Read the newest section in `CURRENT_STATUS.md` and `DEVELOPMENT_LOG.md` before continuing. Actions #621 passed the initial complete mock snapshot; the subsequent invalid-deletion transaction guard and test still require a fresh run at the current head. Live GNOME/Mutter input-method testing remains outstanding.
+
+The History path filter is user-reported nonfunctional, and deeper journal compaction remains deferred. Do not describe the filter as working or mix History fixes into the input/shaping roadmap unless the user changes that priority.
