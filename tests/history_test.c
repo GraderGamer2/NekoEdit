@@ -89,6 +89,7 @@ long doc_buffer_grow(void)
 
 long doc_insert_byte(uint32_t value)
 {
+    history_note_insert(doc_cursor, value);
     move_gap(doc_cursor);
     if (doc_gap_start == doc_gap_end && doc_buffer_grow() < 0) {
         doc_storage_error = 1;
@@ -113,6 +114,7 @@ void doc_delete_selection(void)
         begin = end;
         end = temporary;
     }
+    history_note_delete(begin, end - begin);
     move_gap(begin);
     doc_gap_end += end - begin;
     doc_length -= end - begin;
