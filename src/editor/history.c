@@ -231,6 +231,8 @@ static int write_at(int fd, uint64_t off, const void *p, uint32_t n)
     long r = sc6(SYS_lseek, fd, (long)off, SEEK_SET, 0, 0, 0);
     return !err(r) && write_all(fd, p, n);
 }
+static long map_mem(uint32_t n);
+
 static uint32_t write_varuint(uint8_t *out, uint32_t value)
 {
     uint32_t used = 0;
