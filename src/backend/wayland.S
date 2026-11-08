@@ -9199,6 +9199,72 @@ text_input_commit_request:
     ret
 .size text_input_commit_request, . - text_input_commit_request
 
+# Return the screen-space IME caret position after rendering the preedit prefix.
+# EAX=x, EDX=y. Layout follows the document's active wrap/scroll mode.
+.type text_input_preedit_caret_position, @function
+text_input_preedit_caret_position:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 16
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov r12d, eax
+    lea r13d, [rdx + DOC_LEFT]
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Lti_preedit_caret_base_y
+    sub r13d, dword ptr [rip + doc_view_left_px]
+.Lti_preedit_caret_base_y:
+    mov eax, r12d
+    sub eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov r14d, eax
+    mov r15d, dword ptr [rip + text_input_preedit_cursor_begin]
+    test r15d, r15d
+    js .Lti_preedit_caret_return
+    xor ebx, ebx
+.Lti_preedit_caret_loop:
+    cmp ebx, r15d
+    jae .Lti_preedit_caret_return
+    lea rdi, [rip + text_input_preedit_buffer]
+    mov esi, ebx
+    mov edx, dword ptr [rip + text_input_preedit_length]
+    call text_input_decode_scalar
+    mov dword ptr [rsp], edx
+    mov edi, eax
+    call font_codepoint_advance_pixels
+    mov dword ptr [rsp + 4], eax
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lti_preedit_caret_advance
+    mov eax, r13d
+    add eax, dword ptr [rsp + 4]
+    mov edx, DOC_LEFT
+    add edx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, edx
+    jbe .Lti_preedit_caret_advance
+    mov r13d, DOC_LEFT
+    add r14d, dword ptr [rip + window_doc_line_height]
+.Lti_preedit_caret_advance:
+    mov eax, dword ptr [rsp + 4]
+    add r13d, eax
+    mov eax, dword ptr [rsp]
+    add ebx, eax
+    jmp .Lti_preedit_caret_loop
+.Lti_preedit_caret_return:
+    mov eax, r13d
+    mov edx, r14d
+    add rsp, 16
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size text_input_preedit_caret_position, . - text_input_preedit_caret_position
+
 # Keep text input enabled only while the document itself is the focused target.
 .type text_input_update_state, @function
 text_input_update_state:
@@ -9400,19 +9466,27 @@ text_input_update_state:
     test rax, rax
     js .Lti_update_return
 
+    cmp dword ptr [rip + text_input_preedit_length], 0
+    je .Lti_cursor_rect_document
+    cmp dword ptr [rip + text_input_preedit_cursor_begin], -1
+    je .Lti_cursor_rect_document
+    call text_input_preedit_caret_position
+    mov r13d, eax
+    jmp .Lti_cursor_rect_ready
+.Lti_cursor_rect_document:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
     mov r12d, eax
-    mov r13d, edx
-    add r13d, DOC_LEFT
+    lea r13d, [rdx + DOC_LEFT]
     cmp dword ptr [rip + doc_wrap_enabled], 0
-    jne .Lti_cursor_x_ready
+    jne .Lti_cursor_rect_document_y
     sub r13d, dword ptr [rip + doc_view_left_px]
-.Lti_cursor_x_ready:
+.Lti_cursor_rect_document_y:
     mov eax, r12d
     sub eax, dword ptr [rip + doc_view_top_row]
     imul eax, dword ptr [rip + window_doc_line_height]
     add eax, DOC_TOP
+.Lti_cursor_rect_ready:
     mov dword ptr [rip + payload_buffer], r13d
     mov dword ptr [rip + payload_buffer + 4], eax
     mov dword ptr [rip + payload_buffer + 8], 1
@@ -9774,6 +9848,7 @@ text_input_apply_done:
     push r15
     sub rsp, 16
     xor r15d, r15d
+    xor ebx, ebx
     cmp dword ptr [rip + text_input_enabled], 1
     jne .Lti_apply_clear
     mov ebx, dword ptr [rip + text_input_pending_flags]
@@ -9913,6 +9988,10 @@ text_input_apply_done:
     mov dword ptr [rip + text_input_pending_commit_length], 0
     mov dword ptr [rip + text_input_pending_preedit_length], 0
     mov eax, r15d
+    test ebx, 3
+    jz .Lti_apply_return_flags_ready
+    or eax, 2
+.Lti_apply_return_flags_ready:
     add rsp, 16
     pop r15
     pop r14
