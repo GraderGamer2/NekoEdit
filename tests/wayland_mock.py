@@ -218,6 +218,7 @@ def run(
     file_workflow: bool = False,
     keyboard_layout_test: bool = False,
     unicode_keyboard_test: bool = False,
+    text_input_test: bool = False,
     punctuation_render_test: bool = False,
     utf8_edit_test: bool = False,
     utf8_delete_test: bool = False,
@@ -325,6 +326,8 @@ def run(
                 globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
             if clipboard_test or clipboard_persistence_test:
                 globals_payload += registry_global(6, "wl_data_device_manager", version=1)
+            if text_input_test:
+                globals_payload += registry_global(7, "zwp_text_input_manager_v3", version=1)
             client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
             bind_messages = [recv_wayland_message(client) for _ in range(3)]
@@ -532,6 +535,19 @@ def run(
                         "get wl_data_device for the application seat",
                     )
                     observations.append("wl_data_device_manager bound; wl_data_device created for seat 13")
+                if text_input_test:
+                    manager_name = b"zwp_text_input_manager_v3\0"
+                    manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
+                    expect_message(
+                        client,
+                        (2, 0, struct.pack("<II", 7, len(manager_name)) + manager_padded + struct.pack("<II", 1, 17)),
+                        "bind zwp_text_input_manager_v3",
+                    )
+                    expect_message(
+                        client, (17, 1, struct.pack("<II", 18, 13)),
+                        "get text-input object for the application seat",
+                    )
+                    observations.append("optional text-input-v3 manager bound and object created for seat 13")
                 observations.append("seat pointer and keyboard capability/object creation verified")
 
                 # Release the initial buffer before sending a click. The client
@@ -1286,6 +1302,130 @@ xkb_symbols "nekoedit-sparse" {
                             f"short child state read for {name}+{byte_offset}"
                         )
                     return struct.unpack("<I", raw)[0]
+
+
+                if text_input_test:
+                    def release_frame(label: str) -> None:
+                        client.sendall(wire_message(12, 0))
+                        expect_message(
+                            client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                        )
+                        expect_message(
+                            client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                            f"{label} damage",
+                        )
+                        expect_message(client, (8, 6, b""), f"{label} commit")
+
+                    def expect_state(
+                        expected_text: bytes, expected_cursor: int, label: str
+                    ) -> None:
+                        message = recv_wayland_message(client)
+                        if message[0:2] != (18, 3) or message[3]:
+                            raise AssertionError(f"{label}: unexpected surrounding-text request {message!r}")
+                        payload = message[2]
+                        string_length = struct.unpack_from("<I", payload)[0]
+                        padded_length = (string_length + 3) & ~3
+                        if string_length == 0 or len(payload) != 4 + padded_length + 8:
+                            raise AssertionError(f"{label}: malformed surrounding-text payload {payload!r}")
+                        value = payload[4 : 4 + string_length]
+                        cursor, anchor = struct.unpack_from("<II", payload, 4 + padded_length)
+                        if value != expected_text + b"\0" or (cursor, anchor) != (
+                            expected_cursor, expected_cursor
+                        ):
+                            raise AssertionError(
+                                f"{label}: expected text/cursor {expected_text!r}/{expected_cursor}, "
+                                f"got {value!r}/{cursor}/{anchor}"
+                            )
+                        rectangle = recv_wayland_message(client)
+                        if rectangle[0:2] != (18, 6) or len(rectangle[2]) != 16 or rectangle[3]:
+                            raise AssertionError(f"{label}: malformed cursor rectangle {rectangle!r}")
+                        expect_message(client, (18, 7, b""), f"{label} state commit")
+
+                    # The keyboard is focused, but the IME must remain off until
+                    # text-input.enter identifies this surface as its text target.
+                    client.sendall(wire_message(12, 0))
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), "keyboard-focus redraw attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "keyboard-focus redraw damage",
+                    )
+                    expect_message(client, (8, 6, b""), "keyboard-focus redraw commit")
+                    client.sendall(wire_message(12, 0))
+                    client.sendall(wire_message(18, 0, struct.pack("<I", 8)))
+                    expect_message(client, (18, 1, b""), "enable text input")
+                    expect_message(
+                        client, (18, 5, struct.pack("<II", 0, 0)), "set normal content type"
+                    )
+                    expect_state(b"", 0, "initial text-input state")
+                    release_frame("text-input enable redraw")
+
+                    # A matching empty done acknowledges serial 1 without
+                    # triggering another state commit and a feedback loop.
+                    client.sendall(wire_message(18, 5, struct.pack("<I", 1)))
+                    release_frame("initial done redraw")
+                    preedit = b"abc\0"
+                    client.sendall(
+                        wire_message(
+                            18, 2,
+                            struct.pack("<I", len(preedit)) + preedit
+                            + struct.pack("<ii", 1, 2),
+                        )
+                        + wire_message(18, 5, struct.pack("<I", 1))
+                    )
+                    release_frame("preedit redraw")
+                    if child_u32("text_input_preedit_length") != 3:
+                        raise AssertionError("preedit_string was not retained until done")
+                    if child_u32("text_input_preedit_cursor_begin") != 1:
+                        raise AssertionError("preedit cursor byte offset was not preserved")
+                    if child_u32("doc_length") != 0:
+                        raise AssertionError("preedit text was incorrectly committed to the document")
+
+                    # Commit a multibyte UTF-8 string and verify the updated
+                    # surrounding text and cursor are transmitted exactly once.
+                    committed = "你好".encode("utf-8")
+                    commit = committed + b"\0"
+                    client.sendall(
+                        wire_message(18, 3, struct.pack("<I", len(commit)) + commit)
+                        + wire_message(18, 5, struct.pack("<I", 1))
+                    )
+                    expect_state(committed, 6, "committed UTF-8 text")
+                    release_frame("committed text redraw")
+                    state = read_document_state()
+                    if state["doc_contents"][: state["doc_length"]] != committed:
+                        raise AssertionError(
+                            f"IME commit did not insert exact UTF-8 bytes: {state['doc_contents']!r}"
+                        )
+                    if child_u32("text_input_preedit_length") != 0:
+                        raise AssertionError("commit_string did not clear the previous preedit")
+
+                    # Delete both UTF-8 scalars before the caret as one transaction.
+                    client.sendall(
+                        wire_message(18, 4, struct.pack("<II", 6, 0))
+                        + wire_message(18, 5, struct.pack("<I", 2))
+                    )
+                    expect_state(b"", 0, "delete-surrounding update")
+                    release_frame("delete-surrounding redraw")
+                    if child_u32("doc_length") != 0:
+                        raise AssertionError("delete_surrounding_text did not remove the requested bytes")
+
+                    client.sendall(wire_message(18, 1, struct.pack("<I", 8)))
+                    expect_message(client, (18, 2, b""), "disable text input after leave")
+                    expect_message(client, (18, 7, b""), "commit disable state")
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)), "leave redraw attach"
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "leave redraw damage",
+                    )
+                    expect_message(client, (8, 6, b""), "leave redraw commit")
+                    observations.append(
+                        "text-input-v3 enter/enable, surrounding-text state, serial-stable done, preedit staging, multibyte commit, delete-surrounding, disable/leave and redraw verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 def wait_child_u32(name: str, expected: int, label: str, timeout: float = 1.0) -> int:
                     deadline = time.monotonic() + timeout
