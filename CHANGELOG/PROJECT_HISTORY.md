@@ -671,3 +671,14 @@ Actions #609 found that the compact record encoder was writing its optional 10-b
 ### Phase AC automated validation result
 
 The corrected branch snapshot [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) passed all eight steps in GitHub Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428). This includes the freestanding/ELF build, CLI and preferences tests, compact-history/legacy-v1 host tests, install/uninstall smoke, full Wayland mock coverage, executable inspection, and artifact upload. Artifact [13606921648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648) is 86,304 bytes, SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`. The mock suite passed; manual GNOME/Mutter verification remains open.
+
+
+## 2026-11-08 — Optional Wayland text-input-v3 integration
+
+NekoEdit now discovers `zwp_text_input_manager_v3` when the compositor advertises it and creates a text-input object for its active seat. The existing `wl_keyboard` Unicode path remains the fallback on compositors without the extension. When enabled, text-input-v3 is scoped to the focused document; other application panels retain their previous input behavior.
+
+The implementation sends bounded UTF-8 surrounding text with caret/anchor byte offsets, normal content type, a cursor rectangle, and commit serials. It stages preedit, committed text, and surrounding deletion until the protocol's `done` event. Preedit is displayed as a transient underlined overlay. Commit text is validated as UTF-8; surrounding deletion is bounds-checked and rejected if either endpoint would split a scalar. Valid delete-plus-commit edits form one history action.
+
+The mock compositor now exercises the complete protocol lifecycle, including enable/disable, preedit, a multibyte commit, valid and invalid deletion, serial handling, and redraw sequencing. Actions #621 passed all eight steps on the initial fully tested IME snapshot. A subsequent audit moved history transaction creation after deletion validation and added a dedicated invalid-range test; those last hardening changes await a fresh CI run. Live GNOME/Mutter testing with a real input method remains necessary.
+
+This is basic text-input-v3 integration, not complete IME presentation or Unicode text layout. Preedit attributes/cursor-end styling, candidate positioning at the preedit caret, complex shaping, and bidirectional layout remain future work. Clipboard, History UI/storage, and source-independent desktop installation packaging are unaffected by this milestone.
