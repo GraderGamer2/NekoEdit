@@ -712,6 +712,15 @@ xkb_types "nekoedit-test" {
         map[NumLock] = Level2;
         map[Shift+NumLock] = Level1;
     };
+    type "SEPARATE_CAPS_AND_SHIFT_ALPHABETIC" {
+        modifiers = Shift+Lock+LevelThree;
+        map[Shift] = Level2;
+        map[Lock] = Level4;
+        map[LevelThree] = Level3;
+        map[Shift+LevelThree] = Level4;
+        map[Lock+LevelThree] = Level3;
+        map[Shift+Lock+LevelThree] = Level3;
+    };
 };
 xkb_symbols "nekoedit-test" {
     key <AD01> {
@@ -727,7 +736,10 @@ xkb_symbols "nekoedit-test" {
     key <AD03> { [ e, E ] };
     key <AD04> { [ r, R ] };
     key <AD05> { [ t, T ] };
-    key <AD06> { [ y, Y ] };
+    key <AD06> {
+        type = "SEPARATE_CAPS_AND_SHIFT_ALPHABETIC",
+        symbols[Group1] = [ y, Y, at, quotedbl ]
+    };
     key <AD07> { [ u, U ] };
     key <AD08> { [ i, I ] };
     key <AD09> { [ o, O ] };
@@ -3108,6 +3120,37 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1064, 48, "XKB letter b")
                     key_step(1066, 49, "XKB letter n")
                     key_step(1068, 50, "XKB letter m")
+                    # Verify the common separate Caps/Shift type: Caps alone
+                    # selects level 4, Shift+Caps level 1, LevelThree level 3,
+                    # Shift+LevelThree level 4, and Caps+LevelThree level 3.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1070, 0, 0, 2, 0))
+                    )
+                    key_step(1072, 21, "SEPARATE type Caps selects level 4")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1074, 1, 0, 2, 0))
+                    )
+                    key_step(1076, 21, "SEPARATE type Shift+Caps selects level 1")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1078, 0, 0, 0, 0))
+                        + wire_message(16, 4, struct.pack("<IIIII", 1080, 128, 0, 0, 0))
+                    )
+                    key_step(1082, 21, "SEPARATE type LevelThree selects level 3")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1084, 129, 0, 0, 0))
+                    )
+                    key_step(1086, 21, "SEPARATE type Shift+LevelThree selects level 4")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1088, 128, 0, 2, 0))
+                    )
+                    key_step(1090, 21, "SEPARATE type Caps+LevelThree selects level 3")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1092, 129, 0, 2, 0))
+                    )
+                    key_step(1094, 21, "SEPARATE type Shift+Caps+LevelThree selects level 3")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1096, 0, 0, 0, 0))
+                    )
                     # The normal xkbcomp output uses shorthand arrays for
                     # number-row keys. Depress Shift and verify all twelve
                     # shifted digit-row/punctuation symbols.
@@ -5896,7 +5939,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,77x",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77x",
             keyboard_layout_test=True,
         )
     finally:
