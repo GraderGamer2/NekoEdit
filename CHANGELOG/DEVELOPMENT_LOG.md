@@ -1644,3 +1644,12 @@ The parser now stores up to 24 virtual-modifier names and a separate effective 3
 The Wayland test fixture now uses the real Mod5 and Mod2 masks for LevelThree/NumLock rather than the old declaration-order bits, checks a combined real-modifier encoding, and verifies a high-bit virtual-modifier encoding independently of the name index. It also repeats the virtual-modifier declarations in the later symbols component to ensure a repeated declaration cannot overwrite a previously parsed explicit encoding.
 
 Implicit bindings from key `virtualModifiers` properties, `modifier_map`, and `xkb_compat` interpretations remain outside this step; those require the key/compatibility interpretation layer. Modifier/key actions and `preserve[]` consumed-modifier semantics remain future work. Actions #655 validated the preceding type-map and IME snapshot; the current explicit-encoding change awaits its own complete workflow run.
+
+
+### Explicit virtual-modifier encodings — Actions #657 passed
+
+Actions [Build and test #657](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064) passed all eight workflow steps on [`fb8d02836361`](https://github.com/GraderGamer2/NekoEdit/commit/fb8d02836361da3d15371ba26dd894672bc645f1). The run validated the new virtual-modifier name/mask separation and explicit text-v1 encoding parser, plus the existing exact XKB type maps, custom arbitrary alphabetic type, eight-level fixture, Wayland text-input-v3, editing, clipboard, history, font, and install tests.
+
+The mock asserts `LevelThree = Mod5` (0x80), `NumLock = Mod2` (0x10), `V02 = Mod4+Mod5` (0xC0), `V23 = 0x80000000`, unbound declarations, and duplicate declarations in a later keymap component. This confirms that effective masks are not synthesized from virtual-modifier declaration order.
+
+Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064/artifacts/13615510231) is 91,474 bytes, artifact ID 13615510231, SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`, expiring 2026-11-15 11:21:21 UTC. Live GNOME/Mutter input-method and candidate-position testing remains outstanding.

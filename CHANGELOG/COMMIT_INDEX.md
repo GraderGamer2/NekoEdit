@@ -1016,4 +1016,10 @@ Actions [Build and test #655](https://github.com/GraderGamer2/NekoEdit/actions/r
 |---|---|
 | [51bcc46949f0](https://github.com/GraderGamer2/NekoEdit/commit/51bcc46949f00b4cfe1f7741b17aa1ac212d9d37) | fix: parse explicit XKB virtual modifier encodings |
 
-The parser now stores effective virtual-modifier masks independently from declaration indices and accepts explicit text-v1 assignments using real modifier names, plus-separated masks, numeric masks, and `none`. The Wayland fixture verifies Mod5/Mod2 mappings, a combined Mod4+Mod5 mapping, a high-bit mask, unbound declarations, and repeated declarations across keymap components. The complete PR workflow for this snapshot is the validation gate.
+The parser now stores effective virtual-modifier masks independently from declaration indices and accepts explicit text-v1 assignments using real modifier names, plus-separated masks, numeric masks, and `none`. The Wayland fixture verifies Mod5/Mod2 mappings, a combined Mod4+Mod5 mapping, a high-bit mask, unbound declarations, and repeated declarations across keymap components.
+
+Actions [Build and test #657](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064) passed all eight workflow steps on fb8d02836361. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064/artifacts/13615510231) is 91,474 bytes; SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e` (expires 2026-11-15 11:21:21 UTC).
+
+| Documentation commit | Subject |
+|---|---|
+| [fb8d02836361](https://github.com/GraderGamer2/NekoEdit/commit/fb8d02836361da3d15371ba26dd894672bc645f1) | docs: index explicit XKB virtual modifier support |

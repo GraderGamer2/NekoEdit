@@ -21,7 +21,7 @@ This is not a replacement for libxkbcommon. The client does not resolve implicit
 
 ### Verification state
 
-Actions [Build and test #655](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636) passed all eight workflow steps on [`9824b62d8507`](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a), including build/ELF, host, install, complete Wayland mock, inspection, and artifact upload. The explicit virtual-modifier encoding parser and fixture in the next implementation snapshot require their own complete PR Actions run before this status can be marked green.
+Actions [Build and test #657](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064) passed all eight workflow steps on [`fb8d02836361`](https://github.com/GraderGamer2/NekoEdit/commit/fb8d02836361da3d15371ba26dd894672bc645f1). This validates the explicit virtual-modifier parser, the custom XKB type-map fixture, the full Wayland mock suite (including text-input-v3), the host tests, freestanding ELF checks, installation tests, executable inspection, and artifact upload. Artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42475355064/artifacts/13615510231) is 91,474 bytes (artifact ID `13615510231`), SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`, expiry 2026-11-15 11:21:21 UTC.
 
 The preceding diagnostics were test-harness corrections rather than executable-source failures: #651 fixed a wrapped-caret coordinate assumption; #652 corrected Unicode fixture substitutions after custom type assignments; #654 added release synchronization between adjacent key-repeat cases. Actions #653 and #655 passed the full suite after those corrections.
 
@@ -37,7 +37,7 @@ Live GNOME/Mutter testing with a real input method remains outstanding. The mock
 
 ### Next roadmap items
 
-1. Validate explicit modifier encodings, then test against real GNOME/Mutter keymaps and an actual input method.
+1. Test the explicit virtual-modifier mappings against real GNOME/Mutter keymaps and an actual input method.
 2. Add implicit `virtualModifiers`/`modifier_map` and `xkb_compat` binding resolution, modifier/key action semantics, and preserve/consumed-modifier tracking.
 3. Expand keyboard coverage for remaining key classes/actions and broader Compose behavior.
 4. Improve preedit presentation and typography: cursor/attribute styling, shaping (kerning, mark positioning, GSUB/GPOS), then bidirectional layout.
