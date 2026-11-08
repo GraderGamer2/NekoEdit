@@ -5879,6 +5879,18 @@ xkb_symbols "nekoedit-sparse" {
                     wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
                     + wire_message(12, 0)
                 )
+                # The client processes key release asynchronously on its
+                # Wayland event loop. Wait for repeat_cancel() to acknowledge
+                # it before starting a different key; otherwise a timer tick
+                # already ready at the instant of release can race this mock.
+                repeat_release_deadline = time.monotonic() + 0.5
+                while child_u32("repeat_keycode") != 0 and time.monotonic() < repeat_release_deadline:
+                    time.sleep(0.001)
+                if child_u32("repeat_keycode") != 0:
+                    raise AssertionError(
+                        "Enter key release was not consumed before starting Tab; "
+                        f"repeat_keycode={child_u32('repeat_keycode')}"
+                    )
 
                 # Tab inserts four spaces per action, both on initial press and repeat.
                 before_tab = caret_position()
