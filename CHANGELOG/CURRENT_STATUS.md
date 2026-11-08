@@ -3,7 +3,7 @@
 **Snapshot date:** 2026-11-08 (Asia/Jakarta)  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
 **Development branch:** early-alpha  
-**Current branch / PR #2 head:** [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440) — adjust the History-tab mock test's final sequence after Delete.  
+**Latest tested source/test snapshot:** [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440) — the implementation and full Wayland mock test suite validated by Actions #603.  
 **Latest application implementation commit:** [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) — record delayed external Wayland paste as one Undo/Redo transaction.  
 **Latest full validation:** GitHub Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) passed all eight workflow steps on ae633fa5d654: freestanding build, ELF checks (no PT_INTERP/no DT_NEEDED), CLI smoke tests, persistent preferences, disk-backed journal host tests, full Wayland mock suite, executable inspection, and artifact upload.  
 **Build artifact:** [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495), 80,540 bytes; artifact ID 13602839495.  

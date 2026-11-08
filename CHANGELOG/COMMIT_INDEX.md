@@ -26,6 +26,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-07**
 | [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) | fix: record asynchronous clipboard paste in edit history |
 | [2eaa9eb54fcb](https://github.com/GraderGamer2/NekoEdit/commit/2eaa9eb54fcb503456eaf902103d918650b10d10) | test: exercise History tab controls in Wayland mock |
 | [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440) | test: avoid a redundant no-op shortcut after History deletion |
+| [e2853b66bd3a](https://github.com/GraderGamer2/NekoEdit/commit/e2853b66bd3ade7ca4010ea6ad52590f2ff2ce7c) | docs: update clipboard and disk-backed history implementation status |
 
 Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) passed all eight workflow steps, including the History-tab UI, external clipboard helper lifetime, asynchronous paste Undo/Redo, and host journal tests. Artifact [13602839495](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495) is 80,540 bytes.
 

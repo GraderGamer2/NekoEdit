@@ -1,3 +1,10 @@
+## 2026-11-08 — synchronize the implementation handoff and PR description
+
+- Refreshed README.md and the architecture, Wayland backend, clipboard, and Undo/Redo guides so they describe the shipped helper, journal recovery, asynchronous paste grouping, and History-tab workflow instead of the superseded snapshot/planned-service state.
+- Updated CHANGELOG/CURRENT_STATUS.md, PROJECT_HISTORY.md, COMMIT_INDEX.md, DEVELOPMENT_LOG.md, and the continuity guide. The source/test snapshot remains ae633fa5d654, validated by Actions #603; the documentation refresh was committed as e2853b66bd3a.
+- Rewrote PR #2's description to summarize the implemented clipboard/history work, current constraints, full validation, and remaining live-desktop checks. PR #2 remains open and unmerged.
+- No application source changed in this documentation synchronization.
+
 ## 2026-11-08 — process-exit clipboard helper, disk-backed Undo/Redo, and History UI
 
 ### Implementation
