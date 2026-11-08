@@ -1543,3 +1543,10 @@ The first run for this change set passed the freestanding build and host history
 - Actions [Build and test #608](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453524829) reached the freestanding build but failed compiling `src/editor/history.c`: the new `encode_transaction_v2()` helper called `map_mem()` before its static declaration, and `-Werror` correctly rejected the implicit declaration. The assembly modules compiled; CLI, host tests, Wayland tests and artifact upload were skipped.
 - Added a forward declaration for `map_mem(uint32_t)` before the compact codec in source commit [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). No behavior or file-format logic changed in this correction.
 - The complete workflow must be rerun against the corrected final branch head; validation remains pending at this log entry.
+
+
+### Compact-record selection-state correction
+
+- Actions [Build and test #609](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453639536) passed the freestanding build/ELF check, per-user install smoke test, CLI smoke tests and persistent-preference tests. The host journal test then found the compact-record assertion failing: the test leaves a stale anchor after an ordinary insertion while selection is inactive, and the encoder treated any anchor/cursor difference as meaningful selection state, adding the optional 10-byte extension.
+- Corrected the v2 writer in [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1): the 10-byte state extension is now present only when the before or after selection is active. Inactive anchors are semantically unused and replay normalizes the anchor to the caret. The existing 28-byte test now directly checks that case.
+- Wayland tests were skipped in #609 because `make test` stopped in the host history suite; they still need a complete run on the corrected final head.

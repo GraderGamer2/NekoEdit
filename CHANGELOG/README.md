@@ -67,4 +67,4 @@ A small typo or truly documentation-only correction still receives a commit entr
 
 The initial history was reconstructed from GitHub on 2026-11-06 and includes **188 commits**: 20 commits from the original `main` prototype history and 168 commits in development PR #1. See `COMMIT_INDEX.md` for the exact commit-by-commit record and `PROJECT_HISTORY.md` for the functional narrative.
 
-The project state in these files must be refreshed with every future development change. The compact-journal encoder declaration correction is recorded in `CHANGELOG/DEVELOPMENT_LOG.md`; do not treat Actions #608 as validation because it failed before the host/Wayland tests ran. The corrected full Actions run is the next source of truth.
+The project state in these files must be refreshed with every future development change. The compact-journal encoder declaration correction and inactive-selection-anchor size correction are recorded in `CHANGELOG/DEVELOPMENT_LOG.md`. Actions #608 stopped at the compiler, and #609 stopped at the host history assertion; neither run completed the Wayland tests. Use the corrected full Actions run as the validation source of truth.

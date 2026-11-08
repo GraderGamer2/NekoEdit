@@ -661,3 +661,8 @@ Implementation commit: [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/c
 ### Build correction for the compact journal encoder
 
 The first complete branch Actions attempt for Phase AC stopped in the strict C build: `encode_transaction_v2()` referenced the existing `map_mem()` helper before a prototype, triggering `-Werror=implicit-function-declaration`. Added a forward declaration without changing the v2 disk layout or the version-1 compatibility path. Corrected source commit: [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). The complete corrected workflow is pending; no downstream tests from failed Actions #608 ran.
+
+
+### Compact collapsed-caret metadata correction
+
+Actions #609 found that the compact record encoder was writing its optional 10-byte state extension whenever the selection anchor differed from the caret, even when no selection was active. Such an inactive anchor is not semantically used by Undo/Redo. The writer now includes before/after anchors only when either state has an active selection, and playback normalizes the collapsed anchor to the caret. Source correction: [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1). The 28-byte compact-record host test covers a collapsed caret with a stale anchor. Full host and Wayland validation is pending.
