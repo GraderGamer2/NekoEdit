@@ -656,3 +656,8 @@ The History page now has a true path filter, a separate Browse picker, Open Sele
 The build now includes a per-user install/uninstall workflow and desktop launcher/icon, with an install smoke test integrated into `make test`. The XKB `Multi_key` subset has advanced from 20 to 40 two-symbol pairs; extra tests validate degree, paragraph, registered-mark and ø output. This remains a bounded subset, not complete locale XCompose, XKB actions, or an IME.
 
 Implementation commit: [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). Automated validation of this follow-up is pending on the final PR branch update. GNOME/Mutter live testing remains the user's desktop milestone.
+
+
+### Build correction for the compact journal encoder
+
+The first complete branch Actions attempt for Phase AC stopped in the strict C build: `encode_transaction_v2()` referenced the existing `map_mem()` helper before a prototype, triggering `-Werror=implicit-function-declaration`. Added a forward declaration without changing the v2 disk layout or the version-1 compatibility path. Corrected source commit: [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). The complete corrected workflow is pending; no downstream tests from failed Actions #608 ran.

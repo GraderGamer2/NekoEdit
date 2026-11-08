@@ -1536,3 +1536,10 @@ The first run for this change set passed the freestanding build and host history
 - The preceding baseline Actions [Build and test #607](https://github.com/GraderGamer2/NekoEdit/actions/runs/42448790602) passed all eight workflow steps on 0aa15506bce4 and uploaded artifact 13605155538 (83,845 bytes).
 - The new complete build/test run is to be checked on the final updated PR head. Do not treat the newly added tests as passed until that run completes.
 - The intermittent event-loop error is handled for EINTR but still needs live session retesting. Verify clipboard persistence and task-manager naming, the History page at the user's font/window sizes, and the installed desktop launcher with GNOME/Mutter. Text-input/IME, broader XKB type/action semantics, complex shaping, fractional scaling, multi-buffer scheduling and X11 remain future work.
+
+
+### Build iteration — declaration-order correction
+
+- Actions [Build and test #608](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453524829) reached the freestanding build but failed compiling `src/editor/history.c`: the new `encode_transaction_v2()` helper called `map_mem()` before its static declaration, and `-Werror` correctly rejected the implicit declaration. The assembly modules compiled; CLI, host tests, Wayland tests and artifact upload were skipped.
+- Added a forward declaration for `map_mem(uint32_t)` before the compact codec in source commit [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). No behavior or file-format logic changed in this correction.
+- The complete workflow must be rerun against the corrected final branch head; validation remains pending at this log entry.

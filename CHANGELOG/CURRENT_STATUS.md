@@ -15,6 +15,7 @@ The new host/Wayland tests cover compact v2 size, legacy v1 compatibility, delet
 
 **Snapshot date:** 2026-11-08 (Asia/Jakarta)  
 **Repository:** [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)  
+**Build follow-up:** Actions [#608](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453524829) failed in the C build because the new compact encoder referenced `map_mem()` before its declaration. The assembly sources compiled; smoke/Wayland tests were skipped. Added the missing forward declaration in [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). The corrected full workflow is pending.  
 **Development branch:** early-alpha  
 **Latest tested source/test snapshot before the current follow-up:** [0aa15506bce4](https://github.com/GraderGamer2/NekoEdit/commit/0aa15506bce49e3374b351eeda44d1c2811598b7) — validated by Actions #607; the next full run will validate source commit f3f6da21af1c and its documentation commits.
 **Latest application implementation commit:** [5c2a097d5d2b](https://github.com/GraderGamer2/NekoEdit/commit/5c2a097d5d2bf95af4da76702ce0b2da0c8e420d) — record delayed external Wayland paste as one Undo/Redo transaction.  
