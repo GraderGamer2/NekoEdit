@@ -68,6 +68,26 @@ typedef struct {
     uint32_t inserted_length;
 } operation_header_t;
 
+/* Version 2 compacts the common typing case. Version 1 remains supported so
+   existing per-document journals remain readable and writable. */
+typedef struct {
+    uint32_t magic;
+    uint32_t total_size;
+    uint32_t operation_count;
+    uint32_t before_cursor;
+    uint32_t after_cursor;
+    uint32_t flags;
+} record_header_v2_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t before_anchor;
+    uint32_t after_anchor;
+    uint8_t before_active;
+    uint8_t after_active;
+} record_state_v2_t;
+
+#define RECORD_FLAG_EXPLICIT_STATE 1u
+
 extern char **process_envp;
 extern uint32_t doc_length, doc_cursor, doc_selection_anchor, doc_selection_active;
 extern uint32_t doc_capacity, doc_gap_start, doc_gap_end;
@@ -211,6 +231,74 @@ static int write_at(int fd, uint64_t off, const void *p, uint32_t n)
     long r = sc6(SYS_lseek, fd, (long)off, SEEK_SET, 0, 0, 0);
     return !err(r) && write_all(fd, p, n);
 }
+static uint32_t write_varuint(uint8_t *out, uint32_t value)
+{
+    uint32_t used = 0;
+    while (value >= 0x80u) {
+        out[used++] = (uint8_t)((value & 0x7fu) | 0x80u);
+        value >>= 7;
+    }
+    out[used++] = (uint8_t)value;
+    return used;
+}
+static int read_varuint(const uint8_t *data, uint32_t limit,
+                        uint32_t *position, uint32_t *value)
+{
+    uint32_t result = 0, shift = 0;
+    while (*position < limit && shift <= 28u) {
+        uint8_t byte = data[(*position)++];
+        if (shift == 28u && (byte & 0xf0u)) return 0;
+        result |= (uint32_t)(byte & 0x7fu) << shift;
+        if (!(byte & 0x80u)) {
+            *value = result;
+            return 1;
+        }
+        shift += 7u;
+    }
+    return 0;
+}
+/* The temporary allocation includes the worst-case 5-byte encoding for each
+   of the three uint32 fields per operation, plus all changed document bytes. */
+static int encode_transaction_v2(uint8_t **output, uint32_t *output_size,
+                                 uint32_t *allocation_size)
+{
+    uint64_t capacity64 = (uint64_t)tx_used + (uint64_t)tx_operations * 15u;
+    uint32_t source = 0, destination = 0, i, map_size;
+    uint8_t *encoded;
+    long memory;
+    if (!output || !output_size || !allocation_size ||
+        capacity64 > MAX_RECORD_SIZE) return 0;
+    map_size = (uint32_t)(capacity64 ? capacity64 : PAGE_SIZE);
+    memory = map_mem(map_size);
+    if (err(memory)) return 0;
+    encoded = (uint8_t *)(uintptr_t)memory;
+    for (i = 0; i < tx_operations; ++i) {
+        operation_header_t op;
+        uint32_t j;
+        uint64_t payload_end;
+        if (source > tx_used || sizeof(op) > tx_used - source) goto failed;
+        for (j = 0; j < sizeof(op); ++j)
+            ((uint8_t *)&op)[j] = tx_buffer[source + j];
+        source += sizeof(op);
+        payload_end = (uint64_t)source + op.removed_length + op.inserted_length;
+        if (payload_end > tx_used) goto failed;
+        destination += write_varuint(encoded + destination, op.offset);
+        destination += write_varuint(encoded + destination, op.removed_length);
+        destination += write_varuint(encoded + destination, op.inserted_length);
+        for (j = 0; j < op.removed_length + op.inserted_length; ++j)
+            encoded[destination + j] = tx_buffer[source + j];
+        destination += op.removed_length + op.inserted_length;
+        source = (uint32_t)payload_end;
+    }
+    if (source != tx_used || destination > map_size) goto failed;
+    *output = encoded;
+    *output_size = destination;
+    *allocation_size = map_size;
+    return 1;
+failed:
+    (void)sc6(SYS_munmap, memory, map_size, 0, 0, 0, 0);
+    return 0;
+}
 static long map_mem(uint32_t n)
 {
     return sc6(SYS_mmap, 0, n, PROT_READ | PROT_WRITE,
@@ -321,7 +409,7 @@ static int reset_file_to_current(void)
     if (err(r)) return 0;
     header.magic[0]='N'; header.magic[1]='E'; header.magic[2]='K'; header.magic[3]='O';
     header.magic[4]='H'; header.magic[5]='S'; header.magic[6]='T'; header.magic[7]='1';
-    header.version = 1;
+    header.version = 2;
     header.path_length = identity_length;
     header.header_size = (uint32_t)(sizeof(header) + identity_length + doc_length);
     header.path_hash = hash_identity(identity, identity_length);
@@ -407,59 +495,140 @@ static int replace_range(uint32_t offset, uint32_t removed,
 static int apply_record(uint32_t index, int forward)
 {
     record_header_t rh;
+    record_header_v2_t rh2;
+    record_state_v2_t state2;
     uint64_t start;
-    long map_record, map_ops;
+    long map_record = 0, map_ops = 0;
     uint8_t *record;
     uint32_t *positions;
-    uint32_t map_size, cursor, i;
+    uint32_t map_size, map_ops_size, cursor, i, record_prefix;
+    uint32_t version;
     int ok = 0;
+    rh.total_size = 0;
     if (index >= record_count) return 0;
     start = index ? record_ends[index - 1u] : base_offset;
-    if (!read_at(journal_fd, start, &rh, sizeof(rh)) ||
-        rh.magic != RECORD_MAGIC || rh.total_size < sizeof(rh) ||
-        rh.total_size > MAX_RECORD_SIZE || !rh.operation_count) return 0;
+    version = header.version;
+    if (version == 1u) {
+        if (!read_at(journal_fd, start, &rh, sizeof(rh)) ||
+            rh.magic != RECORD_MAGIC || rh.total_size < sizeof(rh) ||
+            rh.total_size > MAX_RECORD_SIZE || !rh.operation_count) return 0;
+        record_prefix = sizeof(record_header_t);
+    } else if (version == 2u) {
+        if (!read_at(journal_fd, start, &rh2, sizeof(rh2)) ||
+            rh2.magic != RECORD_MAGIC ||
+            rh2.total_size < sizeof(record_header_v2_t) ||
+            rh2.total_size > MAX_RECORD_SIZE || !rh2.operation_count ||
+            (rh2.flags & ~RECORD_FLAG_EXPLICIT_STATE)) return 0;
+        rh.magic = rh2.magic;
+        rh.total_size = rh2.total_size;
+        rh.operation_count = rh2.operation_count;
+        rh.before_cursor = rh2.before_cursor;
+        rh.after_cursor = rh2.after_cursor;
+        if (rh2.flags & RECORD_FLAG_EXPLICIT_STATE) {
+            if (rh.total_size < sizeof(record_header_v2_t) + sizeof(state2) ||
+                !read_at(journal_fd, start + sizeof(record_header_v2_t),
+                         &state2, sizeof(state2))) return 0;
+            rh.before_anchor = state2.before_anchor;
+            rh.after_anchor = state2.after_anchor;
+            rh.before_active = state2.before_active;
+            rh.after_active = state2.after_active;
+            record_prefix = sizeof(record_header_v2_t) + sizeof(state2);
+        } else {
+            rh.before_anchor = rh.before_cursor;
+            rh.after_anchor = rh.after_cursor;
+            rh.before_active = 0;
+            rh.after_active = 0;
+            record_prefix = sizeof(record_header_v2_t);
+        }
+    } else {
+        return 0;
+    }
+    if (rh.operation_count > 0x1fffffffu) return 0;
     map_record = map_mem(rh.total_size);
     if (err(map_record)) return 0;
     record = (uint8_t *)(uintptr_t)map_record;
     if (!read_at(journal_fd, start, record, rh.total_size)) goto done;
     map_size = rh.operation_count * 4u;
-    map_ops = map_mem(map_size ? map_size : PAGE_SIZE);
-    if (err(map_ops)) goto done;
+    map_ops_size = map_size ? map_size : PAGE_SIZE;
+    map_ops = map_mem(map_ops_size);
+    if (err(map_ops)) { map_ops = 0; goto done; }
     positions = (uint32_t *)(uintptr_t)map_ops;
-    cursor = sizeof(record_header_t);
+    cursor = record_prefix;
     for (i = 0; i < rh.operation_count; ++i) {
-        operation_header_t op;
-        uint32_t j;
-        uint64_t next;
-        if (cursor > rh.total_size || sizeof(op) > rh.total_size - cursor) goto done_ops;
-        positions[i] = cursor;
-        for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[cursor + j];
-        next = (uint64_t)cursor + sizeof(op) + op.removed_length + op.inserted_length;
-        if (next > rh.total_size) goto done_ops;
-        cursor = (uint32_t)next;
+        if (version == 1u) {
+            operation_header_t op;
+            uint32_t j;
+            uint64_t next;
+            if (cursor > rh.total_size || sizeof(op) > rh.total_size - cursor)
+                goto done_ops;
+            positions[i] = cursor;
+            for (j = 0; j < sizeof(op); ++j)
+                ((uint8_t *)&op)[j] = record[cursor + j];
+            next = (uint64_t)cursor + sizeof(op) +
+                   op.removed_length + op.inserted_length;
+            if (next > rh.total_size) goto done_ops;
+            cursor = (uint32_t)next;
+        } else {
+            uint32_t offset, removed, inserted;
+            positions[i] = cursor;
+            if (!read_varuint(record, rh.total_size, &cursor, &offset) ||
+                !read_varuint(record, rh.total_size, &cursor, &removed) ||
+                !read_varuint(record, rh.total_size, &cursor, &inserted) ||
+                (uint64_t)cursor + removed + inserted > rh.total_size)
+                goto done_ops;
+            cursor += removed + inserted;
+        }
     }
     if (cursor != rh.total_size) goto done_ops;
     replaying = 1;
     if (forward) {
         for (i = 0; i < rh.operation_count; ++i) {
-            operation_header_t op;
-            uint32_t j, at = positions[i];
-            for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[at + j];
-            if (!replace_range(op.offset, op.removed_length,
-                record + at + sizeof(op) + op.removed_length, op.inserted_length))
-                goto replay_done;
+            uint32_t at = positions[i];
+            if (version == 1u) {
+                operation_header_t op;
+                uint32_t j;
+                for (j = 0; j < sizeof(op); ++j)
+                    ((uint8_t *)&op)[j] = record[at + j];
+                if (!replace_range(op.offset, op.removed_length,
+                    record + at + sizeof(op) + op.removed_length,
+                    op.inserted_length))
+                    goto replay_done;
+            } else {
+                uint32_t offset, removed, inserted;
+                if (!read_varuint(record, rh.total_size, &at, &offset) ||
+                    !read_varuint(record, rh.total_size, &at, &removed) ||
+                    !read_varuint(record, rh.total_size, &at, &inserted) ||
+                    (uint64_t)at + removed + inserted > rh.total_size)
+                    goto replay_done;
+                if (!replace_range(offset, removed,
+                    record + at + removed, inserted))
+                    goto replay_done;
+            }
         }
         doc_cursor = rh.after_cursor;
         doc_selection_anchor = rh.after_anchor;
         doc_selection_active = rh.after_active && doc_cursor != doc_selection_anchor;
     } else {
         for (i = rh.operation_count; i > 0; --i) {
-            operation_header_t op;
-            uint32_t j, at = positions[i - 1u];
-            for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[at + j];
-            if (!replace_range(op.offset, op.inserted_length,
-                               record + at + sizeof(op), op.removed_length))
-                goto replay_done;
+            uint32_t at = positions[i - 1u];
+            if (version == 1u) {
+                operation_header_t op;
+                uint32_t j;
+                for (j = 0; j < sizeof(op); ++j)
+                    ((uint8_t *)&op)[j] = record[at + j];
+                if (!replace_range(op.offset, op.inserted_length,
+                                   record + at + sizeof(op), op.removed_length))
+                    goto replay_done;
+            } else {
+                uint32_t offset, removed, inserted;
+                if (!read_varuint(record, rh.total_size, &at, &offset) ||
+                    !read_varuint(record, rh.total_size, &at, &removed) ||
+                    !read_varuint(record, rh.total_size, &at, &inserted) ||
+                    (uint64_t)at + removed + inserted > rh.total_size)
+                    goto replay_done;
+                if (!replace_range(offset, inserted, record + at, removed))
+                    goto replay_done;
+            }
         }
         doc_cursor = rh.before_cursor;
         doc_selection_anchor = rh.before_anchor;
@@ -471,23 +640,49 @@ static int apply_record(uint32_t index, int forward)
 replay_done:
     replaying = 0;
 done_ops:
-    (void)sc6(SYS_munmap, map_ops, map_size ? map_size : PAGE_SIZE, 0, 0, 0, 0);
+    if (map_ops)
+        (void)sc6(SYS_munmap, map_ops, map_ops_size, 0, 0, 0, 0);
 done:
-    (void)sc6(SYS_munmap, map_record, rh.total_size, 0, 0, 0, 0);
+    if (map_record)
+        (void)sc6(SYS_munmap, map_record, rh.total_size, 0, 0, 0, 0);
     return ok;
 }
 static int scan_records(uint64_t file_size)
 {
     uint64_t off = base_offset;
     uint32_t found = 0;
-    record_header_t rh;
     if (!grow_records(64)) return 0;
     while (off < file_size) {
-        if (file_size - off < sizeof(rh) ||
-            !read_at(journal_fd, off, &rh, sizeof(rh)) ||
-            rh.magic != RECORD_MAGIC || rh.total_size < sizeof(rh) ||
-            rh.total_size > file_size - off || !rh.operation_count) break;
-        off += rh.total_size;
+        uint32_t total_size = 0, operation_count = 0;
+        uint32_t minimum_size, magic = 0;
+        if (header.version == 1u) {
+            record_header_t rh;
+            if (file_size - off < sizeof(rh) ||
+                !read_at(journal_fd, off, &rh, sizeof(rh)))
+                break;
+            magic = rh.magic;
+            total_size = rh.total_size;
+            operation_count = rh.operation_count;
+            minimum_size = sizeof(rh);
+        } else if (header.version == 2u) {
+            record_header_v2_t rh;
+            if (file_size - off < sizeof(rh) ||
+                !read_at(journal_fd, off, &rh, sizeof(rh)) ||
+                (rh.flags & ~RECORD_FLAG_EXPLICIT_STATE))
+                break;
+            magic = rh.magic;
+            total_size = rh.total_size;
+            operation_count = rh.operation_count;
+            minimum_size = sizeof(rh) +
+                ((rh.flags & RECORD_FLAG_EXPLICIT_STATE) ?
+                 sizeof(record_state_v2_t) : 0u);
+        } else {
+            return 0;
+        }
+        if (magic != RECORD_MAGIC || total_size < minimum_size ||
+            total_size > file_size - off || !operation_count)
+            break;
+        off += total_size;
         if (!grow_records(found + 1u)) return 0;
         record_ends[found++] = off;
     }
@@ -521,7 +716,8 @@ static int open_identity_file(int create_if_missing)
     if (!read_at(journal_fd, 0, &header, sizeof(header)) ||
         header.magic[0]!='N' || header.magic[1]!='E' || header.magic[2]!='K' ||
         header.magic[3]!='O' || header.magic[4]!='H' || header.magic[5]!='S' ||
-        header.magic[6]!='T' || header.magic[7]!='1' || header.version != 1 ||
+        header.magic[6]!='T' || header.magic[7]!='1' ||
+        (header.version != 1u && header.version != 2u) ||
         header.path_hash != hash_identity(identity, identity_length) ||
         header.path_length != identity_length ||
         header.base_length > 0x7fffffffu ||
@@ -643,7 +839,12 @@ void history_note_delete(uint32_t offset, uint32_t length)
 void history_commit_action(void)
 {
     record_header_t rh;
+    record_header_v2_t rh2;
+    record_state_v2_t state2;
     uint64_t start, end;
+    uint32_t record_size, compact_size = 0, compact_allocation = 0;
+    uint8_t *compact = (uint8_t *)0;
+    long compact_memory = 0;
     if (!tx_active) return;
     tx_active = 0;
     if (!tx_operations || tx_error || doc_storage_error || !ready) {
@@ -659,22 +860,65 @@ void history_commit_action(void)
         record_count = (uint32_t)header.cursor;
         header.record_count = header.cursor;
     } else start = record_count ? record_ends[record_count - 1u] : base_offset;
-    rh.magic = RECORD_MAGIC;
-    rh.total_size = (uint32_t)(sizeof(rh) + tx_used);
-    rh.operation_count = tx_operations;
-    rh.before_cursor = before_cursor;
-    rh.before_anchor = before_anchor;
-    rh.before_active = before_active;
-    rh.after_cursor = doc_cursor;
-    rh.after_anchor = doc_selection_anchor;
-    rh.after_active = doc_selection_active;
-    if (!grow_records(record_count + 1u) ||
-        !write_at(journal_fd, start, &rh, sizeof(rh)) ||
-        !write_at(journal_fd, start + sizeof(rh), tx_buffer, tx_used) ||
-        err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) {
-        storage_error = 1; return;
+
+    if (header.version == 1u) {
+        rh.magic = RECORD_MAGIC;
+        rh.total_size = (uint32_t)(sizeof(rh) + tx_used);
+        rh.operation_count = tx_operations;
+        rh.before_cursor = before_cursor;
+        rh.before_anchor = before_anchor;
+        rh.before_active = before_active;
+        rh.after_cursor = doc_cursor;
+        rh.after_anchor = doc_selection_anchor;
+        rh.after_active = doc_selection_active;
+        record_size = rh.total_size;
+        if (!grow_records(record_count + 1u) ||
+            !write_at(journal_fd, start, &rh, sizeof(rh)) ||
+            !write_at(journal_fd, start + sizeof(rh), tx_buffer, tx_used) ||
+            err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) {
+            storage_error = 1; return;
+        }
+    } else if (header.version == 2u) {
+        uint32_t explicit_state =
+            (before_anchor != before_cursor || before_active ||
+             doc_selection_anchor != doc_cursor || doc_selection_active) ? 1u : 0u;
+        if (!encode_transaction_v2(&compact, &compact_size, &compact_allocation)) {
+            storage_error = 1; return;
+        }
+        compact_memory = (long)(uintptr_t)compact;
+        rh2.magic = RECORD_MAGIC;
+        rh2.operation_count = tx_operations;
+        rh2.before_cursor = before_cursor;
+        rh2.after_cursor = doc_cursor;
+        rh2.flags = explicit_state ? RECORD_FLAG_EXPLICIT_STATE : 0u;
+        rh2.total_size = (uint32_t)(sizeof(rh2) +
+            (explicit_state ? sizeof(state2) : 0u) + compact_size);
+        record_size = rh2.total_size;
+        if (explicit_state) {
+            state2.before_anchor = before_anchor;
+            state2.after_anchor = doc_selection_anchor;
+            state2.before_active = (uint8_t)(before_active != 0);
+            state2.after_active = (uint8_t)(doc_selection_active != 0);
+        }
+        if (record_size > MAX_RECORD_SIZE ||
+            !grow_records(record_count + 1u) ||
+            !write_at(journal_fd, start, &rh2, sizeof(rh2)) ||
+            (explicit_state &&
+             !write_at(journal_fd, start + sizeof(rh2), &state2, sizeof(state2))) ||
+            !write_at(journal_fd, start + sizeof(rh2) +
+                (explicit_state ? sizeof(state2) : 0u), compact, compact_size) ||
+            err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) {
+            if (compact_memory)
+                (void)sc6(SYS_munmap, compact_memory, compact_allocation, 0, 0, 0, 0);
+            storage_error = 1; return;
+        }
+        if (compact_memory)
+            (void)sc6(SYS_munmap, compact_memory, compact_allocation, 0, 0, 0, 0);
+    } else {
+        storage_error = 1;
+        return;
     }
-    end = start + rh.total_size;
+    end = start + record_size;
     record_ends[record_count++] = end;
     header.record_count = record_count;
     header.cursor = record_count;
@@ -840,7 +1084,8 @@ uint32_t history_search_refresh(const char *query)
                         candidate_header.magic[5] == 'S' &&
                         candidate_header.magic[6] == 'T' &&
                         candidate_header.magic[7] == '1' &&
-                        candidate_header.version == 1u &&
+                        (candidate_header.version == 1u ||
+                         candidate_header.version == 2u) &&
                         candidate_header.path_length > 0u &&
                         candidate_header.path_length < PATH_CAPACITY &&
                         candidate_header.base_length <= 0x7fffffffu &&
@@ -912,6 +1157,40 @@ const char *history_search_result(uint32_t index)
     return index < history_search_count ? history_search_results[index] :
            (const char *)0;
 }
+
+int history_delete_selected(uint32_t index)
+{
+    const char *path = history_search_result(index);
+    char target[PATH_CAPACITY];
+    static const char hex[] = "0123456789abcdef";
+    static const char suffix[] = ".history";
+    uint32_t length, n, i;
+    uint64_t hash;
+    long result;
+    if (!path) return 0;
+    length = slen(path, PATH_CAPACITY);
+    if (!length || length >= PATH_CAPACITY) return 0;
+    if (length == identity_length) {
+        for (i = 0; i < length && path[i] == identity[i]; ++i) {}
+        if (i == length) return history_delete_current();
+    }
+    if (!app_dir[0] || !scopy(target, PATH_CAPACITY, app_dir,
+                               slen(app_dir, PATH_CAPACITY)))
+        return 0;
+    n = slen(target, PATH_CAPACITY);
+    if (!append_text(target, PATH_CAPACITY, &n, "/", 1u)) return 0;
+    hash = hash_identity(path, length);
+    for (i = 0; i < 16u; ++i) {
+        char digit = hex[(hash >> ((15u - i) * 4u)) & 15u];
+        if (!append_text(target, PATH_CAPACITY, &n, &digit, 1u)) return 0;
+    }
+    if (!append_text(target, PATH_CAPACITY, &n, suffix, sizeof(suffix) - 1u))
+        return 0;
+    result = sc6(SYS_unlinkat, AT_FDCWD, (long)target, 0, 0, 0, 0);
+    if (err(result) && result != -2) return 0;
+    history_search_cache_valid = 0;
+    return 1;
+}
 const char *history_search_display(uint32_t index)
 {
     const char *path;
@@ -919,12 +1198,13 @@ const char *history_search_display(uint32_t index)
     if (index >= history_search_count) return (const char *)0;
     path = history_search_results[index];
     length = slen(path, PATH_CAPACITY);
-    if (length <= 86u) {
+    if (length <= 34u) {
         for (i = 0; i < length; ++i)
             history_search_display_buffer[out++] = path[i];
     } else {
-        head = 38u;
-        tail = 45u;
+        /* Keep rows inside the narrowest supported window at a 16px UI font. */
+        head = 14u;
+        tail = 17u;
         for (i = 0; i < head; ++i)
             history_search_display_buffer[out++] = path[i];
         history_search_display_buffer[out++] = '.';

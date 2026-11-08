@@ -16,6 +16,7 @@
 #define SYS_recvmsg 47
 #define SYS_fork 57
 #define SYS_prctl 157
+#define SYS_setsid 112
 
 #define PROT_READ 1
 #define PROT_WRITE 2
@@ -73,6 +74,8 @@ extern int32_t event_fd;
 extern int32_t clipboard_persistence_enabled;
 extern uint8_t event_payload[4096];
 extern void linux_exit(int);
+extern void history_reset(void);
+extern long wl_send_request(uint32_t, uint32_t, const void *, uint32_t);
 extern uint32_t doc_selection_active;
 extern uint32_t doc_selection_anchor;
 extern uint32_t doc_cursor;
@@ -596,7 +599,8 @@ int clipboard_handle_event(uint32_t object_id, uint32_t opcode,
         if (opcode == 5 && size >= 4) {
             selected_offer = *(const uint32_t *)(const void *)payload;
             selected_mimes = selected_offer == pending_offer ? pending_mimes : 0;
-            if (clipboard_service_mode && current_source)
+            if (clipboard_service_mode && current_source &&
+                selected_offer != current_source)
                 clipboard_service_should_exit = 1;
             if (!selected_offer)
                 selected_mimes = 0;
@@ -755,13 +759,26 @@ static int service_has_pending_sends(void)
     return 0;
 }
 
-static void clipboard_service_loop(void)
+static void clipboard_service_loop(uint32_t window_buffer)
 {
     pollfd_t fds[7];
     clipboard_service_mode = 1;
     clipboard_service_should_exit = 0;
+    /* The child remains the owner of the Wayland data source, not a second
+       editor window. Detach it from the launching terminal and retire the
+       inherited shell-surface objects while keeping the data-device alive. */
+    (void)syscall6(SYS_setsid, 0, 0, 0, 0, 0, 0);
     (void)syscall6(SYS_prctl, 15, (long)"nekoedit-clip", 0, 0, 0, 0);
     if (event_fd >= 0) { close_fd(event_fd); event_fd = -1; }
+    history_reset();
+    (void)wl_send_request(10, 0, (const void *)0, 0); /* xdg_toplevel.destroy */
+    (void)wl_send_request(9, 0, (const void *)0, 0);  /* xdg_surface.destroy */
+    (void)wl_send_request(8, 0, (const void *)0, 0);  /* wl_surface.destroy */
+    if (window_buffer)
+        (void)wl_send_request(window_buffer, 0, (const void *)0, 0);
+    close_fd(0);
+    close_fd(1);
+    close_fd(2);
     for (;;) {
         long result;
         fds[0].fd = service_socket_fd;
@@ -783,7 +800,8 @@ static void clipboard_service_loop(void)
     linux_exit(0);
 }
 
-long clipboard_service_handoff(int32_t socket_descriptor)
+long clipboard_service_handoff(int32_t socket_descriptor,
+                               uint32_t window_buffer)
 {
     long child;
     if (!clipboard_persistence_enabled || !current_source ||
@@ -793,7 +811,7 @@ long clipboard_service_handoff(int32_t socket_descriptor)
     if (child < 0) return child;
     if (child == 0) {
         service_socket_fd = socket_descriptor;
-        clipboard_service_loop();
+        clipboard_service_loop(window_buffer);
     }
     return child;
 }

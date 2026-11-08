@@ -2047,35 +2047,54 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(350, 185, 2075, "focus the History search field")
                     if child_u32("history_search_focus") != 1:
                         raise AssertionError("History search field did not receive keyboard focus")
-                    key_step(2076, 28, "Enter opens the selected historical document")
+
+                    # Browse is a separate explicit action; it opens the native
+                    # document picker without making the filter field inert.
+                    workflow_click(700, 185, 2076, "History Browse opens the document picker")
+                    if child_u32("picker_mode") != 1:
+                        raise AssertionError("History Browse did not open the Open picker")
+                    key_step(2077, 1, "Escape closes the History Browse picker")
+                    if child_u32("picker_mode") != 0 or child_u32("history_tab_open") != 1:
+                        raise AssertionError("closing the History Browse picker did not return to History")
+                    workflow_click(350, 185, 2078, "refocus History search after Browse")
+                    history_query_codes = (49, 18, 37, 24, 18, 32, 23, 20,
+                                           12, 35, 23, 31, 20, 24, 19, 21)
+                    for index, code in enumerate(history_query_codes):
+                        key_step(2080 + index * 2, code,
+                                 f"History search query character {index + 1}")
+                    if child_u32("history_search_match_count") != 1:
+                        raise AssertionError("History filter did not match the source document path")
+                    workflow_click(100, 345, 2120, "Open Selected button opens the highlighted history")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("opening a History search result did not restore the edited document")
                     if child_u32("history_tab_open") != 1:
                         raise AssertionError("opening a History search result left the History page")
-                    workflow_click(100, 434, 2080, "History page Undo button")
+                    workflow_click(100, 434, 2160, "History page Undo button")
                     if read_document_state()["doc_contents"] != b"abc":
                         raise AssertionError("History page Undo button did not undo the latest edit")
-                    workflow_click(190, 434, 2090, "History page Redo button")
+                    workflow_click(300, 434, 2170, "History page Redo button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History page Redo button did not redo the latest edit")
 
                     # Export must open the existing native Save picker in
                     # history-export mode; Escape safely returns to the page.
-                    workflow_click(280, 434, 2100, "History page Export button")
+                    workflow_click(480, 434, 2180, "History page Export button")
                     if child_u32("picker_mode") != 2 or child_u32("history_export_mode") != 1:
                         raise AssertionError("History Export did not open its Save picker")
-                    key_step(2110, 1, "Escape cancels History export")
+                    key_step(2190, 1, "Escape cancels History export")
                     if child_u32("picker_mode") != 0 or child_u32("history_export_mode") != 0:
                         raise AssertionError("cancelling History Export did not close the picker cleanly")
 
                     # Delete removes only the journal. The document stays
                     # intact; the host-side journal test separately checks
                     # that the deleted journal exposes zero Undo/Redo records.
-                    workflow_click(368, 434, 2120, "History page Delete button")
+                    workflow_click(660, 434, 2200, "History page Delete Selected History button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History Delete modified document bytes")
+                    if child_u32("history_search_match_count") != 0:
+                        raise AssertionError("History Delete did not remove the selected journal from search results")
                     observations.append(
-                        "History tab switching, Undo/Redo buttons, Export picker mode, cancellation, and Delete verified"
+                        "History tab filtering, Browse picker, Open Selected, responsive Undo/Redo/Export/Delete controls, and selected-history removal verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -2309,9 +2328,15 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     expect_source_creation(19, 2201)
 
-                    # Close the toplevel and request the data after the parent
-                    # process exits. The helper must have inherited the source.
+                    # Close the editor window. The helper keeps only the
+                    # clipboard data-device objects; it must destroy the
+                    # inherited xdg toplevel/surface/buffer so no frozen
+                    # editor window remains on the compositor.
                     client.sendall(wire_message(10, 1))
+                    expect_message(client, (10, 0, b""), "clipboard helper destroys xdg_toplevel")
+                    expect_message(client, (9, 0, b""), "clipboard helper destroys xdg_surface")
+                    expect_message(client, (8, 0, b""), "clipboard helper destroys wl_surface")
+                    expect_message(client, (12, 0, b""), "clipboard helper destroys wl_buffer")
                     read_fd, write_fd = os.pipe()
                     try:
                         transfer = wire_message(
@@ -2628,7 +2653,7 @@ xkb_symbols "nekoedit-sparse" {
                 if punctuation_render_test:
                     # Every printable ASCII punctuation character must have
                     # its own bitmap, rather than silently falling back to '?'.
-                    punctuation_chars = "!\"#$%&'()*+,-./:;<=>?@[\\]^_" + chr(96) + "{|}~"
+                    punctuation_chars = "!\"#$%&'()*+,-./:;<=>?@[\]^_" + chr(96) + "{|}~"
                     question_bitmap = (14, 17, 1, 2, 4, 0, 4)
 
                     def glyph_bitmap(cell_index: int) -> tuple[int, ...]:
@@ -2773,8 +2798,29 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1720, 14, "Backspace cancels a pending Compose sequence")
                     if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Backspace did not cancel Compose without deleting document text")
+
+                    # Additional common two-symbol pairs exercise degree,
+                    # paragraph, registered, and Scandinavian-letter output.
+                    added_compose = (
+                        (24, 24, b"\xc2\xb0", "o o -> degree sign"),
+                        (25, 25, b"\xc2\xb6", "p p -> paragraph sign"),
+                        (19, 24, b"\xc2\xae", "r o -> registered sign"),
+                        (53, 24, b"\xc3\xb8", "/ o -> ø"),
+                    )
+                    for index, (first, second, encoded, label) in enumerate(added_compose):
+                        serial = 1730 + index * 10
+                        key_step(serial, 46, f"Multi_key starts {label}")
+                        key_step(serial + 2, first, f"Compose first symbol for {label}")
+                        key_step(serial + 4, second, f"Compose resolves {label}")
+                        expected_unicode += encoded
+                    expanded_compose_state = read_document_state()
+                    if expanded_compose_state.get("doc_contents") != expected_unicode:
+                        raise AssertionError(
+                            "expanded Compose pairs produced unexpected UTF-8: "
+                            + repr(expanded_compose_state.get("doc_contents"))
+                        )
                     observations.append(
-                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, bounded Multi_key Compose pairs/fallback, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
+                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, 40 bounded Multi_key pairs/fallback, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -4847,7 +4893,7 @@ xkb_symbols "nekoedit-sparse" {
                     + wire_message(16, 4, struct.pack("<IIIII", 1015, 0, 0, 0, 0))
                 )
 
-                # The remaining document must be "b\\n2!": Backspace removed
+                # The remaining document must be "b\n2!": Backspace removed
                 # a, Enter and digit 2 formed the second line, and Shift+1
                 # produced the exclamation mark.
                 first_line = [
@@ -5477,7 +5523,7 @@ xkb_symbols "nekoedit-sparse" {
             process.kill()
             stdout, stderr_bytes = process.communicate()
             thread.join(timeout=9)
-            details = "\\n".join(errors)
+            details = "\n".join(errors)
             raise AssertionError(
                 f"NekoEdit exceeded the {timeout_seconds}s Wayland test timeout; "
                 f"stderr={stderr_bytes.decode(errors='replace')!r}; "
@@ -5679,7 +5725,7 @@ if __name__ == "__main__":
     punctuation_fd, punctuation_path = tempfile.mkstemp(prefix="nekoedit-punctuation-")
     try:
         with os.fdopen(punctuation_fd, "wb") as punctuation_file:
-            punctuation_file.write(b"A!\"#$%&'()*+,-./:;<=>?@[\\]^_")
+            punctuation_file.write(b"A!\"#$%&'()*+,-./:;<=>?@[\]^_")
             punctuation_file.write(bytes([96]) + b"{|}~")
         run(
             sys.argv[1],

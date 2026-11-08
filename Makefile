@@ -9,6 +9,13 @@ APP_BINARY := $(BUILD_DIR)/nekoedit
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
 
+PREFIX ?= /usr/local
+USER_PREFIX ?= $(HOME)/.local
+USER_BIN_DIR ?= $(USER_PREFIX)/bin
+USER_APP_DIR ?= $(USER_PREFIX)/share/applications
+USER_ICON_DIR ?= $(USER_PREFIX)/share/icons/hicolor/scalable/apps
+MAKE_DEFAULT ?= 0
+
 ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
 
@@ -16,7 +23,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland check inspect
+.PHONY: all clean test test-wayland test-install-user check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -46,10 +53,13 @@ inspect: $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
 
-test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST)
+test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
+
+test-install-user: $(APP_BINARY)
+	sh tests/install_user.sh
 
 $(PREFERENCES_TEST): tests/preferences_test.c src/editor/preferences.c
 	@mkdir -p $(@D)
@@ -61,6 +71,29 @@ $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
+
+install: $(APP_BINARY)
+	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/applications" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps"
+	install -m 0755 "$(APP_BINARY)" "$(DESTDIR)$(PREFIX)/bin/nekoedit"
+	sed 's|@NEKOEDIT_EXEC@|nekoedit|g' data/nekoedit.desktop.in > "$(DESTDIR)$(PREFIX)/share/applications/nekoedit.desktop"
+	install -m 0644 data/nekoedit.svg "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/nekoedit.svg"
+
+install-user: $(APP_BINARY)
+	install -d "$(USER_BIN_DIR)" "$(USER_APP_DIR)" "$(USER_ICON_DIR)"
+	install -m 0755 "$(APP_BINARY)" "$(USER_BIN_DIR)/nekoedit"
+	sed 's|@NEKOEDIT_EXEC@|$(USER_BIN_DIR)/nekoedit|g' data/nekoedit.desktop.in > "$(USER_APP_DIR)/nekoedit.desktop"
+	chmod 0755 "$(USER_APP_DIR)/nekoedit.desktop"
+	install -m 0644 data/nekoedit.svg "$(USER_ICON_DIR)/nekoedit.svg"
+	@if command -v gio >/dev/null 2>&1; then gio set "$(USER_APP_DIR)/nekoedit.desktop" metadata::trusted true >/dev/null 2>&1 || true; fi
+	@if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$(USER_APP_DIR)" >/dev/null 2>&1 || true; fi
+	@if [ "$(MAKE_DEFAULT)" = "1" ] && command -v xdg-mime >/dev/null 2>&1; then xdg-mime default nekoedit.desktop text/plain; fi
+	@echo "Installed NekoEdit to $(USER_BIN_DIR)/nekoedit"
+	@echo "Desktop launcher: $(USER_APP_DIR)/nekoedit.desktop"
+	@if [ "$(MAKE_DEFAULT)" = "1" ]; then echo "NekoEdit is now the default text/plain handler."; else echo "Use Open With > NekoEdit to choose it for text files, or rerun with MAKE_DEFAULT=1 to make it the default."; fi
+
+uninstall-user:
+	rm -f "$(USER_BIN_DIR)/nekoedit" "$(USER_APP_DIR)/nekoedit.desktop" "$(USER_ICON_DIR)/nekoedit.svg"
+	@if command -v update-desktop-database >/dev/null 2>&1; then update-desktop-database "$(USER_APP_DIR)" >/dev/null 2>&1 || true; fi
 
 clean:
 	rm -rf $(BUILD_DIR)

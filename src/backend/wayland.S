@@ -148,6 +148,7 @@ ui_history_undo_label: .asciz "UNDO"
 ui_history_redo_label: .asciz "REDO"
 ui_history_export_label: .asciz "EXPORT"
 ui_history_delete_label: .asciz "DELETE"
+ui_history_browse_label: .asciz "BROWSE"
 ui_history_undo_count_label: .asciz "UNDO RECORDS"
 ui_history_redo_count_label: .asciz "REDO RECORDS"
 ui_history_storage_error: .asciz "JOURNAL STORAGE ERROR"
@@ -1976,6 +1977,26 @@ unicode_extended_pictographic_ranges_end:
     .long 0x22, 0x55, 0xdc       # " U -> Ü
     .long 0x2c, 0x63, 0xe7       # , c -> ç
     .long 0x2c, 0x43, 0xc7       # , C -> Ç
+    .long 0x6f, 0x6f, 0xb0       # o o -> degree sign
+    .long 0x70, 0x70, 0xb6       # p p -> paragraph sign
+    .long 0x72, 0x6f, 0xae       # r o -> registered sign
+    .long 0x78, 0x78, 0xd7       # x x -> multiplication sign
+    .long 0x2f, 0x6f, 0xf8       # / o -> ø
+    .long 0x6f, 0x2f, 0xf8       # o / -> ø
+    .long 0x2f, 0x4f, 0xd8       # / O -> Ø
+    .long 0x74, 0x6d, 0x2122     # t m -> trademark sign
+    .long 0x73, 0x6f, 0xa7       # s o -> section sign
+    .long 0x6e, 0x6f, 0xac       # n o -> not sign
+    .long 0x3c, 0x2d, 0x2190     # < - -> ←
+    .long 0x3d, 0x3e, 0x21d2     # = > -> ⇒
+    .long 0x7e, 0x7e, 0x2248     # ~ ~ -> approximately equal
+    .long 0x5e, 0x5e, 0x2191     # ^ ^ -> ↑
+    .long 0x76, 0x76, 0x2193     # v v -> ↓
+    .long 0x2a, 0x2a, 0x2605     # * * -> black star
+    .long 0x21, 0x3d, 0x2260     # ! = -> ≠
+    .long 0x3c, 0x3d, 0x2264     # < = -> ≤
+    .long 0x3e, 0x3d, 0x2265     # > = -> ≥
+    .long 0x2f, 0x2f, 0xf7       # / / -> ÷
     .long 0, 0, 0
 .Ldoc_dead_marks:
     .long 0x300, 0x301, 0x302, 0x303, 0x308, 0x327
@@ -2348,6 +2369,7 @@ recv_msg_control:      .zero 64
 .extern history_redo_count
 .extern history_has_error
 .extern history_delete_current
+.extern history_delete_selected
 .extern history_export_to
 .extern history_search_refresh
 .extern history_search_result_count
@@ -2944,6 +2966,8 @@ wayland_main:
     mov esi, 8
     mov edx, -1
     syscall
+    cmp rax, -4                 # EINTR is a transient wake-up, not a protocol failure
+    je .event_loop
     test rax, rax
     js .protocol_error
     # Drain compositor events before a simultaneous repeat timeout so key
@@ -3213,8 +3237,26 @@ wayland_main:
     jb .pointer_check_horizontal_scroll
     cmp edx, 168
     jb .event_loop
+    cmp edx, 170
+    jb .event_loop
     cmp edx, 204
-    jb .pointer_history_search_focus
+    jae .pointer_history_after_search_row
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 48
+    cmp eax, ecx
+    jae .event_loop
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 144
+    cmp eax, ecx
+    jae .pointer_history_browse
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 160
+    cmp eax, ecx
+    jae .event_loop
+    cmp eax, 48
+    jb .event_loop
+    jmp .pointer_history_search_focus
+.pointer_history_after_search_row:
     cmp edx, 224
     jb .event_loop
     cmp edx, 246
@@ -3239,23 +3281,32 @@ wayland_main:
     jb .event_loop
     cmp edx, 444
     jae .event_loop
-    cmp eax, 64
+    cmp eax, 48
     jb .event_loop
-    cmp eax, 144
-    jb .pointer_history_undo
-    cmp eax, 152
-    jb .event_loop
-    cmp eax, 232
-    jb .pointer_history_redo
-    cmp eax, 240
-    jb .event_loop
-    cmp eax, 320
-    jb .pointer_history_export
-    cmp eax, 328
-    jb .event_loop
-    cmp eax, 408
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 120
+    shr ecx, 2
+    mov r8d, ecx
+    lea r9d, [rcx + 8]
+    sub eax, 48
+    js .event_loop
+    xor edx, edx
+    div r9d
+    cmp eax, 4
     jae .event_loop
-    call history_delete_current
+    cmp edx, r8d
+    jae .event_loop
+    test eax, eax
+    jz .pointer_history_undo
+    cmp eax, 1
+    je .pointer_history_redo
+    cmp eax, 2
+    je .pointer_history_export
+    mov edi, dword ptr [rip + history_search_selected]
+    call history_delete_selected
+    jmp .keyboard_changed
+.pointer_history_browse:
+    call start_open_prompt
     jmp .keyboard_changed
 .pointer_history_search_focus:
     mov dword ptr [rip + history_search_focus], 1
@@ -3283,9 +3334,9 @@ wayland_main:
     mov dword ptr [rip + history_search_focus], 0
     jmp .keyboard_changed
 .pointer_history_open_selected:
-    cmp eax, 64
+    cmp eax, 48
     jb .event_loop
-    cmp eax, 176
+    cmp eax, 208
     jae .event_loop
     call history_open_selected
     jmp .keyboard_changed
@@ -9533,6 +9584,7 @@ application_exit:
     # Align the stack before calling the C handoff routine.
     sub rsp, 8
     mov edi, dword ptr [rip + socket_fd]
+    mov esi, dword ptr [rip + window_buffer_id]
     call clipboard_service_handoff
     add rsp, 8
     mov edi, dword ptr [rip + socket_fd]
@@ -15292,6 +15344,8 @@ render_history_manager:
     push rbx
     push r12
     push r13
+    push r14
+    # Main History surface.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 32
     mov edx, 104
@@ -15301,31 +15355,78 @@ render_history_manager:
     mov r8d, 356
     mov r9d, 0xff1f242d
     call draw_rect
+
     mov edi, 48
     mov esi, 120
     lea rdx, [rip + ui_history_title]
     call draw_text
+    cmp dword ptr [rip + history_open_error], 0
+    jne .render_history_header_error
+    call history_has_error
+    test eax, eax
+    jnz .render_history_header_storage_error
     mov edi, 48
     mov esi, 156
     lea rdx, [rip + active_document_name]
     call draw_text
+    jmp .render_history_search_box
+.render_history_header_error:
+    mov edi, 48
+    mov esi, 156
+    lea rdx, [rip + ui_history_open_error_label]
+    call draw_text
+    jmp .render_history_search_box
+.render_history_header_storage_error:
+    mov edi, 48
+    mov esi, 156
+    lea rdx, [rip + ui_history_storage_error]
+    call draw_text
 
+.render_history_search_box:
+    # A bordered, wide filter field with a separate Browse action.
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 224
+    mov esi, 48
     mov edx, 170
     mov eax, dword ptr [rip + window_width]
-    sub eax, 272
+    sub eax, 208
     mov ecx, eax
     mov r8d, 32
+    mov r9d, 0xff526b80
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 50
+    mov edx, 172
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 212
+    mov ecx, eax
+    mov r8d, 28
     mov r9d, 0xff343d4b
     call draw_rect
-    mov edi, 48
+    mov edi, 60
     mov esi, 192
+    cmp dword ptr [rip + history_search_length], 0
+    jne .render_history_search_text
     lea rdx, [rip + ui_history_search_label]
-    call draw_text
-    mov edi, 236
-    mov esi, 192
+    jmp .render_history_search_draw_text
+.render_history_search_text:
     lea rdx, [rip + history_search_query_buffer]
+.render_history_search_draw_text:
+    call draw_text
+
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 144
+    mov esi, eax
+    mov edx, 170
+    mov ecx, 96
+    mov r8d, 32
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 132
+    mov edi, eax
+    mov esi, 192
+    lea rdx, [rip + ui_history_browse_label]
     call draw_text
 
     mov edi, 48
@@ -15403,51 +15504,59 @@ render_history_manager:
     mov esi, 254
     lea rdx, [rip + ui_history_no_results_label]
     call draw_text
+
 .render_history_draw_open:
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 64
+    mov esi, 48
     mov edx, 330
-    mov ecx, 112
+    mov ecx, 160
     mov r8d, 28
     mov r9d, 0xff414b5a
     call draw_rect
-    mov edi, 76
+    mov edi, 62
     mov esi, 349
     lea rdx, [rip + ui_history_open_label]
     call draw_text
-    mov edi, 48
-    mov esi, 371
+
+    # Keep Undo/Redo counters in their own visible panel, above the action row.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 48
+    mov edx, 368
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 96
+    mov ecx, eax
+    mov r8d, 30
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov edi, 60
+    mov esi, 390
     lea rdx, [rip + ui_history_undo_count_label]
     call draw_text
-    mov edi, 158
-    mov esi, 448
+    add eax, 8
+    mov edi, eax
+    mov esi, 390
     call history_undo_count
     call draw_decimal
-    mov edi, 248
-    mov esi, 371
+
+    mov edi, dword ptr [rip + window_width]
+    shr edi, 1
+    add edi, 12
+    mov esi, 390
     lea rdx, [rip + ui_history_redo_count_label]
     call draw_text
-    mov edi, 360
-    mov esi, 448
+    add eax, 8
+    mov edi, eax
+    mov esi, 390
     call history_redo_count
     call draw_decimal
-    cmp dword ptr [rip + history_open_error], 0
-    je .render_history_check_storage_error
-    mov edi, 48
-    mov esi, 389
-    lea rdx, [rip + ui_history_open_error_label]
-    call draw_text
-    jmp .render_history_buttons
-.render_history_check_storage_error:
-    call history_has_error
-    test eax, eax
-    jz .render_history_buttons
-    mov edi, 48
-    mov esi, 389
-    lea rdx, [rip + ui_history_storage_error]
-    call draw_text
-.render_history_buttons:
-    mov r12d, 64
+
+    # Four equal-width controls scale with the window instead of using
+    # undersized 80-pixel boxes that stopped fitting larger UI fonts.
+    mov eax, dword ptr [rip + window_width]
+    sub eax, 120
+    shr eax, 2
+    mov r14d, eax
+    mov r12d, 48
     xor ebx, ebx
 .render_history_button_loop:
     cmp ebx, 4
@@ -15455,7 +15564,7 @@ render_history_manager:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r12d
     mov edx, 414
-    mov ecx, 80
+    mov ecx, r14d
     mov r8d, 30
     mov r13d, 0xff414b5a
     cmp ebx, 0
@@ -15467,15 +15576,22 @@ render_history_manager:
     jmp .render_history_button_draw
 .render_history_button_not_undo:
     cmp ebx, 1
-    jne .render_history_button_draw
+    jne .render_history_button_not_redo
     call history_redo_count
     test eax, eax
     jnz .render_history_button_draw
     mov r13d, 0xff343d4b
+    jmp .render_history_button_draw
+.render_history_button_not_redo:
+    cmp ebx, 3
+    jne .render_history_button_draw
+    cmp dword ptr [rip + history_search_match_count], 0
+    jne .render_history_button_draw
+    mov r13d, 0xff343d4b
 .render_history_button_draw:
     mov r9d, r13d
     call draw_rect
-    lea edi, [r12 + 16]
+    lea edi, [r12 + 12]
     mov esi, 434
     cmp ebx, 0
     jne .render_history_label_redo
@@ -15495,10 +15611,12 @@ render_history_manager:
     lea rdx, [rip + ui_history_delete_label]
 .render_history_label_draw:
     call draw_text
-    add r12d, 88
+    add r12d, r14d
+    add r12d, 8
     inc ebx
     jmp .render_history_button_loop
 .render_history_manager_done:
+    pop r14
     pop r13
     pop r12
     pop rbx

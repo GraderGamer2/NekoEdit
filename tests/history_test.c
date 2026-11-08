@@ -22,6 +22,19 @@ uint32_t doc_line_index_valid;
 uint32_t doc_storage_error;
 uint8_t *doc_buffer;
 
+typedef struct {
+    uint32_t magic, total_size, operation_count;
+    uint32_t before_cursor, after_cursor, flags;
+} test_record_v2_t;
+typedef struct {
+    uint32_t magic, total_size, operation_count;
+    uint32_t before_cursor, before_anchor, before_active;
+    uint32_t after_cursor, after_anchor, after_active;
+} test_record_v1_t;
+typedef struct {
+    uint32_t offset, removed_length, inserted_length;
+} test_operation_t;
+
 void history_open(const char *path);
 void history_reset(void);
 void history_begin_action(void);
@@ -35,6 +48,7 @@ uint32_t history_undo_count(void);
 uint32_t history_redo_count(void);
 uint32_t history_has_error(void);
 int history_delete_current(void);
+int history_delete_selected(uint32_t index);
 int history_export_to(const char *destination);
 uint32_t history_search_refresh(const char *query);
 uint32_t history_search_result_count(void);
@@ -197,6 +211,89 @@ static uint32_t load_document(const char *path, uint8_t *buffer, uint32_t capaci
     return (uint32_t)length;
 }
 
+static uint32_t test_read_varuint(const uint8_t *bytes, uint32_t limit,
+                                  uint32_t *position)
+{
+    uint32_t value = 0, shift = 0;
+    while (*position < limit && shift <= 28u) {
+        uint8_t byte = bytes[(*position)++];
+        value |= (uint32_t)(byte & 0x7fu) << shift;
+        if (!(byte & 0x80u)) return value;
+        shift += 7u;
+    }
+    fail("invalid compact journal varint in fixture");
+    return 0;
+}
+
+static void rewrite_single_record_as_v1(const char *path)
+{
+    FILE *file = fopen(path, "rb");
+    uint8_t *old_bytes, *new_bytes;
+    long file_size;
+    uint32_t version, header_size, position, offset, removed, inserted;
+    test_record_v2_t record;
+    test_record_v1_t legacy;
+    test_operation_t operation;
+    uint32_t payload_size, new_size;
+    if (!file) fail("could not open compact journal for legacy-format fixture");
+    if (fseek(file, 0, SEEK_END) != 0 || (file_size = ftell(file)) < 0 ||
+        fseek(file, 0, SEEK_SET) != 0)
+        fail("could not size compact journal fixture");
+    old_bytes = (uint8_t *)malloc((size_t)file_size);
+    if (!old_bytes || fread(old_bytes, 1, (size_t)file_size, file) != (size_t)file_size)
+        fail("could not read compact journal fixture");
+    fclose(file);
+    if (file_size < 64)
+        fail("compact journal fixture is shorter than its header");
+    memcpy(&version, old_bytes + 8, sizeof(version));
+    memcpy(&header_size, old_bytes + 12, sizeof(header_size));
+    if (version != 2 || header_size > (uint32_t)file_size ||
+        sizeof(record) > (uint32_t)file_size - header_size)
+        fail("new journal did not use the expected version-2 header");
+    memcpy(&record, old_bytes + header_size, sizeof(record));
+    if (record.magic != 0x31434552u || record.operation_count != 1 ||
+        record.flags != 0 || record.total_size > (uint32_t)file_size - header_size)
+        fail("compact journal fixture is not a single ordinary typing record");
+    position = sizeof(record);
+    offset = test_read_varuint(old_bytes + header_size,
+                               record.total_size, &position);
+    removed = test_read_varuint(old_bytes + header_size,
+                                record.total_size, &position);
+    inserted = test_read_varuint(old_bytes + header_size,
+                                 record.total_size, &position);
+    if ((uint64_t)position + removed + inserted != record.total_size)
+        fail("compact journal payload has an unexpected length");
+    payload_size = removed + inserted;
+    new_size = header_size + sizeof(legacy) + sizeof(operation) + payload_size;
+    new_bytes = (uint8_t *)calloc(new_size, 1);
+    if (!new_bytes) fail("could not allocate legacy journal fixture");
+    memcpy(new_bytes, old_bytes, header_size);
+    version = 1;
+    memcpy(new_bytes + 8, &version, sizeof(version));
+    legacy.magic = record.magic;
+    legacy.total_size = sizeof(legacy) + sizeof(operation) + payload_size;
+    legacy.operation_count = 1;
+    legacy.before_cursor = record.before_cursor;
+    legacy.before_anchor = record.before_cursor;
+    legacy.before_active = 0;
+    legacy.after_cursor = record.after_cursor;
+    legacy.after_anchor = record.after_cursor;
+    legacy.after_active = 0;
+    operation.offset = offset;
+    operation.removed_length = removed;
+    operation.inserted_length = inserted;
+    memcpy(new_bytes + header_size, &legacy, sizeof(legacy));
+    memcpy(new_bytes + header_size + sizeof(legacy), &operation, sizeof(operation));
+    memcpy(new_bytes + header_size + sizeof(legacy) + sizeof(operation),
+           old_bytes + header_size + position, payload_size);
+    file = fopen(path, "wb");
+    if (!file || fwrite(new_bytes, 1, new_size, file) != new_size ||
+        fclose(file) != 0)
+        fail("could not write version-1 compatibility fixture");
+    free(old_bytes);
+    free(new_bytes);
+}
+
 static int history_file_count(const char *directory, char *first, uint32_t capacity)
 {
     DIR *dir = opendir(directory);
@@ -222,6 +319,8 @@ int main(void)
 {
     char home[] = "/tmp/nekoedit-history-test-XXXXXX";
     char document_path[512];
+    char compact_document_path[512];
+    char compact_history_path[512] = {0};
     char second_document_path[512];
     char app_directory[512];
     char exported_path[512];
@@ -240,6 +339,7 @@ int main(void)
     process_envp = environ;
 
     if (snprintf(document_path, sizeof(document_path), "%s/document.txt", home) <= 0 ||
+        snprintf(compact_document_path, sizeof(compact_document_path), "%s/compact.txt", home) <= 0 ||
         snprintf(second_document_path, sizeof(second_document_path), "%s/another-notes.txt", home) <= 0 ||
         snprintf(app_directory, sizeof(app_directory), "%s/.nekoedit", home) <= 0 ||
         snprintf(exported_path, sizeof(exported_path), "%s/exported.history", home) <= 0)
@@ -249,6 +349,64 @@ int main(void)
     doc_buffer = (uint8_t *)calloc(doc_capacity, 1);
     if (!doc_buffer)
         fail("could not allocate initial document buffer");
+
+    /* A one-byte ordinary insertion must use the compact v2 record: 24-byte
+       record header + three one-byte varints + one inserted byte = 28 bytes. */
+    document_reset((const uint8_t *)"x", 1);
+    save_document(compact_document_path);
+    history_open(compact_document_path);
+    if (history_has_error() || history_file_count(app_directory, NULL, 0) != 0)
+        fail("opening compact-format fixture unexpectedly created a journal");
+    doc_cursor = doc_selection_anchor = 1;
+    doc_selection_active = 0;
+    history_begin_action();
+    if (doc_insert_byte('!') < 0)
+        fail("compact-format insertion failed");
+    history_commit_action();
+    save_document(compact_document_path);
+    history_mark_saved();
+    if (history_file_count(app_directory, compact_history_path,
+                           sizeof(compact_history_path)) != 1)
+        fail("compact-format fixture did not create exactly one history file");
+    if (stat(compact_history_path, &st) < 0)
+        fail("could not stat compact-format history file");
+    {
+        FILE *journal = fopen(compact_history_path, "rb");
+        uint32_t version, base_size;
+        if (!journal || fseek(journal, 8, SEEK_SET) != 0 ||
+            fread(&version, sizeof(version), 1, journal) != 1 ||
+            fread(&base_size, sizeof(base_size), 1, journal) != 1)
+            fail("could not inspect compact-format journal header");
+        fclose(journal);
+        if (version != 2 || (uint64_t)st.st_size < base_size ||
+            (uint64_t)st.st_size - base_size != 28u)
+            fail("one-byte insertion did not use the expected 28-byte compact record");
+    }
+    if (!history_undo())
+        fail("compact-format Undo failed");
+    expect_document((const uint8_t *)"x", 1, "compact-format undo");
+    if (!history_redo())
+        fail("compact-format Redo failed");
+    expect_document((const uint8_t *)"x!", 2, "compact-format redo");
+
+    /* Convert that single compact record into the exact previous v1 layout.
+       Reopening, Undo and Redo must continue to work for existing users. */
+    history_reset();
+    rewrite_single_record_as_v1(compact_history_path);
+    document_reset((const uint8_t *)"x!", 2);
+    history_open(compact_document_path);
+    expect_document((const uint8_t *)"x!", 2, "legacy v1 journal recovery");
+    if (history_undo_count() != 1 || !history_undo())
+        fail("legacy v1 journal Undo was not available");
+    expect_document((const uint8_t *)"x", 1, "legacy v1 undo");
+    if (!history_redo())
+        fail("legacy v1 journal Redo was not available");
+    expect_document((const uint8_t *)"x!", 2, "legacy v1 redo");
+    if (!history_delete_current())
+        fail("could not remove compact/legacy compatibility fixture");
+    history_reset();
+    unlink(compact_document_path);
+
     document_reset((const uint8_t *)"abc", 3);
     save_document(document_path);
     history_open(document_path);
@@ -387,6 +545,36 @@ int main(void)
     history_open(document_path);
     expect_document(expected, expected_length, "reopen first document after search");
 
+    /* Deleting a highlighted non-active history must remove only that hashed
+       journal; the currently open document's Undo/Redo state stays intact. */
+    if (history_search_refresh("ANOTHER-NOTES") != 1 ||
+        !history_delete_selected(0))
+        fail("History Delete Selected could not remove a non-active document journal");
+    if (history_search_refresh("") != 1 ||
+        strcmp(history_search_result(0), document_path) != 0 ||
+        history_undo_count() != 24)
+        fail("deleting a non-active history disturbed the active journal or search results");
+
+    /* Recreate the second history so the existing independent-export/delete
+       assertions below continue to cover two simultaneously stored journals. */
+    document_reset((const uint8_t *)"notes", 5);
+    save_document(second_document_path);
+    history_reset();
+    history_open(second_document_path);
+    doc_cursor = doc_selection_anchor = doc_length;
+    doc_selection_active = 0;
+    history_begin_action();
+    if (doc_insert_byte('!') < 0)
+        fail("could not recreate the second history after selected deletion");
+    history_commit_action();
+    save_document(second_document_path);
+    history_mark_saved();
+    persisted_length = load_document(document_path, persisted, sizeof(persisted));
+    document_reset(persisted, persisted_length);
+    history_reset();
+    history_open(document_path);
+    expect_document(expected, expected_length, "restore first active history after selected deletion");
+
     /* Private storage and an exported copy can be managed outside the
        hidden application folder without shell access to ~/.nekoedit. */
     if (stat(app_directory, &st) < 0 || (st.st_mode & 0777) != 0700)
@@ -445,12 +633,13 @@ int main(void)
     history_reset();
     free(doc_buffer);
     unlink(document_path);
+    unlink(compact_document_path);
     unlink(second_document_path);
     unlink(exported_path);
     if (history_file_count(app_directory, history_path, sizeof(history_path)) == 1)
         unlink(history_path);
     rmdir(app_directory);
     rmdir(home);
-    puts("Disk-backed history tests passed (lazy creation, grouping, branching, recovery, path search, export, delete, permissions).");
+    puts("Disk-backed history tests passed (lazy creation, compact v2 records, v1 compatibility, grouping, branching, recovery, path search, export, delete, permissions).");
     return 0;
 }
