@@ -5685,10 +5685,22 @@ xkb_symbols "nekoedit-sparse" {
                         "characters typed beyond the right edge were not rendered on the next row; "
                         f"pixel={hex(wrapped_first)}"
                     )
-                wrapped_caret = struct.unpack_from(
-                    "<I", pixels, 104 * 800 * 4 + 56 * 4
-                )[0]
-                if wrapped_caret != 0xFFFFFFFF:
+                # Assert the caret is on the second visual row without
+                # assuming a fixed cell column: the cursor x-coordinate is
+                # determined by the actual wrapped-row width and insertion
+                # offset, not by a magic pixel constant.
+                wrapped_row_carets = [
+                    candidate_x
+                    for candidate_x in range(16, 800 - 1, 8)
+                    if all(
+                        struct.unpack_from(
+                            "<I", pixels,
+                            (104 + row) * 800 * 4 + candidate_x * 4
+                        )[0] == 0xFFFFFFFF
+                        for row in range(9)
+                    )
+                ]
+                if not wrapped_row_carets:
                     debug_state = read_document_state()
                     caret_candidates = []
                     for candidate_y in range(92, initial_height - 9, 12):
@@ -5712,7 +5724,7 @@ xkb_symbols "nekoedit-sparse" {
                     raise AssertionError(
                         "caret did not follow the text onto its soft-wrapped row: "
                         + repr({
-                            "expected_pixel": hex(wrapped_caret),
+                            "wrapped_row_carets": wrapped_row_carets,
                             "cursor": debug_state.get("doc_cursor"),
                             "length": debug_state.get("doc_length"),
                             "contents": debug_state.get("doc_contents"),
