@@ -881,9 +881,10 @@ void history_commit_action(void)
             storage_error = 1; return;
         }
     } else if (header.version == 2u) {
+        /* A collapsed caret has no meaningful selection anchor. Preserve
+           the extra anchors only when a selection is actually active. */
         uint32_t explicit_state =
-            (before_anchor != before_cursor || before_active ||
-             doc_selection_anchor != doc_cursor || doc_selection_active) ? 1u : 0u;
+            (before_active || doc_selection_active) ? 1u : 0u;
         if (!encode_transaction_v2(&compact, &compact_size, &compact_allocation)) {
             storage_error = 1; return;
         }
