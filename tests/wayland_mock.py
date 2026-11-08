@@ -693,6 +693,8 @@ xkb_keycodes "nekoedit-test" {
     <AB06> = 57;
     <AB07> = 58;
     <AB09> = 60;
+    <RCTL> = 105;
+    <RALT> = 108;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -747,6 +749,10 @@ xkb_types "nekoedit-test" {
         modifiers = V03;
         map[V03] = Level2;
     };
+    type "CUSTOM_INDIRECT" {
+        modifiers = V04;
+        map[V04] = Level2;
+    };
 };
 xkb_symbols "nekoedit-test" {
     # Repeated declarations in later components must retain explicit masks.
@@ -755,6 +761,13 @@ xkb_symbols "nekoedit-test" {
     # Mod4 to its effective virtual-modifier encoding.
     modifier_map Mod4 { <AB06> };
     modifier_map Mod2 { <AB05> };
+    # A matching keycode None removes a previously direct binding.
+    modifier_map Mod3 { <RCTL> };
+    modifier_map None { <RCTL> };
+    # Resolve Alt_L indirectly after symbols have been parsed. The subsequent
+    # keycode None entry must not delete this keysym-kind binding.
+    modifier_map Mod1 { Alt_L };
+    modifier_map None { <RALT> };
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
         symbols[Group1] = [ a, A, at, quotedbl ],
@@ -787,7 +800,17 @@ xkb_symbols "nekoedit-test" {
     key <AB01> { [ z, Z ] };
     key <AB02> { [ x, X ] };
     key <AB03> { [ c, C ] };
-    key <AB04> { [ v, V ] };
+    key <AB04> {
+        type[Group1] = "CUSTOM_INDIRECT",
+        symbols[Group1] = [ v, V ]
+    };
+    key <RCTL> {
+        symbols[Group1] = [ Control_R, NoSymbol, Alt_L ]
+    };
+    key <RALT> {
+        virtualModifiers = V04,
+        symbols[Group1] = [ NoSymbol, Alt_L ]
+    };
     key <AB05> {
         virtualModifiers = V03,
         symbols[Group1] = [ b, B ]
@@ -817,7 +840,10 @@ xkb_symbols "nekoedit-test" {
     key <AE12> { [ equal, plus ] };
     key <TLDE> { [ grave, asciitilde ] };
     key <AD11> { [ bracketleft, braceleft ] };
-    key <AD12> { [ bracketright, braceright ] };
+    key <AD12> {
+        symbols[Group1] = [ bracketright, braceright ],
+        symbols[Group2] = [ Alt_L ]
+    };
     key <AC10> { [ semicolon, colon ] };
     key <AC11> { [ apostrophe, quotedbl ] };
     key <AB08> { [ comma, less ] };
@@ -966,6 +992,7 @@ xkb_symbols "nekoedit-sparse" {
                     wanted_symbols = {
                         "xkb_key_names",
                         "xkb_ascii_levels",
+                        "xkb_keysym_levels",
                         "xkb_key_types",
                         "xkb_group_types",
                         "xkb_type_names",
@@ -977,6 +1004,8 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_virtual_masks",
                         "xkb_key_real_masks",
                         "xkb_key_virtual_maps",
+                        "xkb_key_real_map_kinds",
+                        "xkb_key_real_map_targets",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
@@ -1040,6 +1069,23 @@ xkb_symbols "nekoedit-sparse" {
                         ab05_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 56 * 4, 4))[0]
                         ab06_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 57 * 4, 4))[0]
                         ab06_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 57 * 4, 4))[0]
+                        indirect_type_id = child_memory("xkb_group_types", 55 * 4, 1)[0]
+                        indirect_type_name = child_memory("xkb_type_names", 9 * 64, 64).split(bytes([0]), 1)[0]
+                        indirect_type_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 9 * 4, 4))[0]
+                        indirect_map_count = child_memory("xkb_type_map_counts", 9, 1)[0]
+                        indirect_map_mask = struct.unpack("<I", child_memory("xkb_type_map_masks", 9 * 128, 4))[0]
+                        indirect_map_level = child_memory("xkb_type_map_levels", 9 * 32, 1)[0]
+                        ralt_raw_keysym = struct.unpack("<I", child_memory("xkb_keysym_levels", (108 * 32 + 1) * 4, 4))[0]
+                        rctl_raw_keysym = struct.unpack("<I", child_memory("xkb_keysym_levels", (105 * 32 + 2) * 4, 4))[0]
+                        ad12_raw_keysym = struct.unpack("<I", child_memory("xkb_keysym_levels", (35 * 32 + 8) * 4, 4))[0]
+                        ralt_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 108 * 4, 4))[0]
+                        ralt_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 108 * 4, 4))[0]
+                        ralt_map_kind = child_memory("xkb_key_real_map_kinds", 108, 1)[0]
+                        ralt_map_target = struct.unpack("<I", child_memory("xkb_key_real_map_targets", 108 * 4, 4))[0]
+                        rctl_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 105 * 4, 4))[0]
+                        rctl_map_kind = child_memory("xkb_key_real_map_kinds", 105, 1)[0]
+                        rctl_map_target = struct.unpack("<I", child_memory("xkb_key_real_map_targets", 105 * 4, 4))[0]
+                        ad12_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 35 * 4, 4))[0]
                         virtual_count = struct.unpack("<I", child_memory("xkb_virtual_count", 0, 4))[0]
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
@@ -1079,6 +1125,23 @@ xkb_symbols "nekoedit-sparse" {
                         or ab05_virtual_map != 8
                         or ab06_real_mask != 64
                         or ab06_virtual_map != 8
+                        or indirect_type_id != 9
+                        or indirect_type_name != b"CUSTOM_INDIRECT"
+                        or indirect_type_mask != 8
+                        or indirect_map_count != 1
+                        or indirect_map_mask != 8
+                        or indirect_map_level != 2
+                        or ralt_raw_keysym != 0xffe9
+                        or rctl_raw_keysym != 0xffe9
+                        or ad12_raw_keysym != 0xffe9
+                        or ralt_real_mask != 8
+                        or ralt_virtual_map != 16
+                        or ralt_map_kind != 2
+                        or ralt_map_target != 0xffe9
+                        or rctl_real_mask != 0
+                        or rctl_map_kind != 0
+                        or rctl_map_target != 0
+                        or ad12_real_mask != 0
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -1101,10 +1164,19 @@ xkb_symbols "nekoedit-sparse" {
                                     "type_mask": implicit_type_mask,
                                     "real_key_masks": (ab05_real_mask, ab06_real_mask),
                                     "key_vmods": (ab05_virtual_map, ab06_virtual_map),
+                                    "indirect": {
+                                        "type_id": indirect_type_id,
+                                        "name": indirect_type_name,
+                                        "mask": indirect_type_mask,
+                                        "map": (indirect_map_count, indirect_map_mask, indirect_map_level),
+                                        "ralt": (ralt_raw_keysym, ralt_real_mask, ralt_virtual_map, ralt_map_kind, ralt_map_target),
+                                        "rctl": (rctl_raw_keysym, rctl_real_mask, rctl_map_kind, rctl_map_target),
+                                        "ad12": (ad12_raw_keysym, ad12_real_mask),
+                                    },
                                 },
                             })
                         )
-                    expected_virtual_masks = (128, 16, 192, 80) + (0,) * 19 + (0x80000000,)
+                    expected_virtual_masks = (128, 16, 192, 80, 8) + (0,) * 18 + (0x80000000,)
                     if (
                         (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
                         or virtual_masks != expected_virtual_masks
@@ -3386,10 +3458,21 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", custom_serial + 5, 0, 0, 0, 0))
                     )
+                    # Alt_L is resolved indirectly to RALT (Group1/Level1);
+                    # the lower keycode RCTL only has it on Level2, while
+                    # AD12 has it in Group2. None { <RALT> } above must not
+                    # delete the keysym-kind binding.
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 7, 8, 0, 0, 0))
+                    )
+                    key_step(custom_serial + 8, 47, "indirect Alt_L modifier_map selects CUSTOM_INDIRECT Level2")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 10, 0, 0, 0, 0))
+                    )
                     workflow_shortcut(1300, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "XKB exact declared type maps, per-group assignment, eight custom levels, virtual modifiers, keypad/ONE_LEVEL behavior, groups, and punctuation verified"
+                        "XKB exact declared type maps, per-group assignment, eight custom levels, explicit and direct/indirect implicit virtual modifiers, modifier_map keysym resolution order and exact None targets, Unicode, keypad/ONE_LEVEL behavior, groups, and punctuation verified"
                     )
                     return
 
@@ -6188,7 +6271,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9N",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9NV",
             keyboard_layout_test=True,
         )
     finally:

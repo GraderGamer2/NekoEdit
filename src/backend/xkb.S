@@ -34,6 +34,28 @@
 .Lxkb_mod_level_three:  .asciz "LevelThree"
 .Lxkb_mod_level_five:   .asciz "LevelFive"
 .Lxkb_mod_num_lock:     .asciz "NumLock"
+.Lxkb_sym_shift_l:      .asciz "Shift_L"
+.Lxkb_sym_shift_r:      .asciz "Shift_R"
+.Lxkb_sym_control_l:    .asciz "Control_L"
+.Lxkb_sym_control_r:    .asciz "Control_R"
+.Lxkb_sym_caps_lock:    .asciz "Caps_Lock"
+.Lxkb_sym_meta_l:       .asciz "Meta_L"
+.Lxkb_sym_meta_r:       .asciz "Meta_R"
+.Lxkb_sym_alt_l:        .asciz "Alt_L"
+.Lxkb_sym_alt_r:        .asciz "Alt_R"
+.Lxkb_sym_super_l:      .asciz "Super_L"
+.Lxkb_sym_super_r:      .asciz "Super_R"
+.Lxkb_sym_hyper_l:      .asciz "Hyper_L"
+.Lxkb_sym_hyper_r:      .asciz "Hyper_R"
+.Lxkb_sym_num_lock:     .asciz "Num_Lock"
+.Lxkb_sym_scroll_lock:  .asciz "Scroll_Lock"
+.Lxkb_sym_mode_switch:  .asciz "Mode_switch"
+.Lxkb_sym_iso3_shift:   .asciz "ISO_Level3_Shift"
+.Lxkb_sym_iso3_latch:   .asciz "ISO_Level3_Latch"
+.Lxkb_sym_iso3_lock:    .asciz "ISO_Level3_Lock"
+.Lxkb_sym_iso5_shift:   .asciz "ISO_Level5_Shift"
+.Lxkb_sym_iso5_latch:   .asciz "ISO_Level5_Latch"
+.Lxkb_sym_iso5_lock:    .asciz "ISO_Level5_Lock"
 .Lxkb_mod_none:         .asciz "None"
 .Lxkb_mod_none_lower:   .asciz "none"
 .Lxkb_mod_all:          .asciz "all"
@@ -1035,6 +1057,8 @@
 .Lxkb_group_index:      .long 0
 .Lxkb_level_three_index: .long 0
 .Lxkb_num_lock_index:   .long 0
+.Lxkb_keysym_tmp:       .long 0
+.Lxkb_pending_modmap_count: .long 0
 .Lxkb_token:            .zero 64
 .balign 16
 .global xkb_key_names
@@ -1044,6 +1068,8 @@ xkb_ascii_levels:       .zero 32768       # 256 codes * 4 groups * 8 levels plus
 .balign 16
 .global xkb_unicode_levels
 xkb_unicode_levels:     .zero 131072      # uint32 scalars; 256 * 4 groups * 8 levels plus guard space
+.global xkb_keysym_levels
+xkb_keysym_levels:      .zero 131072      # raw modifier keysyms; same key/group/level indexing
 .global xkb_key_types
 xkb_key_types:          .zero 256         # legacy family flags retained for diagnostics
 .global xkb_group_types
@@ -1070,6 +1096,13 @@ xkb_virtual_masks:    .zero 96         # explicit plus implicit effective 32-bit
 xkb_key_real_masks:   .zero 1024       # 256 keys * one real modifier map
 .global xkb_key_virtual_maps
 xkb_key_virtual_maps: .zero 1024       # 256 keys * 32-bit virtual modifier map
+.global xkb_key_real_map_kinds
+xkb_key_real_map_kinds: .zero 256      # 1=keycode target, 2=keysym target
+.global xkb_key_real_map_targets
+xkb_key_real_map_targets: .zero 1024   # exact original target for modifier_map None
+xkb_pending_modmap_targets: .zero 1024 # 256 deferred modifier_map targets
+xkb_pending_modmap_masks: .zero 1024
+xkb_pending_modmap_kinds: .zero 256    # 1=keycode target, 2=keysym target
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1094,6 +1127,9 @@ xkb_reset_keymap:
     mov ecx, 32768
     rep stosb
     lea rdi, [rip + xkb_unicode_levels]
+    mov ecx, 131072
+    rep stosb
+    lea rdi, [rip + xkb_keysym_levels]
     mov ecx, 131072
     rep stosb
     lea rdi, [rip + xkb_key_types]
@@ -1129,6 +1165,23 @@ xkb_reset_keymap:
     lea rdi, [rip + xkb_key_virtual_maps]
     mov ecx, 1024
     rep stosb
+    lea rdi, [rip + xkb_key_real_map_kinds]
+    mov ecx, 256
+    rep stosb
+    lea rdi, [rip + xkb_key_real_map_targets]
+    mov ecx, 1024
+    rep stosb
+    lea rdi, [rip + xkb_pending_modmap_targets]
+    mov ecx, 1024
+    rep stosb
+    lea rdi, [rip + xkb_pending_modmap_masks]
+    mov ecx, 1024
+    rep stosb
+    lea rdi, [rip + xkb_pending_modmap_kinds]
+    mov ecx, 256
+    rep stosb
+    mov dword ptr [rip + .Lxkb_pending_modmap_count], 0
+    mov dword ptr [rip + .Lxkb_keysym_tmp], 0
     lea rdi, [rip + xkb_group_types]
     mov al, 255
     mov ecx, 1024
@@ -2640,6 +2693,125 @@ xkb_reset_keymap:
 
 # Convert a printable ASCII or XKB Unicode keysym token to a Unicode scalar.
 # XKB's Uxxxx/Uxxxxx/Uxxxxxx forms are accepted; invalid scalars return zero.
+# Map the modifier keysyms used by XKB modifier_map into raw keysym IDs.
+# This table is intentionally limited to common modifier/system keysyms;
+# unsupported names return zero and are not guessed.
+.type .Lxkb_keysym_modifier_id, @function
+.Lxkb_keysym_modifier_id:
+    lea rdi, [rip + .Lxkb_sym_shift_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_shift_l
+    lea rdi, [rip + .Lxkb_sym_shift_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_shift_r
+    lea rdi, [rip + .Lxkb_sym_control_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_control_l
+    lea rdi, [rip + .Lxkb_sym_control_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_control_r
+    lea rdi, [rip + .Lxkb_sym_caps_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_caps_lock
+    lea rdi, [rip + .Lxkb_sym_meta_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_meta_l
+    lea rdi, [rip + .Lxkb_sym_meta_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_meta_r
+    lea rdi, [rip + .Lxkb_sym_alt_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_alt_l
+    lea rdi, [rip + .Lxkb_sym_alt_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_alt_r
+    lea rdi, [rip + .Lxkb_sym_super_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_super_l
+    lea rdi, [rip + .Lxkb_sym_super_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_super_r
+    lea rdi, [rip + .Lxkb_sym_hyper_l]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_hyper_l
+    lea rdi, [rip + .Lxkb_sym_hyper_r]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_hyper_r
+    lea rdi, [rip + .Lxkb_sym_num_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_num_lock
+    lea rdi, [rip + .Lxkb_sym_scroll_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_scroll_lock
+    lea rdi, [rip + .Lxkb_sym_mode_switch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_mode_switch
+    lea rdi, [rip + .Lxkb_sym_iso3_shift]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso3_shift
+    lea rdi, [rip + .Lxkb_sym_iso3_latch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso3_latch
+    lea rdi, [rip + .Lxkb_sym_iso3_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso3_lock
+    lea rdi, [rip + .Lxkb_sym_iso5_shift]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso5_shift
+    lea rdi, [rip + .Lxkb_sym_iso5_latch]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso5_latch
+    lea rdi, [rip + .Lxkb_sym_iso5_lock]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_keysym_id_iso5_lock
+    xor eax, eax
+    ret
+.Lxkb_keysym_id_shift_l:      mov eax, 0xffe1; ret
+.Lxkb_keysym_id_shift_r:      mov eax, 0xffe2; ret
+.Lxkb_keysym_id_control_l:    mov eax, 0xffe3; ret
+.Lxkb_keysym_id_control_r:    mov eax, 0xffe4; ret
+.Lxkb_keysym_id_caps_lock:    mov eax, 0xffe5; ret
+.Lxkb_keysym_id_meta_l:       mov eax, 0xffe7; ret
+.Lxkb_keysym_id_meta_r:       mov eax, 0xffe8; ret
+.Lxkb_keysym_id_alt_l:        mov eax, 0xffe9; ret
+.Lxkb_keysym_id_alt_r:        mov eax, 0xffea; ret
+.Lxkb_keysym_id_super_l:      mov eax, 0xffeb; ret
+.Lxkb_keysym_id_super_r:      mov eax, 0xffec; ret
+.Lxkb_keysym_id_hyper_l:      mov eax, 0xffed; ret
+.Lxkb_keysym_id_hyper_r:      mov eax, 0xffee; ret
+.Lxkb_keysym_id_num_lock:     mov eax, 0xff7f; ret
+.Lxkb_keysym_id_scroll_lock:  mov eax, 0xff14; ret
+.Lxkb_keysym_id_mode_switch:  mov eax, 0xff7e; ret
+.Lxkb_keysym_id_iso3_shift:   mov eax, 0xfe03; ret
+.Lxkb_keysym_id_iso3_latch:   mov eax, 0xfe04; ret
+.Lxkb_keysym_id_iso3_lock:    mov eax, 0xfe05; ret
+.Lxkb_keysym_id_iso5_shift:   mov eax, 0xfe11; ret
+.Lxkb_keysym_id_iso5_latch:   mov eax, 0xfe12; ret
+.Lxkb_keysym_id_iso5_lock:    mov eax, 0xfe13; ret
+.size .Lxkb_keysym_modifier_id, . - .Lxkb_keysym_modifier_id
+
 .type .Lxkb_keysym_unicode, @function
 .Lxkb_keysym_unicode:
     push rbx
@@ -2788,6 +2960,8 @@ xkb_reset_keymap:
     je .Lxkb_symbol_array_success
     cmp eax, ','
     je .Lxkb_symbol_array_loop
+    call .Lxkb_keysym_modifier_id
+    mov dword ptr [rip + .Lxkb_keysym_tmp], eax
     call .Lxkb_keysym_unicode
     mov r12d, eax
     mov eax, dword ptr [rip + .Lxkb_level]
@@ -2800,6 +2974,9 @@ xkb_reset_keymap:
     add eax, dword ptr [rip + .Lxkb_level]
     lea rbx, [rip + xkb_unicode_levels]
     mov dword ptr [rbx + rax*4], r12d
+    lea rbx, [rip + xkb_keysym_levels]
+    mov edx, dword ptr [rip + .Lxkb_keysym_tmp]
+    mov dword ptr [rbx + rax*4], edx
     # Keep the byte table for ASCII lookup; Unicode scalars share the same
     # key/group/eight-level cell layout.
     lea rbx, [rip + xkb_ascii_levels]
@@ -3105,6 +3282,58 @@ xkb_reset_keymap:
 # Parse a direct keycode real-modifier binding:
 # modifier_map Mod5 { <RALT>, <RCTL> };. Indirect keysym bindings are skipped.
 # EAX=0 on success, negative on malformed input.
+# Resolve an indirect modifier_map keysym using XKB's specified ordering:
+# lowest group first, then lowest level, then lowest keycode.
+# EDI=raw keysym; EAX=matching keycode or zero.
+.type .Lxkb_find_key_for_keysym, @function
+.Lxkb_find_key_for_keysym:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r15d, edi
+    xor r12d, r12d
+.Lxkb_find_keysym_group:
+    cmp r12d, 4
+    jae .Lxkb_find_keysym_missing
+    xor r13d, r13d
+.Lxkb_find_keysym_level:
+    cmp r13d, 8
+    jae .Lxkb_find_keysym_next_group
+    mov r14d, 8
+.Lxkb_find_keysym_key:
+    cmp r14d, 256
+    jae .Lxkb_find_keysym_next_level
+    mov eax, r14d
+    shl eax, 5
+    lea eax, [rax + r12*8]
+    add eax, r13d
+    lea rbx, [rip + xkb_keysym_levels]
+    cmp dword ptr [rbx + rax*4], r15d
+    je .Lxkb_find_keysym_found
+    inc r14d
+    jmp .Lxkb_find_keysym_key
+.Lxkb_find_keysym_next_level:
+    inc r13d
+    jmp .Lxkb_find_keysym_level
+.Lxkb_find_keysym_next_group:
+    inc r12d
+    jmp .Lxkb_find_keysym_group
+.Lxkb_find_keysym_found:
+    mov eax, r14d
+    jmp .Lxkb_find_keysym_done
+.Lxkb_find_keysym_missing:
+    xor eax, eax
+.Lxkb_find_keysym_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_find_key_for_keysym, . - .Lxkb_find_key_for_keysym
+
 .type .Lxkb_parse_modifier_map, @function
 .Lxkb_parse_modifier_map:
     push rbx
@@ -3136,7 +3365,7 @@ xkb_reset_keymap:
     jnz .Lxkb_modifier_map_fail
     jmp .Lxkb_modifier_map_find_open
 .Lxkb_modifier_map_none:
-    mov r12d, 0
+    xor r12d, r12d
 .Lxkb_modifier_map_find_open:
     call .Lxkb_next_token
     test eax, eax
@@ -3152,28 +3381,37 @@ xkb_reset_keymap:
     cmp eax, ','
     je .Lxkb_modifier_map_loop
     cmp dword ptr [rip + .Lxkb_token_kind], 2
-    jne .Lxkb_modifier_map_loop
+    jne .Lxkb_modifier_map_keysym
     mov eax, dword ptr [rip + .Lxkb_token]
     mov dword ptr [rip + .Lxkb_keyname_tmp], eax
     call .Lxkb_find_keycode
     test eax, eax
     jz .Lxkb_modifier_map_loop
     mov r13d, eax
-    shl eax, 2
-    lea rbx, [rip + xkb_key_real_masks]
-    add rbx, rax
-    test r12d, r12d
-    jnz .Lxkb_modifier_map_set
-    mov dword ptr [rbx], 0
-    jmp .Lxkb_modifier_map_loop
-.Lxkb_modifier_map_set:
-    mov eax, dword ptr [rbx]
+    mov r14d, 1
+    jmp .Lxkb_modifier_map_queue
+.Lxkb_modifier_map_keysym:
+    cmp dword ptr [rip + .Lxkb_token_kind], 1
+    jne .Lxkb_modifier_map_loop
+    call .Lxkb_keysym_modifier_id
     test eax, eax
-    jz .Lxkb_modifier_map_store
-    cmp eax, r12d
-    jne .Lxkb_modifier_map_fail
-.Lxkb_modifier_map_store:
-    mov dword ptr [rbx], r12d
+    jz .Lxkb_modifier_map_loop
+    mov r13d, eax
+    mov r14d, 2
+.Lxkb_modifier_map_queue:
+    mov r15d, dword ptr [rip + .Lxkb_pending_modmap_count]
+    cmp r15d, 256
+    jae .Lxkb_modifier_map_fail
+    mov eax, r15d
+    shl eax, 2
+    lea rbx, [rip + xkb_pending_modmap_targets]
+    mov dword ptr [rbx + rax], r13d
+    lea rbx, [rip + xkb_pending_modmap_masks]
+    mov dword ptr [rbx + rax], r12d
+    lea rbx, [rip + xkb_pending_modmap_kinds]
+    mov byte ptr [rbx + r15], r14b
+    inc r15d
+    mov dword ptr [rip + .Lxkb_pending_modmap_count], r15d
     jmp .Lxkb_modifier_map_loop
 .Lxkb_modifier_map_done:
     xor eax, eax
@@ -3189,8 +3427,122 @@ xkb_reset_keymap:
     ret
 .size .Lxkb_parse_modifier_map, . - .Lxkb_parse_modifier_map
 
+
 # Aggregate each key's real modifier map into the effective encodings of all
 # virtual modifiers in that key's virtual map.
+# Resolve direct keycode and indirect keysym modifier_map targets after
+# every key's symbols have been parsed. None deletion is exact-target sensitive.
+.type .Lxkb_resolve_modifier_maps, @function
+.Lxkb_resolve_modifier_maps:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rbp
+    xor r12d, r12d
+    mov r15d, dword ptr [rip + .Lxkb_pending_modmap_count]
+.Lxkb_resolve_modmap_loop:
+    cmp r12d, r15d
+    jae .Lxkb_resolve_modmap_done
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_pending_modmap_targets]
+    mov r13d, dword ptr [rbx + rax]
+    lea rbx, [rip + xkb_pending_modmap_masks]
+    mov r14d, dword ptr [rbx + rax]
+    lea rbx, [rip + xkb_pending_modmap_kinds]
+    movzx ebp, byte ptr [rbx + r12]
+    cmp ebp, 1
+    je .Lxkb_resolve_modmap_direct
+    cmp ebp, 2
+    jne .Lxkb_resolve_modmap_fail
+    mov edi, r13d
+    call .Lxkb_find_key_for_keysym
+    test eax, eax
+    jz .Lxkb_resolve_modmap_next
+    mov r13d, eax
+.Lxkb_resolve_modmap_direct:
+    mov eax, r13d
+    shl eax, 2
+    lea rbx, [rip + xkb_key_real_masks]
+    mov edx, dword ptr [rbx + rax]
+    lea rbx, [rip + xkb_key_real_map_kinds]
+    movzx ecx, byte ptr [rbx + r13]
+    lea rbx, [rip + xkb_key_real_map_targets]
+    mov esi, dword ptr [rbx + rax]
+    test r14d, r14d
+    jnz .Lxkb_resolve_modmap_set
+    # None removes a prior entry only when the original target kind and
+    # value exactly match; keycode and keysym targets never alias.
+    cmp ebp, 1
+    je .Lxkb_resolve_modmap_none_keycode
+    cmp ebp, 2
+    jne .Lxkb_resolve_modmap_next
+    cmp ecx, 2
+    jne .Lxkb_resolve_modmap_next
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_pending_modmap_targets]
+    mov esi, dword ptr [rbx + rax]
+    lea rbx, [rip + xkb_key_real_map_targets]
+    cmp dword ptr [rbx + r13*4], esi
+    jne .Lxkb_resolve_modmap_next
+    jmp .Lxkb_resolve_modmap_delete
+.Lxkb_resolve_modmap_none_keycode:
+    cmp ecx, 1
+    jne .Lxkb_resolve_modmap_next
+    cmp esi, r13d
+    jne .Lxkb_resolve_modmap_next
+.Lxkb_resolve_modmap_delete:
+    mov eax, r13d
+    shl eax, 2
+    lea rbx, [rip + xkb_key_real_masks]
+    mov dword ptr [rbx + rax], 0
+    lea rbx, [rip + xkb_key_real_map_kinds]
+    mov byte ptr [rbx + r13], 0
+    lea rbx, [rip + xkb_key_real_map_targets]
+    mov dword ptr [rbx + rax], 0
+    jmp .Lxkb_resolve_modmap_next
+.Lxkb_resolve_modmap_set:
+    test edx, edx
+    jz .Lxkb_resolve_modmap_store
+    cmp edx, r14d
+    jne .Lxkb_resolve_modmap_fail
+    # An identical mask from another alias does not replace the first exact
+    # target; this preserves deterministic None matching.
+    jmp .Lxkb_resolve_modmap_next
+.Lxkb_resolve_modmap_store:
+    mov eax, r13d
+    shl eax, 2
+    lea rbx, [rip + xkb_key_real_masks]
+    mov dword ptr [rbx + rax], r14d
+    lea rbx, [rip + xkb_key_real_map_kinds]
+    mov byte ptr [rbx + r13], bpl
+    lea rbx, [rip + xkb_key_real_map_targets]
+    mov ecx, r12d
+    shl ecx, 2
+    lea rdx, [rip + xkb_pending_modmap_targets]
+    mov ecx, dword ptr [rdx + rcx]
+    mov dword ptr [rbx + rax], ecx
+.Lxkb_resolve_modmap_next:
+    inc r12d
+    jmp .Lxkb_resolve_modmap_loop
+.Lxkb_resolve_modmap_done:
+    xor eax, eax
+    jmp .Lxkb_resolve_modmap_exit
+.Lxkb_resolve_modmap_fail:
+    mov eax, -1
+.Lxkb_resolve_modmap_exit:
+    pop rbp
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size .Lxkb_resolve_modifier_maps, . - .Lxkb_resolve_modifier_maps
+
 .type .Lxkb_apply_virtual_modifier_maps, @function
 .Lxkb_apply_virtual_modifier_maps:
     push rbx
@@ -3198,6 +3550,9 @@ xkb_reset_keymap:
     push r13
     push r14
     push r15
+    call .Lxkb_resolve_modifier_maps
+    test eax, eax
+    js .Lxkb_apply_vmod_fail
     mov r12d, 8
 .Lxkb_apply_vmod_key_loop:
     cmp r12d, 256
@@ -3244,6 +3599,10 @@ xkb_reset_keymap:
     mov dword ptr [rip + xkb_num_lock_mask], edx
 .Lxkb_apply_vmod_done:
     xor eax, eax
+    jmp .Lxkb_apply_vmod_exit
+.Lxkb_apply_vmod_fail:
+    mov eax, -1
+.Lxkb_apply_vmod_exit:
     pop r15
     pop r14
     pop r13
