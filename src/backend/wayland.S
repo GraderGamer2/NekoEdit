@@ -9996,6 +9996,18 @@ render_text_input_preedit:
     mov ebx, dword ptr [rip + text_input_preedit_cursor_begin]
     cmp ebx, -1
     je .Lti_preedit_hide_caret
+    mov eax, dword ptr [rip + text_input_preedit_cursor_end]
+    cmp ebx, eax
+    jbe .Lti_preedit_range_ordered
+    xchg ebx, eax
+.Lti_preedit_range_ordered:
+    mov dword ptr [rsp + 24], eax
+    cmp ebx, eax
+    je .Lti_preedit_collapsed_caret
+    # cursor_begin..cursor_end represents a highlighted preedit span; the
+    # normal document caret is hidden while this range is selected.
+    mov dword ptr [rsp + 12], 0
+.Lti_preedit_collapsed_caret:
     xor r14d, r14d
 .Lti_preedit_render_loop:
     cmp r14d, r15d
@@ -10031,6 +10043,26 @@ render_text_input_preedit:
     mov eax, dword ptr [rip + window_doc_bottom]
     cmp r13d, eax
     jae .Lti_preedit_render_advance
+    mov eax, dword ptr [rsp + 24]
+    cmp ebx, eax
+    je .Lti_preedit_render_glyph
+    cmp r14d, ebx
+    jb .Lti_preedit_render_glyph
+    cmp r14d, eax
+    jae .Lti_preedit_render_glyph
+    # Paint a subtle selection fill behind the selected preedit code points.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r12d
+    mov edx, r13d
+    mov ecx, ebp
+    test ecx, ecx
+    jnz .Lti_preedit_highlight_width
+    mov ecx, 1
+.Lti_preedit_highlight_width:
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    mov r9d, 0xff5e81ac
+    call draw_rect
+.Lti_preedit_render_glyph:
     mov edi, r12d
     mov esi, r13d
     mov edx, dword ptr [rsp + 16]
