@@ -30,6 +30,7 @@ extern int32_t doc_font_size;
 extern int32_t ui_font_size;
 extern int32_t doc_wrap_enabled;
 extern int32_t save_confirm_enabled;
+int32_t clipboard_persistence_enabled = 1;
 
 char *preferences_font_path_ptr;
 
@@ -220,6 +221,7 @@ static void parse_line(const char *line, uint32_t length)
     static const char key_ui[] = "ui_font_size=";
     static const char key_wrap[] = "wrap_lines=";
     static const char key_confirm[] = "confirm_before_save=";
+    static const char key_clipboard[] = "clipboard_persistence=";
     static const char key_font[] = "font_path=";
     uint32_t number;
     uint32_t prefix;
@@ -251,6 +253,13 @@ static void parse_line(const char *line, uint32_t length)
     if (length > prefix && prefix_matches(line, key_confirm, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) && number <= 1u)
             save_confirm_enabled = (int32_t)number;
+        return;
+    }
+
+    prefix = (uint32_t)(sizeof(key_clipboard) - 1u);
+    if (length > prefix && prefix_matches(line, key_clipboard, prefix)) {
+        if (parse_decimal(line + prefix, length - prefix, &number) && number <= 1u)
+            clipboard_persistence_enabled = (int32_t)number;
         return;
     }
 
@@ -321,6 +330,7 @@ int preferences_load(void)
     if (disabled()) {
         preferences_font_path_ptr = (char *)0;
         saved_font_path[0] = 0;
+        clipboard_persistence_enabled = 0;
         return 0;
     }
     preferences_font_path_ptr = (char *)0;
@@ -418,6 +428,12 @@ int preferences_save(void)
         return 0;
     offset = append_number(output_buffer, offset, CONFIG_CAPACITY,
                            save_confirm_enabled ? 1u : 0u);
+    offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
+                          "\nclipboard_persistence=", 23u);
+    if (offset == UINT32_MAX)
+        return 0;
+    offset = append_number(output_buffer, offset, CONFIG_CAPACITY,
+                           clipboard_persistence_enabled ? 1u : 0u);
     font_length = bounded_length(preferences_font_path_ptr, PATH_CAPACITY);
     if (font_length && font_length < PATH_CAPACITY) {
         offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,

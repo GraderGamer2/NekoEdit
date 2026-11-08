@@ -2309,6 +2309,19 @@ recv_msg_control:      .zero 64
 .extern preferences_load
 .extern preferences_save
 .extern preferences_set_font_path
+.extern history_open
+.extern history_begin_action
+.extern history_commit_action
+.extern history_note_insert
+.extern history_note_delete
+.extern history_mark_saved
+.extern history_undo_count
+.extern history_redo_count
+.extern history_has_error
+.extern history_delete_current
+.extern history_export_to
+.extern clipboard_service_handoff
+.extern clipboard_persistence_enabled
 .global wayland_main
 .type wayland_main, @function
 wayland_main:
@@ -3724,7 +3737,7 @@ wayland_main:
     jb .event_loop
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
-    call history_checkpoint
+    call history_begin_action
     mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
     mov dword ptr [rip + keyboard_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
@@ -4415,7 +4428,7 @@ wayland_main:
     mov edi, 32
     call doc_insert_byte
 .keyboard_changed:
-    call history_checkpoint
+    call history_commit_action
     call doc_ensure_cursor_visible
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
@@ -4856,7 +4869,9 @@ load_initial_document:
     mov dword ptr [rip + doc_save_error], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_storage_error], 0
-    call history_reset
+    mov rdi, qword ptr [rip + current_file_path]
+    call history_open
+    mov dword ptr [rip + history_tab_open], 0
     xor eax, eax
 .load_file_return:
     add rsp, 8
@@ -6069,6 +6084,8 @@ picker_confirm_overwrite:
     test rax, rax
     js .picker_overwrite_error
     call picker_commit_active_path
+    mov rdi, qword ptr [rip + current_file_path]
+    call history_open
     call picker_close
     xor eax, eax
     jmp .picker_overwrite_done
@@ -7043,6 +7060,7 @@ save_document_to_path:
     test rax, rax
     js .save_atomic_unlink_error
     mov dword ptr [rip + doc_save_error], 0
+    call history_mark_saved
     xor eax, eax
     jmp .save_atomic_return
 
@@ -7168,7 +7186,9 @@ load_document_from_path:
     mov dword ptr [rip + doc_save_error], 0
     mov dword ptr [rip + doc_open_error], 0
     mov dword ptr [rip + doc_storage_error], 0
-    call history_reset
+    mov rdi, r12
+    call history_open
+    mov dword ptr [rip + history_tab_open], 0
     xor eax, eax
     jmp .load_path_return
 .load_path_close_error:
@@ -7338,6 +7358,8 @@ confirm_save_action:
     test rax, rax
     js .Lconfirm_save_picker_error
     call picker_commit_active_path
+    mov rdi, qword ptr [rip + current_file_path]
+    call history_open
     call picker_close
     xor eax, eax
     jmp .Lconfirm_save_done
@@ -7350,6 +7372,8 @@ confirm_save_action:
     test rax, rax
     js .Lconfirm_save_path_error
     call commit_path_prompt
+    mov rdi, qword ptr [rip + current_file_path]
+    call history_open
     xor eax, eax
     jmp .Lconfirm_save_done
 .Lconfirm_save_path_error:
@@ -9056,6 +9080,8 @@ window_apply_pending_resize:
 .type application_exit, @function
 application_exit:
     mov edi, dword ptr [rip + socket_fd]
+    call clipboard_service_handoff
+    mov edi, dword ptr [rip + socket_fd]
     cmp edi, 0
     jl .application_exit_now
     mov eax, SYS_close
@@ -10626,6 +10652,10 @@ doc_insert_byte:
     push r12
     push r13
     mov r13d, edi
+    mov edi, dword ptr [rip + doc_cursor]
+    mov esi, r13d
+    call history_note_insert
+    mov edi, r13d
     call doc_line_index_ensure
     mov edi, dword ptr [rip + doc_cursor]
     call doc_move_gap
@@ -10797,6 +10827,9 @@ doc_delete_at_cursor:
     call doc_move_gap
     mov r14d, r13d
     sub r14d, r12d
+    mov edi, r12d
+    mov esi, r14d
+    call history_note_delete
     add dword ptr [rip + doc_gap_end], r14d
     sub dword ptr [rip + doc_length], r14d
     inc dword ptr [rip + doc_revision]
@@ -10831,6 +10864,10 @@ doc_delete_selection:
 .Lneko_delete_selection_bounds:
     mov ebx, eax
     mov r12d, edx
+    mov edi, ebx
+    mov esi, r12d
+    sub esi, ebx
+    call history_note_delete
     mov edi, ebx
     call doc_move_gap
     mov r13d, r12d

@@ -1,294 +1,708 @@
 #include <stdint.h>
 #include <stddef.h>
 
-/*
- * Bounded snapshot undo/redo for the document gap buffer.
- * The pre-key hook captures the state before an input action; the post-edit
- * hook commits one new state after the action's byte operations have ended.
- */
+/* Freestanding, append-only edit journal. One keyboard action is one record. */
+#define SYS_read 0
+#define SYS_write 1
+#define SYS_close 3
+#define SYS_lseek 8
 #define SYS_mmap 9
 #define SYS_munmap 11
+#define SYS_mremap 25
+#define SYS_openat 257
+#define SYS_mkdirat 258
+#define SYS_unlinkat 263
+#define SYS_renameat 264
+#define SYS_fsync 74
+#define SYS_ftruncate 77
+#define SYS_getpid 39
+#define AT_FDCWD (-100)
+#define O_WRONLY 1
+#define O_RDWR 2
+#define O_CREAT 64
+#define O_EXCL 128
+#define O_CLOEXEC 0x80000
+#define SEEK_SET 0
 #define PROT_READ 1
 #define PROT_WRITE 2
 #define MAP_PRIVATE 2
 #define MAP_ANONYMOUS 0x20
-#define SNAPSHOT_LIMIT (4u * 1024u * 1024u)
-#define HISTORY_BUDGET (32u * 1024u * 1024u)
-#define HISTORY_DEPTH 16u
+#define MREMAP_MAYMOVE 1
 #define PAGE_SIZE 4096u
+#define PATH_CAPACITY 4096u
+#define INITIAL_TX_CAPACITY 4096u
+#define RECORD_MAGIC 0x31434552u
+#define MAX_RECORD_SIZE 0x7fffffffu
 
 typedef struct {
-    uint8_t *bytes;
-    uint32_t length;
-    uint32_t mapping_size;
-    uint32_t cursor;
-    uint32_t selection_anchor;
-    uint32_t selection_active;
-    uint32_t revision;
-} snapshot_t;
+    char magic[8];
+    uint32_t version;
+    uint32_t header_size;
+    uint64_t path_hash;
+    uint64_t base_length;
+    uint64_t saved_hash;
+    uint64_t record_count;
+    uint64_t cursor;
+    uint32_t path_length;
+    uint32_t flags;
+} journal_header_t;
 
-extern uint32_t doc_revision;
-extern uint32_t doc_length;
-extern uint32_t doc_cursor;
-extern uint32_t doc_selection_anchor;
-extern uint32_t doc_selection_active;
-extern uint32_t doc_capacity;
-extern uint32_t doc_gap_start;
-extern uint32_t doc_gap_end;
-extern uint32_t doc_line_index_valid;
-extern uint32_t doc_storage_error;
+typedef struct {
+    uint32_t magic;
+    uint32_t total_size;
+    uint32_t operation_count;
+    uint32_t before_cursor;
+    uint32_t before_anchor;
+    uint32_t before_active;
+    uint32_t after_cursor;
+    uint32_t after_anchor;
+    uint32_t after_active;
+} record_header_t;
+
+typedef struct {
+    uint32_t offset;
+    uint32_t removed_length;
+    uint32_t inserted_length;
+} operation_header_t;
+
+extern char **process_envp;
+extern uint32_t doc_length, doc_cursor, doc_selection_anchor, doc_selection_active;
+extern uint32_t doc_capacity, doc_gap_start, doc_gap_end;
+extern uint32_t doc_line_index_valid, doc_storage_error;
 extern uint8_t *doc_buffer;
-extern uint32_t doc_byte_at(uint32_t offset);
+extern uint32_t doc_byte_at(uint32_t);
 extern long doc_buffer_grow(void);
+extern long doc_insert_byte(uint32_t);
+extern void doc_delete_selection(void);
 extern void doc_ensure_cursor_visible(void);
 
-static snapshot_t baseline;
-static snapshot_t undo_stack[HISTORY_DEPTH];
-static snapshot_t redo_stack[HISTORY_DEPTH];
-static uint32_t undo_count;
-static uint32_t redo_count;
-static uint32_t baseline_valid;
-static uint32_t history_bytes;
+static int32_t journal_fd = -1;
+static journal_header_t header;
+static char app_dir[PATH_CAPACITY], journal_path[PATH_CAPACITY];
+static char identity[PATH_CAPACITY];
+static uint32_t identity_length, ready, storage_error;
+static uint64_t base_offset;
+static uint64_t *record_ends;
+static uint32_t record_capacity, record_count;
+static uint8_t *tx_buffer;
+static uint32_t tx_capacity, tx_used, tx_operations, tx_active, replaying, tx_error;
+static uint32_t before_cursor, before_anchor, before_active;
 
-static long raw_syscall6(long number, long a1, long a2, long a3,
-                         long a4, long a5, long a6)
+static long sc6(long n, long a, long b, long c, long d, long e, long f)
 {
-    register long rax __asm__("rax") = number;
-    register long r10 __asm__("r10") = a4;
-    register long r8 __asm__("r8") = a5;
-    register long r9 __asm__("r9") = a6;
-    __asm__ volatile ("syscall"
-        : "+a"(rax)
-        : "D"(a1), "S"(a2), "d"(a3),
-          "r"(r10), "r"(r8), "r"(r9)
+    register long rax __asm__("rax") = n;
+    register long r10 __asm__("r10") = d;
+    register long r8 __asm__("r8") = e;
+    register long r9 __asm__("r9") = f;
+    __asm__ volatile ("syscall" : "+a"(rax)
+        : "D"(a), "S"(b), "d"(c), "r"(r10), "r"(r8), "r"(r9)
         : "rcx", "r11", "memory");
     return rax;
 }
+static int err(long v) { return v < 0 && v >= -4095; }
 
-static int syscall_failed(long result)
+static uint32_t slen(const char *s, uint32_t cap)
 {
-    return result < 0 && result >= -4095;
+    uint32_t n = 0;
+    if (!s) return 0;
+    while (n < cap && s[n]) ++n;
+    return n;
 }
-
-static uint32_t mapping_size_for(uint32_t length)
-{
-    uint32_t wanted = length ? length : 1u;
-    if (wanted > SNAPSHOT_LIMIT || wanted > UINT32_MAX - (PAGE_SIZE - 1u))
-        return 0;
-    return (wanted + PAGE_SIZE - 1u) & ~(PAGE_SIZE - 1u);
-}
-
-static void snapshot_drop(snapshot_t *snapshot)
-{
-    if (snapshot->bytes) {
-        (void)raw_syscall6(SYS_munmap, (long)snapshot->bytes,
-                           snapshot->mapping_size, 0, 0, 0, 0);
-        if (history_bytes >= snapshot->mapping_size)
-            history_bytes -= snapshot->mapping_size;
-        else
-            history_bytes = 0;
-    }
-    snapshot->bytes = (uint8_t *)0;
-    snapshot->length = 0;
-    snapshot->mapping_size = 0;
-    snapshot->cursor = 0;
-    snapshot->selection_anchor = 0;
-    snapshot->selection_active = 0;
-    snapshot->revision = 0;
-}
-
-static void stack_drop_oldest(snapshot_t *stack, uint32_t *count)
+static int scopy(char *d, uint32_t cap, const char *s, uint32_t n)
 {
     uint32_t i;
-    if (!*count)
-        return;
-    snapshot_drop(&stack[0]);
-    for (i = 1; i < *count; ++i)
-        stack[i - 1] = stack[i];
-    --*count;
-    stack[*count].bytes = (uint8_t *)0;
-    stack[*count].length = 0;
-    stack[*count].mapping_size = 0;
+    if (!d || !s || n >= cap) return 0;
+    for (i = 0; i < n; ++i) d[i] = s[i];
+    d[n] = 0;
+    return 1;
 }
-
-static void stack_clear(snapshot_t *stack, uint32_t *count)
+static int append_text(char *d, uint32_t cap, uint32_t *used,
+                       const char *s, uint32_t n)
 {
-    while (*count)
-        stack_drop_oldest(stack, count);
+    uint32_t i;
+    if (*used > cap || n >= cap - *used) return 0;
+    for (i = 0; i < n; ++i) d[(*used)++] = s[i];
+    d[*used] = 0;
+    return 1;
 }
-
-static void history_clear_all(void)
+static const char *env(const char *key)
 {
-    stack_clear(undo_stack, &undo_count);
-    stack_clear(redo_stack, &redo_count);
-    if (baseline_valid)
-        snapshot_drop(&baseline);
-    baseline_valid = 0;
+    uint32_t n = slen(key, 128);
+    char **p = process_envp;
+    if (!p || !n) return (const char *)0;
+    while (*p) {
+        uint32_t i = 0;
+        while (i < n && (*p)[i] == key[i]) ++i;
+        if (i == n && (*p)[i] == '=') return *p + i + 1u;
+        ++p;
+    }
+    return (const char *)0;
 }
-
-static int make_room(uint32_t bytes)
+static uint64_t hash_mem(uint64_t h, const uint8_t *p, uint32_t n)
 {
-    while ((uint64_t)history_bytes + bytes > HISTORY_BUDGET) {
-        if (undo_count)
-            stack_drop_oldest(undo_stack, &undo_count);
-        else if (redo_count)
-            stack_drop_oldest(redo_stack, &redo_count);
-        else if (baseline_valid) {
-            snapshot_drop(&baseline);
-            baseline_valid = 0;
-        } else {
+    uint32_t i;
+    for (i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+    return h;
+}
+static uint64_t hash_doc(void)
+{
+    uint64_t h = 1469598103934665603ull;
+    uint32_t i;
+    for (i = 0; i < doc_length; ++i) {
+        uint8_t b = (uint8_t)doc_byte_at(i);
+        h = hash_mem(h, &b, 1);
+    }
+    return h;
+}
+static uint64_t hash_identity(const char *p, uint32_t n)
+{
+    return hash_mem(1469598103934665603ull, (const uint8_t *)p, n);
+}
+static int read_all(int fd, void *p, uint32_t n)
+{
+    uint32_t done = 0;
+    while (done < n) {
+        long r = sc6(SYS_read, fd, (long)((uint8_t *)p + done), n - done, 0, 0, 0);
+        if (r > 0) { done += (uint32_t)r; continue; }
+        if (r == -4) continue;
+        return 0;
+    }
+    return 1;
+}
+static int write_all(int fd, const void *p, uint32_t n)
+{
+    uint32_t done = 0;
+    while (done < n) {
+        long r = sc6(SYS_write, fd, (long)((const uint8_t *)p + done), n - done, 0, 0, 0);
+        if (r > 0) { done += (uint32_t)r; continue; }
+        if (r == -4) continue;
+        return 0;
+    }
+    return 1;
+}
+static int read_at(int fd, uint64_t off, void *p, uint32_t n)
+{
+    long r = sc6(SYS_lseek, fd, (long)off, SEEK_SET, 0, 0, 0);
+    return !err(r) && read_all(fd, p, n);
+}
+static int write_at(int fd, uint64_t off, const void *p, uint32_t n)
+{
+    long r = sc6(SYS_lseek, fd, (long)off, SEEK_SET, 0, 0, 0);
+    return !err(r) && write_all(fd, p, n);
+}
+static long map_mem(uint32_t n)
+{
+    return sc6(SYS_mmap, 0, n, PROT_READ | PROT_WRITE,
+               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+}
+static int grow_records(uint32_t needed)
+{
+    uint32_t next = record_capacity ? record_capacity : 64u;
+    long r;
+    if (needed <= record_capacity) return 1;
+    while (next < needed) {
+        if (next > 0x3fffffffu) return 0;
+        next *= 2u;
+    }
+    if (!record_ends) r = map_mem(next * 8u);
+    else r = sc6(SYS_mremap, (long)record_ends, record_capacity * 8u,
+                 next * 8u, MREMAP_MAYMOVE, 0, 0);
+    if (err(r)) return 0;
+    record_ends = (uint64_t *)(uintptr_t)r;
+    record_capacity = next;
+    return 1;
+}
+static int grow_tx(uint32_t needed)
+{
+    uint32_t next = tx_capacity ? tx_capacity : INITIAL_TX_CAPACITY;
+    long r;
+    if (needed <= tx_capacity) return 1;
+    while (next < needed) {
+        if (next > 0x3fffffffu) return 0;
+        next *= 2u;
+    }
+    if (!tx_buffer) r = map_mem(next);
+    else r = sc6(SYS_mremap, (long)tx_buffer, tx_capacity, next, MREMAP_MAYMOVE, 0, 0);
+    if (err(r)) return 0;
+    tx_buffer = (uint8_t *)(uintptr_t)r;
+    tx_capacity = next;
+    return 1;
+}
+static void free_journal_state(void)
+{
+    if (journal_fd >= 0) (void)sc6(SYS_close, journal_fd, 0, 0, 0, 0, 0);
+    journal_fd = -1;
+    if (record_ends && record_capacity)
+        (void)sc6(SYS_munmap, (long)record_ends, record_capacity * 8u, 0, 0, 0, 0);
+    if (tx_buffer && tx_capacity)
+        (void)sc6(SYS_munmap, (long)tx_buffer, tx_capacity, 0, 0, 0, 0);
+    record_ends = (uint64_t *)0; record_capacity = 0;
+    tx_buffer = (uint8_t *)0; tx_capacity = 0;
+    record_count = 0; ready = 0;
+    tx_active = tx_used = tx_operations = tx_error = 0;
+}
+static int build_paths(const char *path)
+{
+    const char *home = env("HOME");
+    uint32_t hn = slen(home, PATH_CAPACITY), n, i;
+    uint64_t h;
+    static const char hex[] = "0123456789abcdef";
+    static const char ext[] = ".history";
+    long r;
+    char digit;
+    if (!home || !hn || home[0] != '/' || hn + 12u >= PATH_CAPACITY)
+        return 0;
+    if (path && path[0]) {
+        n = slen(path, PATH_CAPACITY);
+        if (!n || n >= PATH_CAPACITY || !scopy(identity, PATH_CAPACITY, path, n)) return 0;
+    } else {
+        static const char prefix[] = "untitled-";
+        char digits[10];
+        uint32_t count = 0, pid = (uint32_t)sc6(SYS_getpid, 0, 0, 0, 0, 0, 0);
+        for (i = 0; i < sizeof(prefix) - 1u; ++i) identity[i] = prefix[i];
+        do { digits[count++] = (char)('0' + pid % 10u); pid /= 10u; }
+        while (pid && count < sizeof(digits));
+        for (i = 0; i < count; ++i)
+            identity[sizeof(prefix) - 1u + i] = digits[count - i - 1u];
+        n = (uint32_t)sizeof(prefix) - 1u + count;
+        identity[n] = 0;
+    }
+    identity_length = n;
+    if (!scopy(app_dir, PATH_CAPACITY, home, hn)) return 0;
+    n = hn;
+    if (!append_text(app_dir, PATH_CAPACITY, &n, "/.nekoedit", 10u)) return 0;
+    r = sc6(SYS_mkdirat, AT_FDCWD, (long)app_dir, 0700, 0, 0, 0);
+    if (err(r) && r != -17) return 0;
+    h = hash_identity(identity, identity_length);
+    if (!scopy(journal_path, PATH_CAPACITY, app_dir, n)) return 0;
+    n = slen(journal_path, PATH_CAPACITY);
+    if (!append_text(journal_path, PATH_CAPACITY, &n, "/", 1u)) return 0;
+    for (i = 0; i < 16u; ++i) {
+        digit = hex[(h >> ((15u - i) * 4u)) & 15u];
+        if (!append_text(journal_path, PATH_CAPACITY, &n, &digit, 1u)) return 0;
+    }
+    return append_text(journal_path, PATH_CAPACITY, &n, ext, sizeof(ext) - 1u);
+}
+static int reserve_doc(uint32_t n)
+{
+    while (doc_capacity < n) {
+        long r = doc_buffer_grow();
+        if (err(r)) return 0;
+    }
+    return 1;
+}
+static uint64_t base_file_offset(void) { return header.header_size; }
+
+static int reset_file_to_current(void)
+{
+    uint32_t i;
+    long r = sc6(SYS_ftruncate, journal_fd, 0, 0, 0, 0, 0);
+    if (err(r)) return 0;
+    header.magic[0]='N'; header.magic[1]='E'; header.magic[2]='K'; header.magic[3]='O';
+    header.magic[4]='H'; header.magic[5]='S'; header.magic[6]='T'; header.magic[7]='1';
+    header.version = 1;
+    header.path_length = identity_length;
+    header.header_size = (uint32_t)(sizeof(header) + identity_length + doc_length);
+    header.path_hash = hash_identity(identity, identity_length);
+    header.base_length = doc_length;
+    header.saved_hash = hash_doc();
+    header.record_count = header.cursor = 0;
+    header.flags = 0;
+    if (!write_all(journal_fd, &header, sizeof(header)) ||
+        !write_all(journal_fd, identity, identity_length)) return 0;
+    for (i = 0; i < doc_length; ++i) {
+        uint8_t b = (uint8_t)doc_byte_at(i);
+        if (!write_all(journal_fd, &b, 1)) return 0;
+    }
+    if (err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) return 0;
+    base_offset = base_file_offset();
+    record_count = 0;
+    if (!grow_records(1)) return 0;
+    ready = 1;
+    return 1;
+}
+static int append_op(uint32_t offset, uint32_t removed, uint32_t inserted,
+                     const uint8_t *inserted_bytes)
+{
+    operation_header_t op;
+    uint64_t needed = (uint64_t)tx_used + sizeof(op) + removed + inserted;
+    uint32_t i;
+    if (!tx_active || replaying) return 1;
+    if (needed > MAX_RECORD_SIZE || !grow_tx((uint32_t)needed)) {
+        tx_error = storage_error = 1; return 0;
+    }
+    op.offset = offset; op.removed_length = removed; op.inserted_length = inserted;
+    for (i = 0; i < sizeof(op); ++i) tx_buffer[tx_used + i] = ((uint8_t *)&op)[i];
+    tx_used += sizeof(op);
+    for (i = 0; i < removed; ++i) tx_buffer[tx_used + i] = (uint8_t)doc_byte_at(offset + i);
+    tx_used += removed;
+    if (inserted && inserted_bytes) {
+        for (i = 0; i < inserted; ++i) tx_buffer[tx_used + i] = inserted_bytes[i];
+        tx_used += inserted;
+    }
+    ++tx_operations;
+    return 1;
+}
+static int replace_range(uint32_t offset, uint32_t removed,
+                         const uint8_t *inserted, uint32_t inserted_length)
+{
+    uint32_t i;
+    uint64_t final_length = (uint64_t)doc_length - removed + inserted_length;
+    if (offset > doc_length || removed > doc_length - offset ||
+        final_length > 0x7fffffffu || !reserve_doc((uint32_t)final_length)) return 0;
+    doc_cursor = offset + removed;
+    doc_selection_anchor = offset;
+    doc_selection_active = removed != 0;
+    if (removed) doc_delete_selection();
+    else { doc_cursor = offset; doc_selection_anchor = offset; doc_selection_active = 0; }
+    for (i = 0; i < inserted_length; ++i) {
+        (void)doc_insert_byte(inserted[i]);
+        if (doc_storage_error) return 0;
+    }
+    doc_cursor = offset + inserted_length;
+    doc_selection_anchor = doc_cursor;
+    doc_selection_active = 0;
+    doc_line_index_valid = 0;
+    return 1;
+}
+static int apply_record(uint32_t index, int forward)
+{
+    record_header_t rh;
+    uint64_t start;
+    long map_record, map_ops;
+    uint8_t *record;
+    uint32_t *positions;
+    uint32_t map_size, cursor, i;
+    int ok = 0;
+    if (index >= record_count) return 0;
+    start = index ? record_ends[index - 1u] : base_offset;
+    if (!read_at(journal_fd, start, &rh, sizeof(rh)) ||
+        rh.magic != RECORD_MAGIC || rh.total_size < sizeof(rh) ||
+        rh.total_size > MAX_RECORD_SIZE || !rh.operation_count) return 0;
+    map_record = map_mem(rh.total_size);
+    if (err(map_record)) return 0;
+    record = (uint8_t *)(uintptr_t)map_record;
+    if (!read_at(journal_fd, start, record, rh.total_size)) goto done;
+    map_size = rh.operation_count * 4u;
+    map_ops = map_mem(map_size ? map_size : PAGE_SIZE);
+    if (err(map_ops)) goto done;
+    positions = (uint32_t *)(uintptr_t)map_ops;
+    cursor = sizeof(record_header_t);
+    for (i = 0; i < rh.operation_count; ++i) {
+        operation_header_t op;
+        uint32_t j;
+        uint64_t next;
+        if (cursor > rh.total_size || sizeof(op) > rh.total_size - cursor) goto done_ops;
+        positions[i] = cursor;
+        for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[cursor + j];
+        next = (uint64_t)cursor + sizeof(op) + op.removed_length + op.inserted_length;
+        if (next > rh.total_size) goto done_ops;
+        cursor = (uint32_t)next;
+    }
+    if (cursor != rh.total_size) goto done_ops;
+    replaying = 1;
+    if (forward) {
+        for (i = 0; i < rh.operation_count; ++i) {
+            operation_header_t op;
+            uint32_t j, at = positions[i];
+            for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[at + j];
+            if (!replace_range(op.offset, op.removed_length,
+                record + at + sizeof(op) + op.removed_length, op.inserted_length))
+                goto replay_done;
+        }
+        doc_cursor = rh.after_cursor;
+        doc_selection_anchor = rh.after_anchor;
+        doc_selection_active = rh.after_active && doc_cursor != doc_selection_anchor;
+    } else {
+        for (i = rh.operation_count; i > 0; --i) {
+            operation_header_t op;
+            uint32_t j, at = positions[i - 1u];
+            for (j = 0; j < sizeof(op); ++j) ((uint8_t *)&op)[j] = record[at + j];
+            if (!replace_range(op.offset, op.inserted_length,
+                               record + at + sizeof(op), op.removed_length))
+                goto replay_done;
+        }
+        doc_cursor = rh.before_cursor;
+        doc_selection_anchor = rh.before_anchor;
+        doc_selection_active = rh.before_active && doc_cursor != doc_selection_anchor;
+    }
+    doc_line_index_valid = 0;
+    doc_ensure_cursor_visible();
+    ok = 1;
+replay_done:
+    replaying = 0;
+done_ops:
+    (void)sc6(SYS_munmap, map_ops, map_size ? map_size : PAGE_SIZE, 0, 0, 0, 0);
+done:
+    (void)sc6(SYS_munmap, map_record, rh.total_size, 0, 0, 0, 0);
+    return ok;
+}
+static int scan_records(uint64_t file_size)
+{
+    uint64_t off = base_offset;
+    uint32_t found = 0;
+    record_header_t rh;
+    if (!grow_records(64)) return 0;
+    while (off < file_size) {
+        if (file_size - off < sizeof(rh) ||
+            !read_at(journal_fd, off, &rh, sizeof(rh)) ||
+            rh.magic != RECORD_MAGIC || rh.total_size < sizeof(rh) ||
+            rh.total_size > file_size - off || !rh.operation_count) break;
+        off += rh.total_size;
+        if (!grow_records(found + 1u)) return 0;
+        record_ends[found++] = off;
+    }
+    record_count = found;
+    return 1;
+}
+static int open_identity_file(void)
+{
+    long r;
+    uint64_t size;
+    uint32_t i, base_length;
+    char disk_identity[PATH_CAPACITY];
+    r = sc6(SYS_openat, AT_FDCWD, (long)journal_path,
+            O_RDWR | O_CREAT | O_CLOEXEC, 0600, 0, 0);
+    if (err(r)) return 0;
+    journal_fd = (int32_t)r;
+    r = sc6(SYS_lseek, journal_fd, 0, 2, 0, 0, 0);
+    if (err(r)) return 0;
+    size = (uint64_t)r;
+    if (size < sizeof(header)) return reset_file_to_current();
+    if (!read_at(journal_fd, 0, &header, sizeof(header)) ||
+        header.magic[0]!='N' || header.magic[1]!='E' || header.magic[2]!='K' ||
+        header.magic[3]!='O' || header.magic[4]!='H' || header.magic[5]!='S' ||
+        header.magic[6]!='T' || header.magic[7]!='1' || header.version != 1 ||
+        header.path_hash != hash_identity(identity, identity_length) ||
+        header.path_length != identity_length ||
+        header.base_length > 0x7fffffffu ||
+        header.header_size != sizeof(header) + identity_length + header.base_length ||
+        header.header_size > size)
+        return reset_file_to_current();
+    if (!read_at(journal_fd, sizeof(header), disk_identity, identity_length))
+        return reset_file_to_current();
+    for (i = 0; i < identity_length; ++i)
+        if (disk_identity[i] != identity[i]) return reset_file_to_current();
+    /* A changed external file must not be overwritten by stale recovery data. */
+    if (hash_doc() != header.saved_hash) return reset_file_to_current();
+    base_offset = header.header_size;
+    if (!scan_records(size)) return 0;
+    if (header.record_count > record_count) header.record_count = record_count;
+    else record_count = (uint32_t)header.record_count;
+    if (header.cursor > header.record_count) header.cursor = header.record_count;
+    base_length = (uint32_t)header.base_length;
+    {
+        uint32_t map_size = base_length ? base_length : 1u;
+        long mem = map_mem(map_size);
+        if (err(mem)) return 0;
+        if (base_length && !read_at(journal_fd, sizeof(header) + identity_length,
+                                    (void *)(uintptr_t)mem, base_length)) {
+            (void)sc6(SYS_munmap, mem, map_size, 0, 0, 0, 0);
             return 0;
         }
-    }
-    return 1;
-}
-
-static int snapshot_capture(snapshot_t *snapshot)
-{
-    uint32_t length = doc_length;
-    uint32_t size = mapping_size_for(length);
-    long mapped;
-    uint32_t i;
-    if (!size || !make_room(size))
-        return 0;
-    mapped = raw_syscall6(SYS_mmap, 0, size, PROT_READ | PROT_WRITE,
-                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (syscall_failed(mapped))
-        return 0;
-    snapshot->bytes = (uint8_t *)(uintptr_t)mapped;
-    snapshot->length = length;
-    snapshot->mapping_size = size;
-    snapshot->cursor = doc_cursor;
-    snapshot->selection_anchor = doc_selection_anchor;
-    snapshot->selection_active = doc_selection_active;
-    snapshot->revision = doc_revision;
-    for (i = 0; i < length; ++i)
-        snapshot->bytes[i] = (uint8_t)doc_byte_at(i);
-    history_bytes += size;
-    return 1;
-}
-
-static void stack_push(snapshot_t *stack, uint32_t *count,
-                       snapshot_t snapshot)
-{
-    if (*count == HISTORY_DEPTH)
-        stack_drop_oldest(stack, count);
-    stack[*count] = snapshot;
-    ++*count;
-}
-
-static snapshot_t stack_pop(snapshot_t *stack, uint32_t *count)
-{
-    snapshot_t snapshot = stack[*count - 1u];
-    stack[*count - 1u].bytes = (uint8_t *)0;
-    stack[*count - 1u].length = 0;
-    stack[*count - 1u].mapping_size = 0;
-    --*count;
-    return snapshot;
-}
-
-static int reserve_document(uint32_t length)
-{
-    if (!doc_buffer)
-        return 0;
-    while (doc_capacity < length) {
-        long result = doc_buffer_grow();
-        if (syscall_failed(result))
+        if (!reserve_doc(base_length)) {
+            (void)sc6(SYS_munmap, mem, map_size, 0, 0, 0, 0);
             return 0;
+        }
+        for (i = 0; i < base_length; ++i)
+            doc_buffer[i] = ((uint8_t *)(uintptr_t)mem)[i];
+        doc_length = base_length;
+        doc_gap_start = base_length;
+        doc_gap_end = doc_capacity;
+        doc_cursor = base_length;
+        doc_selection_anchor = base_length;
+        doc_selection_active = 0;
+        doc_line_index_valid = 0;
+        (void)sc6(SYS_munmap, mem, map_size, 0, 0, 0, 0);
     }
-    return 1;
-}
-
-static int snapshot_restore(const snapshot_t *snapshot)
-{
-    uint32_t i;
-    uint32_t length = snapshot->length;
-    if (!snapshot->bytes || !reserve_document(length))
-        return 0;
-
-    doc_gap_start = 0;
-    doc_gap_end = doc_capacity;
-    doc_length = 0;
-    for (i = 0; i < length; ++i)
-        doc_buffer[i] = snapshot->bytes[i];
-    doc_gap_start = length;
-    doc_gap_end = doc_capacity;
-    doc_length = length;
-    doc_cursor = snapshot->cursor <= length ? snapshot->cursor : length;
-    doc_selection_anchor =
-        snapshot->selection_anchor <= length ? snapshot->selection_anchor : length;
-    doc_selection_active =
-        snapshot->selection_active && doc_selection_anchor != doc_cursor;
+    ready = 1;
+    for (i = 0; i < (uint32_t)header.cursor; ++i)
+        if (!apply_record(i, 1)) { storage_error = 1; return 0; }
     doc_line_index_valid = 0;
-    doc_storage_error = 0;
-    ++doc_revision;
-    doc_ensure_cursor_visible();
+    (void)write_at(journal_fd, 0, &header, sizeof(header));
+    (void)sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0);
     return 1;
 }
 
+void history_open(const char *path)
+{
+    free_journal_state();
+    storage_error = 0;
+    if (!build_paths(path) || !open_identity_file()) {
+        storage_error = 1;
+        ready = 0;
+    }
+}
 void history_reset(void)
 {
-    history_clear_all();
+    free_journal_state();
+    storage_error = 0;
+    replaying = 0;
 }
-
-void history_checkpoint(void)
+void history_begin_action(void)
 {
-    snapshot_t current = {0};
-    if (baseline_valid && baseline.revision == doc_revision) {
-        /* Navigation/selection do not change the content revision, but the
-           next undo should restore the actual pre-edit caret and selection. */
-        baseline.cursor = doc_cursor;
-        baseline.selection_anchor = doc_selection_anchor;
-        baseline.selection_active = doc_selection_active;
-        return;
-    }
-
-    /* An edit after Undo starts a new branch and invalidates Redo. */
-    stack_clear(redo_stack, &redo_count);
-    if (!snapshot_capture(&current)) {
-        history_clear_all();
-        return;
-    }
-    if (!baseline_valid) {
-        baseline = current;
-        baseline_valid = 1;
-        return;
-    }
-    stack_push(undo_stack, &undo_count, baseline);
-    baseline = current;
-    baseline_valid = 1;
+    if (replaying) return;
+    if (!ready && journal_path[0]) (void)open_identity_file();
+    if (!ready) return;
+    tx_active = 1;
+    tx_error = 0;
+    tx_used = 0;
+    tx_operations = 0;
+    before_cursor = doc_cursor;
+    before_anchor = doc_selection_anchor;
+    before_active = doc_selection_active;
 }
-
-static int history_move(snapshot_t *from_stack, uint32_t *from_count,
-                        snapshot_t *to_stack, uint32_t *to_count)
+void history_note_insert(uint32_t offset, uint32_t byte)
 {
-    snapshot_t target;
-    if (!*from_count || !baseline_valid)
-        return 0;
-    target = from_stack[*from_count - 1u];
-    if (!target.bytes || !reserve_document(target.length))
-        return 0;
-
-    if (*to_count == HISTORY_DEPTH)
-        stack_drop_oldest(to_stack, to_count);
-    target = stack_pop(from_stack, from_count);
-    stack_push(to_stack, to_count, baseline);
-    baseline = target;
-    if (!snapshot_restore(&baseline)) {
-        baseline = stack_pop(to_stack, to_count);
-        stack_push(from_stack, from_count, target);
-        return 0;
+    uint8_t b = (uint8_t)byte;
+    if (tx_active && !replaying && !append_op(offset, 0, 1, &b)) storage_error = 1;
+}
+void history_note_delete(uint32_t offset, uint32_t length)
+{
+    if (tx_active && !replaying && !append_op(offset, length, 0, (const uint8_t *)0))
+        storage_error = 1;
+}
+void history_commit_action(void)
+{
+    record_header_t rh;
+    uint64_t start, end;
+    if (!tx_active) return;
+    tx_active = 0;
+    if (!tx_operations || tx_error || doc_storage_error || !ready) {
+        tx_used = tx_operations = 0;
+        if (tx_error || doc_storage_error) storage_error = 1;
+        return;
     }
-    baseline.revision = doc_revision;
+    if (header.cursor < header.record_count) {
+        start = header.cursor ? record_ends[(uint32_t)header.cursor - 1u] : base_offset;
+        if (err(sc6(SYS_ftruncate, journal_fd, (long)start, 0, 0, 0, 0))) {
+            storage_error = 1; return;
+        }
+        record_count = (uint32_t)header.cursor;
+        header.record_count = header.cursor;
+    } else start = record_count ? record_ends[record_count - 1u] : base_offset;
+    rh.magic = RECORD_MAGIC;
+    rh.total_size = (uint32_t)(sizeof(rh) + tx_used);
+    rh.operation_count = tx_operations;
+    rh.before_cursor = before_cursor;
+    rh.before_anchor = before_anchor;
+    rh.before_active = before_active;
+    rh.after_cursor = doc_cursor;
+    rh.after_anchor = doc_selection_anchor;
+    rh.after_active = doc_selection_active;
+    if (!grow_records(record_count + 1u) ||
+        !write_at(journal_fd, start, &rh, sizeof(rh)) ||
+        !write_at(journal_fd, start + sizeof(rh), tx_buffer, tx_used) ||
+        err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) {
+        storage_error = 1; return;
+    }
+    end = start + rh.total_size;
+    record_ends[record_count++] = end;
+    header.record_count = record_count;
+    header.cursor = record_count;
+    if (!write_at(journal_fd, 0, &header, sizeof(header)) ||
+        err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0)))
+        storage_error = 1;
+    tx_used = tx_operations = 0;
+}
+static int move_history(int forward)
+{
+    uint64_t index;
+    if (!ready || (!forward && !header.cursor) ||
+        (forward && header.cursor >= header.record_count)) return 0;
+    index = forward ? header.cursor : header.cursor - 1u;
+    if (!apply_record((uint32_t)index, forward)) {
+        storage_error = 1; return 0;
+    }
+    if (forward) ++header.cursor;
+    else --header.cursor;
+    if (!write_at(journal_fd, 0, &header, sizeof(header)) ||
+        err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) {
+        storage_error = 1; return 0;
+    }
     return 1;
 }
-
 int history_undo(void)
 {
-    return history_move(undo_stack, &undo_count, redo_stack, &redo_count);
+    tx_active = 0; tx_used = tx_operations = 0;
+    return move_history(0);
 }
-
 int history_redo(void)
 {
-    return history_move(redo_stack, &redo_count, undo_stack, &undo_count);
+    tx_active = 0; tx_used = tx_operations = 0;
+    return move_history(1);
+}
+void history_mark_saved(void)
+{
+    if (!ready || journal_fd < 0) return;
+    header.saved_hash = hash_doc();
+    if (!write_at(journal_fd, 0, &header, sizeof(header)) ||
+        err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) storage_error = 1;
+}
+uint32_t history_undo_count(void) { return ready ? (uint32_t)header.cursor : 0; }
+uint32_t history_redo_count(void)
+{
+    return ready && header.record_count >= header.cursor ?
+           (uint32_t)(header.record_count - header.cursor) : 0;
+}
+uint32_t history_has_error(void) { return storage_error; }
+int history_delete_current(void)
+{
+    if (!journal_path[0]) return 0;
+    if (journal_fd >= 0) {
+        (void)sc6(SYS_close, journal_fd, 0, 0, 0, 0, 0);
+        journal_fd = -1;
+    }
+    if (err(sc6(SYS_unlinkat, AT_FDCWD, (long)journal_path, 0, 0, 0, 0))) {
+        storage_error = 1; return 0;
+    }
+    ready = 0; record_count = 0; tx_active = 0;
+    tx_used = tx_operations = 0; storage_error = 0;
+    return 1;
+}
+int history_export_to(const char *destination)
+{
+    char temporary[PATH_CAPACITY], digits[10];
+    uint32_t n = slen(destination, PATH_CAPACITY), used, pid, dc = 0;
+    uint8_t buffer[16384];
+    int32_t out;
+    uint64_t offset = 0, size;
+    long r;
+    if (!ready || journal_fd < 0 || !destination || !n || n >= PATH_CAPACITY - 32u)
+        return 0;
+    if (!scopy(temporary, PATH_CAPACITY, destination, n)) return 0;
+    used = n;
+    if (!append_text(temporary, PATH_CAPACITY, &used, ".tmp-", 5u)) return 0;
+    pid = (uint32_t)sc6(SYS_getpid, 0, 0, 0, 0, 0, 0);
+    do { digits[dc++] = (char)('0' + pid % 10u); pid /= 10u; }
+    while (pid && dc < sizeof(digits));
+    while (dc) {
+        char d = digits[--dc];
+        if (!append_text(temporary, PATH_CAPACITY, &used, &d, 1u)) return 0;
+    }
+    out = (int32_t)sc6(SYS_openat, AT_FDCWD, (long)temporary,
+                       O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600, 0, 0);
+    if (err(out)) return 0;
+    r = sc6(SYS_lseek, journal_fd, 0, 2, 0, 0, 0);
+    if (err(r)) goto export_fail;
+    size = (uint64_t)r;
+    while (offset < size) {
+        uint32_t chunk = size - offset > sizeof(buffer) ?
+                         sizeof(buffer) : (uint32_t)(size - offset);
+        if (!read_at(journal_fd, offset, buffer, chunk) || !write_all(out, buffer, chunk))
+            goto export_fail;
+        offset += chunk;
+    }
+    if (err(sc6(SYS_fsync, out, 0, 0, 0, 0, 0))) goto export_fail;
+    (void)sc6(SYS_close, out, 0, 0, 0, 0, 0);
+    if (err(sc6(SYS_renameat, AT_FDCWD, (long)temporary,
+                AT_FDCWD, (long)destination, 0, 0))) {
+        (void)sc6(SYS_unlinkat, AT_FDCWD, (long)temporary, 0, 0, 0, 0);
+        return 0;
+    }
+    return 1;
+export_fail:
+    (void)sc6(SYS_close, out, 0, 0, 0, 0, 0);
+    (void)sc6(SYS_unlinkat, AT_FDCWD, (long)temporary, 0, 0, 0, 0);
+    return 0;
 }

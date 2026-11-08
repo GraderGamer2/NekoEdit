@@ -12,6 +12,10 @@
 #define SYS_pipe2 293
 #define SYS_mremap 25
 #define SYS_rt_sigaction 13
+#define SYS_poll 7
+#define SYS_recvmsg 47
+#define SYS_fork 57
+#define SYS_prctl 157
 
 #define PROT_READ 1
 #define PROT_WRITE 2
@@ -27,6 +31,8 @@
 #define POLLERR 0x008
 #define POLLHUP 0x010
 #define POLLNVAL 0x020
+#define MSG_CMSG_CLOEXEC 0x40000000
+#define MSG_CTRUNC 0x008
 
 #define SOURCE_COUNT 8u
 #define SEND_COUNT 4u
@@ -64,6 +70,9 @@ extern uint32_t clipboard_manager_global;
 extern uint32_t next_client_object_id;
 extern uint32_t keyboard_serial;
 extern int32_t event_fd;
+extern int32_t clipboard_persistence_enabled;
+extern uint8_t event_payload[4096];
+extern void linux_exit(int);
 extern uint32_t doc_selection_active;
 extern uint32_t doc_selection_anchor;
 extern uint32_t doc_cursor;
@@ -99,6 +108,9 @@ static int32_t receive_fd = -1;
 static uint8_t *receive_buffer;
 static uint32_t receive_length;
 static uint32_t receive_capacity;
+static uint32_t clipboard_service_mode;
+static uint32_t clipboard_service_should_exit;
+static int32_t service_socket_fd = -1;
 
 static long syscall6(long n, long a1, long a2, long a3,
                      long a4, long a5, long a6)
@@ -578,6 +590,8 @@ int clipboard_handle_event(uint32_t object_id, uint32_t opcode,
         if (opcode == 5 && size >= 4) {
             selected_offer = *(const uint32_t *)(const void *)payload;
             selected_mimes = selected_offer == pending_offer ? pending_mimes : 0;
+            if (clipboard_service_mode && current_source)
+                clipboard_service_should_exit = 1;
             if (!selected_offer)
                 selected_mimes = 0;
             return 1;
@@ -627,8 +641,11 @@ int clipboard_handle_event(uint32_t object_id, uint32_t opcode,
             }
             if (opcode == 2) {
                 source->flags |= SOURCE_RETIRED;
-                if (current_source == object_id)
+                if (current_source == object_id) {
                     current_source = 0;
+                    if (clipboard_service_mode)
+                        clipboard_service_should_exit = 1;
+                }
                 (void)wl_send_request(object_id, 1, (const void *)0, 0);
                 maybe_release_source((uint32_t)index);
                 return 1;
@@ -638,4 +655,139 @@ int clipboard_handle_event(uint32_t object_id, uint32_t opcode,
         }
     }
     return 0;
+}
+
+
+/* Retain the exact existing Wayland client and source across editor exit. */
+typedef struct { uint64_t base, length; } service_iovec_t;
+typedef struct {
+    uint64_t name;
+    uint32_t name_length, name_padding;
+    uint64_t iov, iov_count, control, control_length;
+    uint32_t flags, padding;
+} service_msghdr_t;
+typedef struct { uint64_t length; int32_t level, type; } service_cmsghdr_t;
+
+static int service_receive_exact(uint8_t *bytes, uint32_t length)
+{
+    uint32_t done = 0;
+    while (done < length) {
+        service_iovec_t iov;
+        service_msghdr_t msg;
+        uint8_t control[64] __attribute__((aligned(8)));
+        long result;
+        uint32_t i;
+        iov.base = (uint64_t)(uintptr_t)(bytes + done);
+        iov.length = length - done;
+        for (i = 0; i < sizeof(msg); ++i) ((uint8_t *)&msg)[i] = 0;
+        for (i = 0; i < sizeof(control); ++i) control[i] = 0;
+        msg.iov = (uint64_t)(uintptr_t)&iov;
+        msg.iov_count = 1;
+        msg.control = (uint64_t)(uintptr_t)control;
+        msg.control_length = sizeof(control);
+        result = syscall6(SYS_recvmsg, service_socket_fd, (long)&msg,
+                          MSG_CMSG_CLOEXEC, 0, 0, 0);
+        if (result > 0) {
+            if (msg.flags & MSG_CTRUNC) return 0;
+            if (msg.control_length >= sizeof(service_cmsghdr_t) + 4u) {
+                service_cmsghdr_t *ch = (service_cmsghdr_t *)(void *)control;
+                if (ch->length >= sizeof(service_cmsghdr_t) + 4u &&
+                    ch->level == 1 && ch->type == 1) {
+                    uint32_t count = (uint32_t)(ch->length - sizeof(service_cmsghdr_t)) / 4u;
+                    uint32_t j;
+                    for (j = 0; j < count; ++j) {
+                        int32_t incoming = *(int32_t *)(void *)(
+                            control + sizeof(service_cmsghdr_t) + j * 4u);
+                        if (event_fd < 0) event_fd = incoming;
+                        else close_fd(incoming);
+                    }
+                }
+            }
+            done += (uint32_t)result;
+            continue;
+        }
+        if (result == -4) continue;
+        return 0;
+    }
+    return 1;
+}
+
+static int service_read_event(void)
+{
+    uint8_t header[8];
+    uint32_t object_id, word, opcode, size;
+    if (!service_receive_exact(header, sizeof(header))) return 0;
+    object_id = *(uint32_t *)(void *)header;
+    word = *(uint32_t *)(void *)(header + 4);
+    opcode = word & 0xffffu;
+    size = word >> 16;
+    if (size < 8u || size - 8u > 4096u) return 0;
+    size -= 8u;
+    if (size && !service_receive_exact(event_payload, size)) return 0;
+
+    /* Continue answering xdg_wm_base.ping after the toplevel has closed. */
+    if (object_id == 6u && opcode == 0u && size >= 4u) {
+        uint32_t serial = *(uint32_t *)(void *)event_payload;
+        return wl_send_request(6u, 3u, &serial, 4u) >= 0;
+    }
+    {
+        int32_t descriptor = event_fd;
+        (void)clipboard_handle_event(object_id, opcode, event_payload, size, descriptor);
+        if (event_fd >= 0) {
+            close_fd(event_fd);
+            event_fd = -1;
+        }
+    }
+    return 1;
+}
+
+static int service_has_pending_sends(void)
+{
+    uint32_t i;
+    for (i = 0; i < SEND_COUNT; ++i)
+        if (sends[i].fd >= 0) return 1;
+    return 0;
+}
+
+static void clipboard_service_loop(void)
+{
+    pollfd_t fds[7];
+    clipboard_service_mode = 1;
+    clipboard_service_should_exit = 0;
+    (void)syscall6(SYS_prctl, 15, (long)"nekoedit-clip", 0, 0, 0, 0);
+    if (event_fd >= 0) { close_fd(event_fd); event_fd = -1; }
+    for (;;) {
+        long result;
+        fds[0].fd = service_socket_fd;
+        fds[0].events = POLLIN;
+        fds[0].revents = 0;
+        fds[1].fd = -1;
+        fds[1].events = 0;
+        fds[1].revents = 0;
+        clipboard_poll_prepare(fds);
+        result = syscall6(SYS_poll, (long)fds, 7, -1, 0, 0, 0);
+        if (result == -4) continue;
+        if (result < 0 || (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))) break;
+        if ((fds[0].revents & POLLIN) && !service_read_event()) break;
+        (void)clipboard_poll_dispatch(fds);
+        if (clipboard_service_should_exit && !service_has_pending_sends()) break;
+    }
+    close_fd(service_socket_fd);
+    service_socket_fd = -1;
+    linux_exit(0);
+}
+
+long clipboard_service_handoff(int32_t socket_descriptor)
+{
+    long child;
+    if (!clipboard_persistence_enabled || !current_source ||
+        find_source(current_source) < 0 || socket_descriptor < 0)
+        return 0;
+    child = syscall6(SYS_fork, 0, 0, 0, 0, 0, 0);
+    if (child < 0) return child;
+    if (child == 0) {
+        service_socket_fd = socket_descriptor;
+        clipboard_service_loop();
+    }
+    return child;
 }
