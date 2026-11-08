@@ -665,6 +665,7 @@ xkb_keycodes "nekoedit-test" {
     <AB08> = 59;
         <AB10> = 61;
     <KPDL> = 91;
+    <KP0> = 90;
     <AD01> = 24;
     <AD02> = 25;
     <AD03> = 26;
@@ -704,6 +705,12 @@ xkb_types "nekoedit-test" {
         map[Shift] = Level2;
         map[LevelThree] = Level3;
         map[Shift+LevelThree] = Level4;
+    };
+    type "KEYPAD" {
+        modifiers = Shift+NumLock;
+        map[Shift] = Level2;
+        map[NumLock] = Level2;
+        map[Shift+NumLock] = Level1;
     };
 };
 xkb_symbols "nekoedit-test" {
@@ -765,6 +772,10 @@ xkb_symbols "nekoedit-test" {
     key <KPDL> {
         type = "ONE_LEVEL",
         symbols[Group1] = [ comma ]
+    };
+    key <KP0> {
+        type = "KEYPAD",
+        symbols[Group1] = [ x, 7 ]
     };
     key <AB09> { [ period, greater ] };
 };
@@ -3126,8 +3137,19 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1156, 52, "XKB shifted period/greater-than key")
                     key_step(1158, 53, "XKB shifted slash/question key")
                     key_step(1160, 83, "XKB ONE_LEVEL keypad key ignores Shift")
+                    # Canonical KEYPAD is controlled by Shift XOR NumLock:
+                    # either alone selects level 2; both select level 1.
+                    key_step(1162, 82, "XKB KEYPAD Shift selects numeric level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1180, 0, 0, 0, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1164, 0, 0, 16, 0))
+                    )
+                    key_step(1166, 82, "XKB KEYPAD NumLock selects numeric level")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1168, 1, 0, 16, 0))
+                    )
+                    key_step(1170, 82, "XKB KEYPAD Shift cancels NumLock")
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 1172, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1200, 31, "Ctrl+S saves XKB-translated text")
                     client.sendall(wire_message(10, 1))
@@ -5874,7 +5896,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=xkb_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm!@#$%^&*()_+~{}:\"<>?,77x",
             keyboard_layout_test=True,
         )
     finally:
