@@ -153,6 +153,7 @@ ui_menu_compose_locale_label: .asciz "COMPOSE LOCALE"
 ui_menu_locale_en: .asciz "en_US"
 ui_menu_locale_ptbr: .asciz "pt_BR"
 ui_menu_locale_select: .asciz "LOCALE"
+ui_menu_locale_builtin: .asciz "en_US (built-in)"
 ui_menu_locale_base: .asciz "BASE"
 ui_menu_locale_missing: .asciz "MISSING"
 ui_menu_locale_active: .asciz "ACTIVE"
@@ -4973,6 +4974,9 @@ save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
 save_confirm_action:    .long 0
 locale_manager_error:    .long 0
+settings_locale_dropdown_open: .long 0
+settings_locale_dropdown_selected: .long 0
+settings_locale_dropdown_scroll: .long 0
 path_prompt_mode:       .long 0
 path_prompt_length:     .long 0
 file_probe_byte:        .byte 0
@@ -5056,6 +5060,7 @@ picker_current_path:    .zero PATH_CAPACITY
 picker_path_buffer:     .zero PATH_CAPACITY
 picker_name_buffer:     .zero 256
 picker_target_buffer:   .zero PATH_CAPACITY
+settings_locale_display_buffer: .zero 64
 .balign 8
 load_buffer:            .quad 0
 load_capacity:          .long 0
@@ -6406,6 +6411,13 @@ wayland_main:
     jae .pointer_header_outside
     xor dword ptr [rip + settings_menu_open], 1
     mov dword ptr [rip + file_menu_open], 0
+    cmp dword ptr [rip + settings_menu_open], 0
+    je .pointer_header_settings_closed
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    call settings_locale_refresh
+    jmp .keyboard_changed
+.pointer_header_settings_closed:
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
     jmp .keyboard_changed
 .pointer_header_outside:
     cmp dword ptr [rip + file_menu_open], 0
@@ -6473,6 +6485,29 @@ wayland_main:
     mov edi, eax
     mov esi, edx
     call settings_pointer_to_design
+    cmp dword ptr [rip + settings_locale_dropdown_open], 1
+    jne .pointer_settings_no_locale_dropdown
+    cmp edx, 88
+    jb .pointer_settings_no_locale_dropdown
+    cmp edx, 184
+    jae .pointer_settings_no_locale_dropdown
+    cmp eax, 304
+    jae .pointer_settings_no_locale_dropdown
+    mov ecx, edx
+    sub ecx, 88
+    shr ecx, 4
+    add ecx, dword ptr [rip + settings_locale_dropdown_scroll]
+    mov eax, dword ptr [rip + picker_entry_count]
+    inc eax
+    cmp ecx, eax
+    jae .pointer_settings_locale_dropdown_blank
+    mov dword ptr [rip + settings_locale_dropdown_selected], ecx
+    call settings_locale_activate
+    jmp .keyboard_changed
+.pointer_settings_locale_dropdown_blank:
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    jmp .keyboard_changed
+.pointer_settings_no_locale_dropdown:
     cmp eax, 160
     jb .pointer_menu_outside
     cmp eax, 416
@@ -6506,35 +6541,25 @@ wayland_main:
     jmp .pointer_settings_ui_font_increase
 
 .pointer_settings_locale_row:
-    cmp eax, 208
-    jb .pointer_settings_locale_select
     cmp eax, 260
-    jb .pointer_settings_locale_base
-    cmp eax, 304
+    jb .pointer_settings_locale_select
+    cmp eax, 312
     jb .pointer_settings_locale_add
-    cmp eax, 360
+    cmp eax, 368
     jb .pointer_settings_locale_remove
     jmp .pointer_menu_outside
 
 .pointer_settings_locale_select:
-    mov edi, 5
-    call picker_start
-    test rax, rax
-    js .pointer_settings_locale_add_error
-    jmp .keyboard_changed
-
-.pointer_settings_locale_base:
-    lea rdi, [rip + ui_locale_en_tag]
-    call preferences_set_locale_tag
-    test eax, eax
-    jz .pointer_settings_locale_done
-    mov rdi, qword ptr [rip + preferences_locale_ptr]
-    call compose_locale_load
-    call preferences_save
-    mov dword ptr [rip + locale_manager_error], 0
+    xor dword ptr [rip + settings_locale_dropdown_open], 1
+    cmp dword ptr [rip + settings_locale_dropdown_open], 0
+    je .pointer_settings_locale_dropdown_toggled
+    call settings_locale_refresh
+    call settings_locale_sync_selection
+.pointer_settings_locale_dropdown_toggled:
     jmp .keyboard_changed
 
 .pointer_settings_locale_add:
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
     mov dword ptr [rip + locale_manager_error], 0
     mov edi, 4
     call picker_start
@@ -6546,12 +6571,14 @@ wayland_main:
     jmp .keyboard_changed
 
 .pointer_settings_locale_remove:
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    call preferences_locale_is_builtin
+    test eax, eax
+    jnz .pointer_settings_locale_remove_disabled
     call request_locale_remove_confirmation
     jmp .keyboard_changed
-
-.pointer_settings_locale_toggle:
-    jmp .pointer_settings_locale_base
-.pointer_settings_locale_done:
+.pointer_settings_locale_remove_disabled:
+    mov dword ptr [rip + locale_manager_error], 1
     jmp .keyboard_changed
 
 .pointer_settings_clipboard_toggle:
@@ -7482,6 +7509,11 @@ wayland_main:
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_escape_menu_handling:
+    cmp dword ptr [rip + settings_locale_dropdown_open], 0
+    je .Lkeyboard_escape_menu_check
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    jmp .keyboard_changed
+.Lkeyboard_escape_menu_check:
     cmp dword ptr [rip + file_menu_open], 0
     jne .keyboard_close_menus
     cmp dword ptr [rip + settings_menu_open], 0
@@ -7491,6 +7523,8 @@ wayland_main:
     mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .keyboard_unmodified_dispatch:
+    cmp dword ptr [rip + settings_locale_dropdown_open], 1
+    je .keyboard_locale_dropdown_dispatch
 .Lkeyboard_dispatch_navigation:
     cmp eax, 105
     je .keyboard_left
@@ -7521,6 +7555,35 @@ wayland_main:
     mov edi, eax
     call doc_insert_keyboard_codepoint
     jmp .keyboard_changed
+.keyboard_locale_dropdown_dispatch:
+    cmp eax, 103
+    je .keyboard_locale_dropdown_up
+    cmp eax, 108
+    je .keyboard_locale_dropdown_down
+    cmp eax, 28
+    je .keyboard_locale_dropdown_enter
+    jmp .event_loop
+.keyboard_locale_dropdown_up:
+    mov eax, dword ptr [rip + settings_locale_dropdown_selected]
+    test eax, eax
+    jz .event_loop
+    dec eax
+    mov dword ptr [rip + settings_locale_dropdown_selected], eax
+    call settings_locale_dropdown_adjust
+    jmp .keyboard_changed
+.keyboard_locale_dropdown_down:
+    mov eax, dword ptr [rip + settings_locale_dropdown_selected]
+    mov ecx, dword ptr [rip + picker_entry_count]
+    cmp eax, ecx
+    jae .event_loop
+    inc eax
+    mov dword ptr [rip + settings_locale_dropdown_selected], eax
+    call settings_locale_dropdown_adjust
+    jmp .keyboard_changed
+.keyboard_locale_dropdown_enter:
+    call settings_locale_activate
+    jmp .keyboard_changed
+
 .keyboard_open_command:
     call start_open_prompt
     jmp .keyboard_changed
@@ -8823,6 +8886,280 @@ picker_insert_candidate:
 .size picker_insert_candidate, . - picker_insert_candidate
 
 
+
+# Reuse the existing bounded .nlp directory scanner to refresh installed packs.
+# The scanner's entry array remains available after picker_close().
+.type settings_locale_refresh, @function
+settings_locale_refresh:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov ebx, dword ptr [rip + settings_menu_open]
+    mov edi, 5
+    call picker_start
+    test rax, rax
+    js .settings_locale_refresh_error
+    call picker_close
+    mov dword ptr [rip + locale_manager_error], 0
+    jmp .settings_locale_refresh_restore
+.settings_locale_refresh_error:
+    call picker_close
+    mov dword ptr [rip + locale_manager_error], 1
+.settings_locale_refresh_restore:
+    mov dword ptr [rip + settings_menu_open], ebx
+    call settings_locale_sync_selection
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    xor eax, eax
+    ret
+.size settings_locale_refresh, . - settings_locale_refresh
+
+# Resolve the current saved/effective tag to the matching dynamic list item.
+# Item zero is the built-in en_US locale; installed packs follow scanner order.
+.type settings_locale_sync_selection, @function
+settings_locale_sync_selection:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov dword ptr [rip + settings_locale_dropdown_selected], 0
+    mov dword ptr [rip + settings_locale_dropdown_scroll], 0
+    call preferences_locale_is_builtin
+    test eax, eax
+    jnz .settings_locale_sync_adjust
+    mov r12, qword ptr [rip + preferences_locale_ptr]
+    test r12, r12
+    jnz .settings_locale_sync_tag
+    lea r12, [rip + compose_locale_current_tag]
+.settings_locale_sync_tag:
+    xor r15d, r15d
+.settings_locale_sync_tag_length:
+    cmp r15d, 31
+    jae .settings_locale_sync_adjust
+    cmp byte ptr [r12 + r15], 0
+    je .settings_locale_sync_loop_start
+    inc r15d
+    jmp .settings_locale_sync_tag_length
+.settings_locale_sync_loop_start:
+    test r15d, r15d
+    jz .settings_locale_sync_adjust
+    xor r13d, r13d
+.settings_locale_sync_entry_loop:
+    cmp r13d, dword ptr [rip + picker_entry_count]
+    jae .settings_locale_sync_adjust
+    mov eax, r13d
+    imul eax, PICKER_ENTRY_SIZE
+    lea r14, [rip + picker_entries]
+    add r14, rax
+    lea rbx, [r14 + 4]
+    xor ecx, ecx
+.settings_locale_sync_name_length:
+    cmp ecx, 255
+    jae .settings_locale_sync_next
+    cmp byte ptr [rbx + rcx], 0
+    je .settings_locale_sync_name_ready
+    inc ecx
+    jmp .settings_locale_sync_name_length
+.settings_locale_sync_name_ready:
+    lea eax, [r15 + 4]
+    cmp ecx, eax
+    jne .settings_locale_sync_next
+    xor edx, edx
+.settings_locale_sync_compare:
+    cmp edx, r15d
+    jae .settings_locale_sync_suffix
+    mov al, byte ptr [rbx + rdx]
+    cmp al, byte ptr [r12 + rdx]
+    jne .settings_locale_sync_next
+    inc edx
+    jmp .settings_locale_sync_compare
+.settings_locale_sync_suffix:
+    cmp byte ptr [rbx + r15], '.'
+    jne .settings_locale_sync_next
+    cmp byte ptr [rbx + r15 + 1], 'n'
+    jne .settings_locale_sync_next
+    cmp byte ptr [rbx + r15 + 2], 'l'
+    jne .settings_locale_sync_next
+    cmp byte ptr [rbx + r15 + 3], 'p'
+    jne .settings_locale_sync_next
+    lea eax, [r13 + 1]
+    mov dword ptr [rip + settings_locale_dropdown_selected], eax
+    jmp .settings_locale_sync_adjust
+.settings_locale_sync_next:
+    inc r13d
+    jmp .settings_locale_sync_entry_loop
+.settings_locale_sync_adjust:
+    call settings_locale_dropdown_adjust
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size settings_locale_sync_selection, . - settings_locale_sync_selection
+
+# Keep the highlighted item in the six-row viewport.
+.type settings_locale_dropdown_adjust, @function
+settings_locale_dropdown_adjust:
+    mov eax, dword ptr [rip + settings_locale_dropdown_selected]
+    cmp eax, 5
+    jbe .settings_locale_dropdown_scroll_zero
+    sub eax, 5
+    mov dword ptr [rip + settings_locale_dropdown_scroll], eax
+    ret
+.settings_locale_dropdown_scroll_zero:
+    mov dword ptr [rip + settings_locale_dropdown_scroll], 0
+    ret
+.size settings_locale_dropdown_adjust, . - settings_locale_dropdown_adjust
+
+# Apply the highlighted item. Base is item zero; other rows map to picker_entries.
+.type settings_locale_activate, @function
+settings_locale_activate:
+    push rbx
+    push r12
+    sub rsp, 8
+    mov ebx, dword ptr [rip + settings_locale_dropdown_selected]
+    test ebx, ebx
+    jnz .settings_locale_activate_pack
+    lea rdi, [rip + ui_locale_en_tag]
+    call preferences_set_locale_tag
+    test eax, eax
+    jz .settings_locale_activate_error
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    call compose_locale_load
+    call preferences_save
+    mov dword ptr [rip + locale_manager_error], 0
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    mov dword ptr [rip + settings_locale_dropdown_selected], 0
+    jmp .settings_locale_activate_done
+.settings_locale_activate_pack:
+    dec ebx
+    mov dword ptr [rip + picker_selected], ebx
+    mov dword ptr [rip + picker_focus], 0
+    mov dword ptr [rip + picker_mode], 5
+    call picker_select_locale
+    test rax, rax
+    js .settings_locale_activate_error
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    mov dword ptr [rip + locale_manager_error], 0
+    jmp .settings_locale_activate_done
+.settings_locale_activate_error:
+    mov dword ptr [rip + locale_manager_error], 1
+    call picker_close
+.settings_locale_activate_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size settings_locale_activate, . - settings_locale_activate
+
+.type render_settings_locale_dropdown, @function
+render_settings_locale_dropdown:
+    cmp dword ptr [rip + settings_locale_dropdown_open], 1
+    jne .render_settings_locale_dropdown_done
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    # Opaque popup overlays unused Settings rows; six entries fit at current UI scale.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 160
+    mov edx, 88
+    mov ecx, 144
+    mov r8d, 96
+    mov r9d, 0xff171c24
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 161
+    mov edx, 89
+    mov ecx, 142
+    mov r8d, 94
+    mov r9d, 0xff252a33
+    call draw_rect
+    mov r12d, dword ptr [rip + settings_locale_dropdown_scroll]
+    xor r13d, r13d
+.render_settings_locale_dropdown_rows:
+    cmp r13d, 6
+    jae .render_settings_locale_dropdown_finish
+    mov r14d, r12d
+    add r14d, r13d
+    mov eax, dword ptr [rip + picker_entry_count]
+    inc eax
+    cmp r14d, eax
+    jae .render_settings_locale_dropdown_next
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 162
+    mov eax, r13d
+    shl eax, 4
+    lea edx, [rax + 89]
+    mov ecx, 140
+    mov r8d, 15
+    cmp r14d, dword ptr [rip + settings_locale_dropdown_selected]
+    jne .render_settings_locale_dropdown_normal
+    mov r9d, 0xff414b5a
+    jmp .render_settings_locale_dropdown_fill
+.render_settings_locale_dropdown_normal:
+    mov r9d, 0xff252a33
+.render_settings_locale_dropdown_fill:
+    call draw_rect
+    cmp r14d, 0
+    jne .render_settings_locale_dropdown_pack
+    mov edi, 168
+    mov eax, r13d
+    shl eax, 4
+    lea esi, [rax + 101]
+    lea rdx, [rip + ui_menu_locale_builtin]
+    call draw_text
+    jmp .render_settings_locale_dropdown_next
+.render_settings_locale_dropdown_pack:
+    lea eax, [r14 - 1]
+    imul eax, PICKER_ENTRY_SIZE
+    lea rbx, [rip + picker_entries]
+    add rbx, rax
+    add rbx, 4
+    xor ecx, ecx
+.render_settings_locale_dropdown_name_length:
+    cmp ecx, 255
+    jae .render_settings_locale_dropdown_next
+    cmp byte ptr [rbx + rcx], 0
+    je .render_settings_locale_dropdown_name_ready
+    inc ecx
+    jmp .render_settings_locale_dropdown_name_length
+.render_settings_locale_dropdown_name_ready:
+    cmp ecx, 4
+    jb .render_settings_locale_dropdown_next
+    sub ecx, 4
+    lea rdi, [rip + settings_locale_display_buffer]
+    mov rsi, rbx
+    rep movsb
+    mov byte ptr [rdi], 0
+    mov edi, 168
+    mov eax, r13d
+    shl eax, 4
+    lea esi, [rax + 101]
+    lea rdx, [rip + settings_locale_display_buffer]
+    mov ecx, 124
+    call draw_bounded_ascii_width
+.render_settings_locale_dropdown_next:
+    inc r13d
+    jmp .render_settings_locale_dropdown_rows
+.render_settings_locale_dropdown_finish:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+.render_settings_locale_dropdown_done:
+    ret
+.size render_settings_locale_dropdown, . - render_settings_locale_dropdown
+
 .type picker_close, @function
 picker_close:
     mov dword ptr [rip + picker_mode], 0
@@ -9647,6 +9984,8 @@ picker_install_locale:
     mov dword ptr [rip + locale_manager_error], 0
     mov dword ptr [rip + picker_error], 0
     call picker_close
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    call settings_locale_refresh
     xor eax, eax
     jmp .picker_install_locale_done
 .picker_install_locale_error:
@@ -11198,6 +11537,8 @@ confirm_save_action:
     lea rdi, [rip + ui_locale_en_tag]
     call preferences_set_locale_tag
     call preferences_save
+    mov dword ptr [rip + settings_locale_dropdown_open], 0
+    call settings_locale_refresh
 .Lconfirm_remove_locale_pack_done:
     jmp .Lconfirm_save_done
 .Lconfirm_remove_locale_pack_error:
@@ -20096,29 +20437,32 @@ render_file_menu:
 .render_settings_clipboard_draw:
     call draw_text
 
-    # Generic Compose locale controls share the unused bottom Settings row.
+    # Compose locale selector: the selected tag is the dropdown button.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 160
-    mov edx, 184
-    mov ecx, 48
-    mov r8d, 1
-    mov r9d, 0xff414b5a
-    call draw_rect
-    mov edi, 168
-    mov esi, 200
-    lea rdx, [rip + ui_menu_locale_select]
-    call draw_text
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 212
     mov edx, 188
-    mov ecx, 44
+    mov ecx, 96
     mov r8d, 24
     mov r9d, 0xff414b5a
     call draw_rect
-    mov edi, 218
+    mov rdx, qword ptr [rip + preferences_locale_ptr]
+    test rdx, rdx
+    jnz .render_settings_locale_tag_ready
+    lea rdx, [rip + compose_locale_current_tag]
+    cmp byte ptr [rdx], 0
+    jne .render_settings_locale_tag_ready
+    lea rdx, [rip + ui_menu_locale_en]
+.render_settings_locale_tag_ready:
+    mov edi, 168
     mov esi, 204
-    lea rdx, [rip + ui_menu_locale_base]
-    call draw_text
+    mov ecx, 78
+    call draw_bounded_ascii_width
+    mov edi, 244
+    mov esi, 204
+    mov edx, 'v'
+    mov ecx, 7
+    call draw_glyph
+
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 260
     mov edx, 188
@@ -20167,6 +20511,7 @@ render_file_menu:
     mov edi, 370
     mov esi, 200
     call draw_text
+    call render_settings_locale_dropdown
 .render_file_menu_settings_finish:
     mov edi, 360
     mov esi, 146
