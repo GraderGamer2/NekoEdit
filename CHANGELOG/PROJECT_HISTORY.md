@@ -1,3 +1,17 @@
+## 2026-11-09 — select installed Compose locales directly in Settings
+
+Implementation/test commits: [748ca5ba9704](https://github.com/GraderGamer2/NekoEdit/commit/748ca5ba97042b137a64211da07a641e409a567c), [5514f193dd04](https://github.com/GraderGamer2/NekoEdit/commit/5514f193dd0436cfd9af641e0069f4069771f611), [0dbe8df16673](https://github.com/GraderGamer2/NekoEdit/commit/0dbe8df16673ea2d595f7a25c7529c2647a26062), [c6c380a08257](https://github.com/GraderGamer2/NekoEdit/commit/c6c380a08257c24ec1a19edf2bbefb8d36e9e902), [65d2a43e2f72](https://github.com/GraderGamer2/NekoEdit/commit/65d2a43e2f729526548187677c95efb6f62b847e), [1d4168b8683c](https://github.com/GraderGamer2/NekoEdit/commit/1d4168b8683cd705c701f5b5aef8b836b6048ab0), [241391a4e279](https://github.com/GraderGamer2/NekoEdit/commit/241391a4e279bc7404e27cc0fad39566a499681a).
+
+Settings now uses a dropdown populated from the user's private `~/.nekoedit/locales/` directory instead of opening the file picker to select a locale. Built-in en_US is always the first entry. Installed `.nlp` packs follow the existing deterministic directory scan. Opening Settings refreshes the list; Add and confirmed Remove refresh it again after changing the directory. The currently selected saved/effective locale is highlighted.
+
+Mouse selection and Up/Down/Enter are supported, and Escape dismisses the dropdown. Activating an installed locale reuses the existing pack validation/loading path without showing the file picker. Add and Remove remain separate controls; pack installation still validates and atomically copies to `~/.nekoedit/locales/`, and removal still confirms before deleting.
+
+The Wayland mock was expanded to cover dynamic enumeration, selection without picker mode, Escape dismissal, keyboard navigation, Add refreshing the list, reselecting a newly installed pack from the dropdown, and Remove refreshing the list. No workflow run or check status was returned for the updated PR head at the time this entry was written. Build and test #736 passed the previous locale-manager implementation, but it predates this dropdown change and is not evidence for it. The new Wayland mock assertions have been added but remain unexecuted in CI.
+
+This records the implemented behavior and test additions; automated CI and live GNOME/Mutter validation are still outstanding for this milestone.
+
+---
+
 ## 2026-11-09 — make the Compose locale installation destination visible
 
 Implementation/test commit: [2fd44f25bde6](https://github.com/GraderGamer2/NekoEdit/commit/2fd44f25bde6db5ab9fd889b98a186e3fbcae18b).
