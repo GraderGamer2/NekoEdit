@@ -727,6 +727,9 @@ xkb_keycodes "nekoedit-test" {
     <ANGQ> = 230;
     <PHN7> = 231;
     <DA01> = 232;
+    <CP01> = 233;
+    <CP02> = 234;
+    <CP03> = 235;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -958,6 +961,9 @@ xkb_symbols "nekoedit-test" {
     key <ANGQ> { symbols[Group1] = [ leftsingleanglequotemark ] };
     key <PHN7> { symbols[Group1] = [ XF86XK_Numeric7 ] };
     key <DA01> { symbols[Group1] = [ dead_apostrophe ] };
+    key <CP01> { symbols[Group1] = [ period ] };
+    key <CP02> { symbols[Group1] = [ S ] };
+    key <CP03> { symbols[Group1] = [ greater ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -1062,6 +1068,9 @@ xkb_symbols "nekoedit-test" {
                             or b"[ Greek_alpha ]" not in keymap_data
                             or b"[ Cyrillic_ya ]" not in keymap_data
                             or b"[ Multi_key ]" not in keymap_data
+                            or b"[ period ]" not in keymap_data
+                            or b"[ S ]" not in keymap_data
+                            or b"[ greater ]" not in keymap_data
                         ):
                             raise AssertionError("named Unicode/dead-key/Greek/Cyrillic test substitutions did not apply")
                 elif sparse_keymap_test:
@@ -3551,10 +3560,34 @@ xkb_symbols "nekoedit-sparse" {
                         or child_u32("doc_length") != before_compose + 2
                     ):
                         raise AssertionError("Compose o e did not resolve to one two-byte UTF-8 scalar")
+                    # New default-table entries: punctuation, quotation, and
+                    # a non-ASCII Latin character. These are verified as UTF-8
+                    # document insertions, independently of font glyph coverage.
+                    before_pair = child_u32("doc_length")
+                    key_step(1580, 46, "Multi_key starts ellipsis composition")
+                    key_step(1581, 225, "Compose buffers period")
+                    key_step(1582, 225, "Compose period period inserts ellipsis")
+                    if child_u32("doc_length") != before_pair + 3:
+                        raise AssertionError("period period did not insert U+2026")
+
+                    before_pair = child_u32("doc_length")
+                    key_step(1583, 46, "Multi_key starts capital sharp-S composition")
+                    key_step(1584, 226, "Compose buffers capital S")
+                    key_step(1585, 226, "Compose capital S capital S inserts ẞ")
+                    if child_u32("doc_length") != before_pair + 3:
+                        raise AssertionError("capital S capital S did not insert U+1E9E")
+
+                    before_pair = child_u32("doc_length")
+                    key_step(1586, 46, "Multi_key starts angle quotation composition")
+                    key_step(1587, 225, "Compose buffers period for angle quotation")
+                    key_step(1588, 227, "Compose period greater inserts single right angle quote")
+                    if child_u32("doc_length") != before_pair + 3:
+                        raise AssertionError("period greater did not insert U+203A")
+
                     before_fallback = child_u32("doc_length")
-                    key_step(1580, 46, "Multi_key starts a literal-fallback sequence")
-                    key_step(1581, 17, "Compose buffers w as its first symbol")
-                    key_step(1582, 17, "unknown Compose w w pair preserves both symbols")
+                    key_step(1590, 46, "Multi_key starts a literal-fallback sequence")
+                    key_step(1591, 17, "Compose buffers w as its first symbol")
+                    key_step(1592, 17, "unknown Compose w w pair preserves both symbols")
                     if (
                         child_u32("doc_compose_active") != 0
                         or child_u32("doc_length") != before_fallback + 2
@@ -3565,19 +3598,21 @@ xkb_symbols "nekoedit-sparse" {
                     expected_unicode = (
                         b"\xc3\xa9\xf0\x9f\x98\x80"
                         b"\xe2\x82\xac\xc3\xa9\xe2\x80\x94"
-                        b"\xce\xb1\xd1\x8f\xc5\x93ww\xc3\xa9g\xcc\x81"
+                        b"\xce\xb1\xd1\x8f\xc5\x93"
+                        b"\xe2\x80\xa6\xe1\xba\x9e\xe2\x80\xba"
+                        b"ww\xc3\xa9g\xcc\x81"
                     )
                     before_dead_key = child_u32("doc_length")
-                    key_step(1590, 33, "named dead_acute arms an acute accent")
+                    key_step(1610, 33, "named dead_acute arms an acute accent")
                     if child_u32("doc_pending_dead_mark") != 0x301 or child_u32("doc_length") != before_dead_key:
                         raise AssertionError("dead_acute inserted bytes instead of arming an accent")
-                    key_step(1600, 18, "dead_acute plus e composes to eacute")
+                    key_step(1620, 18, "dead_acute plus e composes to eacute")
                     if child_u32("doc_pending_dead_mark") != 0:
                         raise AssertionError("successful dead-key composition did not clear pending state")
                     if child_u32("doc_length") != before_dead_key + 2:
                         raise AssertionError("dead_acute + e did not insert one composed UTF-8 character")
-                    key_step(1610, 33, "dead_acute arms combining-mark fallback")
-                    key_step(1620, 34, "unsupported dead-key pair preserves base and combining mark")
+                    key_step(1630, 33, "dead_acute arms combining-mark fallback")
+                    key_step(1640, 34, "unsupported dead-key pair preserves base and combining mark")
                     composed_state = read_document_state()
                     if composed_state.get("doc_contents") != expected_unicode:
                         raise AssertionError(
@@ -3585,19 +3620,19 @@ xkb_symbols "nekoedit-sparse" {
                             f"{composed_state.get('doc_contents')!r}"
                         )
                     length_before_cancel = child_u32("doc_length")
-                    key_step(1630, 33, "dead_acute can be canceled")
-                    key_step(1640, 14, "Backspace cancels a pending dead key")
+                    key_step(1650, 33, "dead_acute can be canceled")
+                    key_step(1660, 14, "Backspace cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Backspace deleted document text instead of canceling the pending accent")
-                    key_step(1650, 33, "dead_acute arms Escape cancellation")
-                    key_step(1660, 1, "Escape cancels a pending dead key")
+                    key_step(1670, 33, "dead_acute arms Escape cancellation")
+                    key_step(1680, 1, "Escape cancels a pending dead key")
                     if child_u32("doc_pending_dead_mark") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape changed document text instead of canceling the pending accent")
-                    key_step(1670, 46, "Multi_key arms Compose Escape cancellation")
-                    key_step(1680, 17, "Compose buffers w before Escape")
+                    key_step(1690, 46, "Multi_key arms Compose Escape cancellation")
+                    key_step(1700, 17, "Compose buffers w before Escape")
                     if child_u32("doc_compose_active") != 1:
                         raise AssertionError("Compose state was not active before Escape cancellation")
-                    key_step(1690, 1, "Escape cancels a pending Compose sequence")
+                    key_step(1710, 1, "Escape cancels a pending Compose sequence")
                     if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape did not cancel Compose without inserting or deleting text")
                     key_step(1700, 46, "Multi_key arms Compose Backspace cancellation")
