@@ -1,3 +1,16 @@
+## 2026-11-09 — typed locale dead-key Compose rules and Settings integration debugging
+
+- Extended NLP1's 16-bit record-reserved field with rule kind 0 (Multi_key) and kind 1 (dead-key). Existing version-1 packs with zero in this field remain backward-compatible.
+- Updated the freestanding loader's validation, ordering, lower-bound lookup and prefix comparison to include kind. Updated the Wayland input path to query kind 1 after a dead-key action plus one following scalar.
+- Updated the X.Org importer to normalize recognized dead_* actions to combining marks and import one following Unicode scalar. Rebuilt the three pinned locale datasets; their previous Multi_key records remain semantically unchanged.
+- Host-side pack generator, importer, locale manager, and locale-data checks passed in the prior runs. Freestanding ELF build and CLI smoke tests passed in #751–#753.
+- The Settings mock now installs the real pt_BR data rather than a small synthetic pt_BR pack. The earlier test's o i → snowman assertion was specific to aa_TEST, not Brazilian Portuguese. The real pt_BR check was switched to e e → U+018F, a mapping explicitly covered by the committed locale-data regression; #752 and #753 still failed there.
+- Added failure diagnostics for the selected locale tag, XKB values for Multi_key/e, the runtime locale output buffer, Compose state, and document cursor/length. The diagnostic commit is 0df8881843cd9ec3a16dfecaf181dddd2d78907d.
+- Corrected the locale-format docs and the data scope text; this log does not claim a green full-workflow run or live GNOME/Mutter verification.
+
+Relevant implementation commits: 228e7c25f482, 9fc51163cac0, daed2736b4e7. Test correction: 2d518e3f70b1. Documentation: 0bb95b5c5e4f. Diagnostic: 0df8881843cd.
+
+---
 ## 2026-11-09 — repair missing development-branch Actions trigger
 
 The user clarified that they were already viewing **All workflows**; this was not a sidebar filter problem. Inspection established two independent trigger blockers:

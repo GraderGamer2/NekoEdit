@@ -1,5 +1,29 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — typed locale dead-key Compose records and integration test corrections
+
+| Commit | Subject |
+|---|---|
+| [228e7c25f482](https://github.com/GraderGamer2/NekoEdit/commit/228e7c25f482f5bf95fbf250ada65a47e135100c) | feat: add typed Compose locale rule kinds |
+| [9fc51163cac0](https://github.com/GraderGamer2/NekoEdit/commit/9fc51163cac08e9364d68805b2517b07bee63764) | feat: import locale dead-key Compose sequences |
+| [daed2736b4e7](https://github.com/GraderGamer2/NekoEdit/commit/daed2736b4e7939993f5ab11504fa4da540f16a2) | data: add typed locale dead-key Compose records |
+| [5d491c78ebf9](https://github.com/GraderGamer2/NekoEdit/commit/5d491c78ebf973029edb67a987597edf3a022eab) | test: cover locale dead-key lookup and preserve cumulative output |
+| [e6e3f916b94f](https://github.com/GraderGamer2/NekoEdit/commit/e6e3f916b94f071e54c6258a6ce95f5bf6ae7001) | test: include the base dead-key fixture keysym |
+| [597f2df54341](https://github.com/GraderGamer2/NekoEdit/commit/597f2df54341e8fc7f57a378082304d857203a3d) | test: add dead-key entry to locale manager fixture |
+| [731209454c9e](https://github.com/GraderGamer2/NekoEdit/commit/731209454c9e7cd64cef09d99e9276748877ac71) | test: validate typed Multi-key and dead-key locale data |
+| [b905392ca5d2](https://github.com/GraderGamer2/NekoEdit/commit/b905392ca5d203b07f3849f5b9cc65b1d79e3e3b) | test: use real Brazilian locale pack in Settings workflow |
+| [493b3fcaa85b](https://github.com/GraderGamer2/NekoEdit/commit/493b3fcaa85ba009530c62a265759045ec56ed4b) | test: drain queued frames and snapshot held-key renders |
+| [d848df2839c0](https://github.com/GraderGamer2/NekoEdit/commit/d848df2839c09a921f4b9e8ecdf943099b10a2ed) | test: snapshot pointer frames before buffer release |
+| [3339c29445d8](https://github.com/GraderGamer2/NekoEdit/commit/3339c29445d847392bf68fef7164668f61c809fd) | test: snapshot Shift navigation frames before release |
+| [0c274141977f](https://github.com/GraderGamer2/NekoEdit/commit/0c274141977fe554925e0c985b469a8c7d586be1) | test: release the Shift+1 key in keyboard mock |
+| [a2abb832915f](https://github.com/GraderGamer2/NekoEdit/commit/a2abb832915fb7a896b3e59d26deb14ec6db7fe6) | test: compare Shift+1 fixture against newline bytes |
+| [2d518e3f70b1](https://github.com/GraderGamer2/NekoEdit/commit/2d518e3f70b1a12e9ee0e55b879e35c28be8454d) | test: use real pt_BR Compose mapping in Settings |
+| [0bb95b5c5e4f](https://github.com/GraderGamer2/NekoEdit/commit/0bb95b5c5e4ff80b21c0ae40d129eb01473be011) | docs: describe typed locale dead-key packs |
+| [0df8881843cd](https://github.com/GraderGamer2/NekoEdit/commit/0df8881843cd9ec3a16dfecaf181dddd2d78907d) | test: expose pt_BR Compose lookup diagnostics |
+
+Actions #752 and #753 still failed at the real pt_BR e e assertion. The latest test revision adds runtime-state diagnostics; do not mark this milestone CI-verified yet.
+
+---
 ## 2026-11-09 — repair missing development-branch Actions trigger
 
 | Commit | Subject |

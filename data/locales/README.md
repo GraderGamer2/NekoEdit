@@ -15,7 +15,7 @@ The locale-import workflow downloads these exact commits, verifies their Git blo
 ## Included scope and filtering
 
 - The importer follows the single en_US include, then applies pt_BR rules as overrides.
-- Only sequences beginning with XKB \`Multi_key\` are imported. The leading action is removed; the remaining 2–4 input keysyms must resolve to Unicode scalars.
+- XKB Multi_key rules import two to four following keysyms when each resolves to a Unicode scalar. Recognized dead_* actions import when followed by exactly one Unicode scalar; the action is normalized to its combining mark and stored in a separate dead_key namespace.
 - Output strings retain 1–8 Unicode scalars, including combining marks and variation selectors.
 - Non-Unicode input keysyms, unsupported sequence depths, dead-key rules requiring multiple following keysyms, and invalid scalar values are omitted.
 - Prefix ambiguity is removed independently within each rule kind, so a Multi_key rule and dead-key rule may share the same scalar inputs.
@@ -30,10 +30,10 @@ See [NOTICE](pt_BR.UTF-8.NOTICE.txt) for source attribution and licensing refere
 
 The additional datasets use the same pinned en_US Compose baseline and xorgproto keysym definitions above. Their locale source files and Git blobs are:
 
-| Locale | Upstream source path | Git blob | Final rules | Multi_key overrides | Dead-key overrides |
+| Locale | Upstream source path | Git blob | Final records | Multi_key source lines | Dead-key source lines | Multi_key overrides | Dead-key overrides |
 |---|---|---|---:|---:|---:|
-| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,132 | 5 | 278 |
-| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,147 | 36 | 38 |
+| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,132 | 6 | 278 | 5 | 278 |
+| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,147 | 40 | 50 | 36 | 38 |
 
 Finnish contributes six accepted locale-specific Multi_key rules and 278 dead-key rules (all overriding shared base entries). Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics.
 

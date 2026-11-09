@@ -1,3 +1,20 @@
+## 2026-11-09 — typed locale dead-key records; Settings integration diagnosis in progress
+
+**Branch:** early-alpha; PR #2 remains open and unmerged.
+**Implementation commits:** 228e7c25f482, 9fc51163cac0, and daed2736b4e7.
+**Test and integration commits:** 5d491c78ebf9, e6e3f916b94f, 597f2df54341, 731209454c9e, e58e3a695069, b905392ca5d2, 493b3fcaa85b, d848df2839c0, 3339c29445d8, 0c274141977f, a2abb832915f, and 2d518e3f70b1.
+
+- NLP1 uses the former 16-bit reserved record field as a rule kind: 0 is Multi_key and 1 is dead-key. Existing version-1 packs with kind zero remain valid.
+- The importer accepts recognized XKB dead_* actions followed by one Unicode scalar, normalizes the action to its combining mark, and stores [mark, base] in the independent dead-key namespace. Runtime sorting, validation, lower-bound lookup, and prefix checks include the kind.
+- pt_BR.UTF-8, fi_FI.UTF-8, and sr_RS.UTF-8 have regenerated tables containing supported locale dead-key records. Existing Multi_key data was kept semantically unchanged.
+- Host-side pack/importer/manager/data checks passed in the prior Actions runs, as did the freestanding build and command-line smoke tests.
+- Build and test #751 failed because its Settings test expected an aa_TEST-only o i snowman mapping from the real pt_BR pack. Test commit 2d518e3 switched the real pt_BR check to e e → U+018F, but #752 and #753 still failed at that assertion. The latest diagnostic revision (commit 0df8881) records locale-tag, XKB scalar, lookup-output, and document-state details to isolate the fault.
+- Actions #737–#753 were push-triggered after the workflow trigger repair. No complete green workflow or new editor artifact is available for this locale-dead-key milestone. Live GNOME/Mutter behavior has not been tested.
+- The mock's missing Shift+1 key-up, over-escaped newline assertion, and frame-snapshot races were corrected in the intermediate test commits; these harness fixes are not evidence that locale selection passes.
+
+**Next:** use the diagnostic output to isolate whether the remaining pt_BR failure is keymap translation, active pack selection, kind-0 lookup, or insertion. Keep the runtime unchanged until the failing boundary is demonstrated.
+
+---
 ## 2026-11-09 — enable branch-push CI for early-alpha — validation status not yet confirmed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
