@@ -7,7 +7,7 @@
 - The resolver checks a supplied keysymdef.h first, then falls back to the built-in ASCII mapping. Non-ASCII named keysyms still require the optional header; Unicode-form `Uxxxx` names remain self-contained.
 - Added a regression using no keysymdef.h. It verifies named event inputs and keysym-only results for `space`, `quotedbl`, `grave`, `asciitilde`, `quoteleft`, `quoteright`, and `apostrophe`.
 - Updated `docs/COMPOSE_USER_IMPORT.md` to distinguish built-in printable ASCII names from other named character keysyms.
-- Full CI for this parser/test change is pending. Build and test #774 validates the installer baseline but predates this addition.
+- Build and test [#775](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669004934) reached the new test, then failed because that fixture contained a double-escaped newline; the importer correctly rejected the resulting malformed rule. The executable build and earlier command-line tests passed. The fixture has been corrected, and the full workflow is pending rerun. #774 remains the green installer baseline.
 
 **Next:** validate against more actual user-authored Compose files and document remaining unsupported constructs. Preserve the explicit offline/manual import boundary; do not add automatic startup discovery.
 

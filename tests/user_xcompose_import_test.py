@@ -151,9 +151,9 @@ def main() -> None:
         # keysymdef.h. This covers named event inputs and keysym-only results.
         ascii_names = write(
             home / "ascii-keysyms",
-            '<Multi_key> <space> <quotedbl> : apostrophe\\n'
-            '<Multi_key> <grave> <asciitilde> : space\\n'
-            '<Multi_key> <quoteleft> <quoteright> : asciitilde\\n',
+            '<Multi_key> <space> <quotedbl> : apostrophe\n'
+            '<Multi_key> <grave> <asciitilde> : space\n'
+            '<Multi_key> <quoteleft> <quoteright> : asciitilde\n',
         )
         ascii_importer = user_import.ComposeImporter(
             keysyms={},

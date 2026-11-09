@@ -1,3 +1,11 @@
+## 2026-11-10 — correct newline escaping in printable-ASCII keysym regression
+
+- Build and test [#775](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669004934) completed the freestanding build and earlier command-line tests, then failed in the newly added no-header ASCII keysym test.
+- The fixture wrote two literal backslashes before each `n`, so the three intended Compose rules were concatenated. The parser correctly rejected the malformed result token; this was a test-fixture defect, not evidence of a parser/runtime regression.
+- Reduced each source literal to one Python newline escape, preserving the three assertions for printable ASCII named inputs and keysym-only results.
+- Full Build and test rerun is pending. Do not treat #775 as a passing validation.
+
+---
 ## 2026-11-10 — resolve named printable ASCII keysyms without keysymdef.h — CI pending
 
 - Inspected the current `early-alpha` source, importer specification, tests, PR head, and the #774 installer validation before changing code.
