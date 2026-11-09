@@ -171,6 +171,15 @@ def main() -> None:
             "cycle",
         )
 
+        # The limit tests below need a valid tree; the cycle test intentionally
+        # leaves home/.XCompose containing a recursive include.
+        valid_root = write(
+            home / "valid-root",
+            'include "%S/base/Compose"\n'
+            'include "%H/fragments/common"\n'
+            'include "%L"\n',
+        )
+
         # Unknown substitutions, arbitrary absolute paths, and traversal
         # outside the allowlisted roots fail closed.
         invalid_specs = [
@@ -265,7 +274,7 @@ def main() -> None:
         try:
             user_import.MAX_UNIQUE_FILES = 2
             expect_failure(
-                lambda: importer(home, system, locale_file=locale_file).import_file(root_file),
+                lambda: importer(home, system, locale_file=locale_file).import_file(valid_root),
                 "unique file limit",
                 "unique Compose files",
             )
@@ -276,7 +285,7 @@ def main() -> None:
         try:
             user_import.MAX_TOTAL_BYTES = root_file.stat().st_size + 1
             expect_failure(
-                lambda: importer(home, system, locale_file=locale_file).import_file(root_file),
+                lambda: importer(home, system, locale_file=locale_file).import_file(valid_root),
                 "aggregate byte limit",
                 "total limit",
             )

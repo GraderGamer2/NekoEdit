@@ -18,7 +18,7 @@ The core executable keeps **en_US.UTF-8 as its built-in default**. A bounded run
 
 The binary layout, generator, validation rules, and installation example are documented in [COMPOSE_PACK_FORMAT.md](COMPOSE_PACK_FORMAT.md). The pack generator is a Python build/release tool; Python is not a runtime dependency.
 
-The external `pt_BR.UTF-8`, `fi_FI.UTF-8`, and `sr_RS.UTF-8` datasets are generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches it and its notice to a published GitHub Release. Settings now opens an in-menu dropdown populated with every installed `.nlp` pack, provides an explicit Base en_US option, imports a local pack through Add, and removes the selected pack after confirmation. Locale packs carry Multi_key rules and the supported one-following-scalar dead-key rules. System/user Compose-file import and longer dead-key chains remain future work.
+The external `pt_BR.UTF-8`, `fi_FI.UTF-8`, and `sr_RS.UTF-8` datasets are generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches it and its notice to a published GitHub Release. Settings now opens an in-menu dropdown populated with every installed `.nlp` pack, provides an explicit Base en_US option, imports a local pack through Add, and removes the selected pack after confirmation. Locale packs carry Multi_key rules and the supported one-following-scalar dead-key rules. A bounded offline CLI converter for a user-selected XCompose file now produces NLP1-compatible JSON; see [COMPOSE_USER_IMPORT.md](COMPOSE_USER_IMPORT.md). Automatic ~/.XCompose/$XCOMPOSEFILE discovery and Settings UI integration remain future work, as do longer dead-key chains.
 
 ## Explicit limits
 
@@ -26,10 +26,11 @@ This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full lo
 
 - load an arbitrary system-locale table without a matching installed NLP1 data pack (language/territory casing and common UTF-8 codeset spellings normalize to canonical pack names; unsupported/missing tags fall back to en_US);
 - load `/usr/share/X11/locale/compose.dir` or locale-specific `Compose` files;
-- process XCompose `include` directives, `%L` / `%S` / `%H` substitutions, or `$XCOMPOSEFILE`;
-- read or merge `~/.XCompose`;
+- automatically process system or user XCompose files at startup, consult compose.dir, or discover $XCOMPOSEFILE; the manual converter supports only its explicit %H/, %S/, and exact %L include subset;
+- automatically discover or merge ~/.XCompose; a user may explicitly select it as the converter input file;
 - add four-symbol sequences or multi-scalar results to the embedded static en_US table; optional NLP1 packs already support two- to four-scalar inputs and one- to eight-scalar outputs;
-- import dead-key sequences that require two or more following symbols after the dead action; the current pack subset resolves one dead action plus one following Unicode scalar.
+- import dead-key sequences that require two or more following symbols after the dead action; the current pack subset resolves one dead action plus one following Unicode scalar;
+- preserve modifier-qualified Compose rules in NLP1; those entries are counted and skipped because the pack format has no modifier-state field.
 
 The XKB keysym table recognizes 39 named `dead_*` keysyms (including aliases) and maps them to the combining marks used by the keyboard path. Optional locale packs can override a dead-key-plus-scalar pair independently of `Multi_key`; for example, `pt_BR.UTF-8` maps dead acute plus `c` to `ç`, while Serbian packs include Cyrillic dead-key rules. The built-in fallback still uses the existing precomposed Latin mappings and base-plus-mark output. Full Unicode normalization and shaping are separate rendering work.
 

@@ -1,5 +1,19 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — add bounded offline user XCompose converter
+
+| Commit | Subject |
+|---|---|
+| [94d0f9661a01](https://github.com/GraderGamer2/NekoEdit/commit/94d0f9661a01c3d420850478e4be6327b217e2db) | feat: add bounded offline user XCompose importer |
+| [198ec64b7ab8](https://github.com/GraderGamer2/NekoEdit/commit/198ec64b7ab8622a7dc1fc8c6dec1aa800f6c64d) | test: correct XCompose fixture escaping and encoding |
+| [bf39555139a9](https://github.com/GraderGamer2/NekoEdit/commit/bf39555139a9ed8fe9b25df8ab370f5f85b04c1c) | fix: tighten XCompose import and resource boundary tests |
+| [ac038c35eb16](https://github.com/GraderGamer2/NekoEdit/commit/ac038c35eb16f76e57daacc835ef38224ff708e9) | test: encode Latin-1 XCompose escape fixture correctly |
+| [df4c0d8bf3a7](https://github.com/GraderGamer2/NekoEdit/commit/df4c0d8bf3a788388f205f9cfd190b525449bc69) | fix: validate BOM decoding and safe XCompose output handling |
+
+The converter uses allowlisted depth-first includes, strict resource limits, Unicode-only input filtering, NLP1 validation, private atomic output, and no execution or network access. Actions #765 failed because its unique-file-limit fixture reused a path deliberately replaced by the self-cycle test. The current correction gives unique-file and aggregate-byte tests a separate valid include tree; CI validation is pending. See CURRENT_STATUS.md for exact status.
+
+---
+
 ## 2026-11-09 — Finnish/Serbian physical locale dead-key tests
 
 | Commit | Subject |

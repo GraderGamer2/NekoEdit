@@ -1,3 +1,15 @@
+## 2026-11-09 — bounded offline user XCompose conversion
+
+NekoEdit now has a separate standard-library-only converter for a user-selected XCompose file. It emits the same typed, data-only NLP1 JSON accepted by the existing pack builder. Includes expand depth-first from explicitly allowlisted %H, %S, and %L roots; canonical path containment, symlink escape rejection, active-cycle detection, and independent file/byte/depth/expansion/line/record bounds protect traversal. Later duplicate records override earlier ones. Supported unqualified Multi_key and one-following-scalar dead-key records become NLP1 records; modifier-qualified rules are skipped because the format does not represent modifier state.
+
+The converter has no shell expansion, network downloads, executable plugins, or runtime shared-library requirement. Output JSON is written atomically with private permissions under the caller-selected path. The selected input is not moved or modified. A user can build the generated JSON with compose_pack.py and install the resulting pack under ~/.nekoedit/locales/.
+
+This is manual conversion only. Automatic ~/.XCompose discovery, $XCOMPOSEFILE, system startup merging, and a Settings import UI remain future work. Build and test #765 failed in a resource-limit fixture because it reused the self-cycle source path; the current test correction uses a separate valid root and is not yet CI-verified.
+
+Implementation series: [94d0f9661a01](https://github.com/GraderGamer2/NekoEdit/commit/94d0f9661a01c3d420850478e4be6327b217e2db), [198ec64b7ab8](https://github.com/GraderGamer2/NekoEdit/commit/198ec64b7ab8622a7dc1fc8c6dec1aa800f6c64d), [bf39555139a9](https://github.com/GraderGamer2/NekoEdit/commit/bf39555139a9ed8fe9b25df8ab370f5f85b04c1c), [ac038c35eb16](https://github.com/GraderGamer2/NekoEdit/commit/ac038c35eb16f76e57daacc835ef38224ff708e9), and [df4c0d8bf3a7](https://github.com/GraderGamer2/NekoEdit/commit/df4c0d8bf3a788388f205f9cfd190b525449bc69).
+
+---
+
 ## 2026-11-09 — complete Finnish/Serbian locale dead-key integration coverage
 
 Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 workflow steps. The run verified the freestanding editor build, command-line tests, complete Wayland suite, source regeneration against pinned X.Org libX11/xorgproto inputs, locale-pack builds, and upload of both the Linux binary and external locale packs.

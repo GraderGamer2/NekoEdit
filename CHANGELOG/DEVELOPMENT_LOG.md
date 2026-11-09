@@ -1,3 +1,18 @@
+## 2026-11-09 — add bounded offline user XCompose conversion
+
+- Added a separate tools/import_user_xcompose.py rather than modifying the pinned X.Org Compose.pre regeneration tool. It converts an explicitly selected user file into JSON accepted by the existing NLP1 pack builder.
+- Implemented quoted-result parsing with source encodings and octal/hex byte escapes, Unicode-scalar keysyms, quoted include parsing, depth-first expansion, later duplicate overrides, same-kind prefix filtering, Multi_key/dead-key namespaces, and explicit unsupported-rule statistics.
+- Include resolution is allowlisted to %H/relative, %S/relative, and exact %L with a caller-supplied Compose file. Canonical path containment prevents symlink escape; an active include stack rejects cycles while repeated non-recursive includes remain valid.
+- Bounded the import at 512 KiB per file, 4 MiB aggregate expanded bytes, 32 unique files, 64 expansions, depth 16, 64 KiB per line, 32,768 records, four following Multi_key inputs, and eight output scalars. Modifier-qualified rules are skipped because NLP1 does not encode modifier-state predicates.
+- JSON writes are atomic and private (file mode 0600); newly created output directories are mode 0700. The CLI blocks output collision with its imported input or keysym header. No network downloads, shell expansion, plugin loading, or runtime shared library was added.
+- Added a host test covering nested %H/%S/%L includes, source order/overrides, modifier skipping, unsupported keysyms, cycles, traversal and symlink escapes, per-file/aggregate/line/count/depth/expansion limits, encoding/BOM behavior, private output, and source/output collision.
+- Actions #761/#763/#764 exposed fixture escaping and a bytes-literal syntax error. #765 then reached the resource tests but failed because the unique-file-limit test reused the .XCompose file intentionally replaced by the previous cycle test. The current correction uses a separate valid root for unique-file and aggregate-byte limits; full CI remains pending.
+- Documentation now distinguishes manual conversion from automatic ~/.XCompose discovery and Settings integration, neither of which is implemented yet.
+
+Importer commits: 94d0f9661a01, 198ec64b7ab8, bf39555139a9, ac038c35eb16, df4c0d8bf3a7. The resource-fixture correction and documentation commit is listed in CURRENT_STATUS.md and COMMIT_INDEX.md.
+
+---
+
 ## 2026-11-09 — verify Finnish and Serbian locale dead-key keyboard paths
 
 - Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed every workflow step, including the full Wayland protocol mock, pinned X.Org data regeneration, optional locale-pack builds, and both artifact uploads.

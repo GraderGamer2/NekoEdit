@@ -1,3 +1,20 @@
+## 2026-11-09 — offline user XCompose converter added; fixture validation in progress
+
+**Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Importer commits:** [94d0f9661a01](https://github.com/GraderGamer2/NekoEdit/commit/94d0f9661a01c3d420850478e4be6327b217e2db), [198ec64b7ab8](https://github.com/GraderGamer2/NekoEdit/commit/198ec64b7ab8622a7dc1fc8c6dec1aa800f6c64d), [bf39555139a9](https://github.com/GraderGamer2/NekoEdit/commit/bf39555139a9ed8fe9b25df8ab370f5f85b04c1c), [ac038c35eb16](https://github.com/GraderGamer2/NekoEdit/commit/ac038c35eb16f76e57daacc835ef38224ff708e9), and [df4c0d8bf3a7](https://github.com/GraderGamer2/NekoEdit/commit/df4c0d8bf3a788388f205f9cfd190b525449bc69).
+
+- Added tools/import_user_xcompose.py, a manually invoked offline converter from a selected user file to NLP1-compatible JSON. It is separate from the pinned X.Org Compose.pre dataset importer.
+- The accepted include subset is depth-first %H/relative, %S/relative, and exact %L supplied with --locale-compose. Canonical path checks enforce root containment and active-cycle detection; repeated non-active includes are allowed.
+- The converter imports unqualified Unicode Multi_key rules and recognized dead-key-plus-one-scalar rules. Later duplicate entries override earlier ones; same-kind prefixes are removed to fit the immediate-lookup NLP1 model. Modifier-qualified rules and unsupported/non-Unicode symbols are counted and skipped.
+- Bounds: 512 KiB per file, 4 MiB expanded bytes, 32 unique files, 64 include expansions, depth 16, line length 64 KiB, 32,768 records, four following Multi_key inputs, and eight output scalars. There is no shell expansion, network access, executable plugin loading, automatic file discovery, or new runtime dependency.
+- JSON output is atomic and private (file mode 0600); missing output directories are created with mode 0700. The CLI refuses output collisions with imported inputs or the supplied keysym header. Generated .nlp packs still use the existing pack builder and install under ~/.nekoedit/locales/.
+- Actions #761–#765 are not green for this milestone. #764 failed at a non-ASCII character in a Python bytes literal; that was corrected. #765 progressed into resource tests but failed because the unique-file-limit test reused the .XCompose file deliberately replaced by the earlier self-cycle test. The new fixture change uses a separate valid include tree for unique-file and aggregate-byte tests.
+- This is a CLI converter only. Automatic ~/.XCompose/$XCOMPOSEFILE discovery, system startup merging, and a Settings import UI remain unimplemented. Live GNOME/Mutter validation is not claimed.
+
+**Next:** validate the corrected user-import tests and complete the full workflow before wiring the converter into Settings.
+
+---
+
 ## 2026-11-09 — Finnish/Serbian locale dead-key integration green
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

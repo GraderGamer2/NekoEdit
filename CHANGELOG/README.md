@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-Build and test #758/#759 both passed. #759 includes the Finnish/Serbian physical dead-key tests (`dead_apostrophe` + `Cyrillic_ka` → U+045C) and uploaded both editor and locale artifacts. The next bounded task is safe offline `.XCompose` import; CURRENT_STATUS.md records limits and continuity. Check the branch/Actions state before continuing.
+The Finnish/Serbian locale dead-key path is green in Build and test #759. A bounded offline user XCompose converter is now on early-alpha, but #765 failed because the unique-file resource test reused a file deliberately replaced by a prior self-cycle fixture. CURRENT_STATUS.md records importer limits, the test correction, CI state, and the boundary: manual conversion only, with no automatic startup discovery or Settings UI. Check the branch and latest Actions run before continuing.
 
 ## Read this first in every new development chat
 
