@@ -714,6 +714,19 @@ xkb_keycodes "nekoedit-test" {
     <RPT2> = 212;
     <RPT3> = 213;
     <RPT4> = 214;
+    <AR01> = 220;
+    <HE01> = 221;
+    <TH01> = 222;
+    <KO01> = 223;
+    <AM01> = 224;
+    <GE01> = 225;
+    <KA01> = 226;
+    <SI01> = 227;
+    <BR01> = 228;
+    <SHRP> = 229;
+    <ANGQ> = 230;
+    <PHN7> = 231;
+    <DA01> = 232;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -932,6 +945,19 @@ xkb_symbols "nekoedit-test" {
     key <GRP1> { symbols[Group1] = [ ISO_Group_Shift ] };
     key <NXT1> { symbols[Group1] = [ ISO_Next_Group ] };
     key <IMPL> { symbols[Group1] = [ Control_L ] };
+    key <AR01> { symbols[Group1] = [ Arabic_alef ] };
+    key <HE01> { symbols[Group1] = [ hebrew_aleph ] };
+    key <TH01> { symbols[Group1] = [ Thai_kokai ] };
+    key <KO01> { symbols[Group1] = [ Hangul_Kiyeog ] };
+    key <AM01> { symbols[Group1] = [ Armenian_AYB ] };
+    key <GE01> { symbols[Group1] = [ Georgian_an ] };
+    key <KA01> { symbols[Group1] = [ kana_a ] };
+    key <SI01> { symbols[Group1] = [ Sinh_a ] };
+    key <BR01> { symbols[Group1] = [ braille_dots_12345678 ] };
+    key <SHRP> { symbols[Group1] = [ SSHARP ] };
+    key <ANGQ> { symbols[Group1] = [ leftsingleanglequotemark ] };
+    key <PHN7> { symbols[Group1] = [ XF86XK_Numeric7 ] };
+    key <DA01> { symbols[Group1] = [ dead_apostrophe ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -3470,10 +3496,21 @@ xkb_symbols "nekoedit-sparse" {
                         child_u32_at("xkb_unicode_levels", 53 * 128),
                         child_u32_at("xkb_unicode_levels", 54 * 128),
                     )
-                    if alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002, 0x03B1, 0x044F, 0x110007):
+                    extended_alias_scalars = tuple(
+                        child_u32_at("xkb_unicode_levels", keycode * 128)
+                        for keycode in range(220, 233)
+                    )
+                    expected_extended_alias_scalars = (
+                        0x0627, 0x05D0, 0x0E01, 0x3131, 0x0531, 0x10D0,
+                        0x30A1, 0x0D85, 0x28FF, 0x1E9E, 0x2039, 0x0037, 0x110002,
+                    )
+                    if (
+                        alias_scalars != (0x20AC, 0x00E9, 0x2014, 0x110002, 0x03B1, 0x044F, 0x110007)
+                        or extended_alias_scalars != expected_extended_alias_scalars
+                    ):
                         raise AssertionError(
-                            "named XKB Unicode/Greek/Cyrillic keysyms were not loaded into the scalar table: "
-                            + repr(alias_scalars)
+                            "X.Org named Unicode keysyms did not map to their expected Unicode scalars: "
+                            + repr({"existing": alias_scalars, "extended": extended_alias_scalars})
                         )
                     # AC01 is XKB keycode 38 (evdev 30). The first level
                     # produces U+00E9 and Shift selects supplementary U+1F600.
@@ -3589,8 +3626,44 @@ xkb_symbols "nekoedit-sparse" {
                             "expanded Compose pairs produced unexpected UTF-8: "
                             + repr(expanded_compose_state.get("doc_contents"))
                         )
+
+                    # Exercise non-Latin and recent named keysyms through the
+                    # real keyboard-event path, not only parser memory.
+                    extended_typed = (
+                        (212, b"\xd8\xa7", "Arabic alef U+0627"),
+                        (213, b"\xd7\x90", "Hebrew alef U+05D0"),
+                        (214, b"\xe0\xb8\x81", "Thai ko kai U+0E01"),
+                        (215, b"\xe3\x84\xb1", "Hangul kiyeok U+3131"),
+                        (216, b"\xd4\xb1", "Armenian ayb U+0531"),
+                        (217, b"\xe1\x83\x90", "Georgian an U+10D0"),
+                        (218, b"\xe3\x82\xa1", "Katakana small a U+30A1"),
+                        (219, b"\xe0\xb6\x85", "Sinhala a U+0D85"),
+                        (220, b"\xe2\xa3\xbf", "Braille pattern dots-12345678 U+28FF"),
+                        (221, b"\xe1\xba\x9e", "German capital sharp S U+1E9E"),
+                        (222, b"\xe2\x80\xb9", "single left angle quote U+2039"),
+                        (223, b"7", "XF86 phone numeric 7"),
+                    )
+                    for index, (evdev_code, encoded, label) in enumerate(extended_typed):
+                        key_step(1800 + index * 2, evdev_code, f"named {label} inserts UTF-8")
+                        expected_unicode += encoded
+                    if read_document_state().get("doc_contents") != expected_unicode:
+                        raise AssertionError(
+                            "expanded X.Org named-keysyms did not insert the expected UTF-8: "
+                            + repr(read_document_state().get("doc_contents"))
+                        )
+                    apostrophe_length = child_u32("doc_length")
+                    key_step(1830, 224, "new dead_apostrophe keysym arms the acute action")
+                    if child_u32("doc_pending_dead_mark") != 0x301 or child_u32("doc_length") != apostrophe_length:
+                        raise AssertionError("dead_apostrophe did not enter the existing acute-mark path")
+                    key_step(1832, 18, "dead_apostrophe plus e composes to eacute")
+                    expected_unicode += b"\xc3\xa9"
+                    if read_document_state().get("doc_contents") != expected_unicode:
+                        raise AssertionError(
+                            "dead_apostrophe composition produced unexpected UTF-8: "
+                            + repr(read_document_state().get("doc_contents"))
+                        )
                     observations.append(
-                        "XKB explicit scalars, named Unicode aliases, Greek/Cyrillic aliases, 40 bounded Multi_key pairs/fallback, dead_acute composition, combining fallback, and Backspace/Escape cancellation verified"
+                        "XKB Uxxxx scalars, full X.Org Unicode-annotated keysym aliases, Arabic/Hebrew/Thai/Hangul/Armenian/Georgian/Kana/Sinhala/Braille, xorgproto 2026.1 German/quote/phone names, and dead_apostrophe typing verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
