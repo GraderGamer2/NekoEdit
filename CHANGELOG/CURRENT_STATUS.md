@@ -1,3 +1,17 @@
+## 2026-11-09 — diagnose and repair missing development-branch Actions trigger
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Current PR head before workflow repair:** [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754).
+
+- The previous PR HEAD [457695f8f6ea](https://github.com/GraderGamer2/NekoEdit/commit/457695f8f6ea364a15b25b555e8c628ed6af1cbb) ended in `[skip ci]`, which suppresses both push- and pull-request-triggered workflows.
+- A normal non-skipping follow-up [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) removed the HEAD skip marker, but no run appeared.
+- The PR metadata still reports `mergeable=false`; the comparison shows `main` has three commits not in `early-alpha`. GitHub documents that `pull_request` workflows do not run while a PR has a merge conflict. The active workflow's `push` filter only includes `main`, so it had no branch-push route for `early-alpha`.
+- The workflow will be changed to run on pushes to both `main` and `early-alpha`. PR events will be limited to opened/reopened/ready-for-review to avoid a second run for every branch push; changelog-only commits will be ignored. This lets the feature branch be built even while the PR merge conflict remains unresolved.
+
+**Validation:** No Actions run has yet been confirmed for the new non-skipping head. The workflow-trigger correction is pending in this commit snapshot; do not claim the dead-key change has passed until a run for a post-correction head completes.
+
+---
+
 ## 2026-11-09 — expand XKB combining dead-key actions — CI pending
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
