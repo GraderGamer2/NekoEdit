@@ -803,6 +803,7 @@ xkb_keycodes "nekoedit-test" {
     <CP05> = 237;
     <CP06> = 238;
     <CP07> = 239;
+    <CP08> = 240;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -1041,6 +1042,7 @@ xkb_symbols "nekoedit-test" {
     key <CP05> { symbols[Group1] = [ dead_macron ] };
     key <CP06> { symbols[Group1] = [ dead_caron ] };
     key <CP07> { symbols[Group1] = [ dead_belowdot ] };
+    key <CP08> { symbols[Group1] = [ c ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -4124,8 +4126,16 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(5060, 46, "keyboard-selected pt_BR starts Compose")
                     key_step(5062, 24, "keyboard-selected pt_BR buffers o")
                     key_step(5064, 23, "keyboard-selected pt_BR resolves o i")
-                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
-                        raise AssertionError("keyboard-selected pt_BR did not route Compose through its installed pack")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885e29883efb88f"):
+                        raise AssertionError("keyboard-selected pt_BR did not append its snowman output after aa_TEST")
+
+                    before_pt_dead = child_u32("doc_length")
+                    key_step(5066, 33, "pt_BR dead_acute arms its combining mark")
+                    if child_u32("doc_pending_dead_mark") != 0x301 or child_u32("doc_length") != before_pt_dead:
+                        raise AssertionError("pt_BR dead_acute did not arm without inserting text")
+                    key_step(5068, 232, "pt_BR dead_acute plus c uses its locale-specific cedilla rule")
+                    if child_u32("doc_pending_dead_mark") != 0 or read_document_state()["doc_contents"] != bytes.fromhex("e29885e29883efb88fc3a7"):
+                        raise AssertionError("pt_BR dead-key pack rule did not insert ç after the locale Compose result")
 
                     click_settings(180, 10, 5070, "reopen Settings to choose Base")
                     click_settings_design(200, 200, 5080, "open locale dropdown for Base")

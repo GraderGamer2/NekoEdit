@@ -1,6 +1,6 @@
 # pt_BR.UTF-8 Compose locale data
 
-This directory contains NekoEdit's first non-en_US Compose dataset. The JSON is a **complete flattened table**, built from the pinned X.Org en_US Compose baseline with the Brazilian Portuguese locale's supported Multi_key additions and overrides. It is not a small overlay.
+This directory contains three non-en_US Compose datasets. Each JSON file is a **complete flattened table**, built from the pinned X.Org en_US Compose baseline plus its locale's `Multi_key` and dead-key additions and overrides. They are not small overlays.
 
 ## Reproducible source pins
 
@@ -30,11 +30,11 @@ See [NOTICE](pt_BR.UTF-8.NOTICE.txt) for source attribution and licensing refere
 
 The additional datasets use the same pinned en_US Compose baseline and xorgproto keysym definitions above. Their locale source files and Git blobs are:
 
-| Locale | Upstream source path | Git blob | Final rules | Locale overrides |
-|---|---|---|---:|---:|
-| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 2,904 | 5 |
-| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 2,907 | 36 |
+| Locale | Upstream source path | Git blob | Final rules | Multi_key overrides | Dead-key overrides |
+|---|---|---|---:|---:|---:|
+| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,132 | 5 | 278 |
+| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,147 | 36 | 38 |
 
-Finnish contributes six accepted locale-specific Multi_key rules: fi/fl/ij/IJ ligatures, long s, and the apostrophe-space-n sequence. Serbian contributes forty accepted Multi_key sequences for Cyrillic accent composition. The source files also contain dead-key sequences; these are excluded from NLP1 v1 because it represents Unicode scalar inputs only. The generated tables retain source-line and unsupported-rule statistics.
+Finnish contributes six accepted locale-specific Multi_key rules and 278 dead-key rules (all overriding shared base entries). Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics.
 
 The Build and test workflow fetches all three locale files from the pinned libX11 revision and verifies their blob IDs before regenerating the data. The importer receives each locale-specific source blob through `--locale-compose-blob`; all generated JSON files must compare byte-for-byte with the committed data before the packs are uploaded.

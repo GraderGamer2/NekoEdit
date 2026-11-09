@@ -18,7 +18,7 @@ The core executable keeps **en_US.UTF-8 as its built-in default**. A bounded run
 
 The binary layout, generator, validation rules, and installation example are documented in [COMPOSE_PACK_FORMAT.md](COMPOSE_PACK_FORMAT.md). The pack generator is a Python build/release tool; Python is not a runtime dependency.
 
-The first complete external dataset, `pt_BR.UTF-8`, is generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches it and its notice to a published GitHub Release. Settings now opens a generic picker for every installed `.nlp` pack, provides an explicit Base en_US option, imports a local pack through Add, and removes the selected pack after confirmation. More locales, locale-specific dead-key tables, and system/user Compose-file import remain future work.
+The external `pt_BR.UTF-8`, `fi_FI.UTF-8`, and `sr_RS.UTF-8` datasets are generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches it and its notice to a published GitHub Release. Settings now opens a generic picker for every installed `.nlp` pack, provides an explicit Base en_US option, imports a local pack through Add, and removes the selected pack after confirmation. More locale datasets and system/user Compose-file import remain future work.
 
 ## Explicit limits
 
@@ -29,9 +29,9 @@ This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full lo
 - process XCompose `include` directives, `%L` / `%S` / `%H` substitutions, or `$XCOMPOSEFILE`;
 - read or merge `~/.XCompose`;
 - add four-symbol sequences or multi-scalar results to the embedded static en_US table; optional NLP1 packs already support two- to four-scalar inputs and one- to eight-scalar outputs;
-- implement every dead-key keysym and locale-specific dead-key rule.
+- import dead-key sequences that require two or more following symbols after the dead action; the current pack subset resolves one dead action plus one following Unicode scalar.
 
-The separate dead-key path remains limited to six combining marks (grave, acute, circumflex, tilde, diaeresis, and cedilla) with 52 precomposed Latin-1 results and base-plus-mark fallback. Full Unicode normalization and shaping are separate rendering work.
+The XKB keysym table recognizes 39 named `dead_*` keysyms (including aliases) and maps them to the combining marks used by the keyboard path. Optional locale packs can override a dead-key-plus-scalar pair independently of `Multi_key`; for example, `pt_BR.UTF-8` maps dead acute plus `c` to `ç`, while Serbian packs include Cyrillic dead-key rules. The built-in fallback still uses the existing precomposed Latin mappings and base-plus-mark output. Full Unicode normalization and shaping are separate rendering work.
 
 ## Source and attribution
 

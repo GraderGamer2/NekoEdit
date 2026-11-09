@@ -6,7 +6,7 @@ NekoEdit keeps the default **en_US.UTF-8** Compose tables in the core executable
 
 Select it explicitly with `NEKOEDIT_LOCALE=<locale-tag>`. With no setting, the built-in en_US locale remains active. Explicit built-in names (`en_US`, `en_US.UTF-8`, `C`, and `POSIX`) also select the embedded default. Missing, incompatible, or malformed packs fall back atomically to en_US.
 
-A selected pack is the complete Compose table for its locale. It does not overlay or merge with en_US. This keeps precedence deterministic. Locale-specific dead-key actions remain on NekoEdit's existing six-action path and are not overridden by NLP1 version 1.
+A selected pack is the complete Compose table for its locale. It does not overlay or merge with en_US. This keeps precedence deterministic. Records are typed as either `Multi_key` sequences or dead-key sequences; the two namespaces remain independent.
 
 ## Binary layout
 
@@ -25,11 +25,11 @@ All integers are unsigned little-endian. The header is exactly 72 bytes:
 | 36 | 32 bytes | NUL-terminated ASCII locale tag, zero-padded |
 | 68 | u32 | Reserved, zero |
 
-Each 52-byte record contains a one-byte input count, one-byte output count, two zero reserved bytes, four input scalars, and eight output scalars. Input count is 2–4; output count is 1–8. Unused scalar slots must be zero.
+Each 52-byte record contains a one-byte input count, one-byte output count, a 16-bit rule kind, four input scalars, and eight output scalars. Kind `0` is a `Multi_key` rule; kind `1` is a dead-key rule. The low byte stores the kind and the high byte must remain zero. Old version-1 packs used zero in both bytes, so they remain valid and are interpreted as `Multi_key`-only packs. Input count is 2–4; output count is 1–8. Unused scalar slots must be zero. A dead-key input is stored as `[combining-mark scalar, following base scalar]`.
 
 Scalars must be nonzero Unicode scalar values no greater than U+10FFFF and outside the surrogate range. Multi-scalar results can represent combining marks and variation selectors.
 
-Records are strictly lexicographically sorted by input sequence. Version 1 rejects duplicate sequences and prefix ambiguity (a complete sequence that is also the prefix of a longer sequence). This allows immediate resolution without timers or delayed insertion.
+Records are strictly sorted by `(rule kind, input sequence)`. Duplicate inputs and prefix ambiguity are rejected within each kind, but the same scalar tuple may exist once as `Multi_key` and once as a dead-key rule. This allows immediate resolution without timers or delayed insertion.
 
 The runtime validates version, header and record sizes, locale-tag match, flags/reserved fields, file and record-count bounds, payload length, CRC-32, sequence ordering, prefix ambiguity, output lengths, and all used/unused scalar slots. Files larger than 2 MiB are rejected. The pack is mapped read-only only after structural validation; invalid files are unmapped and ignored.
 
@@ -41,9 +41,10 @@ The standard-library-only generator accepts JSON:
 {
   "locale": "fr_FR.UTF-8",
   "sequences": [
-    {"input": ["U+006F", "U+0069"], "output": ["U+2603", "U+FE0F"]},
-    {"input": ["U+0079", "U+0075", "U+0069"], "output": ["U+2605"]},
-    {"input": ["U+0077", "U+0065", "U+0072", "U+0074"], "output": ["U+1F642"]}
+    {"kind": "multi_key", "input": ["U+006F", "U+0069"], "output": ["U+2603", "U+FE0F"]},
+    {"kind": "multi_key", "input": ["U+0079", "U+0075", "U+0069"], "output": ["U+2605"]},
+    {"kind": "multi_key", "input": ["U+0077", "U+0065", "U+0072", "U+0074"], "output": ["U+1F642"]},
+    {"kind": "dead_key", "input": ["U+0301", "U+0063"], "output": ["U+00E7"]}
   ]
 }
 ```
@@ -60,14 +61,14 @@ Packs are data, not shared libraries or executable plugins. Python is used only 
 
 ## Implementation boundary
 
-The loader and input path support two-, three-, and four-scalar sequences and output strings of up to eight scalars. The embedded en_US tables remain unchanged and active whenever no compatible optional pack is selected. Actual non-en_US release assets, a Settings locale selector, and an installer remain future work.
+The loader and input path support two-, three-, and four-scalar records and output strings of up to eight scalars. Kind 0 is used by `Multi_key` lookup and buffering; kind 1 is queried immediately after a dead-key action and its following scalar. Old packs with a zero kind field continue to load as kind 0. The embedded en_US tables remain unchanged and active whenever no compatible optional pack is selected.
 
 
 ## First external locale dataset: pt_BR.UTF-8
 
-The repository includes a reproducible Brazilian Portuguese dataset derived from the pinned X.Org libX11 en_US Compose baseline and pt_BR overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, applies locale overrides, imports only Multi_key rules whose input keysyms resolve to Unicode scalars, and removes shorter rules that prefix longer ones. Dead-key-led rules and non-Unicode input symbols are not represented by NLP1 version 1.
+The repository includes reproducible Brazilian Portuguese, Finnish, and Serbian datasets derived from the pinned X.Org libX11 en_US Compose baseline and locale overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, imports `Multi_key` rules with two to four Unicode scalar inputs, and imports recognized dead-key actions followed by one Unicode scalar. A dead-key action is normalized to its combining mark and stored as a kind-1 `[mark, base]` pair. Non-Unicode input symbols and dead-key sequences requiring multiple following symbols remain outside the supported subset. Shorter prefixes are dropped independently within each rule kind.
 
-The committed source database is [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and [`pt_BR.UTF-8.NOTICE.txt`](../data/locales/pt_BR.UTF-8.NOTICE.txt). Rebuild from the committed JSON with:
+The committed source databases are [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), [`fi_FI.UTF-8.json`](../data/locales/fi_FI.UTF-8.json), and [`sr_RS.UTF-8.json`](../data/locales/sr_RS.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and [`pt_BR.UTF-8.NOTICE.txt`](../data/locales/pt_BR.UTF-8.NOTICE.txt). Rebuild from the committed JSON with:
 
 ```sh
 make locale-packs
