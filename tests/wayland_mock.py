@@ -4460,21 +4460,21 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_pending_dead_mark") != 0x304 or child_u32("doc_length") != macron_length:
                         raise AssertionError("dead_macron did not arm the combining macron")
                     key_step(1842, 18, "dead_macron plus e composes to U+0113")
-                    expected_unicode += b"\\xc4\\x93"
+                    expected_unicode += b"\xc4\x93"
 
                     caron_length = child_u32("doc_length")
                     key_step(1850, 230, "dead_caron arms U+030C")
                     if child_u32("doc_pending_dead_mark") != 0x30C or child_u32("doc_length") != caron_length:
                         raise AssertionError("dead_caron did not arm the combining caron")
                     key_step(1852, 18, "dead_caron plus e composes to U+011B")
-                    expected_unicode += b"\\xc4\\x9b"
+                    expected_unicode += b"\xc4\x9b"
 
                     fallback_length = child_u32("doc_length")
                     key_step(1860, 231, "dead_belowdot arms U+0323")
                     if child_u32("doc_pending_dead_mark") != 0x323 or child_u32("doc_length") != fallback_length:
                         raise AssertionError("dead_belowdot did not arm the combining dot below")
                     key_step(1862, 17, "dead_belowdot plus w uses combining fallback")
-                    expected_unicode += b"w\\xcc\\xa3"
+                    expected_unicode += b"w\xcc\xa3"
                     final_dead_state = read_document_state()
                     if final_dead_state.get("doc_contents") != expected_unicode:
                         raise AssertionError(
