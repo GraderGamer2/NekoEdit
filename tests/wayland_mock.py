@@ -2185,7 +2185,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     expect_state(
                         b"", 0, "hidden preedit cursor",
-                        expected_rectangle=(24, 92, 1, 12),
+                        expected_rectangle=(16, 92, 1, 12),
                     )
                     release_frame("hidden preedit cursor redraw")
                     if child_u32("text_input_preedit_cursor_begin") != 0xffffffff:
