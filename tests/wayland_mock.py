@@ -233,6 +233,7 @@ def run(
     font_parser_test: bool = False,
     font_picker_test: bool = False,
     clipboard_test: bool = False,
+    context_menu_test: bool = False,
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
@@ -314,7 +315,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(45 if file_workflow else 8)
+            client.settimeout(45 if file_workflow or context_menu_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -1816,6 +1817,8 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_view_top_row", "doc_view_left_px", "doc_wrap_enabled",
                         "doc_total_visual_rows", "doc_scroll_thumb_height",
                         "window_doc_pixel_width", "settings_menu_open",
+                        "doc_selection_active", "context_menu_open", "context_menu_x",
+                        "context_menu_y",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
 
@@ -2986,6 +2989,165 @@ xkb_symbols "nekoedit-sparse" {
                             client, (18, 1, struct.pack("<II", source_id, serial)),
                             f"{label}: set clipboard selection",
                         )
+
+                    def context_right_click(x: int, y: int, serial: int, label: str) -> None:
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            + wire_message(
+                                15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x111, 1)
+                            )
+                        )
+                        workflow_redraw(label)
+                        client.sendall(
+                            wire_message(
+                                15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x111, 0)
+                            ) + wire_message(12, 0)
+                        )
+                        if child_u32("context_menu_open") != 1:
+                            raise AssertionError(f"{label}: right-click did not open the context menu")
+                        if (
+                            child_u32("context_menu_x") != x
+                            or child_u32("context_menu_y") != y
+                        ):
+                            raise AssertionError(
+                                f"{label}: menu anchor changed unexpectedly: "
+                                f"{child_u32('context_menu_x')}, {child_u32('context_menu_y')}"
+                            )
+
+                    def context_menu_item(
+                        x: int, y: int, serial: int, source_id: int, label: str
+                    ) -> None:
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            + wire_message(
+                                15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
+                            )
+                        )
+                        expect_source_creation(source_id, serial + 1, label)
+                        workflow_redraw(label)
+                        client.sendall(
+                            wire_message(
+                                15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
+                            ) + wire_message(12, 0)
+                        )
+                        if child_u32("context_menu_open") != 0:
+                            raise AssertionError(f"{label}: selected menu item did not dismiss the menu")
+
+                    if context_menu_test:
+                        # Escape dismisses without changing document state.
+                        context_right_click(220, 120, 2400, "right-click opens context menu")
+                        key_step(2410, 1, "Escape dismisses the context menu")
+                        if child_u32("context_menu_open") != 0:
+                            raise AssertionError("Escape left the context menu open")
+
+                        workflow_shortcut(2430, 30, "Ctrl+A before context-menu Copy")
+                        context_right_click(220, 120, 2460, "reopen context menu for Copy")
+                        if child_u32("doc_selection_active") != 1:
+                            raise AssertionError("opening the context menu discarded the active selection")
+                        context_menu_item(235, 133, 2480, 19, "context-menu Copy")
+                        if read_document_state()["doc_contents"] != original_clipboard:
+                            raise AssertionError("context-menu Copy modified document bytes")
+                        if child_u32("doc_selection_active") != 1:
+                            raise AssertionError("context-menu Copy cleared the selection")
+                        receive_source_bytes(19, "context-menu Copy")
+                        observations.append(
+                            "right-click opens a positioned menu, Escape closes it, and Copy preserves selection/document bytes"
+                        )
+
+                        # Cut publishes an immutable clipboard snapshot before deletion.
+                        context_right_click(220, 120, 2500, "reopen context menu for Cut")
+                        context_menu_item(235, 185, 2520, 20, "context-menu Cut")
+                        client.sendall(wire_message(19, 2))
+                        expect_message(client, (19, 1, b""), "retire copied context-menu source")
+                        cut_state = read_document_state()
+                        if cut_state["doc_contents"] != b"":
+                            raise AssertionError(
+                                "context-menu Cut did not delete the selection: "
+                                + repr(cut_state["doc_contents"])
+                            )
+                        if child_u32("doc_selection_active") != 0:
+                            raise AssertionError("context-menu Cut left a stale selection active")
+                        receive_source_bytes(20, "context-menu Cut after deletion")
+                        observations.append(
+                            "context-menu Cut publishes an independent clipboard snapshot and deletes the selected bytes"
+                        )
+
+                        # A new external owner replaces Cut's source; then Paste receives asynchronously.
+                        client.sendall(wire_message(20, 2))
+                        expect_message(client, (20, 1, b""), "retire cut context-menu source")
+                        external_offer = 0xFF000020
+                        client.sendall(
+                            wire_message(18, 0, struct.pack("<I", external_offer))
+                            + wire_message(external_offer, 0, clipboard_string("text/plain;charset=utf-8"))
+                            + wire_message(external_offer, 0, clipboard_string("text/plain"))
+                            + wire_message(18, 5, struct.pack("<I", external_offer))
+                        )
+                        context_right_click(220, 120, 2550, "open context menu for Paste")
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", 2570, 235 * 256, 159 * 256))
+                            + wire_message(
+                                15, 3, struct.pack("<IIII", 2571, 2572, 0x110, 1)
+                            )
+                        )
+                        paste_request = recv_wayland_message(client)
+                        if paste_request[:3] != (
+                            external_offer, 1, clipboard_string("text/plain;charset=utf-8")
+                        ) or len(paste_request[3]) != 1:
+                            raise AssertionError(
+                                "context-menu Paste did not request the preferred UTF-8 MIME with one pipe FD: "
+                                + repr(paste_request[:3])
+                                + repr(paste_request[3])
+                            )
+                        paste_fd = paste_request[3][0]
+                        workflow_redraw("context-menu Paste starts asynchronous transfer")
+                        client.sendall(
+                            wire_message(
+                                15, 3, struct.pack("<IIII", 2573, 2574, 0x110, 0)
+                            ) + wire_message(12, 0)
+                        )
+                        pasted = b"pasted from context menu\n"
+                        try:
+                            os.write(paste_fd, pasted)
+                        finally:
+                            os.close(paste_fd)
+                        workflow_redraw("context-menu Paste completes asynchronous transfer")
+                        client.sendall(wire_message(12, 0))
+                        paste_state = read_document_state()
+                        if paste_state["doc_contents"] != pasted:
+                            raise AssertionError(
+                                "context-menu Paste did not insert external clipboard bytes: "
+                                + repr(paste_state["doc_contents"])
+                            )
+                        workflow_shortcut(2590, 44, "Ctrl+Z undoes context-menu Paste")
+                        if read_document_state()["doc_contents"] != b"":
+                            raise AssertionError("Ctrl+Z did not undo context-menu Paste")
+                        workflow_shortcut(2610, 21, "Ctrl+Y redoes context-menu Paste")
+                        if read_document_state()["doc_contents"] != pasted:
+                            raise AssertionError("Ctrl+Y did not redo context-menu Paste")
+
+                        # An outside click dismisses but does not click through.
+                        context_right_click(220, 120, 2630, "reopen menu for outside-click dismissal")
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", 2640, 400 * 256, 70 * 256))
+                            + wire_message(
+                                15, 3, struct.pack("<IIII", 2641, 2642, 0x110, 1)
+                            )
+                        )
+                        workflow_redraw("outside click dismisses context menu")
+                        client.sendall(
+                            wire_message(
+                                15, 3, struct.pack("<IIII", 2643, 2644, 0x110, 0)
+                            ) + wire_message(12, 0)
+                        )
+                        if child_u32("context_menu_open") != 0:
+                            raise AssertionError("outside click did not dismiss the context menu")
+                        if read_document_state()["doc_contents"] != pasted:
+                            raise AssertionError("outside click changed the document")
+                        observations.append(
+                            "context-menu Paste uses asynchronous Wayland receive and supports Undo/Redo; outside click dismisses without click-through"
+                        )
+                        client.sendall(wire_message(10, 1))
+                        return
 
                     # Select all, then test Ctrl+C through the actual Wayland
                     # data-source protocol and an SCM_RIGHTS transfer pipe.
@@ -6983,6 +7145,25 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(clipboard_path)
+        except FileNotFoundError:
+            pass
+
+    # Exercise Copy/Paste/Cut through the in-surface menu and actual Wayland
+    # data-device transfers, separately from keyboard shortcut coverage.
+    context_menu_fd, context_menu_path = tempfile.mkstemp(prefix="nekoedit-context-menu-")
+    try:
+        with os.fdopen(context_menu_fd, "wb") as context_menu_document:
+            context_menu_document.write(b"copy me\n")
+        run(
+            sys.argv[1],
+            initial_file=context_menu_path,
+            clipboard_test=True,
+            context_menu_test=True,
+            cursor_shape_supported=False,
+        )
+    finally:
+        try:
+            os.unlink(context_menu_path)
         except FileNotFoundError:
             pass
 

@@ -67,6 +67,10 @@
 .equ CURSOR_SHAPE_NESW_RESIZE, 28
 .equ CURSOR_SHAPE_NWSE_RESIZE, 29
 .equ BTN_LEFT,          0x110
+.equ BTN_RIGHT,         0x111
+.equ CONTEXT_MENU_WIDTH, 128
+.equ CONTEXT_MENU_HEIGHT, 78
+.equ CONTEXT_MENU_ROW_HEIGHT, 26
 .equ CLOCK_MONOTONIC,      1
 .equ TFD_CLOEXEC,     0x80000
 .equ POLLIN,              1
@@ -135,6 +139,9 @@ ui_settings_label:     .asciz "Settings"
 ui_menu_open_label:    .asciz "Open"
 ui_menu_save_label:    .asciz "Save"
 ui_menu_save_as_label: .asciz "Save As"
+ui_context_menu_copy_label: .asciz "Copy"
+ui_context_menu_paste_label: .asciz "Paste"
+ui_context_menu_cut_label: .asciz "Cut"
 ui_menu_confirm_save_label: .asciz "Confirm before saving"
 ui_menu_state_on:      .asciz "ON"
 ui_menu_state_off:     .asciz "OFF"
@@ -4814,8 +4821,9 @@ pointer_object:         .long 0
 keyboard_created:       .long 0
 keyboard_object:        .long 0
 keyboard_focused:       .long 0
-.global keyboard_serial
+.global keyboard_serial, clipboard_serial
 keyboard_serial:        .long 0
+clipboard_serial:       .long 0
 keyboard_group:         .long 0
 .global xkb_modifiers
 xkb_modifiers:          .long 0
@@ -4918,6 +4926,10 @@ doc_save_error:         .long 0
 doc_open_error:         .long 0
 file_menu_open:         .long 0
 settings_menu_open:     .long 0
+.global context_menu_open, context_menu_x, context_menu_y
+context_menu_open:      .long 0
+context_menu_x:         .long 0
+context_menu_y:         .long 0
 .global history_tab_open, history_export_mode
 history_tab_open:       .long 0
 history_export_mode:    .long 0
@@ -5888,6 +5900,8 @@ wayland_main:
 .pointer_button:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
+    cmp dword ptr [rip + event_payload + 8], BTN_RIGHT
+    je .pointer_context_button
     cmp dword ptr [rip + event_payload + 8], BTN_LEFT
     jne .event_loop
     cmp dword ptr [rip + event_payload + 12], 1
@@ -5924,11 +5938,111 @@ wayland_main:
     mov dword ptr [rip + doc_selection_active], 0
 .Lneko_pointer_button_released:
     jmp .event_loop
+.pointer_context_button:
+    # Only right-button presses open/dismiss the document context menu.
+    # Dialogs, History, menus, and non-document surface areas stay unaffected.
+    cmp dword ptr [rip + event_payload + 12], 1
+    jne .event_loop
+    cmp dword ptr [rip + context_menu_open], 1
+    jne .pointer_context_button_open
+    mov dword ptr [rip + context_menu_open], 0
+    jmp .keyboard_changed
+.pointer_context_button_open:
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + picker_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + history_tab_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + file_menu_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + settings_menu_open], 0
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    cmp eax, DOC_LEFT
+    jb .event_loop
+    mov ecx, DOC_LEFT
+    add ecx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, ecx
+    jae .event_loop
+    mov edx, dword ptr [rip + pointer_y]
+    cmp edx, DOC_TOP
+    jl .event_loop
+    cmp edx, dword ptr [rip + window_doc_bottom]
+    jae .event_loop
+    mov dword ptr [rip + context_menu_open], 1
+    # Keep the whole menu on-screen and inside the document viewport.
+    mov ecx, dword ptr [rip + pointer_x]
+    mov eax, dword ptr [rip + window_width]
+    sub eax, CONTEXT_MENU_WIDTH
+    cmp ecx, eax
+    jbe .pointer_context_x_ready
+    mov ecx, eax
+.pointer_context_x_ready:
+    mov dword ptr [rip + context_menu_x], ecx
+    mov ecx, dword ptr [rip + pointer_y]
+    mov eax, dword ptr [rip + window_doc_bottom]
+    sub eax, CONTEXT_MENU_HEIGHT
+    cmp ecx, eax
+    jbe .pointer_context_y_ready
+    mov ecx, eax
+.pointer_context_y_ready:
+    mov dword ptr [rip + context_menu_y], ecx
+    jmp .keyboard_changed
+
 .pointer_button_press:
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + pointer_serial], eax
+    mov dword ptr [rip + clipboard_serial], eax
+    cmp dword ptr [rip + context_menu_open], 1
+    jne .pointer_no_context_menu
+    # Menu-item actions use this left-button event's serial for
+    # wl_data_device.set_selection, as required by the Wayland protocol.
+    mov eax, dword ptr [rip + pointer_x]
+    mov ecx, dword ptr [rip + context_menu_x]
+    cmp eax, ecx
+    jb .pointer_context_menu_dismiss
+    add ecx, CONTEXT_MENU_WIDTH
+    cmp eax, ecx
+    jae .pointer_context_menu_dismiss
+    mov edx, dword ptr [rip + pointer_y]
+    sub edx, dword ptr [rip + context_menu_y]
+    js .pointer_context_menu_dismiss
+    cmp edx, CONTEXT_MENU_HEIGHT
+    jae .pointer_context_menu_dismiss
+    mov dword ptr [rip + context_menu_open], 0
+    cmp edx, CONTEXT_MENU_ROW_HEIGHT
+    jb .pointer_context_menu_copy
+    cmp edx, CONTEXT_MENU_ROW_HEIGHT * 2
+    jb .pointer_context_menu_paste
+    jmp .pointer_context_menu_cut
+.pointer_context_menu_copy:
+    call history_begin_action
+    mov edi, 1
+    call clipboard_key_command
+    jmp .keyboard_changed
+.pointer_context_menu_paste:
+    call history_begin_action
+    mov edi, 3
+    call clipboard_key_command
+    jmp .keyboard_changed
+.pointer_context_menu_cut:
+    call history_begin_action
+    mov edi, 2
+    call clipboard_key_command
+    jmp .keyboard_changed
+.pointer_context_menu_dismiss:
+    mov dword ptr [rip + context_menu_open], 0
+    jmp .keyboard_changed
+.pointer_no_context_menu:
     cmp dword ptr [rip + save_confirm_open], 0
     jne .save_confirm_pointer
     cmp dword ptr [rip + find_replace_mode], 0
@@ -6701,6 +6815,7 @@ wayland_main:
     jne .event_loop
     mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
     mov dword ptr [rip + keyboard_serial], eax
+    mov dword ptr [rip + clipboard_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]  # evdev keycode
     mov edx, dword ptr [rip + event_payload + 12] # 1=pressed, 0=released
     cmp eax, 29
@@ -6858,6 +6973,12 @@ wayland_main:
 .keyboard_non_modifier:
     test edx, edx
     jz .event_loop
+    cmp dword ptr [rip + context_menu_open], 0
+    je .keyboard_context_menu_closed
+    mov dword ptr [rip + context_menu_open], 0
+    cmp eax, 1
+    je .keyboard_changed
+.keyboard_context_menu_closed:
     cmp dword ptr [rip + save_confirm_open], 0
     jne .keyboard_save_confirmation
     cmp dword ptr [rip + find_replace_mode], 0
@@ -11761,6 +11882,7 @@ render_surface:
     call render_save_confirmation
     call render_find_replace
 .render_surface_done:
+    call render_context_menu
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -19442,6 +19564,62 @@ render_file_menu:
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
+
+# Minimal three-command document context menu, painted after all other UI.
+.type render_context_menu, @function
+render_context_menu:
+    cmp dword ptr [rip + context_menu_open], 1
+    jne .Lrender_context_menu_done
+    push rbx
+    push r12
+    mov dword ptr [rip + ui_transform_active], 0
+    mov ebx, dword ptr [rip + context_menu_x]
+    mov r12d, dword ptr [rip + context_menu_y]
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, ebx
+    mov edx, r12d
+    mov ecx, CONTEXT_MENU_WIDTH
+    mov r8d, CONTEXT_MENU_HEIGHT
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    lea esi, [rbx + 1]
+    lea edx, [r12 + 1]
+    mov ecx, CONTEXT_MENU_WIDTH - 2
+    mov r8d, CONTEXT_MENU_HEIGHT - 2
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    lea esi, [rbx + 1]
+    lea edx, [r12 + CONTEXT_MENU_ROW_HEIGHT]
+    mov ecx, CONTEXT_MENU_WIDTH - 2
+    mov r8d, 1
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    lea esi, [rbx + 1]
+    lea edx, [r12 + CONTEXT_MENU_ROW_HEIGHT * 2]
+    mov ecx, CONTEXT_MENU_WIDTH - 2
+    mov r8d, 1
+    mov r9d, 0xff414b5a
+    call draw_rect
+    lea edi, [rbx + 12]
+    lea esi, [r12 + 7]
+    lea rdx, [rip + ui_context_menu_copy_label]
+    call draw_text
+    lea edi, [rbx + 12]
+    lea esi, [r12 + CONTEXT_MENU_ROW_HEIGHT + 7]
+    lea rdx, [rip + ui_context_menu_paste_label]
+    call draw_text
+    lea edi, [rbx + 12]
+    lea esi, [r12 + CONTEXT_MENU_ROW_HEIGHT * 2 + 7]
+    lea rdx, [rip + ui_context_menu_cut_label]
+    call draw_text
+    pop r12
+    pop rbx
+.Lrender_context_menu_done:
+    ret
+.size render_context_menu, . - render_context_menu
 
 .type render_history_manager, @function
 render_history_manager:

@@ -12,6 +12,14 @@ The pair table stores Unicode scalar triples (first input, second input, result)
 
 The regression mock exercises the existing `o e` ligature plus newly added `period period` → U+2026, `S S` → U+1E9E, `period greater` → U+203A, `minus minus period` → U+2013, and `minus minus minus` → U+2014 paths. It also verifies that a recognized triple prefix stays buffered until the third symbol and that Backspace cancels a pending two-symbol prefix. These tests inspect text insertion and document bytes, not font availability or visual glyph rendering.
 
+## Locale-pack direction
+
+The product default will remain **en_US.UTF-8** and its Compose baseline will be built into the core executable. Other locales are planned as optional, separately downloadable locale packs attached to GitHub Releases. The editor will load an installed pack at runtime and fall back to built-in en_US when no matching pack is installed or a pack fails validation.
+
+These packs are data, not executable plugins: no native shared objects, arbitrary code, or third-party runtime dependencies. A versioned, bounded format should permit the runtime loader to reject incompatible, oversized, malformed, or out-of-range records before they are used. The editor itself should remain usable offline; downloading/installing packs belongs to a separate release workflow, not an automatic network dependency in the core editor.
+
+This architecture is planned, not implemented by the current static en_US tables.
+
 ## Explicit limits
 
 This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full locale-aware Compose support. It does not currently:

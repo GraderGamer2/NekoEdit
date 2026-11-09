@@ -69,7 +69,7 @@ typedef struct {
 
 extern uint32_t clipboard_manager_global;
 extern uint32_t next_client_object_id;
-extern uint32_t keyboard_serial;
+extern uint32_t clipboard_serial;
 extern int32_t event_fd;
 extern int32_t clipboard_persistence_enabled;
 extern uint8_t event_payload[4096];
@@ -476,7 +476,7 @@ static int copy_selection(int cut)
     if (source_offer_mime(source_id, mime_utf8) < 0 ||
         source_offer_mime(source_id, mime_plain) < 0)
         goto copy_destroy_source;
-    serial = keyboard_serial;
+    serial = clipboard_serial;
     args[0] = source_id;
     args[1] = serial;
     result = wl_send_request(device_object, 1, args, 8);
