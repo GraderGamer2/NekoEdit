@@ -9736,6 +9736,7 @@ picker_confirm_action:
     je .picker_confirm_action_open
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_confirm_action_save
+    jmp .picker_confirm_action_open
 .picker_confirm_action_install:
     # Install only a regular-file row selected from the filtered .nlp listing.
     cmp dword ptr [rip + picker_focus], 0
@@ -9775,7 +9776,13 @@ picker_confirm_action:
     je .picker_confirm_action_error
     jmp picker_save_file
 .picker_confirm_action_error:
+    cmp dword ptr [rip + picker_mode], 4
+    jne .picker_confirm_action_error_save
+    mov dword ptr [rip + picker_error], 5
+    jmp .picker_confirm_action_error_return
+.picker_confirm_action_error_save:
     mov dword ptr [rip + picker_error], 3
+.picker_confirm_action_error_return:
     mov rax, -2
     ret
 .size picker_confirm_action, . - picker_confirm_action
@@ -20349,8 +20356,6 @@ render_save_confirmation:
     mov r8d, 28
     mov r9d, 0xff343d4b
     call draw_rect
-    lea edi, [r12 + 16]
-    lea esi, [r13 + 10]
     lea edi, [r12 + 16]
     lea esi, [r13 + 10]
     cmp dword ptr [rip + save_confirm_action], 3

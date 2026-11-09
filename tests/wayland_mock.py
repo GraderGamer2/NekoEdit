@@ -275,6 +275,11 @@ def run(
         if compose_locale_invalid_test: pack_data[-1] ^= 1
         with open(os.path.join(locale_dir, pack_tag + ".nlp"), "wb") as pack_file:
             pack_file.write(pack_data)
+        if compose_locale_settings_test:
+            # The Add Pack picker starts in the process CWD; keep a separate
+            # source copy outside ~/.nekoedit/locales to exercise real install.
+            with open(os.path.join(runtime_dir, pack_tag + ".nlp"), "wb") as source_pack_file:
+                source_pack_file.write(pack_data)
         if compose_locale_saved_preference_test:
             preferences_path = os.path.join(runtime_dir, ".nekoedit", "preferences")
             with open(preferences_path, "wb") as preferences_file:
@@ -3875,6 +3880,64 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "Settings locale selector activates the installed pt_BR pack, routes Compose through it, and persists built-in en_US"
                     )
+
+                    # Remove the pre-seeded install so Add Pack must copy and
+                    # validate the user-selected .nlp from the file picker.
+                    installed_path = os.path.join(runtime_dir, ".nekoedit", "locales", "pt_BR.UTF-8.nlp")
+                    os.unlink(installed_path)
+
+                    def click_settings_design(dx: int, dy: int, serial: int, label: str) -> None:
+                        panel_x = child_u32("settings_panel_x")
+                        panel_y = child_u32("settings_panel_y")
+                        panel_w = child_u32("settings_panel_width")
+                        panel_h = child_u32("settings_panel_height")
+                        sx = panel_x + ((dx - 160) * panel_w // 256)
+                        sy = panel_y + ((dy - 32) * panel_h // 192)
+                        click_settings(sx, sy, serial, label)
+
+                    def click_picker_design(dx: int, dy: int, serial: int, label: str) -> None:
+                        panel_x = child_u32("picker_panel_x")
+                        panel_y = child_u32("picker_panel_y")
+                        panel_w = child_u32("picker_panel_width")
+                        panel_h = child_u32("picker_panel_height")
+                        sx = panel_x + ((dx - 40) * panel_w // 720)
+                        sy = panel_y + ((dy - 36) * panel_h // 408)
+                        click_settings(sx, sy, serial, label)
+
+                    click_settings_design(282, 200, 5060, "open Add Pack picker")
+                    if child_u32("picker_mode") != 4:
+                        raise AssertionError("Settings Add did not open locale-pack picker mode")
+                    click_picker_design(200, 160, 5070, "select the .nlp source pack")
+                    key_step(5080, 28, "install selected locale pack")
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("Add Pack did not activate the installed pt_BR pack")
+                    if not os.path.isfile(installed_path):
+                        raise AssertionError("Add Pack did not create the installed .nlp file")
+                    installed_mode = os.stat(installed_path).st_mode & 0o777
+                    if installed_mode != 0o600:
+                        raise AssertionError(f"installed locale file permissions were {oct(installed_mode)}")
+                    if not os.path.isfile(os.path.join(runtime_dir, "pt_BR.UTF-8.nlp")):
+                        raise AssertionError("Add Pack unexpectedly consumed the user's source file")
+                    with open(preference_path, "r", encoding="utf-8") as preference_file:
+                        saved_after_install = preference_file.read()
+                    if "compose_locale=pt_BR.UTF-8\\n" not in saved_after_install:
+                        raise AssertionError("Add Pack did not persist the new locale choice")
+                    observations.append("Settings Add Pack opens the filtered .nlp picker, validates/copies the selected source, activates pt_BR, and persists the choice")
+
+                    click_settings(180, 10, 5090, "open Settings for Remove Pack")
+                    click_settings_design(332, 200, 5100, "request Remove Pack confirmation")
+                    if child_u32("save_confirm_open") != 1:
+                        raise AssertionError("Remove Pack did not request confirmation")
+                    click_settings(300, 272, 5110, "confirm Remove Pack")
+                    if os.path.exists(installed_path):
+                        raise AssertionError("Remove Pack did not delete the validated installed file")
+                    if child_u32("compose_locale_active") != 0:
+                        raise AssertionError("Remove Pack did not restore embedded en_US")
+                    with open(preference_path, "r", encoding="utf-8") as preference_file:
+                        saved_after_remove = preference_file.read()
+                    if "compose_locale=en_US.UTF-8\\n" not in saved_after_remove:
+                        raise AssertionError("Remove Pack did not persist the en_US fallback")
+                    observations.append("Settings Remove Pack requires confirmation, deletes the validated installed pack, restores en_US, and persists the fallback")
                     client.sendall(wire_message(10, 1))
                     return
 
@@ -7182,7 +7245,7 @@ xkb_symbols "nekoedit-sparse" {
             pass_fds=pass_fds,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            cwd=runtime_dir if file_workflow else None,
+            cwd=runtime_dir if (file_workflow or compose_locale_settings_test) else None,
         )
         process_holder.append(process)
         if use_wayland_socket:
