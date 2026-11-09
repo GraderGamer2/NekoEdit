@@ -10,6 +10,7 @@
 #define SYS_munmap 11
 #define SYS_getpid 39
 #define SYS_fsync 74
+#define SYS_fchmod 91
 #define SYS_openat 257
 #define SYS_mkdirat 258
 #define SYS_unlinkat 263
@@ -438,6 +439,10 @@ static long open_locale_directory(void)
                       O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0, 0, 0);
     (void)syscall6(SYS_close, root_fd, 0, 0, 0, 0, 0);
     if (failed(app_fd)) return -1;
+    if (failed(syscall6(SYS_fchmod, app_fd, DIR_MODE, 0, 0, 0, 0))) {
+        (void)syscall6(SYS_close, app_fd, 0, 0, 0, 0, 0);
+        return -1;
+    }
     result = syscall6(SYS_mkdirat, app_fd, (long)"locales",
                       DIR_MODE, 0, 0, 0);
     if (failed(result) && result != -17) {
@@ -447,7 +452,12 @@ static long open_locale_directory(void)
     locale_fd = syscall6(SYS_openat, app_fd, (long)"locales",
                          O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0, 0, 0);
     (void)syscall6(SYS_close, app_fd, 0, 0, 0, 0, 0);
-    return failed(locale_fd) ? -1 : locale_fd;
+    if (failed(locale_fd)) return -1;
+    if (failed(syscall6(SYS_fchmod, locale_fd, DIR_MODE, 0, 0, 0, 0))) {
+        (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
+        return -1;
+    }
+    return locale_fd;
 }
 
 static int pack_tag(const uint8_t *bytes, uint32_t size,
