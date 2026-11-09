@@ -3,7 +3,7 @@
 ## 2026-11-09 — physical typing restored; isolate Settings over History
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
-**Current source commit:** [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) — `fix: isolate Settings as a modal over the editor and History`. **Latest test-harness follow-up:** [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04).
+**Current source commit:** [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) — `fix: isolate Settings as a modal over the editor and History`. **Latest test-harness follow-up:** [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). **Validated tree:** [537bcadfaa7c](https://github.com/GraderGamer2/NekoEdit/commit/537bcadfaa7cd82b5bdae7ce2b5e5e82caeb9a6f).
 
 ### User confirmation and latest validated input build
 
@@ -22,9 +22,11 @@
 - A pointer click outside an open Settings panel now dismisses that modal and ends the click dispatch. It no longer falls through to the covered document or History controls. The non-modal File menu retains its existing behavior.
 - The History integration test now opens Settings while History is active, checks the pixels where Open Selected used to remain visible and inside the panel, verifies that an outside click does not open History Browse, then confirms Browse works normally after the modal closes.
 - Implementation/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0).
-- First consolidated workflow attempt, Actions [#675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610), passed compilation, ELF checks, install/smoke tests, preferences, and history host tests. The Wayland suite passed the default physical typing, opt-in IME, and save-confirmation scenarios, then failed in an earlier held-key fixture before reaching the new History/Settings assertions: a one-shot Tab check consumed a delayed redraw from the preceding held Enter and read the document before Tab dispatch had completed.
-- Test-only follow-up [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04) now synchronizes the held Tab scenario on `repeat_keycode=15` and the actual four-byte document-cursor advance before it accepts a redraw. The held-repeat assertions remain intact.
-- A new consolidated CI result is pending. Do not treat the modal pixel/click-through assertions as passed until that run reaches and completes the History scenario.
+- The first consolidated run, Actions [#675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610), passed compilation, ELF checks, install/smoke tests, preferences, and history host tests, then exposed a stale-redraw race in the seat-v3 held-Tab mock before reaching the new modal assertions. The test could mistake a delayed frame from the preceding held Enter for the Tab redraw.
+- Test-only follow-up [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04) synchronizes that held-key fixture on `repeat_keycode=15` and the actual four-byte document-cursor advance before it accepts a frame.
+- Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) then passed **all eight workflow steps** on the consolidated tree. The run passed the complete Wayland mock, including the new History/Settings backdrop pixel checks, modal outside-click isolation, and post-dismissal Browse action.
+- Build artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558/artifacts/13642440538): 94,472 bytes; SHA-256 `1959b61ef8050d10472b59a5a14ec8ed61eb885ccc2fe3c1216c9d2de86eed0f`; expires 2026-11-16 00:59:16 UTC.
+- This is mock-compositor verification. The new Settings-over-History behavior should still receive a live GNOME/Mutter desktop check.
 
 ### Next work
 

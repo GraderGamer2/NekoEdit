@@ -3,7 +3,7 @@
 - Actions [Build and test #675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610) built the executable and passed ELF checks, CLI smoke tests, user install/uninstall tests, preferences tests, and disk-history host tests. The Wayland mock passed the default physical typing, explicitly enabled text-input-v3, and save-confirmation scenarios, then failed in the older seat-v3 held-key scenario: the initial Tab assertion observed an unchanged caret.
 - The test sequence released a held Enter and waited for `repeat_keycode=0`, but `expect_redraw()` could still consume a frame delayed from that preceding key before the newly sent Tab event was dispatched. A redraw alone is not proof that a particular key transition has been applied.
 - Updated the held Tab fixture to wait for `repeat_keycode=15` and for `doc_cursor` to advance by four bytes before consuming the frame. The assertion now synchronizes on the actual Tab editing action; it retains the subsequent held-repeat check.
-- Test-only commit: [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). The next full workflow is pending.
+- Test-only commit: [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) passed all eight workflow steps after this synchronization fix.
 
 ---
 
@@ -28,7 +28,7 @@
 ### Validation
 
 - Source/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0).
-- The full workflow for this commit is pending. The previously validated physical-typing correction remains Actions [#667](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292), with artifact [13637810575](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292/artifacts/13637810575); the user has since confirmed ordinary typing works again.
+- The initial workflow attempt #675 was blocked by the stale held-Tab frame described in the next entry; after synchronizing that test, Actions [#676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) passed all eight steps on the consolidated tree. The full Wayland mock reached and passed the modal framebuffer and click-through assertions. Artifact [13642440538](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558/artifacts/13642440538) is 94,472 bytes with SHA-256 `1959b61ef8050d10472b59a5a14ec8ed61eb885ccc2fe3c1216c9d2de86eed0f`. The earlier physical-typing correction remains validated by Actions #667, and the user has confirmed normal typing works again.
 - Do not mark the new modal pixel and click-through assertions green until CI validates this commit.
 
 ---

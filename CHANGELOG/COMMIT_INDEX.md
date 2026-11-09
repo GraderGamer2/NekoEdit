@@ -15,7 +15,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 |---|---|
 | [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04) | test: wait for Tab edit before consuming its redraw |
 
-The seat-v3 held-key fixture now waits for both the Tab repeat-key state and the four-byte document-cursor movement before accepting a frame. Actions #675 could consume a delayed frame from the preceding held Enter, so the redraw alone did not prove the Tab event had been dispatched. The next full workflow is pending.
+The seat-v3 held-key fixture now waits for both the Tab repeat-key state and the four-byte document-cursor movement before accepting a frame. Actions #675 could consume a delayed frame from the preceding held Enter, so the redraw alone did not prove the Tab event had been dispatched. Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) passed all eight steps after the synchronization fix.
 
 ## Settings modal and History overlay isolation (2026-11-09)
 
@@ -23,7 +23,7 @@ The seat-v3 held-key fixture now waits for both the Tab repeat-key state and the
 |---|---|
 | [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) | fix: isolate Settings as a modal over the editor and History |
 
-The Settings layer now clears the workspace behind its centered panel, preserving the title and tab strip, and outside-click dismissal no longer activates covered document/History controls. The History mock checks framebuffer pixels and click-through behavior, then confirms Browse works after dismissal. The full workflow for this commit is pending.
+The Settings layer now clears the workspace behind its centered panel, preserving the title and tab strip, and outside-click dismissal no longer activates covered document/History controls. The History mock checks framebuffer pixels and click-through behavior, then confirms Browse works after dismissal. Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) passed all eight workflow steps. Artifact [13642440538](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558/artifacts/13642440538) is 94,472 bytes; SHA-256 `1959b61ef8050d10472b59a5a14ec8ed61eb885ccc2fe3c1216c9d2de86eed0f`.
 
 ## Wayland mock one-shot key-repeat synchronization (2026-11-09)
 
