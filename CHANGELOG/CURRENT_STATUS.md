@@ -1,29 +1,38 @@
 # NekoEdit current status
 
-## 2026-11-09 — XKB preserve/consumed Control and Shift validated — Actions #686 passed
+## 2026-11-09 — XKB useModMapMods scope validation passed — Actions #691
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open against `main`.
-**Feature commit:** [1b9d2da39977](https://github.com/GraderGamer2/NekoEdit/commit/1b9d2da399779ae306011e04e0509748b17afd87).
-**Documentation commit:** [29bada7cd1d8](https://github.com/GraderGamer2/NekoEdit/commit/29bada7cd1d8b153d4aa1c895e600c2cc68bbe82).
-**Test synchronization commit:** [97cc62949fb7](https://github.com/GraderGamer2/NekoEdit/commit/97cc62949fb794c632242ea8c4c289d91aab8628).
+**Implementation/test commits:** [4ad4291e5230](https://github.com/GraderGamer2/NekoEdit/commit/4ad4291e52303e6145e2847e7e921d198735aea4), [d64f3d8a3a1e](https://github.com/GraderGamer2/NekoEdit/commit/d64f3d8a3a1e3c9c6f513f2f8fb9009581d1bbc9), [fb04b1e5d218](https://github.com/GraderGamer2/NekoEdit/commit/fb04b1e5d218230d5cd647e528019e0f504e2161), [1a57acd950c5](https://github.com/GraderGamer2/NekoEdit/commit/1a57acd950c508c991bb2e7157da5dfc70c681f7).
 
-- The `xkb_types` parser retains a 32-bit preserve mask beside each exact `map[]` entry. A preserve declaration without a matching preceding map creates the implicit Level1 entry; a later matching map updates it in place. Preserved masks are validated against the type's declared modifier set.
-- Lookup computes the consumed modifier mask as the selected type's modifier mask AND NOT the matching entry's preserve mask. The same exact key/group/type-map selection is used for symbol lookup and consumed-modifier lookup.
-- Wayland retains the complete compositor-provided XKB state for keysym selection. Shortcut-visible Control and Shift are filtered separately using the current key's consumed mask; raw compositor/physical state is restored on key release. Modifier and group actions remain compositor-owned. Alt is not currently filtered because the implemented shortcut set does not use it.
-- The mock adds paired Shift-only types and assigns them to Left and Right. It verifies parser type IDs, type masks, exact map masks and preserve masks; runtime coverage proves consumed Shift does not extend selection for Ctrl+Shift+Left, while `preserve[Shift]` retains selection for Ctrl+Shift+Right. The earlier Control tests continue to verify preserved Ctrl+A and consumed-Control EuroSign insertion rather than Ctrl+Z.
-- Actions #684 and #685 stopped in the new test's post-release synchronization: a modifier release does not guarantee a repaint. The test now waits for the actual Control and Shift shortcut-state reset instead of waiting for a frame. This correction changes test synchronization, not editor behavior.
-- Actions [Build and test #686](`https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163`) passed all eight workflow steps, including ELF inspection, command-line tests, the complete Wayland mock and artifact upload. The mock log explicitly records both consumed-Shift filtering and preserved-Shift selection.
+- Extended the synthetic `xkb_compat` fixture to cover `useModMapMods = level1`, explicit `useModMapMods = any`, and the omitted-attribute default (`any`). It verifies `level1` wins the equal-specificity first-declaration tie for Group 1 / Level 1, while the lower-priority `any` rule applies to the same keysym on Group 1 / Level 2 and Group 2 / Level 1.
+- The fixture also verifies implicit `any` on a separate key whose `ISO_Group_Shift` symbol occurs only in Group 2. Memory assertions check the stored rule scopes, key real-modifier maps, virtual-modifier assignments, and effective masks. `V16` correctly aggregates Mod5 (`0x80`) from the alternate-level/group matches; the default-`any` V14 case aggregates Mod2 (`0x10`).
+- No XKB runtime behavior was changed in this milestone; the parser already implemented both scopes. This adds coverage against regressions in scope parsing, specificity/tie ordering, and virtual-modifier aggregation.
+- Actions #688 and #689 stopped in the older soft-wrap mouse hit-test scenario because the mock injected a new pointer click before confirming that the previous single `wl_buffer` release had been consumed. The test helper now waits for `buffer_busy=0` before and after a pointer click; the caret/pixel assertions remain unchanged.
+- Actions #690 then reached the new XKB fixture and exposed a missing expected value: the new V16 rule legitimately contributes Mod5 from alternate-level/group matches. The expected virtual-modifier table was corrected to include `V16=0x80`; no application-source change was required.
+- Actions [Build and test #691](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336) passed all eight workflow steps, including build/ELF verification, command-line and host tests, the complete Wayland mock, executable inspection, and artifact upload.
 
-**Artifact:** [nekoedit-linux-x86_64 — 13645133185](https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163/artifacts/13645133185)  
+**Artifact:** [nekoedit-linux-x86_64 — 13646371299](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336/artifacts/13646371299)  
 **Size:** 95,324 bytes  
-**SHA-256:** `4817ba43f7015796080a570879664407b0b51578a7f501d3ddaf2c166fb22035`  
-**Expires:** 2026-11-16 02:23:52 UTC.
+**SHA-256:** `70148ff518fe7f22f73209fdf3477cfe1d80bd27fe9221567a92866d4c2a500c`  
+**Expires:** 2026-11-16 02:53:37 UTC.
+
+### User-reported desktop behavior
+
+The user confirmed that `Ctrl+Shift+Left` selects words correctly in the current build. This is a manual desktop confirmation and is recorded separately from the automated mock results.
+
+### Roadmap request
+
+Add a minimal right-click context menu in the document area with exactly three commands: **Copy**, **Paste**, and **Cut**. It remains roadmap-only; this milestone does not implement the menu, and no other context-menu commands should be added unless requested.
 
 ### Remaining scope
 
-General XKB stateful key-action interpretation remains compositor-owned and is not executed by NekoEdit. Broader shortcut filtering beyond the Control/Shift shortcuts currently implemented is not yet applicable; Alt and other modifier policies still need real-keymap evaluation if those modifiers are added to shortcut bindings. Validation against real GNOME/Mutter keymaps and a live desktop session remains outstanding.
+The bounded `xkb_compat` reader supports `virtualModifier`, `useModMapMods=level1|any` (including the implicit `any` default), specificity/tie handling, and repeat policy. It does not execute general stateful XKB actions, compatibility indicators, or full locale Compose behavior. Modifier/group transitions remain compositor-owned. Live GNOME/Mutter validation against real keymaps remains outstanding.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
+
+---
+
 
 ---
 

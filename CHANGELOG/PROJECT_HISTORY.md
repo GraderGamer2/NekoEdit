@@ -811,3 +811,15 @@ The first two CI attempts (#684 and #685) stopped because the test waited for a 
 
 The user had already confirmed that the preceding build worked and that `clipboard_persistence` appeared in the preference file. That setting is the expected Clipboard Service toggle documented in `docs/CLIPBOARD.md`; it is independent of this XKB work. Real GNOME/Mutter keyboard-map validation remains separate from mock coverage.
 
+
+ 
+## 2026-11-09 — verify XKB useModMapMods level1/any scope and default
+
+The bounded XKB compatibility parser already accepted `useModMapMods = level1` and `useModMapMods = any`, with omitted scope defaulting to `any`. The synthetic keymap now protects this behavior with an explicit equal-specificity precedence case: the earlier `level1` interpretation handles Group 1 / Level 1, while the lower-priority `any` interpretation handles the same keysym at Group 1 / Level 2 and Group 2 / Level 1. A separate key containing `ISO_Group_Shift` only in Group 2 omits the attribute and proves the implicit default still applies.
+
+The process-memory assertions verify the interpretation scopes, real modifier maps, virtual-modifier assignments, and effective aggregate masks. The any-scope rule yields V16=Mod5 (0x80) from alternate-level/group occurrences; the default-any Group 2 case yields V14=Mod2 (0x10). The parser and Wayland application source were unchanged; this is a regression-coverage milestone.
+
+The first two CI attempts (#688 and #689) stopped at an older soft-wrap pointer-click assertion before the custom XKB fixture. The mock did not wait for the previous single `wl_buffer` release to be consumed before injecting another click. The helper now waits for `buffer_busy=0` before and after a click, without weakening the caret/pixel assertions. Actions #690 then reached the XKB fixture and caught a missing V16=0x80 expected value. After correcting that expectation, Actions [Build and test #691](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336) passed the complete eight-step workflow. Artifact [13646371299](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336/artifacts/13646371299) is 95,324 bytes with SHA-256 `70148ff518fe7f22f73209fdf3477cfe1d80bd27fe9221567a92866d4c2a500c`.
+
+The user separately confirmed real-build word selection with `Ctrl+Shift+Left`. The user also requested a minimal right-click document context menu with exactly Copy, Paste, and Cut. The request is in the README remaining roadmap and is not part of this milestone.
+

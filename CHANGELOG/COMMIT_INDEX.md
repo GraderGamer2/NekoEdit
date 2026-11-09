@@ -5,8 +5,20 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **377** (375 previously recorded commits + the consumed-Shift implementation and its test synchronization correction; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **381** (377 previously recorded commits + four XKB any-scope fixture and test-synchronization commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — XKB useModMapMods scope coverage and pointer-test synchronization
+
+| Commit | Subject |
+|---|---|
+| [4ad4291e5230](https://github.com/GraderGamer2/NekoEdit/commit/4ad4291e52303e6145e2847e7e921d198735aea4) | test: cover XKB any-scope modifier interpretations |
+| [d64f3d8a3a1e](https://github.com/GraderGamer2/NekoEdit/commit/d64f3d8a3a1e3c9c6f513f2f8fb9009581d1bbc9) | test: assert default XKB any scope |
+| [fb04b1e5d218](https://github.com/GraderGamer2/NekoEdit/commit/fb04b1e5d218230d5cd647e528019e0f504e2161) | test: synchronize pointer clicks with buffer releases |
+| [1a57acd950c5](https://github.com/GraderGamer2/NekoEdit/commit/1a57acd950c508c991bb2e7157da5dfc70c681f7) | test: expect XKB any-scope virtual modifier aggregation |
+
+The expanded fixture verifies explicit `level1` and `any` scope precedence, the omitted-scope `any` default, cross-group/level virtual-modifier assignment, and the resulting Mod5/Mod2 effective encodings. The pointer helper now acknowledges the preceding single-buffer release before and after a click. Actions [Build and test #691](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336) passed all eight steps and produced artifact [13646371299](https://github.com/GraderGamer2/NekoEdit/actions/runs/42553348336/artifacts/13646371299), 95,324 bytes, SHA-256 `70148ff518fe7f22f73209fdf3477cfe1d80bd27fe9221567a92866d4c2a500c`.
+
 
 ## 2026-11-09 — screenshot debugging directory cleanup
 
