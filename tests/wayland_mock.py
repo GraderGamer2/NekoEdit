@@ -2107,6 +2107,15 @@ xkb_symbols "nekoedit-sparse" {
                         "cursor_end": child_u32("text_input_pending_preedit_cursor_end"),
                         "flags": child_u32("text_input_pending_flags"),
                         "commit_serial": child_u32("text_input_commit_serial"),
+                        "text_input_object": child_u32("text_input_object"),
+                        "text_input_enabled": child_u32("text_input_enabled"),
+                        "text_input_entered": child_u32("text_input_entered"),
+                        "last_object": child_u32("last_object"),
+                        "last_opcode": child_u32("last_opcode"),
+                        "last_size": child_u32("last_size"),
+                        "event_payload_words": [
+                            child_u32_at("event_payload", offset) for offset in (0, 4, 8, 12, 16)
+                        ],
                     }
                     if (
                         pending_values["length"] != len(multibyte_preedit_text)
