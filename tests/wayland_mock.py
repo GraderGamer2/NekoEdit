@@ -6915,6 +6915,9 @@ xkb_symbols "nekoedit-sparse" {
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering, caret and live status verified"
                 )
 
+                shift_frame_pixels = bytearray(len(pixels))
+                shift_frame_state = {}
+
                 def key_step_shift(serial: int, code: int, label: str) -> None:
                     client.sendall(
                         wire_message(16, 4, struct.pack("<IIIII", serial, 1, 0, 0, 0))
@@ -6927,6 +6930,15 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
+                    # Capture the modifier-held frame before key-up and buffer
+                    # release can allow the compositor to receive another one.
+                    shift_frame_pixels[:] = pixels
+                    shift_frame_state.clear()
+                    shift_frame_state.update({
+                        "cursor": child_u32("doc_cursor"),
+                        "length": child_u32("doc_length"),
+                        "contents": read_document_state()["doc_contents"],
+                    })
                     client.sendall(
                         wire_message(
                             16, 3, struct.pack("<IIII", serial + 2, serial + 2, code, 0)
@@ -7151,9 +7163,9 @@ xkb_symbols "nekoedit-sparse" {
                 key_step(1164, 32, "append d for vertical selection")
                 key_step_shift(1168, 103, "Shift+Up select previous line")
                 vertical_pixels = [
-                    struct.unpack_from("<I", pixels, 92 * 800 * 4 + 39 * 4)[0],
-                    struct.unpack_from("<I", pixels, 104 * 800 * 4 + 23 * 4)[0],
-                    struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0],
+                    struct.unpack_from("<I", shift_frame_pixels, 92 * 800 * 4 + 39 * 4)[0],
+                    struct.unpack_from("<I", shift_frame_pixels, 104 * 800 * 4 + 23 * 4)[0],
+                    struct.unpack_from("<I", shift_frame_pixels, 104 * 800 * 4 + 31 * 4)[0],
                 ]
                 if vertical_pixels != [0xFF5E81AC] * 3:
                     raise AssertionError(
@@ -7161,17 +7173,26 @@ xkb_symbols "nekoedit-sparse" {
                         f"pixels={[hex(x) for x in vertical_pixels]}"
                     )
                 key_step_shift(1172, 108, "Shift+Down collapse vertical selection")
-                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 39 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", shift_frame_pixels, 92 * 800 * 4 + 39 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Shift+Down back to the anchor did not clear selection")
 
                 key_step_shift(1176, 102, "Shift+Home select to line start")
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
+                if struct.unpack_from("<I", shift_frame_pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF5E81AC:
                     raise AssertionError("Shift+Home did not select text to the start of the line")
                 key_step_shift(1180, 107, "Shift+End collapse to line end")
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF252A33:
+                if struct.unpack_from("<I", shift_frame_pixels, 104 * 800 * 4 + 31 * 4)[0] != 0xFF252A33:
                     raise AssertionError("Shift+End did not clear selection after returning to its anchor")
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
-                    raise AssertionError("Shift+End did not leave the caret at the line end")
+                shift_end_caret_pixel = struct.unpack_from(
+                    "<I", shift_frame_pixels, 104 * 800 * 4 + 32 * 4
+                )[0]
+                if shift_end_caret_pixel != 0xFFFFFFFF:
+                    raise AssertionError(
+                        "Shift+End did not leave the caret at the line end: "
+                        f"pixel={hex(shift_end_caret_pixel)}, "
+                        f"doc_cursor={shift_frame_state.get('cursor')}, "
+                        f"doc_length={shift_frame_state.get('length')}, "
+                        f"doc_bytes={shift_frame_state.get('contents', b'')[:24]!r}"
+                    )
                 observations.append(
                     "Shift+Arrow and Shift+Home/End selection, extension, collapse, and multi-line highlighting"
                 )
