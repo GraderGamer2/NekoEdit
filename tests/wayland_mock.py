@@ -4186,8 +4186,30 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(5064, 18, "keyboard-selected pt_BR resolves e e")
                     if child_u32("doc_compose_active") != 0:
                         raise AssertionError("successful pt_BR Multi_key composition left Compose state active")
-                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885c78f"):
-                        raise AssertionError("keyboard-selected pt_BR did not append its upstream e e to U+018F output after aa_TEST")
+                    pt_after_multi = read_document_state()["doc_contents"]
+                    pt_tag_bytes = bytes(
+                        child_u32_at("compose_locale_current_tag", i) & 0xFF
+                        for i in range(32)
+                    ).split(b"\\0", 1)[0]
+                    pt_keymap_values = (
+                        child_u32_at("xkb_unicode_levels", 54 * 128),
+                        child_u32_at("xkb_unicode_levels", 26 * 128),
+                    )
+                    pt_locale_output = tuple(
+                        child_u32_at("compose_locale_output", i) for i in range(2)
+                    )
+                    if pt_after_multi != bytes.fromhex("e29885c78f"):
+                        raise AssertionError(
+                            "keyboard-selected pt_BR e e did not append U+018F after aa_TEST: "
+                            f"actual={pt_after_multi.hex()}, locale={pt_tag_bytes!r}, "
+                            f"active={child_u32('compose_locale_active')}, "
+                            f"keymap(Multi_key,e)={[hex(v) for v in pt_keymap_values]}, "
+                            f"locale_output={[hex(v) for v in pt_locale_output]}, "
+                            f"compose_first=U+{child_u32('doc_compose_first'):04X}, "
+                            f"compose_second=U+{child_u32('doc_compose_second'):04X}, "
+                            f"compose_active={child_u32('doc_compose_active')}, "
+                            f"cursor={child_u32('doc_cursor')}, length={child_u32('doc_length')}"
+                        )
 
                     before_pt_dead = child_u32("doc_length")
                     key_step(5066, 33, "pt_BR dead_acute arms its combining mark")
