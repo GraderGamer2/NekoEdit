@@ -299,7 +299,7 @@ def main() -> None:
 
         # Latin-1 sources and octal escapes are explicit, not guessed.
         latin1 = home / "latin1"
-        latin1.write_bytes(r'<Multi_key> <a> <e> : "\351" eacute' + "\n".encode("latin-1"))
+        latin1.write_bytes((r'<Multi_key> <a> <e> : "\351" eacute' + "\n").encode("latin-1"))
         latin_doc = importer(home, system, encoding="latin-1").import_file(latin1)
         if mapping(latin_doc)[("multi_key", (ord("a"), ord("e")))] != (0x00E9,):
             raise AssertionError("Latin-1 octal escape was not decoded with the selected encoding")
