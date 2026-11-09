@@ -1,3 +1,17 @@
+## 2026-11-09 — ship the first separately packaged locale data set
+
+Source work: [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca), [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf), and [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a).
+
+NekoEdit now has its first external Compose data set: `pt_BR.UTF-8`. It is a complete table derived from the pinned X.Org libX11 en_US source plus pt_BR additions/overrides, with input keysyms converted using pinned xorgproto definitions. The reproducible importer validates the expected include, scalar inputs, output strings, source ordering, and prefix policy. The JSON includes upstream revision/blob identifiers and filter statistics; the repository also includes source/license notices.
+
+The final table has 2,908 rules (2,220 pairs, 582 triples, 106 four-input sequences), including 100 multi-scalar outputs. It is built as a 151,288-byte NLP1 file separately from the core executable. The standard build verifies pinned source blob hashes and byte-for-byte importer output, then uploads the pack as a distinct artifact. A separate workflow attaches it and its notice when a project GitHub Release is published.
+
+Build and test [#704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 steps, including the Wayland mock, importer regeneration, pack build, ELF inspection, and both artifact uploads. The locale ZIP is [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918); the editor ZIP is [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709).
+
+The Release attachment workflow has been committed, but no new project Release was published in this task, so the pack is not yet attached to a versioned release. More locales, GUI selection/install/remove, automatic system-locale detection, system/user Compose-file import, locale-specific dead keys, and live GNOME/Mutter validation remain future work.
+
+---
+
 ## 2026-11-09 — implement the bounded Compose locale-pack runtime
 
 Implementation: [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27), with regression fixes [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a) and [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f).

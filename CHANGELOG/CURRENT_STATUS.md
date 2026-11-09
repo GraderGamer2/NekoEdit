@@ -1,3 +1,28 @@
+## 2026-11-09 — publish first external Compose locale data set
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
+**Source/tooling commits:** [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca), [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf), and [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a).
+
+**CI:** [Build and test #704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 workflow steps. It built NekoEdit, ran CLI/host tests and the complete Wayland mock, inspected the freestanding ELF, fetched the pinned X.Org inputs, verified all three upstream Git blob IDs, regenerated the locale JSON byte-for-byte, built the .nlp pack, and uploaded both artifacts.
+
+- Added the first non-en_US dataset, **pt_BR.UTF-8**, as a complete flattened table: the pinned X.Org libX11 en_US Compose baseline followed by Brazilian Portuguese additions/overrides. The importer follows the single en_US include and resolves input keysyms using the pinned xorgproto `keysymdef.h`.
+- The dataset contains **2,908 rules**: 2,220 two-input, 582 three-input, and 106 four-input sequences. One hundred rules produce multiple Unicode scalars. Three locale rules override a base mapping; one shorter sequence is omitted because it prefixes a longer sequence.
+- Dead-key-led rules and input keysyms that cannot be represented as Unicode scalars by NLP1 v1 are excluded. These omissions and their counts are retained in the JSON statistics.
+- Added `tools/import_xcompose.py` with strict single-include handling, X.Org keysym alias resolution, C-style quoted output parsing, override merging, deterministic sorting/prefix filtering, and atomic JSON output.
+- Added pinned source revisions/blob IDs, importer statistics, and a redistribution notice under `data/locales/`. The pack is data-only; no upstream executable code or runtime library is bundled.
+- CI verifies downloaded source blob hashes, regenerates `pt_BR.UTF-8.json` byte-for-byte, and uses `make locale-packs` to build `pt_BR.UTF-8.nlp`. The standard build uploads the pack separately; the Release workflow attaches the pack and notice when a GitHub Release is published.
+- Wayland mock tests confirm pair/multi-output, triple, and four-input resolution through the real locale loader; unknown sequences fall back literally and Escape/Backspace cancel buffered prefixes.
+
+**Locale pack:** 151,288 bytes uncompressed (2,908 × 52-byte records + 72-byte header). Actions artifact [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918) is a 17,943-byte ZIP; SHA-256 `e644d2d0f20f499a0ce6b50872ca2aa688243ebdffaaaa6f7431c5f4b9bfb132`. It expires 2026-11-16 07:26:59 UTC.
+
+**Editor binary:** 119,239 bytes. Actions artifact [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709) has ZIP SHA-256 `1ea57032f6db13c84ddcfafcf4b5bd8dc1973b518164c91a2e969b6ff16dfb01`; it expires 2026-11-16 07:27:00 UTC.
+
+### Remaining locale work and validation boundary
+
+The first data pack and Release attachment workflow are implemented, but no new project Release was published in this task, so the pack is not yet attached to a versioned end-user release. More locale datasets, Settings-based selection/install/remove, automatic system-locale discovery, system/user Compose-file import, and locale-specific dead-key behavior remain future work. CI/mock coverage is verified; live GNOME/Mutter testing of an installed pt_BR pack remains outstanding. The editor remains offline-capable with built-in en_US and does not automatically download data.
+
+---
+
 ## 2026-11-09 — implement optional Compose locale packs
 
 **Implementation:** [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27); test correction [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a); runtime fallback correction [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f). Branch `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
@@ -41,7 +66,7 @@ The complete Wayland mock and ELF checks passed in CI. This is not a claim that 
 
 ### Locale-pack implementation update
 
-The NLP1 runtime loader and release-time generator are now implemented on `early-alpha`; see the newer status entry at the top of this file. The core keeps en_US.UTF-8 embedded, optional packs are selected explicitly with `NEKOEDIT_LOCALE`, and invalid/missing packs fall back to the built-in tables. Packs are data-only, bounded to 2 MiB/32,768 records, and support 2–4 input scalars with up to eight output scalars. Actual localized Release assets, GUI selection/installation, system/user Compose import, and locale-specific dead keys remain future work.
+The NLP1 runtime loader, pack builder, and first external dataset (pt_BR.UTF-8) are implemented on `early-alpha`; see the latest status entry at the top of this file. The pack is a complete en_US-derived table with pt_BR overrides and a pinned source notice. CI rebuilds it from verified upstream Git blobs, compares the JSON byte-for-byte, and uploads the standalone `.nlp` asset. The Release workflow attaches it when a GitHub Release is published. Settings-based installation/selection, more locales, system/user Compose imports, automatic locale discovery, and locale-specific dead keys remain future work.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
