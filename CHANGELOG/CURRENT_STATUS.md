@@ -1,3 +1,12 @@
+## 2026-11-09 — synchronize the legacy seat-v3 final key release
+
+- Actions [Build and test #681](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549071378) compiled the preserve implementation, passed ELF verification and all host tests, and completed the first five Wayland mock scenarios. It then exited during the older inherited-`WAYLAND_SOCKET` / seat-v3 held-key scenario before the custom XKB preserve fixture ran.
+- The seat-v3 scenario already waited for the client to consume the held-Enter release before beginning Tab, but it did not wait for the final held-Tab release before the mock immediately sent `xdg_toplevel.close` and closed its socket. The test therefore allowed a pending repeat timer and compositor shutdown to race.
+- Added the same explicit `repeat_keycode == 0` acknowledgement after Tab key-up and before compositor close. No application keyboard semantics were changed in this synchronization correction.
+- Preserve-parser memory checks and the key-specific shortcut cases remain unvalidated until the next complete workflow run.
+
+---
+
 ## 2026-11-09 — fix XKB preserve mock symbol inspection
 
 - Actions [Build and test #680](https://github.com/GraderGamer2/NekoEdit/actions/runs/42548911081) built and linked the new XKB preserve implementation, passed ELF checks and all host tests, then stopped in the Wayland mock before the new XKB assertions. The mock attempted to inspect `xkb_type_map_preserves` through `/proc/<pid>/mem`, but its `wanted_symbols` allow-list did not include the newly exported symbol, causing a harness `KeyError`.

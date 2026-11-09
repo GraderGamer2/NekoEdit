@@ -6420,6 +6420,12 @@ xkb_symbols "nekoedit-sparse" {
                     wire_message(16, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
                     + wire_message(12, 0)
                 )
+                # As with the preceding Enter release, wait until the client
+                # has processed Tab key-up and cancelled its repeat timer
+                # before the compositor sends xdg_toplevel.close.
+                wait_child_u32(
+                    "repeat_keycode", 0, "legacy seat-v3 Tab release before close"
+                )
                 observations.append(
                     "printable characters, Enter, and Tab repeated while held; compositor repeat_info and legacy fallback were exercised"
                 )
