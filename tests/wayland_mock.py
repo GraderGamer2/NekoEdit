@@ -3771,7 +3771,8 @@ xkb_symbols "nekoedit-sparse" {
                         "consumed Shift is removed from Ctrl+Shift+Left shortcut state",
                         shift=True,
                     )
-                    workflow_redraw("consumed-Shift key release completes")
+                    wait_child_u32("ctrl_down", 0, "consumed-Shift shortcut Control release")
+                    wait_child_u32("shift_down", 0, "consumed-Shift shortcut Shift release")
                     if child_u32("doc_selection_active") != 0:
                         raise AssertionError(
                             "an unpreserved Shift map incorrectly retained Shift-selection behavior"
@@ -3782,7 +3783,8 @@ xkb_symbols "nekoedit-sparse" {
                         "preserved Shift remains available to Ctrl+Shift+Right",
                         shift=True,
                     )
-                    workflow_redraw("preserved-Shift key release completes")
+                    wait_child_u32("ctrl_down", 0, "preserved-Shift shortcut Control release")
+                    wait_child_u32("shift_down", 0, "preserved-Shift shortcut Shift release")
                     if child_u32("doc_selection_active") != 1:
                         raise AssertionError(
                             "preserve[Shift] did not retain Shift-selection behavior"
