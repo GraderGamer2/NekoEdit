@@ -1,3 +1,27 @@
+## 2026-11-09 — implement optional Compose locale packs
+
+**Implementation:** [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27); test correction [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a); runtime fallback correction [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f). Branch `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+
+**CI:** [Build and test #701](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750) — all eight workflow steps passed, including the complete Wayland mock, ELF inspection, and artifact upload.
+
+- Kept **en_US.UTF-8** as the embedded default. A non-default locale is selected explicitly through `NEKOEDIT_LOCALE=<locale-tag>`; its data file is loaded from `$HOME/.nekoedit/locales/<locale-tag>.nlp`.
+- Added NLP1, a versioned, data-only format with a 72-byte header and 52-byte records. It supports 2–4 input Unicode scalars and 1–8 output scalars. The runtime caps packs at 2 MiB and 32,768 records.
+- The loader checks magic/version, header and record sizes, locale-tag match, file/payload length, CRC-32, flags/reserved bytes, strict sequence ordering, duplicate/prefix ambiguity, output/input counts, Unicode scalar validity, and zero-filled unused slots. Invalid/missing packs fall back atomically to built-in en_US.
+- A selected pack replaces the active Compose table; it does not merge with en_US. This avoids precedence and timeout ambiguity. The existing six dead-key actions remain separate.
+- Added `tools/compose_pack.py`, a standard-library-only JSON-to-NLP1 builder. Python is a build/release tool and test dependency only, not a runtime dependency.
+- The Wayland mock validates a real loaded pack through keyboard events: a pair producing two scalars, a three-key rule, a four-key rule, literal fallback for an unknown pair, and Escape/Backspace cancellation. A CRC-corrupt pack is rejected and leaves en_US active. Host tests cover header/CRC encoding, sorting, duplicate/prefix rejection, unsafe locale tags, invalid scalars, and output limits.
+- No executable plugin code, shared object, network access, or automatic download was introduced.
+
+**Artifact:** [nekoedit-linux-x86_64 — 13656010309](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750/artifacts/13656010309)  
+**Size:** 119,239 bytes  
+**Expires:** 2026-11-16 07:02:43 UTC.
+
+### Remaining locale work and validation boundary
+
+Actual non-en_US release assets, a Settings locale selector/installer, automatic selection from system locale variables, system/user Compose-file import, locale-specific dead-key rules, and release-pack provenance/licensing workflows remain future work. The pack loader and test fixture have passed CI; this does not claim manual testing of an installed non-en_US pack in live GNOME/Mutter. The core editor remains usable offline with built-in en_US.
+
+---
+
 ## 2026-11-09 — implement minimal document context menu
 
 **Implementation:** [0c9fee44200b](https://github.com/GraderGamer2/NekoEdit/commit/0c9fee44200b1528c1c3d148dd525c5319c6dd7d) on the early-alpha branch; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open.  
@@ -15,13 +39,9 @@
 
 The complete Wayland mock and ELF checks passed in CI. This is not a claim that the menu has already been manually checked on the user's live GNOME/Mutter desktop; that visual/input retest remains separate.
 
-### Locale-pack architecture decision
+### Locale-pack implementation update
 
-- **en_US.UTF-8 remains the built-in default** and the only locale data embedded in the core executable.
-- Other locales are planned as optional, versioned **data-only** packs attached to GitHub Releases. The editor will load an installed compatible pack at runtime and fall back to built-in en_US if it is absent or invalid.
-- Packs must not contain native shared objects or executable plugin code. The bounded loader will validate the format version, sizes, record counts, scalar ranges, and input-sequence limits before exposing the table.
-- Installing/downloading packs is a separate, explicit release workflow. The editor remains offline-capable and must not silently download data at runtime.
-- This is a documented design direction, not an implemented loader or pack format yet.
+The NLP1 runtime loader and release-time generator are now implemented on `early-alpha`; see the newer status entry at the top of this file. The core keeps en_US.UTF-8 embedded, optional packs are selected explicitly with `NEKOEDIT_LOCALE`, and invalid/missing packs fall back to the built-in tables. Packs are data-only, bounded to 2 MiB/32,768 records, and support 2–4 input scalars with up to eight output scalars. Actual localized Release assets, GUI selection/installation, system/user Compose import, and locale-specific dead keys remain future work.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
@@ -67,7 +87,7 @@ The user reported question marks when trying scripts without corresponding insta
 
 ---
 
-# NekoEdit current status
+# Earlier NekoEdit status snapshot — before the locale-pack implementation
 
 ## 2026-11-09 — expand named XKB Unicode keysyms — Actions #695 passed
 
@@ -89,13 +109,13 @@ The user reported question marks when trying scripts without corresponding insta
 
 The user reports that the previous build works perfectly and that no visible behavior change is apparent. The new named-key additions are CI/mock-verified; multilingual physical-key typing has not yet been separately confirmed on live GNOME/Mutter. The earlier manual confirmation that `Ctrl+Shift+Left` selects words correctly remains recorded.
 
-### Roadmap request
+### Roadmap request at this earlier snapshot
 
-The requested right-click document context menu remains a separate, unimplemented item with exactly three commands: **Copy**, **Paste**, and **Cut**. It is not part of this keyboard-layout milestone.
+At this snapshot, the right-click document context menu had not yet been implemented. It was delivered in the subsequent context-menu milestone recorded above. The currently verified menu contains exactly **Copy**, **Paste**, and **Cut**.
 
 ### Remaining keyboard-layout scope
 
-The parser now covers the expanded named Unicode table and the previously validated bounded XKB type, modifier-map, compatibility-predicate, preserve/consumed-modifier, virtual-modifier, and repeat subsets. This is not complete libxkbcommon or locale Compose support. Stateful modifier/group actions and compatibility indicators remain compositor-owned or unfinished; advanced IME preedit attributes and full locale Compose are incomplete. Live GNOME/Mutter testing with real keymaps and an input method remains outstanding. Glyph appearance also depends on the selected font containing the mapped character.
+The parser now covers the expanded named Unicode table and the previously validated bounded XKB type, modifier-map, compatibility-predicate, preserve/consumed-modifier, virtual-modifier, and repeat subsets. This is not complete libxkbcommon or full locale Compose support. The optional NLP1 loader supports installed locale tables, but system/user Compose-file import, automatic system-locale selection, locale-specific dead-key actions, and release-pack selection UI remain unfinished. Stateful modifier/group actions and compatibility indicators remain compositor-owned or unfinished; advanced IME preedit attributes also remain incomplete. Live GNOME/Mutter testing with real keymaps and an input method remains outstanding. Glyph appearance also depends on the selected font containing the mapped character.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 

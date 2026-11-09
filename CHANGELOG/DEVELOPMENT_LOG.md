@@ -1,4 +1,33 @@
-## 2026-11-09 — minimal document context menu and locale-pack architecture
+## 2026-11-09 — implement bounded Compose locale packs — Build and test #701 passed
+
+### Implementation
+
+- Added `src/backend/compose_locale.c`, a freestanding runtime loader using direct Linux syscalls. It reads an explicitly selected `NEKOEDIT_LOCALE` pack from `$HOME/.nekoedit/locales/<tag>.nlp`, maps it read-only, and activates it only after complete validation.
+- Defined NLP1: 72-byte header, 52-byte records, little-endian fields, version 1, CRC-32 payload check, exact locale tag, bounded record/byte counts, zero reserved fields, and strict Unicode-scalar/sequence validation.
+- Each record has 2–4 input scalars and 1–8 output scalars. Records must be sorted and unique; prefix-ambiguous sequences are rejected to avoid delayed resolution timers.
+- The pack replaces the selected locale's active Compose table; it is not an overlay on en_US. Built-in en_US remains the default and the failure fallback. No shared libraries, executable plugins, runtime Python, or network activity were added.
+- Extended the keyboard Compose state to four buffered scalars and routed active optional packs through pair/triple/four-input resolution. Output strings are inserted scalar-by-scalar through the existing UTF-8 insertion path.
+- Added `tools/compose_pack.py` to build NLP1 packs from JSON, plus host-side format/generator validation tests.
+
+### Regression coverage and fixes
+
+- The host test verifies header layout, payload CRC, record ordering, one-/multi-scalar outputs, and rejection of duplicates, prefix ambiguity, surrogate scalars, unsafe locale tags, oversized output sequences, and packs claiming built-in en_US.
+- The Wayland mock verifies valid-pack loading and actual keyboard-event resolution of a two-input/two-output rule, a three-input rule, and a four-input rule. It also checks unknown-input literal fallback, Escape/Backspace cancellation, and a CRC-corrupt pack falling back to built-in en_US.
+- The first test run exposed a wrong tuple offset in the new generator test; [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a) corrected the test field index.
+- The next Wayland run exposed that the literal-fallback source pointed at Compose slots which were cleared before insertion. [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f) moves the slot reset after the insertion loop. The regression remains in the final mock.
+- Final [Build and test #701](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750) passed all eight workflow steps, including the complete Wayland mock, ELF checks, and artifact upload.
+
+**Source commits:** [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27), [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a), [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f).
+
+**Artifact:** [13656010309](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750/artifacts/13656010309), 119,239 bytes; expires 2026-11-16 07:02:43 UTC.
+
+### Remaining work
+
+Publish actual localized pack assets with accurate provenance/licensing, add GUI locale selection and explicit install/remove flows, evaluate system/user Compose-file import, and extend locale-specific dead-key behavior. No live GNOME/Mutter test of an installed external locale pack is claimed.
+
+---
+
+## 2026-11-09 — context-menu implementation and locale-pack design decision (before NLP1 loader)
 
 ### Implementation
 
