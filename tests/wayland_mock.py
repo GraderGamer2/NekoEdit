@@ -4069,46 +4069,55 @@ xkb_symbols "nekoedit-sparse" {
                         click_settings(sx, sy, serial, label)
 
                     click_settings(180, 10, 5000, "open Settings dropdown")
-                    click_settings_design(184, 200, 5010, "open installed locale selector")
-                    if child_u32("picker_mode") != 5:
-                        raise AssertionError("Settings Locale did not open installed-pack selection mode")
-                    click_picker_design(200, 160, 5020, "select alphabetically first installed locale")
-                    key_step(5030, 28, "activate selected installed locale")
+                    click_settings_design(200, 200, 5010, "open installed locale dropdown")
+                    if child_u32("settings_locale_dropdown_open") != 1:
+                        raise AssertionError("Settings Locale did not open its dropdown")
+                    if child_u32("picker_mode") != 0:
+                        raise AssertionError("installed locale dropdown unexpectedly opened the file picker")
+                    if child_u32("picker_entry_count") != 2:
+                        raise AssertionError("installed locale dropdown did not discover both installed packs")
+                    click_settings_design(200, 112, 5020, "select alphabetically first installed locale")
+                    if child_u32("settings_locale_dropdown_open") != 0:
+                        raise AssertionError("selecting a locale did not close the dropdown")
+                    if child_u32("picker_mode") != 0:
+                        raise AssertionError("selecting an installed locale left the file picker open")
                     if child_u32("compose_locale_active") != 1:
                         raise AssertionError("Settings did not activate the selected generic locale pack")
                     if child_u32("doc_length") != 0:
                         raise AssertionError("changing the locale changed document contents")
 
-                    # aa_TEST sorts before pt_BR, proving the picker resolves the
-                    # selected filename tag rather than hard-coding pt_BR.
-                    key_step(5040, 46, "generic locale starts Compose")
-                    key_step(5042, 24, "generic locale buffers o")
-                    key_step(5044, 23, "generic locale resolves o i")
+                    # aa_TEST sorts before pt_BR, proving the dropdown resolves
+                    # each installed filename rather than hard-coding a locale.
+                    key_step(5030, 46, "generic locale starts Compose")
+                    key_step(5032, 24, "generic locale buffers o")
+                    key_step(5034, 23, "generic locale resolves o i")
                     if read_document_state()["doc_contents"] != bytes.fromhex("e29885"):
                         raise AssertionError("Settings-selected aa_TEST pack did not insert its distinct output")
 
-                    click_settings(180, 10, 5050, "open Settings dropdown for Base")
-                    click_settings_design(235, 200, 5060, "select embedded Base locale")
+                    click_settings(180, 10, 5040, "reopen Settings to choose Base")
+                    click_settings_design(200, 200, 5050, "open locale dropdown for Base")
+                    click_settings_design(200, 96, 5060, "select built-in en_US from dropdown")
                     if child_u32("compose_locale_active") != 0:
-                        raise AssertionError("Settings Base did not return to built-in en_US")
+                        raise AssertionError("Settings dropdown did not return to built-in en_US")
                     preference_path = os.path.join(runtime_dir, ".nekoedit", "preferences")
                     with open(preference_path, "r", encoding="utf-8") as preference_file:
                         saved = preference_file.read()
                     if "compose_locale=en_US.UTF-8\n" not in saved:
-                        raise AssertionError("Base locale choice was not persisted")
+                        raise AssertionError("built-in locale choice was not persisted")
                     observations.append(
-                        "Settings locale picker selects generic aa_TEST, Base persists en_US, and Add/Remove remain available"
+                        "Settings installed-locale dropdown dynamically lists generic packs, selects aa_TEST, and persists built-in en_US without opening a file picker"
                     )
 
                     # Remove the pre-seeded pt_BR install so Add Pack must copy
                     # and validate the user's source file from the picker.
                     installed_path = os.path.join(runtime_dir, ".nekoedit", "locales", "pt_BR.UTF-8.nlp")
                     os.unlink(installed_path)
-                    click_settings_design(282, 200, 5070, "open Add Pack picker")
+                    click_settings(180, 10, 5070, "reopen Settings for Add Pack")
+                    click_settings_design(282, 200, 5080, "open Add Pack picker")
                     if child_u32("picker_mode") != 4:
                         raise AssertionError("Settings Add did not open locale-pack picker mode")
-                    click_picker_design(200, 160, 5070, "select the .nlp source pack")
-                    key_step(5080, 28, "install selected locale pack")
+                    click_picker_design(200, 160, 5090, "select the .nlp source pack")
+                    key_step(5100, 28, "install selected locale pack")
                     if child_u32("compose_locale_active") != 1:
                         raise AssertionError("Add Pack did not activate the installed pt_BR pack")
                     if not os.path.isfile(installed_path):
@@ -4122,10 +4131,29 @@ xkb_symbols "nekoedit-sparse" {
                         saved_after_install = preference_file.read()
                     if "compose_locale=pt_BR.UTF-8\n" not in saved_after_install:
                         raise AssertionError("Add Pack did not persist the new locale choice")
-                    observations.append("Settings Add Pack opens the filtered .nlp picker, validates/copies the selected source, activates pt_BR, and persists the choice")
+                    if child_u32("picker_entry_count") != 2:
+                        raise AssertionError("successful Add did not refresh the installed-locale list")
+                    if child_u32("settings_locale_dropdown_selected") != 2:
+                        raise AssertionError("refreshed dropdown did not locate the newly installed pt_BR pack")
+                    observations.append("Settings Add Pack copied/validated pt_BR, preserved the source, and refreshed the dynamic installed-locale list")
 
-                    click_settings(180, 10, 5110, "open Settings for Remove Pack")
-                    click_settings_design(332, 200, 5120, "request Remove Pack confirmation")
+                    click_settings(180, 10, 5110, "reopen Settings to choose installed pt_BR")
+                    click_settings_design(200, 200, 5120, "open refreshed locale dropdown")
+                    if child_u32("picker_entry_count") != 2 or child_u32("settings_locale_dropdown_selected") != 2:
+                        raise AssertionError("reopened locale dropdown did not retain the newly installed pt_BR entry")
+                    click_settings_design(200, 128, 5130, "select newly installed pt_BR from dropdown")
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("dropdown did not activate the newly installed pt_BR pack")
+                    if child_u32("picker_mode") != 0:
+                        raise AssertionError("choosing pt_BR reopened a file picker")
+                    key_step(5140, 46, "selected pt_BR locale starts Compose")
+                    key_step(5142, 24, "selected pt_BR locale buffers o")
+                    key_step(5144, 23, "selected pt_BR locale resolves o i")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
+                        raise AssertionError("dropdown-selected pt_BR did not route Compose through its installed pack")
+
+                    click_settings(180, 10, 5150, "reopen Settings for Remove Pack")
+                    click_settings_design(332, 200, 5160, "request Remove Pack confirmation")
                     if child_u32("save_confirm_open") != 1:
                         raise AssertionError("Remove Pack did not request confirmation")
                     click_settings(300, 272, 5130, "confirm Remove Pack")
