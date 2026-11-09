@@ -20,6 +20,15 @@ Actions [Build and test #42571651703](https://github.com/GraderGamer2/NekoEdit/a
 
 The same milestone documents the future locale design: built-in en_US, other locales as optional versioned data-only GitHub Release packs with a bounded runtime loader and built-in fallback. This is not yet implemented.
 
+## 2026-11-09 — mirror context-menu continuity records
+
+| Commit | Subject |
+|---|---|
+| [588b4180572b](https://github.com/GraderGamer2/NekoEdit/commit/588b4180572b0de1c41abc1fe65d5fb381e2c627) | docs: record context menu and locale-pack roadmap [skip ci] |
+
+Updated CURRENT_STATUS, DEVELOPMENT_LOG, PROJECT_HISTORY, COMMIT_INDEX, and the changelog continuity guide with the context-menu implementation, passing Build and test #698 evidence, artifact details, and the planned en_US/data-only optional locale-pack architecture. This is a documentation-only update; the implementation remains on early-alpha pending PR #2.
+
+
 ## 2026-11-09 — add three-symbol XKB Compose sequences
 
 | Commit | Subject |
