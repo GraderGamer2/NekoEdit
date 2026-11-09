@@ -8,6 +8,9 @@
 | [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754) | docs: record CI trigger and skip-marker policy |
 | [c50b4ab02e5f](https://github.com/GraderGamer2/NekoEdit/commit/c50b4ab02e5f057a636a477c49cdf3c1e35c5405) | docs: record missing Actions trigger diagnosis |
 | [f42cc77768c5](https://github.com/GraderGamer2/NekoEdit/commit/f42cc77768c5dda2ee5026282c77fa7f9502bd72) | docs: correct Actions trigger diagnosis |
+| [2afe1b1d9375](https://github.com/GraderGamer2/NekoEdit/commit/2afe1b1d93751a54da640c11cb8f5047e93e0215) | ci: run builds on early-alpha pushes |
+| [75f84f844aa4](https://github.com/GraderGamer2/NekoEdit/commit/75f84f844aa40f343ef20fbe86e2a3475f1986e1) | docs: record early-alpha CI trigger status |
+| [2a566f7f0a4c](https://github.com/GraderGamer2/NekoEdit/commit/2a566f7f0a4cf08138c1bea7388dd9e55ec8a27d) | docs: finalize CI trigger repair log |
 
 These are documentation/continuity corrections and do not change the implementation/test commit count. The first follow-up removed `[skip ci]` from the PR HEAD; the subsequent diagnosis confirmed that PR merge conflicts also suppress `pull_request` workflows and that pushes to `early-alpha` were not included in the workflow's branch filter. See CURRENT_STATUS.md and DEVELOPMENT_LOG.md for the trigger repair and final validation state.
 
