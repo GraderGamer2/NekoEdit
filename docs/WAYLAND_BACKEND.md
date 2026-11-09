@@ -44,6 +44,14 @@ The implementation sends and receives the Wayland protocol directly over an AF_U
 
 The initial surface commit is required to receive the first configure. The buffer is attached only after acknowledging that configure.
 
+## XKB compatibility modifier-map scope
+
+The bounded `xkb_compat` reader supports both `useModMapMods = level1` and `useModMapMods = any`. When the attribute is omitted, XKB's default is `any`. The `level1` scope considers the keysym at Group 1 / Level 1; `any` considers occurrences in any group and level. When multiple matching interpretations have equal specificity, the first declaration wins.
+
+The Wayland mock places the same `ISO_Level3_Shift` keysym on Group 1 / Level 1, Group 1 / Level 2, and Group 2 / Level 1. It verifies that an earlier `level1` interpretation handles the first occurrence and a later `any` interpretation handles the other two. A separate Group 2-only `ISO_Group_Shift` key omits the attribute and verifies the implicit `any` default. The tests also inspect the resulting real/virtual modifier aggregation.
+
+This is bounded compatibility interpretation coverage, not general XKB action execution. Stateful modifier/group actions remain compositor-owned.
+
 ## XKB per-key repeat and compositor-owned key actions
 
 The keymap reader keeps direct `repeat = True/False` declarations in `xkb_symbols` separate from `xkb_compat` interpretation policy. The compatibility-section `interpret.repeat` default is `False`, and an interpretation may override it with its own `repeat` field. When no compatibility interpretation matches, XKB's default interpretation enables repeat only if the key has a Group 1 / Level 1 symbol; a key without that base-level symbol retains the ordinary non-repeat default. Because repeat is key-wide, both compatibility matching and the fallback are evaluated only from Group 1 / Level 1. An explicit key-level `repeat` property takes precedence over either compatibility result.
