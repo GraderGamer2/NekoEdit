@@ -1141,7 +1141,7 @@ xkb_key_repeat_flags: .zero 256           # default true; indexed by XKB keycode
 .global xkb_key_repeat_explicit
 xkb_key_repeat_explicit: .zero 256        # direct key repeat setting overrides compat
 .global xkb_compat_default_repeat
-xkb_compat_default_repeat: .zero 4        # interpret.repeat default
+xkb_compat_default_repeat: .long 1        # interpret.repeat default
 .global xkb_compat_rule_count
 xkb_compat_rule_count: .long 0
 .global xkb_compat_rules
@@ -1152,7 +1152,7 @@ xkb_compat_rules: .zero 2048             # 128 records * 16 bytes
 .Lxkb_compat_tmp_predicate: .long 0
 .Lxkb_compat_tmp_scope: .long 0
 .Lxkb_compat_tmp_valid: .long 0
-.Lxkb_compat_tmp_repeat: .zero 4
+.Lxkb_compat_tmp_repeat: .long 1
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask

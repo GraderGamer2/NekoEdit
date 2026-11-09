@@ -3637,9 +3637,78 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 4, struct.pack("<IIIII", custom_serial + 10, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1300, 31, "Ctrl+S saves XKB-translated text")
+
+                    def check_key_repeat_policy(
+                        keycode: int, serial: int, should_repeat: bool, label: str
+                    ) -> None:
+                        before_cursor = child_u32("doc_cursor")
+                        client.sendall(
+                            wire_message(
+                                16, 3, struct.pack("<IIII", serial, serial, keycode, 1)
+                            )
+                        )
+                        workflow_redraw(label + " initial key press")
+                        client.sendall(wire_message(12, 0))
+                        wait_child_u32(
+                            "doc_cursor", before_cursor + 1,
+                            label + " initial symbol insertion",
+                        )
+                        if should_repeat:
+                            wait_child_u32(
+                                "repeat_keycode", keycode,
+                                label + " starts the XKB-permitted repeat timer",
+                            )
+                            repeat_deadline = time.monotonic() + 1.5
+                            while (
+                                child_u32("doc_cursor") <= before_cursor + 1
+                                and time.monotonic() < repeat_deadline
+                            ):
+                                time.sleep(0.005)
+                            if child_u32("doc_cursor") <= before_cursor + 1:
+                                raise AssertionError(
+                                    label + " was marked repeatable but no repeated edit arrived"
+                                )
+                            workflow_redraw(label + " repeated key")
+                            client.sendall(wire_message(12, 0))
+                        else:
+                            if child_u32("repeat_keycode") != 0:
+                                raise AssertionError(
+                                    label + " incorrectly started a repeat timer: "
+                                    + str(child_u32("repeat_keycode"))
+                                )
+                            # The compositor's test policy is 180 ms before
+                            # repeat. Hold beyond that delay and verify the
+                            # repeat-disabled key produced only its first symbol.
+                            time.sleep(0.4)
+                            if child_u32("doc_cursor") != before_cursor + 1:
+                                raise AssertionError(
+                                    label + " repeated despite XKB repeat=False: "
+                                    + str(child_u32("doc_cursor"))
+                                )
+                        client.sendall(
+                            wire_message(
+                                16, 3,
+                                struct.pack("<IIII", serial + 1, serial + 1, keycode, 0),
+                            )
+                            + wire_message(12, 0)
+                        )
+                        wait_child_u32(
+                            "repeat_keycode", 0, label + " key release cancels repeat"
+                        )
+
+                    # These keycodes are mapped in the custom fixture:
+                    # RPT0 inherits interpret.repeat=False (Mod1),
+                    # RPT1 overrides it to True (Mod2),
+                    # RPT2 explicitly overrides compat True with key repeat=False,
+                    # and RPT3 explicitly overrides the default False with True.
+                    check_key_repeat_policy(202, 1320, False, "RPT0 inherited compatibility repeat=False")
+                    check_key_repeat_policy(203, 1330, True, "RPT1 compatibility repeat=True")
+                    check_key_repeat_policy(204, 1340, False, "RPT2 explicit key repeat=False")
+                    check_key_repeat_policy(205, 1350, True, "RPT3 explicit key repeat=True")
+
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "XKB exact declared type maps, per-group assignment, eight custom levels, explicit and direct/indirect implicit virtual modifiers, modifier_map keysym resolution order and exact None targets, Unicode, keypad/ONE_LEVEL behavior, groups, and punctuation verified"
+                        "XKB exact type maps, compositor-owned modifiers, compatibility and explicit per-key repeat precedence, keydown timer gating, and repeated edits verified"
                     )
                     return
 
