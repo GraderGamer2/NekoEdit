@@ -1,3 +1,25 @@
+## 2026-11-09 — verify pt_BR Settings flow; add Finnish/Serbian locale dead-key event coverage
+
+### Completed validation
+
+- Build and test #758 passed all 12 steps on source commit `81937968d94b`: freestanding ELF/CLI, full Wayland protocol suite, executable inspection, pinned source regeneration verification, locale-pack builds, and both artifact uploads.
+- The Settings integration path now covers the installed-locale dropdown, Escape and keyboard selection, actual `pt_BR` `Multi_key e e` → U+018F, locale `dead_acute + c` → ç, saved Base en_US selection, Add Pack validation/source preservation/reselection, and confirmed Remove Pack/fallback.
+- The #751–#757 debugging chain was closed without a runtime patch: the synthetic-only snowman expectation was replaced with the actual pt_BR U+018F rule; its expected UTF-8 was corrected from C7 8F to C6 8F; the Settings scenario timeout was raised to 50 seconds; and the final guard was changed to require the three current observation strings.
+
+### Finnish/Serbian physical dead-key tests
+
+- Commit `98144943b5aed894c103f8fa2b8049ac60e5ef52` adds a data-level assertion for `[U+0301, U+043A]` → U+045C in both `fi_FI.UTF-8` and `sr_RS.UTF-8`.
+- The two Wayland keyboard tests preserve their existing Multi_key coverage, then exercise the alias `dead_apostrophe` (U+0301) followed by a Cyrillic-ka keysym. The fixture maps physical AC08 to `Cyrillic_ka` and verifies the pending-mark state, clearing after insertion, `compose_locale_output == U+045C`, and exact cumulative document bytes.
+- This is test-only coverage: the locale JSON source and runtime implementation were not modified by this commit.
+- Build and test #759 is the first run for this new test commit and was in progress when this entry was recorded. Results are not yet claimed.
+
+### Validation boundary
+
+Full CI and generated artifacts are confirmed for the #758 baseline; Finnish/Serbian physical-key dead-key integration is pending #759. Live GNOME/Mutter testing remains outstanding.
+
+Commit: [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52).
+
+---
 ## 2026-11-09 — typed locale dead-key Compose rules and Settings integration debugging
 
 - Extended NLP1's 16-bit record-reserved field with rule kind 0 (Multi_key) and kind 1 (dead-key). Existing version-1 packs with zero in this field remain backward-compatible.

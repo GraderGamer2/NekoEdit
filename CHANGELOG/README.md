@@ -2,6 +2,10 @@
 
 This directory is the project's durable development history and handoff source. It exists so work can continue in a new ChatGPT conversation without relying on the context length or availability of an older chat.
 
+## Latest handoff (2026-11-09)
+
+Build and test #758 is fully green, including the pt_BR Settings/Add/Remove path and artifact uploads. Commit `98144943b5ae` adds Finnish/Serbian physical dead-key coverage (`dead_apostrophe` + `Cyrillic_ka` → U+045C); Actions #759 is the validation run. Check CURRENT_STATUS.md and the actual branch/Actions state before continuing.
+
 ## Read this first in every new development chat
 
 Before changing NekoEdit, inspect these files in this order:

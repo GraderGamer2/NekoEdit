@@ -1,3 +1,12 @@
+## 2026-11-09 — verify locale Settings installer and extend Finnish/Serbian dead-key integration tests
+
+Build and test [#758](https://github.com/GraderGamer2/NekoEdit/actions/runs/42629086891) passed its complete 12-step workflow. This closes the pt_BR Settings regression chain: the installed-locale dropdown, keyboard activation, the actual Brazilian `Multi_key e e` → U+018F mapping, the `dead_acute + c` → ç locale mapping, Base en_US preference persistence, local Add Pack copy/source preservation/reselection, and confirmed Remove Pack/fallback all passed. The build also regenerated/verified all pinned X.Org inputs, built the three optional locale packs, inspected the executable, and uploaded the Linux binary and locale-pack artifacts.
+
+Commit [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52) adds coverage for the other two real locale datasets. Finnish and Serbian data tests explicitly check `[dead_acute, Cyrillic_ka] → U+045C`. Their Wayland scenarios retain the previous Multi_key checks, then generate `dead_apostrophe` followed by `Cyrillic_ka` through an adjusted XKB mock keymap. Tests verify no text is inserted while the mark is pending, the pending mark is cleared after the base scalar, the locale lookup returns U+045C, and the final document bytes contain the expected precomposed Cyrillic output.
+
+This latest change only modifies test fixtures and data assertions; no runtime implementation or locale JSON was changed. Build and test #759 is running for this commit. Actual GNOME/Mutter and physical keyboard-layout behavior remains a separate manual validation boundary.
+
+---
 ## 2026-11-09 — expand XKB combining dead-key actions
 
 NekoEdit now recognizes 35 standard combining dead-key actions through the XKB named-keysym path. The original six action marker IDs and the dedicated `Multi_key` marker were preserved; the additional actions occupy a contiguous range after the reserved Compose marker. The generic input layer maps actions to Unicode combining marks, precomposes a curated set of Latin Extended-A characters, and falls back to base-plus-mark when no precomposed scalar is available. The mock covers the new actions through both parser state and actual document input. This is not yet locale-specific Compose support: NLP1 remains a `Multi_key` data format, and dead-key-led locale rules plus `.XCompose` import remain future work.
