@@ -5944,6 +5944,10 @@ xkb_symbols "nekoedit-sparse" {
                     )
 
                 def pointer_click(x: int, y: int, serial: int, label: str) -> None:
+                    # This mock uses one active wl_buffer. Wait until the
+                    # preceding release has been consumed before generating
+                    # another pointer-driven frame.
+                    wait_child_u32("buffer_busy", 0, f"{label} waits for prior buffer release")
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
@@ -5963,6 +5967,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         + wire_message(12, 0)
                     )
+                    wait_child_u32("buffer_busy", 0, f"{label} waits for click-frame release")
 
                 def pointer_drag(
                     start_x: int, start_y: int, end_x: int, end_y: int,
