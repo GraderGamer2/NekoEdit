@@ -4969,7 +4969,7 @@ history_search_scroll:  .long 0
 history_search_match_count: .long 0
 history_open_error:     .long 0
 history_search_query_buffer: .zero 128
-.global save_confirm_enabled
+.global save_confirm_enabled, settings_locale_dropdown_open, settings_locale_dropdown_selected, settings_locale_dropdown_scroll
 save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
 save_confirm_action:    .long 0
@@ -9046,6 +9046,7 @@ settings_locale_activate:
     mov dword ptr [rip + locale_manager_error], 0
     mov dword ptr [rip + settings_locale_dropdown_open], 0
     mov dword ptr [rip + settings_locale_dropdown_selected], 0
+    mov dword ptr [rip + settings_menu_open], 0
     jmp .settings_locale_activate_done
 .settings_locale_activate_pack:
     dec ebx
@@ -9056,6 +9057,7 @@ settings_locale_activate:
     test rax, rax
     js .settings_locale_activate_error
     mov dword ptr [rip + settings_locale_dropdown_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     mov dword ptr [rip + locale_manager_error], 0
     jmp .settings_locale_activate_done
 .settings_locale_activate_error:
