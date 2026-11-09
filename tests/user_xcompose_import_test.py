@@ -153,6 +153,11 @@ def main() -> None:
             home / "repeat",
             'include "%H/fragments/common"\ninclude "%H/fragments/common"\n',
         )
+        tab_include = write(home / "tab-include", 'include\t"%H/fragments/common"\n')
+        tab_doc = importer(home, system).import_file(tab_include)
+        if tab_doc["statistics"]["files_read"] != 2:
+            raise AssertionError("tab-separated include whitespace was not accepted")
+
         repeated_doc = importer(home, system).import_file(repeated)
         if repeated_doc["statistics"]["file_expansions"] != 3:
             raise AssertionError("repeated include was incorrectly deduplicated")
@@ -305,7 +310,10 @@ def main() -> None:
             raise AssertionError("Latin-1 octal escape was not decoded with the selected encoding")
 
         bom_file = home / "bom"
-        bom_file.write_bytes(b'\xef\xbb\xbf<Multi_key> <a> <e> : "é" eacute\n')
+        bom_file.write_bytes(
+            b"\xef\xbb\xbf"
+            + '<Multi_key> <a> <e> : "é" eacute\n'.encode("utf-8")
+        )
         bom_doc = importer(home, system, encoding="utf-8-sig").import_file(bom_file)
         if mapping(bom_doc)[("multi_key", (ord("a"), ord("e")))] != (0x00E9,):
             raise AssertionError("UTF-8 BOM input was not decoded safely")
@@ -314,6 +322,27 @@ def main() -> None:
         user_import._atomic_write(output, json.dumps(document))
         if stat.S_IMODE(output.stat().st_mode) != 0o600:
             raise AssertionError("generated user data file is not mode 0600")
+        if stat.S_IMODE(output.parent.stat().st_mode) != 0o700:
+            raise AssertionError("generated locale directory is not mode 0700")
+        if stat.S_IMODE(output.parent.parent.stat().st_mode) != 0o700:
+            raise AssertionError("generated .nekoedit directory is not mode 0700")
+
+        # The CLI must refuse to replace any source file that contributed to
+        # the import, even when the output path is supplied as an alias.
+        import io
+        from contextlib import redirect_stderr
+        source_before = repeated.read_bytes()
+        error_stream = io.StringIO()
+        with redirect_stderr(error_stream):
+            exit_code = user_import.main([
+                "--input", str(repeated),
+                "--locale", "custom.UTF-8",
+                "--output", str(repeated),
+                "--home", str(home),
+                "--system-root", str(system),
+            ])
+        if exit_code != 1 or repeated.read_bytes() != source_before:
+            raise AssertionError("CLI output collision did not fail without modifying the source")
 
     print("Bounded offline user XCompose importer tests passed")
 

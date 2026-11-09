@@ -462,7 +462,7 @@ class ComposeImporter:
                 if not line or line.startswith("XCOMM"):
                     continue
 
-                if line == "include" or line.startswith("include "):
+                if re.match(r"^include(?:\s|$)", line):
                     match = re.fullmatch(
                         r'include\s+("(?:\\.|[^"\\])*")\s*', line
                     )
