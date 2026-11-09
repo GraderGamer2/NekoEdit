@@ -18042,11 +18042,8 @@ doc_insert_keyboard_codepoint:
 .Ldoc_keyboard_locale_literal:
     lea r15, [rip + doc_compose_first]
 .Ldoc_keyboard_locale_commit:
+    # Preserve buffered input slots until literal fallback has consumed them.
     mov dword ptr [rip + doc_compose_active], 0
-    mov dword ptr [rip + doc_compose_first], 0
-    mov dword ptr [rip + doc_compose_second], 0
-    mov dword ptr [rip + doc_compose_third], 0
-    mov dword ptr [rip + doc_compose_fourth], 0
     call doc_delete_selection
     xor ebx, ebx
 .Ldoc_keyboard_locale_insert_loop:
@@ -18057,6 +18054,10 @@ doc_insert_keyboard_codepoint:
     inc ebx
     jmp .Ldoc_keyboard_locale_insert_loop
 .Ldoc_keyboard_locale_insert_done:
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_locale_buffered:
     mov eax, 1
