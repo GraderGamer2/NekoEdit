@@ -5,7 +5,7 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **401** (398 previously recorded commits + three commits for character-locale discovery, alias/precedence coverage, and the saved-preference fixture correction; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **402** (401 previously recorded commits + the text-input-v3 change-cause implementation and mock regression; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 
 ## 2026-11-09 — character-locale discovery and precedence tests — Build and test #711 passed
@@ -39,6 +39,20 @@ Persisted locale preferences override NEKOEDIT_LOCALE; without a saved choice, t
 [Build and test #709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652) passed all 12 steps. The run log includes explicit Settings scenario start/completion markers and the successful Settings/Compose/persistence observation. Locale artifact [13657516254](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657516254) is 17,943 bytes (151,288-byte NLP1 file); editor artifact [13657600927](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657600927) is 120,129 bytes.
 
 The Settings selector chooses between installed data and built-in en_US; it does not install/download a pack. A GUI installer/remover and more locale datasets remain future work.
+
+---
+
+## 2026-11-09 — text-input-v3 change-cause synchronization — Build and test #735 passed
+
+| Commit | Subject |
+|---|---|
+| [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891) | feat: report text-input change origin to compositor |
+
+Added text-input-v3 `set_text_change_cause` before surrounding-text and cursor-rectangle updates. Editor keyboard/pointer edits set cause 1 (`other`); IME-driven and focus updates use cause 0 (`input_method`). A successful commit resets the local cause state. The Wayland mock checks request ordering/payload, the external Shift+Left selection, and the subsequent IME-originated deletion resetting to cause 0. Added `docs/TEXT_INPUT_V3.md`.
+
+[Build and test #735](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663) passed all 12 workflow steps, including the complete Wayland mock, ELF inspection, pinned locale source regeneration, three locale pack builds, and artifact uploads. Locale artifact [13663108897](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13663108897) ZIP 53,740 bytes, SHA-256 `b250539c4ddeb7ae321dda7aa3d4642154a456279611770988431b89d54e9586`. Editor artifact [13664216595](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13664216595) ZIP 125,040 bytes, SHA-256 `514c53ebfe0b7fe1aebf50c9004e2986eed7117c38d2503dfac2311e3d08c916`.
+
+The text-input-v3 path remains opt-in; no live GNOME/Mutter IME test is claimed.
 
 ---
 

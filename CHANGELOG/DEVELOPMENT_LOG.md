@@ -1,3 +1,33 @@
+## 2026-11-09 — report text-input-v3 change origin to the compositor — Build and test #735 passed
+
+### Runtime change
+
+- Added a four-byte `set_text_change_cause` request (opcode 4) to the text-input-v3 state update sequence. The cause is committed atomically with surrounding text and cursor geometry.
+- Editor-originated changes routed through `.keyboard_changed` mark the cause as `other` (1). Text-input-v3 `done`, enter, and leave state resynchronization uses `input_method` (0).
+- A successful state `commit` resets the local cause flag to 0, matching the protocol's initial/default value and preventing an old user edit from leaking into a later IME update.
+- The request is sent before `set_surrounding_text` and `set_cursor_rectangle`. The implementation does not enable text-input-v3 by default and adds no new runtime dependency.
+
+### Regression coverage
+
+- Extended the Wayland mock's `expect_state` helper to require opcode 4, a four-byte payload, correct ordering before opcode 3, and the expected cause.
+- The Shift+Left selection case asserts `other=1`. The following IME-originated delete-surrounding update asserts `input_method=0`, covering the reset and preventing stale cause state.
+- The full mock retains the preedit UTF-8/cursor-offset, malformed event, multibyte commit, selection/deletion, surrounding-text boundary, enable/disable, and serial checks.
+
+### Validation
+
+- [Build and test #735](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663) passed all 12 workflow steps on [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891), including the full Wayland mock and the three external locale pack builds.
+- Locale artifacts: 53,740-byte ZIP [13663108897](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13663108897), SHA-256 `b250539c4ddeb7ae321dda7aa3d4642154a456279611770988431b89d54e9586`.
+- Editor artifact: 125,040-byte ZIP [13664216595](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13664216595), SHA-256 `514c53ebfe0b7fe1aebf50c9004e2986eed7117c38d2503dfac2311e3d08c916`.
+- Added [docs/TEXT_INPUT_V3.md](../docs/TEXT_INPUT_V3.md). The IME remains opt-in; live GNOME/Mutter verification is not claimed.
+
+### Next work
+
+Perform a live GNOME/Mutter text-input-v3 test when a desktop IME can be exercised, and continue the remaining XKB/locale/typography roadmap without making experimental IME input the default.
+
+**Implementation commit:** [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891).
+
+---
+
 ## 2026-11-09 — automatic character-locale discovery, aliases, and precedence tests — Build and test #711 passed
 
 ### Runtime behavior
