@@ -4182,12 +4182,12 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("settings_locale_dropdown_open") != 0 or child_u32("picker_mode") != 0:
                         raise AssertionError("keyboard locale selection did not close without opening a file picker")
                     key_step(5060, 46, "keyboard-selected pt_BR starts Compose")
-                    key_step(5062, 24, "keyboard-selected pt_BR buffers o")
-                    key_step(5064, 23, "keyboard-selected pt_BR resolves o i")
+                    key_step(5062, 18, "keyboard-selected pt_BR buffers e")
+                    key_step(5064, 18, "keyboard-selected pt_BR resolves e e")
                     if child_u32("doc_compose_active") != 0:
                         raise AssertionError("successful pt_BR Multi_key composition left Compose state active")
-                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885e29883efb88f"):
-                        raise AssertionError("keyboard-selected pt_BR did not append its snowman output after aa_TEST")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885c78f"):
+                        raise AssertionError("keyboard-selected pt_BR did not append its upstream e e to U+018F output after aa_TEST")
 
                     before_pt_dead = child_u32("doc_length")
                     key_step(5066, 33, "pt_BR dead_acute arms its combining mark")
@@ -4258,10 +4258,10 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("picker_mode") != 0:
                         raise AssertionError("choosing pt_BR reopened a file picker")
                     key_step(5140, 46, "selected pt_BR locale starts Compose")
-                    key_step(5142, 24, "selected pt_BR locale buffers o")
-                    key_step(5144, 23, "selected pt_BR locale resolves o i")
-                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
-                        raise AssertionError("dropdown-selected pt_BR did not route Compose through its installed pack")
+                    key_step(5142, 18, "selected pt_BR locale buffers e")
+                    key_step(5144, 18, "selected pt_BR locale resolves e e")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885c78fc3a7c78f"):
+                        raise AssertionError("dropdown-selected pt_BR did not append its upstream e e mapping through the installed pack")
 
                     click_settings(180, 10, 5150, "reopen Settings for Remove Pack")
                     click_settings_design(332, 200, 5160, "request Remove Pack confirmation")
