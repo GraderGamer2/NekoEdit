@@ -237,6 +237,7 @@ static int make_path(char *path, uint32_t capacity,
 
 uint32_t compose_locale_load(const char *requested_tag)
 {
+    static const char pt_br_canonical[] = "pt_BR.UTF-8";
     const char *tag = requested_tag;
     const char *home = environment_value(home_env);
     uint32_t tag_length, home_length, count = 0;
@@ -252,6 +253,12 @@ uint32_t compose_locale_load(const char *requested_tag)
         tag = environment_value(lc_ctype_env);
     if (!tag || !tag[0])
         tag = environment_value(lang_env);
+
+    /* Normalize common glibc locale spellings to the one packaged table tag. */
+    if (tag && (equals(tag, "pt_BR") || equals(tag, "pt_BR.utf8") ||
+                equals(tag, "pt_BR.UTF8") || equals(tag, "pt_br") ||
+                equals(tag, "pt_br.utf8") || equals(tag, "pt_br.UTF-8")))
+        tag = pt_br_canonical;
     compose_locale_active = 0;
     if (mapped_pack && mapped_pack_size)
         (void)syscall6(SYS_munmap, (long)mapped_pack, mapped_pack_size, 0, 0, 0, 0);
@@ -260,8 +267,9 @@ uint32_t compose_locale_load(const char *requested_tag)
     mapped_record_count = 0;
     if (!tag || !tag[0] || equals(tag, "en_US") ||
         equals(tag, "en_US.UTF-8") || equals(tag, "en_US.utf8") ||
-        equals(tag, "C") || equals(tag, "C.UTF-8") || equals(tag, "C.utf8") ||
-        equals(tag, "POSIX"))
+        equals(tag, "en_US.UTF8") || equals(tag, "C") ||
+        equals(tag, "C.UTF-8") || equals(tag, "C.utf8") ||
+        equals(tag, "C.UTF8") || equals(tag, "POSIX"))
         return 0;
 
     tag_length = string_length(tag, MAX_TAG_LENGTH + 1u);
