@@ -47,3 +47,17 @@ The source is distributed as part of X.Org libX11. Its repository `COPYING` file
 ## Runtime impact
 
 The embedded en_US tables remain static read-only data. Optional packs are opened and mapped only when a non-built-in `NEKOEDIT_LOCALE` is explicitly selected. The loader rejects files larger than 2 MiB and validates the header, locale tag, CRC-32, record ordering, prefix ambiguity, and Unicode scalar fields before enabling a locale. Lookups use a sorted bounded table and binary search. The executable gains no dynamic dependency and performs no automatic download.
+
+
+## Selecting an installed locale
+
+The Settings dropdown has a **COMPOSE LOCALE** row for the built-in `en_US` and optional `pt_BR` pack. The selection is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A persisted choice takes precedence over `NEKOEDIT_LOCALE`; when no preference is saved, the environment variable remains a first-run override. Selecting a locale never downloads or installs it.
+
+Install the separate Release asset before selecting it:
+
+```sh
+mkdir -p "$HOME/.nekoedit/locales"
+install -m 600 pt_BR.UTF-8.nlp "$HOME/.nekoedit/locales/pt_BR.UTF-8.nlp"
+```
+
+If `pt_BR` is selected but its file is absent or invalid, Settings displays `MISSING` and the embedded en_US table remains active. Choose `en_US` in Settings to clear that selection. Switching locales does not modify the active document.

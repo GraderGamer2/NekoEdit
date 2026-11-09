@@ -232,15 +232,17 @@ static int make_path(char *path, uint32_t capacity,
     return 1;
 }
 
-uint32_t compose_locale_load(void)
+uint32_t compose_locale_load(const char *requested_tag)
 {
-    const char *tag = environment_value(locale_env);
+    const char *tag = requested_tag;
     const char *home = environment_value(home_env);
     uint32_t tag_length, home_length, count = 0;
     char path[4096];
     long fd, size, address;
     const uint8_t *candidate;
 
+    if (!tag || !tag[0])
+        tag = environment_value(locale_env);
     compose_locale_active = 0;
     if (mapped_pack && mapped_pack_size)
         (void)syscall6(SYS_munmap, (long)mapped_pack, mapped_pack_size, 0, 0, 0, 0);

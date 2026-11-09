@@ -149,6 +149,13 @@ ui_menu_font_size_label: .asciz "FONT SIZE"
 ui_menu_ui_font_size_label: .asciz "UI FONT"
 ui_menu_wrap_lines_label: .asciz "WRAP LINES"
 ui_menu_clipboard_label: .asciz "CLIPBOARD SERVICE"
+ui_menu_compose_locale_label: .asciz "COMPOSE LOCALE"
+ui_menu_locale_en: .asciz "en_US"
+ui_menu_locale_ptbr: .asciz "pt_BR"
+ui_menu_locale_missing: .asciz "MISSING"
+ui_menu_locale_active: .asciz "ACTIVE"
+ui_locale_en_tag: .asciz "en_US.UTF-8"
+ui_locale_ptbr_tag: .asciz "pt_BR.UTF-8"
 ui_history_label: .asciz "History"
 ui_history_title: .asciz "DOCUMENT HISTORY"
 ui_history_undo_label: .asciz "UNDO"
@@ -5086,6 +5093,9 @@ recv_msg_control:      .zero 64
 .extern compose_locale_prefix
 .extern compose_locale_output
 .extern preferences_set_font_path
+.extern preferences_locale_ptr
+.extern preferences_set_locale_tag
+.extern preferences_locale_is_pt_br
 .extern history_open
 .extern history_begin_action
 .extern history_commit_action
@@ -5116,7 +5126,8 @@ wayland_main:
     mov dword ptr [rip + ui_font_size], 10
     # Load validated persistent settings before the first layout calculation.
     call preferences_load
-    # A selected optional pack replaces the Compose table only after full validation.
+    # Persisted selection overrides the environment; no saved choice leaves the env fallback active.
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
     call compose_locale_load
     mov dword ptr [rip + window_buffer_id], 12
     mov dword ptr [rip + window_pending_width], 0
@@ -6447,6 +6458,8 @@ wayland_main:
     jb .pointer_menu_outside
     cmp edx, 224
     jae .pointer_menu_outside
+    cmp edx, 184
+    jae .pointer_settings_locale_toggle
     cmp edx, 160
     jae .pointer_settings_clipboard_toggle
     cmp edx, 136
@@ -6468,6 +6481,28 @@ wayland_main:
     cmp eax, 416
     jae .pointer_menu_outside
     jmp .pointer_settings_ui_font_increase
+
+.pointer_settings_locale_toggle:
+    # Toggle between built-in en_US and the installed pt_BR dataset.
+    # A persisted pt_BR choice remains detectable even when its pack is missing.
+    call preferences_locale_is_pt_br
+    test eax, eax
+    jnz .pointer_settings_locale_en
+    cmp dword ptr [rip + compose_locale_active], 0
+    jne .pointer_settings_locale_en
+    lea rdi, [rip + ui_locale_ptbr_tag]
+    jmp .pointer_settings_locale_apply
+.pointer_settings_locale_en:
+    lea rdi, [rip + ui_locale_en_tag]
+.pointer_settings_locale_apply:
+    call preferences_set_locale_tag
+    test eax, eax
+    jz .pointer_settings_locale_done
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    call compose_locale_load
+    call preferences_save
+.pointer_settings_locale_done:
+    jmp .keyboard_changed
 
 .pointer_settings_clipboard_toggle:
     xor dword ptr [rip + clipboard_persistence_enabled], 1
@@ -19700,6 +19735,40 @@ render_file_menu:
 .render_settings_clipboard_off:
     lea rdx, [rip + ui_menu_state_off]
 .render_settings_clipboard_draw:
+    call draw_text
+
+    # Compose locale occupies the unused bottom Settings row.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 160
+    mov edx, 184
+    mov ecx, 256
+    mov r8d, 1
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 172
+    mov esi, 200
+    lea rdx, [rip + ui_menu_compose_locale_label]
+    call draw_text
+    call preferences_locale_is_pt_br
+    test eax, eax
+    jz .render_settings_locale_not_ptbr
+    cmp dword ptr [rip + compose_locale_active], 0
+    je .render_settings_locale_missing
+    lea rdx, [rip + ui_menu_locale_ptbr]
+    jmp .render_settings_locale_value
+.render_settings_locale_missing:
+    lea rdx, [rip + ui_menu_locale_missing]
+    jmp .render_settings_locale_value
+.render_settings_locale_not_ptbr:
+    cmp dword ptr [rip + compose_locale_active], 0
+    jne .render_settings_locale_active
+    lea rdx, [rip + ui_menu_locale_en]
+    jmp .render_settings_locale_value
+.render_settings_locale_active:
+    lea rdx, [rip + ui_menu_locale_active]
+.render_settings_locale_value:
+    mov edi, 356
+    mov esi, 200
     call draw_text
 .render_file_menu_settings_finish:
     mov edi, 360

@@ -505,7 +505,7 @@ int preferences_save(void)
                            clipboard_persistence_enabled ? 1u : 0u);
     locale_length = bounded_length(preferences_locale_ptr, sizeof(saved_locale_tag));
     if (locale_length && locale_length < sizeof(saved_locale_tag)) {
-        static const char locale_prefix[] = "\\ncompose_locale=";
+        static const char locale_prefix[] = "\ncompose_locale=";
         offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
                               locale_prefix, sizeof(locale_prefix) - 1u);
         if (offset == UINT32_MAX)

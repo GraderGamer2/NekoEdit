@@ -74,3 +74,10 @@ make locale-packs
 ```
 
 The standard build workflow verifies the pinned upstream inputs, regenerates the JSON, and uploads the generated `.nlp` pack as a separate artifact. The locale-pack Release workflow repeats that verification and attaches both the pack and notice when a GitHub Release is published.
+
+
+## Settings selection
+
+With the pack installed at `~/.nekoedit/locales/pt_BR.UTF-8.nlp`, choose **Settings → COMPOSE LOCALE → pt_BR**. The selection is stored in `~/.nekoedit/preferences`. A stored choice takes precedence over `NEKOEDIT_LOCALE`; if there is no saved preference, the environment variable remains available as a first-run override. Selecting `en_US` stores the built-in choice and suppresses an environment override. A missing/invalid selected pack leaves built-in en_US active and Settings displays `MISSING`.
+
+Settings selection does not install or download locale data. Install a release asset or copy a locally built pack into the locale directory first.

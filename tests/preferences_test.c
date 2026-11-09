@@ -157,6 +157,8 @@ int main(void)
     refresh_environment();
     if (preferences_load() != 1)
         fail("existing preferences did not load");
+    if (!preferences_locale_is_pt_br())
+        fail("persisted pt_BR locale did not survive reload");
     if (doc_font_size != 28 || ui_font_size != 15 ||
         doc_wrap_enabled != 0 || save_confirm_enabled != 0 ||
         clipboard_persistence_enabled != 0)

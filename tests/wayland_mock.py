@@ -239,6 +239,7 @@ def run(
     context_menu_test: bool = False,
     compose_locale_test: bool = False,
     compose_locale_invalid_test: bool = False,
+    compose_locale_settings_test: bool = False,
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
@@ -254,19 +255,20 @@ def run(
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
-    if compose_locale_test and compose_locale_invalid_test:
-        raise ValueError("valid and invalid locale-pack scenarios are mutually exclusive")
-    if compose_locale_test or compose_locale_invalid_test:
+    if sum((compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test)) > 1:
+        raise ValueError("locale-pack scenarios are mutually exclusive")
+    if compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test:
         locale_dir = os.path.join(runtime_dir, ".nekoedit", "locales")
         os.makedirs(locale_dir, mode=0o700, exist_ok=True)
-        pack_doc = {"locale":"xx_TEST.UTF-8", "sequences":[
+        pack_tag = "pt_BR.UTF-8" if compose_locale_settings_test else "xx_TEST.UTF-8"
+        pack_doc = {"locale":pack_tag, "sequences":[
             {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
             {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
             {"input":[0x79,0x75,0x69],"output":[0x2605]},
         ]}
         pack_data = bytearray(encode_compose_pack(pack_doc))
         if compose_locale_invalid_test: pack_data[-1] ^= 1
-        with open(os.path.join(locale_dir, "xx_TEST.UTF-8.nlp"), "wb") as pack_file:
+        with open(os.path.join(locale_dir, pack_tag + ".nlp"), "wb") as pack_file:
             pack_file.write(pack_data)
     display_name = "wayland-mock"
     if use_wayland_socket:
@@ -334,7 +336,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test else 8)
+            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -662,7 +664,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test:
+                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -3739,6 +3741,71 @@ xkb_symbols "nekoedit-sparse" {
                     ):
                         raise AssertionError("Backspace did not clear the locale Compose state")
                     observations.append("validated optional locale pack: pair/multi-output, triple, four-input, unknown fallback, Escape and Backspace")
+                    client.sendall(wire_message(10, 1))
+                    return
+
+
+                elif compose_locale_settings_test:
+                    if child_u32("compose_locale_active") != 0:
+                        raise AssertionError("built-in en_US was not active before the Settings choice")
+
+                    def click_settings(x: int, y: int, serial: int, label: str) -> None:
+                        wait_child_u32("buffer_busy", 0, f"{label} waits for the released buffer")
+                        client.sendall(
+                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                        )
+                        expect_message(
+                            client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
+                        )
+                        expect_message(
+                            client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                            f"{label} damage",
+                        )
+                        expect_message(client, (8, 6, b""), f"{label} commit")
+                        client.sendall(
+                            wire_message(15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0))
+                            + wire_message(12, 0)
+                        )
+                        wait_child_u32("buffer_busy", 0, f"{label} waits for frame release")
+
+                    def click_locale_row(serial: int, label: str) -> None:
+                        panel_x = child_u32("settings_panel_x")
+                        panel_y = child_u32("settings_panel_y")
+                        panel_w = child_u32("settings_panel_width")
+                        panel_h = child_u32("settings_panel_height")
+                        if not panel_w or not panel_h:
+                            raise AssertionError("Settings panel geometry was not initialized")
+                        x = panel_x + (160 * panel_w // 256)
+                        y = panel_y + (168 * panel_h // 192)
+                        click_settings(x, y, serial, label)
+
+                    click_settings(180, 10, 5000, "open Settings dropdown")
+                    click_locale_row(5010, "select installed pt_BR locale")
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("Settings did not activate the installed pt_BR pack")
+                    if child_u32("doc_length") != 0:
+                        raise AssertionError("changing the locale changed document contents")
+
+                    click_settings(180, 10, 5020, "close Settings dropdown")
+                    key_step(5030, 46, "pt_BR selection starts Compose")
+                    key_step(5032, 24, "pt_BR selection buffers o")
+                    key_step(5034, 23, "pt_BR selection resolves o i")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
+                        raise AssertionError("Settings-selected pt_BR rule did not insert the expected scalar")
+
+                    click_settings(180, 10, 5040, "reopen Settings dropdown")
+                    click_locale_row(5050, "switch to built-in en_US")
+                    if child_u32("compose_locale_active") != 0:
+                        raise AssertionError("Settings did not return to built-in en_US")
+                    preference_path = os.path.join(runtime_dir, ".nekoedit", "preferences")
+                    with open(preference_path, "r", encoding="utf-8") as preference_file:
+                        saved = preference_file.read()
+                    if "compose_locale=en_US.UTF-8\n" not in saved:
+                        raise AssertionError("built-in locale selection was not persisted")
+                    observations.append(
+                        "Settings locale selector activates the installed pt_BR pack, routes Compose through it, and persists built-in en_US"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
@@ -6988,7 +7055,7 @@ xkb_symbols "nekoedit-sparse" {
     # enter the CI runner account. Only this test enables preferences to exercise
     # the default-on clipboard service setting.
     environment["HOME"] = runtime_dir
-    if clipboard_persistence_test:
+    if clipboard_persistence_test or compose_locale_settings_test:
         environment.pop("NEKOEDIT_DISABLE_PREFERENCES", None)
     else:
         environment["NEKOEDIT_DISABLE_PREFERENCES"] = "1"
@@ -7223,6 +7290,24 @@ if __name__ == "__main__":
     finally:
         try: os.unlink(locale_path)
         except FileNotFoundError: pass
+
+
+    # Exercise the visible Settings locale selector against an installed pt_BR pack.
+    settings_locale_fd, settings_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-settings-")
+    try:
+        with os.fdopen(settings_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(
+            sys.argv[1],
+            initial_file=settings_locale_path,
+            unicode_keyboard_test=True,
+            compose_locale_settings_test=True,
+        )
+    finally:
+        try:
+            os.unlink(settings_locale_path)
+        except FileNotFoundError:
+            pass
 
     # Basic bounded snapshot undo/redo, including replacement of a selection.
     history_fd, history_path = tempfile.mkstemp(prefix="nekoedit-history-")
