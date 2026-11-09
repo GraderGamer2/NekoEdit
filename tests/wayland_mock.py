@@ -730,6 +730,7 @@ xkb_keycodes "nekoedit-test" {
     <CP01> = 233;
     <CP02> = 234;
     <CP03> = 235;
+    <CP04> = 236;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -964,6 +965,7 @@ xkb_symbols "nekoedit-test" {
     key <CP01> { symbols[Group1] = [ period ] };
     key <CP02> { symbols[Group1] = [ S ] };
     key <CP03> { symbols[Group1] = [ greater ] };
+    key <CP04> { symbols[Group1] = [ minus ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -1071,6 +1073,7 @@ xkb_symbols "nekoedit-test" {
                             or b"[ period ]" not in keymap_data
                             or b"[ S ]" not in keymap_data
                             or b"[ greater ]" not in keymap_data
+                            or b"[ minus ]" not in keymap_data
                         ):
                             raise AssertionError("named Unicode/dead-key/Greek/Cyrillic test substitutions did not apply")
                 elif sparse_keymap_test:
@@ -3584,10 +3587,35 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_length") != before_pair + 3:
                         raise AssertionError("period greater did not insert U+203A")
 
+                    # Three-symbol sequences hold the second input only
+                    # when it prefixes one of the shipped X.Org Compose triples.
+                    before_triple = child_u32("doc_length")
+                    key_step(1589, 46, "Multi_key starts an en-dash sequence")
+                    key_step(1590, 228, "Compose buffers first minus")
+                    key_step(1591, 228, "Compose buffers second minus as a triple prefix")
+                    if (
+                        child_u32("doc_compose_active") != 1
+                        or child_u32("doc_compose_first") != ord("-")
+                        or child_u32("doc_compose_second") != ord("-")
+                        or child_u32("doc_length") != before_triple
+                    ):
+                        raise AssertionError("Compose did not retain its recognized three-key prefix")
+                    key_step(1592, 225, "Compose minus minus period inserts en dash")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_length") != before_triple + 3:
+                        raise AssertionError("minus minus period did not insert U+2013")
+
+                    before_triple = child_u32("doc_length")
+                    key_step(1593, 46, "Multi_key starts an em-dash sequence")
+                    key_step(1594, 228, "Compose buffers first minus for em dash")
+                    key_step(1595, 228, "Compose buffers second minus for em dash")
+                    key_step(1596, 228, "Compose minus minus minus inserts em dash")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_length") != before_triple + 3:
+                        raise AssertionError("minus minus minus did not insert U+2014")
+
                     before_fallback = child_u32("doc_length")
-                    key_step(1590, 46, "Multi_key starts a literal-fallback sequence")
-                    key_step(1591, 17, "Compose buffers w as its first symbol")
-                    key_step(1592, 17, "unknown Compose w w pair preserves both symbols")
+                    key_step(1600, 46, "Multi_key starts a literal-fallback sequence")
+                    key_step(1601, 17, "Compose buffers w as its first symbol")
+                    key_step(1602, 17, "unknown Compose w w pair preserves both symbols")
                     if (
                         child_u32("doc_compose_active") != 0
                         or child_u32("doc_length") != before_fallback + 2
@@ -3600,7 +3628,7 @@ xkb_symbols "nekoedit-sparse" {
                         b"\xe2\x82\xac\xc3\xa9\xe2\x80\x94"
                         b"\xce\xb1\xd1\x8f\xc5\x93"
                         b"\xe2\x80\xa6\xe1\xba\x9e\xe2\x80\xba"
-                        b"ww\xc3\xa9g\xcc\x81"
+                        b"\xe2\x80\x93\xe2\x80\x94ww\xc3\xa9g\xcc\x81"
                     )
                     before_dead_key = child_u32("doc_length")
                     key_step(1610, 33, "named dead_acute arms an acute accent")
@@ -3636,10 +3664,18 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
                         raise AssertionError("Escape did not cancel Compose without inserting or deleting text")
                     key_step(1700, 46, "Multi_key arms Compose Backspace cancellation")
-                    key_step(1710, 17, "Compose buffers w before Backspace")
-                    key_step(1720, 14, "Backspace cancels a pending Compose sequence")
-                    if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_first") != 0 or child_u32("doc_length") != length_before_cancel:
-                        raise AssertionError("Backspace did not cancel Compose without deleting document text")
+                    key_step(1710, 228, "Compose buffers first minus before Backspace")
+                    key_step(1720, 228, "Compose buffers second minus before Backspace")
+                    if child_u32("doc_compose_second") != ord("-"):
+                        raise AssertionError("Compose triple prefix was not pending before Backspace")
+                    key_step(1730, 14, "Backspace cancels a buffered Compose triple prefix")
+                    if (
+                        child_u32("doc_compose_active") != 0
+                        or child_u32("doc_compose_first") != 0
+                        or child_u32("doc_compose_second") != 0
+                        or child_u32("doc_length") != length_before_cancel
+                    ):
+                        raise AssertionError("Backspace did not cancel the buffered Compose prefix")
 
                     # Additional common two-symbol pairs exercise degree,
                     # paragraph, registered, and Scandinavian-letter output.
