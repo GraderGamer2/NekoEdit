@@ -4198,7 +4198,7 @@ xkb_symbols "nekoedit-sparse" {
                     pt_locale_output = tuple(
                         child_u32_at("compose_locale_output", i) for i in range(2)
                     )
-                    if pt_after_multi != bytes.fromhex("e29885c78f"):
+                    if pt_after_multi != bytes.fromhex("e29885c68f"):
                         raise AssertionError(
                             "keyboard-selected pt_BR e e did not append U+018F after aa_TEST: "
                             f"actual={pt_after_multi.hex()}, locale={pt_tag_bytes!r}, "
@@ -4219,7 +4219,7 @@ xkb_symbols "nekoedit-sparse" {
                     actual_pt_dead = read_document_state()["doc_contents"]
                     pending_after_pt_dead = child_u32("doc_pending_dead_mark")
                     locale_output_first = child_u32_at("compose_locale_output", 0)
-                    if pending_after_pt_dead != 0 or actual_pt_dead != bytes.fromhex("e29885e29883efb88fc3a7"):
+                    if pending_after_pt_dead != 0 or actual_pt_dead != bytes.fromhex("e29885c68fc3a7"):
                         raise AssertionError(
                             "pt_BR dead-key pack rule did not insert ç after the locale Compose result: "
                             f"actual={actual_pt_dead.hex()}, pending=U+{pending_after_pt_dead:04X}, "
@@ -4282,7 +4282,7 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(5140, 46, "selected pt_BR locale starts Compose")
                     key_step(5142, 18, "selected pt_BR locale buffers e")
                     key_step(5144, 18, "selected pt_BR locale resolves e e")
-                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885c78fc3a7c78f"):
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29885c68fc3a7c68f"):
                         raise AssertionError("dropdown-selected pt_BR did not append its upstream e e mapping through the installed pack")
 
                     click_settings(180, 10, 5150, "reopen Settings for Remove Pack")
