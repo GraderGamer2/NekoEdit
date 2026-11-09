@@ -2052,6 +2052,14 @@ xkb_symbols "nekoedit-sparse" {
                     # triggering another state commit and a feedback loop.
                     client.sendall(wire_message(18, 5, struct.pack("<I", 1)))
                     release_frame("initial done redraw")
+                    def preedit_event(value: bytes, cursor_begin: int, cursor_end: int) -> bytes:
+                        # Wayland strings include the trailing NUL in their length
+                        # and are padded to a 4-byte boundary before following fields.
+                        payload = struct.pack("<I", len(value)) + value
+                        payload += b"\0" * (-len(value) % 4)
+                        payload += struct.pack("<ii", cursor_begin, cursor_end)
+                        return wire_message(18, 2, payload)
+
                     preedit = b"abc\0"
                     client.sendall(
                         wire_message(
@@ -2084,16 +2092,8 @@ xkb_symbols "nekoedit-sparse" {
                     multibyte_preedit = multibyte_preedit_text + b"\\0"
                     invalid_preedit = "é".encode("utf-8") + b"\\0"
                     client.sendall(
-                        wire_message(
-                            18, 2,
-                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
-                            + struct.pack("<ii", 3, 1),
-                        )
-                        + wire_message(
-                            18, 2,
-                            struct.pack("<I", len(invalid_preedit)) + invalid_preedit
-                            + struct.pack("<ii", 1, 1),
-                        )
+                        preedit_event(multibyte_preedit, 3, 1)
+                        + preedit_event(invalid_preedit, 1, 1)
                     )
                     pending_deadline = time.monotonic() + 2.0
                     while (
@@ -2139,11 +2139,7 @@ xkb_symbols "nekoedit-sparse" {
                     # same glyph span, while cursor_begin moves the IME caret.
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
-                        wire_message(
-                            18, 2,
-                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
-                            + struct.pack("<ii", 1, 3),
-                        )
+                        preedit_event(multibyte_preedit, 1, 3)
                         + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     forward_range_rect = expect_state(
@@ -2167,11 +2163,7 @@ xkb_symbols "nekoedit-sparse" {
                     # rectangle therefore returns to the committed document caret.
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
-                        wire_message(
-                            18, 2,
-                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
-                            + struct.pack("<ii", -1, -1),
-                        )
+                        preedit_event(multibyte_preedit, -1, -1)
                         + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     expect_state(
@@ -2186,11 +2178,7 @@ xkb_symbols "nekoedit-sparse" {
                     empty_preedit = b"\\0"
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
-                        wire_message(
-                            18, 2,
-                            struct.pack("<I", len(empty_preedit)) + empty_preedit
-                            + struct.pack("<ii", -1, -1),
-                        )
+                        preedit_event(empty_preedit, -1, -1)
                         + wire_message(18, 5, struct.pack("<I", serial))
                     )
                     expect_state(b"", 0, "empty preedit reset")
