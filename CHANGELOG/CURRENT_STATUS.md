@@ -1,37 +1,28 @@
 # NekoEdit current status
 
-## 2026-11-09 — physical typing restored; isolate Settings over History
+## 2026-11-09 — correct XKB per-key repeat defaults and BSS storage
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
-**Current source commit:** [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) — `fix: isolate Settings as a modal over the editor and History`. **Latest test-harness follow-up:** [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). **Validated tree:** [537bcadfaa7c](https://github.com/GraderGamer2/NekoEdit/commit/537bcadfaa7cd82b5bdae7ce2b5e5e82caeb9a6f).
+**Source/test correction:** [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644) — `fix: align XKB per-key repeat defaults with keymap semantics`.
 
-### User confirmation and latest validated input build
+### Audit findings and correction
 
-- The user confirms that ordinary typing works again after the text-input-v3 default-off correction.
-- Actions [Build and test #667](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292) passed all eight steps on the corrected physical-typing source/test tree. The uploaded artifact is [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292/artifacts/13637810575), 94,377 bytes, SHA-256 `921bf1f2e4bfbec1bc33b7737ac6d8a1dbc4f8d3578e94bb972ef46e455fcf30`. Live IME behavior when explicitly opting in remains separate from the confirmed normal typing path.
+- Actions [Build and test #677](https://github.com/GraderGamer2/NekoEdit/actions/runs/42544941470) stopped during assembly because `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` had non-zero initializers in `.bss`. A follow-up had changed them to `.zero 4`, but a later test commit reintroduced the invalid initializers; this audit caught the regression in the current branch.
+- Both objects are now zero-filled BSS storage, and `xkb_reset_keymap` explicitly initializes the compatibility interpretation default and temporary value to zero.
+- XKB has two distinct repeat defaults. A compatibility `interpret.repeat` section default starts `False`; separately, the fallback/default interpretation enables a key only when Group 1 / Level 1 actually contains a symbol. A mapped key with no base-level symbol retains `DEFAULT_KEY_REPEAT=False`.
+- The most-specific compatibility interpretation still supplies a key-wide repeat result from Group 1 / Level 1. An explicit per-key `repeat` declaration takes precedence over both the fallback and compatibility interpretation. The query also rejects keycodes absent from the loaded keymap.
+- Wayland cancels any previous repeat timer when a newly pressed key is non-repeatable. Compositor-provided repeat delay/rate still determine timing; modifier and group actions remain compositor-owned.
 
-### Screenshot diagnosis
+### Regression coverage
 
-- Inspected the repository screenshot [`Screenshots for debugging/inconsistent UI.png`](https://github.com/GraderGamer2/NekoEdit/blob/early-alpha/Screenshots%20for%20debugging/inconsistent%20UI.png) directly from the `early-alpha` branch.
-- The screenshot shows the History tab underneath the centered Settings panel. This was caused by render order, not a duplicated History renderer: `render_surface` drew `render_history_manager` first, then `render_file_menu` drew only a 256×192 Settings rectangle. Since there was no modal backdrop, History search/results, Open Selected, counters, and action buttons remained visible around the smaller panel.
-- The outside-click path also closed Settings and fell through into document/History hit-testing, allowing the same click to activate content that should have been covered by a modal.
+- The parser fixture checks a compatibility section with explicit `interpret.repeat = False`, a per-interpret `True` override, direct per-key `False` and `True`, the base-symbol fallback, and a defined keycode with an empty key block.
+- The Wayland integration test holds the symbol-less key and verifies it neither inserts text nor starts repeat. A second complete keymap run removes the `interpret.repeat` assignment and verifies that the implicit compatibility default is also `False`.
+- Source/test commit: [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644). Full consolidated CI is pending; Actions #677 did not reach the test stage.
 
-### Correction and regression coverage
+### Remaining XKB work
 
-- Settings now disables the coordinate transform temporarily and clears the workspace from y=76 to the bottom of the window before drawing the panel. The title bar and document/History tab strip remain visible; the underlying workspace controls do not.
-- A pointer click outside an open Settings panel now dismisses that modal and ends the click dispatch. It no longer falls through to the covered document or History controls. The non-modal File menu retains its existing behavior.
-- The History integration test now opens Settings while History is active, checks the pixels where Open Selected used to remain visible and inside the panel, verifies that an outside click does not open History Browse, then confirms Browse works normally after the modal closes.
-- Implementation/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0).
-- The first consolidated run, Actions [#675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610), passed compilation, ELF checks, install/smoke tests, preferences, and history host tests, then exposed a stale-redraw race in the seat-v3 held-Tab mock before reaching the new modal assertions. The test could mistake a delayed frame from the preceding held Enter for the Tab redraw.
-- Test-only follow-up [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04) synchronizes that held-key fixture on `repeat_keycode=15` and the actual four-byte document-cursor advance before it accepts a frame.
-- Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) then passed **all eight workflow steps** on the consolidated tree. The run passed the complete Wayland mock, including the new History/Settings backdrop pixel checks, modal outside-click isolation, and post-dismissal Browse action.
-- Build artifact [`nekoedit-linux-x86_64`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558/artifacts/13642440538): 94,472 bytes; SHA-256 `1959b61ef8050d10472b59a5a14ec8ed61eb885ccc2fe3c1216c9d2de86eed0f`; expires 2026-11-16 00:59:16 UTC.
-- This is mock-compositor verification. The new Settings-over-History behavior should still receive a live GNOME/Mutter desktop check.
-
-### Next work
-
-- Keep the History path filter marked as user-reported nonfunctional; the modal correction does not claim to fix it.
-- After the modal tests pass, continue the bounded XKB work with general key/action and repeat semantics, then consumed/preserved-modifier behavior. Real GNOME/Mutter input-method validation remains a separate desktop acceptance check.
+- The compositor remains responsible for stateful actions such as `SetMods` and `SetGroup`; the client consumes the modifier/group state Wayland reports.
+- XKB `preserve[]` consumed-modifier semantics remain unimplemented. The next bounded milestone should add preserve handling to exact type-map lookup with focused parser and symbol-lookup tests, without replaying compositor actions.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
@@ -65,14 +56,13 @@
 - The first run, Actions [#666](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531482671), passed the new advertisement/physical-XKB test and the opt-in IME test, then exposed a timing race in the generic one-shot `key_step` helper during a later grapheme Backspace case. The helper waited for frame acknowledgement before sending key-up, leaving a window for the 300 ms repeat timer to add another deletion.
 - Test-only follow-up [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880) now queues key-up with key-down and waits for `repeat_keycode` to clear. Dedicated held-key repeat scenarios are unchanged.
 
-### Validation and next work
+### Validation
 
-- Source/test changes are committed as [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f); the test synchronization follow-up is [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880). Full GitHub Actions validation is pending for the corrected branch tip; Actions #666 did not complete successfully because of the one-shot key-release timing race described above.
-- Live GNOME/Mutter verification remains necessary. First verify normal typing with the default environment; then separately test the experimental IME path with `NEKOEDIT_ENABLE_TEXT_INPUT=1`.
-- Continue broader XKB action/repeat and preserve/consumed-modifier work only after the default physical-key path is confirmed working on the desktop.
+- Source/test changes are [ba20d1c66217](https://github.com/GraderGamer2/NekoEdit/commit/ba20d1c66217c29b247c57b9530fcf230818bc9f); the one-shot key-release test follow-up is [34aa71ae8313](https://github.com/GraderGamer2/NekoEdit/commit/34aa71ae831361d1027ce18322fb22d5d56de880).
+- Actions [Build and test #666](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531482671) passed the default-off text-input advertisement check and explicit-opt-in IME mock, then exposed a one-shot key-release timing race in the grapheme Backspace test. After the test helper queued key-up with key-down, Actions [Build and test #667](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292) passed all eight steps, including physical XKB typing and grapheme editing.
+- Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292/artifacts/13637810575): 94,377 bytes; SHA-256 `921bf1f2e4bfbec1bc33b7737ac6d8a1dbc4f8d3578e94bb972ef46e455fcf30`. The user confirmed normal physical typing is restored. Live GNOME/Mutter validation of the explicitly opted-in IME path remains a separate acceptance check.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
-
 ---
 
 ## 2026-11-08 — XKB compatibility specificity tests and ISO group/level keysyms
@@ -99,7 +89,7 @@
 
 ### Scope not yet implemented
 
-This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates and virtual-modifier assignment but does not execute `action` or `repeat` statements, evaluate compatibility indicators/defaults, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
+This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates, virtual-modifier assignment, and bounded repeat policy described in the newer 2026-11-09 milestone, but does not execute stateful `action` statements, evaluate compatibility indicators, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 

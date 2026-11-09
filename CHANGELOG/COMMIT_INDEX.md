@@ -5,9 +5,28 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **367** (366 previously recorded commits + the 2026-11-09 held-Tab mock synchronization follow-up; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **372** (371 previously recorded commits + the XKB repeat-default/BSS correction and symbol-less-key regression coverage; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## XKB repeat-default and symbol-less key correction (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644) | fix: align XKB per-key repeat defaults with keymap semantics |
+
+Separates the compatibility interpretation default (`interpret.repeat=False`) from the fallback interpretation default (repeat enabled only for a key with a Group1/Level1 symbol). Direct key repeat still takes precedence; a symbol-less key and an unmapped keycode remain non-repeatable. The change also restores zero-only BSS storage, tests a symbol-less key through Wayland events, and reruns the fixture with `interpret.repeat` omitted. Consolidated CI pending.
+
+## XKB per-key repeat policy (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426) | feat: honor XKB per-key repeat policy on Wayland |
+| [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104) | test: cover XKB per-key repeat policy precedence |
+| [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d) | fix: initialize XKB repeat defaults in keymap reset |
+| [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27) | test: verify XKB repeat policy through Wayland key events |
+
+Direct `xkb_symbols` repeat properties, `interpret.repeat` defaults and overrides, Group1/Level1 key-wide selection, and explicit-key precedence are parsed and consulted before the Wayland repeat timer starts. The mock inspects parser tables and holds each repeat-policy variant through the actual Wayland event path. Actions #677 exposed BSS initializers, fixed in [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d); the runtime test is [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27). Consolidated CI pending.
 
 ## Held Tab mock synchronization (2026-11-09)
 
