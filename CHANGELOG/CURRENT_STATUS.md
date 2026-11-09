@@ -1,3 +1,27 @@
+## 2026-11-09 — report text-input-v3 change origin — Build and test #735 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
+**Implementation:** [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891).
+
+**CI:** [Build and test #735](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663) passed all 12 workflow steps: freestanding build, CLI smoke tests, full Wayland protocol mock, ELF inspection, pinned X.Org source/blob verification, exact locale JSON regeneration, all three pack builds, and separate locale/editor artifact uploads.
+
+- Added text-input-v3 `set_text_change_cause` (opcode 4) to every committed surrounding-text/cursor-state update. It is sent before `set_surrounding_text` and `set_cursor_rectangle`, all within the same state commit.
+- Editor-originated keyboard and pointer changes set cause **`other` (1)**. Text-input-v3 `done`/focus synchronization uses **`input_method` (0)**. The local flag resets to the protocol default after each successful commit.
+- The mock checks request ordering and the transmitted cause on every text-input state refresh. Shift+Left selection must send cause 1; the subsequent IME-driven delete/resync must return to cause 0. Existing preedit byte-offset, malformed UTF-8 rejection, multibyte commit, delete-surrounding, serial, enable/disable, and redraw tests remain in the full suite.
+- Added [docs/TEXT_INPUT_V3.md](../docs/TEXT_INPUT_V3.md), documenting state synchronization, cause semantics, preedit byte offsets, and the live-compositor validation boundary.
+- The IME integration remains explicitly opt-in with `NEKOEDIT_ENABLE_TEXT_INPUT=1`; this CI result does not claim a live GNOME/Mutter physical-keyboard/IME test.
+
+**Artifacts from #735:**
+- Locale packs ZIP [13663108897](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13663108897), 53,740 bytes; SHA-256 `b250539c4ddeb7ae321dda7aa3d4642154a456279611770988431b89d54e9586`. Contains the separate `pt_BR.UTF-8`, `fi_FI.UTF-8`, and `sr_RS.UTF-8` pack assets and notices.
+- Editor ZIP [13664216595](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663/artifacts/13664216595), 125,040 bytes; SHA-256 `514c53ebfe0b7fe1aebf50c9004e2986eed7117c38d2503dfac2311e3d08c916`.
+- Both artifacts expire 2026-11-16 09:56 UTC.
+
+### Remaining text-input work
+
+The text-input-v3 path still needs live GNOME/Mutter validation with an installed input method, broader interaction testing while focus moves between editor and modal surfaces, and any additional cursor/selection edge cases uncovered by desktop testing. Complex-script shaping remains a separate typography milestone; text-input-v3 does not expose arbitrary rich-text attribute runs.
+
+---
+
 ## 2026-11-09 — automatic character-locale discovery and precedence — Build and test #711 passed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
@@ -26,7 +50,7 @@ A valid saved Settings choice is authoritative. Otherwise, the first non-empty v
 
 ### Remaining locale work
 
-The Settings row currently selects built-in en_US or installed pt_BR. GUI pack installation/removal, more datasets, locale-specific dead-key tables, and system/user Compose-file import remain outstanding. The Release attachment workflow has not yet been exercised by publishing a new project Release. Keep the editor offline-capable and packs data-only.
+The Settings locale picker now lists every installed NLP1 pack, supports local Add and confirmed Remove, and can select built-in en_US. Current external data sets are pt_BR.UTF-8, fi_FI.UTF-8, and sr_RS.UTF-8. Automatic character-locale discovery checks `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG` after any saved Settings choice. Locale-specific dead-key tables and system/user Compose-file import remain outstanding; the Release attachment workflow still needs a published-release test. Keep the editor offline-capable and packs data-only.
 
 ---
 

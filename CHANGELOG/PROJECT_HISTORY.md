@@ -1,3 +1,17 @@
+## 2026-11-09 — synchronize the text-input-v3 change origin with the compositor
+
+Implementation: [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891).
+
+NekoEdit now sends text-input-v3 `set_text_change_cause` before its surrounding-text and cursor-rectangle updates. Keyboard and pointer changes made by the editor are identified as `other`; changes applied from input-method events and text-input focus synchronization are identified as `input_method`. The local cause state resets after the corresponding commit, so an editor-generated cause cannot persist into a later IME event.
+
+The Wayland mock asserts both request order and payload. A keyboard Shift+Left selection change must report cause 1; a subsequent IME deletion/state refresh must report cause 0. This extends the existing preedit byte-offset, UTF-8 validation, multibyte commit, delete-surrounding, and serial tests.
+
+Build and test [#735](https://github.com/GraderGamer2/NekoEdit/actions/runs/42597142663) passed all 12 steps. It also rebuilt the pt_BR, fi_FI, and sr_RS locale packs and uploaded them separately from the editor. The new protocol note is [docs/TEXT_INPUT_V3.md](../docs/TEXT_INPUT_V3.md).
+
+The IME path remains opt-in. The mock does not substitute for the outstanding live GNOME/Mutter test with a physical keyboard and installed input method.
+
+---
+
 ## 2026-11-09 — automatic Compose locale discovery from character-locale variables
 
 Implementation/test commits: [74110d69492e](https://github.com/GraderGamer2/NekoEdit/commit/74110d69492eb168b93f3020890e37300afe585e), [39f61c7e27f9](https://github.com/GraderGamer2/NekoEdit/commit/39f61c7e27f9c8ba715637e41a3e3389f7051260), and [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5).
