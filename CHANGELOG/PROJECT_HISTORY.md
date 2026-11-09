@@ -1,3 +1,15 @@
+## 2026-11-09 — support three-symbol XKB Compose sequences
+
+Implementation: [bf3a1891dd63](https://github.com/GraderGamer2/NekoEdit/commit/bf3a1891dd6318ad70f99bf7e75e4afbf481dc56).
+
+The previous 2,140 two-symbol pairs were retained and supplemented with 564 three-symbol entries from the X.Org libX11 `en_US.UTF-8` Compose source. The Wayland backend now buffers a recognized two-symbol prefix and waits for its third scalar. Existing complete pair mappings are excluded from triple-prefix ambiguity, and the original NekoEdit pair outputs still take precedence.
+
+The mock verifies the en-dash and em-dash sequences, pending second-scalar state, literal fallback, and Backspace cancellation. Actions [Build and test #42564500183](https://github.com/GraderGamer2/NekoEdit/actions/runs/42564500183) passed all eight steps on the first attempt. Artifact [13650369672](https://github.com/GraderGamer2/NekoEdit/actions/runs/42564500183/artifacts/13650369672) has ZIP SHA-256 `4b4234c8a9a493b0f389005f55f0da9a4bd6cdd9c962cea8bd832773a1a6b174`.
+
+Compose remains a static `en_US.UTF-8` snapshot. 106 four-symbol upstream sequences, multi-scalar outputs, locale selection, system and per-user Compose files, include directives, and broader dead-key semantics are still future work. This is a sequence-depth improvement, not full locale awareness.
+
+---
+
 ## 2026-11-09 — expand XKB Multi_key Compose coverage
 
 Commit: [31c1bd47575e](https://github.com/GraderGamer2/NekoEdit/commit/31c1bd47575ee776701bd106d8d25dcd33219432).
