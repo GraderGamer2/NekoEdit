@@ -3920,7 +3920,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("Add Pack unexpectedly consumed the user's source file")
                     with open(preference_path, "r", encoding="utf-8") as preference_file:
                         saved_after_install = preference_file.read()
-                    if "compose_locale=pt_BR.UTF-8\\n" not in saved_after_install:
+                    if "compose_locale=pt_BR.UTF-8\n" not in saved_after_install:
                         raise AssertionError("Add Pack did not persist the new locale choice")
                     observations.append("Settings Add Pack opens the filtered .nlp picker, validates/copies the selected source, activates pt_BR, and persists the choice")
 
@@ -3935,7 +3935,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("Remove Pack did not restore embedded en_US")
                     with open(preference_path, "r", encoding="utf-8") as preference_file:
                         saved_after_remove = preference_file.read()
-                    if "compose_locale=en_US.UTF-8\\n" not in saved_after_remove:
+                    if "compose_locale=en_US.UTF-8\n" not in saved_after_remove:
                         raise AssertionError("Remove Pack did not persist the en_US fallback")
                     observations.append("Settings Remove Pack requires confirmation, deletes the validated installed pack, restores en_US, and persists the fallback")
                     client.sendall(wire_message(10, 1))
