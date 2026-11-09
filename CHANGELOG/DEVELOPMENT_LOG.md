@@ -1,13 +1,17 @@
-## 2026-11-09 — restore PR validation after skipped HEAD commit
+## 2026-11-09 — repair missing development-branch Actions trigger
 
-The user clarified that the missing run was not a workflow-sidebar selection issue: they were already viewing **All workflows**. Inspection of PR #2 showed its current HEAD, `457695f8f6ea364a15b25b555e8c628ed6af1cbb`, had the subject `docs: record XKB dead-key expansion status [skip ci]`.
+The user clarified that they were already viewing **All workflows**; this was not a sidebar filter problem. Inspection found two independent trigger blockers:
 
-GitHub's documented behavior is that a `[skip ci]` marker in the HEAD commit of a pull request suppresses workflows triggered by `pull_request`. The same marker suppresses relevant `push` runs. The existing Build and test workflow already targets PRs to `main`, so the appropriate repair is a normal follow-up commit without the marker—not another overlapping trigger or a UI instruction.
+1. The earlier PR HEAD [457695f8f6ea](https://github.com/GraderGamer2/NekoEdit/commit/457695f8f6ea364a15b25b555e8c628ed6af1cbb) had `[skip ci]` in its commit subject, which suppresses `push` and `pull_request` workflows.
+2. Removing that marker with [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) did not start a run. PR #2 still reports `mergeable=false` and is three commits behind `main`. GitHub's official troubleshooting documentation says `pull_request` workflows are not run while the PR has a merge conflict. The existing Build and test workflow only listens for pushes to `main`, leaving no active trigger for the `early-alpha` branch.
 
-- Added this documentation-only follow-up with a normal commit subject so PR #2 moves to a non-skipped HEAD and can trigger the existing `pull_request` synchronization event.
-- No application source, tests, workflow filters, or PR metadata were changed.
-- CI must still be confirmed against the new PR head. Previous Actions #736 is older and does not validate the dead-key expansion.
-- Future open-PR commits must not leave `[skip ci]` on the HEAD when validation is required; use that marker only when intentionally suppressing the PR workflow.
+The workflow correction will:
+- trigger on pushes to `main` and `early-alpha`, so the branch can be tested independently of PR mergeability;
+- limit PR-triggered runs to `opened`, `reopened`, and `ready_for_review`, avoiding duplicate runs on every `synchronize` after a branch push;
+- ignore changelog-only commits while still running for source, test, and workflow changes.
+
+No PR merge, force-push, or source-code change is being made as part of this trigger repair. The PR remains open. The actual branch build result must be checked after the workflow file update; no passing result is claimed yet.
+
 
 ---
 
