@@ -3755,9 +3755,21 @@ xkb_symbols "nekoedit-sparse" {
                             wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                             + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                         )
-                        expect_message(
-                            client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
-                        )
+                        message = recv_wayland_message(client)
+                        # A pointer move can update cursor feedback before the surface redraw.
+                        if message[0:2] == (18, 1):
+                            if message[3] or len(message[2]) != 8:
+                                raise AssertionError(f"{label}: malformed cursor-shape request {message!r}")
+                            enter_serial, shape = struct.unpack("<II", message[2])
+                            if enter_serial != 777 or shape > 40:
+                                raise AssertionError(f"{label}: invalid cursor-shape update {message!r}")
+                            message = recv_wayland_message(client)
+                        if (
+                            message[0:2] != (8, 1)
+                            or message[2] != struct.pack("<III", 12, 0, 0)
+                            or message[3]
+                        ):
+                            raise AssertionError(f"{label} attach: unexpected request {message!r}")
                         expect_message(
                             client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
                             f"{label} damage",
