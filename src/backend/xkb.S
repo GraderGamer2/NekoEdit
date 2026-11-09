@@ -1137,11 +1137,11 @@ xkb_pending_modmap_kinds: .zero 256    # 1=keycode target, 2=keysym target
 .global xkb_key_virtual_explicit
 xkb_key_virtual_explicit: .zero 256      # direct key property overrides compat vmods
 .global xkb_key_repeat_flags
-xkb_key_repeat_flags: .zero 256           # default true; indexed by XKB keycode
+xkb_key_repeat_flags: .zero 256           # resolved key-wide policy; base-less keys remain false
 .global xkb_key_repeat_explicit
 xkb_key_repeat_explicit: .zero 256        # direct key repeat setting overrides compat
 .global xkb_compat_default_repeat
-xkb_compat_default_repeat: .long 1        # interpret.repeat default
+xkb_compat_default_repeat: .zero 4        # xkb_compat interpret.repeat defaults to False
 .global xkb_compat_rule_count
 xkb_compat_rule_count: .long 0
 .global xkb_compat_rules
@@ -1152,7 +1152,7 @@ xkb_compat_rules: .zero 2048             # 128 records * 16 bytes
 .Lxkb_compat_tmp_predicate: .long 0
 .Lxkb_compat_tmp_scope: .long 0
 .Lxkb_compat_tmp_valid: .long 0
-.Lxkb_compat_tmp_repeat: .long 1
+.Lxkb_compat_tmp_repeat: .zero 4
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1234,14 +1234,12 @@ xkb_reset_keymap:
     mov ecx, 256
     rep stosb
     lea rdi, [rip + xkb_key_repeat_flags]
-    mov al, 1
     mov ecx, 256
     rep stosb
-    xor eax, eax
     lea rdi, [rip + xkb_key_repeat_explicit]
     mov ecx, 256
     rep stosb
-    mov dword ptr [rip + xkb_compat_default_repeat], 1
+    mov dword ptr [rip + xkb_compat_default_repeat], 0
     mov dword ptr [rip + xkb_compat_rule_count], 0
     lea rdi, [rip + xkb_compat_rules]
     mov ecx, 2048
@@ -1252,7 +1250,7 @@ xkb_reset_keymap:
     mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_valid], 0
-    mov dword ptr [rip + .Lxkb_compat_tmp_repeat], 1
+    mov dword ptr [rip + .Lxkb_compat_tmp_repeat], 0
     mov dword ptr [rip + .Lxkb_pending_modmap_count], 0
     mov dword ptr [rip + .Lxkb_keysym_tmp], 0
     lea rdi, [rip + xkb_group_types]
@@ -4234,6 +4232,19 @@ xkb_reset_keymap:
     mov edx, dword ptr [rsi + rax*4]
     or edx, r8d
     jz .Lxkb_compat_apply_next_level
+    # DEFAULT_INTERPRET_KEY_REPEAT applies only when Group1/Level1 contains
+    # a symbol. A key without that base symbol retains DEFAULT_KEY_REPEAT=0.
+    # Explicit per-key repeat declarations override both defaults and rules.
+    test r13d, r13d
+    jnz .Lxkb_compat_apply_repeat_default_done
+    test r14d, r14d
+    jnz .Lxkb_compat_apply_repeat_default_done
+    lea rsi, [rip + xkb_key_repeat_explicit]
+    cmp byte ptr [rsi + r12], 0
+    jne .Lxkb_compat_apply_repeat_default_done
+    lea rsi, [rip + xkb_key_repeat_flags]
+    mov byte ptr [rsi + r12], 1
+.Lxkb_compat_apply_repeat_default_done:
     mov eax, r12d
     shl eax, 2
     lea rsi, [rip + xkb_key_real_masks]
@@ -4693,6 +4704,9 @@ xkb_key_repeats:
     cmp edi, 247
     ja .Lxkb_key_repeat_invalid
     lea eax, [rdi + 8]
+    lea rdx, [rip + xkb_key_names]
+    cmp dword ptr [rdx + rax*4], 0
+    je .Lxkb_key_repeat_invalid
     lea rdx, [rip + xkb_key_repeat_flags]
     movzx eax, byte ptr [rdx + rax]
     ret

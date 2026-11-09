@@ -4055,7 +4055,11 @@ wayland_main:
     mov edi, dword ptr [rip + event_payload + 8]
     call xkb_key_repeats
     test eax, eax
-    jz .keyboard_key_no_repeat
+    jnz .keyboard_key_repeat_allowed
+    # A non-repeat key must not leave a previous key's timer active.
+    call repeat_cancel
+    jmp .keyboard_key_no_repeat
+.keyboard_key_repeat_allowed:
     mov eax, dword ptr [rip + event_payload + 8]
     call repeat_start_if_supported
 .keyboard_key_no_repeat:

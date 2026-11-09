@@ -220,6 +220,7 @@ def run(
     unicode_keyboard_test: bool = False,
     text_input_test: bool = False,
     text_input_advertised: bool = False,
+    omit_compat_repeat_default: bool = False,
     punctuation_render_test: bool = False,
     utf8_edit_test: bool = False,
     utf8_delete_test: bool = False,
@@ -708,6 +709,7 @@ xkb_keycodes "nekoedit-test" {
     <RPT1> = 211;
     <RPT2> = 212;
     <RPT3> = 213;
+    <RPT4> = 214;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -934,9 +936,15 @@ xkb_symbols "nekoedit-test" {
     key <RPT1> { symbols[Group1] = [ w ] };
     key <RPT2> { repeat = False, symbols[Group1] = [ e ] };
     key <RPT3> { repeat = True, symbols[Group1] = [ r ] };
+    key <RPT4> { };
 };
 };
 \0"""
+                    if omit_compat_repeat_default:
+                        keymap_data = keymap_data.replace(
+                            b"    interpret.repeat = False;\n",
+                            b"",
+                        )
                     if unicode_keyboard_test:
                         keymap_data = keymap_data.replace(
                             b'key <AC01> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ a, A ] };',
@@ -1215,6 +1223,7 @@ xkb_symbols "nekoedit-sparse" {
                             child_memory("xkb_key_repeat_flags", 210, 4),
                         )
                         repeat_explicit = child_memory("xkb_key_repeat_explicit", 210, 4)
+                        repeat_symbol_less = child_memory("xkb_key_repeat_flags", 214, 1)[0]
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -1290,6 +1299,7 @@ xkb_symbols "nekoedit-sparse" {
                          or repeat_default != 0
                          or repeat_values != (1, bytes((0, 1, 0, 1)))
                          or repeat_explicit != bytes((0, 0, 1, 1))
+                         or repeat_symbol_less != 0
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -3706,9 +3716,31 @@ xkb_symbols "nekoedit-sparse" {
                     check_key_repeat_policy(204, 1340, False, "RPT2 explicit key repeat=False")
                     check_key_repeat_policy(205, 1350, True, "RPT3 explicit key repeat=True")
 
+                    # RPT4 is a defined keycode with no Group1/Level1 symbol.
+                    # The fallback interpretation therefore must not enable it.
+                    before_symbol_less_cursor = child_u32("doc_cursor")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1360, 1360, 206, 1))
+                    )
+                    wait_child_u32("keyboard_serial", 1360, "symbol-less RPT4 keydown")
+                    time.sleep(0.4)
+                    if (
+                        child_u32("repeat_keycode") != 0
+                        or child_u32("doc_cursor") != before_symbol_less_cursor
+                    ):
+                        raise AssertionError(
+                            "symbol-less RPT4 unexpectedly inserted text or started repeat"
+                        )
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1361, 1361, 206, 0))
+                        + wire_message(12, 0)
+                    )
+                    wait_child_u32("keyboard_serial", 1361, "symbol-less RPT4 keyup")
+                    wait_child_u32("repeat_keycode", 0, "symbol-less RPT4 release")
+
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "XKB exact type maps, compositor-owned modifiers, compatibility and explicit per-key repeat precedence, keydown timer gating, and repeated edits verified"
+                        "XKB exact type maps, compositor-owned modifiers, compatibility and explicit per-key repeat precedence, symbol-less key policy, keydown timer gating, and repeated edits verified"
                     )
                     return
 
@@ -6528,6 +6560,27 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(xkb_path)
+        except FileNotFoundError:
+            pass
+
+    # With no explicit interpret.repeat section default, the compatibility
+    # default is still False. Re-run the fixture without that assignment.
+    implicit_repeat_fd, implicit_repeat_path = tempfile.mkstemp(prefix="nekoedit-xkb-repeat-default-")
+    try:
+        with os.fdopen(implicit_repeat_fd, "wb") as implicit_repeat_document:
+            implicit_repeat_document.write(b"I")
+        run(
+            sys.argv[1],
+            initial_file=implicit_repeat_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9NV",
+            keyboard_layout_test=True,
+            text_input_advertised=True,
+            omit_compat_repeat_default=True,
+        )
+    finally:
+        try:
+            os.unlink(implicit_repeat_path)
         except FileNotFoundError:
             pass
 
