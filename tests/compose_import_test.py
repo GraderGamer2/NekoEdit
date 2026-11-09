@@ -43,25 +43,33 @@ include "X11_LOCALEDATADIR/en_US.UTF-8/Compose"
 def main() -> None:
     document = import_compose_sources(BASE, LOCALE, KEYSYMS, "xx_TEST.UTF-8")
     mapping = {
-        tuple(record["input"]): tuple(record["output"])
+        (record["kind"], tuple(record["input"])): tuple(record["output"])
         for record in document["sequences"]
     }
     if document["statistics"]["base_rules"] != 5:
-        raise AssertionError("base_rules must count valid source lines, including duplicates")
+        raise AssertionError("base_rules must count valid Multi_key lines, including duplicates")
+    if document["statistics"]["base_dead_key_rules"] != 1:
+        raise AssertionError("the base dead-key rule was not imported")
+    if document["statistics"]["locale_dead_key_rules"] != 1:
+        raise AssertionError("the locale dead-key override was not imported")
+    if document["statistics"]["dead_key_overrides"] != 1:
+        raise AssertionError("the locale dead-key rule did not override its base mapping")
     if document["statistics"]["dropped_shorter_prefix_rules"] != 1:
         raise AssertionError("shorter prefix was not removed deterministically")
     if (ord("a"), ord("e")) in mapping:
         raise AssertionError("shorter pair prefix should yield to the longer locale rule")
-    if mapping[(ord("a"), ord("e"), ord("x"))] != (0x2605,):
+    if mapping[("multi_key", (ord("a"), ord("e"), ord("x")))] != (0x2605,):
         raise AssertionError("three-input locale rule was not retained")
-    if mapping[(ord("q"), ord("q"))] != (0x00F8,):
+    if mapping[("multi_key", (ord("q"), ord("q")))] != (0x00F8,):
         raise AssertionError("locale rule did not override the base table")
-    if mapping[(ord("z"), ord("z"))] != (ord("u"), 0x0301):
+    if mapping[("multi_key", (ord("z"), ord("z")))] != (ord("u"), 0x0301):
         raise AssertionError("multi-scalar output was not preserved")
-    if mapping[(0x1E9E, ord("a"))] != (0x1E9E,):
+    if mapping[("multi_key", (0x1E9E, ord("a")))] != (0x1E9E,):
         raise AssertionError("legacy keysym alias did not use the annotated canonical value")
-    if any(key[0] == 0x110001 for key in mapping):
-        raise AssertionError("dead-key action sequences must not enter scalar-only locale packs")
+    if mapping[("dead_key", (0x0301, ord("c")))] != (ord("ñ"),):
+        raise AssertionError("locale dead_acute + c override was not retained as a typed rule")
+    if ("multi_key", (0x0301, ord("c"))) in mapping:
+        raise AssertionError("dead-key record leaked into the Multi_key namespace")
     if document["statistics"]["unsupported_input"] != 1:
         raise AssertionError("unmapped input keysym should be counted and skipped")
     if len(encode_pack(document)) <= 72:
@@ -83,7 +91,7 @@ def main() -> None:
     )
     if source_override["source"]["locale_compose_blob"] != "a" * 40:
         raise AssertionError("per-locale source blob metadata was not applied")
-    if "xx_TEST.UTF-8 Multi_key overrides" not in source_override["source"]["import_policy"]:
+    if "xx_TEST.UTF-8 Multi_key and dead-key overrides" not in source_override["source"]["import_policy"]:
         raise AssertionError("import policy metadata is not locale-generic")
     print("X.Org Compose importer tests passed")
 

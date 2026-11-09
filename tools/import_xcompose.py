@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flatten a pinned X.Org Compose.pre locale into NekoEdit locale JSON."""
+"""Flatten pinned X.Org Compose.pre data into NekoEdit locale JSON."""
 from __future__ import annotations
 
 import argparse
@@ -25,6 +25,50 @@ _DEFINE = re.compile(
 _INCLUDE = re.compile(r'^\s*include\s+"([^"]+)"\s*$')
 _KEY = re.compile(r"<([^>]+)>")
 _STRING = re.compile(r'"((?:\\.|[^"\\])*)"')
+
+# These values are the combining marks represented by NekoEdit's existing
+# XKB dead-key action IDs. The action itself never enters the scalar input.
+DEAD_KEY_MARKS = {
+    "dead_abovecomma": 0x0313,
+    "dead_abovedot": 0x0307,
+    "dead_abovereversedcomma": 0x0314,
+    "dead_abovering": 0x030A,
+    "dead_aboveverticalline": 0x030D,
+    "dead_acute": 0x0301,
+    "dead_apostrophe": 0x0301,
+    "dead_belowbreve": 0x032E,
+    "dead_belowcircumflex": 0x032D,
+    "dead_belowcomma": 0x0326,
+    "dead_belowdiaeresis": 0x0324,
+    "dead_belowdot": 0x0323,
+    "dead_belowmacron": 0x0331,
+    "dead_belowring": 0x0325,
+    "dead_belowtilde": 0x0330,
+    "dead_belowverticalline": 0x0329,
+    "dead_breve": 0x0306,
+    "dead_caron": 0x030C,
+    "dead_cedilla": 0x0327,
+    "dead_circumflex": 0x0302,
+    "dead_dasia": 0x0314,
+    "dead_diaeresis": 0x0308,
+    "dead_doubleacute": 0x030B,
+    "dead_doublegrave": 0x030F,
+    "dead_grave": 0x0300,
+    "dead_hook": 0x0309,
+    "dead_horn": 0x031B,
+    "dead_invertedbreve": 0x0311,
+    "dead_iota": 0x0345,
+    "dead_longsolidusoverlay": 0x0338,
+    "dead_lowline": 0x0332,
+    "dead_macron": 0x0304,
+    "dead_ogonek": 0x0328,
+    "dead_perispomeni": 0x0303,
+    "dead_psili": 0x0313,
+    "dead_semivoiced_sound": 0x309A,
+    "dead_stroke": 0x0338,
+    "dead_tilde": 0x0303,
+    "dead_voiced_sound": 0x3099,
+}
 
 
 def _valid_scalar(value: int) -> bool:
@@ -56,7 +100,7 @@ def parse_keysym_definitions(source: str) -> dict[str, int]:
 
 
 def _decode_compose_string(raw: str) -> str:
-    # The pinned Compose.pre files use C-style quoted string escapes.
+    # Compose.pre string values follow C string escape syntax.
     try:
         value = ast.literal_eval('"' + raw + '"')
     except (SyntaxError, ValueError) as exc:
@@ -66,11 +110,18 @@ def _decode_compose_string(raw: str) -> str:
     return value
 
 
-def _read_rules(text: str, keysyms: dict[str, int], stats: dict[str, int],
-                *, allow_base_include: bool) -> dict[tuple[int, ...], tuple[int, ...]]:
-    rules: dict[tuple[int, ...], tuple[int, ...]] = {}
+def _read_rules(
+    text: str,
+    keysyms: dict[str, int],
+    stats: dict[str, int],
+    *,
+    allow_base_include: bool,
+) -> dict[tuple[int, tuple[int, ...]], tuple[int, ...]]:
+    rules: dict[tuple[int, tuple[int, ...]], tuple[int, ...]] = {}
     include_count = 0
-    valid_rule_lines = 0
+    valid_multi_key_lines = 0
+    valid_dead_key_lines = 0
+
     for line_number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith("XCOMM") or stripped.startswith("#"):
@@ -79,28 +130,46 @@ def _read_rules(text: str, keysyms: dict[str, int], stats: dict[str, int],
         if include:
             target = include.group(1)
             if not allow_base_include or target != BASE_INCLUDE:
-                raise ValueError(f"unsupported Compose include on line {line_number}: {target!r}")
+                raise ValueError(
+                    f"unsupported Compose include on line {line_number}: {target!r}"
+                )
             include_count += 1
             continue
         if not stripped.startswith("<") or ":" not in line:
             continue
+
         left, right = line.split(":", 1)
         names = _KEY.findall(left)
         if not names:
             continue
-        if names[0] != "Multi_key":
+
+        if names[0] == "Multi_key":
+            kind = 0
+            input_names = names[1:]
+            if len(input_names) < 2:
+                stats["short_sequence"] += 1
+                continue
+            if len(input_names) > 4:
+                stats["too_long"] += 1
+                continue
+        elif names[0] in DEAD_KEY_MARKS:
+            kind = 1
+            input_names = names[1:]
+            if len(input_names) < 1:
+                stats["short_sequence"] += 1
+                continue
+            # The current input path resolves a dead action plus one scalar.
+            if len(input_names) != 1:
+                stats["too_long"] += 1
+                continue
+        else:
             stats["unsupported_lead"] += 1
-            continue
-        count = len(names) - 1
-        if count < 2:
-            stats["short_sequence"] += 1
-            continue
-        if count > 4:
-            stats["too_long"] += 1
             continue
 
         input_values: list[int] = []
-        for name in names[1:]:
+        if kind == 1:
+            input_values.append(DEAD_KEY_MARKS[names[0]])
+        for name in input_names:
             if re.fullmatch(r"U[0-9A-Fa-f]{4,6}", name):
                 scalar = int(name[1:], 16)
             else:
@@ -120,22 +189,34 @@ def _read_rules(text: str, keysyms: dict[str, int], stats: dict[str, int],
                 stats["invalid_string"] += 1
                 continue
             output_values = tuple(ord(char) for char in output_text)
-            if (not 1 <= len(output_values) <= 8 or
-                    any(not _valid_scalar(value) for value in output_values)):
+            if (
+                not 1 <= len(output_values) <= 8
+                or any(not _valid_scalar(value) for value in output_values)
+            ):
                 stats["invalid_output"] += 1
                 continue
-            valid_rule_lines += 1
-            rules[tuple(input_values)] = output_values
+            rules[(kind, tuple(input_values))] = output_values
+            if kind == 0:
+                valid_multi_key_lines += 1
+            else:
+                valid_dead_key_lines += 1
 
-    stats["locale_rule_lines" if allow_base_include else "base_rule_lines"] = valid_rule_lines
+    stats["locale_rule_lines" if allow_base_include else "base_rule_lines"] = valid_multi_key_lines
+    stats[
+        "locale_dead_key_lines" if allow_base_include else "base_dead_key_lines"
+    ] = valid_dead_key_lines
     if allow_base_include and include_count != 1:
         raise ValueError(f"expected exactly one en_US Compose include, found {include_count}")
     return rules
 
 
-def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
-                           locale: str,
-                           source_info: dict[str, Any] | None = None) -> dict[str, Any]:
+def import_compose_sources(
+    base_text: str,
+    locale_text: str,
+    keysym_text: str,
+    locale: str,
+    source_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     try:
         locale_bytes = locale.encode("ascii")
     except UnicodeEncodeError as exc:
@@ -145,33 +226,44 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
 
     keysyms = parse_keysym_definitions(keysym_text)
     stats = {
-        "unsupported_input": 0, "invalid_output": 0, "invalid_string": 0,
-        "short_sequence": 0, "too_long": 0, "unsupported_lead": 0,
-        "base_rule_lines": 0, "locale_rule_lines": 0,
+        "unsupported_input": 0,
+        "invalid_output": 0,
+        "invalid_string": 0,
+        "short_sequence": 0,
+        "too_long": 0,
+        "unsupported_lead": 0,
+        "base_rule_lines": 0,
+        "locale_rule_lines": 0,
+        "base_dead_key_lines": 0,
+        "locale_dead_key_lines": 0,
     }
     base_rules = _read_rules(base_text, keysyms, stats, allow_base_include=False)
     locale_rules = _read_rules(locale_text, keysyms, stats, allow_base_include=True)
     merged = dict(base_rules)
     overrides = 0
-    for key, value in locale_rules.items():
-        if key in merged:
+    dead_key_overrides = 0
+    for identity, value in locale_rules.items():
+        if identity in merged:
             overrides += 1
-        merged[key] = value
+            if identity[0] == 1:
+                dead_key_overrides += 1
+        merged[identity] = value
 
-    # The runtime resolves a pair immediately. Remove any shorter rule which
-    # prefixes a longer one, allowing the longer rule to use bounded buffering.
-    dropped_prefixes: set[tuple[int, ...]] = set()
-    for key in merged:
+    # Prefix ambiguity is scoped to a rule kind. A dead-key sequence and a
+    # Multi_key sequence may legitimately contain the same scalar tuple.
+    dropped_prefixes: set[tuple[int, tuple[int, ...]]] = set()
+    for kind, key in merged:
         for length in range(2, len(key)):
-            prefix = key[:length]
+            prefix = (kind, key[:length])
             if prefix in merged:
                 dropped_prefixes.add(prefix)
     for prefix in dropped_prefixes:
         del merged[prefix]
 
     records = [
-        {"input": list(key), "output": list(value)}
-        for key, value in sorted(merged.items())
+        {"kind": "multi_key" if kind == 0 else "dead_key",
+         "input": list(key), "output": list(value)}
+        for (kind, key), value in sorted(merged.items())
     ]
     input_lengths = {
         str(length): sum(len(record["input"]) == length for record in records)
@@ -191,9 +283,9 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
         "keysymdef_path": "include/X11/keysymdef.h",
         "keysymdef_blob": KEYSYMDEF_BLOB,
         "import_policy": (
-            f"Flatten the en_US include, apply {locale} Multi_key overrides, retain only "
-            "input keysyms mapped to Unicode scalars, and drop shorter sequences that "
-            "prefix longer sequences."
+            f"Flatten the en_US include, apply {locale} Multi_key and dead-key overrides, "
+            "retain only input keysyms mapped to Unicode scalars, and drop shorter "
+            "sequences that prefix longer sequences."
         ),
     }
     if source_info:
@@ -209,7 +301,17 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
             "final_rules": len(records),
             "input_sequence_lengths": input_lengths,
             "multi_scalar_outputs": sum(len(record["output"]) > 1 for record in records),
-            **{key: value for key, value in stats.items() if key not in ("base_rule_lines", "locale_rule_lines")},
+            "base_dead_key_rules": stats["base_dead_key_lines"],
+            "locale_dead_key_rules": stats["locale_dead_key_lines"],
+            "dead_key_overrides": dead_key_overrides,
+            **{
+                key: value
+                for key, value in stats.items()
+                if key not in {
+                    "base_rule_lines", "locale_rule_lines",
+                    "base_dead_key_lines", "locale_dead_key_lines",
+                }
+            },
         },
         "sequences": records,
     }
@@ -221,8 +323,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--locale-source", required=True, type=Path)
     parser.add_argument("--keysymdef", required=True, type=Path)
     parser.add_argument("--locale", required=True)
-    parser.add_argument("--locale-compose-blob", default=LOCALE_COMPOSE_BLOB,
-                        help="Git blob SHA for the locale Compose.pre source")
+    parser.add_argument(
+        "--locale-compose-blob",
+        default=LOCALE_COMPOSE_BLOB,
+        help="Git blob SHA for the locale Compose.pre source",
+    )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     if not re.fullmatch(r"[0-9a-f]{40}", args.locale_compose_blob):
@@ -253,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"wrote {stats['final_rules']} {args.locale} rules "
         f"({stats['locale_overrides']} locale overrides; "
+        f"{stats['dead_key_overrides']} dead-key overrides; "
         f"{stats['dropped_shorter_prefix_rules']} shorter prefixes dropped)"
     )
     return 0
