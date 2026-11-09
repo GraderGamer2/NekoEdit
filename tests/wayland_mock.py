@@ -6883,7 +6883,7 @@ xkb_symbols "nekoedit-sparse" {
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "shifted key damage")
                 expect_message(client, (8, 6, b""), "shifted key commit")
                 shifted_key_pixels = bytes(pixels)
-                if read_document_state()["doc_contents"] != b"b\\n2!":
+                if read_document_state()["doc_contents"] != b"b\n2!":
                     raise AssertionError(
                         "Shift+1 fixture content changed before repeat: "
                         f"{read_document_state()['doc_contents']!r}"
