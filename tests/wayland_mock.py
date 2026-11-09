@@ -2338,6 +2338,56 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     return actual
 
+                def wait_buffer_idle(label: str, timeout: float = 3.0) -> None:
+                    # A release may immediately flush a redraw that was queued
+                    # while the single buffer was busy. Consume and release
+                    # those frames instead of polling buffer_busy forever.
+                    original_timeout = client.gettimeout()
+                    deadline = time.monotonic() + timeout
+                    try:
+                        while True:
+                            if child_u32("buffer_busy") == 0:
+                                time.sleep(0.005)
+                                if child_u32("buffer_busy") == 0:
+                                    return
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise AssertionError(
+                                    f"{label}: buffer did not become idle; "
+                                    f"buffer_busy={child_u32('buffer_busy')}"
+                                )
+                            client.settimeout(remaining)
+                            try:
+                                message = recv_wayland_message(client)
+                            except socket.timeout:
+                                continue
+                            if (
+                                message[0] == child_u32("cursor_shape_device")
+                                and message[1] == 1
+                            ):
+                                if message[3] or len(message[2]) != 8:
+                                    raise AssertionError(
+                                        f"{label}: malformed cursor-shape update {message!r}"
+                                    )
+                                continue
+                            if message[:3] != (
+                                8, 1, struct.pack("<III", 12, 0, 0)
+                            ) or message[3]:
+                                raise AssertionError(
+                                    f"{label}: unexpected queued redraw request {message!r}"
+                                )
+                            expect_message(
+                                client,
+                                (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                                f"{label} queued redraw damage",
+                            )
+                            expect_message(
+                                client, (8, 6, b""), f"{label} queued redraw commit"
+                            )
+                            client.sendall(wire_message(12, 0))
+                    finally:
+                        client.settimeout(original_timeout)
+
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
                 ) -> None:
@@ -4038,7 +4088,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("built-in en_US was not active before the Settings choice")
 
                     def click_settings(x: int, y: int, serial: int, label: str) -> None:
-                        wait_child_u32("buffer_busy", 0, f"{label} waits for the released buffer")
+                        wait_buffer_idle(f"{label} waits for the released buffer")
                         client.sendall(
                             wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                             + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
@@ -4067,7 +4117,7 @@ xkb_symbols "nekoedit-sparse" {
                             wire_message(15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0))
                             + wire_message(12, 0)
                         )
-                        wait_child_u32("buffer_busy", 0, f"{label} waits for frame release")
+                        wait_buffer_idle(f"{label} waits for frame release")
 
                     def click_settings_design(dx: int, dy: int, serial: int, label: str) -> None:
                         panel_x = child_u32("settings_panel_x")
@@ -6889,7 +6939,7 @@ xkb_symbols "nekoedit-sparse" {
                     # This mock uses one active wl_buffer. Wait until the
                     # preceding release has been consumed before generating
                     # another pointer-driven frame.
-                    wait_child_u32("buffer_busy", 0, f"{label} waits for prior buffer release")
+                    wait_buffer_idle(f"{label} waits for prior buffer release")
                     client.sendall(
                         wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
@@ -6909,7 +6959,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         + wire_message(12, 0)
                     )
-                    wait_child_u32("buffer_busy", 0, f"{label} waits for click-frame release")
+                    wait_buffer_idle(f"{label} waits for click-frame release")
 
                 def pointer_drag(
                     start_x: int, start_y: int, end_x: int, end_y: int,
@@ -7131,16 +7181,18 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
                 # Hold Left: the initial press acts immediately, then repeat
-                # begins after ~300 ms and continues at roughly 30 Hz.
+                # begins after the compositor-specified delay and continues at
+                # roughly 30 Hz. Snapshot each rendered frame before releasing
+                # the buffer, so a queued repeat redraw cannot overwrite it.
                 repeat_started = time.monotonic()
                 client.sendall(
                     wire_message(16, 3, struct.pack("<IIII", 1200, 1200, 105, 1))
                 )
                 expect_redraw("initial held Left")
-                client.sendall(wire_message(12, 0))
                 caret = struct.unpack_from("<I", pixels, 104 * 800 * 4 + 24 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("initial Left press did not move the caret once")
+                client.sendall(wire_message(12, 0))
 
                 expect_redraw("first repeated Left")
                 first_repeat_elapsed = time.monotonic() - repeat_started
@@ -7150,13 +7202,12 @@ xkb_symbols "nekoedit-sparse" {
                         "keyboard repeat started before the compositor/fallback delay; "
                         f"expected={expected_delay:.3f}s elapsed={first_repeat_elapsed:.3f}s"
                     )
-                client.sendall(wire_message(12, 0))
                 caret = struct.unpack_from("<I", pixels, 104 * 800 * 4 + 16 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("first repeated Left did not move the caret to line start")
+                client.sendall(wire_message(12, 0))
 
                 expect_redraw("second repeated Left")
-                client.sendall(wire_message(12, 0))
                 caret = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 32 * 4)[0]
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("continued Left repeat did not cross to the previous line")
@@ -7171,48 +7222,49 @@ xkb_symbols "nekoedit-sparse" {
                     wire_message(16, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
                 )
                 expect_redraw("initial held Backspace")
-                client.sendall(wire_message(12, 0))
                 first_line_b = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 17 * 4
                 )[0]
                 if first_line_b != 0xFFD8DEE9:
                     raise AssertionError("initial Backspace removed more than one character")
+                client.sendall(wire_message(12, 0))
 
                 expect_redraw("repeated Backspace")
-                client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
-                    + wire_message(12, 0)
-                )
                 removed_b = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 17 * 4
                 )[0]
                 if removed_b != 0xFF252A33:
                     raise AssertionError("held Backspace did not repeat after its initial delay")
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
+                    + wire_message(12, 0)
+                )
+
                 # Delete-forward uses the same delayed repeat path.
                 client.sendall(
                     wire_message(16, 3, struct.pack("<IIII", 1220, 1220, 111, 1))
                 )
                 expect_redraw("initial held Delete")
-                client.sendall(wire_message(12, 0))
                 first_cell = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 20 * 4
                 )[0]
                 if first_cell != 0xFFD8DEE9:
                     raise AssertionError("initial Delete did not move the first character onto line one")
+                client.sendall(wire_message(12, 0))
 
                 expect_redraw("repeated Delete")
-                client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
-                    + wire_message(12, 0)
-                )
                 next_glyph = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 20 * 4
                 )[0]
                 if next_glyph != 0xFF252A33:
                     raise AssertionError("held Delete did not repeat after its initial delay")
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
+                    + wire_message(12, 0)
+                )
 
                 observations.append(
-                    "keyboard auto-repeat used a 300 ms initial delay and repeated Left, Backspace, and Delete while held"
+                    "keyboard auto-repeat used the compositor/fallback delay and repeated Left, Backspace, and Delete while held"
                 )
 
                 # Insert enough characters to pass the 95-cell line width.
@@ -7380,7 +7432,6 @@ xkb_symbols "nekoedit-sparse" {
                 before = caret_position()
                 client.sendall(wire_message(16, 3, struct.pack("<IIII", 1710, 1710, 30, 1)))
                 expect_redraw("initial held printable key")
-                client.sendall(wire_message(12, 0))
                 after_press = caret_position()
                 # Ctrl+A left the complete document selected, so this first
                 # character must replace it and restart at the document origin.
@@ -7389,8 +7440,8 @@ xkb_symbols "nekoedit-sparse" {
                         f"initial printable press did not replace the selection at document start: "
                         f"before={before}, after={after_press}"
                     )
-                expect_redraw("first repeated printable key")
                 client.sendall(wire_message(12, 0))
+                expect_redraw("first repeated printable key")
                 after_repeat = caret_position()
                 if after_repeat != (32, 92):
                     raise AssertionError(
@@ -7408,7 +7459,6 @@ xkb_symbols "nekoedit-sparse" {
                 before_enter = caret_position()
                 client.sendall(wire_message(16, 3, struct.pack("<IIII", 1720, 1720, 28, 1)))
                 expect_redraw("initial held Enter")
-                client.sendall(wire_message(12, 0))
                 after_enter = caret_position((16, before_enter[1] + 12))
                 if after_enter != (16, before_enter[1] + 12):
                     raise AssertionError(
@@ -7422,13 +7472,14 @@ xkb_symbols "nekoedit-sparse" {
                         f"text_input_enabled={child_u32('text_input_enabled')}, "
                         f"doc_bytes={read_document_state()['doc_contents'][:24]!r}"
                     )
-                expect_redraw("first repeated Enter")
                 client.sendall(wire_message(12, 0))
+                expect_redraw("first repeated Enter")
                 after_enter_repeat = caret_position((16, after_enter[1] + 12))
                 if after_enter_repeat != (16, after_enter[1] + 12):
                     raise AssertionError(
                         f"held Enter did not repeat: after_press={after_enter}, after_repeat={after_enter_repeat}"
                     )
+                client.sendall(wire_message(12, 0))
                 client.sendall(
                     wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
                     + wire_message(12, 0)
@@ -7460,14 +7511,13 @@ xkb_symbols "nekoedit-sparse" {
                     "initial held Tab inserts four spaces",
                 )
                 expect_redraw("initial held Tab")
-                client.sendall(wire_message(12, 0))
                 after_tab = caret_position()
                 if after_tab != (before_tab[0] + 32, before_tab[1]):
                     raise AssertionError(
                         f"initial Tab did not insert four spaces: before={before_tab}, after={after_tab}"
                     )
-                expect_redraw("first repeated Tab")
                 client.sendall(wire_message(12, 0))
+                expect_redraw("first repeated Tab")
                 after_tab_repeat = caret_position()
                 if after_tab_repeat != (after_tab[0] + 32, after_tab[1]):
                     raise AssertionError(
