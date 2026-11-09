@@ -9,6 +9,15 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
+## XKB per-key repeat policy (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426) | feat: honor XKB per-key repeat policy on Wayland |
+| [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104) | test: cover XKB per-key repeat policy precedence |
+
+Direct `xkb_symbols` repeat properties, `interpret.repeat` defaults and overrides, Group1/Level1 key-wide selection, and explicit-key precedence are now parsed and consulted before the Wayland repeat timer starts. The mock fixture checks default-false, compat-true, direct-false, direct-true, and normal default-repeat outcomes. CI pending.
+
 ## Held Tab mock synchronization (2026-11-09)
 
 | Commit | Subject |

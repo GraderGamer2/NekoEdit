@@ -1,3 +1,21 @@
+## 2026-11-09 — honor XKB per-key repeat policy on Wayland
+
+### Parser and policy
+
+- Added direct per-key `repeat = True/False` parsing in `xkb_symbols`, section-default `interpret.repeat` parsing, and per-interpret `repeat` overrides. Each interpretation record stores repeat in its spare byte without changing the existing 16-byte rule layout.
+- Per-key repeat flags default to enabled. A matching interpretation can override the default; an explicit key-level `repeat` property takes precedence. The compatibility repeat result is applied only when evaluating Group 1 / Level 1 because XKB repeat is key-wide.
+- The compatibility evaluator no longer skips every key with an explicit key-level `virtualModifiers` property. Vmod output still respects that explicit override, while the separate repeat result is evaluated normally.
+- Wayland now asks `xkb_key_repeats` before starting the existing client repeat timer. Its timing continues to use compositor-provided repeat rate/delay.
+- Stateful XKB actions remain compositor-owned; this client does not re-run `SetMods` or `SetGroup` after receiving state from Wayland.
+
+### Regression fixture
+
+- Added four synthetic XKB keycodes: one inherits `interpret.repeat = False`, one uses a matching `AnyOf(Mod2)` rule with `repeat = True`, one explicitly overrides that with key-level false, and one explicitly overrides the default-false rule with key-level true. An ordinary existing key verifies the default repeat-enabled state.
+- The mock inspects the section default, four per-key repeat flags, direct-property flags, and compatibility-rule count.
+- Source/test commit: [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426). Test fixture completion: [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104). CI pending.
+
+---
+
 ## 2026-11-09 — synchronize the held Tab mock after a delayed frame
 
 - Actions [Build and test #675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610) built the executable and passed ELF checks, CLI smoke tests, user install/uninstall tests, preferences tests, and disk-history host tests. The Wayland mock passed the default physical typing, explicitly enabled text-input-v3, and save-confirmation scenarios, then failed in the older seat-v3 held-key scenario: the initial Tab assertion observed an unchanged caret.
