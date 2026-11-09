@@ -4951,6 +4951,7 @@ current_file_path:      .quad 0
 doc_save_error:         .long 0
 doc_open_error:         .long 0
 file_menu_open:         .long 0
+.global settings_menu_open
 settings_menu_open:     .long 0
 .global context_menu_open, context_menu_x, context_menu_y
 context_menu_open:      .long 0
