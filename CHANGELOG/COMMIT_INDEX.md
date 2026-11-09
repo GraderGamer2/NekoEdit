@@ -5,8 +5,18 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **383** (381 previously recorded commits + two new XKB implementation/test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **384** (383 previously recorded commits + one XKB implementation/test commit; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — expanded X.Org named Unicode keysym coverage
+
+| Commit | Subject |
+|---|---|
+| [2e50f35a1ebc](https://github.com/GraderGamer2/NekoEdit/commit/2e50f35a1ebccfb6b2feb919a35e28c0605ede79) | feat: expand XKB named Unicode keysym coverage |
+
+Expanded the static named Unicode/action table from 280 retained entries to 1,642 records derived from X.Org Unicode-annotated keysym definitions, including legacy aliases that share annotated numeric values. Added explicit xorgproto 2026.1 aliases for SSHARP, single-angle quotation marks, XF86 phone numeric names, and dead_apostrophe. The Wayland mock checks thirteen new parser cells and actual UTF-8 insertion for twelve new named character/phone aliases, plus dead_apostrophe composition through the existing acute path. No runtime library was added.
+
+Actions [Build and test #695](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496) passed all eight workflow steps. Artifact [13648893107](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496/artifacts/13648893107) is 104,167 bytes; ZIP SHA-256 `5762e219685c3734e77e8b2bd7e9fad0bdb39d3ca4c742d969fe330a8d407c4c`.
 
 ## 2026-11-09 — XKB omitted matching operator defaults to Exactly
 
