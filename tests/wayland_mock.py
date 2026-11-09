@@ -2083,7 +2083,6 @@ xkb_symbols "nekoedit-sparse" {
                     multibyte_preedit_text = "aé中".encode("utf-8")
                     multibyte_preedit = multibyte_preedit_text + b"\\0"
                     invalid_preedit = "é".encode("utf-8") + b"\\0"
-                    serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         wire_message(
                             18, 2,
@@ -2095,17 +2094,38 @@ xkb_symbols "nekoedit-sparse" {
                             struct.pack("<I", len(invalid_preedit)) + invalid_preedit
                             + struct.pack("<ii", 1, 1),
                         )
-                        + wire_message(18, 5, struct.pack("<I", serial))
                     )
+                    pending_deadline = time.monotonic() + 2.0
+                    while (
+                        child_u32("text_input_pending_preedit_length") != len(multibyte_preedit_text)
+                        and time.monotonic() < pending_deadline
+                    ):
+                        time.sleep(0.005)
+                    if (
+                        child_u32("text_input_pending_preedit_length") != len(multibyte_preedit_text)
+                        or child_u32("text_input_pending_preedit_cursor_begin") != 3
+                        or child_u32("text_input_pending_preedit_cursor_end") != 1
+                    ):
+                        raise AssertionError(
+                            "valid preedit candidate was not retained after rejecting a malformed cursor offset"
+                        )
+                    # Take the serial after the candidate events have been consumed.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(wire_message(18, 5, struct.pack("<I", serial)))
                     reversed_range_rect = expect_state(
                         b"", 0, "reversed multibyte preedit cursor range"
                     )
                     release_frame("reversed multibyte preedit redraw")
+                    preedit_word0 = struct.pack(
+                        "<I", child_u32("text_input_preedit_buffer")
+                    )
+                    preedit_word2 = struct.pack(
+                        "<I", child_u32_at("text_input_preedit_buffer", 2)
+                    )
+                    actual_preedit = preedit_word0 + preedit_word2[2:4]
                     if (
                         child_u32("text_input_preedit_length") != len(multibyte_preedit_text)
-                        or child_memory(
-                            "text_input_preedit_buffer", 0, len(multibyte_preedit_text)
-                        ) != multibyte_preedit_text
+                        or actual_preedit != multibyte_preedit_text
                     ):
                         raise AssertionError(
                             "a later invalid preedit event overwrote the preceding valid pending preedit"
