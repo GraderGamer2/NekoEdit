@@ -823,3 +823,12 @@ The first two CI attempts (#688 and #689) stopped at an older soft-wrap pointer-
 
 The user separately confirmed real-build word selection with `Ctrl+Shift+Left`. The user also requested a minimal right-click document context menu with exactly Copy, Paste, and Cut. The request is in the README remaining roadmap and is not part of this milestone.
 
+## 2026-11-09 — XKB omitted matching operator defaults to Exactly
+
+The bounded XKB text-v1 `xkb_compat` parser previously recognized the named matching operations, but rejected the valid shorthand in which an `interpret` rule supplies a parenthesized real-modifier mask without naming the operation. The XKB format defines this omitted operation as `Exactly`; omitting the entire predicate remains a different default, `AnyOfOrNone(all)`.
+
+The parser now detects the opening parenthesis immediately after the `+` separator and stores the existing Exactly predicate value before invoking the shared real-modifier-mask reader. The synthetic Wayland keymap adds keycode 209, whose Group 1 / Level 1 keysym is Control_L and whose real modifier map is Mod2. Its shorthand interpretation assigns V17 only when the modmap is exactly Mod2. The mock checks the raw keysym, real mask, stored predicate enum, per-key virtual map, and aggregate V17=Mod2 (0x10). The existing Control_L / Mod1 key continues to resolve through the explicit Exactly(Mod1) rule.
+
+Actions #693 compiled the implementation and passed command-line tests, then exposed an off-by-two test-fixture record index after the new interpretation was inserted before the existing group-key rules. The new rule is record 12 and the shifted default-any rule is record 13; the correction changed only the mock's memory offsets. Actions [Build and test #694](https://github.com/GraderGamer2/NekoEdit/actions/runs/42555001320) passed all eight workflow steps, including the full Wayland mock, executable inspection, and artifact upload. Artifact [13646668835](https://github.com/GraderGamer2/NekoEdit/actions/runs/42555001320/artifacts/13646668835) is 95,370 bytes with uploaded ZIP SHA-256 `5c4e9da79a371c2aa15807a3dd555774974c6d17f132908d31b615cb7a958cd9`.
+
+This milestone does not execute general XKB actions or change compositor-owned modifier/group transitions. The user-reported `Ctrl+Shift+Left` desktop confirmation remains separately recorded. The requested document-area context menu with exactly Copy, Paste, and Cut remains a separate, unimplemented roadmap task.
