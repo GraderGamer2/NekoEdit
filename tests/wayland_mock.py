@@ -6882,17 +6882,27 @@ xkb_symbols "nekoedit-sparse" {
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "shifted key attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "shifted key damage")
                 expect_message(client, (8, 6, b""), "shifted key commit")
+                shifted_key_pixels = bytes(pixels)
+                if read_document_state()["doc_contents"] != b"b\\n2!":
+                    raise AssertionError(
+                        "Shift+1 fixture content changed before repeat: "
+                        f"{read_document_state()['doc_contents']!r}"
+                    )
+                # Release the 1 key itself before releasing Shift. Omitting
+                # this key-up leaves it held and appends repeat characters to
+                # every later pointer/selection assertion.
                 client.sendall(
-                    wire_message(12, 0)
-                    + wire_message(16, 3, struct.pack("<IIII", 1014, 1014, 42, 0))
-                    + wire_message(16, 4, struct.pack("<IIIII", 1015, 0, 0, 0, 0))
+                    wire_message(16, 3, struct.pack("<IIII", 1014, 1014, 2, 0))
+                    + wire_message(16, 3, struct.pack("<IIII", 1015, 1015, 42, 0))
+                    + wire_message(16, 4, struct.pack("<IIIII", 1016, 0, 0, 0, 0))
+                    + wire_message(12, 0)
                 )
 
                 # The remaining document must be "b\n2!": Backspace removed
                 # a, Enter and digit 2 formed the second line, and Shift+1
                 # produced the exclamation mark.
                 first_line = [
-                    struct.unpack_from("<I", pixels, 92 * 800 * 4 + x * 4)[0]
+                    struct.unpack_from("<I", shifted_key_pixels, 92 * 800 * 4 + x * 4)[0]
                     for x in range(16, 24)
                 ]
                 if first_line[0] != 0xFFD8DEE9:
@@ -6900,16 +6910,16 @@ xkb_symbols "nekoedit-sparse" {
                         "expected B glyph was not rendered at the first line; "
                         f"first pixels={[hex(value) for value in first_line]}"
                     )
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", shifted_key_pixels, 104 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("expected digit 2 was not rendered on the second line")
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 26 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", shifted_key_pixels, 104 * 800 * 4 + 26 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("Shift+1 did not render an exclamation mark")
-                if struct.unpack_from("<I", pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
+                if struct.unpack_from("<I", shifted_key_pixels, 104 * 800 * 4 + 32 * 4)[0] != 0xFFFFFFFF:
                     raise AssertionError("document caret was not rendered after the shifted character")
                 # The footer tracks the current logical caret position and byte count.
-                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 41 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", shifted_key_pixels, 466 * 800 * 4 + 41 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("status bar did not show logical line 2")
-                if struct.unpack_from("<I", pixels, 466 * 800 * 4 + 100 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", shifted_key_pixels, 466 * 800 * 4 + 100 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("status bar did not show logical column 3")
                 observations.append(
                     "US-QWERTY insertion, cursor movement, Backspace, Enter, digit rendering, caret and live status verified"
