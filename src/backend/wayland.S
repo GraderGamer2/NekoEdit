@@ -18426,8 +18426,9 @@ doc_compose_precomposed:
 .size doc_compose_precomposed, . - doc_compose_precomposed
 
 # Insert a Unicode scalar, arm a dead key, or process a bounded Multi_key pair.
-# Dead-key actions use 0x110001..0x110006; Multi_key uses 0x110007. None are
-# Unicode scalars. Multi_key buffers two following symbols and resolves the
+# Dead-key actions use 0x110001..0x110024; 0x110007 remains reserved for
+# Multi_key and is handled before the dead-key range. None are Unicode scalars.
+# Multi_key buffers two following symbols and resolves the
 # curated pair table below; unknown pairs are preserved as their two scalars.
 # Resolve one two-symbol Multi_key sequence (EDI=first, ESI=second).
 # EAX is the composed Unicode scalar, or zero for an unsupported pair.
