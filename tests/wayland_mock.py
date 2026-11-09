@@ -7579,6 +7579,10 @@ xkb_symbols "nekoedit-sparse" {
                     wire_message(16, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
                     + wire_message(12, 0)
                 )
+                # Do not start another held key until the event loop has
+                # processed this key-up; otherwise a pending repeat timeout
+                # can race the next key's first frame.
+                wait_child_u32("repeat_keycode", 0, "held printable key release")
 
                 # Enter repeats as well; each timer tick advances one visual row.
                 before_enter = caret_position()

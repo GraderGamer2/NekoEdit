@@ -1,3 +1,19 @@
+## 2026-11-09 — XCompose parser host tests pass; Wayland mock release ordering correction pending
+
+**Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Importer implementation series:** 94d0f9661a01, 198ec64b7ab8, bf39555139a9, ac038c35eb16, df4c0d8bf3a7.
+**Resource-fixture correction:** f850b786ddfe.
+
+- The offline user XCompose converter is implemented as a separate manually invoked tool. It handles bounded, depth-first includes from explicit %H/%S/%L roots, supported Multi_key/dead-key records, safe canonical path containment, cycles, resource limits, Unicode filtering, override order, private atomic JSON output, and NLP1 validation.
+- Build and test #766 passed the freestanding build, command-line smoke tests, existing Compose tests, the new user XCompose importer test, locale-data/pack tests, and locale-manager tests. In particular, the new importer test completed successfully, including the separate valid root now used for unique-file/aggregate-byte tests.
+- #766 then failed later in the existing Wayland repeat mock: after the printable held-key test sent key-up and released the buffer, the Enter test began before the app acknowledged repeat cancellation. It failed at the initial Enter caret assertion with document bytes aaa + newline and repeat_keycode=28. This is a test event-order issue; no editor runtime failure was established.
+- The current harness patch waits for repeat_keycode=0 after the printable key-up before starting the held Enter test. It preserves the original caret and repeat assertions instead of weakening them. Full CI validation is pending the next push-triggered run.
+- The importer remains CLI-only. Automatic ~/.XCompose/$XCOMPOSEFILE discovery, startup merging, and Settings UI integration are not implemented. No live GNOME/Mutter verification is claimed.
+
+**Next:** verify Build and test #767. If the full mock passes, the parser milestone is ready for a later Settings import design; do not add startup auto-loading implicitly.
+
+---
+
 ## 2026-11-09 — offline user XCompose converter added; fixture validation in progress
 
 **Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

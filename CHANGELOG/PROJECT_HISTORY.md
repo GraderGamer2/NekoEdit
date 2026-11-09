@@ -1,3 +1,13 @@
+## 2026-11-09 — validate bounded user XCompose importer and stabilize held-key test sequencing
+
+The new offline XCompose converter's host tests now pass, including include traversal, resource bounds, escaping, Unicode resolution, safe output, and NLP1 encoding. Build and test #766 passed the entire command-line/host test set. The first remaining failure occurred in the existing Wayland keyboard-repeat test: the mock began the held Enter phase before the application had acknowledged key-up/repeat cancellation for the preceding printable key. The document had received the newline, but the frame assertion observed a stale caret row.
+
+The test now waits for the shared repeat_keycode state to clear before starting the next held key. This preserves the test's assertions and runtime behavior; it only makes the event sequence deterministic. The complete Build and test #767 run is the validation boundary.
+
+The converter remains an explicit, offline CLI step. It does not auto-read ~/.XCompose or $XCOMPOSEFILE, merge locale tables at startup, or add a Settings import UI.
+
+---
+
 ## 2026-11-09 — bounded offline user XCompose conversion
 
 NekoEdit now has a separate standard-library-only converter for a user-selected XCompose file. It emits the same typed, data-only NLP1 JSON accepted by the existing pack builder. Includes expand depth-first from explicitly allowlisted %H, %S, and %L roots; canonical path containment, symlink escape rejection, active-cycle detection, and independent file/byte/depth/expansion/line/record bounds protect traversal. Later duplicate records override earlier ones. Supported unqualified Multi_key and one-following-scalar dead-key records become NLP1 records; modifier-qualified rules are skipped because the format does not represent modifier state.

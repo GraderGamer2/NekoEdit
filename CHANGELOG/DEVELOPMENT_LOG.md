@@ -1,3 +1,13 @@
+## 2026-11-09 — validate offline XCompose importer and serialize held-key mock transitions
+
+- Build and test #766 passed the freestanding build, command-line tests, existing X.Org importer, the new bounded user XCompose importer test, all three locale table checks, and locale manager validation.
+- The new importer test now separately covers repeated non-recursive includes, explicit %H/%S/%L handling, path/canonical symlink boundaries, cycle detection, per-file/aggregate bytes, lines, records, include depth/expansions/unique files, modifier skips, Unicode keysyms, Latin-1 escape decoding, UTF-8 BOM, private output, and source/output collision.
+- #766 failed later in the broad Wayland test, before any new XCompose runtime integration. The held printable key's key-up was sent together with a buffer release; the test started holding Enter before the child event loop acknowledged repeat cancellation. The mock then observed document bytes aaa plus newline and repeat_keycode=28, but its caret-frame assertion saw the prior row.
+- Added a bounded wait for repeat_keycode=0 immediately after the printable key-up and before initiating Enter. This serializes the mock's held-key phases without altering the runtime repeat delay or reducing assertions.
+- This is a Wayland test-harness ordering fix, not an editor implementation change. Build and test #767 must confirm the entire protocol suite.
+
+---
+
 ## 2026-11-09 — add bounded offline user XCompose conversion
 
 - Added a separate tools/import_user_xcompose.py rather than modifying the pinned X.Org Compose.pre regeneration tool. It converts an explicitly selected user file into JSON accepted by the existing NLP1 pack builder.
