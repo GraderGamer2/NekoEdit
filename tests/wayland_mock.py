@@ -1992,7 +1992,7 @@ xkb_symbols "nekoedit-sparse" {
                         expected_text: bytes, expected_cursor: int, label: str,
                         expected_anchor: int | None = None,
                         expected_rectangle: tuple[int, int, int, int] | None = None,
-                    ) -> None:
+                    ) -> tuple[int, int, int, int]:
                         message = recv_wayland_message(client)
                         if message[0:2] != (18, 3) or message[3]:
                             raise AssertionError(f"{label}: unexpected surrounding-text request {message!r}")
@@ -2026,6 +2026,7 @@ xkb_symbols "nekoedit-sparse" {
                                 f"got {rectangle_values}"
                             )
                         expect_message(client, (18, 7, b""), f"{label} state commit")
+                        return rectangle_values
 
                     # The keyboard is focused, but the IME must remain off until
                     # text-input.enter identifies this surface as its text target.
@@ -2075,6 +2076,107 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("preedit cursor byte offset was not preserved")
                     if child_u32("doc_length") != 0:
                         raise AssertionError("preedit text was incorrectly committed to the document")
+
+                    # A valid multibyte preedit followed by an invalid replacement in
+                    # the same done batch must retain the last valid candidate. Cursor
+                    # indices are UTF-8 byte offsets, and the range may be reversed.
+                    multibyte_preedit_text = "aé中".encode("utf-8")
+                    multibyte_preedit = multibyte_preedit_text + b"\\0"
+                    invalid_preedit = "é".encode("utf-8") + b"\\0"
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        wire_message(
+                            18, 2,
+                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
+                            + struct.pack("<ii", 3, 1),
+                        )
+                        + wire_message(
+                            18, 2,
+                            struct.pack("<I", len(invalid_preedit)) + invalid_preedit
+                            + struct.pack("<ii", 1, 1),
+                        )
+                        + wire_message(18, 5, struct.pack("<I", serial))
+                    )
+                    reversed_range_rect = expect_state(
+                        b"", 0, "reversed multibyte preedit cursor range"
+                    )
+                    release_frame("reversed multibyte preedit redraw")
+                    if (
+                        child_u32("text_input_preedit_length") != len(multibyte_preedit_text)
+                        or child_memory(
+                            "text_input_preedit_buffer", 0, len(multibyte_preedit_text)
+                        ) != multibyte_preedit_text
+                    ):
+                        raise AssertionError(
+                            "a later invalid preedit event overwrote the preceding valid pending preedit"
+                        )
+                    if reversed_range_rect[0] <= 24:
+                        raise AssertionError(
+                            "preedit cursor_begin=3 was treated as a character count instead of a UTF-8 byte offset"
+                        )
+
+                    # The same highlight range in forward order must occupy the
+                    # same glyph span, while cursor_begin moves the IME caret.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        wire_message(
+                            18, 2,
+                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
+                            + struct.pack("<ii", 1, 3),
+                        )
+                        + wire_message(18, 5, struct.pack("<I", serial))
+                    )
+                    forward_range_rect = expect_state(
+                        b"", 0, "forward multibyte preedit cursor range"
+                    )
+                    release_frame("forward multibyte preedit redraw")
+                    highlight_width = reversed_range_rect[0] - forward_range_rect[0]
+                    if (
+                        highlight_width <= 0
+                        or reversed_range_rect[1] != forward_range_rect[1]
+                        or not rendered_color_present(
+                            forward_range_rect[0], forward_range_rect[1],
+                            highlight_width, 12, 3200, 0xff5e81ac
+                        )
+                    ):
+                        raise AssertionError(
+                            "forward/reversed UTF-8 preedit ranges did not paint the same selected scalar span"
+                        )
+
+                    # A (-1,-1) preedit cursor hides the IME cursor; the cursor
+                    # rectangle therefore returns to the committed document caret.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        wire_message(
+                            18, 2,
+                            struct.pack("<I", len(multibyte_preedit)) + multibyte_preedit
+                            + struct.pack("<ii", -1, -1),
+                        )
+                        + wire_message(18, 5, struct.pack("<I", serial))
+                    )
+                    expect_state(
+                        b"", 0, "hidden preedit cursor",
+                        expected_rectangle=(24, 92, 1, 12),
+                    )
+                    release_frame("hidden preedit cursor redraw")
+                    if child_u32("text_input_preedit_cursor_begin") != 0xffffffff:
+                        raise AssertionError("preedit cursor (-1,-1) was not preserved as hidden")
+
+                    # An empty preedit with hidden cursor clears the previous composition.
+                    empty_preedit = b"\\0"
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        wire_message(
+                            18, 2,
+                            struct.pack("<I", len(empty_preedit)) + empty_preedit
+                            + struct.pack("<ii", -1, -1),
+                        )
+                        + wire_message(18, 5, struct.pack("<I", serial))
+                    )
+                    expect_state(b"", 0, "empty preedit reset")
+                    release_frame("empty preedit reset redraw")
+                    if child_u32("text_input_preedit_length") != 0:
+                        raise AssertionError("empty preedit did not clear the active composition")
 
                     # Commit a multibyte UTF-8 string and verify the updated
                     # surrounding text and cursor are transmitted exactly once.

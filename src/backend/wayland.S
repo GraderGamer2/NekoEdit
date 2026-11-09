@@ -13010,14 +13010,16 @@ text_input_handle_event:
 .Lti_preedit:
     cmp dword ptr [rip + last_size], 12
     jb .Lti_ignored
-    lea rdi, [rip + text_input_pending_preedit_buffer]
+    # Stage candidate bytes and metadata in the unused tail of request_buffer.
+    # Do not touch the actual pending preedit until UTF-8 and cursor validation pass.
+    lea rdi, [rip + text_input_request_buffer]
     mov esi, 4096
     mov edx, 8
     call text_input_copy_event_string
     test eax, eax
     js .Lti_ignored
-    mov dword ptr [rip + text_input_pending_preedit_length], eax
-    lea rdi, [rip + text_input_pending_preedit_buffer]
+    mov dword ptr [rip + text_input_request_buffer + 4096], eax
+    lea rdi, [rip + text_input_request_buffer]
     mov esi, eax
     call text_input_validate_utf8
     test eax, eax
@@ -13029,31 +13031,31 @@ text_input_handle_event:
     and eax, -4
     lea rdx, [rip + event_payload + 4]
     mov ecx, dword ptr [rdx + rax]
-    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], ecx
+    mov dword ptr [rip + text_input_request_buffer + 4100], ecx
     mov ecx, dword ptr [rdx + rax + 4]
-    mov dword ptr [rip + text_input_pending_preedit_cursor_end], ecx
+    mov dword ptr [rip + text_input_request_buffer + 4104], ecx
     jmp .Lti_preedit_validate
 .Lti_preedit_null:
     lea rdx, [rip + event_payload + 4]
     mov ecx, dword ptr [rdx]
-    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], ecx
+    mov dword ptr [rip + text_input_request_buffer + 4100], ecx
     mov ecx, dword ptr [rdx + 4]
-    mov dword ptr [rip + text_input_pending_preedit_cursor_end], ecx
+    mov dword ptr [rip + text_input_request_buffer + 4104], ecx
 .Lti_preedit_validate:
-    mov ecx, dword ptr [rip + text_input_pending_preedit_cursor_begin]
-    mov edx, dword ptr [rip + text_input_pending_preedit_cursor_end]
+    mov ecx, dword ptr [rip + text_input_request_buffer + 4100]
+    mov edx, dword ptr [rip + text_input_request_buffer + 4104]
     cmp ecx, -1
     jne .Lti_preedit_begin_visible
     cmp edx, -1
     jne .Lti_ignored
-    jmp .Lti_preedit_flag
+    jmp .Lti_preedit_commit_candidate
 .Lti_preedit_begin_visible:
     test ecx, ecx
     js .Lti_ignored
-    cmp ecx, dword ptr [rip + text_input_pending_preedit_length]
+    cmp ecx, dword ptr [rip + text_input_request_buffer + 4096]
     ja .Lti_ignored
     je .Lti_preedit_validate_end
-    lea rax, [rip + text_input_pending_preedit_buffer]
+    lea rax, [rip + text_input_request_buffer]
     movzx eax, byte ptr [rax + rcx]
     and eax, 0xc0
     cmp eax, 0x80
@@ -13063,15 +13065,25 @@ text_input_handle_event:
     je .Lti_ignored
     test edx, edx
     js .Lti_ignored
-    cmp edx, dword ptr [rip + text_input_pending_preedit_length]
+    cmp edx, dword ptr [rip + text_input_request_buffer + 4096]
     ja .Lti_ignored
-    je .Lti_preedit_flag
-    lea rax, [rip + text_input_pending_preedit_buffer]
+    je .Lti_preedit_commit_candidate
+    lea rax, [rip + text_input_request_buffer]
     movzx eax, byte ptr [rax + rdx]
     and eax, 0xc0
     cmp eax, 0x80
     je .Lti_ignored
-.Lti_preedit_flag:
+.Lti_preedit_commit_candidate:
+    mov eax, dword ptr [rip + text_input_request_buffer + 4096]
+    mov dword ptr [rip + text_input_pending_preedit_length], eax
+    mov eax, dword ptr [rip + text_input_request_buffer + 4100]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_begin], eax
+    mov eax, dword ptr [rip + text_input_request_buffer + 4104]
+    mov dword ptr [rip + text_input_pending_preedit_cursor_end], eax
+    lea rsi, [rip + text_input_request_buffer]
+    lea rdi, [rip + text_input_pending_preedit_buffer]
+    mov ecx, dword ptr [rip + text_input_pending_preedit_length]
+    rep movsb
     or dword ptr [rip + text_input_pending_flags], 2
     xor eax, eax
     ret
