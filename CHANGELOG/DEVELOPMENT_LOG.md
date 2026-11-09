@@ -1,3 +1,26 @@
+## 2026-11-09 — correct XKB repeat defaults, BSS storage, and symbol-less keys
+
+### Root causes found after Actions #677
+
+- Actions [Build and test #677](https://github.com/GraderGamer2/NekoEdit/actions/runs/42544941470) failed during assembly before running tests: `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` were declared with non-zero `.long 1` initializers inside `.bss`. Although commit [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d) changed them to zero-filled storage, the subsequent Wayland event-test change reintroduced those initializers. The current-branch audit caught this source regression.
+- The previous implementation also conflated two different XKB defaults: the `xkb_compat` interpretation default and the fallback default interpretation applied to a symbol-bearing base level.
+
+### Implementation correction
+
+- The two repeat-related BSS objects are now `.zero 4`; `xkb_reset_keymap` initializes both to zero. The per-key repeat-eligibility table is cleared, not blanket-initialized to true.
+- The `interpret.repeat` compatibility-section default now starts `False`, matching libxkbcommon's `InitInterp` behavior.
+- The fallback/default interpretation sets repeat to true only when Group 1 / Level 1 contains a symbol, and only when there is no explicit per-key repeat property. A key with no base-level symbol retains the ordinary `DEFAULT_KEY_REPEAT=False`.
+- A matching compatibility interpretation overrides the fallback from Group 1 / Level 1, unless a direct per-key `repeat` property is present. A query for a keycode absent from the active keymap returns false.
+- Wayland cancels an existing repeat timer if a newly pressed key is not repeatable. Repeat cadence remains driven by the compositor's `wl_keyboard.repeat_info`.
+
+### Regression coverage
+
+- Added synthetic key RPT4 with a valid XKB keycode and an empty key block. The parser asserts it remains non-repeatable; the Wayland key event test holds it beyond the compositor's repeat delay and verifies no text insertion or repeat timer.
+- The original explicit `interpret.repeat = False` test run remains. A second full keyboard-layout fixture removes that section assignment, verifying the compatibility default is implicitly false as well.
+- Source/test correction: [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644). Consolidated CI is pending.
+
+---
+
 ## 2026-11-09 — correct repeat-state storage and test Wayland timer gating
 
 ### Build correction

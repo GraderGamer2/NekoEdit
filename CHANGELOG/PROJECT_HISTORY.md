@@ -1,3 +1,12 @@
+## 2026-11-09 — align XKB repeat defaults with libxkbcommon
+
+A follow-up audit corrected two separate XKB repeat defaults that had been conflated. An `xkb_compat` section's `interpret.repeat` default is `False`; the fallback/default interpretation enables repeat only for keys with an actual Group 1 / Level 1 symbol. Keys without that base-level symbol retain the ordinary false repeat default. Direct `xkb_symbols` per-key repeat properties override compatibility interpretation results, and key-wide compatibility repeat is derived only from Group 1 / Level 1.
+
+The audit also caught two non-zero repeat initializers that had been reintroduced into `.bss` by a later test commit after the first zero-storage correction. They are now zero-filled storage with explicit reset initialization. The Wayland query rejects unmapped keycodes, and a non-repeatable key cancels any stale repeat timer.
+
+Regression coverage now includes a keycode with an empty key block and a second parser/integration run with the `interpret.repeat` section assignment omitted. Source/test correction: [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644). Full CI validation is pending.
+
+
 # NekoEdit project history
 
 ## 2026-11-09 — validate repeat policy through the Wayland key event path

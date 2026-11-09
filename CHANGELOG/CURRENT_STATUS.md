@@ -1,28 +1,28 @@
 # NekoEdit current status
 
-## 2026-11-09 — implement XKB per-key repeat policy
+## 2026-11-09 — correct XKB per-key repeat defaults and BSS storage
 
-**Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
-**Source/test commit:** [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426); **parser-fixture follow-up:** [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104); **BSS initialization fix:** [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d); **Wayland event-path test:** [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27). Actions #677 initially stopped at assembly because two non-zero repeat defaults were placed in `.bss`; the BSS objects are now zero-filled and both defaults are initialized in `xkb_reset_keymap`. The next full workflow is pending.
+**Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
+**Source/test correction:** [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644) — `fix: align XKB per-key repeat defaults with keymap semantics`.
 
-### Implemented behavior
+### Audit findings and correction
 
-- The XKB text-v1 reader now handles `repeat = True/False` inside an `xkb_symbols` key declaration, the `interpret.repeat` compatibility-section default, and a per-interpret `repeat` setting.
-- It retains per-key repeat eligibility separately from direct-property presence. The default is repeat-enabled; the most-specific matching compatibility interpretation can override it, while an explicit key-level property wins.
-- Because repeat is a key-wide property, compatibility repeat is derived only from Group 1 / Level 1. Other groups and levels do not independently change the key's repeat policy.
-- The Wayland physical key-down path queries the XKB keymap policy before starting the existing compositor-configured delay/rate timer.
-- The client does not execute compositor key actions such as `SetMods`/`SetGroup`; it consumes the resulting modifier/group state from Wayland events. `preserve[]` consumed-modifier handling remains future work.
+- Actions [Build and test #677](https://github.com/GraderGamer2/NekoEdit/actions/runs/42544941470) stopped during assembly because `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` had non-zero initializers in `.bss`. A follow-up had changed them to `.zero 4`, but a later test commit reintroduced the invalid initializers; this audit caught the regression in the current branch.
+- Both objects are now zero-filled BSS storage, and `xkb_reset_keymap` explicitly initializes the compatibility interpretation default and temporary value to zero.
+- XKB has two distinct repeat defaults. A compatibility `interpret.repeat` section default starts `False`; separately, the fallback/default interpretation enables a key only when Group 1 / Level 1 actually contains a symbol. A mapped key with no base-level symbol retains `DEFAULT_KEY_REPEAT=False`.
+- The most-specific compatibility interpretation still supplies a key-wide repeat result from Group 1 / Level 1. An explicit per-key `repeat` declaration takes precedence over both the fallback and compatibility interpretation. The query also rejects keycodes absent from the loaded keymap.
+- Wayland cancels any previous repeat timer when a newly pressed key is non-repeatable. Compositor-provided repeat delay/rate still determine timing; modifier and group actions remain compositor-owned.
 
-### Regression coverage and validation
+### Regression coverage
 
-- The mock keymap covers a section default of `False`, a compatibility override to `True`, a direct key-level `False` override, a direct `True` override, and an unaffected default-repeat key. Parser assertions inspect the section default, per-key flags, explicit-property flags, and compatibility rule count.
-- The keyboard integration scenario holds all four synthetic keys through the actual Wayland event path: inherited-false and explicit-false must not start the timer or repeat after the 180 ms test delay; compatibility-true and direct-true must start the timer and produce a repeated edit. The final event-path test is [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27).
-- Actions #677 failed before tests because `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` used non-zero initializers in `.bss`. Commit [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d) changes both to zero-filled storage; `xkb_reset_keymap` explicitly initializes them. The next full workflow will validate the corrected source and event-path tests.
+- The parser fixture checks a compatibility section with explicit `interpret.repeat = False`, a per-interpret `True` override, direct per-key `False` and `True`, the base-symbol fallback, and a defined keycode with an empty key block.
+- The Wayland integration test holds the symbol-less key and verifies it neither inserts text nor starts repeat. A second complete keymap run removes the `interpret.repeat` assignment and verifies that the implicit compatibility default is also `False`.
+- Source/test commit: [2816c9f0a0c4](https://github.com/GraderGamer2/NekoEdit/commit/2816c9f0a0c44c6619174deab7878177258f9644). Full consolidated CI is pending; Actions #677 did not reach the test stage.
 
-### Next work
+### Remaining XKB work
 
-- Add bounded `preserve[]` consumed-modifier support based on XKB key-type map entries and preserve clauses; keep compositor-applied stateful actions outside the Wayland client.
-- Then expand further compatibility interpretation matching and arbitrary key-action metadata only where the Wayland client needs it, without replaying compositor transitions.
+- The compositor remains responsible for stateful actions such as `SetMods` and `SetGroup`; the client consumes the modifier/group state Wayland reports.
+- XKB `preserve[]` consumed-modifier semantics remain unimplemented. The next bounded milestone should add preserve handling to exact type-map lookup with focused parser and symbol-lookup tests, without replaying compositor actions.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
