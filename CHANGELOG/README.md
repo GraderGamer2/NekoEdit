@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-The Finnish/Serbian locale dead-key path is green in Build and test #759. The bounded offline user XCompose converter and its locale-manager integration are present. The latest History filter change adds a visible caret and horizontal scrolling for 127-byte path queries. Its long-query/clear checks passed in #772; the follow-up Browse click initially timed out because of a wrong mock coordinate argument, now corrected in the test. CURRENT_STATUS.md records the current CI boundary. The converter remains manual only: no automatic startup discovery or Settings UI.
+The Finnish/Serbian locale dead-key path is green in Build and test #759. The History long-query, caret, Browse, Open Selected, Undo/Redo, Export, and Delete flow passed in #773. The user XCompose converter has a one-command host installer that writes a private data-only pack under ~/.nekoedit/locales; Build and test #774 passed all 13 steps, including its installer security tests and the complete Wayland mock. The editor remains freestanding: no automatic ~/.XCompose startup discovery or Settings import UI. Live GNOME/Mutter input validation is still outstanding. CURRENT_STATUS.md records the exact source commit, workflow and artifact IDs.
 
 ## Read this first in every new development chat
 

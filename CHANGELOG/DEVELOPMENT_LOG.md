@@ -1,10 +1,26 @@
+## 2026-11-09 — one-command private user XCompose installer; Build and test #774 passed
+
+- Rechecked the live branch before continuing: the Finnish/Serbian physical dead-key keyboard tests were already implemented in 98144943b5ae and green in #759. The offline user XCompose importer and converter-to-manager integration were also already present.
+- Verified that Build and test #773 passed all 13 workflow steps on 669d552ff0ed. It closed the History long-query test's Browse-coordinate regression and passed the full Wayland History workflow.
+- Added tools/install_user_xcompose.py. It calls the existing bounded ComposeImporter and compose_pack encoder in memory and installs the result directly under ~/.nekoedit/locales/<locale>.nlp. No intermediate JSON file or second pack-builder command is required.
+- The utility is optional and host-side. No Python interpreter, subprocess, shell invocation, network request, or extra runtime library was added to the freestanding editor.
+- Directory creation/opening uses home-relative directory file descriptors and O_NOFOLLOW checks. The installer rejects non-owned/symlinked .nekoedit path components, tightens both app directories to mode 0700, installs a 0600 pack, and fsyncs file and directory.
+- The default publish is atomic and no-clobber. --replace is explicit and only replaces a regular existing pack. The selected XCompose file, included files, and keysymdef.h are protected from output collisions.
+- Added tests/install_user_xcompose_test.py to verify pack header/size/locale, fixed destination, permissions, source preservation, refusal to overwrite, explicit replacement, temporary-file cleanup, and symlink rejection. Added it to make test.
+- Updated docs/COMPOSE_USER_IMPORT.md and README with the one-command path and the explicit boundary: manual import only, no auto-discovery/startup merge or Settings importer UI.
+- Build and test #774 passed all 13 steps on source commit b53ffd4809fa, including the new test, existing host checks, full Wayland mock, pinned X.Org regeneration, locale pack builds, and both artifact uploads. Artifacts: editor ZIP 13691852154 (127,343 bytes) and locale ZIP 13691932145 (74,021 bytes), expiring 2026-11-16.
+- No live GNOME/Mutter test was run. The new tool only writes a data-only NLP1 pack; the existing Settings dropdown discovers it on refresh.
+
+Source commit: [b53ffd4809fa](https://github.com/GraderGamer2/NekoEdit/commit/b53ffd4809fa390709f9947bde383ac570ac81d7). Validation: [Build and test #774](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878).
+
+---
 ## 2026-11-09 — correct History mock pointer coordinates after long-query test
 
 - Build and test #772 passed the freestanding build and all host-side tests, including the user-XCompose locale-manager fixture after the quoted-result correction.
 - The Wayland mock reached the new History search case: it typed all 127 query characters, saw zero matches, observed a horizontally scrolled display start and an in-field caret, and successfully cleared the query back to one match.
 - The test then timed out waiting for the History Browse redraw because the follow-up edit passed the new serial value as the first `workflow_click` argument (x) instead of the third argument (serial). The application was not receiving a click inside the Browse button.
 - Restored the actual History control coordinates (Browse x=700, Open Selected x=100, Undo x=100, Redo x=300, Export x=480, Delete x=660) and assigned the larger serials to the third argument. This is a test-harness correction only; no runtime behavior is changed.
-- Build and test #773 must verify the full History path, including the existing positive path match and Browse/Open/Undo/Redo/Export/Delete operations.
+- Build and test #773 passed the full History path, including the positive path match and Browse/Open/Undo/Redo/Export/Delete operations.
 
 ---
 

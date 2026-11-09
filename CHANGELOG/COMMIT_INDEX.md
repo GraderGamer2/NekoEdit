@@ -1,11 +1,30 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — complete History filter validation and one-command user XCompose installer
+
+| Commit | Subject |
+|---|---|
+| [b53ffd4809fa](https://github.com/GraderGamer2/NekoEdit/commit/b53ffd4809fa390709f9947bde383ac570ac81d7) | feat: install user XCompose directly as a private locale pack |
+| [8b4d5b22b138](https://github.com/GraderGamer2/NekoEdit/commit/8b4d5b22b138f7001151e9e6148ad68e20514aa5) | fix: zero-initialize History caret position in BSS |
+| [40fcc34e434b](https://github.com/GraderGamer2/NekoEdit/commit/40fcc34e434b1e84e5357e84fccb8a1cb4a47355) | fix: address History search query buffers safely |
+| [735a231951a1](https://github.com/GraderGamer2/NekoEdit/commit/735a231951a1c7043a2df1f654683657b495f295) | test: load user-converted XCompose pack through locale manager |
+| [216e466a48d8](https://github.com/GraderGamer2/NekoEdit/commit/216e466a48d862d0fdcc908f1e2e329373f7a583) | test: wait for printable-key repeat cancellation before Enter |
+| [f850b786ddfe](https://github.com/GraderGamer2/NekoEdit/commit/f850b786ddfebf60f9e5b5cae97687ca7ee58717) | test: isolate XCompose resource fixtures and document offline conversion |
+| [8e1406997d98](https://github.com/GraderGamer2/NekoEdit/commit/8e1406997d9851f8c229b694d95e01410292e38e) | docs: record green Finnish and Serbian locale tests |
+| [5f87db08acd8](https://github.com/GraderGamer2/NekoEdit/commit/5f87db08acd85ab064a7c5b8a99a873f8f5dddaf) | docs: record Finnish and Serbian locale test milestone |
+| [5e365ece79c0](https://github.com/GraderGamer2/NekoEdit/commit/5e365ece79c080faf032f3daf67a40bf520f3d69) | docs: record Settings locale test completion diagnosis |
+| [7badeae8c572](https://github.com/GraderGamer2/NekoEdit/commit/7badeae8c572f298a40bc5618750ee5e9c8e2d8a) | docs: record successful locale dead-key and Add test results |
+| [07007e1ba250](https://github.com/GraderGamer2/NekoEdit/commit/07007e1ba25097112a1dd3da98657bec3f542149) | docs: record locale dead-key integration status |
+
+Build and test #773 passed the complete History long-query, Browse, Open Selected, Undo/Redo, Export, and Delete path. Commit b53ffd4809fa adds the explicit offline installer from selected XCompose text to a private NLP1 pack under ~/.nekoedit/locales. Build and test #774 passed all 13 steps, including the installer regression test and full Wayland mock. See CURRENT_STATUS.md for artifact IDs and the remaining automatic-import/UI boundary.
+
+---
 ## 2026-11-09 — valid XCompose result syntax in the locale-manager integration fixture
 
 | Commit | Subject |
 |---|---|
 | [5fcb5f813469](https://github.com/GraderGamer2/NekoEdit/commit/5fcb5f8134692e8d2e29430edb5b2a6ac199141e) | test: use valid result syntax in locale manager XCompose fixture |
-| Pending | test: restore History control coordinates after long-query assertions |
+| [669d552ff0ed](https://github.com/GraderGamer2/NekoEdit/commit/669d552ff0ede445ac309ffb890f3575877042b4) | test: restore History control coordinates after long-query assertions |
 
 Build and test #771 compiled the History-filter assembly successfully, then failed because the new locale-manager fixture used two unquoted result keysyms. The fixture is corrected to a quoted Unicode result plus one conventional result-keysym annotation. Build and test #772 passed host tests, then typed the 127-character filter, verified zero results and caret scrolling, and cleared the query successfully. Its Browse click timed out because the serial had been placed in the x-coordinate parameter; the next test revision restores the control coordinates.
 
@@ -15,7 +34,7 @@ Build and test #771 compiled the History-filter assembly successfully, then fail
 
 | Commit | Subject |
 |---|---|
-| Pending | feat: keep the History search caret visible in long path queries |
+| [bb651450e657](https://github.com/GraderGamer2/NekoEdit/commit/bb651450e657ae1622d04f5374aef4375796a224) | feat: keep the History search caret visible in long path queries |
 
 The 127-byte query/filter source remains unchanged; only the displayed query is horizontally windowed. The mock adds zero-match, long-query scroll/caret, Ctrl+A clear, and positive-match checkpoints. Baseline Build and test #767 passed before this revision.
 

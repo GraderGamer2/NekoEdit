@@ -1,10 +1,29 @@
+## 2026-11-09 — one-command user XCompose installer — Build and test #774 passed
+
+**Branch:** early-alpha; PR #2 remains open and unmerged.
+**Source implementation:** [b53ffd4809fa](https://github.com/GraderGamer2/NekoEdit/commit/b53ffd4809fa390709f9947bde383ac570ac81d7).
+**CI:** [Build and test #774](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878) passed all 13 steps on b53ffd4809fa, including the freestanding ELF build, command-line/host tests, new installer test, complete Wayland mock, pinned X.Org regeneration, three locale-pack builds, and both artifact uploads.
+**Artifacts:** Linux x86-64 ZIP [13691852154](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878/artifacts/13691852154) (127,343 bytes); locale-pack ZIP [13691932145](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878/artifacts/13691932145) (74,021 bytes). Both expire 2026-11-16; neither is a published GitHub Release.
+
+- Added tools/install_user_xcompose.py. It runs the existing bounded offline ComposeImporter and NLP1 encoder in memory, then installs the binary directly as ~/.nekoedit/locales/<locale>.nlp. The lower-level JSON converter remains available.
+- NekoEdit's editor binary remains freestanding. The new utility is an optional Python-standard-library host command; the editor does not launch Python, execute shell commands, discover XCompose files at startup, or add a runtime library.
+- The installer opens ~/.nekoedit/locales relative to directory file descriptors, rejects symlinked or non-owned directory components, enforces 0700 directories and 0600 packs, and fsyncs the installed file and directory.
+- Existing packs are not silently overwritten. The default no-clobber install uses an atomic hard-link publish; --replace explicitly replaces an existing regular file atomically. Imported source/include files and keysymdef.h cannot be replaced by the output.
+- Added tests/install_user_xcompose_test.py and included it in make test. The test validates NLP1 structure, path placement, private modes, source preservation, no-clobber, explicit replacement, temporary-file cleanup, and symlink rejection.
+- The installed pack is visible to the existing Settings locale dropdown on its next list refresh. There is still no automatic ~/.XCompose/$XCOMPOSEFILE discovery, system startup merge, or Settings import UI.
+- Build and test #773 [passed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42645272935) before this feature. #774 is the first full workflow for the installer and is green. The History long-query/Browse/Open/Undo/Redo/Export/Delete path also passed in #773.
+- Finnish/Serbian physical dead-key coverage already passed in #759; do not duplicate that work. Live GNOME/Mutter keyboard-layout and IME behavior remain unverified.
+
+**Next:** exercise the one-command installer against a broader set of actual user Compose files and confirm documented include/encoding behavior. Consider a Settings affordance only if it can invoke the host converter without weakening the freestanding runtime policy. Do not add automatic startup import implicitly.
+
+---
 ## 2026-11-09 — improve History path-filter usability
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open.
-**Baseline:** [216e466a48d8](https://github.com/GraderGamer2/NekoEdit/commit/216e466a48d862d0fdcc908f1e2e329373f7a583); latest full workflow [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 13 steps, including the full Wayland mock and executable/locale artifact uploads.
+**Baseline:** [216e466a48d8](https://github.com/GraderGamer2/NekoEdit/commit/216e466a48d862d0fdcc908f1e2e329373f7a583); follow-up [Build and test #773](https://github.com/GraderGamer2/NekoEdit/actions/runs/42645272935) passed all 13 steps, including the full Wayland mock and executable/locale artifact uploads.
 **Current change:** add a visible History search caret and horizontally scrolled query display; leave the full 127-byte filter buffer and path matching logic unchanged. The Wayland test types a 127-character non-match, verifies zero results and an in-field caret after horizontal scrolling, clears the query, then verifies the path-match sequence.
 
-**Validation:** Actions #768–#770 exposed and corrected the assembly/BSS and indexed-address issues. Build #771 passed `make clean all` but stopped in the locale-manager fixture because its synthetic rule used invalid unquoted `U018F U018F` result syntax; commit 5fcb5f8 corrected it to a quoted Unicode result with one keysym annotation. Action #772 passed all host tests and reached the new History filter scenario, but the Browse click timed out because the test mistakenly put the serial in the x-coordinate argument. The pointer coordinates are restored in the next test revision; the 127-character query/caret assertions ran before that failure. Full Wayland completion remains unverified.
+**Validation:** Actions #768–#770 exposed and corrected the assembly/BSS and indexed-address issues. Build #771 passed `make clean all` but stopped in the locale-manager fixture because its synthetic rule used invalid unquoted `U018F U018F` result syntax; commit 5fcb5f8 corrected it to a quoted Unicode result with one keysym annotation. Action #772 passed all host tests and reached the new History filter scenario, but the Browse click timed out because the test mistakenly put the serial in the x-coordinate argument. Commit 669d552 restored the pointer coordinates. Build and test #773 then passed the complete History flow: 127-character query/caret, clear, Browse, Open Selected, Undo/Redo, Export, and Delete.
 
 ---
 

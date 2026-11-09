@@ -1,3 +1,12 @@
+## 2026-11-09 — History filter validated; direct user XCompose installer added
+
+Build and test #773 passed the complete History path-filter flow after the test mock's Browse coordinates were corrected. The 127-character non-matching query, horizontal viewport/caret, Ctrl+A clear, positive stored-path match, Browse/Open Selected, Undo/Redo, Export, and selected-history Delete all passed in the full Wayland mock.
+
+The user XCompose path now includes an optional one-command host installer, tools/install_user_xcompose.py. It uses the existing bounded offline parser and NLP1 encoder, creates or opens only the user's private ~/.nekoedit/locales directory, and atomically installs a data-only pack. It refuses to overwrite by default and offers an explicit --replace for regular existing packs. Source/include/keysyms files are protected from output collision. This does not change the editor's freestanding runtime and does not introduce automatic ~/.XCompose discovery or Settings import UI.
+
+Build and test [#774](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878) passed all 13 steps on source commit [b53ffd4809fa](https://github.com/GraderGamer2/NekoEdit/commit/b53ffd4809fa390709f9947bde383ac570ac81d7). The run validated the installer regression test, all existing host tests, the complete Wayland mock, pinned Compose data regeneration, optional locale packs, and both uploaded artifacts. Live GNOME/Mutter input behavior remains separate and unverified.
+
+---
 ## 2026-11-09 — History long-query test reaches real UI; correct mock click argument order
 
 Build and test #772 passed build and host-side tests, including converter-to-NLP1 manager integration. The new History test successfully entered a 127-character non-match, observed zero results, confirmed horizontal scrolling and caret visibility, and used Ctrl+A to restore the unfiltered result. It then failed waiting for Browse because the modified test passed its pointer serial as the x coordinate rather than the serial argument. The control coordinates have been restored in the follow-up test revision; the History runtime itself has not yet been shown to fail.
