@@ -1,16 +1,25 @@
 ## 2026-11-09 — repair missing development-branch Actions trigger
 
-The user clarified that they were already viewing **All workflows**; this was not a sidebar filter problem. Inspection found two independent trigger blockers:
+The user clarified that they were already viewing **All workflows**; this was not a sidebar filter problem. Inspection established two independent trigger blockers:
 
-1. The earlier PR HEAD [457695f8f6ea](https://github.com/GraderGamer2/NekoEdit/commit/457695f8f6ea364a15b25b555e8c628ed6af1cbb) had `[skip ci]` in its commit subject, which suppresses `push` and `pull_request` workflows.
-2. Removing that marker with [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) did not start a run. PR #2 still reports `mergeable=false` and is three commits behind `main`. GitHub's official troubleshooting documentation says `pull_request` workflows are not run while the PR has a merge conflict. The existing Build and test workflow only listens for pushes to `main`, leaving no active trigger for the `early-alpha` branch.
+1. The earlier PR HEAD [457695f8f6ea](https://github.com/GraderGamer2/NekoEdit/commit/457695f8f6ea364a15b25b555e8c628ed6af1cbb) had `[skip ci]` in its subject. GitHub skips eligible `push` and `pull_request` workflows when the HEAD contains a skip annotation.
+2. A non-skipping follow-up [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) did not produce a PR run. PR #2 still reports `mergeable=false` and `main` is three commits ahead of `early-alpha`. GitHub's official troubleshooting documentation confirms that `pull_request` workflows do not run while the PR has a merge conflict. The old workflow only listened for pushes to `main`, so the development branch had no alternative trigger.
 
-The workflow correction will:
-- trigger on pushes to `main` and `early-alpha`, so the branch can be tested independently of PR mergeability;
-- limit PR-triggered runs to `opened`, `reopened`, and `ready_for_review`, avoiding duplicate runs on every `synchronize` after a branch push;
-- ignore changelog-only commits while still running for source, test, and workflow changes.
+### Workflow correction
 
-No PR merge, force-push, or source-code change is being made as part of this trigger repair. The PR remains open. The actual branch build result must be checked after the workflow file update; no passing result is claimed yet.
+- [2afe1b1d9375](https://github.com/GraderGamer2/NekoEdit/commit/2afe1b1d93751a54da640c11cb8f5047e93e0215) updates `.github/workflows/build.yml`.
+- Pushes to `main` and `early-alpha` now trigger Build and test directly.
+- Pull-request runs are restricted to `opened`, `reopened`, and `ready_for_review`; subsequent same-repository commits are tested by the branch-push trigger rather than a second PR `synchronize` run.
+- Changelog-only commits are excluded using `paths-ignore: CHANGELOG/**`; source, tests, and workflow changes still trigger builds.
+- The PR has not been merged and its merge conflict has not been resolved. This change makes source validation independent of that mergeability state; it does not repair the PR merge conflict itself.
+
+### Validation boundary
+
+The PR-only workflow lookup returned no run for the new head, and the combined-status lookup returned no status context. That connector lookup explicitly filters to pull-request-triggered runs, so it cannot confirm the new push-triggered run. No passing CI result is claimed. The user can see the `early-alpha` push run in **All workflows**; the dead-key implementation remains unverified until it completes.
+
+Continuity updates:
+- [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754) records the skip-marker/CI policy in CHANGELOG/README.md.
+- [c50b4ab02e5f](https://github.com/GraderGamer2/NekoEdit/commit/c50b4ab02e5f057a636a477c49cdf3c1e35c5405), [f42cc77768c5](https://github.com/GraderGamer2/NekoEdit/commit/f42cc77768c5dda2ee5026282c77fa7f9502bd72), [0e7d31960bc4](https://github.com/GraderGamer2/NekoEdit/commit/0e7d31960bc437656ecf49dc9d536fab91145a71), and [75f84f844aa4](https://github.com/GraderGamer2/NekoEdit/commit/75f84f844aa40f343ef20fbe86e2a3475f1986e1) update the diagnosis, continuity index, and current status.
 
 
 ---
