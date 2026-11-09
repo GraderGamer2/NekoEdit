@@ -80,7 +80,7 @@ The standard build workflow verifies the pinned upstream inputs, regenerates the
 
 With any valid pack installed at `~/.nekoedit/locales/<tag>.nlp`, choose **Settings → Locale**, select its filename, and confirm. The loader derives the locale tag from the selected `.nlp` filename, then validates the file header and embedded tag before activation. **Settings → Base** explicitly selects built-in en_US and suppresses environment overrides.
 
-**Settings → Add** opens a local `.nlp` file picker. The application validates the selected file before atomically copying it into the private locale directory; the original file is left untouched. **Settings → Remove** requests confirmation, validates the currently selected installed file, and removes only that pack. Removing the active or persisted pack returns the selection to en_US. These actions do not perform network downloads.
+**Settings → Add** opens a local `.nlp` source-file picker. Its path row is explicitly labeled **SOURCE**, while the destination is shown beside it as **TARGET: `~/.nekoedit/locales/`**. The application validates the selected file before atomically copying it to `~/.nekoedit/locales/<locale-tag>.nlp`; the original source file is left untouched. The private `.nekoedit` and `locales` directories are created with mode 0700, and installed packs use mode 0600. **Settings → Remove** requests confirmation, validates the currently selected installed file, and removes only that pack. Removing the active or persisted pack returns the selection to en_US. These actions do not perform network downloads.
 
 
 ## Automatic character-locale selection
