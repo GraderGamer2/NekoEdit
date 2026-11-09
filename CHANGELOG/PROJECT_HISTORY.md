@@ -1,3 +1,17 @@
+## 2026-11-09 — automatic Compose locale discovery from character-locale variables
+
+Implementation/test commits: [74110d69492e](https://github.com/GraderGamer2/NekoEdit/commit/74110d69492eb168b93f3020890e37300afe585e), [39f61c7e27f9](https://github.com/GraderGamer2/NekoEdit/commit/39f61c7e27f9c8ba715637e41a3e3389f7051260), and [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5).
+
+A saved Settings choice is authoritative; otherwise NekoEdit selects the first non-empty value among `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG`. Empty values are skipped. Common Brazilian Portuguese spellings normalize to the canonical `pt_BR.UTF-8` pack tag. C/POSIX and en_US aliases use the embedded default. An unsupported non-empty higher-priority value does not fall through to a lower-priority variable. Message-translation variables are ignored because they do not represent the character input locale.
+
+The Wayland mock validates actual Compose keystrokes selected by LC_ALL, LC_CTYPE, and LANG, plus an explicit saved en_US setting overriding a pt_BR environment. It checks the resulting document UTF-8, not just loader state. The saved-preference fixture correction ensures the preferences file contains valid separate lines.
+
+Build and test [#711](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908) passed all 12 steps, including the full Wayland suite, source-blob checks, byte-for-byte locale regeneration, and separate locale/editor artifact uploads. The application remains offline-capable and no dynamic runtime dependency was added.
+
+The next locale milestone is GUI installation/removal of external data-only packs. More datasets, locale-specific dead keys, system/user Compose import, actual Release attachment testing, and live GNOME/Mutter verification remain future work.
+
+---
+
 ## 2026-11-09 — add persistent Settings selection for Compose locales
 
 Implementation/test commits: [7343175f2584](https://github.com/GraderGamer2/NekoEdit/commit/7343175f258430e55db1252d8dcb31dbe9bce40e), [70f216f2197d](https://github.com/GraderGamer2/NekoEdit/commit/70f216f2197d30b3c6af75481d542aad864b12fe), [05d080417878](https://github.com/GraderGamer2/NekoEdit/commit/05d080417878bb71dae54fda4638cd554c3bea08), [241401ea9d1e](https://github.com/GraderGamer2/NekoEdit/commit/241401ea9d1e2529d6da9e5ada340bf64cce84e7), and [ce35e0803d0a](https://github.com/GraderGamer2/NekoEdit/commit/ce35e0803d0a586074aa5ddb11d65208cb24fb99).

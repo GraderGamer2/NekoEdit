@@ -1,3 +1,35 @@
+## 2026-11-09 — automatic character-locale discovery, aliases, and precedence tests — Build and test #711 passed
+
+### Runtime behavior
+
+- Extended `compose_locale_load()`: a saved Settings preference remains authoritative; otherwise the first non-empty value among `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG` is selected.
+- Empty variables are skipped. Common pt_BR names (`pt_BR`, `pt_BR.utf8`, `pt_BR.UTF8`, and implemented lower-case-country variants) normalize to the canonical `pt_BR.UTF-8` pack tag.
+- en_US and C/POSIX aliases keep the embedded default. Unsupported non-empty higher-priority values leave en_US active rather than falling through. `LC_MESSAGES` and `LANGUAGE` are intentionally ignored because they concern message translation, not character input.
+- This is direct environment parsing in the freestanding C loader. No libc locale subsystem, message catalog, executable plugin, download service, or runtime library was introduced.
+
+### Regression coverage and corrections
+
+- Added Wayland end-to-end scenarios for LC_CTYPE after empty LC_ALL, LANG after both higher-priority variables are empty, pt_BR.utf8 and bare pt_BR aliases, and a saved en_US choice overriding pt_BR process environment.
+- Each test types the Compose sequence and checks the resulting multiscalar UTF-8 bytes; it does not stop at checking the loader-active flag.
+- [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5) corrected an earlier fixture that had literal backslash-n text instead of two valid preferences lines. The final #711 run includes the corrected fixture.
+- The #711 log also confirms the LC_ALL precedence and C fallback cases, plus the persistent Settings selection test.
+
+### Validation
+
+- [Build and test #711](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908) passed all 12 steps on the documentation-sync tree: freestanding build, CLI/host tests, full Wayland mock, ELF inspection, pinned-source blob checks, exact JSON regeneration, locale-pack generation, and both artifact uploads.
+- Locale pack: 151,288 bytes; artifact [13657749061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13657749061), ZIP 17,943 bytes, SHA-256 `aed84a5b2f6622f6c1a97485bde302a9a15f6e37c6ba61d0975d3affe770bcab`.
+- Editor binary: 120,558 bytes; artifact [13658670522](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13658670522), ZIP SHA-256 `3e28c207ff4667d74dfdfe526aa9ffa43f4ade3c0dc2fe15afcd11455eda8619`.
+
+### Remaining work
+
+Add an in-app pack installer/remover, more locale tables, locale-specific dead-key data, and optional system/user Compose import. The GitHub Release attachment workflow is implemented but has not been exercised by publishing a new project Release. Live GNOME/Mutter verification remains outstanding.
+
+**Implementation/test commits:** [74110d69492e](https://github.com/GraderGamer2/NekoEdit/commit/74110d69492eb168b93f3020890e37300afe585e), [39f61c7e27f9](https://github.com/GraderGamer2/NekoEdit/commit/39f61c7e27f9c8ba715637e41a3e3389f7051260), [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5).
+
+**Documentation/graph commits:** [3501b7411d98](https://github.com/GraderGamer2/NekoEdit/commit/3501b7411d98ff37b1cd2bcc69145f5f1d4d2ab7), [533700d4d45f](https://github.com/GraderGamer2/NekoEdit/commit/533700d4d45f1c13239aef3adfe332b59e07b7bd), [e14283bd3405](https://github.com/GraderGamer2/NekoEdit/commit/e14283bd34057f7f4c547e9fcc41c149f1b67744), [36edf26d251f](https://github.com/GraderGamer2/NekoEdit/commit/36edf26d251fea2edc016b46277b12629d50440f), and merge sync [fd6054789a3b](https://github.com/GraderGamer2/NekoEdit/commit/fd6054789a3bad1f1d0d4c727bc8b19248c286c7).
+
+---
+
 ## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
 
 ### Preference and loader integration
