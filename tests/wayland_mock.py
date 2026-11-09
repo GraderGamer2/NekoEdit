@@ -2089,8 +2089,8 @@ xkb_symbols "nekoedit-sparse" {
                     # the same done batch must retain the last valid candidate. Cursor
                     # indices are UTF-8 byte offsets, and the range may be reversed.
                     multibyte_preedit_text = "aé中".encode("utf-8")
-                    multibyte_preedit = multibyte_preedit_text + b"\\0"
-                    invalid_preedit = "é".encode("utf-8") + b"\\0"
+                    multibyte_preedit = multibyte_preedit_text + bytes((0,))
+                    invalid_preedit = "é".encode("utf-8") + bytes((0,))
                     client.sendall(
                         preedit_event(multibyte_preedit, 3, 1)
                         + preedit_event(invalid_preedit, 1, 1)
@@ -2192,7 +2192,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("preedit cursor (-1,-1) was not preserved as hidden")
 
                     # An empty preedit with hidden cursor clears the previous composition.
-                    empty_preedit = b"\\0"
+                    empty_preedit = bytes((0,))
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         preedit_event(empty_preedit, -1, -1)
