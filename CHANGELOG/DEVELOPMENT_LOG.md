@@ -1,3 +1,66 @@
+## 2026-11-09 — XKB preserve/consumed-Control milestone validated — Actions #682 passed
+
+### Implementation and semantics
+
+- The parser stores a 32-bit preserve mask for every bounded XKB type-map entry, associated by the exact left-hand modifier combination. A preserve declaration before its map creates an implicit Level1 entry; a later matching map updates it in place. The parser verifies the preserve mask is a subset of the type's declared modifiers.
+- The shared level-selection routine returns the matched level and selected entry's consumed modifier mask. The exported xkb_lookup_consumed_modifiers query uses the same exact type/map selection as symbol lookup.
+- Wayland retains the full compositor XKB state for keysym lookup and tracks raw Control separately. Only shortcut-visible Control is filtered by the current key's consumed mask; raw Control is restored on key release. No modifier/group actions are re-applied by the client.
+- Scope is deliberately bounded to Control shortcut dispatch. General xkb_compat action execution and consumed Shift/Alt policy remain future work.
+
+### Regression coverage and validation
+
+- The mock uses paired types with Control selecting Level3. One preserves Control; the other consumes it. The preserve statement deliberately precedes map[Control] so the test catches duplicate entries instead of updating the implicit Level1 map.
+- Parser-memory assertions verify type IDs, exact map masks/levels, and preserved masks. Wayland key-event coverage proves preserved Control keeps Ctrl+A active, while consumed Control causes Ctrl+Z to insert the key's EuroSign instead of invoking Undo.
+- Actions #680 stopped at the mock symbol allow-list because xkb_type_map_preserves had not been added. Actions #681 stopped in the legacy seat-v3 test because the final Tab release was not awaited before compositor close. The allow-list and final-release synchronization corrections were included before #682.
+- Actions [Build and test #682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275) passed all eight steps on test commit [660afc518e4f](https://github.com/GraderGamer2/NekoEdit/commit/660afc518e4f2cc63df83832c6233e93bce1f299), including the complete Wayland mock, ELF inspection, and artifact upload.
+- Artifact [13644083218](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275/artifacts/13644083218) is 95,246 bytes with SHA-256 `e7707ab4c100bd5415ef0ea2184419b48d86ec0851e8d58992b4d396121d7216`; it expires 2026-11-16 02:08:49 UTC.
+- Live GNOME/Mutter verification against real layout keymaps remains outstanding.
+
+---
+
+## 2026-11-09 — synchronize the legacy seat-v3 final key release
+
+- Actions [Build and test #681](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549071378) compiled the preserve implementation, passed ELF verification and all host tests, and completed the first five Wayland mock scenarios. It then exited during the older inherited-`WAYLAND_SOCKET` / seat-v3 held-key scenario before the custom XKB preserve fixture ran.
+- The seat-v3 scenario already waited for the client to consume the held-Enter release before beginning Tab, but it did not wait for the final held-Tab release before the mock immediately sent `xdg_toplevel.close` and closed its socket. The test therefore allowed a pending repeat timer and compositor shutdown to race.
+- Added the same explicit `repeat_keycode == 0` acknowledgement after Tab key-up and before compositor close. No application keyboard semantics were changed in this synchronization correction.
+- These parser-memory checks and key-specific shortcut cases subsequently passed in Actions [#682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275).
+
+---
+
+## 2026-11-09 — fix XKB preserve mock symbol inspection
+
+- Actions [Build and test #680](https://github.com/GraderGamer2/NekoEdit/actions/runs/42548911081) built and linked the new XKB preserve implementation, passed ELF checks and all host tests, then stopped in the Wayland mock before the new XKB assertions. The mock attempted to inspect `xkb_type_map_preserves` through `/proc/<pid>/mem`, but its `wanted_symbols` allow-list did not include the newly exported symbol, causing a harness `KeyError`.
+- Added the exported preserve table to the mock symbol allow-list. This is a test-harness correction, not a source parser failure; #680 did not validate the preserve parser or runtime scenarios.
+- Also aligned the new nested-call consumed-mask wrapper to the SysV ABI by preserving an additional callee-saved register around `.Lxkb_select_level`.
+- The allow-list correction is in [ca83b3e4c096](https://github.com/GraderGamer2/NekoEdit/commit/ca83b3e4c096ebc029148aa2c16cfd50d2f8764e); Actions #682 subsequently reached and passed all preserve-memory and runtime shortcut assertions.
+
+---
+
+## 2026-11-09 — XKB type preserve masks and key-specific consumed Control
+
+**Branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
+
+### Implementation
+
+- Added a 32-bit preserve-mask slot for each of the existing 64 × 32 bounded XKB type-map entries.
+- The `xkb_types` parser now reads `preserve[modifier-combination] = modifier-mask;`, associates it with the exact `map[]` entry, and rejects preserved modifiers outside the type's declared `modifiers` mask.
+- A preserve statement without an earlier matching map entry creates the specification's implicit Level1 entry. A later `map[]` declaration updates the same entry in place.
+- Type lookup returns both the selected level and the consumed-modifier mask (`type.modifiers & ~entry.preserve`). The new `xkb_lookup_consumed_modifiers` API uses the same exact map selection as symbol lookup.
+- Wayland keeps raw physical/compositor Control state separate from the key-specific shortcut state. It masks Control only when the current key's XKB consumed mask includes Control, and restores raw state when the key is released. Keysym lookup still receives the complete compositor modifier state; no modifier/group actions are replayed in the client.
+
+### Regression coverage
+
+- Added paired custom types with Control selecting Level3: one preserves Control and one consumes it.
+- The fixture puts `preserve[Control]` before `map[Control]` to verify the implicit Level1 entry is updated rather than duplicated. The mock inspects map masks, level numbers, and preserve masks in process memory.
+- Wayland integration verifies preserved Control still dispatches Ctrl+A, while consumed Control causes Ctrl+Z to insert the key's EuroSign alternate instead of undoing. The document is saved before the consumed-key test, so the disk round-trip also detects an accidental shortcut dispatch.
+- Actions validation is pending on the implementation commit. Live GNOME/Mutter comparison against real keymaps remains outstanding.
+
+### Scope boundary
+
+This milestone implements XKB type-map preserve/consumed-modifier semantics for the current Control shortcut path. It does not execute general `xkb_compat` actions, change compositor modifier/group state, or add generic Shift/Alt shortcut policy.
+
+---
+
 ## 2026-11-09 — correct XKB repeat defaults, BSS storage, and symbol-less keys
 
 ### Root causes found after Actions #677

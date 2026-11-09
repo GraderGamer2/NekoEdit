@@ -5,9 +5,23 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **372** (371 previously recorded commits + the XKB repeat-default/BSS correction and symbol-less-key regression coverage; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **375** (372 previously recorded commits + the XKB preserve implementation and its two test corrections; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## XKB type preserve and consumed-Control handling (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [44e509741574](https://github.com/GraderGamer2/NekoEdit/commit/44e509741574cbf0c569e0ddd58e83cf34229a24) | feat: honor XKB preserve masks in shortcut dispatch |
+| [ca83b3e4c096](https://github.com/GraderGamer2/NekoEdit/commit/ca83b3e4c096ebc029148aa2c16cfd50d2f8764e) | test: expose XKB preserve table to Wayland mock |
+| [660afc518e4f](https://github.com/GraderGamer2/NekoEdit/commit/660afc518e4f2cc63df83832c6233e93bce1f299) | test: await legacy Tab repeat cancellation before close |
+
+The xkb_types parser associates preserve masks with exact map[] modifier combinations, including the implicit Level1 entry created when a preserve statement appears before its map. Selected map lookup computes consumed modifiers as the type's declared modifier mask minus the selected entry's preserve mask. Wayland uses this result to decide whether Control remains available to shortcut dispatch for the current key while retaining the complete compositor state for symbol lookup.
+
+The mock inspects the preserve table and verifies two runtime outcomes: preserved Control continues to activate Ctrl+A; unpreserved/consumed Control selects the mapped third-level EuroSign instead of invoking Ctrl+Z. Actions #680 exposed a missing symbol in the mock's /proc inspection allow-list. Actions #681 exposed an unawaited final Tab key release in the seat-v3 inherited-socket scenario. The allow-list and final-release test synchronization were corrected in the two follow-up commits.
+
+Actions [Build and test #682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275) passed all eight workflow steps on 660afc518e4f. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275/artifacts/13644083218) is 95,246 bytes; SHA-256 `e7707ab4c100bd5415ef0ea2184419b48d86ec0851e8d58992b4d396121d7216`.
 
 ## XKB repeat-default and symbol-less key correction (2026-11-09)
 

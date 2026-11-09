@@ -1,5 +1,69 @@
 # NekoEdit current status
 
+## 2026-11-09 — XKB type preserve and consumed-Control validation passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open against `main`.
+**Feature commit:** [44e509741574](https://github.com/GraderGamer2/NekoEdit/commit/44e509741574cbf0c569e0ddd58e83cf34229a24).
+**Latest test commit:** [660afc518e4f](https://github.com/GraderGamer2/NekoEdit/commit/660afc518e4f2cc63df83832c6233e93bce1f299).
+
+- The xkb_types parser retains a 32-bit preserve mask beside each exact map entry. Preserve-before-map declarations create an implicit Level1 entry; a later matching map updates it in place.
+- Lookup computes consumed modifiers as type.modifiers AND NOT the matched entry's preserve mask. Wayland uses that per-key result for Control shortcut dispatch while symbol lookup keeps the full compositor XKB state.
+- The mock verifies parser tables, implicit-Level1 ordering, preserved Ctrl+A, and consumed-Control EuroSign insertion instead of Ctrl+Z.
+- Actions [Build and test #682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275) passed all eight workflow steps, including the complete Wayland mock, ELF inspection, and artifact upload.
+- Artifact [13644083218](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275/artifacts/13644083218) is 95,246 bytes; SHA-256 `e7707ab4c100bd5415ef0ea2184419b48d86ec0851e8d58992b4d396121d7216`; expires 2026-11-16 02:08:49 UTC.
+- Actions #680 and #681 stopped in intermediate mock-harness support paths; the allow-list and legacy Tab-release synchronization corrections were included before the passing #682 tree.
+
+### Remaining scope
+
+General xkb_compat action execution and consumed Shift/Alt shortcut behavior remain unfinished. Modifier/group transitions remain compositor-owned. Live GNOME/Mutter verification against real layout keymaps remains outstanding.
+
+**Snapshot date:** 2026-11-09 (Asia/Jakarta).
+
+---
+
+## 2026-11-09 — synchronize the legacy seat-v3 final key release
+
+- Actions [Build and test #681](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549071378) compiled the preserve implementation, passed ELF verification and all host tests, and completed the first five Wayland mock scenarios. It then exited during the older inherited-`WAYLAND_SOCKET` / seat-v3 held-key scenario before the custom XKB preserve fixture ran.
+- The seat-v3 scenario already waited for the client to consume the held-Enter release before beginning Tab, but it did not wait for the final held-Tab release before the mock immediately sent `xdg_toplevel.close` and closed its socket. The test therefore allowed a pending repeat timer and compositor shutdown to race.
+- Added the same explicit `repeat_keycode == 0` acknowledgement after Tab key-up and before compositor close. No application keyboard semantics were changed in this synchronization correction.
+- The preserve parser-memory checks and both key-specific shortcut scenarios subsequently passed in Actions [#682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275).
+
+---
+
+## 2026-11-09 — fix XKB preserve mock symbol inspection
+
+- Actions [Build and test #680](https://github.com/GraderGamer2/NekoEdit/actions/runs/42548911081) built and linked the new XKB preserve implementation, passed ELF checks and all host tests, then stopped in the Wayland mock before the new XKB assertions. The mock attempted to inspect `xkb_type_map_preserves` through `/proc/<pid>/mem`, but its `wanted_symbols` allow-list did not include the newly exported symbol, causing a harness `KeyError`.
+- Added the exported preserve table to the mock symbol allow-list. This is a test-harness correction, not a source parser failure; #680 did not validate the preserve parser or runtime scenarios.
+- Also aligned the new nested-call consumed-mask wrapper to the SysV ABI by preserving an additional callee-saved register around `.Lxkb_select_level`.
+- The allow-list correction is in [ca83b3e4c096](https://github.com/GraderGamer2/NekoEdit/commit/ca83b3e4c096ebc029148aa2c16cfd50d2f8764e); Actions #682 subsequently reached and passed all preserve-memory and runtime shortcut assertions.
+
+---
+
+## 2026-11-09 — XKB type preserve masks and key-specific consumed Control
+
+**Branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
+
+### Implementation
+
+- Added a 32-bit preserve-mask slot for each of the existing 64 × 32 bounded XKB type-map entries.
+- The `xkb_types` parser now reads `preserve[modifier-combination] = modifier-mask;`, associates it with the exact `map[]` entry, and rejects preserved modifiers outside the type's declared `modifiers` mask.
+- A preserve statement without an earlier matching map entry creates the specification's implicit Level1 entry. A later `map[]` declaration updates the same entry in place.
+- Type lookup returns both the selected level and the consumed-modifier mask (`type.modifiers & ~entry.preserve`). The new `xkb_lookup_consumed_modifiers` API uses the same exact map selection as symbol lookup.
+- Wayland keeps raw physical/compositor Control state separate from the key-specific shortcut state. It masks Control only when the current key's XKB consumed mask includes Control, and restores raw state when the key is released. Keysym lookup still receives the complete compositor modifier state; no modifier/group actions are replayed in the client.
+
+### Regression coverage
+
+- Added paired custom types with Control selecting Level3: one preserves Control and one consumes it.
+- The fixture puts `preserve[Control]` before `map[Control]` to verify the implicit Level1 entry is updated rather than duplicated. The mock inspects map masks, level numbers, and preserve masks in process memory.
+- Wayland integration verifies preserved Control still dispatches Ctrl+A, while consumed Control causes Ctrl+Z to insert the key's EuroSign alternate instead of undoing. The document is saved before the consumed-key test, so the disk round-trip also detects an accidental shortcut dispatch.
+- Actions [Build and test #682](https://github.com/GraderGamer2/NekoEdit/actions/runs/42549249275) passed all eight workflow steps, including preserve parser-memory checks and both key-specific shortcut scenarios. Live GNOME/Mutter comparison against real keymaps remains outstanding.
+
+### Scope boundary
+
+This milestone implements XKB type-map preserve/consumed-modifier semantics for the current Control shortcut path. It does not execute general `xkb_compat` actions, change compositor modifier/group state, or add generic Shift/Alt shortcut policy.
+
+---
+
 ## 2026-11-09 — correct XKB per-key repeat defaults and BSS storage
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
@@ -22,7 +86,7 @@
 ### Remaining XKB work
 
 - The compositor remains responsible for stateful actions such as `SetMods` and `SetGroup`; the client consumes the modifier/group state Wayland reports.
-- XKB `preserve[]` consumed-modifier semantics remain unimplemented. The next bounded milestone should add preserve handling to exact type-map lookup with focused parser and symbol-lookup tests, without replaying compositor actions.
+- XKB type-map `preserve[]` and consumed-Control shortcut handling are implemented and validated in Actions #682. General XKB key actions and broader consumed Shift/Alt shortcut policy remain future work.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
@@ -89,7 +153,7 @@
 
 ### Scope not yet implemented
 
-This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates, virtual-modifier assignment, and bounded repeat policy described in the newer 2026-11-09 milestone, but does not execute stateful `action` statements, evaluate compatibility indicators, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
+This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates, virtual-modifier assignment, and bounded repeat policy described in the newer 2026-11-09 milestone, but does not execute stateful `action` statements, evaluate compatibility indicators, implement general key actions, or track consumed modifiers beyond the implemented type-map preserve/Control shortcut subset. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 
