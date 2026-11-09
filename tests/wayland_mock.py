@@ -6188,7 +6188,17 @@ xkb_symbols "nekoedit-sparse" {
 
                 # Tab inserts four spaces per action, both on initial press and repeat.
                 before_tab = caret_position()
+                before_tab_cursor = child_u32("doc_cursor")
                 client.sendall(wire_message(16, 3, struct.pack("<IIII", 1730, 1730, 15, 1)))
+                # A delayed redraw from the preceding held Enter can otherwise
+                # satisfy expect_redraw() before this Tab event is dispatched.
+                # Synchronize on both its repeat state and actual document edit.
+                wait_child_u32("repeat_keycode", 15, "initial held Tab key event")
+                wait_child_u32(
+                    "doc_cursor",
+                    before_tab_cursor + 4,
+                    "initial held Tab inserts four spaces",
+                )
                 expect_redraw("initial held Tab")
                 client.sendall(wire_message(12, 0))
                 after_tab = caret_position()
