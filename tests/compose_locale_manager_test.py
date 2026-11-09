@@ -23,7 +23,10 @@ def main() -> None:
         document = {
             "locale": "pt_BR.UTF-8",
             "sequences": [
-                {"input": [ord("o"), ord("i")], "output": [0x2603, 0xFE0F]},
+                {"kind": "multi_key", "input": [ord("o"), ord("i")],
+                 "output": [0x2603, 0xFE0F]},
+                {"kind": "dead_key", "input": [0x0301, ord("c")],
+                 "output": [0x00E7]},
             ],
         }
         packed = encode_pack(document)
