@@ -4,13 +4,49 @@ NekoEdit resolves named character keysyms without a runtime X11, Fontconfig, Fre
 
 ## Coverage
 
-The static table includes all printable Unicode mappings in the X.Org `keysymdef.h` data used to generate it, including legacy aliases that share a keysym value with a Unicode-annotated canonical entry. The current table also retains NekoEdit's dedicated `Multi_key` and six dead-accent action markers.
+The static table includes the printable Unicode mappings from the pinned X.Org `keysymdef.h` data, including legacy aliases that share a keysym value with a Unicode-annotated canonical entry. It also maps named non-character actions used by the editor: `Multi_key` and the standard combining dead-key actions below.
 
-The 2026.1 additions include `SSHARP` (U+1E9E), `leftsingleanglequotemark` / `rightsingleanglequotemark` (U+2039/U+203A), `XF86XK_Numeric0` through `XF86XK_Numeric9`, `XF86XK_NumericStar`, `XF86XK_NumericPound`, and `dead_apostrophe` (handled through the existing acute-accent path).
+The 2026.1 additions include `SSHARP` (U+1E9E), `leftsingleanglequotemark` / `rightsingleanglequotemark` (U+2039/U+203A), `XF86XK_Numeric0` through `XF86XK_Numeric9`, `XF86XK_NumericStar`, `XF86XK_NumericPound`, and `dead_apostrophe` (an alias for the acute action).
 
-The Wayland mock checks both parser scalar storage and actual UTF-8 insertion for Arabic, Hebrew, Thai, Hangul, Armenian, Georgian, Kana, Sinhala, Braille, German capital sharp S, single-angle quotation marks, and phone-numeric keysyms. It separately checks that `dead_apostrophe` activates the supported acute accent behavior.
+### Combining dead-key actions
 
-This is not a claim of complete XKB/libxkbcommon support. Named function keysyms without Unicode character mappings stay on the editor's command/key-action paths. General XKB key actions and compatibility indicators are not executed by the client; Wayland modifier/group state remains compositor-owned. Rendering still depends on the selected font containing the corresponding glyph, and complete shaping, locale Compose, and advanced IME behavior remain separate work.
+The first six action markers remain ABI-stable: `dead_grave` U+0300, `dead_acute` / `dead_apostrophe` U+0301, `dead_circumflex` U+0302, `dead_tilde` / `dead_perispomeni` U+0303, `dead_diaeresis` U+0308, and `dead_cedilla` U+0327. The additional named actions map to these canonical combining marks:
+
+| Keysym names | Combining scalar |
+|---|---:|
+| `dead_macron` | U+0304 |
+| `dead_breve` | U+0306 |
+| `dead_abovedot` | U+0307 |
+| `dead_abovering` | U+030A |
+| `dead_doubleacute` | U+030B |
+| `dead_caron` | U+030C |
+| `dead_ogonek` | U+0328 |
+| `dead_iota` | U+0345 |
+| `dead_voiced_sound` / `dead_semivoiced_sound` | U+3099 / U+309A |
+| `dead_belowdot` | U+0323 |
+| `dead_hook` / `dead_horn` | U+0309 / U+031B |
+| `dead_stroke` / `dead_longsolidusoverlay` | U+0338 |
+| `dead_abovecomma` / `dead_psili` | U+0313 |
+| `dead_abovereversedcomma` / `dead_dasia` | U+0314 |
+| `dead_doublegrave` | U+030F |
+| `dead_belowring` | U+0325 |
+| `dead_belowmacron` | U+0331 |
+| `dead_belowcircumflex` | U+032D |
+| `dead_belowtilde` | U+0330 |
+| `dead_belowbreve` | U+032E |
+| `dead_belowdiaeresis` | U+0324 |
+| `dead_invertedbreve` | U+0311 |
+| `dead_belowcomma` | U+0326 |
+| `dead_lowline` | U+0332 |
+| `dead_aboveverticalline` / `dead_belowverticalline` | U+030D / U+0329 |
+
+An entered dead key arms its combining mark without inserting bytes. The next scalar uses a curated precomposition table where a known Unicode character exists; otherwise the editor inserts the base scalar followed by the combining mark. The precomposition table currently covers the original 52 Latin-1 pairs plus curated Latin Extended-A macron, breve, caron, ogonek, and below-dot pairs. This is generic XKB dead-key behavior, not locale-specific Compose data.
+
+`dead_currency` and the `dead_a`/vowel-style syllable-entry actions are deliberately not mapped to combining marks. They have different semantics and must not be treated as ordinary diacritics. `Multi_key` retains its separate marker and sequence-buffering path.
+
+The Wayland mock checks parser marker storage and real document insertion for the additional macron, caron, and below-dot actions. It verifies two precomposed results and the base-plus-mark fallback. Existing tests continue to cover Arabic, Hebrew, Thai, Hangul, Armenian, Georgian, Kana, Sinhala, Braille, German capital sharp S, angle quotation marks, and phone-numeric keysyms.
+
+This is not a claim of complete XKB/libxkbcommon support. Named function keysyms without Unicode character mappings stay on the editor's command/key-action paths. General XKB key actions and compatibility indicators are not executed by the client; Wayland modifier/group state remains compositor-owned. Rendering still depends on the selected font containing the corresponding glyph, and complete locale Compose import, full shaping, and advanced IME behavior remain separate work.
 
 ## Source and licensing
 

@@ -4701,6 +4701,11 @@ unicode_extended_pictographic_ranges_end:
     .long 0, 0, 0, 0
 .Ldoc_dead_marks:
     .long 0x300, 0x301, 0x302, 0x303, 0x308, 0x327
+    .long 0x0, 0x304, 0x306, 0x307, 0x30a, 0x30b
+    .long 0x30c, 0x328, 0x345, 0x3099, 0x309a, 0x323
+    .long 0x309, 0x31b, 0x338, 0x313, 0x314, 0x30f
+    .long 0x325, 0x331, 0x32d, 0x330, 0x32e, 0x324
+    .long 0x311, 0x326, 0x332, 0x30d, 0x329, 0x338
 .Ldoc_dead_compose_table:
     .long 0x41, 0x300, 0xc0
     .long 0x45, 0x300, 0xc8
@@ -4754,6 +4759,41 @@ unicode_extended_pictographic_ranges_end:
     .long 0x79, 0x308, 0xff
     .long 0x43, 0x327, 0xc7
     .long 0x63, 0x327, 0xe7
+    # Macron: common Latin Extended-A forms.
+    .long 0x41, 0x304, 0x100
+    .long 0x61, 0x304, 0x101
+    .long 0x45, 0x304, 0x112
+    .long 0x65, 0x304, 0x113
+    .long 0x49, 0x304, 0x12a
+    .long 0x69, 0x304, 0x12b
+    .long 0x4f, 0x304, 0x14c
+    .long 0x6f, 0x304, 0x14d
+    .long 0x55, 0x304, 0x16a
+    .long 0x75, 0x304, 0x16b
+    # Breve.
+    .long 0x41, 0x306, 0x102
+    .long 0x61, 0x306, 0x103
+    # Caron.
+    .long 0x43, 0x30c, 0x10c
+    .long 0x63, 0x30c, 0x10d
+    .long 0x44, 0x30c, 0x10e
+    .long 0x64, 0x30c, 0x10f
+    .long 0x45, 0x30c, 0x11a
+    .long 0x65, 0x30c, 0x11b
+    .long 0x4e, 0x30c, 0x147
+    .long 0x6e, 0x30c, 0x148
+    .long 0x53, 0x30c, 0x160
+    .long 0x73, 0x30c, 0x161
+    .long 0x5a, 0x30c, 0x17d
+    .long 0x7a, 0x30c, 0x17e
+    # Ogonek.
+    .long 0x41, 0x328, 0x104
+    .long 0x61, 0x328, 0x105
+    .long 0x45, 0x328, 0x118
+    .long 0x65, 0x328, 0x119
+    # Below-dot.
+    .long 0x45, 0x323, 0x1eb8
+    .long 0x65, 0x323, 0x1eb9
     .long 0, 0, 0
 
 .section .text
@@ -18353,37 +18393,37 @@ keycode_to_unicode:
     ret
 .size keycode_to_unicode, . - keycode_to_unicode
 
-# Return a precomposed Latin-1 scalar for (EDI=base, ESI=combining mark).
+# Return a precomposed Unicode scalar for (EDI=base, ESI=combining mark).
 # Zero means no precomposed mapping exists; callers preserve base+mark.
-.type doc_compose_latin1, @function
-doc_compose_latin1:
+.type doc_compose_precomposed, @function
+doc_compose_precomposed:
     push rbx
     push r12
     push r13
     mov r12d, edi
     mov r13d, esi
     lea rbx, [rip + .Ldoc_dead_compose_table]
-.Ldoc_compose_latin1_loop:
+.Ldoc_compose_precomposed_loop:
     cmp dword ptr [rbx], 0
-    je .Ldoc_compose_latin1_none
+    je .Ldoc_compose_precomposed_none
     cmp dword ptr [rbx], r12d
-    jne .Ldoc_compose_latin1_next
+    jne .Ldoc_compose_precomposed_next
     cmp dword ptr [rbx + 4], r13d
-    je .Ldoc_compose_latin1_found
-.Ldoc_compose_latin1_next:
+    je .Ldoc_compose_precomposed_found
+.Ldoc_compose_precomposed_next:
     add rbx, 12
-    jmp .Ldoc_compose_latin1_loop
-.Ldoc_compose_latin1_found:
+    jmp .Ldoc_compose_precomposed_loop
+.Ldoc_compose_precomposed_found:
     mov eax, dword ptr [rbx + 8]
-    jmp .Ldoc_compose_latin1_done
-.Ldoc_compose_latin1_none:
+    jmp .Ldoc_compose_precomposed_done
+.Ldoc_compose_precomposed_none:
     xor eax, eax
-.Ldoc_compose_latin1_done:
+.Ldoc_compose_precomposed_done:
     pop r13
     pop r12
     pop rbx
     ret
-.size doc_compose_latin1, . - doc_compose_latin1
+.size doc_compose_precomposed, . - doc_compose_precomposed
 
 # Insert a Unicode scalar, arm a dead key, or process a bounded Multi_key pair.
 # Dead-key actions use 0x110001..0x110006; Multi_key uses 0x110007. None are
@@ -18500,7 +18540,7 @@ doc_insert_keyboard_codepoint:
     je .Ldoc_keyboard_compose_start
     cmp r12d, 0x110001
     jb .Ldoc_keyboard_insert_scalar
-    cmp r12d, 0x110006
+    cmp r12d, 0x110024
     ja .Ldoc_keyboard_insert_scalar
     lea rax, [rip + .Ldoc_dead_marks]
     sub r12d, 0x110001
@@ -18773,7 +18813,7 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_pending_dead_mark], 0
     mov edi, r12d
     mov esi, r13d
-    call doc_compose_latin1
+    call doc_compose_precomposed
     test eax, eax
     jz .Ldoc_keyboard_compose_fallback
     mov r14d, eax

@@ -800,6 +800,9 @@ xkb_keycodes "nekoedit-test" {
     <CP02> = 234;
     <CP03> = 235;
     <CP04> = 236;
+    <CP05> = 237;
+    <CP06> = 238;
+    <CP07> = 239;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -1035,6 +1038,9 @@ xkb_symbols "nekoedit-test" {
     key <CP02> { symbols[Group1] = [ S ] };
     key <CP03> { symbols[Group1] = [ greater ] };
     key <CP04> { symbols[Group1] = [ minus ] };
+    key <CP05> { symbols[Group1] = [ dead_macron ] };
+    key <CP06> { symbols[Group1] = [ dead_caron ] };
+    key <CP07> { symbols[Group1] = [ dead_belowdot ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -1155,6 +1161,9 @@ xkb_symbols "nekoedit-test" {
                             or b"[ S ]" not in keymap_data
                             or b"[ greater ]" not in keymap_data
                             or b"[ minus ]" not in keymap_data
+                            or b"[ dead_macron ]" not in keymap_data
+                            or b"[ dead_caron ]" not in keymap_data
+                            or b"[ dead_belowdot ]" not in keymap_data
                         ):
                             raise AssertionError("named Unicode/dead-key/Greek/Cyrillic test substitutions did not apply")
                 elif sparse_keymap_test:
@@ -4227,6 +4236,15 @@ xkb_symbols "nekoedit-sparse" {
                             "X.Org named Unicode keysyms did not map to their expected Unicode scalars: "
                             + repr({"existing": alias_scalars, "extended": extended_alias_scalars})
                         )
+                    dead_action_markers = tuple(
+                        child_u32_at("xkb_unicode_levels", keycode * 128)
+                        for keycode in (237, 238, 239)
+                    )
+                    if dead_action_markers != (0x110008, 0x11000D, 0x110012):
+                        raise AssertionError(
+                            "additional XKB dead keys did not resolve to their combining-mark actions: "
+                            + repr(dead_action_markers)
+                        )
                     # AC01 is XKB keycode 38 (evdev 30). The first level
                     # produces U+00E9 and Shift selects supplementary U+1F600.
                     key_step(1500, 30, "XKB U00E9 inserts a two-byte UTF-8 scalar")
@@ -4436,8 +4454,35 @@ xkb_symbols "nekoedit-sparse" {
                             "dead_apostrophe composition produced unexpected UTF-8: "
                             + repr(read_document_state().get("doc_contents"))
                         )
+                    # Extended dead-key actions share the pending-mark path.
+                    macron_length = child_u32("doc_length")
+                    key_step(1840, 229, "dead_macron arms U+0304")
+                    if child_u32("doc_pending_dead_mark") != 0x304 or child_u32("doc_length") != macron_length:
+                        raise AssertionError("dead_macron did not arm the combining macron")
+                    key_step(1842, 18, "dead_macron plus e composes to U+0113")
+                    expected_unicode += b"\\xc4\\x93"
+
+                    caron_length = child_u32("doc_length")
+                    key_step(1850, 230, "dead_caron arms U+030C")
+                    if child_u32("doc_pending_dead_mark") != 0x30C or child_u32("doc_length") != caron_length:
+                        raise AssertionError("dead_caron did not arm the combining caron")
+                    key_step(1852, 18, "dead_caron plus e composes to U+011B")
+                    expected_unicode += b"\\xc4\\x9b"
+
+                    fallback_length = child_u32("doc_length")
+                    key_step(1860, 231, "dead_belowdot arms U+0323")
+                    if child_u32("doc_pending_dead_mark") != 0x323 or child_u32("doc_length") != fallback_length:
+                        raise AssertionError("dead_belowdot did not arm the combining dot below")
+                    key_step(1862, 17, "dead_belowdot plus w uses combining fallback")
+                    expected_unicode += b"w\\xcc\\xa3"
+                    final_dead_state = read_document_state()
+                    if final_dead_state.get("doc_contents") != expected_unicode:
+                        raise AssertionError(
+                            "expanded dead-key composition/fallback produced unexpected UTF-8: "
+                            + repr(final_dead_state.get("doc_contents"))
+                        )
                     observations.append(
-                        "XKB Uxxxx scalars, full X.Org Unicode-annotated keysym aliases, Arabic/Hebrew/Thai/Hangul/Armenian/Georgian/Kana/Sinhala/Braille, xorgproto 2026.1 German/quote/phone names, and dead_apostrophe typing verified"
+                        "XKB Uxxxx scalars, full X.Org Unicode-annotated keysym aliases, Arabic/Hebrew/Thai/Hangul/Armenian/Georgian/Kana/Sinhala/Braille, xorgproto 2026.1 names, dead_apostrophe, macron, caron, and below-dot composition verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return
