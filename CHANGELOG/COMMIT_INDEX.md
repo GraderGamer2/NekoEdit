@@ -21,8 +21,9 @@
 | [0bb95b5c5e4f](https://github.com/GraderGamer2/NekoEdit/commit/0bb95b5c5e4ff80b21c0ae40d129eb01473be011) | docs: describe typed locale dead-key packs |
 | [0df8881843cd](https://github.com/GraderGamer2/NekoEdit/commit/0df8881843cd9ec3a16dfecaf181dddd2d78907d) | test: expose pt_BR Compose lookup diagnostics |
 | [bbbb1c167a48](https://github.com/GraderGamer2/NekoEdit/commit/bbbb1c167a485702ca12f5fe6129fc54e4eb9002) | test: correct U+018F UTF-8 bytes in locale assertions |
+| [820412fb8794](https://github.com/GraderGamer2/NekoEdit/commit/820412fb879481f4956eeeef1105f581536c400d) | test: extend Settings locale workflow timeout |
 
-Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 is required to confirm the full Wayland scenario.
+Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 passed the pt_BR lookup/dead-key/Add assertions but hit the 20-second outer timeout at Remove Pack. Commit 820412fb8794 gives the Settings workflow a 50-second bound; #757 must verify the complete scenario.
 
 ---
 ## 2026-11-09 — repair missing development-branch Actions trigger
