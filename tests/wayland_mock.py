@@ -7749,13 +7749,21 @@ xkb_symbols "nekoedit-sparse" {
             "mock compositor failed:\n" + "\n".join(errors)
             + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
         )
-    if compose_locale_settings_test and not any(
-        "Settings locale picker selects generic aa_TEST" in item
-        for item in observations
-    ):
-        raise AssertionError(
-            "Settings locale selector scenario was requested but did not complete its assertions"
+    if compose_locale_settings_test:
+        required_settings_observations = (
+            "Settings installed-locale dropdown dynamically lists generic packs, selects aa_TEST, and persists built-in en_US without opening a file picker",
+            "Settings Add Pack copied/validated pt_BR, preserved the source, and refreshed the dynamic installed-locale list",
+            "Settings Remove Pack requires confirmation, refreshes the locale list, deletes the validated pack, restores en_US, and persists the fallback",
         )
+        missing_settings_observations = [
+            expected for expected in required_settings_observations
+            if expected not in observations
+        ]
+        if missing_settings_observations:
+            raise AssertionError(
+                "Settings locale selector scenario did not complete all checkpoints: "
+                + repr(missing_settings_observations)
+            )
     if disconnect_after_configure_ack:
         sentinel = b"PRIVATE_CONTENT_SENTINEL"
         if (
