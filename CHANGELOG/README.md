@@ -53,6 +53,14 @@ For each feature, bug fix, refactor, or meaningful test change:
 
 A small typo or truly documentation-only correction still receives a commit entry in `COMMIT_INDEX.md`; group minor edits into a concise development-log note where appropriate. A multi-commit feature must be recorded as one coherent work entry plus the individual commit-index rows.
 
+## GitHub Actions trigger policy
+
+The Build and test workflow must run for pushes to `main` and the active development branch `early-alpha`. Pull-request runs are reserved for opening, reopening, or marking a PR ready; normal commits on the development branch are tested by the branch-push event so a merge-conflicted PR cannot block validation. Changelog-only commits are ignored by the workflow's path filters, but source, test, and workflow changes still run the build.
+
+Do not put a skip annotation such as `[skip ci]` in the HEAD commit of an open PR when validation is required. GitHub suppresses `push` and `pull_request` workflows for a matching commit message, and GitHub also suppresses `pull_request` workflows while the PR has merge conflicts. Check the actual PR mergeability state and the commit message before diagnosing a missing Actions run; do not assume it is an Actions-tab filter problem.
+
+---
+
 ## Accuracy and continuity rules
 
 - Do not rely on a previous ChatGPT conversation when the repository contains newer information.
