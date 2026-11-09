@@ -1,3 +1,16 @@
+## 2026-11-09 — verify Finnish and Serbian locale dead-key keyboard paths
+
+- Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed every workflow step, including the full Wayland protocol mock, pinned X.Org data regeneration, optional locale-pack builds, and both artifact uploads.
+- Finnish and Serbian tests now exercise the same locale dead-key input through the physical XKB mock: the fixture's `DA01` key emits `dead_apostrophe` (U+0301), and `AC08` emits `Cyrillic_ka` (U+043A). Both locale packs return U+045C (`ќ`), not a generic decomposed fallback. Tests check the armed mark before the base key, the resulting UTF-8 bytes, cleared pending state, and lookup output.
+- The locale-data regression explicitly pins `[U+0301, U+043A] → U+045C` in both JSON tables. The existing Finnish `Multi_key f i` and Serbian grave-plus-Cyrillic-a tests remain in place.
+- Test commit: [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52). The branch's later documentation-only commit is [5f87db08acd8](https://github.com/GraderGamer2/NekoEdit/commit/5f87db08acd85ab064a7c5b8a99a873f8f5dddaf).
+- Artifacts from #759: Linux x86-64 ZIP `13681366275` (126,958 bytes) and locale packs ZIP `13681910677` (74,021 bytes), expiring 2026-11-16. No published Release was created. No runtime source or locale JSON changed in this milestone.
+
+### Next
+
+Begin the bounded offline `.XCompose` importer. Before implementation, document its grammar subset and safety boundary: allowlisted include roots/expansions, canonical-path cycle detection, bounded file count/bytes/records, depth and output limits compatible with NLP1, Unicode-scalar keysym resolution, and no shell expansion or code execution. Keep installation data under `~/.nekoedit/locales/`.
+
+---
 ## 2026-11-09 — verify pt_BR Settings flow; add Finnish/Serbian locale dead-key event coverage
 
 ### Completed validation

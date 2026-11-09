@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-Build and test #758 is fully green, including the pt_BR Settings/Add/Remove path and artifact uploads. Commit `98144943b5ae` adds Finnish/Serbian physical dead-key coverage (`dead_apostrophe` + `Cyrillic_ka` → U+045C); Actions #759 is the validation run. Check CURRENT_STATUS.md and the actual branch/Actions state before continuing.
+Build and test #758/#759 both passed. #759 includes the Finnish/Serbian physical dead-key tests (`dead_apostrophe` + `Cyrillic_ka` → U+045C) and uploaded both editor and locale artifacts. The next bounded task is safe offline `.XCompose` import; CURRENT_STATUS.md records limits and continuity. Check the branch/Actions state before continuing.
 
 ## Read this first in every new development chat
 

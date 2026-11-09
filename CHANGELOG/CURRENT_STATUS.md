@@ -1,29 +1,23 @@
-## 2026-11-09 — locale dead-key Settings coverage green; Finnish/Serbian physical-input coverage added
+## 2026-11-09 — Finnish/Serbian locale dead-key integration green
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
-**Latest source commit:** [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52).
+**Latest source/test commit:** [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52). The later branch commit `5f87db08acd8` only updates continuity documentation.
 
-### Verified baseline
+- Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 steps: freestanding ELF build, CLI smoke tests, complete Wayland mock, executable inspection, pinned X.Org source regeneration/verification, locale-pack build, and both artifact uploads.
+- The Finnish and Serbian Wayland cases retained their existing Multi_key checks and now also send `dead_apostrophe` (U+0301) followed by `Cyrillic_ka` (U+043A). Both packs resolve the typed dead-key record to U+045C (`ќ`). The tests assert pending-mark state, document insertion, pending-mark clearing, and `compose_locale_output`.
+- The generated-data test explicitly checks `[U+0301, U+043A] → U+045C` in both `fi_FI.UTF-8` and `sr_RS.UTF-8`.
+- The earlier pt_BR Settings regression is also closed: #758 passed the dynamic locale dropdown, keyboard selection, `Multi_key e e` → U+018F, `dead_acute + c` → ç, Base persistence, Add Pack/source preservation/reselection, and confirmed Remove Pack/fallback.
+- Artifacts from #759: [Linux x86-64 executable ZIP](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236/artifacts/13681366275) (126,958 bytes) and [Compose locale pack ZIP](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236/artifacts/13681910677) (74,021 bytes). They expire on 2026-11-16 and are not a published GitHub Release.
+- Commit `98144943b5ae` changed tests only; no runtime assembly/C or locale JSON source changed. The complete #759 run confirms the existing runtime handles these records.
 
-- Build and test [#758](https://github.com/GraderGamer2/NekoEdit/actions/runs/42629086891) passed all 12 workflow steps on commit `81937968d94b`: freestanding ELF build, CLI smoke tests, full Wayland mock, binary inspection, pinned X.Org source verification, all optional locale-pack builds, and both artifact uploads.
-- Artifacts uploaded by #758: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/42629086891) and [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/42629086891). They are temporary Actions artifacts, not a published GitHub Release.
-- The full Settings path passed: dynamic dropdown/keyboard selection, real `pt_BR` `Multi_key e e` → U+018F, `dead_acute + c` → ç, explicit Base en_US preference, Add Pack source preservation/installation/reselection, and confirmed Remove Pack with en_US fallback.
-- Earlier #751–#757 failures were test-only: a synthetic-only Compose expectation, incorrect UTF-8 bytes for U+018F, a too-short process timeout, and an obsolete observation-string guard. The runtime lookup/insertion path was confirmed correct; the final full workflow passed in #758.
+### Next bounded roadmap item
 
-### New coverage in progress
-
-- Commit `98144943b5ae` extends `tests/compose_locale_data_test.py` with an explicit `dead_key` record assertion: `[U+0301, U+043A]` → U+045C (`ќ`) for both Finnish and Serbian packs.
-- The Finnish and Serbian Wayland scenarios now map the test's AC08 key to `Cyrillic_ka` and send a physical event for `dead_apostrophe` (the acute-action alias) followed by that Cyrillic scalar. They assert the pending mark is armed without insertion, then cleared after insertion, and verify both `compose_locale_output` and the resulting UTF-8 bytes.
-- Expected cumulative outputs: Finnish `U+FB01` followed by `U+045C` (`ef ac 81 d1 9c`); Serbian `U+0430 U+0300` followed by `U+045C` (`d0 b0 cc 80 d1 9c`).
-- This is test coverage only; no editor runtime or locale dataset was changed in commit `98144943b5ae`.
-- Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) is running on that commit. Do not mark these new Finnish/Serbian keyboard assertions verified until the complete run passes.
+System/user `.XCompose` import remains the next locale gap. Start with a bounded, offline build-time importer/parser and comprehensive fixture tests; explicitly define include handling, cycle/size limits, Unicode keysym filtering, depth/output limits, and deterministic failure behavior before wiring any UI. Preserve the data-only NLP1 runtime and the user's `~/.nekoedit/` storage boundary. Do not add network access or executable plugin loading.
 
 ### Known boundary
 
-- NLP1 kind 0 remains `Multi_key`; kind 1 remains a dead-key action normalized to its combining mark plus one following Unicode scalar. Longer dead-key chains, non-Unicode input symbols, and system/user `.XCompose` import remain unsupported.
-- Live GNOME/Mutter input and physical-layout behavior have not been manually tested. The mock verifies NekoEdit's XKB parsing/dispatch path, not every desktop compositor or installed keyboard layout.
-
-**Next:** inspect Actions #759. If green, move to the next locale interoperability item rather than changing the dead-key runtime without a demonstrated defect.
+- NLP1 dead-key records support one following Unicode scalar. Longer dead-key chains, non-Unicode input symbols, and system/user `.XCompose` import are not implemented yet.
+- Live GNOME/Mutter input and actual physical keyboard-layout behavior remain unverified. The mock tests NekoEdit's XKB parsing and dispatch, not all compositor/IME combinations.
 
 ---
 ---

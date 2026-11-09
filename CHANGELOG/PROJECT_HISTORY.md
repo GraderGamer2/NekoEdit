@@ -1,3 +1,14 @@
+## 2026-11-09 — complete Finnish/Serbian locale dead-key integration coverage
+
+Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 workflow steps. The run verified the freestanding editor build, command-line tests, complete Wayland suite, source regeneration against pinned X.Org libX11/xorgproto inputs, locale-pack builds, and upload of both the Linux binary and external locale packs.
+
+The Finnish and Serbian scenarios now exercise locale dead-key records through mocked physical XKB input, not only through data-level lookup. The test fixture maps its `DA01` key to `dead_apostrophe` (U+0301) and its `AC08` key to `Cyrillic_ka` (U+043A). Each locale pack resolves the sequence to U+045C (`ќ`). Assertions verify the pending mark arms without inserting document bytes, the following Cyrillic scalar triggers the locale lookup, the lookup output is U+045C, the pending mark clears, and the document contains the expected UTF-8. The data-level test independently pins the same mapping in both generated locale JSONs.
+
+Implementation scope did not expand: [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52) changed tests only. The runtime implementation and source datasets were unchanged. The earlier pt_BR Settings installer/remover path is green as part of #758. Artifacts from #759 are [Linux x86-64 ZIP 13681366275](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236/artifacts/13681366275) and [locale-pack ZIP 13681910677](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236/artifacts/13681910677), each expiring November 16, 2026.
+
+The next locale milestone is a safe, offline `.XCompose` importer. Its initial scope must be bounded and data-only: include resolution with allowlisted roots and cycle detection, strict byte/file/record limits, Unicode-only input filtering, maximum sequence/output lengths compatible with NLP1, and no shell expansion or execution. GUI integration can follow after parser/fixture behavior is stable.
+
+---
 ## 2026-11-09 — verify locale Settings installer and extend Finnish/Serbian dead-key integration tests
 
 Build and test [#758](https://github.com/GraderGamer2/NekoEdit/actions/runs/42629086891) passed its complete 12-step workflow. This closes the pt_BR Settings regression chain: the installed-locale dropdown, keyboard activation, the actual Brazilian `Multi_key e e` → U+018F mapping, the `dead_acute + c` → ç locale mapping, Base en_US preference persistence, local Add Pack copy/source preservation/reselection, and confirmed Remove Pack/fallback all passed. The build also regenerated/verified all pinned X.Org inputs, built the three optional locale packs, inspected the executable, and uploaded the Linux binary and locale-pack artifacts.

@@ -4,9 +4,9 @@
 
 | Commit | Subject |
 |---|---|
-| [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52) | test: exercise Finnish and Serbian locale dead-key rules |
+| [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52) | test: exercise Finnish and Serbian locale dead-key rules (Build and test #759 passed) |
 
-Adds explicit generated-data checks for `[U+0301, U+043A] → U+045C` and extends both locale Wayland scenarios to deliver `dead_apostrophe` followed by `Cyrillic_ka` through the test keymap. Build and test #759 is the validation run for this test-only change. The preceding full workflow #758 is green.
+Adds explicit generated-data checks for `[U+0301, U+043A] → U+045C` and extends both locale Wayland scenarios to deliver `dead_apostrophe` followed by `Cyrillic_ka` through the test keymap. Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 steps for this test-only change. It uploaded Linux binary artifact `13681366275` and locale pack artifact `13681910677`.
 
 ---
 ## 2026-11-09 — typed locale dead-key Compose records and integration test corrections
