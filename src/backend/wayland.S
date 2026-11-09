@@ -200,6 +200,8 @@ ui_picker_font_title:  .asciz "SELECT TRUE TYPE FONT"
 ui_picker_install_title: .asciz "INSTALL COMPOSE PACK"
 ui_picker_select_locale_title: .asciz "SELECT COMPOSE LOCALE"
 ui_picker_path_label:  .asciz "LOCATION"
+ui_picker_source_label: .asciz "SOURCE"
+ui_picker_install_target_label: .asciz "TARGET: ~/.nekoedit/locales/"
 ui_picker_name_label:  .asciz "FILE NAME"
 ui_picker_search_label: .asciz "SEARCH"
 ui_picker_up_label:   .asciz "UP"
@@ -19358,8 +19360,21 @@ render_picker:
 .render_picker_path:
     mov edi, 56
     mov esi, 62
+    cmp dword ptr [rip + picker_mode], 4
+    jne .render_picker_path_location_label
+    lea rdx, [rip + ui_picker_source_label]
+    jmp .render_picker_path_label_draw
+.render_picker_path_location_label:
     lea rdx, [rip + ui_picker_path_label]
+.render_picker_path_label_draw:
     call draw_text
+    cmp dword ptr [rip + picker_mode], 4
+    jne .render_picker_target_done
+    mov edi, 128
+    mov esi, 62
+    lea rdx, [rip + ui_picker_install_target_label]
+    call draw_text
+.render_picker_target_done:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 56
     mov edx, 80
