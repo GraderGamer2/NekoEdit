@@ -17,9 +17,9 @@ The locale-import workflow downloads these exact commits, verifies their Git blo
 - The importer follows the single en_US include, then applies pt_BR rules as overrides.
 - Only sequences beginning with XKB \`Multi_key\` are imported. The leading action is removed; the remaining 2–4 input keysyms must resolve to Unicode scalars.
 - Output strings retain 1–8 Unicode scalars, including combining marks and variation selectors.
-- Dead-key-led sequences, non-Unicode input keysyms, unsupported sequence depths, and invalid scalar values are omitted. Locale-specific dead-key behavior is outside NLP1 version 1.
-- If a shorter sequence prefixes a longer sequence, the shorter rule is dropped. This matches the runtime's immediate pair-resolution model and avoids timeout-based composition.
-- The resulting pack has 2,908 rules: 2,220 two-input, 582 three-input, and 106 four-input rules. One hundred rules have multi-scalar output.
+- Non-Unicode input keysyms, unsupported sequence depths, dead-key rules requiring multiple following keysyms, and invalid scalar values are omitted.
+- Prefix ambiguity is removed independently within each rule kind, so a Multi_key rule and dead-key rule may share the same scalar inputs.
+- pt_BR contains 4,136 records: 3,448 two-scalar, 582 three-scalar, and 106 four-scalar records; 246 records have multi-scalar output.
 
 The generated binary is not embedded in NekoEdit. \`make locale-packs\` builds it in \`build/locales/\`; the normal Actions build uploads it separately, and the locale-pack Release workflow attaches the \`.nlp\` asset and this notice when a GitHub Release is published.
 

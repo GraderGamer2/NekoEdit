@@ -98,11 +98,8 @@ The first non-empty value is used as the locale tag. Empty values are ignored. F
 
 ## Additional locale datasets
 
-Two additional reproducible tables are included beside pt_BR:
+Three reproducible tables are included: pt_BR.UTF-8, fi_FI.UTF-8, and sr_RS.UTF-8. Their pinned source inputs, per-locale Git blob IDs, filtering statistics, and attribution are recorded in data/locales/README.md.
 
-- **fi_FI.UTF-8** — six valid locale-specific `Multi_key` rules, five overriding an en_US result. The table has 2,904 final rules (2,217 pairs, 581 triples, 106 four-input sequences) and 100 multi-scalar outputs inherited from the base. Examples include the `fi` and `fl` ligatures and `ij` / `IJ` ligatures.
-- **sr_RS.UTF-8** — 40 valid locale-specific `Multi_key` rules, 36 overriding the base table. The table has 2,907 final rules (2,221 pairs, 580 triples, 106 four-input sequences) and 106 multi-scalar results. Serbian additions compose grave, acute, circumflex, and double-grave accents with Cyrillic letters using base-plus-combining-mark output.
+The importer flattens the en_US include and applies locale overrides separately for Multi_key and dead-key rules. It keeps input keysyms only when they map to Unicode scalars. Multi_key sequences support two to four scalars. A dead-key rule supports a recognized dead_* action followed by one scalar; the action is normalized to its combining mark. Longer dead-key chains, non-Unicode input symbols, and unsupported sequence depths remain outside the supported subset. Shorter-prefix removal is scoped to the same rule kind.
 
-All three datasets share the pinned libX11 and xorgproto revisions; each locale Compose file has its own verified Git blob ID in its JSON source metadata. The importer accepts `--locale-compose-blob` so non-pt_BR locales cannot inherit the Portuguese source identifier. The standard build verifies every source blob, regenerates all three JSON files byte-for-byte, and uploads packs separately from the executable. The Release workflow attaches every generated `.nlp` file and matching notice.
-
-NLP1 v1 imports only scalar-key `Multi_key` sequences. Finnish and Serbian source files also contain dead-key-specific rules; those are intentionally skipped and must not be mistaken for supported locale-specific dead-key behavior.
+NLP1 uses the former 16-bit reserved record field for the rule kind. Kind zero is Multi_key; kind one is dead-key. Older version-1 packs have a zero value in that field, remain compatible, and are treated as Multi_key-only packs. The standard build verifies all pinned source blobs, regenerates the three JSON inputs byte-for-byte, and uploads generated locale packs separately from the editor executable. The Release workflow attaches every generated .nlp file and matching notice.
