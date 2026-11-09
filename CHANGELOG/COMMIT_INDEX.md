@@ -5,8 +5,24 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **398** (393 previously recorded commits + five commits for persistent Compose locale preferences, Settings selector, hit-test correction, and Wayland regression coverage; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **401** (398 previously recorded commits + three commits for character-locale discovery, alias/precedence coverage, and the saved-preference fixture correction; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — character-locale discovery and precedence tests — Build and test #711 passed
+
+| Commit | Subject |
+|---|---|
+| [74110d69492e](https://github.com/GraderGamer2/NekoEdit/commit/74110d69492eb168b93f3020890e37300afe585e) | feat: discover Compose locale from character locale environment |
+| [39f61c7e27f9](https://github.com/GraderGamer2/NekoEdit/commit/39f61c7e27f9c8ba715637e41a3e3389f7051260) | test: cover full character-locale precedence and aliases |
+| [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5) | fix: write saved locale test preferences as separate lines |
+
+The runtime honors a saved Settings preference first, then the first non-empty value among `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG`. Empty values are skipped; common pt_BR spellings normalize to the canonical pack name. C/POSIX and en_US aliases retain the built-in table. Unsupported non-empty higher-priority values do not fall through. The Wayland mock types real Compose sequences for LC_ALL, LC_CTYPE, and LANG and verifies saved en_US overriding pt_BR environment variables.
+
+[Build and test #711](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908) passed all 12 steps. The log confirms LC_ALL selection, C fallback, LC_CTYPE/LANG resolution, saved Settings precedence, the Settings selector, pinned source blobs, exact JSON regeneration, pack generation, and separate uploads. Locale artifact [13657749061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13657749061): 17,943-byte ZIP, 151,288-byte NLP1; SHA-256 `aed84a5b2f6622f6c1a97485bde302a9a15f6e37c6ba61d0975d3affe770bcab`. Editor artifact [13658670522](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13658670522): 120,558-byte executable; ZIP SHA-256 `3e28c207ff4667d74dfdfe526aa9ffa43f4ade3c0dc2fe15afcd11455eda8619`.
+
+No live GNOME/Mutter validation is claimed. GUI pack installation/removal remains the next locale task.
+
+---
 
 ## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
 
@@ -39,6 +55,29 @@ Added a pinned-source importer and the first complete non-en_US dataset, pt_BR.U
 [Build and test #704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 steps, including exact source regeneration, the complete Wayland mock, pack build, ELF inspection, and separate editor/locale artifact uploads. NLP1 pack: 151,288 bytes; artifact ZIP [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918), 17,943 bytes. Editor artifact ZIP [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709), editor binary 119,239 bytes.
 
 The Release attachment workflow is committed but has not been exercised against a published tag/release in this task. More locales and GUI locale management remain future work.
+
+---
+
+## Documentation and branch synchronization commits — 2026-11-09
+
+| Commit | Subject |
+|---|---|
+| [43cf74cf54da](https://github.com/GraderGamer2/NekoEdit/commit/43cf74cf54da193aee9c0ceb7dcf07550f5b73cd) | docs: record NLP1 locale-pack implementation [skip ci] |
+| [56feb951a87f](https://github.com/GraderGamer2/NekoEdit/commit/56feb951a87f04b16ed4e25a00dc75b4c0e4e14a) | docs: record pt_BR locale pack milestone [skip ci] |
+| [76e1b02f97a5](https://github.com/GraderGamer2/NekoEdit/commit/76e1b02f97a53fe88d0c15e10035072ec244ef98) | docs: mirror NLP1 locale-pack continuity records [skip ci] |
+| [6cd4a2a75c4d](https://github.com/GraderGamer2/NekoEdit/commit/6cd4a2a75c4dec915ade6e4b31f2efcbd6947981) | docs: mirror pt_BR locale pack continuity records [skip ci] |
+| [5bc9916cdf84](https://github.com/GraderGamer2/NekoEdit/commit/5bc9916cdf8426f07c6f725c603e66cad9f3be35) | docs: sync commit index with main continuity record [skip ci] |
+| [0566c92cd5e6](https://github.com/GraderGamer2/NekoEdit/commit/0566c92cd5e60b16131eee811f9bfd44eaa733cc) | docs: mirror context menu and locale-pack roadmap [skip ci] |
+| [3501b7411d98](https://github.com/GraderGamer2/NekoEdit/commit/3501b7411d98ff37b1cd2bcc69145f5f1d4d2ab7) | docs: record persistent Compose locale selector [skip ci] |
+| [533700d4d45f](https://github.com/GraderGamer2/NekoEdit/commit/533700d4d45f1c13239aef3adfe332b59e07b7bd) | docs: name the Compose locale Settings control [skip ci] |
+| [061b8afeded4](https://github.com/GraderGamer2/NekoEdit/commit/061b8afeded4c718ee0f2d747b778e2dea639418) | docs: mirror persistent Compose locale selector records [skip ci] |
+| [15c9d759b584](https://github.com/GraderGamer2/NekoEdit/commit/15c9d759b584ab718a2ec10b204b6d7083d4ed0a) | docs: mirror Compose locale Settings label [skip ci] |
+| [fafc8f3c2629](https://github.com/GraderGamer2/NekoEdit/commit/fafc8f3c2629652f6b6855b13218ba0935c1e0ad) | docs: mirror character locale selection order [skip ci] |
+| [e14283bd3405](https://github.com/GraderGamer2/NekoEdit/commit/e14283bd34057f7f4c547e9fcc41c149f1b67744) | docs: clarify character-locale variable selection [skip ci] |
+| [36edf26d251f](https://github.com/GraderGamer2/NekoEdit/commit/36edf26d251fea2edc016b46277b12629d50440f) | docs: clarify missing locale pack preference behavior |
+| [fd6054789a3b](https://github.com/GraderGamer2/NekoEdit/commit/fd6054789a3bad1f1d0d4c727bc8b19248c286c7) | merge: sync documentation-only main updates into early-alpha [skip ci] |
+
+These documentation and graph-only commits do not increment the implementation/test total. The two-parent sync preserves the `early-alpha` tree while incorporating the documentation-only `main` history and restoring a clean PR merge base.
 
 ---
 

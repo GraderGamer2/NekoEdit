@@ -1,3 +1,35 @@
+## 2026-11-09 — automatic character-locale discovery and precedence — Build and test #711 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
+**Implementation/test commits:** [74110d69492e](https://github.com/GraderGamer2/NekoEdit/commit/74110d69492eb168b93f3020890e37300afe585e), [39f61c7e27f9](https://github.com/GraderGamer2/NekoEdit/commit/39f61c7e27f9c8ba715637e41a3e3389f7051260), and [aa35f95ea95e](https://github.com/GraderGamer2/NekoEdit/commit/aa35f95ea95eb1eea792fa692e0be3fb3f672fe5).
+**Branch-history sync:** [fd6054789a3b](https://github.com/GraderGamer2/NekoEdit/commit/fd6054789a3bad1f1d0d4c727bc8b19248c286c7) is a two-parent documentation-only sync from `main`; it did not move source changes into `main`.
+
+**CI:** [Build and test #711](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908) passed all 12 workflow steps. In addition to the freestanding build, CLI/host tests, full Wayland mock, ELF inspection, pinned X.Org source verification, exact JSON regeneration, pack build, and artifact uploads, the mock log explicitly confirms:
+
+- `LC_ALL` selects pt_BR ahead of `LC_CTYPE` and `LANG`.
+- `LC_ALL=C` selects embedded en_US even when lower-priority variables specify pt_BR.
+- With empty `LC_ALL`, `LC_CTYPE=pt_BR.utf8` selects the canonical pt_BR pack and resolves a real Compose sequence.
+- With both higher-priority variables empty, bare `LANG=pt_BR` selects the canonical pack and resolves Compose input.
+- A saved `compose_locale=en_US.UTF-8` setting overrides pt_BR process locale variables.
+- The Settings selector still activates pt_BR, routes Compose through it, and persists a return to en_US.
+
+### Runtime precedence
+
+A valid saved Settings choice is authoritative. Otherwise, the first non-empty value in this order is selected: `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, `LANG`. Empty values are ignored. Common pt_BR spellings (`pt_BR`, `pt_BR.utf8`, `pt_BR.UTF8`, and implemented lower-case-country variants) normalize to the canonical `pt_BR.UTF-8.nlp` filename. en_US and C/POSIX aliases keep the embedded tables active. An unsupported non-empty higher-priority locale leaves built-in en_US active rather than falling through. `LC_MESSAGES` and `LANGUAGE` are ignored because they concern message translation, not character input.
+
+### Artifacts
+
+- Locale pack: 151,288 bytes; artifact [13657749061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13657749061), ZIP 17,943 bytes, SHA-256 `aed84a5b2f6622f6c1a97485bde302a9a15f6e37c6ba61d0975d3affe770bcab`.
+- Editor binary: 120,558 bytes; artifact [13658670522](https://github.com/GraderGamer2/NekoEdit/actions/runs/42583637908/artifacts/13658670522), ZIP SHA-256 `3e28c207ff4667d74dfdfe526aa9ffa43f4ade3c0dc2fe15afcd11455eda8619`.
+
+**Validation boundary:** automated Wayland mock/CI only; no live GNOME/Mutter desktop test is claimed for locale discovery or aliases.
+
+### Remaining locale work
+
+The Settings row currently selects built-in en_US or installed pt_BR. GUI pack installation/removal, more datasets, locale-specific dead-key tables, and system/user Compose-file import remain outstanding. The Release attachment workflow has not yet been exercised by publishing a new project Release. Keep the editor offline-capable and packs data-only.
+
+---
+
 ## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
 
 **Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
@@ -139,7 +171,7 @@ At this snapshot, the right-click document context menu had not yet been impleme
 
 ### Remaining keyboard-layout scope
 
-The parser now covers the expanded named Unicode table and the previously validated bounded XKB type, modifier-map, compatibility-predicate, preserve/consumed-modifier, virtual-modifier, and repeat subsets. This is not complete libxkbcommon or full locale Compose support. The optional NLP1 loader supports installed locale tables, but system/user Compose-file import, automatic system-locale selection, locale-specific dead-key actions, and release-pack selection UI remain unfinished. Stateful modifier/group actions and compatibility indicators remain compositor-owned or unfinished; advanced IME preedit attributes also remain incomplete. Live GNOME/Mutter testing with real keymaps and an input method remains outstanding. Glyph appearance also depends on the selected font containing the mapped character.
+The parser now covers the expanded named Unicode table and the previously validated bounded XKB type, modifier-map, compatibility-predicate, preserve/consumed-modifier, virtual-modifier, and repeat subsets. This is not complete libxkbcommon or full locale Compose support. At that earlier snapshot, automatic system-locale discovery had not yet been implemented; see the newer #711 milestone above. System/user Compose-file import and locale-specific dead-key actions remain outstanding. Stateful modifier/group actions and compatibility indicators remain compositor-owned or unfinished; advanced IME preedit attributes also remain incomplete. Live GNOME/Mutter testing with real keymaps and an input method remains outstanding. Glyph appearance also depends on the selected font containing the mapped character.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
