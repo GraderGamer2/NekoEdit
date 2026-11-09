@@ -36,11 +36,13 @@ int32_t clipboard_persistence_enabled = 1;
 int32_t text_input_opt_in = 0;
 
 char *preferences_font_path_ptr;
+char *preferences_locale_ptr;
 
 static char application_directory[PATH_CAPACITY];
 static char preferences_path[PATH_CAPACITY];
 static char temporary_path[PATH_CAPACITY];
 static char saved_font_path[PATH_CAPACITY];
+static char saved_locale_tag[32];
 static uint8_t config_buffer[CONFIG_CAPACITY];
 static uint8_t output_buffer[CONFIG_CAPACITY];
 
@@ -116,6 +118,58 @@ static int copy_text(char *destination, uint32_t capacity,
     for (i = 0; i < length; ++i)
         destination[i] = source[i];
     destination[length] = 0;
+    return 1;
+}
+
+
+static int valid_locale_tag(const char *tag, uint32_t length)
+{
+    uint32_t i;
+    if (!tag || !length || length > 31u ||
+        tag[0] == '.' || tag[length - 1u] == '.')
+        return 0;
+    for (i = 0; i < length; ++i) {
+        char value = tag[i];
+        int valid = (value >= 'a' && value <= 'z') ||
+                    (value >= 'A' && value <= 'Z') ||
+                    (value >= '0' && value <= '9') ||
+                    value == '_' || value == '-' || value == '.' || value == '@';
+        if (!valid || (value == '.' && i + 1u < length && tag[i + 1u] == '.'))
+            return 0;
+    }
+    return 1;
+}
+
+static int store_locale_tag(const char *tag, uint32_t length)
+{
+    if (!tag || !length || !valid_locale_tag(tag, length) ||
+        !copy_text(saved_locale_tag, sizeof(saved_locale_tag), tag, length))
+        return 0;
+    preferences_locale_ptr = saved_locale_tag;
+    return 1;
+}
+
+int preferences_set_locale_tag(const char *tag)
+{
+    uint32_t length;
+    if (!tag || !tag[0]) {
+        saved_locale_tag[0] = 0;
+        preferences_locale_ptr = (char *)0;
+        return 1;
+    }
+    length = bounded_length(tag, sizeof(saved_locale_tag));
+    return store_locale_tag(tag, length);
+}
+
+int preferences_locale_is_pt_br(void)
+{
+    static const char target[] = "pt_BR.UTF-8";
+    uint32_t i;
+    if (!preferences_locale_ptr)
+        return 0;
+    for (i = 0; i < sizeof(target); ++i)
+        if (preferences_locale_ptr[i] != target[i])
+            return 0;
     return 1;
 }
 
@@ -226,6 +280,7 @@ static void parse_line(const char *line, uint32_t length)
     static const char key_confirm[] = "confirm_before_save=";
     static const char key_clipboard[] = "clipboard_persistence=";
     static const char key_font[] = "font_path=";
+    static const char key_locale[] = "compose_locale=";
     uint32_t number;
     uint32_t prefix;
 
@@ -263,6 +318,12 @@ static void parse_line(const char *line, uint32_t length)
     if (length > prefix && prefix_matches(line, key_clipboard, prefix)) {
         if (parse_decimal(line + prefix, length - prefix, &number) && number <= 1u)
             clipboard_persistence_enabled = (int32_t)number;
+        return;
+    }
+
+    prefix = (uint32_t)(sizeof(key_locale) - 1u);
+    if (length > prefix && prefix_matches(line, key_locale, prefix)) {
+        (void)store_locale_tag(line + prefix, length - prefix);
         return;
     }
 
@@ -332,6 +393,8 @@ int preferences_load(void)
     uint32_t used = 0, offset = 0;
     const char *text_input = environment_value("NEKOEDIT_ENABLE_TEXT_INPUT");
     text_input_opt_in = text_input && text_input[0] == '1' && text_input[1] == 0 ? 1 : 0;
+    preferences_locale_ptr = (char *)0;
+    saved_locale_tag[0] = 0;
     if (disabled()) {
         preferences_font_path_ptr = (char *)0;
         saved_font_path[0] = 0;
@@ -404,6 +467,7 @@ int preferences_save(void)
     long fd, result, directory_fd;
     uint32_t offset = 0;
     uint32_t font_length;
+    uint32_t locale_length;
     if (disabled() || !build_paths())
         return 0;
     if (!make_directory(application_directory))
@@ -439,6 +503,18 @@ int preferences_save(void)
         return 0;
     offset = append_number(output_buffer, offset, CONFIG_CAPACITY,
                            clipboard_persistence_enabled ? 1u : 0u);
+    locale_length = bounded_length(preferences_locale_ptr, sizeof(saved_locale_tag));
+    if (locale_length && locale_length < sizeof(saved_locale_tag)) {
+        static const char locale_prefix[] = "\\ncompose_locale=";
+        offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
+                              locale_prefix, sizeof(locale_prefix) - 1u);
+        if (offset == UINT32_MAX)
+            return 0;
+        offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,
+                              preferences_locale_ptr, locale_length);
+        if (offset == UINT32_MAX)
+            return 0;
+    }
     font_length = bounded_length(preferences_font_path_ptr, PATH_CAPACITY);
     if (font_length && font_length < PATH_CAPACITY) {
         offset = append_bytes(output_buffer, offset, CONFIG_CAPACITY,

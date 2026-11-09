@@ -16,6 +16,9 @@ int32_t save_confirm_enabled = 1;
 extern int32_t clipboard_persistence_enabled;
 extern int32_t text_input_opt_in;
 extern char *preferences_font_path_ptr;
+extern char *preferences_locale_ptr;
+int preferences_locale_is_pt_br(void);
+int preferences_set_locale_tag(const char *tag);
 
 int preferences_load(void);
 int preferences_save(void);
@@ -41,6 +44,7 @@ static void reset_defaults(void)
     clipboard_persistence_enabled = 1;
     text_input_opt_in = 0;
     preferences_font_path_ptr = NULL;
+    preferences_locale_ptr = NULL;
 }
 
 static void expect_defaults(void)
@@ -123,6 +127,31 @@ int main(void)
         !strstr(contents, "clipboard_persistence=0\n") ||
         !strstr(contents, "font_path=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf\n"))
         fail("saved configuration is missing one or more values");
+
+
+    if (!preferences_set_locale_tag("pt_BR.UTF-8") ||
+        !preferences_locale_is_pt_br() || !preferences_locale_ptr ||
+        strcmp(preferences_locale_ptr, "pt_BR.UTF-8") != 0)
+        fail("valid Brazilian Portuguese locale preference was not accepted");
+    if (!preferences_save())
+        fail("locale preference could not be persisted");
+    read_config(file_path, contents, sizeof(contents));
+    if (!strstr(contents, "compose_locale=pt_BR.UTF-8\n"))
+        fail("locale tag is missing from saved preferences");
+
+    if (!preferences_set_locale_tag("en_US.UTF-8") ||
+        preferences_locale_is_pt_br() || !preferences_save())
+        fail("built-in en_US locale preference could not be saved");
+    read_config(file_path, contents, sizeof(contents));
+    if (!strstr(contents, "compose_locale=en_US.UTF-8\n"))
+        fail("built-in locale selection did not roundtrip");
+
+    if (preferences_set_locale_tag("../outside") ||
+        preferences_set_locale_tag("pt_BR.UTF-8/../../outside") ||
+        preferences_set_locale_tag("bad\nlocale"))
+        fail("unsafe locale tag was accepted");
+    if (!preferences_set_locale_tag("pt_BR.UTF-8") || !preferences_save())
+        fail("valid locale could not be restored after rejected input");
 
     reset_defaults();
     refresh_environment();
