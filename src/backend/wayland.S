@@ -152,6 +152,8 @@ ui_menu_clipboard_label: .asciz "CLIPBOARD SERVICE"
 ui_menu_compose_locale_label: .asciz "COMPOSE LOCALE"
 ui_menu_locale_en: .asciz "en_US"
 ui_menu_locale_ptbr: .asciz "pt_BR"
+ui_menu_locale_select: .asciz "LOCALE"
+ui_menu_locale_base: .asciz "BASE"
 ui_menu_locale_missing: .asciz "MISSING"
 ui_menu_locale_active: .asciz "ACTIVE"
 ui_menu_locale_add: .asciz "ADD"
@@ -186,7 +188,7 @@ ui_save_confirm_message: .asciz "SAVE THIS DOCUMENT?"
 ui_save_confirm_save_label: .asciz "SAVE"
 ui_save_confirm_cancel_label: .asciz "CANCEL"
 ui_locale_remove_title: .asciz "REMOVE COMPOSE PACK"
-ui_locale_remove_message: .asciz "REMOVE INSTALLED pt_BR PACK?"
+ui_locale_remove_message: .asciz "REMOVE THE SELECTED COMPOSE PACK?"
 ui_locale_remove_label: .asciz "REMOVE"
 ui_prompt_open_title:  .asciz "OPEN FILE PATH"
 ui_prompt_save_title:  .asciz "SAVE AS PATH"
@@ -196,6 +198,7 @@ ui_picker_open_title:  .asciz "OPEN FILE"
 ui_picker_save_title:  .asciz "SAVE FILE AS"
 ui_picker_font_title:  .asciz "SELECT TRUE TYPE FONT"
 ui_picker_install_title: .asciz "INSTALL COMPOSE PACK"
+ui_picker_select_locale_title: .asciz "SELECT COMPOSE LOCALE"
 ui_picker_path_label:  .asciz "LOCATION"
 ui_picker_name_label:  .asciz "FILE NAME"
 ui_picker_search_label: .asciz "SEARCH"
@@ -208,6 +211,7 @@ ui_picker_open_label: .asciz "OPEN"
 ui_picker_load_label: .asciz "LOAD"
 ui_picker_save_label: .asciz "SAVE"
 ui_picker_install_label: .asciz "INSTALL"
+ui_picker_select_locale_label: .asciz "SELECT"
 ui_picker_dir_marker: .asciz "[D]"
 ui_picker_file_marker: .asciz "[F]"
 ui_picker_empty: .asciz "(EMPTY DIRECTORY)"
@@ -5106,9 +5110,12 @@ recv_msg_control:      .zero 64
 .extern preferences_locale_ptr
 .extern preferences_set_locale_tag
 .extern preferences_locale_is_pt_br
+.extern preferences_locale_is_builtin
 .extern compose_locale_install_pack
 .extern compose_locale_remove_pack
 .extern compose_locale_installed_tag
+.extern compose_locale_get_directory
+.extern compose_locale_current_tag
 .extern history_open
 .extern history_begin_action
 .extern history_commit_action
@@ -6496,13 +6503,33 @@ wayland_main:
     jmp .pointer_settings_ui_font_increase
 
 .pointer_settings_locale_row:
+    cmp eax, 208
+    jb .pointer_settings_locale_select
     cmp eax, 260
-    jb .pointer_settings_locale_toggle
+    jb .pointer_settings_locale_base
     cmp eax, 304
     jb .pointer_settings_locale_add
     cmp eax, 360
     jb .pointer_settings_locale_remove
     jmp .pointer_menu_outside
+
+.pointer_settings_locale_select:
+    mov edi, 5
+    call picker_start
+    test rax, rax
+    js .pointer_settings_locale_add_error
+    jmp .keyboard_changed
+
+.pointer_settings_locale_base:
+    lea rdi, [rip + ui_locale_en_tag]
+    call preferences_set_locale_tag
+    test eax, eax
+    jz .pointer_settings_locale_done
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    call compose_locale_load
+    call preferences_save
+    mov dword ptr [rip + locale_manager_error], 0
+    jmp .keyboard_changed
 
 .pointer_settings_locale_add:
     mov dword ptr [rip + locale_manager_error], 0
@@ -6520,24 +6547,7 @@ wayland_main:
     jmp .keyboard_changed
 
 .pointer_settings_locale_toggle:
-    # Toggle between built-in en_US and the installed pt_BR dataset.
-    # A persisted pt_BR choice remains detectable even when its pack is missing.
-    call preferences_locale_is_pt_br
-    test eax, eax
-    jnz .pointer_settings_locale_en
-    cmp dword ptr [rip + compose_locale_active], 0
-    jne .pointer_settings_locale_en
-    lea rdi, [rip + ui_locale_ptbr_tag]
-    jmp .pointer_settings_locale_apply
-.pointer_settings_locale_en:
-    lea rdi, [rip + ui_locale_en_tag]
-.pointer_settings_locale_apply:
-    call preferences_set_locale_tag
-    test eax, eax
-    jz .pointer_settings_locale_done
-    mov rdi, qword ptr [rip + preferences_locale_ptr]
-    call compose_locale_load
-    call preferences_save
+    jmp .pointer_settings_locale_base
 .pointer_settings_locale_done:
     jmp .keyboard_changed
 
@@ -8470,9 +8480,26 @@ picker_start:
     mov dword ptr [rip + picker_path_view_start], 0
 
 .picker_start_open_directory:
+    cmp dword ptr [rip + picker_mode], 5
+    jne .picker_start_open_path
+    lea rdi, [rip + picker_current_path]
+    mov esi, PATH_CAPACITY
+    call compose_locale_get_directory
+    test eax, eax
+    jz .picker_start_failed
+    mov r12d, eax
+    lea rdi, [rip + picker_path_buffer]
+    lea rsi, [rip + picker_current_path]
+    mov ecx, r12d
+    rep movsb
+    mov byte ptr [rdi], 0
+    mov dword ptr [rip + picker_path_length], r12d
+    mov dword ptr [rip + picker_path_cursor], r12d
+    mov dword ptr [rip + picker_path_view_start], 0
+.picker_start_open_path:
     mov eax, SYS_openat
     mov edi, AT_FDCWD
-    lea rsi, [rip + ui_picker_dot]
+    lea rsi, [rip + picker_current_path]
     mov edx, O_DIRECTORY | O_CLOEXEC
     xor r10d, r10d
     syscall
@@ -8528,6 +8555,8 @@ picker_scan_directory:
     cmp dword ptr [rip + picker_mode], 3
     je .picker_scan_clear_name_field
     cmp dword ptr [rip + picker_mode], 4
+    je .picker_scan_clear_name_field
+    cmp dword ptr [rip + picker_mode], 5
     jne .picker_scan_keep_name_field
 .picker_scan_clear_name_field:
     mov dword ptr [rip + picker_name_length], 0
@@ -8650,8 +8679,15 @@ picker_scan_directory:
     jne .picker_scan_advance
     jmp .picker_scan_name_copy
 .picker_scan_filter_locale:
+    cmp dword ptr [rip + picker_mode], 5
+    jne .picker_scan_filter_locale_install
+    cmp byte ptr [rip + picker_candidate], 1
+    je .picker_scan_advance
+    jmp .picker_scan_filter_locale_extension
+.picker_scan_filter_locale_install:
     cmp byte ptr [rip + picker_candidate], 1
     je .picker_scan_name_copy
+.picker_scan_filter_locale_extension:
     cmp ebx, 4
     jb .picker_scan_advance
     lea rax, [r14 + rbx - 4]
@@ -9728,8 +9764,78 @@ picker_confirm_overwrite:
     ret
 .size picker_confirm_overwrite, . - picker_confirm_overwrite
 
+.type picker_select_locale, @function
+picker_select_locale:
+    push rbx
+    push r12
+    cmp dword ptr [rip + picker_focus], 0
+    jne .picker_select_locale_error
+    mov eax, dword ptr [rip + picker_selected]
+    test eax, eax
+    js .picker_select_locale_error
+    cmp eax, dword ptr [rip + picker_entry_count]
+    jae .picker_select_locale_error
+    imul eax, PICKER_ENTRY_SIZE
+    lea rdx, [rip + picker_entries]
+    add rdx, rax
+    cmp byte ptr [rdx], 0
+    jne .picker_select_locale_error
+    call picker_copy_selected_name
+    mov r12d, dword ptr [rip + picker_name_length]
+    cmp r12d, 5
+    jb .picker_select_locale_error
+    lea rbx, [rip + picker_name_buffer]
+    lea rdx, [rbx + r12 - 4]
+    cmp byte ptr [rdx], '.'
+    jne .picker_select_locale_error
+    movzx eax, byte ptr [rdx + 1]
+    or al, 0x20
+    cmp al, 'n'
+    jne .picker_select_locale_error
+    movzx eax, byte ptr [rdx + 2]
+    or al, 0x20
+    cmp al, 'l'
+    jne .picker_select_locale_error
+    movzx eax, byte ptr [rdx + 3]
+    or al, 0x20
+    cmp al, 'p'
+    jne .picker_select_locale_error
+    mov byte ptr [rdx], 0
+    mov rdi, rbx
+    call preferences_set_locale_tag
+    test eax, eax
+    jz .picker_select_locale_error
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    call compose_locale_load
+    test eax, eax
+    jnz .picker_select_locale_loaded
+    # Do not persist a selected file that failed pack validation.
+    lea rdi, [rip + ui_locale_en_tag]
+    call preferences_set_locale_tag
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    call compose_locale_load
+    call preferences_save
+    jmp .picker_select_locale_error
+.picker_select_locale_loaded:
+    call preferences_save
+    mov dword ptr [rip + locale_manager_error], 0
+    mov dword ptr [rip + picker_error], 0
+    call picker_close
+    xor eax, eax
+    jmp .picker_select_locale_done
+.picker_select_locale_error:
+    mov dword ptr [rip + picker_error], 5
+    mov rax, -5
+.picker_select_locale_done:
+    pop r12
+    pop rbx
+    ret
+.size picker_select_locale, . - picker_select_locale
+
 .type picker_confirm_action, @function
 picker_confirm_action:
+    cmp dword ptr [rip + picker_mode], 5
+    je .picker_confirm_action_select_locale
     cmp dword ptr [rip + picker_mode], 4
     je .picker_confirm_action_install
     cmp dword ptr [rip + picker_mode], 3
@@ -9737,6 +9843,9 @@ picker_confirm_action:
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_confirm_action_save
     jmp .picker_confirm_action_open
+.picker_confirm_action_select_locale:
+    # Selection is resolved through the private locale directory by the loader.
+    jmp picker_select_locale
 .picker_confirm_action_install:
     # Install only a regular-file row selected from the filtered .nlp listing.
     cmp dword ptr [rip + picker_focus], 0
@@ -10112,6 +10221,8 @@ picker_handle_key:
     je .picker_key_enter_font_file
     cmp dword ptr [rip + picker_mode], 4
     je .picker_key_enter_install_file
+    cmp dword ptr [rip + picker_mode], 5
+    je .picker_key_enter_select_locale
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_key_enter_action
     call picker_open_file
@@ -10120,6 +10231,9 @@ picker_handle_key:
     call picker_load_font
     jmp .picker_key_done
 .picker_key_enter_install_file:
+    call picker_confirm_action
+    jmp .picker_key_done
+.picker_key_enter_select_locale:
     call picker_confirm_action
     jmp .picker_key_done
 .picker_key_enter_directory:
@@ -10481,6 +10595,8 @@ picker_handle_pointer:
     je .picker_pointer_load_font
     cmp dword ptr [rip + picker_mode], 4
     je .picker_pointer_install_pack
+    cmp dword ptr [rip + picker_mode], 5
+    je .picker_pointer_select_locale
     cmp dword ptr [rip + picker_mode], 1
     jne .picker_pointer_record_click
     call picker_open_file
@@ -10489,6 +10605,9 @@ picker_handle_pointer:
     call picker_load_font
     jmp .picker_pointer_done
 .picker_pointer_install_pack:
+    call picker_confirm_action
+    jmp .picker_pointer_done
+.picker_pointer_select_locale:
     call picker_confirm_action
     jmp .picker_pointer_done
 .picker_pointer_double_directory:
@@ -11059,14 +11178,15 @@ confirm_save_action:
     xor eax, eax
     jmp .Lconfirm_save_done
 .Lconfirm_remove_locale_pack:
-    lea rdi, [rip + ui_locale_ptbr_tag]
+    mov rdi, qword ptr [rip + preferences_locale_ptr]
+    test rdi, rdi
+    jnz .Lconfirm_remove_locale_pack_tag_ready
+    lea rdi, [rip + compose_locale_current_tag]
+.Lconfirm_remove_locale_pack_tag_ready:
     call compose_locale_remove_pack
     test eax, eax
     jz .Lconfirm_remove_locale_pack_error
     mov dword ptr [rip + locale_manager_error], 0
-    call preferences_locale_is_pt_br
-    test eax, eax
-    jz .Lconfirm_remove_locale_pack_done
     lea rdi, [rip + ui_locale_en_tag]
     call preferences_set_locale_tag
     call preferences_save
@@ -19180,7 +19300,15 @@ render_picker:
 .render_picker_title_install:
     mov edi, 56
     mov esi, 40
+    cmp dword ptr [rip + picker_mode], 5
+    je .render_picker_title_select_locale
     lea rdx, [rip + ui_picker_install_title]
+    call draw_text
+    jmp .render_picker_path
+.render_picker_title_select_locale:
+    mov edi, 56
+    mov esi, 40
+    lea rdx, [rip + ui_picker_select_locale_title]
     call draw_text
     jmp .render_picker_path
 .render_picker_title_open:
@@ -19568,11 +19696,16 @@ render_picker:
     mov esi, 407
     cmp dword ptr [rip + picker_mode], 1
     je .render_picker_open_label
+    cmp dword ptr [rip + picker_mode], 5
+    je .render_picker_select_locale_label
     cmp dword ptr [rip + picker_mode], 4
     je .render_picker_install_label
     cmp dword ptr [rip + picker_mode], 3
     jne .render_picker_save_label
     lea rdx, [rip + ui_picker_load_label]
+    jmp .render_picker_action_label
+.render_picker_select_locale_label:
+    lea rdx, [rip + ui_picker_select_locale_label]
     jmp .render_picker_action_label
 .render_picker_install_label:
     lea rdx, [rip + ui_picker_install_label]
@@ -19916,17 +20049,28 @@ render_file_menu:
 .render_settings_clipboard_draw:
     call draw_text
 
-    # Compose locale occupies the unused bottom Settings row.
+    # Generic Compose locale controls share the unused bottom Settings row.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 160
     mov edx, 184
-    mov ecx, 256
+    mov ecx, 48
     mov r8d, 1
     mov r9d, 0xff414b5a
     call draw_rect
-    mov edi, 172
+    mov edi, 168
     mov esi, 200
-    lea rdx, [rip + ui_menu_compose_locale_label]
+    lea rdx, [rip + ui_menu_locale_select]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 212
+    mov edx, 188
+    mov ecx, 44
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 218
+    mov esi, 204
+    lea rdx, [rip + ui_menu_locale_base]
     call draw_text
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 260
@@ -19950,20 +20094,21 @@ render_file_menu:
     mov esi, 204
     lea rdx, [rip + ui_menu_locale_remove]
     call draw_text
-    call preferences_locale_is_pt_br
+    call preferences_locale_is_builtin
     test eax, eax
-    jz .render_settings_locale_not_ptbr
+    jnz .render_settings_locale_en
+    cmp qword ptr [rip + preferences_locale_ptr], 0
+    je .render_settings_locale_effective
     cmp dword ptr [rip + compose_locale_active], 0
     je .render_settings_locale_missing
-    lea rdx, [rip + ui_menu_locale_ptbr]
+.render_settings_locale_effective:
+    cmp dword ptr [rip + compose_locale_active], 0
+    jne .render_settings_locale_active
+.render_settings_locale_en:
+    lea rdx, [rip + ui_menu_locale_en]
     jmp .render_settings_locale_value
 .render_settings_locale_missing:
     lea rdx, [rip + ui_menu_locale_missing]
-    jmp .render_settings_locale_value
-.render_settings_locale_not_ptbr:
-    cmp dword ptr [rip + compose_locale_active], 0
-    jne .render_settings_locale_active
-    lea rdx, [rip + ui_menu_locale_en]
     jmp .render_settings_locale_value
 .render_settings_locale_active:
     lea rdx, [rip + ui_menu_locale_active]
