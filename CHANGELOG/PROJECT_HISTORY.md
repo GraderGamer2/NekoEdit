@@ -1,3 +1,17 @@
+## 2026-11-09 — implement the three-command document context menu
+
+Commit: [0c9fee44200b](https://github.com/GraderGamer2/NekoEdit/commit/0c9fee44200b1528c1c3d148dd525c5319c6dd7d).
+
+NekoEdit now has a small native in-surface context menu opened by right-clicking inside the document viewport. The menu contains only Copy, Paste, and Cut. It preserves the current selection when opened, reuses the existing Wayland clipboard/data-device machinery, and closes with Escape, another right-click, or an outside click. An outside click is consumed so the underlying editor control is not activated.
+
+Clipboard Copy and Cut continue to use immutable snapshots; Cut publishes the selected bytes before deleting them. Pointer-originated Copy/Cut now supply the serial from the menu-item pointer press to wl_data_device.set_selection. Paste uses the existing asynchronous external-offer path and remains one Undo/Redo action.
+
+The new Wayland mock validates popup opening/dismissal, selection preservation, Copy bytes, Cut snapshot/delete ordering, asynchronous external Paste, Undo/Redo, and outside-click isolation. Build and test [#698](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) passed all eight workflow steps. The 116,962-byte artifact [13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472) has ZIP SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80.
+
+The project now records the locale architecture for upcoming Compose work: en_US remains built into the core executable; other locales are optional, versioned, data-only GitHub Release packs loaded by a bounded runtime parser. Packs must not contain executable plugin code or native libraries, and absence/invalidity falls back to en_US. The core editor must remain offline-capable. This is a roadmap decision, not an implemented loader.
+
+---
+
 ## 2026-11-09 — support three-symbol XKB Compose sequences
 
 Implementation: [bf3a1891dd63](https://github.com/GraderGamer2/NekoEdit/commit/bf3a1891dd6318ad70f99bf7e75e4afbf481dc56).
