@@ -12010,6 +12010,9 @@ window_get_resize_edges:
     jb .window_get_resize_edges_top
     cmp eax, 160
     jb .window_get_resize_edges_done
+    # Keep the File and Settings buttons clickable in the title-bar top band.
+    cmp eax, 240
+    jb .window_get_resize_edges_done
     mov ecx, dword ptr [rip + window_width]
     sub ecx, 104
     cmp eax, ecx
