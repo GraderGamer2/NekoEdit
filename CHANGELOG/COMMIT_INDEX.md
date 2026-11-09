@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — History path-filter caret and horizontal query scrolling
+
+| Commit | Subject |
+|---|---|
+| Pending | feat: keep the History search caret visible in long path queries |
+
+The 127-byte query/filter source remains unchanged; only the displayed query is horizontally windowed. The mock adds zero-match, long-query scroll/caret, Ctrl+A clear, and positive-match checkpoints. Baseline Build and test #767 passed before this revision.
+
+---
+
 ## 2026-11-09 — add bounded offline user XCompose converter
 
 | Commit | Subject |

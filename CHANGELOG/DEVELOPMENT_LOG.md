@@ -1,3 +1,14 @@
+## 2026-11-09 — make the History path filter usable with long queries
+
+- Added a dedicated visible-query buffer for the History search field. The original 128-byte query buffer remains the source of truth for filtering.
+- The display slice now follows the insertion point and horizontally scrolls when the typed path/query exceeds the available field width. A visible caret tracks pointer focus, Left/Right, Home/End, insertion, Backspace, Delete, and Ctrl+A clear.
+- Extended the Wayland integration scenario to type the full 127-character query limit, assert zero matches, verify horizontal scrolling and an in-field caret, clear the query, then continue with the existing positive path-match, Browse, Open Selected, Undo/Redo, Export, and Delete checks.
+- The filter remains a case-insensitive substring search over stored document paths. This change does not modify journal formats, stored paths, query limits, or runtime dependencies.
+
+Baseline [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 13 steps. Validation of this History filter revision is pending its push-triggered Actions run.
+
+---
+
 ## 2026-11-09 — test the user XCompose converter through the freestanding locale manager
 
 - Build and test #767 passed all 12 steps after a held-key mock race was corrected.

@@ -1,3 +1,13 @@
+## 2026-11-09 — improve History path-filter usability
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open.
+**Baseline:** [216e466a48d8](https://github.com/GraderGamer2/NekoEdit/commit/216e466a48d862d0fdcc908f1e2e329373f7a583); latest full workflow [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 13 steps, including the full Wayland mock and executable/locale artifact uploads.
+**Current change:** add a visible History search caret and horizontally scrolled query display; leave the full 127-byte filter buffer and path matching logic unchanged. The Wayland test types a 127-character non-match, verifies zero results and an in-field caret after horizontal scrolling, clears the query, then verifies the path-match sequence.
+
+**Validation:** this revision has been pushed for its first full Actions run. No result is claimed until the workflow completes.
+
+---
+
 ## 2026-11-09 — end-to-end user XCompose pack-to-runtime coverage added
 
 - Build and test [#767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 12 workflow steps. The offline user XCompose importer host test, complete Wayland mock, pinned X.Org regeneration, locale-pack builds, and editor/locale artifact uploads are green.

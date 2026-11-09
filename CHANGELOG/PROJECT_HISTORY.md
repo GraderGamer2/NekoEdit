@@ -1,3 +1,11 @@
+## 2026-11-09 — improve History path-filter usability
+
+The History search field now keeps a visible insertion caret and displays a horizontally scrolled query slice when its 127-byte search buffer exceeds the available pixel width. The underlying case-insensitive path substring match and full query buffer are unchanged. The Wayland mock now checks a 127-character non-matching query, zero results, a visible in-field caret after scrolling, Ctrl+A clearing back to the unfiltered result, and the existing positive path match plus History operations.
+
+Baseline [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed the complete 13-step workflow. This revision has not yet completed CI validation.
+
+---
+
 ## 2026-11-09 — exercise user XCompose conversion through pack installation and runtime lookup
 
 The offline user XCompose importer is now validated beyond JSON and binary encoding. The locale-manager integration fixture builds a small user file with an allowlisted home include, converts it with the public CLI, builds an NLP1 file with the pack CLI, and sends the result through the freestanding C locale manager. That manager installs the custom pack under the isolated HOME/.nekoedit/locales directory, verifies private permissions, activates the locale, checks Multi_key e e → U+018F and dead_acute+c → ç through the binary lookup API, then removes the pack and restores built-in en_US.
