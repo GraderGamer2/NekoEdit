@@ -2101,13 +2101,21 @@ xkb_symbols "nekoedit-sparse" {
                         and time.monotonic() < pending_deadline
                     ):
                         time.sleep(0.005)
+                    pending_values = {
+                        "length": child_u32("text_input_pending_preedit_length"),
+                        "cursor_begin": child_u32("text_input_pending_preedit_cursor_begin"),
+                        "cursor_end": child_u32("text_input_pending_preedit_cursor_end"),
+                        "flags": child_u32("text_input_pending_flags"),
+                        "commit_serial": child_u32("text_input_commit_serial"),
+                    }
                     if (
-                        child_u32("text_input_pending_preedit_length") != len(multibyte_preedit_text)
-                        or child_u32("text_input_pending_preedit_cursor_begin") != 3
-                        or child_u32("text_input_pending_preedit_cursor_end") != 1
+                        pending_values["length"] != len(multibyte_preedit_text)
+                        or pending_values["cursor_begin"] != 3
+                        or pending_values["cursor_end"] != 1
                     ):
                         raise AssertionError(
-                            "valid preedit candidate was not retained after rejecting a malformed cursor offset"
+                            "valid preedit candidate was not retained after rejecting a malformed cursor offset: "
+                            + repr(pending_values)
                         )
                     # Take the serial after the candidate events have been consumed.
                     serial = child_u32("text_input_commit_serial")
