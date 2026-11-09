@@ -32,30 +32,49 @@ Each include target is canonicalized before use. Symlinks that resolve outside t
 
 The fixed resource bounds are in tools/import_user_xcompose.py: 512 KiB per file, 4 MiB total expanded input, 32 unique files, 64 include expansions, depth 16, 64 KiB per line, 32,768 unique records, at most four following Multi_key inputs, and eight output scalars.
 
-## Convert and install a selected file
+## One-command install into NekoEdit
 
-The output JSON and generated pack belong in NekoEdit's existing private locale directory. For a typical UTF-8 user file that includes a system locale Compose file:
+For a typical UTF-8 user file that includes a system locale Compose file, run the optional host-side installer:
 
-    mkdir -p "$HOME/.nekoedit/locales"
+~~~sh
+python3 tools/install_user_xcompose.py \
+  --input "$HOME/.XCompose" \
+  --locale custom.UTF-8 \
+  --home "$HOME" \
+  --system-root /usr/share/X11/locale \
+  --locale-compose /usr/share/X11/locale/en_US.UTF-8/Compose
+~~~
 
-    python3 tools/import_user_xcompose.py \
-      --input "$HOME/.XCompose" \
-      --locale custom.UTF-8 \
-      --home "$HOME" \
-      --system-root /usr/share/X11/locale \
-      --locale-compose /usr/share/X11/locale/en_US.UTF-8/Compose \
-      --output "$HOME/.nekoedit/locales/custom.UTF-8.json"
+The installer imports and validates the selected file in memory, builds the NLP1 binary, and atomically places it at:
 
-    python3 tools/compose_pack.py build \
-      --input "$HOME/.nekoedit/locales/custom.UTF-8.json" \
-      --output "$HOME/.nekoedit/locales/custom.UTF-8.nlp"
+~~~text
+~/.nekoedit/locales/custom.UTF-8.nlp
+~~~
 
-    chmod 0600 "$HOME/.nekoedit/locales/custom.UTF-8.nlp"
+The .nekoedit and locales directories are created or tightened to mode 0700, and the pack is mode 0600. Existing locale packs are never silently overwritten. Pass --replace to atomically replace an existing regular pack with the same locale tag. The source and included files are never moved, modified, or deleted. NekoEdit's Settings locale dropdown discovers the installed pack the next time Settings refreshes its list.
 
-Omit --locale-compose when the selected file does not use %L. Use --keysymdef /usr/include/X11/keysymdef.h when that header is installed and named non-ASCII keysyms need to be resolved. Select another permitted input encoding with --encoding when required; the default is strict UTF-8.
+Omit --locale-compose when the selected file does not use %L. Use --keysymdef /usr/include/X11/keysymdef.h when that header is installed and named non-ASCII keysyms need to be resolved. Select another permitted input encoding with --encoding when required; the default is strict UTF-8. The tool uses Python's standard library only and is not launched by the editor.
+
+## Optional JSON intermediate
+
+The lower-level converter remains available when you want to inspect or edit generated records before installing them:
+
+~~~sh
+python3 tools/import_user_xcompose.py \
+  --input "$HOME/.XCompose" \
+  --locale custom.UTF-8 \
+  --home "$HOME" \
+  --system-root /usr/share/X11/locale \
+  --locale-compose /usr/share/X11/locale/en_US.UTF-8/Compose \
+  --output /tmp/custom.UTF-8.json
+
+python3 tools/compose_pack.py build \
+  --input /tmp/custom.UTF-8.json \
+  --output /tmp/custom.UTF-8.nlp
+~~~
 
 The JSON writer creates missing output directories privately (mode 0700), atomically replaces the selected output, and writes the file with mode 0600. It refuses to overwrite a file that contributed to the import or the supplied keysym header.
 
-## Not integrated into the editor yet
+## Integration boundary
 
-This is a build-time/user-invoked conversion tool only. NekoEdit does not automatically read $XCOMPOSEFILE, search for ~/.XCompose, merge it with system data at startup, or expose an importer in Settings. After conversion and pack building, the resulting .nlp file can be installed and selected through the existing Settings locale dropdown. Conversion does not move, delete, or modify the source file.
+This is an explicit user-invoked host utility, not a runtime feature. NekoEdit does not automatically read $XCOMPOSEFILE, search for ~/.XCompose, merge it with system data at startup, or expose an importer in Settings. After running the installer, the resulting .nlp pack is discovered by the existing Settings locale dropdown. Importing does not move, delete, or modify the selected source file. The editor remains a freestanding executable with no Python/runtime-library dependency.
