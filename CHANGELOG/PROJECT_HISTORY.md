@@ -1,3 +1,17 @@
+## 2026-11-09 — expand XKB Multi_key Compose coverage
+
+Commit: [31c1bd47575e](https://github.com/GraderGamer2/NekoEdit/commit/31c1bd47575ee776701bd106d8d25dcd33219432).
+
+The fixed 40-pair Compose list was expanded to 2,140 distinct two-symbol mappings derived from the X.Org libX11 `en_US.UTF-8` Compose source plus seven historical NekoEdit-only mappings. The original 40 outputs retain priority on collisions. The test suite exercises the expanded scalar insertion path with ellipsis, capital sharp S, and single right angle quotation mark sequences. The implementation adds a static table only and no new runtime dependency.
+
+This is not yet locale-aware Compose or general XCompose support. Only two-symbol sequences with one-scalar output are represented. Locale selection, system and per-user Compose file loading, include directives, longer input sequences, multi-scalar output, and broader dead-key actions remain future work. See [docs/COMPOSE.md](../docs/COMPOSE.md).
+
+Actions [Build and test #42563677349](https://github.com/GraderGamer2/NekoEdit/actions/runs/42563677349) passed all eight steps on retry attempt 2. Artifact [13650009531](https://github.com/GraderGamer2/NekoEdit/actions/runs/42563677349/artifacts/13650009531) has ZIP SHA-256 `d7cd58ba93aac6efaeb88149f497d74ce0f74d9bd5c9f4fa7811f9a237790a2d`.
+
+The user also noted question-mark rendering for scripts whose font glyphs may be missing. Inspection confirms cmap misses are currently rendered using the selected typeface's `?` glyph; this is a renderer fallback, not proof that the document stores a question mark. Cross-font fallback is future rendering work.
+
+---
+
 ## 2026-11-09 — align XKB repeat defaults with libxkbcommon
 
 A follow-up audit corrected two separate XKB repeat defaults that had been conflated. An `xkb_compat` section's `interpret.repeat` default is `False`; the fallback/default interpretation enables repeat only for keys with an actual Group 1 / Level 1 symbol. Keys without that base-level symbol retain the ordinary false repeat default. Direct `xkb_symbols` per-key repeat properties override compatibility interpretation results, and key-wide compatibility repeat is derived only from Group 1 / Level 1.

@@ -5,8 +5,16 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **384** (383 previously recorded commits + one XKB implementation/test commit; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **385** (384 previously recorded commits + this Compose implementation/test commit; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — expanded XKB default Compose coverage
+
+| Commit | Subject |
+|---|---|
+| [31c1bd47575e](https://github.com/GraderGamer2/NekoEdit/commit/31c1bd47575ee776701bd106d8d25dcd33219432) | feat: expand default XKB Compose pair coverage |
+
+Expanded the static `Multi_key` table from 40 entries to 2,140 distinct two-symbol pairs: 2,133 unique one-scalar-output entries from the X.Org libX11 `en_US.UTF-8` Compose source, plus seven original NekoEdit mappings retained on union. All original 40 mappings take precedence on overlaps. Added end-to-end Unicode insertion checks for ellipsis, capital sharp S, and a single right angle quote. No runtime dependency was added. Actions [Build and test #42563677349](https://github.com/GraderGamer2/NekoEdit/actions/runs/42563677349) passed all eight steps on retry attempt 2; artifact [13650009531](https://github.com/GraderGamer2/NekoEdit/actions/runs/42563677349/artifacts/13650009531).
 
 ## 2026-11-09 — expanded X.Org named Unicode keysym coverage
 
