@@ -6935,6 +6935,8 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(16, 4, struct.pack("<IIIII", serial + 3, 0, 0, 0, 0))
                     )
 
+                pointer_click_pixels = bytearray(len(pixels))
+
                 def pointer_click(x: int, y: int, serial: int, label: str) -> None:
                     # This mock uses one active wl_buffer. Wait until the
                     # preceding release has been consumed before generating
@@ -6953,6 +6955,9 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
+                    # Inspect the exact frame rendered for this click before
+                    # a release-triggered repaint can reuse the shared buffer.
+                    pointer_click_pixels[:] = pixels
                     client.sendall(
                         wire_message(
                             15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0)
@@ -7005,21 +7010,21 @@ xkb_symbols "nekoedit-sparse" {
                 # insertion boundaries across lines and between characters.
                 pointer_click(22, 98, 1100, "mouse caret first line")
                 first_line_caret = struct.unpack_from(
-                    "<I", pixels, 92 * 800 * 4 + 24 * 4
+                    "<I", pointer_click_pixels, 92 * 800 * 4 + 24 * 4
                 )[0]
                 if first_line_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret after first-line text")
 
                 pointer_click(18, 110, 1110, "mouse caret second-line start")
                 second_line_start = struct.unpack_from(
-                    "<I", pixels, 104 * 800 * 4 + 16 * 4
+                    "<I", pointer_click_pixels, 104 * 800 * 4 + 16 * 4
                 )[0]
                 if second_line_start != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret at second-line start")
 
                 pointer_click(26, 110, 1120, "mouse caret between characters")
                 between_chars = struct.unpack_from(
-                    "<I", pixels, 104 * 800 * 4 + 24 * 4
+                    "<I", pointer_click_pixels, 104 * 800 * 4 + 24 * 4
                 )[0]
                 if between_chars != 0xFFFFFFFF:
                     raise AssertionError("mouse click did not place caret between second-line characters")
@@ -7335,7 +7340,7 @@ xkb_symbols "nekoedit-sparse" {
                 # insertion point, not to a logical hard-newline-only row.
                 pointer_click(40, 110, 1510, "click within soft-wrapped row")
                 wrapped_click_caret = struct.unpack_from(
-                    "<I", pixels, 104 * 800 * 4 + 40 * 4
+                    "<I", pointer_click_pixels, 104 * 800 * 4 + 40 * 4
                 )[0]
                 if wrapped_click_caret != 0xFFFFFFFF:
                     raise AssertionError("mouse hit testing did not account for soft-wrapped rows")
