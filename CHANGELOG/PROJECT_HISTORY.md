@@ -1,3 +1,15 @@
+## 2026-11-09 — make the Compose locale installation destination visible
+
+Implementation/test commit: [2fd44f25bde6](https://github.com/GraderGamer2/NekoEdit/commit/2fd44f25bde6db5ab9fd889b98a186e3fbcae18b).
+
+The Settings Add picker now labels the selected local file's directory as **SOURCE** and displays **TARGET: `~/.nekoedit/locales/`** beside it. The validated pack is atomically copied to `$HOME/.nekoedit/locales/<locale-tag>.nlp`; the source file remains where it was selected. The application/locale directories use mode 0700, installed pack files use mode 0600, and the selected locale remains persisted in `~/.nekoedit/preferences`.
+
+The host-side locale-manager regression now checks the exact destination path. The full Wayland mock already exercises generic pack selection, Add, source preservation, activation, confirmed Remove, and fallback to en_US. Build and test [#736](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047) passed the complete build, host and Wayland tests, source verification, pack builds, and artifact uploads.
+
+This is a UI clarification and regression milestone, not a change to the NLP1 format or locale precedence. Live GNOME/Mutter desktop validation remains outstanding.
+
+---
+
 ## 2026-11-09 — synchronize the text-input-v3 change origin with the compositor
 
 Implementation: [7b07ce26a158](https://github.com/GraderGamer2/NekoEdit/commit/7b07ce26a1587865e7c5c1bc203e140ee948d891).
