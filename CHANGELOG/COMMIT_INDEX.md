@@ -5,8 +5,26 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **393** (390 previously recorded commits + three commits for the reproducible pt_BR dataset, importer metadata, and source-line count fix; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **398** (393 previously recorded commits + five commits for persistent Compose locale preferences, Settings selector, hit-test correction, and Wayland regression coverage; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
+
+| Commit | Subject |
+|---|---|
+| [7343175f2584](https://github.com/GraderGamer2/NekoEdit/commit/7343175f258430e55db1252d8dcb31dbe9bce40e) | feat: persist the selected Compose locale |
+| [70f216f2197d](https://github.com/GraderGamer2/NekoEdit/commit/70f216f2197d30b3c6af75481d542aad864b12fe) | feat: add persistent Compose locale selector in Settings |
+| [05d080417878](https://github.com/GraderGamer2/NekoEdit/commit/05d080417878bb71dae54fda4638cd554c3bea08) | test: consume cursor feedback in Settings locale mock |
+| [241401ea9d1e](https://github.com/GraderGamer2/NekoEdit/commit/241401ea9d1e2529d6da9e5ada340bf64cce84e7) | fix: keep Settings button outside the resize hit band |
+| [ce35e0803d0a](https://github.com/GraderGamer2/NekoEdit/commit/ce35e0803d0a586074aa5ddb11d65208cb24fb99) | test: assert the Settings locale scenario runs |
+
+Persisted locale preferences override NEKOEDIT_LOCALE; without a saved choice, the environment remains a first-run override. The Settings dropdown switches between built-in en_US and installed pt_BR, displaying MISSING when the selected pack cannot be loaded. The test uses real Wayland pointer and keyboard events, confirms the pt_BR Compose mapping, restores en_US, and checks the saved preference. The title-bar hit-test correction makes Settings reachable without interception by the top resize edge.
+
+[Build and test #709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652) passed all 12 steps. The run log includes explicit Settings scenario start/completion markers and the successful Settings/Compose/persistence observation. Locale artifact [13657516254](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657516254) is 17,943 bytes (151,288-byte NLP1 file); editor artifact [13657600927](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657600927) is 120,129 bytes.
+
+The Settings selector chooses between installed data and built-in en_US; it does not install/download a pack. A GUI installer/remover and more locale datasets remain future work.
+
+---
 
 ## 2026-11-09 — first external Compose locale data — Build and test #704 passed
 

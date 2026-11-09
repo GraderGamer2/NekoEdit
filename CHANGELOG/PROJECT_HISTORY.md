@@ -1,3 +1,19 @@
+## 2026-11-09 — add persistent Settings selection for Compose locales
+
+Implementation/test commits: [7343175f2584](https://github.com/GraderGamer2/NekoEdit/commit/7343175f258430e55db1252d8dcb31dbe9bce40e), [70f216f2197d](https://github.com/GraderGamer2/NekoEdit/commit/70f216f2197d30b3c6af75481d542aad864b12fe), [05d080417878](https://github.com/GraderGamer2/NekoEdit/commit/05d080417878bb71dae54fda4638cd554c3bea08), [241401ea9d1e](https://github.com/GraderGamer2/NekoEdit/commit/241401ea9d1e2529d6da9e5ada340bf64cce84e7), and [ce35e0803d0a](https://github.com/GraderGamer2/NekoEdit/commit/ce35e0803d0a586074aa5ddb11d65208cb24fb99).
+
+NekoEdit's Settings dropdown now has a persistent COMPOSE LOCALE row. It switches between the embedded en_US table and an installed pt_BR pack. The choice is stored in the per-user preferences file; a saved selection overrides NEKOEDIT_LOCALE, while the environment variable remains a first-run override when no preference exists. A missing/invalid selected pack leaves en_US active and displays MISSING. Selection is local only and does not download or install data.
+
+This UI test exposed and fixed a title-bar hit-test conflict: the window resize band previously claimed the top strip over Settings. The Settings button is now exempt from that resize hit band. The Wayland mock clicks the header and locale row, checks that the real loader activates the installed pt_BR fixture, verifies the Compose o-i output, then selects en_US and verifies the saved preference.
+
+Build and test [#709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652) passed all 12 steps. The job log explicitly reports the Settings scenario start/completion and the success observation for the UI, Compose, and persistence assertions. The run also rechecks pinned source regeneration and builds/uploads the pt_BR pack.
+
+Artifacts: locale pack [13657516254](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657516254), 17,943-byte ZIP for a 151,288-byte NLP1 file; editor [13657600927](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657600927), 120,129 bytes.
+
+A GUI pack installer/remover, additional locales, automatic system-locale discovery, system/user Compose-file import, locale-specific dead keys, a published end-user Release, and live GNOME/Mutter testing remain outstanding.
+
+---
+
 ## 2026-11-09 — ship the first separately packaged locale data set
 
 Source work: [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca), [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf), and [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a).

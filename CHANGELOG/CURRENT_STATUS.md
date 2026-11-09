@@ -1,25 +1,24 @@
-## 2026-11-09 — publish first external Compose locale data set
+## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
 
-**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
-**Source/tooling commits:** [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca), [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf), and [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a).
+**Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open, unmerged, and clean.
+**Implementation/test commits:** [7343175f2584](https://github.com/GraderGamer2/NekoEdit/commit/7343175f258430e55db1252d8dcb31dbe9bce40e), [70f216f2197d](https://github.com/GraderGamer2/NekoEdit/commit/70f216f2197d30b3c6af75481d542aad864b12fe), [05d080417878](https://github.com/GraderGamer2/NekoEdit/commit/05d080417878bb71dae54fda4638cd554c3bea08), [241401ea9d1e](https://github.com/GraderGamer2/NekoEdit/commit/241401ea9d1e2529d6da9e5ada340bf64cce84e7), and [ce35e0803d0a](https://github.com/GraderGamer2/NekoEdit/commit/ce35e0803d0a586074aa5ddb11d65208cb24fb99).
 
-**CI:** [Build and test #704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 workflow steps. It built NekoEdit, ran CLI/host tests and the complete Wayland mock, inspected the freestanding ELF, fetched the pinned X.Org inputs, verified all three upstream Git blob IDs, regenerated the locale JSON byte-for-byte, built the .nlp pack, and uploaded both artifacts.
+**CI:** [Build and test #709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652) passed all 12 workflow steps. The job log explicitly shows the Settings scenario starting and completing. Its Wayland observation confirms the installed pt_BR pack was activated, used for Compose input, and the return to built-in en_US was persisted.
 
-- Added the first non-en_US dataset, **pt_BR.UTF-8**, as a complete flattened table: the pinned X.Org libX11 en_US Compose baseline followed by Brazilian Portuguese additions/overrides. The importer follows the single en_US include and resolves input keysyms using the pinned xorgproto `keysymdef.h`.
-- The dataset contains **2,908 rules**: 2,220 two-input, 582 three-input, and 106 four-input sequences. One hundred rules produce multiple Unicode scalars. Three locale rules override a base mapping; one shorter sequence is omitted because it prefixes a longer sequence.
-- Dead-key-led rules and input keysyms that cannot be represented as Unicode scalars by NLP1 v1 are excluded. These omissions and their counts are retained in the JSON statistics.
-- Added `tools/import_xcompose.py` with strict single-include handling, X.Org keysym alias resolution, C-style quoted output parsing, override merging, deterministic sorting/prefix filtering, and atomic JSON output.
-- Added pinned source revisions/blob IDs, importer statistics, and a redistribution notice under `data/locales/`. The pack is data-only; no upstream executable code or runtime library is bundled.
-- CI verifies downloaded source blob hashes, regenerates `pt_BR.UTF-8.json` byte-for-byte, and uses `make locale-packs` to build `pt_BR.UTF-8.nlp`. The standard build uploads the pack separately; the Release workflow attaches the pack and notice when a GitHub Release is published.
-- Wayland mock tests confirm pair/multi-output, triple, and four-input resolution through the real locale loader; unknown sequences fall back literally and Escape/Backspace cancel buffered prefixes.
+- Added a validated compose_locale preference to the existing per-user preferences file. The line-oriented version-1 format is retained. Locale values use bounded safe ASCII tags; traversal, separators, newline injection, and overlong values are rejected.
+- A stored locale preference takes precedence over NEKOEDIT_LOCALE. When no preference exists, the environment variable remains a first-run override. An explicit en_US.UTF-8 selection suppresses an environment override.
+- Added a COMPOSE LOCALE row at the bottom of the existing Settings dropdown. It toggles between built-in en_US and an installed pt_BR.UTF-8 pack without increasing the panel footprint. The row reports pt_BR when active and MISSING when pt_BR is selected but its data file is absent or invalid.
+- Corrected the title-bar top-edge resize hit band to exempt both File and Settings buttons. Previously, a Settings press at the top of the window could be intercepted as xdg_toplevel.resize before the menu handler received it.
+- Preference host tests verify pt_BR/en_US save, reload, and unsafe-tag rejection. The Wayland mock clicks the Settings header and locale row, activates a fixture pack, types its two-input Compose mapping, switches back to en_US, and checks the stored preference. A guard makes the test fail if the Settings scenario does not append its success observation.
+- Locale selection does not install or download data. Install the separate NLP1 file under the user's locale directory first. The editor still works offline with built-in en_US.
 
-**Locale pack:** 151,288 bytes uncompressed (2,908 × 52-byte records + 72-byte header). Actions artifact [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918) is a 17,943-byte ZIP; SHA-256 `e644d2d0f20f499a0ce6b50872ca2aa688243ebdffaaaa6f7431c5f4b9bfb132`. It expires 2026-11-16 07:26:59 UTC.
-
-**Editor binary:** 119,239 bytes. Actions artifact [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709) has ZIP SHA-256 `1ea57032f6db13c84ddcfafcf4b5bd8dc1973b518164c91a2e969b6ff16dfb01`; it expires 2026-11-16 07:27:00 UTC.
+**Artifacts from #709:**
+- pt_BR NLP1 pack: 151,288 bytes uncompressed; artifact [13657516254](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657516254), ZIP size 17,943 bytes. Expires 2026-11-16 07:46:33 UTC.
+- NekoEdit editor: artifact [13657600927](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657600927), 120,129 bytes. Expires 2026-11-16 07:46:35 UTC.
 
 ### Remaining locale work and validation boundary
 
-The first data pack and Release attachment workflow are implemented, but no new project Release was published in this task, so the pack is not yet attached to a versioned end-user release. More locale datasets, Settings-based selection/install/remove, automatic system-locale discovery, system/user Compose-file import, and locale-specific dead-key behavior remain future work. CI/mock coverage is verified; live GNOME/Mutter testing of an installed pt_BR pack remains outstanding. The editor remains offline-capable with built-in en_US and does not automatically download data.
+The first pt_BR data pack and Release attachment workflow are implemented. The persistent Settings selector for en_US/pt_BR is now implemented and CI/mock-tested. Remaining work: GUI pack installer/remover, additional locale datasets, automatic system-locale discovery, system/user Compose-file imports, locale-specific dead-key actions, and live GNOME/Mutter manual testing. No new project Release was published in this task, so no versioned end-user Release asset has been exercised. The editor remains offline-capable with built-in en_US.
 
 ---
 
@@ -66,7 +65,7 @@ The complete Wayland mock and ELF checks passed in CI. This is not a claim that 
 
 ### Locale-pack implementation update
 
-The NLP1 runtime loader, pack builder, and first external dataset (pt_BR.UTF-8) are implemented on `early-alpha`; see the latest status entry at the top of this file. The pack is a complete en_US-derived table with pt_BR overrides and a pinned source notice. CI rebuilds it from verified upstream Git blobs, compares the JSON byte-for-byte, and uploads the standalone `.nlp` asset. The Release workflow attaches it when a GitHub Release is published. Settings-based installation/selection, more locales, system/user Compose imports, automatic locale discovery, and locale-specific dead keys remain future work.
+The NLP1 loader, pack builder, pt_BR data, and persistent Settings selector are implemented on early-alpha. Settings stores compose_locale, overrides NEKOEDIT_LOCALE when saved, and toggles between built-in en_US and an installed pt_BR pack. The Release workflow attaches the separate data-only pack on publish. A GUI installer/remover, additional locales, automatic system-locale discovery, system/user Compose imports, and locale-specific dead keys remain future work.
 
 **Snapshot date:** 2026-11-09 (Asia/Jakarta).
 
