@@ -14,6 +14,7 @@ extern char compose_locale_current_tag[32];
 extern char compose_locale_installed_tag[32];
 uint32_t compose_locale_install_pack(const char *source_path);
 uint32_t compose_locale_remove_pack(const char *tag);
+uint32_t compose_locale_get_directory(char *destination, uint32_t capacity);
 uint32_t compose_locale_load(const char *tag);
 uint32_t compose_locale_lookup(uint32_t input_count,
                               const uint32_t *input, uint32_t *output);
@@ -27,6 +28,7 @@ static void fail(const char *message)
 int main(int argc, char **argv)
 {
     char app_path[4096], locale_dir[4096], installed_path[4096];
+    char actual_directory[4096], expected_directory[4096];
     struct stat st;
     uint32_t input[2] = { 'o', 'i' }, output[8] = {0};
     uint32_t output_count;
@@ -36,6 +38,13 @@ int main(int argc, char **argv)
     if (setenv("HOME", argv[1], 1) < 0)
         fail("could not set HOME");
     process_envp = environ;
+
+    if (!compose_locale_get_directory(actual_directory, sizeof(actual_directory)))
+        fail("private locale directory could not be resolved");
+    if (snprintf(expected_directory, sizeof(expected_directory),
+                 "%s/.nekoedit/locales", argv[1]) <= 0 ||
+        strcmp(actual_directory, expected_directory) != 0)
+        fail("locale destination is not HOME/.nekoedit/locales");
 
     if (!compose_locale_install_pack(argv[2]))
         fail("valid pack was not installed");
