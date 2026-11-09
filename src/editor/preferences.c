@@ -173,6 +173,27 @@ int preferences_locale_is_pt_br(void)
     return 1;
 }
 
+int preferences_locale_is_builtin(void)
+{
+    static const char en_us_utf8[] = "en_US.UTF-8";
+    static const char en_us[] = "en_US";
+    static const char c_locale[] = "C";
+    static const char c_utf8[] = "C.UTF-8";
+    static const char posix[] = "POSIX";
+    const char *choices[] = {en_us_utf8, en_us, c_locale, c_utf8, posix};
+    const char *value = preferences_locale_ptr;
+    uint32_t choice, i;
+    if (!value)
+        return 0;
+    for (choice = 0; choice < sizeof(choices) / sizeof(choices[0]); ++choice) {
+        const char *candidate = choices[choice];
+        for (i = 0; value[i] && candidate[i] && value[i] == candidate[i]; ++i) {}
+        if (!value[i] && !candidate[i])
+            return 1;
+    }
+    return 0;
+}
+
 static int append_component(char *destination, uint32_t capacity,
                             uint32_t *length, const char *component)
 {

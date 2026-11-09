@@ -621,6 +621,35 @@ install_done:
     return ok;
 }
 
+
+/* Return the private locale-pack directory after ensuring its permissions. */
+uint32_t compose_locale_get_directory(char *destination, uint32_t capacity)
+{
+    const char *home = environment_value(home_env);
+    uint32_t home_length, used = 0, i;
+    long directory_fd;
+    if (!destination || capacity < 2u || !home || home[0] != '/')
+        return 0;
+    directory_fd = open_locale_directory();
+    if (failed(directory_fd))
+        return 0;
+    (void)syscall6(SYS_close, directory_fd, 0, 0, 0, 0, 0);
+    home_length = string_length(home, capacity);
+    if (!home_length || home_length >= capacity)
+        return 0;
+    for (i = 0; i < home_length; ++i)
+        destination[used++] = home[i];
+    if (used && destination[used - 1u] == '/')
+        --used;
+    for (i = 0; i < sizeof(directory_suffix) - 2u; ++i) {
+        if (used + 1u >= capacity)
+            return 0;
+        destination[used++] = directory_suffix[i];
+    }
+    destination[used] = 0;
+    return used;
+}
+
 /* A filename is removable only when it opens without following symlinks and
  * its embedded locale tag, CRC, scalar records, and ordering all validate. */
 uint32_t compose_locale_remove_pack(const char *tag)
