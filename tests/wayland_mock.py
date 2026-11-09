@@ -4094,9 +4094,29 @@ xkb_symbols "nekoedit-sparse" {
                     if read_document_state()["doc_contents"] != bytes.fromhex("e29885"):
                         raise AssertionError("Settings-selected aa_TEST pack did not insert its distinct output")
 
-                    click_settings(180, 10, 5040, "reopen Settings to choose Base")
-                    click_settings_design(200, 200, 5050, "open locale dropdown for Base")
-                    click_settings_design(200, 96, 5060, "select built-in en_US from dropdown")
+                    click_settings(180, 10, 5040, "reopen Settings for keyboard locale navigation")
+                    click_settings_design(200, 200, 5050, "open locale dropdown for keyboard navigation")
+                    key_step(5052, 103, "move locale highlight up to built-in en_US")
+                    if child_u32("settings_locale_dropdown_selected") != 0:
+                        raise AssertionError("Up did not move the locale highlight to built-in en_US")
+                    key_step(5054, 108, "move locale highlight down to aa_TEST")
+                    key_step(5056, 108, "move locale highlight down to pt_BR")
+                    if child_u32("settings_locale_dropdown_selected") != 2:
+                        raise AssertionError("Down did not navigate to the second installed locale")
+                    key_step(5058, 28, "activate pt_BR from the keyboard dropdown")
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("Enter did not activate the highlighted installed locale")
+                    if child_u32("settings_locale_dropdown_open") != 0 or child_u32("picker_mode") != 0:
+                        raise AssertionError("keyboard locale selection did not close without opening a file picker")
+                    key_step(5060, 46, "keyboard-selected pt_BR starts Compose")
+                    key_step(5062, 24, "keyboard-selected pt_BR buffers o")
+                    key_step(5064, 23, "keyboard-selected pt_BR resolves o i")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
+                        raise AssertionError("keyboard-selected pt_BR did not route Compose through its installed pack")
+
+                    click_settings(180, 10, 5070, "reopen Settings to choose Base")
+                    click_settings_design(200, 200, 5080, "open locale dropdown for Base")
+                    click_settings_design(200, 96, 5090, "select built-in en_US from dropdown")
                     if child_u32("compose_locale_active") != 0:
                         raise AssertionError("Settings dropdown did not return to built-in en_US")
                     preference_path = os.path.join(runtime_dir, ".nekoedit", "preferences")
@@ -4156,7 +4176,7 @@ xkb_symbols "nekoedit-sparse" {
                     click_settings_design(332, 200, 5160, "request Remove Pack confirmation")
                     if child_u32("save_confirm_open") != 1:
                         raise AssertionError("Remove Pack did not request confirmation")
-                    click_settings(300, 272, 5130, "confirm Remove Pack")
+                    click_settings(300, 272, 5170, "confirm Remove Pack")
                     if os.path.exists(installed_path):
                         raise AssertionError("Remove Pack did not delete the validated installed file")
                     if child_u32("compose_locale_active") != 0:
