@@ -1145,9 +1145,11 @@ xkb_symbols "nekoedit-test" {
                         if (
                             b"EuroSign, eacute" not in keymap_data
                             or b"[ emdash ]" not in keymap_data
-                            or b"[ dead_acute ]" not in keymap_data
+                            or (not compose_locale_finnish_test and b"[ dead_acute ]" not in keymap_data)
+                            or (compose_locale_finnish_test and b"[ f ]" not in keymap_data)
                             or b"[ Greek_alpha ]" not in keymap_data
                             or b"[ Cyrillic_ya ]" not in keymap_data
+                            or (compose_locale_serbian_test and b"[ Cyrillic_a ]" not in keymap_data)
                             or b"[ Multi_key ]" not in keymap_data
                             or b"[ period ]" not in keymap_data
                             or b"[ S ]" not in keymap_data
