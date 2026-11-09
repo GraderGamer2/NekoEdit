@@ -1,3 +1,33 @@
+## 2026-11-09 — extend XKB consumed-modifier shortcut handling to Shift — Actions #686 passed
+
+### Implementation and semantics
+
+- Extended the per-key shortcut filter from Control to Shift using the existing XKB type-map consumed-mask query. The raw compositor/physical Shift state is retained independently and restored after key-up, so a consumed decision is confined to the current key event.
+- Symbol lookup still receives the complete compositor modifier/group state. The client does not execute modifier/group actions; compositor state remains authoritative.
+- The parser already handled exact `preserve[]` entries. This milestone adds Shift-only preserve and consumed types to the mock keymap, including the preserve-before-map declaration-order case, and verifies their per-entry masks.
+
+### Regression coverage and validation
+
+- Parser assertions verify Left/Right type assignments, both type modifier masks, exact `map[]` entries, and preserve masks: the preserved type retains Shift (mask 1), while the unpreserved type consumes it (mask 0).
+- Runtime tests use Ctrl+Shift+Left on a Shift-consuming map and verify that it behaves as Ctrl+Left without selecting. Ctrl+Shift+Right uses a matching `preserve[Shift]` map and still extends a selection.
+- Actions #684 and #685 initially failed because the mock expected a repaint after sending modifier releases. The editor does not promise a redraw for a pure release; the test was corrected to wait for the backend's actual `ctrl_down=0` and `shift_down=0` state. No application change was made for that harness correction.
+- Actions [Build and test #686](https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163) passed all eight steps. Its Wayland mock output explicitly reports: “XKB consumed Shift is filtered from shortcuts while preserve[Shift] keeps it”.
+- Artifact [13645133185](https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163/artifacts/13645133185) is 95,324 bytes; SHA-256 `4817ba43f7015796080a570879664407b0b51578a7f501d3ddaf2c166fb22035`; it expires 2026-11-16 02:23:52 UTC.
+
+### Files and commits
+
+- [1b9d2da39977](https://github.com/GraderGamer2/NekoEdit/commit/1b9d2da399779ae306011e04e0509748b17afd87) — per-key Control/Shift consumed-modifier filtering and Shift preserve/consumed fixture.
+- [29bada7cd1d8](https://github.com/GraderGamer2/NekoEdit/commit/29bada7cd1d8b153d4aa1c895e600c2cc68bbe82) — README and Wayland backend scope documentation.
+- [97cc62949fb7](https://github.com/GraderGamer2/NekoEdit/commit/97cc62949fb794c632242ea8c4c289d91aab8628) — wait for the actual modifier-state reset after key-up.
+
+The user confirmed the previous downloadable build continued to work and noticed the persisted `clipboard_persistence` preference; `docs/CLIPBOARD.md` describes this as the expected Clipboard Service toggle, which hands off ownership only when the editor closes. That manual confirmation predates this Shift code change and is not treated as desktop validation of the new keyboard behavior.
+
+### Remaining scope
+
+General XKB stateful key-action execution remains compositor-owned. Alt is not currently used by the shortcut set and is not part of this filter. Live GNOME/Mutter verification with real layout keymaps remains outstanding.
+
+---
+
 ## 2026-11-09 — XKB preserve/consumed-Control milestone validated — Actions #682 passed
 
 ### Implementation and semantics
