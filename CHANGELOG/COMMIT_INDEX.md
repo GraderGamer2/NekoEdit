@@ -24,6 +24,18 @@ The Settings locale selector now enumerates installed packs from `~/.nekoedit/lo
 
 No workflow run or check status was returned for the updated PR head at the time this entry was written. Build and test #736 passed the previous locale-manager implementation, but it predates this dropdown change and is not evidence for it. The new Wayland mock assertions have been added but remain unexecuted in CI.
 
+### Documentation and continuity commits
+
+| Commit | Subject |
+|---|---|
+| [703a264b4946](https://github.com/GraderGamer2/NekoEdit/commit/703a264b4946269298665ce74ce078e02087cd36) | docs: describe dynamic installed-locale dropdown |
+| [b8c08cbf1623](https://github.com/GraderGamer2/NekoEdit/commit/b8c08cbf162360329399ccdf027653ec94da8059) | docs: document installed-locale dropdown behavior [skip ci] |
+| [d385ebf975ab](https://github.com/GraderGamer2/NekoEdit/commit/d385ebf975abc09d0116b36070e12aa63b2c29f4) | docs: record dynamic locale dropdown status [skip ci] |
+| [e13775187d1c](https://github.com/GraderGamer2/NekoEdit/commit/e13775187d1c9e52216010a66f588b8135e47cb9) | docs: log dynamic installed-locale dropdown work [skip ci] |
+| [6dcff61b4d2a](https://github.com/GraderGamer2/NekoEdit/commit/6dcff61b4d2a7088028fd566b7f246c4902d2902) | docs: add installed-locale dropdown project history [skip ci] |
+| [1b64041481e8](https://github.com/GraderGamer2/NekoEdit/commit/1b64041481e842b5e3eddaea49f03a8b19d57a97) | docs: index installed-locale dropdown commits [skip ci] |
+| [298879921f47](https://github.com/GraderGamer2/NekoEdit/commit/298879921f4781fcbea864f5135eebab5bb0861e) | docs: update changelog continuity for locale dropdown [skip ci] |
+
 ---
 
 ## 2026-11-09 — clarify the Compose locale installation destination — Build and test #736 passed
