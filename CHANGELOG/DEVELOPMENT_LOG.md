@@ -1,3 +1,40 @@
+## 2026-11-09 — add the first external Compose locale pack — Build and test #704 passed
+
+### Source data and import pipeline
+
+- Added `data/locales/pt_BR.UTF-8.json` as a complete table, not an overlay. It flattens the en_US Compose include and then applies pt_BR locale rules, with locale entries replacing matching base keys.
+- Pinned libX11 to `mirror/libX11` commit `ff8706a5eae25b8bafce300527079f68a201d27f` and xorgproto to `X11Libre/mirror.fdo.xorgproto` commit `6d3907b6d5dc4aa7d7ee6ee5d7d8714e7466630b`. Exact upstream Git blob IDs are stored in source metadata and verified in CI before import.
+- `tools/import_xcompose.py` resolves named and aliased input keysyms to Unicode scalars, decodes Compose quoted strings, supports only the expected en_US include, applies locale overrides, and deterministically drops shorter keys that prefix longer keys.
+- The source contains 2,904 valid base rule lines and 9 valid locale lines. Three locale rules replace existing keys; 2,908 final entries remain after one ambiguous shorter prefix is removed. Final lengths are 2,220 pairs, 582 triples, and 106 four-input rules. One hundred results contain multiple scalars.
+- Dead-key-led rules and non-scalar input keysyms are intentionally excluded; NLP1 v1 is a scalar-only Multi_key table. JSON statistics include accepted/skipped source lines, upstream pins, and import policy. A companion notice records provenance and license references.
+
+### Tests and build integration
+
+- Added importer tests for aliases, duplicate source definitions, locale override priority, multi-scalar output, prefix handling, unsupported keysyms, and unknown include rejection.
+- Added a committed-data test for pt_BR-specific mappings, counts/depth distribution, and NLP1 header construction.
+- `make test` runs both locale tests. `make locale-packs` builds the 151,288-byte pack and copies its notice to `build/locales/`.
+- The regular Build and test workflow verifies source blob IDs, regenerates the JSON, requires byte-for-byte equality, and uploads the optional pack separately from the editor executable. A dedicated Release workflow attaches the pack and notice when a project Release is published.
+
+### Corrections retained in history
+
+- [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf) corrected importer provenance wording to match the committed JSON.
+- The first exact-generation run exposed a mismatch in the meaning of `base_rules`. [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a) changed the statistic to count valid source lines before duplicate-key replacement and added a duplicate-line regression test. The JSON then matched byte-for-byte.
+
+### Validation
+
+- [Build and test #704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 workflow steps: freestanding build, CLI/host tests, complete Wayland mock, ELF inspection, source fetch/blob verification, exact importer regeneration, pack build, and both uploads.
+- The mock confirms read-only pt_BR pack activation and pair/multi-output, triple, four-input, literal fallback, Escape, and Backspace behavior.
+- Locale pack: 151,288 bytes; artifact [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918), ZIP size 17,943 bytes, SHA-256 `e644d2d0f20f499a0ce6b50872ca2aa688243ebdffaaaa6f7431c5f4b9bfb132`.
+- Editor binary: 119,239 bytes; artifact [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709), ZIP SHA-256 `1ea57032f6db13c84ddcfafcf4b5bd8dc1973b518164c91a2e969b6ff16dfb01`.
+
+### Remaining work
+
+Publish a project Release to exercise attachment to an actual versioned release; create more locale datasets; add Settings-based install/select/remove; optionally follow system locale variables; evaluate system/user Compose import and locale-specific dead keys. Live GNOME/Mutter testing of an installed pt_BR pack remains outstanding.
+
+**Source commits:** [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca), [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf), [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a).
+
+---
+
 ## 2026-11-09 — implement bounded Compose locale packs — Build and test #701 passed
 
 ### Implementation

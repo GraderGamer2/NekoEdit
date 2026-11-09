@@ -5,8 +5,24 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **390** (387 previously recorded commits + three NLP1 locale-pack implementation/test commits; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **393** (390 previously recorded commits + three commits for the reproducible pt_BR dataset, importer metadata, and source-line count fix; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — first external Compose locale data — Build and test #704 passed
+
+| Commit | Subject |
+|---|---|
+| [d5f96921ef9e](https://github.com/GraderGamer2/NekoEdit/commit/d5f96921ef9e9cf1e052a6509003b827769af9ca) | feat: add reproducible Brazilian Portuguese Compose pack |
+| [15cf37c949fa](https://github.com/GraderGamer2/NekoEdit/commit/15cf37c949facfeb5038915f90b8f1917cf3afdf) | fix: align pt_BR importer provenance metadata |
+| [7871f5256b89](https://github.com/GraderGamer2/NekoEdit/commit/7871f5256b89789e348b52801ebaecbca86e2a0a) | fix: count Compose source rules before deduplication |
+
+Added a pinned-source importer and the first complete non-en_US dataset, pt_BR.UTF-8, derived from libX11's en_US baseline and pt_BR overrides. Added source notices, importer/data regression tests, a separate pack build target, CI source-blob verification and exact JSON regeneration, and a Release workflow that attaches the pack and notice on publish. The table contains 2,908 records (2,220 pairs, 582 triples, 106 four-input rules), with 100 multi-scalar results. Importer statistics count valid source lines before duplicate-key replacement.
+
+[Build and test #704](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889) passed all 12 steps, including exact source regeneration, the complete Wayland mock, pack build, ELF inspection, and separate editor/locale artifact uploads. NLP1 pack: 151,288 bytes; artifact ZIP [13656596918](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13656596918), 17,943 bytes. Editor artifact ZIP [13657030709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42579353889/artifacts/13657030709), editor binary 119,239 bytes.
+
+The Release attachment workflow is committed but has not been exercised against a published tag/release in this task. More locales and GUI locale management remain future work.
+
+---
 
 ## 2026-11-09 — bounded Compose locale packs — Build and test #701 passed
 
