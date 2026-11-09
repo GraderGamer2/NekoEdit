@@ -3850,7 +3850,8 @@ xkb_symbols "nekoedit-sparse" {
                         panel_h = child_u32("settings_panel_height")
                         if not panel_w or not panel_h:
                             raise AssertionError("Settings panel geometry was not initialized")
-                        x = panel_x + (160 * panel_w // 256)
+                        # The toggle occupies the left side of the locale row (design x < 260).
+                        x = panel_x + (60 * panel_w // 256)
                         y = panel_y + (168 * panel_h // 192)
                         click_settings(x, y, serial, label)
 
