@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-The Finnish/Serbian locale dead-key path is green in Build and test #759. The bounded offline user XCompose converter and its locale-manager integration are present. The latest History filter change adds a visible caret and horizontal scrolling for 127-byte path queries; #771 exposed an invalid synthetic result line in the manager fixture, now corrected. CURRENT_STATUS.md records the current CI boundary. The converter remains manual only: no automatic startup discovery or Settings UI.
+The Finnish/Serbian locale dead-key path is green in Build and test #759. The bounded offline user XCompose converter and its locale-manager integration are present. The latest History filter change adds a visible caret and horizontal scrolling for 127-byte path queries. Its long-query/clear checks passed in #772; the follow-up Browse click initially timed out because of a wrong mock coordinate argument, now corrected in the test. CURRENT_STATUS.md records the current CI boundary. The converter remains manual only: no automatic startup discovery or Settings UI.
 
 ## Read this first in every new development chat
 

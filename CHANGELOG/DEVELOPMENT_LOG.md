@@ -1,3 +1,13 @@
+## 2026-11-09 — correct History mock pointer coordinates after long-query test
+
+- Build and test #772 passed the freestanding build and all host-side tests, including the user-XCompose locale-manager fixture after the quoted-result correction.
+- The Wayland mock reached the new History search case: it typed all 127 query characters, saw zero matches, observed a horizontally scrolled display start and an in-field caret, and successfully cleared the query back to one match.
+- The test then timed out waiting for the History Browse redraw because the follow-up edit passed the new serial value as the first `workflow_click` argument (x) instead of the third argument (serial). The application was not receiving a click inside the Browse button.
+- Restored the actual History control coordinates (Browse x=700, Open Selected x=100, Undo x=100, Redo x=300, Export x=480, Delete x=660) and assigned the larger serials to the third argument. This is a test-harness correction only; no runtime behavior is changed.
+- Build and test #773 must verify the full History path, including the existing positive path match and Browse/Open/Undo/Redo/Export/Delete operations.
+
+---
+
 ## 2026-11-09 — correct the locale-manager XCompose result fixture discovered during History-filter CI
 
 - Build and test #771 successfully assembled and linked the freestanding executable after the History-query BSS/address corrections.

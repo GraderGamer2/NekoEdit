@@ -1,3 +1,9 @@
+## 2026-11-09 — History long-query test reaches real UI; correct mock click argument order
+
+Build and test #772 passed build and host-side tests, including converter-to-NLP1 manager integration. The new History test successfully entered a 127-character non-match, observed zero results, confirmed horizontal scrolling and caret visibility, and used Ctrl+A to restore the unfiltered result. It then failed waiting for Browse because the modified test passed its pointer serial as the x coordinate rather than the serial argument. The control coordinates have been restored in the follow-up test revision; the History runtime itself has not yet been shown to fail.
+
+---
+
 ## 2026-11-09 — correct locale-manager user XCompose fixture syntax
 
 The locale-manager integration fixture had used two unquoted result keysyms, a result form that the bounded user XCompose converter intentionally does not implement. It now uses a quoted Unicode result plus one keysym annotation, matching the documented syntax and preserving the narrow parser grammar. Build and test #771 confirmed that the History-filter assembly compiles and links after the BSS correction, but host tests stopped at the invalid fixture before the Wayland History filter scenario. The follow-up workflow must cover both.

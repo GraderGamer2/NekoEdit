@@ -4,9 +4,10 @@
 
 | Commit | Subject |
 |---|---|
-| Pending | test: use valid result syntax in locale manager XCompose fixture |
+| [5fcb5f813469](https://github.com/GraderGamer2/NekoEdit/commit/5fcb5f8134692e8d2e29430edb5b2a6ac199141e) | test: use valid result syntax in locale manager XCompose fixture |
+| Pending | test: restore History control coordinates after long-query assertions |
 
-Build and test #771 compiled the History-filter assembly successfully, then failed because the new locale-manager fixture used two unquoted result keysyms. The fixture is corrected to a quoted Unicode result plus one conventional result-keysym annotation. The History-filter mock assertions have not yet reached CI.
+Build and test #771 compiled the History-filter assembly successfully, then failed because the new locale-manager fixture used two unquoted result keysyms. The fixture is corrected to a quoted Unicode result plus one conventional result-keysym annotation. Build and test #772 passed host tests, then typed the 127-character filter, verified zero results and caret scrolling, and cleared the query successfully. Its Browse click timed out because the serial had been placed in the x-coordinate parameter; the next test revision restores the control coordinates.
 
 ---
 
