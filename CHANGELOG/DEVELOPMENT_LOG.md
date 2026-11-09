@@ -1,3 +1,12 @@
+## 2026-11-09 — synchronize the held Tab mock after a delayed frame
+
+- Actions [Build and test #675](https://github.com/GraderGamer2/NekoEdit/actions/runs/42542901610) built the executable and passed ELF checks, CLI smoke tests, user install/uninstall tests, preferences tests, and disk-history host tests. The Wayland mock passed the default physical typing, explicitly enabled text-input-v3, and save-confirmation scenarios, then failed in the older seat-v3 held-key scenario: the initial Tab assertion observed an unchanged caret.
+- The test sequence released a held Enter and waited for `repeat_keycode=0`, but `expect_redraw()` could still consume a frame delayed from that preceding key before the newly sent Tab event was dispatched. A redraw alone is not proof that a particular key transition has been applied.
+- Updated the held Tab fixture to wait for `repeat_keycode=15` and for `doc_cursor` to advance by four bytes before consuming the frame. The assertion now synchronizes on the actual Tab editing action; it retains the subsequent held-repeat check.
+- Test-only commit: [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). The next full workflow is pending.
+
+---
+
 ## 2026-11-09 — diagnose and isolate Settings modal over the History page
 
 ### Screenshot and root cause

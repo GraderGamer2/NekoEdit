@@ -5,9 +5,17 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **366** (365 previously recorded commits + the 2026-11-09 Settings modal/rendering regression fix; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **367** (366 previously recorded commits + the 2026-11-09 held-Tab mock synchronization follow-up; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Held Tab mock synchronization (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04) | test: wait for Tab edit before consuming its redraw |
+
+The seat-v3 held-key fixture now waits for both the Tab repeat-key state and the four-byte document-cursor movement before accepting a frame. Actions #675 could consume a delayed frame from the preceding held Enter, so the redraw alone did not prove the Tab event had been dispatched. The next full workflow is pending.
 
 ## Settings modal and History overlay isolation (2026-11-09)
 
