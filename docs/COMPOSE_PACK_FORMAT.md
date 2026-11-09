@@ -93,3 +93,15 @@ When no non-empty saved Settings preference is present, the runtime checks local
 4. LANG
 
 The first non-empty value is used as the locale tag. Empty values are ignored. For the current pt_BR dataset, `pt_BR`, `pt_BR.utf8`, and `pt_BR.UTF8` resolve to the canonical pack tag `pt_BR.UTF-8`. C/POSIX spellings select built-in en_US. An unsupported non-empty higher-priority locale does not fall through to a lower-priority variable; it leaves the built-in fallback active. LC_MESSAGES and LANGUAGE are intentionally ignored because they control message translation rather than character input locale. A saved Settings selection always takes precedence over these variables. C, C.UTF-8, C.utf8, and POSIX select the embedded en_US fallback. If the selected optional locale pack is absent or invalid, the loader also leaves en_US active.
+
+
+## Additional locale datasets
+
+Two additional reproducible tables are included beside pt_BR:
+
+- **fi_FI.UTF-8** — six valid locale-specific `Multi_key` rules, five overriding an en_US result. The table has 2,904 final rules (2,217 pairs, 581 triples, 106 four-input sequences) and 100 multi-scalar outputs inherited from the base. Examples include the `fi` and `fl` ligatures and `ij` / `IJ` ligatures.
+- **sr_RS.UTF-8** — 40 valid locale-specific `Multi_key` rules, 36 overriding the base table. The table has 2,907 final rules (2,221 pairs, 580 triples, 106 four-input sequences) and 106 multi-scalar results. Serbian additions compose grave, acute, circumflex, and double-grave accents with Cyrillic letters using base-plus-combining-mark output.
+
+All three datasets share the pinned libX11 and xorgproto revisions; each locale Compose file has its own verified Git blob ID in its JSON source metadata. The importer accepts `--locale-compose-blob` so non-pt_BR locales cannot inherit the Portuguese source identifier. The standard build verifies every source blob, regenerates all three JSON files byte-for-byte, and uploads packs separately from the executable. The Release workflow attaches every generated `.nlp` file and matching notice.
+
+NLP1 v1 imports only scalar-key `Multi_key` sequences. Finnish and Serbian source files also contain dead-key-specific rules; those are intentionally skipped and must not be mistaken for supported locale-specific dead-key behavior.

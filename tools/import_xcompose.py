@@ -191,7 +191,7 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
         "keysymdef_path": "include/X11/keysymdef.h",
         "keysymdef_blob": KEYSYMDEF_BLOB,
         "import_policy": (
-            "Flatten the en_US include, apply pt_BR Multi_key overrides, retain only "
+            f"Flatten the en_US include, apply {locale} Multi_key overrides, retain only "
             "input keysyms mapped to Unicode scalars, and drop shorter sequences that "
             "prefix longer sequences."
         ),
@@ -221,14 +221,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--locale-source", required=True, type=Path)
     parser.add_argument("--keysymdef", required=True, type=Path)
     parser.add_argument("--locale", required=True)
+    parser.add_argument("--locale-compose-blob", default=LOCALE_COMPOSE_BLOB,
+                        help="Git blob SHA for the locale Compose.pre source")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
+    if not re.fullmatch(r"[0-9a-f]{40}", args.locale_compose_blob):
+        parser.error("--locale-compose-blob must be a 40-character lowercase Git SHA")
     try:
         document = import_compose_sources(
             args.base.read_text(encoding="utf-8"),
             args.locale_source.read_text(encoding="utf-8"),
             args.keysymdef.read_text(encoding="utf-8"),
             args.locale,
+            source_info={"locale_compose_blob": args.locale_compose_blob},
         )
         encoded = json.dumps(document, ensure_ascii=True, indent=2) + "\n"
         args.output.parent.mkdir(parents=True, exist_ok=True)

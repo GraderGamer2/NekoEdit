@@ -104,15 +104,16 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 LOCALE_PACK_DIR := $(BUILD_DIR)/locales
-LOCALE_PACK := $(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp
+LOCALE_TAGS := pt_BR.UTF-8 fi_FI.UTF-8 sr_RS.UTF-8
+LOCALE_PACKS := $(addprefix $(LOCALE_PACK_DIR)/,$(addsuffix .nlp,$(LOCALE_TAGS)))
 
 .PHONY: locale-packs
-locale-packs: $(LOCALE_PACK)
+locale-packs: $(LOCALE_PACKS)
 
-$(LOCALE_PACK): data/locales/pt_BR.UTF-8.json tools/compose_pack.py
+$(LOCALE_PACK_DIR)/%.nlp: data/locales/%.json data/locales/%.NOTICE.txt tools/compose_pack.py
 	@mkdir -p "$(@D)"
 	$(PYTHON) tools/compose_pack.py build --input "$<" --output "$@"
-	cp data/locales/pt_BR.UTF-8.NOTICE.txt "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.NOTICE.txt"
+	cp "data/locales/$*.NOTICE.txt" "$(LOCALE_PACK_DIR)/$*.NOTICE.txt"
 
 $(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/compose_locale.c
 	@mkdir -p "$(@D)"

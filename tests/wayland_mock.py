@@ -6,6 +6,7 @@ Python is used only by this test harness; it is not part of NekoEdit's runtime.
 from __future__ import annotations
 
 import mmap
+import json
 import os
 import select
 import socket
@@ -245,6 +246,8 @@ def run(
     compose_locale_ctype_test: bool = False,
     compose_locale_lang_test: bool = False,
     compose_locale_saved_preference_test: bool = False,
+    compose_locale_finnish_test: bool = False,
+    compose_locale_serbian_test: bool = False,
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
@@ -260,17 +263,40 @@ def run(
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
-    if sum((compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test, compose_locale_system_test, compose_locale_c_fallback_test, compose_locale_ctype_test, compose_locale_lang_test, compose_locale_saved_preference_test)) > 1:
+    locale_scenarios = (
+        compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test,
+        compose_locale_system_test, compose_locale_c_fallback_test, compose_locale_ctype_test,
+        compose_locale_lang_test, compose_locale_saved_preference_test,
+        compose_locale_finnish_test, compose_locale_serbian_test,
+    )
+    if sum(locale_scenarios) > 1:
         raise ValueError("locale-pack scenarios are mutually exclusive")
-    if compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test:
+    if any(locale_scenarios):
         locale_dir = os.path.join(runtime_dir, ".nekoedit", "locales")
         os.makedirs(locale_dir, mode=0o700, exist_ok=True)
-        pack_tag = "pt_BR.UTF-8" if (compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test) else "xx_TEST.UTF-8"
-        pack_doc = {"locale":pack_tag, "sequences":[
-            {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
-            {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
-            {"input":[0x79,0x75,0x69],"output":[0x2605]},
-        ]}
+        if compose_locale_finnish_test:
+            pack_tag = "fi_FI.UTF-8"
+            source_json = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                       "data", "locales", pack_tag + ".json")
+            with open(source_json, "r", encoding="utf-8") as source_file:
+                pack_doc = json.load(source_file)
+        elif compose_locale_serbian_test:
+            pack_tag = "sr_RS.UTF-8"
+            source_json = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                       "data", "locales", pack_tag + ".json")
+            with open(source_json, "r", encoding="utf-8") as source_file:
+                pack_doc = json.load(source_file)
+        else:
+            pack_tag = "pt_BR.UTF-8" if (
+                compose_locale_settings_test or compose_locale_system_test or
+                compose_locale_c_fallback_test or compose_locale_ctype_test or
+                compose_locale_lang_test or compose_locale_saved_preference_test
+            ) else "xx_TEST.UTF-8"
+            pack_doc = {"locale":pack_tag, "sequences":[
+                {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
+                {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
+                {"input":[0x79,0x75,0x69],"output":[0x2605]},
+            ]}
         pack_data = bytearray(encode_compose_pack(pack_doc))
         if compose_locale_invalid_test: pack_data[-1] ^= 1
         with open(os.path.join(locale_dir, pack_tag + ".nlp"), "wb") as pack_file:
@@ -357,7 +383,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test else 8)
+            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -685,7 +711,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test:
+                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -1106,6 +1132,16 @@ xkb_symbols "nekoedit-test" {
                             b"key <AB03> { [ c, C ] };",
                             b"key <AB03> { [ Multi_key ] };",
                         )
+                        if compose_locale_finnish_test:
+                            keymap_data = keymap_data.replace(
+                                b'key <AC04> { type = "ONE_LEVEL", symbols[Group1] = [ dead_acute ] };',
+                                b'key <AC04> { [ f ] };',
+                            )
+                        if compose_locale_serbian_test:
+                            keymap_data = keymap_data.replace(
+                                b"key <AC01> { [ U00E9, U1F600 ] };",
+                                b"key <AC01> { [ Cyrillic_a ] };",
+                            )
                         if (
                             b"EuroSign, eacute" not in keymap_data
                             or b"[ emdash ]" not in keymap_data
@@ -3766,6 +3802,30 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
 
+
+                elif compose_locale_finnish_test:
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("fi_FI.utf8 did not normalize to the installed fi_FI.UTF-8 pack")
+                    key_step(6100, 46, "Finnish locale starts Compose")
+                    key_step(6102, 33, "Finnish locale buffers f")
+                    key_step(6104, 23, "Finnish locale resolves f i to the fi ligature")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("efac81"):
+                        raise AssertionError("Finnish fi ligature did not produce U+FB01")
+                    observations.append("fi_FI.utf8 alias loaded the actual Finnish pack and resolved Multi_key f i to U+FB01")
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                elif compose_locale_serbian_test:
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("sr_RS.utf8 did not normalize to the installed sr_RS.UTF-8 pack")
+                    key_step(6200, 46, "Serbian locale starts Compose")
+                    key_step(6202, 41, "Serbian locale buffers grave accent")
+                    key_step(6204, 30, "Serbian locale resolves Cyrillic a with combining grave")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("d0b0cc80"):
+                        raise AssertionError("Serbian Cyrillic accent did not produce U+0430 U+0300")
+                    observations.append("sr_RS.utf8 alias loaded the actual Serbian pack and resolved grave plus Cyrillic_a to decomposed Cyrillic output")
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 elif compose_locale_system_test:
                     if child_u32("compose_locale_active") != 1:
@@ -7217,6 +7277,14 @@ xkb_symbols "nekoedit-sparse" {
         environment["LC_ALL"] = ""
         environment["LC_CTYPE"] = ""
         environment["LANG"] = "pt_BR"
+    if compose_locale_finnish_test:
+        environment["LC_ALL"] = ""
+        environment["LC_CTYPE"] = "fi_FI.utf8"
+        environment["LANG"] = "en_US.UTF-8"
+    if compose_locale_serbian_test:
+        environment["LC_ALL"] = ""
+        environment["LC_CTYPE"] = ""
+        environment["LANG"] = "sr_RS.utf8"
     if compose_locale_saved_preference_test:
         environment["LC_ALL"] = "pt_BR.UTF-8"
         environment["LC_CTYPE"] = "pt_BR.UTF-8"
@@ -7473,6 +7541,28 @@ if __name__ == "__main__":
         except FileNotFoundError: pass
 
 
+
+    # Exercise generic UTF-8 alias normalization with the actual Finnish data table.
+    fi_locale_fd, fi_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-fi-")
+    try:
+        with os.fdopen(fi_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(sys.argv[1], initial_file=fi_locale_path, unicode_keyboard_test=True,
+            compose_locale_finnish_test=True)
+    finally:
+        try: os.unlink(fi_locale_path)
+        except FileNotFoundError: pass
+
+    # Exercise Serbian Cyrillic Multi_key accent output from the actual locale table.
+    sr_locale_fd, sr_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-sr-")
+    try:
+        with os.fdopen(sr_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(sys.argv[1], initial_file=sr_locale_path, unicode_keyboard_test=True,
+            compose_locale_serbian_test=True)
+    finally:
+        try: os.unlink(sr_locale_path)
+        except FileNotFoundError: pass
 
     # With no explicit NekoEdit override or saved preference, discover pt_BR from LC_ALL.
     system_locale_fd, system_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-system-")

@@ -24,7 +24,7 @@ The first complete external dataset, `pt_BR.UTF-8`, is generated from pinned X.O
 
 This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full locale-aware Compose support. It does not currently:
 
-- load an arbitrary system-locale table without a matching installed NLP1 data pack (the current pt_BR aliases are normalized, and unsupported/missing tags fall back to en_US);
+- load an arbitrary system-locale table without a matching installed NLP1 data pack (language/territory casing and common UTF-8 codeset spellings normalize to canonical pack names; unsupported/missing tags fall back to en_US);
 - load `/usr/share/X11/locale/compose.dir` or locale-specific `Compose` files;
 - process XCompose `include` directives, `%L` / `%S` / `%H` substitutions, or `$XCOMPOSEFILE`;
 - read or merge `~/.XCompose`;
@@ -51,6 +51,6 @@ The embedded en_US tables remain static read-only data. Optional packs are opene
 
 ## Selecting an installed locale
 
-The Settings dropdown's locale row offers four actions: **Locale** opens the installed `.nlp` pack picker, **Base** selects embedded `en_US`, **Add** imports a local pack, and **Remove** deletes the currently selected non-built-in pack after confirmation. The selected tag is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A saved choice takes precedence over environment selection. When no preference is saved, NekoEdit checks `NEKOEDIT_LOCALE`, then `LC_ALL`, `LC_CTYPE`, and `LANG` in that order; empty values are ignored. Common `pt_BR`, `pt_BR.utf8`, and `pt_BR.UTF8` spellings resolve to the canonical `pt_BR.UTF-8` pack tag. `C`, `C.UTF-8`, `C.UTF8`, `C.utf8`, and `POSIX` select embedded en_US. `LC_MESSAGES` and `LANGUAGE` are ignored because they control message translation, not character input.
+The Settings dropdown's locale row offers four actions: **Locale** opens the installed `.nlp` pack picker, **Base** selects embedded `en_US`, **Add** imports a local pack, and **Remove** deletes the currently selected non-built-in pack after confirmation. The selected tag is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A saved choice takes precedence over environment selection. When no preference is saved, NekoEdit checks `NEKOEDIT_LOCALE`, then `LC_ALL`, `LC_CTYPE`, and `LANG` in that order; empty values are ignored. Locale normalization folds language/territory case, canonicalizes UTF8/utf-8 codeset spelling, and adds `.UTF-8` to bare language/territory tags. For example, `fi_FI.utf8` selects `fi_FI.UTF-8`, and `sr_RS.UTF8` selects `sr_RS.UTF-8`. `C`, `C.UTF-8`, `C.UTF8`, `C.utf8`, and `POSIX` select embedded en_US. `LC_MESSAGES` and `LANGUAGE` are ignored because they control message translation, not character input.
 
 Add opens a local file picker filtered to `.nlp`. The selected file is structurally validated, copied into `~/.nekoedit/locales/` with private permissions, and only then activated. Remove acts on the persisted selected tag (or the effective installed locale when no saved preference exists), validates the installed file before deletion, and requires confirmation. Neither action downloads data. An absent or invalid selected pack leaves embedded en_US active and displays `MISSING`. Switching locales does not modify the active document.

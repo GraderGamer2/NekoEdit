@@ -24,3 +24,17 @@ The locale-import workflow downloads these exact commits, verifies their Git blo
 The generated binary is not embedded in NekoEdit. \`make locale-packs\` builds it in \`build/locales/\`; the normal Actions build uploads it separately, and the locale-pack Release workflow attaches the \`.nlp\` asset and this notice when a GitHub Release is published.
 
 See [NOTICE](pt_BR.UTF-8.NOTICE.txt) for source attribution and licensing references.
+
+
+## fi_FI.UTF-8 and sr_RS.UTF-8
+
+The additional datasets use the same pinned en_US Compose baseline and xorgproto keysym definitions above. Their locale source files and Git blobs are:
+
+| Locale | Upstream source path | Git blob | Final rules | Locale overrides |
+|---|---|---|---:|---:|
+| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 2,904 | 5 |
+| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 2,907 | 36 |
+
+Finnish contributes six accepted locale-specific Multi_key rules: fi/fl/ij/IJ ligatures, long s, and the apostrophe-space-n sequence. Serbian contributes forty accepted Multi_key sequences for Cyrillic accent composition. The source files also contain dead-key sequences; these are excluded from NLP1 v1 because it represents Unicode scalar inputs only. The generated tables retain source-line and unsupported-rule statistics.
+
+The Build and test workflow fetches all three locale files from the pinned libX11 revision and verifies their blob IDs before regenerating the data. The importer receives each locale-specific source blob through `--locale-compose-blob`; all generated JSON files must compare byte-for-byte with the committed data before the packs are uploaded.

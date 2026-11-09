@@ -77,6 +77,14 @@ def main() -> None:
         pass
     else:
         raise AssertionError("unsupported Compose include was silently accepted")
+    source_override = import_compose_sources(
+        BASE, LOCALE, KEYSYMS, "xx_TEST.UTF-8",
+        source_info={"locale_compose_blob": "a" * 40},
+    )
+    if source_override["source"]["locale_compose_blob"] != "a" * 40:
+        raise AssertionError("per-locale source blob metadata was not applied")
+    if "xx_TEST.UTF-8 Multi_key overrides" not in source_override["source"]["import_policy"]:
+        raise AssertionError("import policy metadata is not locale-generic")
     print("X.Org Compose importer tests passed")
 
 

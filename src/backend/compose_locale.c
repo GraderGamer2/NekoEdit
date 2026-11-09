@@ -123,6 +123,124 @@ static int valid_tag(const char *tag, uint32_t length)
     }
     return 1;
 }
+static char ascii_lower(char value)
+{
+    return value >= 'A' && value <= 'Z' ? (char)(value - 'A' + 'a') : value;
+}
+
+static char ascii_upper(char value)
+{
+    return value >= 'a' && value <= 'z' ? (char)(value - 'a' + 'A') : value;
+}
+
+static int segment_equals_ascii_case(const char *value, uint32_t length,
+                                     const char *expected)
+{
+    uint32_t i, expected_length = string_length(expected, 32u);
+    if (length != expected_length) return 0;
+    for (i = 0; i < length; ++i)
+        if (ascii_lower(value[i]) != ascii_lower(expected[i])) return 0;
+    return 1;
+}
+
+/* Normalize language_territory locale tags without libc locale APIs.
+ * Language becomes lower-case, territory upper-case and UTF8/utf-8 -> UTF-8.
+ * A language_territory name without a codeset defaults to a UTF-8 pack.
+ */
+static uint32_t normalize_locale_tag(const char *input, char *output,
+                                     uint32_t capacity)
+{
+    uint32_t length, underscore = 0xffffffffu, dot = 0xffffffffu;
+    uint32_t modifier = 0xffffffffu, language_end, region_end;
+    uint32_t region_start, at = 0, i;
+    int has_region = 0, special_language;
+
+    if (!input || !output || !capacity) return 0;
+    length = string_length(input, MAX_TAG_LENGTH + 1u);
+    if (!valid_tag(input, length)) return 0;
+
+    if (equals(input, "C") || equals(input, "POSIX")) {
+        for (i = 0; i < length; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = input[i];
+        }
+        output[at] = 0;
+        return at;
+    }
+
+    for (i = 0; i < length; ++i) {
+        if (input[i] == '_' && underscore == 0xffffffffu) underscore = i;
+        if (input[i] == '.' && dot == 0xffffffffu) dot = i;
+        if (input[i] == '@' && modifier == 0xffffffffu) modifier = i;
+    }
+    language_end = length;
+    if (underscore < language_end) language_end = underscore;
+    if (dot < language_end) language_end = dot;
+    if (modifier < language_end) language_end = modifier;
+    special_language = segment_equals_ascii_case(input, language_end, "C") ||
+                       segment_equals_ascii_case(input, language_end, "POSIX");
+
+    if (special_language) {
+        for (i = 0; i < language_end; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = ascii_upper(input[i]);
+        }
+    } else {
+        for (i = 0; i < language_end; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = ascii_lower(input[i]);
+        }
+    }
+
+    if (underscore < length && (dot == 0xffffffffu || underscore < dot) &&
+        (modifier == 0xffffffffu || underscore < modifier)) {
+        has_region = 1;
+        if (at + 1u >= capacity) return 0;
+        output[at++] = '_';
+        region_start = underscore + 1u;
+        region_end = length;
+        if (dot < region_end) region_end = dot;
+        if (modifier < region_end) region_end = modifier;
+        for (i = region_start; i < region_end; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = ascii_upper(input[i]);
+        }
+    }
+
+    if (dot < length && (modifier == 0xffffffffu || dot < modifier)) {
+        uint32_t codeset_end = modifier < length ? modifier : length;
+        uint32_t codeset_length = codeset_end - dot - 1u;
+        if (segment_equals_ascii_case(input + dot + 1u, codeset_length, "UTF8") ||
+            segment_equals_ascii_case(input + dot + 1u, codeset_length, "UTF-8")) {
+            const char canonical[] = ".UTF-8";
+            for (i = 0; i < sizeof(canonical) - 1u; ++i) {
+                if (at + 1u >= capacity) return 0;
+                output[at++] = canonical[i];
+            }
+        } else {
+            for (i = dot; i < codeset_end; ++i) {
+                if (at + 1u >= capacity) return 0;
+                output[at++] = input[i];
+            }
+        }
+    } else if (has_region) {
+        const char canonical[] = ".UTF-8";
+        for (i = 0; i < sizeof(canonical) - 1u; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = canonical[i];
+        }
+    }
+
+    if (modifier < length) {
+        for (i = modifier; i < length; ++i) {
+            if (at + 1u >= capacity) return 0;
+            output[at++] = input[i];
+        }
+    }
+    if (!valid_tag(output, at)) return 0;
+    output[at] = 0;
+    return at;
+}
 
 static uint32_t read32(const uint8_t *p)
 {
@@ -256,11 +374,11 @@ static int make_path(char *path, uint32_t capacity,
 
 uint32_t compose_locale_load(const char *requested_tag)
 {
-    static const char pt_br_canonical[] = "pt_BR.UTF-8";
     const char *tag = requested_tag;
     const char *home = environment_value(home_env);
     uint32_t tag_length, home_length, count = 0;
     char path[4096];
+    char normalized_tag[MAX_TAG_LENGTH + 9u];
     long fd, size, address;
     const uint8_t *candidate;
 
@@ -273,11 +391,12 @@ uint32_t compose_locale_load(const char *requested_tag)
     if (!tag || !tag[0])
         tag = environment_value(lang_env);
 
-    /* Normalize common glibc locale spellings to the one packaged table tag. */
-    if (tag && (equals(tag, "pt_BR") || equals(tag, "pt_BR.utf8") ||
-                equals(tag, "pt_BR.UTF8") || equals(tag, "pt_br") ||
-                equals(tag, "pt_br.utf8") || equals(tag, "pt_br.UTF-8")))
-        tag = pt_br_canonical;
+    if (tag) {
+        if (normalize_locale_tag(tag, normalized_tag, sizeof(normalized_tag)))
+            tag = normalized_tag;
+        else
+            tag = (const char *)0;
+    }
     compose_locale_active = 0;
     compose_locale_current_tag[0] = 0;
     if (mapped_pack && mapped_pack_size)
