@@ -22,8 +22,10 @@
 | [0df8881843cd](https://github.com/GraderGamer2/NekoEdit/commit/0df8881843cd9ec3a16dfecaf181dddd2d78907d) | test: expose pt_BR Compose lookup diagnostics |
 | [bbbb1c167a48](https://github.com/GraderGamer2/NekoEdit/commit/bbbb1c167a485702ca12f5fe6129fc54e4eb9002) | test: correct U+018F UTF-8 bytes in locale assertions |
 | [820412fb8794](https://github.com/GraderGamer2/NekoEdit/commit/820412fb879481f4956eeeef1105f581536c400d) | test: extend Settings locale workflow timeout |
+| [612ed6f9196f](https://github.com/GraderGamer2/NekoEdit/commit/612ed6f9196f220cdc875f7ba476834676e0d69d) | docs: record successful locale lookup diagnosis |
+| [81937968d94b](https://github.com/GraderGamer2/NekoEdit/commit/81937968d94b5efecb2c01d5ef01512f4e6cd41e) | test: require current Settings locale checkpoints |
 
-Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 passed the pt_BR lookup/dead-key/Add assertions but hit the 20-second outer timeout at Remove Pack. Commit 820412fb8794 gives the Settings workflow a 50-second bound; #757 must verify the complete scenario.
+Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 passed the pt_BR lookup/dead-key/Add assertions but hit the 20-second outer timeout at Remove Pack. #757 completed the scenario but was rejected by a stale wrapper guard that still looked for the previous observation text. Commit 81937968d94b updates that guard to require the current dropdown/Base, Add Pack, and Remove Pack checkpoints. Build and test #758 validates the correction.
 
 ---
 ## 2026-11-09 — repair missing development-branch Actions trigger

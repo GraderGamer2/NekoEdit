@@ -8,7 +8,7 @@
 - Added failure diagnostics for the selected locale tag, XKB values for Multi_key/e, the runtime locale output buffer, Compose state, and document cursor/length in 0df8881843cd9ec3a16dfecaf181dddd2d78907d. Commit bbbb1c167a485702ca12f5fe6129fc54e4eb9002 corrects U+018F's UTF-8 bytes (C6 8F) in the three cumulative assertions, including after dead-key insertion and after Add/reselection.
 - Corrected the locale-format docs and the data scope text; this log does not claim a green full-workflow run or live GNOME/Mutter verification.
 
-Relevant implementation commits: 228e7c25f482, 9fc51163cac0, daed2736b4e7. Test correction: 2d518e3f70b1. Documentation: 0bb95b5c5e4f. Diagnostic: 0df8881843cd.
+Relevant implementation commits: 228e7c25f482, 9fc51163cac0, daed2736b4e7. Test corrections: 2d518e3f70b1, bbbb1c167a48, 820412fb8794, and 81937968d94b. Documentation: 0bb95b5c5e4f. Diagnostic: 0df8881843cd. Changelog status correction: 612ed6f9196f220cdc875f7ba476834676e0d69d.
 
 ---
 ## 2026-11-09 — repair missing development-branch Actions trigger
