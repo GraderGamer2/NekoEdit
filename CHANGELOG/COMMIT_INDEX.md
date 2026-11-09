@@ -5,8 +5,26 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **403** (402 previously recorded commits + the Compose locale Add-destination UI and path regression; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **410** (403 previously recorded commits + seven commits for the dynamic installed-locale Settings dropdown and Wayland mock coverage; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — dynamic installed-locale Settings dropdown — CI pending
+
+| Commit | Subject |
+|---|---|
+| [748ca5ba9704](https://github.com/GraderGamer2/NekoEdit/commit/748ca5ba97042b137a64211da07a641e409a567c) | feat: add dynamic installed-locale Settings dropdown |
+| [5514f193dd04](https://github.com/GraderGamer2/NekoEdit/commit/5514f193dd0436cfd9af641e0069f4069771f611) | fix: guard built-in locale removal and dropdown bounds |
+| [0dbe8df16673](https://github.com/GraderGamer2/NekoEdit/commit/0dbe8df16673ea2d595f7a25c7529c2647a26062) | ui: close locale menu after applying selection |
+| [c6c380a08257](https://github.com/GraderGamer2/NekoEdit/commit/c6c380a08257c24ec1a19edf2bbefb8d36e9e902) | test: cover dynamic installed-locale dropdown selection |
+| [65d2a43e2f72](https://github.com/GraderGamer2/NekoEdit/commit/65d2a43e2f729526548187677c95efb6f62b847e) | test: verify keyboard navigation in locale dropdown |
+| [1d4168b8683c](https://github.com/GraderGamer2/NekoEdit/commit/1d4168b8683cd705c701f5b5aef8b836b6048ab0) | test: verify dropdown dismissal and removal refresh |
+| [241391a4e279](https://github.com/GraderGamer2/NekoEdit/commit/241391a4e279bc7404e27cc0fad39566a499681a) | test: expose Settings menu state to Wayland mock |
+
+The Settings locale selector now enumerates installed packs from `~/.nekoedit/locales/` using the existing bounded picker scan. Built-in en_US is listed first. Opening Settings refreshes the list, and Add/Remove refresh it after filesystem changes. The dropdown supports pointer and Up/Down/Enter selection, plus Escape dismissal; selecting a pack does not open the file picker. The mock adds dynamic-list, no-picker, keyboard, and refresh assertions.
+
+No workflow run or check status was returned for the updated PR head at the time this entry was written. Build and test #736 passed the previous locale-manager implementation, but it predates this dropdown change and is not evidence for it. The new Wayland mock assertions have been added but remain unexecuted in CI.
+
+---
 
 ## 2026-11-09 — clarify the Compose locale installation destination — Build and test #736 passed
 
