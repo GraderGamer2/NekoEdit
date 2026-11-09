@@ -18,17 +18,17 @@ The core executable keeps **en_US.UTF-8 as its built-in default**. A bounded run
 
 The binary layout, generator, validation rules, and installation example are documented in [COMPOSE_PACK_FORMAT.md](COMPOSE_PACK_FORMAT.md). The pack generator is a Python build/release tool; Python is not a runtime dependency.
 
-The first complete external dataset, `pt_BR.UTF-8`, is generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches the pack and its notice to a published GitHub Release. More locales, a Settings selector/installer, automatic system-locale discovery, locale-specific dead-key tables, and system/user Compose-file import remain future work.
+The first complete external dataset, `pt_BR.UTF-8`, is generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches it and its notice to a published GitHub Release. Settings now opens a generic picker for every installed `.nlp` pack, provides an explicit Base en_US option, imports a local pack through Add, and removes the selected pack after confirmation. More locales, locale-specific dead-key tables, and system/user Compose-file import remain future work.
 
 ## Explicit limits
 
 This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full locale-aware Compose support. It does not currently:
 
-- select a Compose table from `LC_ALL`, `LC_CTYPE`, or `LANG`;
+- load an arbitrary system-locale table without a matching installed NLP1 data pack (the current pt_BR aliases are normalized, and unsupported/missing tags fall back to en_US);
 - load `/usr/share/X11/locale/compose.dir` or locale-specific `Compose` files;
 - process XCompose `include` directives, `%L` / `%S` / `%H` substitutions, or `$XCOMPOSEFILE`;
 - read or merge `~/.XCompose`;
-- process four-symbol sequences or multi-scalar result strings;
+- add four-symbol sequences or multi-scalar results to the embedded static en_US table; optional NLP1 packs already support two- to four-scalar inputs and one- to eight-scalar outputs;
 - implement every dead-key keysym and locale-specific dead-key rule.
 
 The separate dead-key path remains limited to six combining marks (grave, acute, circumflex, tilde, diaeresis, and cedilla) with 52 precomposed Latin-1 results and base-plus-mark fallback. Full Unicode normalization and shaping are separate rendering work.
@@ -51,13 +51,6 @@ The embedded en_US tables remain static read-only data. Optional packs are opene
 
 ## Selecting an installed locale
 
-The Settings dropdown has a **COMPOSE LOCALE** row for the built-in `en_US` and optional `pt_BR` pack. The selection is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A persisted choice takes precedence over environment selection. When no preference is saved, NekoEdit checks `NEKOEDIT_LOCALE`, then `LC_ALL`, `LC_CTYPE`, and `LANG` in that order; empty values are ignored. Common `pt_BR`, `pt_BR.utf8`, and `pt_BR.UTF8` spellings resolve to the canonical `pt_BR.UTF-8` pack tag. `C`, `C.UTF-8`, `C.UTF8`, `C.utf8`, and `POSIX` select the embedded en_US fallback. `LC_MESSAGES` and `LANGUAGE` are deliberately ignored because they control message translation, not character input. Selecting a locale never downloads or installs it.
+The Settings dropdown's locale row offers four actions: **Locale** opens the installed `.nlp` pack picker, **Base** selects embedded `en_US`, **Add** imports a local pack, and **Remove** deletes the currently selected non-built-in pack after confirmation. The selected tag is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A saved choice takes precedence over environment selection. When no preference is saved, NekoEdit checks `NEKOEDIT_LOCALE`, then `LC_ALL`, `LC_CTYPE`, and `LANG` in that order; empty values are ignored. Common `pt_BR`, `pt_BR.utf8`, and `pt_BR.UTF8` spellings resolve to the canonical `pt_BR.UTF-8` pack tag. `C`, `C.UTF-8`, `C.UTF8`, `C.utf8`, and `POSIX` select embedded en_US. `LC_MESSAGES` and `LANGUAGE` are ignored because they control message translation, not character input.
 
-Install the separate Release asset before selecting it:
-
-```sh
-mkdir -p "$HOME/.nekoedit/locales"
-install -m 600 pt_BR.UTF-8.nlp "$HOME/.nekoedit/locales/pt_BR.UTF-8.nlp"
-```
-
-If `pt_BR` is selected but its file is absent or invalid, Settings displays `MISSING` and the embedded en_US table remains active. The saved selection is retained when a pack is missing, so reinstalling the pack makes the selected locale available again without another Settings change. Choose `en_US` in Settings to clear that selection. Switching locales does not modify the active document.
+Add opens a local file picker filtered to `.nlp`. The selected file is structurally validated, copied into `~/.nekoedit/locales/` with private permissions, and only then activated. Remove acts on the persisted selected tag (or the effective installed locale when no saved preference exists), validates the installed file before deletion, and requires confirmation. Neither action downloads data. An absent or invalid selected pack leaves embedded en_US active and displays `MISSING`. Switching locales does not modify the active document.

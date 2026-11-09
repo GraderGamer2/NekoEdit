@@ -18,6 +18,7 @@ extern int32_t text_input_opt_in;
 extern char *preferences_font_path_ptr;
 extern char *preferences_locale_ptr;
 int preferences_locale_is_pt_br(void);
+int preferences_locale_is_builtin(void);
 int preferences_set_locale_tag(const char *tag);
 
 int preferences_load(void);
@@ -90,6 +91,8 @@ int main(void)
     if (preferences_load() != 0)
         fail("missing configuration unexpectedly loaded");
     expect_defaults();
+    if (preferences_locale_is_builtin())
+        fail("unset locale preference must remain distinguishable from explicit en_US");
 
     doc_font_size = 28;
     ui_font_size = 15;
@@ -140,8 +143,15 @@ int main(void)
         fail("locale tag is missing from saved preferences");
 
     if (!preferences_set_locale_tag("en_US.UTF-8") ||
-        preferences_locale_is_pt_br() || !preferences_save())
+        preferences_locale_is_pt_br() || !preferences_locale_is_builtin() || !preferences_save())
         fail("built-in en_US locale preference could not be saved");
+    if (!preferences_set_locale_tag("en_US") || !preferences_locale_is_builtin() ||
+        !preferences_set_locale_tag("C") || !preferences_locale_is_builtin() ||
+        !preferences_set_locale_tag("C.UTF-8") || !preferences_locale_is_builtin() ||
+        !preferences_set_locale_tag("POSIX") || !preferences_locale_is_builtin())
+        fail("a built-in locale alias was not recognized");
+    if (!preferences_set_locale_tag("aa_TEST.UTF-8") || preferences_locale_is_builtin())
+        fail("a generic installed locale tag was misclassified as built-in");
     read_config(file_path, contents, sizeof(contents));
     if (!strstr(contents, "compose_locale=en_US.UTF-8\n"))
         fail("built-in locale selection did not roundtrip");
@@ -152,6 +162,8 @@ int main(void)
         fail("unsafe locale tag was accepted");
     if (!preferences_set_locale_tag("pt_BR.UTF-8") || !preferences_save())
         fail("valid locale could not be restored after rejected input");
+    if (preferences_locale_is_builtin())
+        fail("pt_BR was incorrectly classified as a built-in locale");
 
     reset_defaults();
     refresh_environment();

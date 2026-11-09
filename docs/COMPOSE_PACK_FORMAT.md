@@ -78,9 +78,9 @@ The standard build workflow verifies the pinned upstream inputs, regenerates the
 
 ## Settings selection
 
-With the pack installed at `~/.nekoedit/locales/pt_BR.UTF-8.nlp`, choose **Settings → COMPOSE LOCALE → pt_BR**. The selection is stored in `~/.nekoedit/preferences`. A stored choice takes precedence over `NEKOEDIT_LOCALE`; if there is no saved preference, the environment variable remains available as a first-run override. Selecting `en_US` stores the built-in choice and suppresses an environment override. A missing/invalid selected pack leaves built-in en_US active and Settings displays `MISSING`.
+With any valid pack installed at `~/.nekoedit/locales/<tag>.nlp`, choose **Settings → Locale**, select its filename, and confirm. The loader derives the locale tag from the selected `.nlp` filename, then validates the file header and embedded tag before activation. **Settings → Base** explicitly selects built-in en_US and suppresses environment overrides.
 
-Settings selection does not install or download locale data. Install a release asset or copy a locally built pack into the locale directory first.
+**Settings → Add** opens a local `.nlp` file picker. The application validates the selected file before atomically copying it into the private locale directory; the original file is left untouched. **Settings → Remove** requests confirmation, validates the currently selected installed file, and removes only that pack. Removing the active or persisted pack returns the selection to en_US. These actions do not perform network downloads.
 
 
 ## Automatic character-locale selection
