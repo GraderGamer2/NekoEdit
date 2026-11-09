@@ -1258,6 +1258,7 @@ xkb_symbols "nekoedit-sparse" {
                         compat_rule_count = struct.unpack("<I", child_memory("xkb_compat_rule_count", 0, 4))[0]
                         compat_scope_level1 = child_memory("xkb_compat_rules", 4 * 16 + 13, 1)[0]
                         compat_scope_any = child_memory("xkb_compat_rules", 5 * 16 + 13, 1)[0]
+                        compat_scope_default_any = child_memory("xkb_compat_rules", 12 * 16 + 13, 1)[0]
                         tie_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 203 * 4, 4))[0]
                         all_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 204 * 4, 4))[0]
                         exact_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 205 * 4, 4))[0]
@@ -1378,6 +1379,7 @@ xkb_symbols "nekoedit-sparse" {
                          or grpany_raw_keysym != 0xff7e
                          or compat_scope_level1 != 1
                          or compat_scope_any != 0
+                         or compat_scope_default_any != 0
                          or ralt_explicit_virtual != 1
                         or tie_real_mask != 4
                         or all_real_mask != 1
