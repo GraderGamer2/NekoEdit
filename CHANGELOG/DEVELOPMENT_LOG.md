@@ -1,21 +1,17 @@
-## 2026-11-10 — correct newline escaping in printable-ASCII keysym regression
+## 2026-11-10 — built-in printable ASCII X keysym names; Build and test #776 passed
 
-- Build and test [#775](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669004934) completed the freestanding build and earlier command-line tests, then failed in the newly added no-header ASCII keysym test.
-- The fixture wrote two literal backslashes before each `n`, so the three intended Compose rules were concatenated. The parser correctly rejected the malformed result token; this was a test-fixture defect, not evidence of a parser/runtime regression.
-- Reduced each source literal to one Python newline escape, preserving the three assertions for printable ASCII named inputs and keysym-only results.
-- Full Build and test rerun is pending. Do not treat #775 as a passing validation.
+- Added a built-in mapping for standard printable ASCII X keysym names, including punctuation names and quote aliases. Literal ASCII characters remain on the existing direct path.
+- The resolver retains caller-supplied X.Org keysym definitions as first priority, then uses the built-in ASCII aliases. Named non-ASCII keysyms still require the optional Unicode-annotated keysymdef.h.
+- Added no-header regression cases for both event inputs and keysym-only results. Updated docs/COMPOSE_USER_IMPORT.md to reflect the exact no-header boundary.
+- Source change: [f05a54158632](https://github.com/GraderGamer2/NekoEdit/commit/f05a541586329b0c05097aa5078944e6db0d7187). Regression-fixture correction: [74a0a7780885](https://github.com/GraderGamer2/NekoEdit/commit/74a0a7780885f95ffcd1a709d3d2ae55c66d1898).
+- Build and test #775 failed in the new fixture because its Python newline escapes were double-escaped. Build and test [#776](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669196064) passed all 13 workflow steps on the corrected head: freestanding ELF build, command-line/host tests, complete Wayland mock, executable inspection, pinned X.Org regeneration/verification, locale-pack build, and both artifact uploads.
+- Artifacts: editor ZIP 13697074317 (127,343 bytes); locale ZIP 13698660427 (74,021 bytes), both expiring 2026-11-16.
+- The user separately confirmed the Settings locale dropdown works in the desktop build. No live GNOME/Mutter layout or IME test was performed during this session.
 
----
-## 2026-11-10 — resolve named printable ASCII keysyms without keysymdef.h — CI pending
-
-- Inspected the current `early-alpha` source, importer specification, tests, PR head, and the #774 installer validation before changing code.
-- Added a static fallback for the standard printable ASCII X keysym names. It covers named punctuation keysyms and their deprecated quote aliases; literal ASCII letters/digits continue through the existing one-character path.
-- Preserved precedence for the optional caller-supplied X.Org keysym definitions. Non-ASCII named symbols still require that header, while `Uxxxx` keysyms remain self-contained.
-- Added a no-header regression that checks both input-key resolution and unquoted keysym-only result resolution. Existing include, encoding, cycle, resource-limit, and installation tests are unchanged.
-- Updated `docs/COMPOSE_USER_IMPORT.md` to make the no-header behavior explicit.
-- Full CI and the exact revision result are pending. #774 remains the latest green baseline and does not include this fix.
+**Next:** exercise the manual importer with a wider set of actual user-authored Compose files. Preserve its bounded offline include policy and the freestanding runtime.
 
 ---
+
 ## 2026-11-09 — one-command private user XCompose installer; Build and test #774 passed
 
 - Rechecked the live branch before continuing: the Finnish/Serbian physical dead-key keyboard tests were already implemented in 98144943b5ae and green in #759. The offline user XCompose importer and converter-to-manager integration were also already present.

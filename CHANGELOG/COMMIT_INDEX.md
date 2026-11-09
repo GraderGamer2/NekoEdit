@@ -1,5 +1,16 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — built-in printable ASCII XCompose keysyms — Build and test #776 passed
+
+| Commit | Subject |
+|---|---|
+| [f05a54158632](https://github.com/GraderGamer2/NekoEdit/commit/f05a541586329b0c05097aa5078944e6db0d7187) | fix: resolve printable ASCII Compose keysyms without header |
+| [74a0a7780885](https://github.com/GraderGamer2/NekoEdit/commit/74a0a7780885f95ffcd1a709d3d2ae55c66d1898) | test: fix ASCII Compose fixture newline escaping |
+
+The user XCompose importer now resolves standard printable ASCII X keysym names without requiring keysymdef.h. The optional header remains available for non-ASCII named keysyms. Build and test #775 exposed a double-escaped newline in the first regression fixture; the corrected fixture and implementation passed all 13 workflow steps in #776, including the complete Wayland mock, pinned X.Org verification, locale-pack build, and both artifact uploads. See CURRENT_STATUS.md for artifact IDs and the remaining live-desktop validation boundary.
+
+---
+
 ## 2026-11-09 — complete History filter validation and one-command user XCompose installer
 
 | Commit | Subject |

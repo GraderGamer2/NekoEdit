@@ -1,15 +1,19 @@
-## 2026-11-10 — built-in printable ASCII X keysym names — CI pending
+## 2026-11-10 — built-in printable ASCII X keysym names — Build and test #776 passed
 
-**Branch:** `early-alpha`; PR #2 remains open and unmerged.
-**Implementation:** this source/test commit is the first revision of the fix; the exact SHA and CI result will be recorded in the follow-up continuity entry.
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [f05a54158632](https://github.com/GraderGamer2/NekoEdit/commit/f05a541586329b0c05097aa5078944e6db0d7187).
+**Test-fixture correction:** [74a0a7780885](https://github.com/GraderGamer2/NekoEdit/commit/74a0a7780885f95ffcd1a709d3d2ae55c66d1898).
+**CI:** [Build and test #776](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669196064) passed all 13 workflow steps on the corrected head, including freestanding build, all command-line/host tests, full Wayland protocol mock, executable inspection, pinned X.Org source verification, locale-pack build, and both artifact uploads.
 
-- Added an internal mapping for the standard printable ASCII names from the X.Org keysym set, including punctuation names and the `quoteleft`/`quoteright` aliases. Literal one-character ASCII keysyms remain on their existing fast path.
-- The resolver checks a supplied keysymdef.h first, then falls back to the built-in ASCII mapping. Non-ASCII named keysyms still require the optional header; Unicode-form `Uxxxx` names remain self-contained.
-- Added a regression using no keysymdef.h. It verifies named event inputs and keysym-only results for `space`, `quotedbl`, `grave`, `asciitilde`, `quoteleft`, `quoteright`, and `apostrophe`.
-- Updated `docs/COMPOSE_USER_IMPORT.md` to distinguish built-in printable ASCII names from other named character keysyms.
-- Build and test [#775](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669004934) reached the new test, then failed because that fixture contained a double-escaped newline; the importer correctly rejected the resulting malformed rule. The executable build and earlier command-line tests passed. The fixture has been corrected, and the full workflow is pending rerun. #774 remains the green installer baseline.
+- The user XCompose importer now resolves standard printable ASCII X keysym names without requiring the optional X.Org `keysymdef.h`. Added names include punctuation names and the `quoteleft`/`quoteright` aliases; single-character ASCII and `Uxxxx` handling are unchanged.
+- Resolution order preserves caller-supplied keysym definitions first, then the built-in printable ASCII fallback. Other named non-ASCII symbols still require a Unicode-annotated keysymdef header.
+- The new no-header regression covers named event inputs and keysym-only outputs, including `space`, `quotedbl`, `grave`, `asciitilde`, `quoteleft`, `quoteright`, and `apostrophe`.
+- Build and test #775 initially failed only because this new fixture double-escaped its line terminators. The importer rejected the malformed concatenated rule as designed. Commit 74a0a778 corrects the fixture, and #776 passes the complete workflow.
+- The user separately confirmed that the installed-locale Settings dropdown works in the desktop build. This manual confirmation is distinct from the automated mock test.
+- Artifacts from #776: Linux x86-64 ZIP [13697074317](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669196064/artifacts/13697074317) (127,343 bytes); locale-pack ZIP [13698660427](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669196064/artifacts/13698660427) (74,021 bytes). Both expire 2026-11-16; neither is a published GitHub Release.
+- No live GNOME/Mutter keyboard-layout or IME validation was performed.
 
-**Next:** validate against more actual user-authored Compose files and document remaining unsupported constructs. Preserve the explicit offline/manual import boundary; do not add automatic startup discovery.
+**Next:** broaden validation against actual user-authored Compose files and clarify any additional syntax/encoding limitations. Keep import explicit and offline; do not add automatic startup discovery as part of this compatibility change.
 
 ---
 
