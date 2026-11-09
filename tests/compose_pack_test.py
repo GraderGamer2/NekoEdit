@@ -30,7 +30,8 @@ def main():
         or len(packed)!=HEADER_SIZE+h[5]):
         raise AssertionError("NLP1 header or payload mismatch")
     records=[struct.unpack_from("<BBH4I8I",packed,HEADER_SIZE+i*RECORD_SIZE) for i in range(3)]
-    keys=[r[4:4+r[0]] for r in records]
+    # BBH occupies tuple fields 0–2; the four input scalars start at index 3.
+    keys=[r[3:3+r[0]] for r in records]
     if keys!=sorted(keys) or [r[1] for r in records]!=[2,1,1]:
         raise AssertionError("pack sorting or output scalar counts are wrong")
     rejected({"locale":"fr_FR","sequences":[
