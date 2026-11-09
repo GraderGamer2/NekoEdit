@@ -1,3 +1,19 @@
+## 2026-11-09 — implement the bounded Compose locale-pack runtime
+
+Implementation: [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27), with regression fixes [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a) and [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f).
+
+The built-in `en_US.UTF-8` Compose tables remain the default. NekoEdit can now load an explicitly selected optional locale pack from `~/.nekoedit/locales/<tag>.nlp` using `NEKOEDIT_LOCALE`. A loaded pack replaces the active Compose table; it does not merge with en_US. A missing or invalid pack leaves the embedded default active.
+
+The new NLP1 format is versioned, little-endian, CRC-32 checked, and bounded to 2 MiB and 32,768 records. Each record maps 2–4 Unicode input scalars to 1–8 output scalars. Duplicate or prefix-ambiguous keys, invalid scalar values, invalid padding/reserved fields, mismatched tags, and malformed lengths are rejected. The runtime maps validated data read-only. The Python generator is a release/build tool only.
+
+The Wayland mock sends real key events through a valid pack and verifies a pair with multi-scalar output, a three-input sequence, a four-input sequence, unknown-input literal fallback, and Escape/Backspace cancellation. A CRC-corrupt pack is rejected and leaves en_US active. Host generator tests cover the binary format and invalid source records.
+
+Build and test [#701](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750) passed all eight workflow steps. Artifact [13656010309](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750/artifacts/13656010309) is 119,239 bytes.
+
+This milestone implements the pack format, builder, loader, and sequence resolver; actual non-en_US GitHub Release assets, Settings locale selection/installation, system/user Compose import, and locale-specific dead-key rules remain future work. The user-facing editor stays offline-capable and no executable plugin or native-library loader is introduced.
+
+---
+
 ## 2026-11-09 — implement the three-command document context menu
 
 Commit: [0c9fee44200b](https://github.com/GraderGamer2/NekoEdit/commit/0c9fee44200b1528c1c3d148dd525c5319c6dd7d).
@@ -8,7 +24,7 @@ Clipboard Copy and Cut continue to use immutable snapshots; Cut publishes the se
 
 The new Wayland mock validates popup opening/dismissal, selection preservation, Copy bytes, Cut snapshot/delete ordering, asynchronous external Paste, Undo/Redo, and outside-click isolation. Build and test [#698](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) passed all eight workflow steps. The 116,962-byte artifact [13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472) has ZIP SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80.
 
-The project now records the locale architecture for upcoming Compose work: en_US remains built into the core executable; other locales are optional, versioned, data-only GitHub Release packs loaded by a bounded runtime parser. Packs must not contain executable plugin code or native libraries, and absence/invalidity falls back to en_US. The core editor must remain offline-capable. This is a roadmap decision, not an implemented loader.
+At this earlier context-menu milestone, the NLP1 locale loader was still a roadmap item. The later locale-pack milestone at the top of this file adds the format, generator, bounded runtime loader, fallback behavior, and Wayland test coverage.
 
 ---
 

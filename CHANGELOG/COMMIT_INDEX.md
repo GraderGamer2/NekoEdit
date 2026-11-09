@@ -5,8 +5,26 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **387** (386 previously recorded commits + this document-context-menu implementation/test commit; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **390** (387 previously recorded commits + three NLP1 locale-pack implementation/test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — bounded Compose locale packs — Build and test #701 passed
+
+| Commit | Subject |
+|---|---|
+| [77f1df75cb0d](https://github.com/GraderGamer2/NekoEdit/commit/77f1df75cb0dba7042119b3c158a8d618a4dce27) | feat: add bounded data-only Compose locale packs |
+| [f461a9da7cb2](https://github.com/GraderGamer2/NekoEdit/commit/f461a9da7cb2ef9108bb2b19b4c06e697df8f64a) | test: fix NLP1 input tuple offset |
+| [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f) | fix: retain literal Compose fallback inputs |
+
+Implemented the NLP1 data-only locale format, standard-library Python pack generator, freestanding read-only runtime loader, and two-/three-/four-input Compose resolver with one- to eight-scalar results. Built-in en_US remains the default/fallback. A pack is selected explicitly through `NEKOEDIT_LOCALE` and replaces, rather than overlays, the active Compose table. Invalid CRC/metadata/record data is rejected; unknown valid-pack sequences are inserted literally. Duplicate/prefix-ambiguous mappings are rejected to keep resolution deterministic.
+
+The test correction fixed the generator unit test's unpacked input-field offset. The runtime correction preserves pending Compose scalars until literal fallback has inserted them. Both regressions are covered by the final test suite.
+
+[Build and test #701](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750) passed all eight workflow steps on final source commit [8e4e53bcd678](https://github.com/GraderGamer2/NekoEdit/commit/8e4e53bcd678bb9d281f69e5aaaa7a9432408a0f). The Wayland mock verifies valid and CRC-corrupt packs, multi-scalar output, pair/triple/four-input resolution, literal fallback, and cancellation. Artifact [13656010309](https://github.com/GraderGamer2/NekoEdit/actions/runs/42576739750/artifacts/13656010309) is 119,239 bytes.
+
+**Implementation/test commit count:** three commits recorded for this milestone. Actual non-en_US release assets, GUI selector/installer, system/user Compose import, and locale-specific dead-key support remain future work.
+
+---
 
 ## 2026-11-09 — minimal document context menu — Build and test #698 passed
 
@@ -18,7 +36,7 @@ Added a small right-click menu in the document viewport with exactly Copy, Paste
 
 Actions [Build and test #42571651703](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) passed all eight workflow steps on the first attempt. Artifact [13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472) is 116,962 bytes; SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80.
 
-The same milestone documents the future locale design: built-in en_US, other locales as optional versioned data-only GitHub Release packs with a bounded runtime loader and built-in fallback. This is not yet implemented.
+At that earlier checkpoint, optional locale packs were a recorded design direction only. The later NLP1 milestone above implements the versioned format, builder, runtime loader, fallback, and test coverage.
 
 ## 2026-11-09 — mirror context-menu continuity records
 
