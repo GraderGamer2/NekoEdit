@@ -88,7 +88,7 @@ def _decode_quoted(
     """Decode one quoted XCompose string and return (value, end_offset).
 
     Octal and hexadecimal escapes contribute encoded bytes, which are decoded
-    with the selected source encoding. \u and \U are accepted as convenient
+    accepted for user files.
     Unicode-scalar extensions for user files.
     """
     if not text.startswith('"'):
@@ -307,11 +307,17 @@ class ComposeImporter:
         self.home_root = home_root
         self.system_root = system_root
         self.locale_compose = locale_compose
-        self.encoding = codecs.lookup(encoding).name
-        if self.encoding not in {
+        self.source_encoding = codecs.lookup(encoding).name
+        if self.source_encoding not in {
             codecs.lookup(name).name for name in _ALLOWED_ENCODINGS
         }:
             raise ValueError(f"unsupported source encoding: {encoding!r}")
+        # utf-8-sig is only a file-decoding mode; using it for encode/decode
+        # fragments would inject a BOM each time an escaped segment is flushed.
+        self.encoding = (
+            "utf-8" if self.source_encoding == "utf-8-sig"
+            else self.source_encoding
+        )
 
         self.rules: dict[tuple[int, tuple[int, ...]], tuple[int, ...]] = {}
         self.active_paths: list[Path] = []
@@ -439,7 +445,7 @@ class ComposeImporter:
                 f"expanded Compose input exceeds the {MAX_TOTAL_BYTES}-byte total limit"
             )
         try:
-            text = raw.decode(self.encoding, errors="strict")
+            text = raw.decode(self.source_encoding, errors="strict")
         except UnicodeDecodeError as exc:
             raise ValueError(f"{path}: input is not valid {self.encoding}") from exc
         if "\0" in text:
@@ -578,7 +584,7 @@ class ComposeImporter:
             "source": {
                 "type": "user_xcompose",
                 "format": "XCompose(5) bounded text-rule subset",
-                "encoding": self.encoding,
+                "encoding": self.source_encoding,
                 "import_policy": (
                     "Read the selected file and depth-first includes from explicit %H, %S, "
                     "and %L roots; import unqualified Multi_key and recognized dead-key "
