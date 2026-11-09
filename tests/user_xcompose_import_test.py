@@ -147,8 +147,18 @@ def main() -> None:
         if str(home) in serialized_source or str(root) in serialized_source:
             raise AssertionError("private source paths leaked into generated metadata")
 
-        # A repeated, non-recursive include is allowed and bounded; active
-        # recursion through a canonical path is always rejected.
+        # Repeated, non-recursive includes are legal and preserve textual
+        # override order; a canonical path is only a cycle while active.
+        repeated = write(
+            home / "repeat",
+            'include "%H/fragments/common"\ninclude "%H/fragments/common"\n',
+        )
+        repeated_doc = importer(home, system).import_file(repeated)
+        if repeated_doc["statistics"]["file_expansions"] != 3:
+            raise AssertionError("repeated include was incorrectly deduplicated")
+        if repeated_doc["statistics"]["rule_overrides"] != 2:
+            raise AssertionError("repeated include did not preserve override order")
+
         root_cycle = write(home / ".XCompose", 'include "%H/.XCompose"\n')
         expect_failure(
             lambda: importer(home, system, locale_file=locale_file).import_file(root_cycle),
@@ -233,6 +243,41 @@ def main() -> None:
             "depth",
         )
 
+        # Include expansion, unique-file, and aggregate-byte limits are
+        # independent from the per-file and recursion-depth boundaries.
+        original_expansions = user_import.MAX_FILE_EXPANSIONS
+        try:
+            user_import.MAX_FILE_EXPANSIONS = 2
+            expect_failure(
+                lambda: importer(home, system).import_file(repeated),
+                "include expansion limit",
+                "expansion count",
+            )
+        finally:
+            user_import.MAX_FILE_EXPANSIONS = original_expansions
+
+        original_unique = user_import.MAX_UNIQUE_FILES
+        try:
+            user_import.MAX_UNIQUE_FILES = 2
+            expect_failure(
+                lambda: importer(home, system, locale_file=locale_file).import_file(root_file),
+                "unique file limit",
+                "unique Compose files",
+            )
+        finally:
+            user_import.MAX_UNIQUE_FILES = original_unique
+
+        original_total = user_import.MAX_TOTAL_BYTES
+        try:
+            user_import.MAX_TOTAL_BYTES = root_file.stat().st_size + 1
+            expect_failure(
+                lambda: importer(home, system, locale_file=locale_file).import_file(root_file),
+                "aggregate byte limit",
+                "total limit",
+            )
+        finally:
+            user_import.MAX_TOTAL_BYTES = original_total
+
         # Override/record limits can be lowered in a unit test to exercise
         # the deterministic guard without constructing a huge input fixture.
         original_limit = user_import.MAX_RECORDS
@@ -254,10 +299,16 @@ def main() -> None:
 
         # Latin-1 sources and octal escapes are explicit, not guessed.
         latin1 = home / "latin1"
-        latin1.write_bytes('<Multi_key> <a> <e> : "\351" eacute\n'.encode("latin-1"))
+        latin1.write_bytes(r'<Multi_key> <a> <e> : "\351" eacute' + "\n".encode("latin-1"))
         latin_doc = importer(home, system, encoding="latin-1").import_file(latin1)
         if mapping(latin_doc)[("multi_key", (ord("a"), ord("e")))] != (0x00E9,):
             raise AssertionError("Latin-1 octal escape was not decoded with the selected encoding")
+
+        bom_file = home / "bom"
+        bom_file.write_bytes(b'\xef\xbb\xbf<Multi_key> <a> <e> : "é" eacute\n')
+        bom_doc = importer(home, system, encoding="utf-8-sig").import_file(bom_file)
+        if mapping(bom_doc)[("multi_key", (ord("a"), ord("e")))] != (0x00E9,):
+            raise AssertionError("UTF-8 BOM input was not decoded safely")
 
         output = home / ".nekoedit" / "locales" / "custom.json"
         user_import._atomic_write(output, json.dumps(document))

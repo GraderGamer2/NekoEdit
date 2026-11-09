@@ -88,8 +88,8 @@ def _decode_quoted(
     """Decode one quoted XCompose string and return (value, end_offset).
 
     Octal and hexadecimal escapes contribute encoded bytes, which are decoded
-    accepted for user files.
-    Unicode-scalar extensions for user files.
+    with the selected source encoding. Unicode-scalar escapes are also accepted
+    as a convenience extension for user files.
     """
     if not text.startswith('"'):
         raise ValueError("expected a double-quoted string")
@@ -447,7 +447,7 @@ class ComposeImporter:
         try:
             text = raw.decode(self.source_encoding, errors="strict")
         except UnicodeDecodeError as exc:
-            raise ValueError(f"{path}: input is not valid {self.encoding}") from exc
+            raise ValueError(f"{path}: input is not valid {self.source_encoding}") from exc
         if "\0" in text:
             raise ValueError(f"{path}: NUL bytes are not allowed")
 
@@ -603,9 +603,28 @@ class ComposeImporter:
         }
 
 
+def _mkdir_private(path: Path) -> None:
+    """Create missing output directories from the top down with mode 0700."""
+    missing: list[Path] = []
+    current = path
+    while not current.exists():
+        missing.append(current)
+        if current.parent == current:
+            raise OSError(f"cannot find an existing parent for {path}")
+        current = current.parent
+    if not current.is_dir():
+        raise OSError(f"output parent is not a directory: {current}")
+    for directory in reversed(missing):
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            if not directory.is_dir():
+                raise
+
+
 def _atomic_write(path: Path, text: str) -> None:
     path = path.expanduser()
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    _mkdir_private(path.parent)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
     )
@@ -675,6 +694,12 @@ def main(argv: list[str] | None = None) -> int:
             encoding=args.encoding,
         )
         document = importer.import_file(args.input)
+        # Never replace one of the files that contributed to this import.
+        output_path = args.output.expanduser().resolve(strict=False)
+        if output_path in importer.unique_paths:
+            raise ValueError("output path must not replace an imported Compose file")
+        if args.keysymdef is not None and output_path == args.keysymdef.expanduser().resolve(strict=True):
+            raise ValueError("output path must not replace keysymdef.h")
         # Reuse the release pack validator so the generated JSON cannot contain
         # records the freestanding NLP1 loader would reject.
         encode_pack(document)
