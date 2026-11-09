@@ -2,6 +2,10 @@
 
 This directory is the project's durable development history and handoff source. It exists so work can continue in a new ChatGPT conversation without relying on the context length or availability of an older chat.
 
+## Latest handoff (2026-11-09)
+
+Build and test #758/#759 both passed. #759 includes the Finnish/Serbian physical dead-key tests (`dead_apostrophe` + `Cyrillic_ka` → U+045C) and uploaded both editor and locale artifacts. The next bounded task is safe offline `.XCompose` import; CURRENT_STATUS.md records limits and continuity. Check the branch/Actions state before continuing.
+
 ## Read this first in every new development chat
 
 Before changing NekoEdit, inspect these files in this order:
@@ -53,6 +57,14 @@ For each feature, bug fix, refactor, or meaningful test change:
 
 A small typo or truly documentation-only correction still receives a commit entry in `COMMIT_INDEX.md`; group minor edits into a concise development-log note where appropriate. A multi-commit feature must be recorded as one coherent work entry plus the individual commit-index rows.
 
+## GitHub Actions trigger policy
+
+The Build and test workflow must run for pushes to `main` and the active development branch `early-alpha`. Pull-request runs are reserved for opening, reopening, or marking a PR ready; normal commits on the development branch are tested by the branch-push event so a merge-conflicted PR cannot block validation. Changelog-only commits are ignored by the workflow's path filters, but source, test, and workflow changes still run the build.
+
+Do not put a skip annotation such as `[skip ci]` in the HEAD commit of an open PR when validation is required. GitHub suppresses `push` and `pull_request` workflows for a matching commit message, and GitHub also suppresses `pull_request` workflows while the PR has merge conflicts. Check the actual PR mergeability state and the commit message before diagnosing a missing Actions run; do not assume it is an Actions-tab filter problem.
+
+---
+
 ## Accuracy and continuity rules
 
 - Do not rely on a previous ChatGPT conversation when the repository contains newer information.
@@ -81,4 +93,4 @@ The History path filter is user-reported nonfunctional, and deeper journal compa
 
 The current early-alpha implementation includes the minimal right-click document menu (Copy, Paste, Cut), recorded in CURRENT_STATUS.md and DEVELOPMENT_LOG.md. The corresponding Wayland mock validates pointer-serial clipboard ownership, selection preservation, immutable clipboard snapshots, asynchronous external Paste, Undo/Redo, and dismissal without click-through.
 
-The Compose locale architecture is implemented through the bounded NLP1 loader, reproducible pt_BR.UTF-8 data, a persistent Settings selector, and automatic character-locale discovery. A saved Settings choice takes precedence; otherwise the first non-empty value among NEKOEDIT_LOCALE, LC_ALL, LC_CTYPE, and LANG is selected. Empty variables are skipped, common pt_BR spellings resolve to the canonical pack tag, and C/POSIX keeps built-in en_US. Build and test #711 verifies LC_ALL, LC_CTYPE, LANG, C fallback, alias handling, saved en_US overriding a pt_BR environment, and the Settings selector. The run also verifies pinned source blobs, exact JSON regeneration, and separate pack/editor artifacts. The Release workflow attaches the pack and notice when a project Release is published. GUI pack installation/removal, more datasets, system/user Compose imports, and locale-specific dead-key rules remain future work. Keep packs as inert data; do not add executable plugins or automatic downloads.
+The Compose locale architecture is implemented through the bounded NLP1 loader, reproducible pt_BR.UTF-8, fi_FI.UTF-8, and sr_RS.UTF-8 datasets, automatic character-locale discovery, and the Settings Add/Remove manager. Settings now exposes a dynamic installed-locale dropdown, populated from `~/.nekoedit/locales/` with built-in en_US first; it refreshes when Settings opens and after Add/Remove, and installed packs can be selected by mouse or keyboard without a file picker. Build and test #711 verifies locale precedence/aliases and #736 verifies the Add/Remove installer. The dynamic dropdown and its new Wayland mock assertions are recorded in CURRENT_STATUS.md and DEVELOPMENT_LOG.md; CI for that newest milestone is still pending. The Add picker displays `TARGET: ~/.nekoedit/locales/`; packs remain data-only. The Release workflow attaches packs and notices when a project Release is published. System/user Compose imports and longer dead-key chains remain future work. Keep packs inert; do not add executable plugins or automatic downloads.

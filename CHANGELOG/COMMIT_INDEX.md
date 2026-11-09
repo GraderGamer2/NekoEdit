@@ -1,12 +1,117 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — Finnish/Serbian physical locale dead-key tests
+
+| Commit | Subject |
+|---|---|
+| [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52) | test: exercise Finnish and Serbian locale dead-key rules (Build and test #759 passed) |
+
+Adds explicit generated-data checks for `[U+0301, U+043A] → U+045C` and extends both locale Wayland scenarios to deliver `dead_apostrophe` followed by `Cyrillic_ka` through the test keymap. Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 steps for this test-only change. It uploaded Linux binary artifact `13681366275` and locale pack artifact `13681910677`.
+
+---
+## 2026-11-09 — typed locale dead-key Compose records and integration test corrections
+
+| Commit | Subject |
+|---|---|
+| [228e7c25f482](https://github.com/GraderGamer2/NekoEdit/commit/228e7c25f482f5bf95fbf250ada65a47e135100c) | feat: add typed Compose locale rule kinds |
+| [9fc51163cac0](https://github.com/GraderGamer2/NekoEdit/commit/9fc51163cac08e9364d68805b2517b07bee63764) | feat: import locale dead-key Compose sequences |
+| [daed2736b4e7](https://github.com/GraderGamer2/NekoEdit/commit/daed2736b4e7939993f5ab11504fa4da540f16a2) | data: add typed locale dead-key Compose records |
+| [5d491c78ebf9](https://github.com/GraderGamer2/NekoEdit/commit/5d491c78ebf973029edb67a987597edf3a022eab) | test: cover locale dead-key lookup and preserve cumulative output |
+| [e6e3f916b94f](https://github.com/GraderGamer2/NekoEdit/commit/e6e3f916b94f071e54c6258a6ce95f5bf6ae7001) | test: include the base dead-key fixture keysym |
+| [597f2df54341](https://github.com/GraderGamer2/NekoEdit/commit/597f2df54341e8fc7f57a378082304d857203a3d) | test: add dead-key entry to locale manager fixture |
+| [731209454c9e](https://github.com/GraderGamer2/NekoEdit/commit/731209454c9e7cd64cef09d99e9276748877ac71) | test: validate typed Multi-key and dead-key locale data |
+| [b905392ca5d2](https://github.com/GraderGamer2/NekoEdit/commit/b905392ca5d203b07f3849f5b9cc65b1d79e3e3b) | test: use real Brazilian locale pack in Settings workflow |
+| [493b3fcaa85b](https://github.com/GraderGamer2/NekoEdit/commit/493b3fcaa85ba009530c62a265759045ec56ed4b) | test: drain queued frames and snapshot held-key renders |
+| [d848df2839c0](https://github.com/GraderGamer2/NekoEdit/commit/d848df2839c09a921f4b9e8ecdf943099b10a2ed) | test: snapshot pointer frames before buffer release |
+| [3339c29445d8](https://github.com/GraderGamer2/NekoEdit/commit/3339c29445d847392bf68fef7164668f61c809fd) | test: snapshot Shift navigation frames before release |
+| [0c274141977f](https://github.com/GraderGamer2/NekoEdit/commit/0c274141977fe554925e0c985b469a8c7d586be1) | test: release the Shift+1 key in keyboard mock |
+| [a2abb832915f](https://github.com/GraderGamer2/NekoEdit/commit/a2abb832915fb7a896b3e59d26deb14ec6db7fe6) | test: compare Shift+1 fixture against newline bytes |
+| [2d518e3f70b1](https://github.com/GraderGamer2/NekoEdit/commit/2d518e3f70b1a12e9ee0e55b879e35c28be8454d) | test: use real pt_BR Compose mapping in Settings |
+| [0bb95b5c5e4f](https://github.com/GraderGamer2/NekoEdit/commit/0bb95b5c5e4ff80b21c0ae40d129eb01473be011) | docs: describe typed locale dead-key packs |
+| [0df8881843cd](https://github.com/GraderGamer2/NekoEdit/commit/0df8881843cd9ec3a16dfecaf181dddd2d78907d) | test: expose pt_BR Compose lookup diagnostics |
+| [bbbb1c167a48](https://github.com/GraderGamer2/NekoEdit/commit/bbbb1c167a485702ca12f5fe6129fc54e4eb9002) | test: correct U+018F UTF-8 bytes in locale assertions |
+| [820412fb8794](https://github.com/GraderGamer2/NekoEdit/commit/820412fb879481f4956eeeef1105f581536c400d) | test: extend Settings locale workflow timeout |
+| [612ed6f9196f](https://github.com/GraderGamer2/NekoEdit/commit/612ed6f9196f220cdc875f7ba476834676e0d69d) | docs: record successful locale lookup diagnosis |
+| [81937968d94b](https://github.com/GraderGamer2/NekoEdit/commit/81937968d94b5efecb2c01d5ef01512f4e6cd41e) | test: require current Settings locale checkpoints |
+
+Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 passed the pt_BR lookup/dead-key/Add assertions but hit the 20-second outer timeout at Remove Pack. #757 completed the scenario but was rejected by a stale wrapper guard that still looked for the previous observation text. Commit 81937968d94b updates that guard to require the current dropdown/Base, Add Pack, and Remove Pack checkpoints. Build and test #758 validates the correction.
+
+---
+## 2026-11-09 — repair missing development-branch Actions trigger
+
+| Commit | Subject |
+|---|---|
+| [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) | ci: restore PR validation after skipped HEAD |
+| [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754) | docs: record CI trigger and skip-marker policy |
+| [c50b4ab02e5f](https://github.com/GraderGamer2/NekoEdit/commit/c50b4ab02e5f057a636a477c49cdf3c1e35c5405) | docs: record missing Actions trigger diagnosis |
+| [f42cc77768c5](https://github.com/GraderGamer2/NekoEdit/commit/f42cc77768c5dda2ee5026282c77fa7f9502bd72) | docs: correct Actions trigger diagnosis |
+| [2afe1b1d9375](https://github.com/GraderGamer2/NekoEdit/commit/2afe1b1d93751a54da640c11cb8f5047e93e0215) | ci: run builds on early-alpha pushes |
+| [75f84f844aa4](https://github.com/GraderGamer2/NekoEdit/commit/75f84f844aa40f343ef20fbe86e2a3475f1986e1) | docs: record early-alpha CI trigger status |
+| [2a566f7f0a4c](https://github.com/GraderGamer2/NekoEdit/commit/2a566f7f0a4cf08138c1bea7388dd9e55ec8a27d) | docs: finalize CI trigger repair log |
+
+These are documentation/continuity corrections and do not change the implementation/test commit count. The first follow-up removed `[skip ci]` from the PR HEAD; the subsequent diagnosis confirmed that PR merge conflicts also suppress `pull_request` workflows and that pushes to `early-alpha` were not included in the workflow's branch filter. See CURRENT_STATUS.md and DEVELOPMENT_LOG.md for the trigger repair and final validation state.
+
+---
+
 This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**. It includes the original 20 commits on `main`, all 187 development-history commits on the branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the TrueType metric and responsive picker-alignment milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **402** (401 previously recorded commits + the text-input-v3 change-cause implementation and mock regression; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **412** (410 previously recorded commits + the dead-key expansion and its mock-fixture correction; comment-only and changelog continuity commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — expand XKB combining dead-key actions — CI pending
+
+| Commit | Subject |
+|---|---|
+| [2bfe46ee19b0](https://github.com/GraderGamer2/NekoEdit/commit/2bfe46ee19b0dda91d39fd4b208a805abebf6418) | feat: expand XKB combining dead-key actions |
+| [42747acc3102](https://github.com/GraderGamer2/NekoEdit/commit/42747acc3102ab133b4a263d55f09d98b74e89d0) | docs: update expanded dead-key action range comment [skip ci] |
+| [528b8d680652](https://github.com/GraderGamer2/NekoEdit/commit/528b8d68065213173c9bdde9ba24bf2262da0fec) | fix: correct UTF-8 escape literals in dead-key mock |
+
+The implementation adds the standard combining dead-key names/actions and their combining-mark values, expands the generic action range without changing the legacy marker IDs, and adds 30 curated Latin Extended-A precomposition entries. The Wayland mock checks macron, caron, and below-dot through actual typing, including decomposed fallback. CI has not returned a workflow run for the implementation/test head; see `CHANGELOG/CURRENT_STATUS.md` for the precise validation boundary.
+
+## 2026-11-09 — dynamic installed-locale Settings dropdown — CI pending
+
+| Commit | Subject |
+|---|---|
+| [748ca5ba9704](https://github.com/GraderGamer2/NekoEdit/commit/748ca5ba97042b137a64211da07a641e409a567c) | feat: add dynamic installed-locale Settings dropdown |
+| [5514f193dd04](https://github.com/GraderGamer2/NekoEdit/commit/5514f193dd0436cfd9af641e0069f4069771f611) | fix: guard built-in locale removal and dropdown bounds |
+| [0dbe8df16673](https://github.com/GraderGamer2/NekoEdit/commit/0dbe8df16673ea2d595f7a25c7529c2647a26062) | ui: close locale menu after applying selection |
+| [c6c380a08257](https://github.com/GraderGamer2/NekoEdit/commit/c6c380a08257c24ec1a19edf2bbefb8d36e9e902) | test: cover dynamic installed-locale dropdown selection |
+| [65d2a43e2f72](https://github.com/GraderGamer2/NekoEdit/commit/65d2a43e2f729526548187677c95efb6f62b847e) | test: verify keyboard navigation in locale dropdown |
+| [1d4168b8683c](https://github.com/GraderGamer2/NekoEdit/commit/1d4168b8683cd705c701f5b5aef8b836b6048ab0) | test: verify dropdown dismissal and removal refresh |
+| [241391a4e279](https://github.com/GraderGamer2/NekoEdit/commit/241391a4e279bc7404e27cc0fad39566a499681a) | test: expose Settings menu state to Wayland mock |
+
+The Settings locale selector now enumerates installed packs from `~/.nekoedit/locales/` using the existing bounded picker scan. Built-in en_US is listed first. Opening Settings refreshes the list, and Add/Remove refresh it after filesystem changes. The dropdown supports pointer and Up/Down/Enter selection, plus Escape dismissal; selecting a pack does not open the file picker. The mock adds dynamic-list, no-picker, keyboard, and refresh assertions.
+
+No workflow run or check status was returned for the updated PR head at the time this entry was written. Build and test #736 passed the previous locale-manager implementation, but it predates this dropdown change and is not evidence for it. The new Wayland mock assertions have been added but remain unexecuted in CI.
+
+### Documentation and continuity commits
+
+| Commit | Subject |
+|---|---|
+| [703a264b4946](https://github.com/GraderGamer2/NekoEdit/commit/703a264b4946269298665ce74ce078e02087cd36) | docs: describe dynamic installed-locale dropdown |
+| [b8c08cbf1623](https://github.com/GraderGamer2/NekoEdit/commit/b8c08cbf162360329399ccdf027653ec94da8059) | docs: document installed-locale dropdown behavior [skip ci] |
+| [d385ebf975ab](https://github.com/GraderGamer2/NekoEdit/commit/d385ebf975abc09d0116b36070e12aa63b2c29f4) | docs: record dynamic locale dropdown status [skip ci] |
+| [e13775187d1c](https://github.com/GraderGamer2/NekoEdit/commit/e13775187d1c9e52216010a66f588b8135e47cb9) | docs: log dynamic installed-locale dropdown work [skip ci] |
+| [6dcff61b4d2a](https://github.com/GraderGamer2/NekoEdit/commit/6dcff61b4d2a7088028fd566b7f246c4902d2902) | docs: add installed-locale dropdown project history [skip ci] |
+| [1b64041481e8](https://github.com/GraderGamer2/NekoEdit/commit/1b64041481e842b5e3eddaea49f03a8b19d57a97) | docs: index installed-locale dropdown commits [skip ci] |
+| [298879921f47](https://github.com/GraderGamer2/NekoEdit/commit/298879921f4781fcbea864f5135eebab5bb0861e) | docs: update changelog continuity for locale dropdown [skip ci] |
+
+---
+
+## 2026-11-09 — clarify the Compose locale installation destination — Build and test #736 passed
+
+| Commit | Subject |
+|---|---|
+| [2fd44f25bde6](https://github.com/GraderGamer2/NekoEdit/commit/2fd44f25bde6db5ab9fd889b98a186e3fbcae18b) | ui: show locale pack install target in Add picker |
+
+The Add picker distinguishes the user-selected source directory from the installed destination, displaying `TARGET: ~/.nekoedit/locales/`. The host test asserts that the directory API resolves to `$HOME/.nekoedit/locales`; the complete Wayland mock checks Add/Remove installation behavior and source-file preservation.
+
+[Build and test #736](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047) passed, including the freestanding build, host tests, Wayland mock, pinned locale-source regeneration, pack builds, and artifact uploads. Editor artifact [13666405540](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13666405540), 125,184-byte ZIP, SHA-256 `8a9250a86fe2b751c45ad5270b27a4556d00a7b73c16629ea75210abafbb31f1`; locale packs [13665239303](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13665239303), 53,740-byte ZIP, SHA-256 `7a6c8edbeb28c3dbfc01c623705a2667c9d7ec7fec9ec04bae8d545353ad87ac`.
+
+---
 
 ## 2026-11-09 — text-input-v3 change-cause synchronization — Build and test #735 passed
 

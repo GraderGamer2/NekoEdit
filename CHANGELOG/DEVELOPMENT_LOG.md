@@ -1,3 +1,132 @@
+## 2026-11-09 — verify Finnish and Serbian locale dead-key keyboard paths
+
+- Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed every workflow step, including the full Wayland protocol mock, pinned X.Org data regeneration, optional locale-pack builds, and both artifact uploads.
+- Finnish and Serbian tests now exercise the same locale dead-key input through the physical XKB mock: the fixture's `DA01` key emits `dead_apostrophe` (U+0301), and `AC08` emits `Cyrillic_ka` (U+043A). Both locale packs return U+045C (`ќ`), not a generic decomposed fallback. Tests check the armed mark before the base key, the resulting UTF-8 bytes, cleared pending state, and lookup output.
+- The locale-data regression explicitly pins `[U+0301, U+043A] → U+045C` in both JSON tables. The existing Finnish `Multi_key f i` and Serbian grave-plus-Cyrillic-a tests remain in place.
+- Test commit: [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52). The branch's later documentation-only commit is [5f87db08acd8](https://github.com/GraderGamer2/NekoEdit/commit/5f87db08acd85ab064a7c5b8a99a873f8f5dddaf).
+- Artifacts from #759: Linux x86-64 ZIP `13681366275` (126,958 bytes) and locale packs ZIP `13681910677` (74,021 bytes), expiring 2026-11-16. No published Release was created. No runtime source or locale JSON changed in this milestone.
+
+### Next
+
+Begin the bounded offline `.XCompose` importer. Before implementation, document its grammar subset and safety boundary: allowlisted include roots/expansions, canonical-path cycle detection, bounded file count/bytes/records, depth and output limits compatible with NLP1, Unicode-scalar keysym resolution, and no shell expansion or code execution. Keep installation data under `~/.nekoedit/locales/`.
+
+---
+## 2026-11-09 — verify pt_BR Settings flow; add Finnish/Serbian locale dead-key event coverage
+
+### Completed validation
+
+- Build and test #758 passed all 12 steps on source commit `81937968d94b`: freestanding ELF/CLI, full Wayland protocol suite, executable inspection, pinned source regeneration verification, locale-pack builds, and both artifact uploads.
+- The Settings integration path now covers the installed-locale dropdown, Escape and keyboard selection, actual `pt_BR` `Multi_key e e` → U+018F, locale `dead_acute + c` → ç, saved Base en_US selection, Add Pack validation/source preservation/reselection, and confirmed Remove Pack/fallback.
+- The #751–#757 debugging chain was closed without a runtime patch: the synthetic-only snowman expectation was replaced with the actual pt_BR U+018F rule; its expected UTF-8 was corrected from C7 8F to C6 8F; the Settings scenario timeout was raised to 50 seconds; and the final guard was changed to require the three current observation strings.
+
+### Finnish/Serbian physical dead-key tests
+
+- Commit `98144943b5aed894c103f8fa2b8049ac60e5ef52` adds a data-level assertion for `[U+0301, U+043A]` → U+045C in both `fi_FI.UTF-8` and `sr_RS.UTF-8`.
+- The two Wayland keyboard tests preserve their existing Multi_key coverage, then exercise the alias `dead_apostrophe` (U+0301) followed by a Cyrillic-ka keysym. The fixture maps physical AC08 to `Cyrillic_ka` and verifies the pending-mark state, clearing after insertion, `compose_locale_output == U+045C`, and exact cumulative document bytes.
+- This is test-only coverage: the locale JSON source and runtime implementation were not modified by this commit.
+- Build and test #759 is the first run for this new test commit and was in progress when this entry was recorded. Results are not yet claimed.
+
+### Validation boundary
+
+Full CI and generated artifacts are confirmed for the #758 baseline; Finnish/Serbian physical-key dead-key integration is pending #759. Live GNOME/Mutter testing remains outstanding.
+
+Commit: [98144943b5ae](https://github.com/GraderGamer2/NekoEdit/commit/98144943b5aed894c103f8fa2b8049ac60e5ef52).
+
+---
+## 2026-11-09 — typed locale dead-key Compose rules and Settings integration debugging
+
+- Extended NLP1's 16-bit record-reserved field with rule kind 0 (Multi_key) and kind 1 (dead-key). Existing version-1 packs with zero in this field remain backward-compatible.
+- Updated the freestanding loader's validation, ordering, lower-bound lookup and prefix comparison to include kind. Updated the Wayland input path to query kind 1 after a dead-key action plus one following scalar.
+- Updated the X.Org importer to normalize recognized dead_* actions to combining marks and import one following Unicode scalar. Rebuilt the three pinned locale datasets; their previous Multi_key records remain semantically unchanged.
+- Host-side pack generator, importer, locale manager, and locale-data checks passed in the prior runs. Freestanding ELF build and CLI smoke tests passed in #751–#753.
+- The Settings mock now installs the real pt_BR data rather than a small synthetic pt_BR pack. The earlier test's o i → snowman assertion was specific to aa_TEST, not Brazilian Portuguese. The real pt_BR check was switched to e e → U+018F, a mapping explicitly covered by the committed locale-data regression; #752 and #753 still failed there.
+- Added failure diagnostics for the selected locale tag, XKB values for Multi_key/e, the runtime locale output buffer, Compose state, and document cursor/length in 0df8881843cd9ec3a16dfecaf181dddd2d78907d. Commit bbbb1c167a485702ca12f5fe6129fc54e4eb9002 corrects U+018F's UTF-8 bytes (C6 8F) in the three cumulative assertions, including after dead-key insertion and after Add/reselection.
+- Corrected the locale-format docs and the data scope text; this log does not claim a green full-workflow run or live GNOME/Mutter verification.
+
+Relevant implementation commits: 228e7c25f482, 9fc51163cac0, daed2736b4e7. Test corrections: 2d518e3f70b1, bbbb1c167a48, 820412fb8794, and 81937968d94b. Documentation: 0bb95b5c5e4f. Diagnostic: 0df8881843cd. Changelog status correction: 612ed6f9196f220cdc875f7ba476834676e0d69d.
+
+---
+## 2026-11-09 — repair missing development-branch Actions trigger
+
+The user clarified that they were already viewing **All workflows**; this was not a sidebar filter problem. Inspection established two independent trigger blockers:
+
+1. The earlier PR HEAD [457695f8f6ea](https://github.com/GraderGamer2/NekoEdit/commit/457695f8f6ea364a15b25b555e8c628ed6af1cbb) had `[skip ci]` in its subject. GitHub skips eligible `push` and `pull_request` workflows when the HEAD contains a skip annotation.
+2. A non-skipping follow-up [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) did not produce a PR run. PR #2 still reports `mergeable=false` and `main` is three commits ahead of `early-alpha`. GitHub's official troubleshooting documentation confirms that `pull_request` workflows do not run while the PR has a merge conflict. The old workflow only listened for pushes to `main`, so the development branch had no alternative trigger.
+
+### Workflow correction
+
+- [2afe1b1d9375](https://github.com/GraderGamer2/NekoEdit/commit/2afe1b1d93751a54da640c11cb8f5047e93e0215) updates `.github/workflows/build.yml`.
+- Pushes to `main` and `early-alpha` now trigger Build and test directly.
+- Pull-request runs are restricted to `opened`, `reopened`, and `ready_for_review`; subsequent same-repository commits are tested by the branch-push trigger rather than a second PR `synchronize` run.
+- Changelog-only commits are excluded using `paths-ignore: CHANGELOG/**`; source, tests, and workflow changes still trigger builds.
+- The PR has not been merged and its merge conflict has not been resolved. This change makes source validation independent of that mergeability state; it does not repair the PR merge conflict itself.
+
+### Validation boundary
+
+The PR-only workflow lookup returned no run for the new head, and the combined-status lookup returned no status context. That connector lookup explicitly filters to pull-request-triggered runs, so it cannot confirm the new push-triggered run. No passing CI result is claimed. The user can see the `early-alpha` push run in **All workflows**; the dead-key implementation remains unverified until it completes.
+
+Continuity updates:
+- [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754) records the skip-marker/CI policy in CHANGELOG/README.md.
+- [c50b4ab02e5f](https://github.com/GraderGamer2/NekoEdit/commit/c50b4ab02e5f057a636a477c49cdf3c1e35c5405), [f42cc77768c5](https://github.com/GraderGamer2/NekoEdit/commit/f42cc77768c5dda2ee5026282c77fa7f9502bd72), [0e7d31960bc4](https://github.com/GraderGamer2/NekoEdit/commit/0e7d31960bc437656ecf49dc9d536fab91145a71), and [75f84f844aa4](https://github.com/GraderGamer2/NekoEdit/commit/75f84f844aa40f343ef20fbe86e2a3475f1986e1) update the diagnosis, continuity index, and current status.
+
+
+---
+
+## 2026-11-09 — expand XKB combining dead-key actions — CI pending
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation/test commits:** [2bfe46ee19b0](https://github.com/GraderGamer2/NekoEdit/commit/2bfe46ee19b0dda91d39fd4b208a805abebf6418) and [528b8d680652](https://github.com/GraderGamer2/NekoEdit/commit/528b8d68065213173c9bdde9ba24bf2262da0fec).
+**Comment correction:** [42747acc3102](https://github.com/GraderGamer2/NekoEdit/commit/42747acc3102ab133b4a263d55f09d98b74e89d0).
+
+- Extended the named-keysyms table from the original six dead-key actions to 35 standard combining dead-key actions. This adds macron, breve, dot/ring, double accents, caron, ogonek, iota, Japanese voiced/semi-voiced marks, below marks, overlay marks, and German T3 actions, with the X.Org aliases mapped to their canonical action.
+- Preserved the existing marker IDs `0x110001`–`0x110006` and the `Multi_key` marker `0x110007`. New dead-key markers occupy `0x110008`–`0x110024`; the reserved `Multi_key` slot remains bypassed by the dead-mark lookup.
+- Expanded the combining-mark table and renamed the internal Latin-1-only lookup to `doc_compose_precomposed`. The table keeps the original 52 Latin-1 pairs and adds 30 curated Latin Extended-A pairs for macron, breve, caron, ogonek, and below-dot.
+- Unsupported base/mark pairs still insert the base scalar followed by its combining mark. The editor does not pretend every key has a precomposed form.
+- Extended the dedicated Unicode-keyboard mock keymap with `dead_macron`, `dead_caron`, and `dead_belowdot`. Assertions check their marker values, precomposed `e + macron → U+0113` and `e + caron → U+011B`, and the decomposed `w + U+0323` fallback.
+- Corrected the mock's byte-literal escapes after review: the expected values are Python byte escapes, not literal backslash sequences. Updated README and [KEYSYM_UNICODE.md](../docs/KEYSYM_UNICODE.md) with the action coverage and its limits.
+
+**Validation status:** GitHub reports **no workflow run and no status check** for the implementation/test head `528b8d68065213173c9bdde9ba24bf2262da0fec`. The most recent successful branch workflow, Build and test #736, ran on the older installer commit `2fd44f25bde6db5ab9fd889b98a186e3fbcae18b`; it does not validate this dead-key work or the installed-locale dropdown. No live GNOME/Mutter test has been performed for these changes.
+
+**Compatibility boundary:** the NLP1 locale-pack format still represents `Multi_key` input sequences only. Locale-specific dead-key-led Compose rules and system/user `.XCompose` import remain separate roadmap work and require a deliberate format/importer extension.
+
+---
+
+## 2026-11-09 — dynamic installed-locale Settings dropdown — CI pending
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation/test commits:** [748ca5ba9704](https://github.com/GraderGamer2/NekoEdit/commit/748ca5ba97042b137a64211da07a641e409a567c), [5514f193dd04](https://github.com/GraderGamer2/NekoEdit/commit/5514f193dd0436cfd9af641e0069f4069771f611), [0dbe8df16673](https://github.com/GraderGamer2/NekoEdit/commit/0dbe8df16673ea2d595f7a25c7529c2647a26062), [c6c380a08257](https://github.com/GraderGamer2/NekoEdit/commit/c6c380a08257c24ec1a19edf2bbefb8d36e9e902), [65d2a43e2f72](https://github.com/GraderGamer2/NekoEdit/commit/65d2a43e2f729526548187677c95efb6f62b847e), [1d4168b8683c](https://github.com/GraderGamer2/NekoEdit/commit/1d4168b8683cd705c701f5b5aef8b836b6048ab0), and [241391a4e279](https://github.com/GraderGamer2/NekoEdit/commit/241391a4e279bc7404e27cc0fad39566a499681a).
+
+- Replaced the Settings locale file-picker selection action with an in-menu dropdown backed by the existing bounded scanner for `~/.nekoedit/locales/*.nlp`. Built-in en_US is the first item; installed packs follow the scanner's deterministic ordering.
+- Opening Settings refreshes the installed-pack list. Successful Add and confirmed Remove refresh it immediately as well. The selected locale is matched to the saved/effective locale and highlighted.
+- Mouse selection and Up/Down/Enter keyboard navigation are supported; Escape closes only the dropdown. Selecting an installed locale reuses the existing validated loader path without displaying the file picker.
+- Add and Remove remain separate Settings actions. Add still copies a validated pack into `~/.nekoedit/locales/`; Remove still requires confirmation and returns to en_US.
+- Added Wayland mock assertions for the installed list, no-picker selection, Escape dismissal, keyboard selection, newly installed pack visibility, selection after Add, and list refresh after Remove.
+
+**Validation status:** No workflow run or check status was returned for the updated PR head at the time this entry was written. Build and test #736 passed the previous locale-manager implementation, but it predates this dropdown change and is not evidence for it. The new Wayland mock assertions have been added but remain unexecuted in CI.
+
+**Remaining boundary:** no live GNOME/Mutter desktop run has been performed for the new dropdown. The feature remains on `early-alpha`; PR #2 has not been merged.
+
+---
+
+## 2026-11-09 — make the Compose locale installation destination visible — Build and test #736 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation/test commit:** [2fd44f25bde6](https://github.com/GraderGamer2/NekoEdit/commit/2fd44f25bde6db5ab9fd889b98a186e3fbcae18b).
+
+- The Settings **Add** picker now distinguishes the selected source folder (**SOURCE**) from the installation destination (**TARGET: `~/.nekoedit/locales/`**).
+- A selected NLP1 pack is still validated before it is atomically copied to `$HOME/.nekoedit/locales/<locale-tag>.nlp`; the original source file is not moved or consumed.
+- The application and locale directories remain mode 0700, installed pack files mode 0600, and locale selection is persisted in `~/.nekoedit/preferences`.
+- Extended the host manager test to assert that the directory API returns exactly `$HOME/.nekoedit/locales`. The existing test still checks valid-pack activation/lookup, CRC-corrupt and symlink rejection, permissions, and removal.
+- The Wayland mock exercised the Settings locale list, Base selection, Add installation/activation, source-file preservation, and confirmed Remove restoring en_US.
+
+**CI:** [Build and test #736](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047) passed. The freestanding build/ELF checks, command-line and host tests, complete Wayland mock, pinned X.Org source verification/regeneration, all locale pack builds, and artifact uploads succeeded.
+
+**Artifacts:** editor [13666405540](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13666405540), 125,184-byte ZIP, SHA-256 `8a9250a86fe2b751c45ad5270b27a4556d00a7b73c16629ea75210abafbb31f1`; locale packs [13665239303](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13665239303), 53,740-byte ZIP, SHA-256 `7a6c8edbeb28c3dbfc01c623705a2667c9d7ec7fec9ec04bae8d545353ad87ac`. Both expire 2026-11-16 10:31 UTC.
+
+**Validation boundary:** automated host and mock-Wayland checks only; this does not claim a live GNOME/Mutter desktop retest.
+
+---
+
 ## 2026-11-09 — report text-input-v3 change origin to the compositor — Build and test #735 passed
 
 ### Runtime change
