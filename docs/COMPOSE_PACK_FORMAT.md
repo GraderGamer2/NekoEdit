@@ -61,3 +61,16 @@ Packs are data, not shared libraries or executable plugins. Python is used only 
 ## Implementation boundary
 
 The loader and input path support two-, three-, and four-scalar sequences and output strings of up to eight scalars. The embedded en_US tables remain unchanged and active whenever no compatible optional pack is selected. Actual non-en_US release assets, a Settings locale selector, and an installer remain future work.
+
+
+## First external locale dataset: pt_BR.UTF-8
+
+The repository includes a reproducible Brazilian Portuguese dataset derived from the pinned X.Org libX11 en_US Compose baseline and pt_BR overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, applies locale overrides, imports only Multi_key rules whose input keysyms resolve to Unicode scalars, and removes shorter rules that prefix longer ones. Dead-key-led rules and non-Unicode input symbols are not represented by NLP1 version 1.
+
+The committed source database is [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and [`pt_BR.UTF-8.NOTICE.txt`](../data/locales/pt_BR.UTF-8.NOTICE.txt). Rebuild from the committed JSON with:
+
+```sh
+make locale-packs
+```
+
+The standard build workflow verifies the pinned upstream inputs, regenerates the JSON, and uploads the generated `.nlp` pack as a separate artifact. The locale-pack Release workflow repeats that verification and attaches both the pack and notice when a GitHub Release is published.

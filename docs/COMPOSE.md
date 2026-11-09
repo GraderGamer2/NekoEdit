@@ -18,7 +18,7 @@ The core executable keeps **en_US.UTF-8 as its built-in default**. A bounded run
 
 The binary layout, generator, validation rules, and installation example are documented in [COMPOSE_PACK_FORMAT.md](COMPOSE_PACK_FORMAT.md). The pack generator is a Python build/release tool; Python is not a runtime dependency.
 
-Actual non-en_US release assets, a Settings selector/installer, and locale-specific system/user Compose-file import remain future work.
+The first complete external dataset, `pt_BR.UTF-8`, is generated from pinned X.Org sources; see [data/locales/README.md](../data/locales/README.md). The build workflow produces the `.nlp` asset separately from the editor binary, and the locale-pack workflow attaches the pack and its notice to a published GitHub Release. More locales, a Settings selector/installer, automatic system-locale discovery, locale-specific dead-key tables, and system/user Compose-file import remain future work.
 
 ## Explicit limits
 

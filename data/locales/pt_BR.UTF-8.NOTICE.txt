@@ -1,0 +1,16 @@
+NekoEdit pt_BR.UTF-8 Compose locale pack — source notice
+
+This data pack is derived from these upstream X.Org sources:
+
+1. X.Org libX11, \`nls/en_US.UTF-8/Compose.pre\` and \`nls/pt_BR.UTF-8/Compose.pre\`
+   Repository: https://github.com/mirror/libX11
+   Commit: ff8706a5eae25b8bafce300527079f68a201d27f
+   The pt_BR source identifies Gustavo Noronha Silva as its original modifier and Benno Schulenberg as the author of its include-file transformation. The applicable per-file notices and licenses are in libX11's \`COPYING\` file:
+   https://github.com/mirror/libX11/blob/ff8706a5eae25b8bafce300527079f68a201d27f/COPYING
+
+2. X.Org xorgproto keysym Unicode annotations, \`include/X11/keysymdef.h\`
+   Repository: https://github.com/X11Libre/mirror.fdo.xorgproto
+   Commit: 6d3907b6d5dc4aa7d7ee6ee5d7d8714e7466630b
+   The header's Open Group and Digital Equipment copyright/permission notices are reproduced in NekoEdit's \`docs/KEYSYM_UNICODE.md\`. This pack contains only resolved Unicode input/output scalar values, not header code.
+
+The generated pack is data only. It contains no copied executable code, native library, runtime service, or network logic. Keep this notice and applicable upstream license information alongside redistributed copies of this asset.

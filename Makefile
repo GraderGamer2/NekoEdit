@@ -23,7 +23,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-install-user check inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-install-user locale-packs check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -58,6 +58,8 @@ test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) test-install-user
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
 	$(PYTHON) tests/compose_pack_test.py
+	$(PYTHON) tests/compose_import_test.py
+	$(PYTHON) tests/compose_locale_data_test.py
 
 test-install-user: $(APP_BINARY)
 	sh tests/install_user.sh
@@ -98,3 +100,14 @@ uninstall-user:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+LOCALE_PACK_DIR := $(BUILD_DIR)/locales
+LOCALE_PACK := $(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp
+
+.PHONY: locale-packs
+locale-packs: $(LOCALE_PACK)
+
+$(LOCALE_PACK): data/locales/pt_BR.UTF-8.json tools/compose_pack.py
+	@mkdir -p "$(@D)"
+	$(PYTHON) tools/compose_pack.py build --input "$<" --output "$@"
+	cp data/locales/pt_BR.UTF-8.NOTICE.txt "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.NOTICE.txt"
