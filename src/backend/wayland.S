@@ -2218,6 +2218,7 @@ shift_down:             .long 0
 caps_lock:              .long 0
 num_lock:               .long 0
 ctrl_down:              .long 0
+ctrl_physical_down:     .long 0
 .global doc_length
 doc_length:             .long 0
 .global doc_cursor
@@ -2386,6 +2387,7 @@ recv_msg_control:      .zero 64
 .extern xkb_parse_keymap
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
+.extern xkb_lookup_consumed_modifiers
 .extern xkb_key_repeats
 .extern xkb_level_three_mask
 .extern xkb_num_lock_mask
@@ -3975,6 +3977,7 @@ wayland_main:
     and eax, 4
     setnz al
     movzx eax, al
+    mov dword ptr [rip + ctrl_physical_down], eax
     mov dword ptr [rip + ctrl_down], eax
 
     # Keep the legacy real-Mod5 diagnostic/fallback state separately. The
@@ -4006,6 +4009,7 @@ wayland_main:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + ctrl_down], 0
+    mov dword ptr [rip + ctrl_physical_down], 0
     mov dword ptr [rip + level3_down], 0
     mov dword ptr [rip + level3_physical_down], 0
     mov dword ptr [rip + level3_mod5_down], 0
@@ -4050,6 +4054,30 @@ wayland_main:
     xor dword ptr [rip + xkb_modifiers], ecx
     jmp .keyboard_changed
 .keyboard_key_pressed:
+    # A type may use Control to select an alternate symbol. XKB preserve[]
+    # determines whether that active Control remains available to shortcuts.
+    # Keep raw physical/compositor state separate so this decision stays
+    # scoped to the current key and cannot leak to the next key event.
+    cmp dword ptr [rip + keymap_format], 1
+    jne .Lkeyboard_key_ctrl_ready
+    mov eax, dword ptr [rip + xkb_modifiers]
+    test eax, 4
+    jz .Lkeyboard_key_ctrl_physical_fallback
+    mov edi, dword ptr [rip + event_payload + 8]
+    mov esi, eax
+    mov edx, dword ptr [rip + keyboard_group]
+    call xkb_lookup_consumed_modifiers
+    test eax, 4
+    jnz .Lkeyboard_key_ctrl_consumed
+    mov dword ptr [rip + ctrl_down], 1
+    jmp .Lkeyboard_key_ctrl_ready
+.Lkeyboard_key_ctrl_physical_fallback:
+    mov eax, dword ptr [rip + ctrl_physical_down]
+    mov dword ptr [rip + ctrl_down], eax
+    jmp .Lkeyboard_key_ctrl_ready
+.Lkeyboard_key_ctrl_consumed:
+    mov dword ptr [rip + ctrl_down], 0
+.Lkeyboard_key_ctrl_ready:
     cmp dword ptr [rip + ctrl_down], 0
     jne .keyboard_key_no_repeat
     mov edi, dword ptr [rip + event_payload + 8]
@@ -4067,6 +4095,14 @@ wayland_main:
     mov edx, 1
     jmp .keyboard_non_modifier
 .keyboard_key_release:
+    # Restore the unfiltered state after the previous key's consumed check.
+    mov eax, dword ptr [rip + xkb_modifiers]
+    and eax, 4
+    setnz al
+    movzx eax, al
+    or eax, dword ptr [rip + ctrl_physical_down]
+    mov dword ptr [rip + ctrl_down], eax
+    mov eax, dword ptr [rip + event_payload + 8]
     cmp eax, dword ptr [rip + repeat_keycode]
     jne .event_loop
     call repeat_cancel
@@ -4101,6 +4137,7 @@ wayland_main:
     mov dword ptr [rip + xkb_modifiers], eax
     jmp .event_loop
 .keyboard_control:
+    mov dword ptr [rip + ctrl_physical_down], edx
     mov dword ptr [rip + ctrl_down], edx
     jmp .event_loop
 .keyboard_non_modifier:

@@ -768,6 +768,22 @@ xkb_types "nekoedit-test" {
         modifiers = V04;
         map[V04] = Level2;
     };
+    type "CUSTOM_CTRL_PRESERVE" {
+        modifiers = Shift+Control;
+        map[None] = Level1;
+        map[Shift] = Level2;
+        preserve[Control] = Control;
+        map[Control] = Level3;
+        map[Shift+Control] = Level4;
+        preserve[Shift+Control] = Control;
+    };
+    type "CUSTOM_CTRL_CONSUMED" {
+        modifiers = Shift+Control;
+        map[None] = Level1;
+        map[Shift] = Level2;
+        map[Control] = Level3;
+        map[Shift+Control] = Level4;
+    };
 };
 xkb_compat "nekoedit-test" {
     # Specific predicates outrank the generic Alt_L rule.
@@ -851,7 +867,10 @@ xkb_symbols "nekoedit-test" {
     key <AD08> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ i, I ] };
     key <AD09> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ o, O ] };
     key <AD10> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ p, P ] };
-    key <AC01> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ a, A ] };
+    key <AC01> {
+        type[Group1] = "CUSTOM_CTRL_PRESERVE",
+        symbols[Group1] = [ a, A, at, quotedbl ]
+    };
     key <AC03> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ d, D ] };
     key <AC04> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ f, F ] };
     key <AC05> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ g, G ] };
@@ -859,7 +878,10 @@ xkb_symbols "nekoedit-test" {
     key <AC07> { [ j, J ] };
     key <AC08> { [ k, K ] };
     key <AC09> { [ l, L ] };
-    key <AB01> { [ z, Z ] };
+    key <AB01> {
+        type[Group1] = "CUSTOM_CTRL_CONSUMED",
+        symbols[Group1] = [ z, Z, EuroSign, eacute ]
+    };
     key <AB02> { [ x, X ] };
     key <AB03> { [ c, C ] };
     key <AB04> {
@@ -947,7 +969,7 @@ xkb_symbols "nekoedit-test" {
                         )
                     if unicode_keyboard_test:
                         keymap_data = keymap_data.replace(
-                            b'key <AC01> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ a, A ] };',
+                            b'key <AC01> {\n        type[Group1] = "CUSTOM_CTRL_PRESERVE",\n        symbols[Group1] = [ a, A, at, quotedbl ]\n    };',
                             b"key <AC01> { [ U00E9, U1F600 ] };",
                         )
                         keymap_data = keymap_data.replace(
@@ -963,7 +985,7 @@ xkb_symbols "nekoedit-test" {
                             b'key <AC04> { type = "ONE_LEVEL", symbols[Group1] = [ dead_acute ] };',
                         )
                         keymap_data = keymap_data.replace(
-                            b"key <AB01> { [ z, Z ] };",
+                            b'key <AB01> {\n        type[Group1] = "CUSTOM_CTRL_CONSUMED",\n        symbols[Group1] = [ z, Z, EuroSign, eacute ]\n    };',
                             b"key <AB01> { [ Greek_alpha ] };",
                         )
                         keymap_data = keymap_data.replace(
@@ -1224,6 +1246,20 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         repeat_explicit = child_memory("xkb_key_repeat_explicit", 210, 4)
                         repeat_symbol_less = child_memory("xkb_key_repeat_flags", 214, 1)[0]
+                        preserve_type_id = child_memory("xkb_group_types", 38 * 4, 1)[0]
+                        consumed_type_id = child_memory("xkb_group_types", 52 * 4, 1)[0]
+                        preserve_map_masks = struct.unpack(
+                            "<4I", child_memory("xkb_type_map_masks", 10 * 128, 16)
+                        )
+                        preserve_map_levels = child_memory(
+                            "xkb_type_map_levels", 10 * 32, 4
+                        )
+                        preserve_map_values = struct.unpack(
+                            "<4I", child_memory("xkb_type_map_preserves", 10 * 128, 16)
+                        )
+                        consumed_map_values = struct.unpack(
+                            "<4I", child_memory("xkb_type_map_preserves", 11 * 128, 16)
+                        )
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -1300,6 +1336,12 @@ xkb_symbols "nekoedit-sparse" {
                          or repeat_values != (1, bytes((0, 1, 0, 1)))
                          or repeat_explicit != bytes((0, 0, 1, 1))
                          or repeat_symbol_less != 0
+                         or preserve_type_id != 10
+                         or consumed_type_id != 11
+                         or preserve_map_masks != (0, 1, 4, 5)
+                         or preserve_map_levels != bytes((1, 2, 3, 4))
+                         or preserve_map_values != (0, 0, 4, 4)
+                         or consumed_map_values != (0, 0, 0, 0)
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -2255,6 +2297,11 @@ xkb_symbols "nekoedit-sparse" {
                         events += wire_message(
                             16, 3, struct.pack("<IIII", serial + 1, serial + 1, 42, 1)
                         )
+                    modifier_state = 4 | (1 if shift else 0)
+                    events += wire_message(
+                        16, 4,
+                        struct.pack("<IIIII", serial + 20, modifier_state, 0, 0, 0)
+                    )
                     events += wire_message(
                         16, 3,
                         struct.pack("<IIII", serial + (2 if shift else 1),
@@ -2271,13 +2318,15 @@ xkb_symbols "nekoedit-sparse" {
                             16, 3, struct.pack("<IIII", serial + 4, serial + 4, 42, 0)
                         )
                     releases += wire_message(
-                        16, 3,
-                        struct.pack("<IIII", serial + 5, serial + 5, 29, 0)
+                        16, 3, struct.pack("<IIII", serial + 5, serial + 5, 29, 0)
+                    )
+                    releases += wire_message(
+                        16, 4,
+                        struct.pack("<IIIII", serial + 21, 0, 0, 0, 0)
                     )
                     client.sendall(releases + wire_message(12, 0))
                     if child_u32("save_confirm_open") == 1:
                         key_step(serial + 6, 28, label + " — confirm pending save")
-
                 if find_replace_test:
                     initial = read_document_state()
                     if initial["doc_contents"] != b"one fish two fish":
@@ -3647,6 +3696,31 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 4, struct.pack("<IIIII", custom_serial + 10, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1300, 31, "Ctrl+S saves XKB-translated text")
+
+                    workflow_shortcut(1380, 30, "preserved Control keeps Ctrl+A active")
+                    if child_u32("doc_selection_active") != 1:
+                        raise AssertionError(
+                            "XKB preserve[Control] did not keep Ctrl+A available as a shortcut"
+                        )
+                    key_step(1390, 106, "collapse selection after preserved Ctrl+A")
+                    if child_u32("doc_selection_active") != 0:
+                        raise AssertionError("Right did not collapse the preserved Ctrl+A selection")
+
+                    consumed_before = read_document_state()
+                    workflow_shortcut(1400, 44, "consumed Control suppresses Ctrl+Z")
+                    consumed_after = read_document_state()
+                    if (
+                        len(consumed_after["doc_contents"])
+                        != len(consumed_before["doc_contents"]) + 3
+                        or not consumed_after["doc_contents"].endswith(b"\xe2\x82\xac")
+                    ):
+                        raise AssertionError(
+                            "consumed Control did not select AB01's third-level EuroSign: "
+                            + repr(consumed_after["doc_contents"][-12:])
+                        )
+                    observations.append(
+                        "XKB preserve[] keeps Control available to shortcuts while an unpreserved Control map consumes it"
+                    )
 
                     def check_key_repeat_policy(
                         keycode: int, serial: int, should_repeat: bool, label: str

@@ -1081,6 +1081,7 @@
 .Lxkb_type_group:       .long 0
 .Lxkb_type_tmp_mask:    .long 0
 .Lxkb_type_tmp_level:   .long 0
+.Lxkb_type_tmp_preserve: .long 0
 .Lxkb_type_map_slot:    .long 0
 .Lxkb_mask_delimiter:   .long 0
 .Lxkb_mask_accum:       .long 0
@@ -1117,6 +1118,8 @@ xkb_type_map_counts:    .zero 64
 xkb_type_map_masks:     .zero 8192        # 64 types * 32 exact modifier combinations
 .global xkb_type_map_levels
 xkb_type_map_levels:    .zero 2048        # 64 types * 32 one-byte LevelN values
+.global xkb_type_map_preserves
+xkb_type_map_preserves: .zero 8192        # 64 types * 32 preserved 32-bit masks
 .global xkb_virtual_names
 xkb_virtual_names:     .zero 1536        # 24 virtual modifier names * 64 bytes
 .global xkb_virtual_count
@@ -1202,6 +1205,9 @@ xkb_reset_keymap:
     rep stosb
     lea rdi, [rip + xkb_type_map_levels]
     mov ecx, 2048
+    rep stosb
+    lea rdi, [rip + xkb_type_map_preserves]
+    mov ecx, 8192
     rep stosb
     lea rdi, [rip + xkb_virtual_names]
     mov ecx, 1536
@@ -2468,6 +2474,10 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jnz .Lxkb_type_body_map
+    lea rdi, [rip + .Lxkb_word_preserve]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_type_body_preserve
 .Lxkb_type_body_skip_statement:
     call .Lxkb_next_token
     test eax, eax
@@ -2515,12 +2525,88 @@ xkb_reset_keymap:
     jne .Lxkb_type_body_fail
     lea rbx, [rip + xkb_type_map_counts]
     movzx r13d, byte ptr [rbx + r12]
-    cmp r13d, 32
-    jae .Lxkb_type_body_fail
     mov eax, r12d
     shl eax, 7
     lea rbx, [rip + xkb_type_map_masks]
     add rbx, rax
+    xor r14d, r14d
+.Lxkb_type_body_map_find:
+    cmp r14d, r13d
+    jae .Lxkb_type_body_map_append
+    mov edx, r14d
+    shl edx, 2
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_mask]
+    cmp dword ptr [rbx + rdx], eax
+    je .Lxkb_type_body_map_store
+    inc r14d
+    jmp .Lxkb_type_body_map_find
+.Lxkb_type_body_map_append:
+    cmp r13d, 32
+    jae .Lxkb_type_body_fail
+    mov edx, r13d
+    shl edx, 2
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_mask]
+    mov dword ptr [rbx + rdx], eax
+    mov eax, r12d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_preserves]
+    add rbx, rax
+    mov edx, r13d
+    shl edx, 2
+    mov dword ptr [rbx + rdx], 0
+    mov r14d, r13d
+    inc r13d
+    lea rbx, [rip + xkb_type_map_counts]
+    mov byte ptr [rbx + r12], r13b
+.Lxkb_type_body_map_store:
+    mov eax, r12d
+    shl eax, 5
+    lea rbx, [rip + xkb_type_map_levels]
+    add rbx, rax
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_level]
+    mov byte ptr [rbx + r14], al
+    jmp .Lxkb_type_body_loop
+
+.Lxkb_type_body_preserve:
+    # preserve[<modifier combination>] = <modifier mask>; if no map[] entry
+    # exists yet, create the specification's implicit Level1 entry. A later
+    # map[] declaration updates that entry instead of appending a duplicate.
+    call .Lxkb_next_token
+    cmp eax, '['
+    jne .Lxkb_type_body_fail
+    mov edi, ']'
+    call .Lxkb_parse_modmask
+    test edx, edx
+    jz .Lxkb_type_body_fail
+    mov dword ptr [rip + .Lxkb_type_tmp_mask], eax
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_type_body_fail
+    mov edi, ';'
+    call .Lxkb_parse_modmask
+    test edx, edx
+    jz .Lxkb_type_body_fail
+    mov dword ptr [rip + .Lxkb_type_tmp_preserve], eax
+    lea rbx, [rip + xkb_type_map_counts]
+    movzx r13d, byte ptr [rbx + r12]
+    mov eax, r12d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_masks]
+    add rbx, rax
+    xor r14d, r14d
+.Lxkb_type_body_preserve_find:
+    cmp r14d, r13d
+    jae .Lxkb_type_body_preserve_append
+    mov edx, r14d
+    shl edx, 2
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_mask]
+    cmp dword ptr [rbx + rdx], eax
+    je .Lxkb_type_body_preserve_store
+    inc r14d
+    jmp .Lxkb_type_body_preserve_find
+.Lxkb_type_body_preserve_append:
+    cmp r13d, 32
+    jae .Lxkb_type_body_fail
     mov edx, r13d
     shl edx, 2
     mov eax, dword ptr [rip + .Lxkb_type_tmp_mask]
@@ -2529,14 +2615,48 @@ xkb_reset_keymap:
     shl eax, 5
     lea rbx, [rip + xkb_type_map_levels]
     add rbx, rax
-    mov eax, dword ptr [rip + .Lxkb_type_tmp_level]
-    mov byte ptr [rbx + r13], al
+    mov byte ptr [rbx + r13], 1
+    mov r14d, r13d
     inc r13d
     lea rbx, [rip + xkb_type_map_counts]
     mov byte ptr [rbx + r12], r13b
+.Lxkb_type_body_preserve_store:
+    mov eax, r12d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_preserves]
+    add rbx, rax
+    mov edx, r14d
+    shl edx, 2
+    mov eax, dword ptr [rip + .Lxkb_type_tmp_preserve]
+    mov dword ptr [rbx + rdx], eax
     jmp .Lxkb_type_body_loop
 
 .Lxkb_type_body_done:
+    # XKB requires preserved modifiers to be part of the type's modifiers.
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_type_modifiers]
+    mov r8d, dword ptr [rbx + rax]
+    lea rbx, [rip + xkb_type_map_counts]
+    movzx r13d, byte ptr [rbx + r12]
+    mov eax, r12d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_preserves]
+    add rbx, rax
+    xor r14d, r14d
+.Lxkb_type_body_validate_preserve:
+    cmp r14d, r13d
+    jae .Lxkb_type_body_done_valid
+    mov edx, r14d
+    shl edx, 2
+    mov eax, dword ptr [rbx + rdx]
+    mov ecx, r8d
+    not ecx
+    test eax, ecx
+    jnz .Lxkb_type_body_fail
+    inc r14d
+    jmp .Lxkb_type_body_validate_preserve
+.Lxkb_type_body_done_valid:
     xor eax, eax
     jmp .Lxkb_type_body_exit
 .Lxkb_type_body_fail:
@@ -4651,9 +4771,11 @@ xkb_parse_keymap:
     lea rbx, [rip + xkb_type_modifiers]
     mov eax, r15d
     shl eax, 2
-    mov eax, dword ptr [rbx + rax]
+    mov r9d, dword ptr [rbx + rax]
+    mov eax, r9d
     and eax, r13d
     mov r13d, eax
+    xor r8d, r8d
     lea rbx, [rip + xkb_type_map_counts]
     movzx r14d, byte ptr [rbx + r15]
     test r14d, r14d
@@ -4674,6 +4796,13 @@ xkb_parse_keymap:
     jmp .Lxkb_select_map_loop
 .Lxkb_select_map_found:
     mov eax, r15d
+    shl eax, 7
+    lea rbx, [rip + xkb_type_map_preserves]
+    add rbx, rax
+    mov edx, r12d
+    shl edx, 2
+    mov r8d, dword ptr [rbx + rdx]
+    mov eax, r15d
     shl eax, 5
     lea rbx, [rip + xkb_type_map_levels]
     add rbx, rax
@@ -4684,8 +4813,13 @@ xkb_parse_keymap:
     cmp eax, 7
     jbe .Lxkb_select_done
 .Lxkb_select_default:
+    xor r8d, r8d
     xor eax, eax
 .Lxkb_select_done:
+    mov edx, r8d
+    mov ecx, r9d
+    not edx
+    and ecx, edx
     pop r15
     pop r14
     pop r13
@@ -4693,6 +4827,37 @@ xkb_parse_keymap:
     pop rbx
     ret
 .size .Lxkb_select_level, . - .Lxkb_select_level
+
+# RDI=evdev keycode, ESI=32-bit XKB modifier state, EDX=group.
+# Return the consumed-modifier mask for the selected type-map entry.
+.global xkb_lookup_consumed_modifiers
+.type xkb_lookup_consumed_modifiers, @function
+xkb_lookup_consumed_modifiers:
+    push rbx
+    push r12
+    cmp dword ptr [rip + xkb_keymap_ready], 1
+    jne .Lxkb_consumed_none
+    cmp edi, 247
+    ja .Lxkb_consumed_none
+    lea r12d, [rdi + 8]
+    lea rbx, [rip + xkb_key_names]
+    cmp dword ptr [rbx + r12*4], 0
+    je .Lxkb_consumed_none
+    mov edi, r12d
+    cmp edx, 3
+    jbe .Lxkb_consumed_group_ok
+    xor edx, edx
+.Lxkb_consumed_group_ok:
+    call .Lxkb_select_level
+    mov eax, ecx
+    jmp .Lxkb_consumed_exit
+.Lxkb_consumed_none:
+    xor eax, eax
+.Lxkb_consumed_exit:
+    pop r12
+    pop rbx
+    ret
+.size xkb_lookup_consumed_modifiers, . - xkb_lookup_consumed_modifiers
 
 # RDI=Linux evdev keycode. EAX=1 if this key is configured to repeat.
 # Modifier/group actions remain compositor-owned; this query only reads keymap policy.

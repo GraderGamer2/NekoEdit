@@ -1,5 +1,30 @@
 # NekoEdit current status
 
+## 2026-11-09 — XKB type preserve masks and key-specific consumed Control
+
+**Branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
+
+### Implementation
+
+- Added a 32-bit preserve-mask slot for each of the existing 64 × 32 bounded XKB type-map entries.
+- The `xkb_types` parser now reads `preserve[modifier-combination] = modifier-mask;`, associates it with the exact `map[]` entry, and rejects preserved modifiers outside the type's declared `modifiers` mask.
+- A preserve statement without an earlier matching map entry creates the specification's implicit Level1 entry. A later `map[]` declaration updates the same entry in place.
+- Type lookup returns both the selected level and the consumed-modifier mask (`type.modifiers & ~entry.preserve`). The new `xkb_lookup_consumed_modifiers` API uses the same exact map selection as symbol lookup.
+- Wayland keeps raw physical/compositor Control state separate from the key-specific shortcut state. It masks Control only when the current key's XKB consumed mask includes Control, and restores raw state when the key is released. Keysym lookup still receives the complete compositor modifier state; no modifier/group actions are replayed in the client.
+
+### Regression coverage
+
+- Added paired custom types with Control selecting Level3: one preserves Control and one consumes it.
+- The fixture puts `preserve[Control]` before `map[Control]` to verify the implicit Level1 entry is updated rather than duplicated. The mock inspects map masks, level numbers, and preserve masks in process memory.
+- Wayland integration verifies preserved Control still dispatches Ctrl+A, while consumed Control causes Ctrl+Z to insert the key's EuroSign alternate instead of undoing. The document is saved before the consumed-key test, so the disk round-trip also detects an accidental shortcut dispatch.
+- Actions validation is pending on the implementation commit. Live GNOME/Mutter comparison against real keymaps remains outstanding.
+
+### Scope boundary
+
+This milestone implements XKB type-map preserve/consumed-modifier semantics for the current Control shortcut path. It does not execute general `xkb_compat` actions, change compositor modifier/group state, or add generic Shift/Alt shortcut policy.
+
+---
+
 ## 2026-11-09 — correct XKB per-key repeat defaults and BSS storage
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
