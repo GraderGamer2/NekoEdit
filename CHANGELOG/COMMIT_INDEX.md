@@ -5,8 +5,19 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **381** (377 previously recorded commits + four XKB any-scope fixture and test-synchronization commits; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **383** (381 previously recorded commits + two new XKB implementation/test commits; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — XKB omitted matching operator defaults to Exactly
+
+| Commit | Subject |
+|---|---|
+| [488e8e995dd9](https://github.com/GraderGamer2/NekoEdit/commit/488e8e995dd9f788fdc442af6c52b305ea70e73e) | feat: accept implicit Exactly XKB compatibility predicates |
+| [bc1b83a9608d](https://github.com/GraderGamer2/NekoEdit/commit/bc1b83a9608d6ddd37d1f0d4be3229bdc55dac2d) | test: inspect the shifted XKB compatibility rule entries |
+
+The bounded text-v1 parser now accepts a bare parenthesized real-modifier mask after the `+` separator and stores it as the existing `Exactly` predicate. The Wayland fixture covers `Control_L + (Mod2)` on a dedicated keycode, verifying its Control_L keysym, Mod2 real mask, Exactly predicate, V17 per-key virtual map, and V17=Mod2 effective encoding. The existing Mod1-mapped Control_L case continues to use explicit `Exactly(Mod1)`.
+
+Actions #693 compiled the source and passed CLI tests, but the first mock attempt read the new rule from record 14 rather than record 12 after fixture insertion. The test-only offset correction also moved the existing default-any scope read to record 13. Actions [Build and test #694](https://github.com/GraderGamer2/NekoEdit/actions/runs/42555001320) passed all eight workflow steps. Artifact [13646668835](https://github.com/GraderGamer2/NekoEdit/actions/runs/42555001320/artifacts/13646668835) is 95,370 bytes; uploaded ZIP SHA-256 `5c4e9da79a371c2aa15807a3dd555774974c6d17f132908d31b615cb7a958cd9`.
 
 ## 2026-11-09 — XKB useModMapMods scope coverage and pointer-test synchronization
 
