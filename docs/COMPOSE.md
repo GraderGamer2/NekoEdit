@@ -60,4 +60,4 @@ mkdir -p "$HOME/.nekoedit/locales"
 install -m 600 pt_BR.UTF-8.nlp "$HOME/.nekoedit/locales/pt_BR.UTF-8.nlp"
 ```
 
-If `pt_BR` is selected but its file is absent or invalid, Settings displays `MISSING` and the embedded en_US table remains active. Choose `en_US` in Settings to clear that selection. Switching locales does not modify the active document.
+If `pt_BR` is selected but its file is absent or invalid, Settings displays `MISSING` and the embedded en_US table remains active. The saved selection is retained when a pack is missing, so reinstalling the pack makes the selected locale available again without another Settings change. Choose `en_US` in Settings to clear that selection. Switching locales does not modify the active document.
