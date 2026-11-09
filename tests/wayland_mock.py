@@ -7142,6 +7142,13 @@ xkb_symbols "nekoedit-sparse" {
             "mock compositor failed:\n" + "\n".join(errors)
             + f"\nNekoEdit exit status: {result.returncode}; stderr: {stderr!r}"
         )
+    if compose_locale_settings_test and not any(
+        "Settings locale selector activates the installed pt_BR pack" in item
+        for item in observations
+    ):
+        raise AssertionError(
+            "Settings locale selector scenario was requested but did not complete its assertions"
+        )
     if disconnect_after_configure_ack:
         sentinel = b"PRIVATE_CONTENT_SENTINEL"
         if (
@@ -7305,6 +7312,7 @@ if __name__ == "__main__":
 
 
     # Exercise the visible Settings locale selector against an installed pt_BR pack.
+    print("Wayland: starting Settings locale selector scenario.")
     settings_locale_fd, settings_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-settings-")
     try:
         with os.fdopen(settings_locale_fd, "wb") as locale_document:
@@ -7320,6 +7328,7 @@ if __name__ == "__main__":
             os.unlink(settings_locale_path)
         except FileNotFoundError:
             pass
+    print("Wayland: Settings locale selector scenario completed.")
 
     # Basic bounded snapshot undo/redo, including replacement of a selection.
     history_fd, history_path = tempfile.mkstemp(prefix="nekoedit-history-")
