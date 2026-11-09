@@ -4,9 +4,18 @@ on:
   push:
     branches:
       - main
+      - early-alpha
+    paths-ignore:
+      - 'CHANGELOG/**'
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - reopened
+      - ready_for_review
+    paths-ignore:
+      - 'CHANGELOG/**'
   workflow_dispatch:
 
 permissions:
