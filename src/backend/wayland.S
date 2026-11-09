@@ -5010,7 +5010,7 @@ history_search_selected: .long 0
 history_search_scroll:  .long 0
 history_search_match_count: .long 0
 history_search_display_start: .long 0
-history_search_caret_x: .long 60
+history_search_caret_x: .long 0
 history_open_error:     .long 0
 history_search_query_buffer: .zero 128
 history_search_query_display_buffer: .zero 128
