@@ -1,5 +1,18 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — repair missing development-branch Actions trigger
+
+| Commit | Subject |
+|---|---|
+| [8c52fc1cd09e](https://github.com/GraderGamer2/NekoEdit/commit/8c52fc1cd09ebd3116cb7afa83669a11aa952950) | ci: restore PR validation after skipped HEAD |
+| [0b3f19cc3a78](https://github.com/GraderGamer2/NekoEdit/commit/0b3f19cc3a78af5aa71892dbba76113d6afa3754) | docs: record CI trigger and skip-marker policy |
+| [c50b4ab02e5f](https://github.com/GraderGamer2/NekoEdit/commit/c50b4ab02e5f057a636a477c49cdf3c1e35c5405) | docs: record missing Actions trigger diagnosis |
+| [f42cc77768c5](https://github.com/GraderGamer2/NekoEdit/commit/f42cc77768c5dda2ee5026282c77fa7f9502bd72) | docs: correct Actions trigger diagnosis |
+
+These are documentation/continuity corrections and do not change the implementation/test commit count. The first follow-up removed `[skip ci]` from the PR HEAD; the subsequent diagnosis confirmed that PR merge conflicts also suppress `pull_request` workflows and that pushes to `early-alpha` were not included in the workflow's branch filter. See CURRENT_STATUS.md and DEVELOPMENT_LOG.md for the trigger repair and final validation state.
+
+---
+
 This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**. It includes the original 20 commits on `main`, all 187 development-history commits on the branch originally named `feat/wayland-socket-error-handling` and later renamed to `early-alpha` through the TrueType metric and responsive picker-alignment milestone, six changelog bootstrap commits, and the separate changelog installation on `main`.
 
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
