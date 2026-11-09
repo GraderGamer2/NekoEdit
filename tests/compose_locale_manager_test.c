@@ -16,7 +16,7 @@ uint32_t compose_locale_install_pack(const char *source_path);
 uint32_t compose_locale_remove_pack(const char *tag);
 uint32_t compose_locale_get_directory(char *destination, uint32_t capacity);
 uint32_t compose_locale_load(const char *tag);
-uint32_t compose_locale_lookup(uint32_t input_count,
+uint32_t compose_locale_lookup(uint32_t kind, uint32_t input_count,
                               const uint32_t *input, uint32_t *output);
 
 static void fail(const char *message)
@@ -31,6 +31,7 @@ int main(int argc, char **argv)
     char actual_directory[4096], expected_directory[4096];
     struct stat st;
     uint32_t input[2] = { 'o', 'i' }, output[8] = {0};
+    uint32_t dead_input[2] = { 0x0301u, 'c' };
     uint32_t output_count;
 
     if (argc != 5)
@@ -68,16 +69,21 @@ int main(int argc, char **argv)
 
     if (!compose_locale_load("pt_BR.UTF-8") || !compose_locale_active)
         fail("installed pack could not be loaded after installation");
-    output_count = compose_locale_lookup(2, input, output);
+    output_count = compose_locale_lookup(0, 2, input, output);
     if (output_count != 2 || output[0] != 0x2603 || output[1] != 0xfe0f)
-        fail("installed pack did not resolve the expected multiscalar sequence");
+        fail("installed pack did not resolve the expected Multi_key multiscalar sequence");
+    if (compose_locale_lookup(0, 2, dead_input, output) != 0)
+        fail("dead-key rule leaked into the Multi_key namespace");
+    output_count = compose_locale_lookup(1, 2, dead_input, output);
+    if (output_count != 1 || output[0] != 0x00e7)
+        fail("Brazilian dead_acute + c rule did not resolve to cedilla");
 
     if (compose_locale_install_pack(argv[3]))
         fail("CRC-corrupt source pack was accepted");
     if (compose_locale_install_pack(argv[4]))
         fail("symlink source pack was followed");
     if (!compose_locale_load("pt_BR.UTF-8") ||
-        compose_locale_lookup(2, input, output) != 2 ||
+        compose_locale_lookup(0, 2, input, output) != 2 ||
         output[0] != 0x2603 || output[1] != 0xfe0f)
         fail("rejected imports damaged the existing installed pack");
 

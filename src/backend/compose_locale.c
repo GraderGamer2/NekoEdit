@@ -273,7 +273,13 @@ static uint32_t crc32(const uint8_t *bytes, uint32_t length)
 
 static int compare_records(const uint8_t *a, const uint8_t *b)
 {
-    uint32_t ac = a[0], bc = b[0], shared = ac < bc ? ac : bc, i;
+    uint32_t a_kind = read16(a + 2), b_kind = read16(b + 2);
+    uint32_t ac, bc, shared, i;
+    if (a_kind < b_kind) return -1;
+    if (a_kind > b_kind) return 1;
+    ac = a[0];
+    bc = b[0];
+    shared = ac < bc ? ac : bc;
     for (i = 0; i < shared; ++i) {
         uint32_t av = read32(a + 4u + i * 4u);
         uint32_t bv = read32(b + 4u + i * 4u);
@@ -284,10 +290,15 @@ static int compare_records(const uint8_t *a, const uint8_t *b)
 }
 
 /* A stored longer sequence compares equal when it begins with the input prefix. */
-static int compare_record_input(const uint8_t *record,
+static int compare_record_input(const uint8_t *record, uint32_t kind,
                                 const uint32_t *input, uint32_t input_count)
 {
-    uint32_t count = record[0], shared = count < input_count ? count : input_count, i;
+    uint32_t record_kind = read16(record + 2);
+    uint32_t count, shared, i;
+    if (record_kind < kind) return -1;
+    if (record_kind > kind) return 1;
+    count = record[0];
+    shared = count < input_count ? count : input_count;
     for (i = 0; i < shared; ++i) {
         uint32_t value = read32(record + 4u + i * 4u);
         if (value < input[i]) return -1;
@@ -325,9 +336,10 @@ static int validate_pack(const uint8_t *data, uint32_t size,
     for (i = 0; i < count; ++i) {
         const uint8_t *record = payload + i * RECORD_SIZE;
         uint32_t inputs = record[0], outputs = record[1], j;
+        uint32_t kind = read16(record + 2);
         if (inputs < 2u || inputs > MAX_INPUTS ||
             outputs < 1u || outputs > MAX_OUTPUTS ||
-            read16(record + 2) != 0u) return 0;
+            kind > 1u) return 0;
         for (j = 0; j < MAX_INPUTS; ++j) {
             uint32_t value = read32(record + 4u + j * 4u);
             if (j < inputs) {
@@ -451,14 +463,15 @@ uint32_t compose_locale_load(const char *requested_tag)
     return 1;
 }
 
-static uint32_t find_lower_bound(const uint32_t *input, uint32_t input_count)
+static uint32_t find_lower_bound(uint32_t kind, const uint32_t *input,
+                                 uint32_t input_count)
 {
     uint32_t low = 0, high = mapped_record_count;
     const uint8_t *records = mapped_pack + HEADER_SIZE;
     while (low < high) {
         uint32_t mid = low + (high - low) / 2u;
         const uint8_t *record = records + mid * RECORD_SIZE;
-        if (compare_record_input(record, input, input_count) < 0)
+        if (compare_record_input(record, kind, input, input_count) < 0)
             low = mid + 1u;
         else
             high = mid;
@@ -466,36 +479,37 @@ static uint32_t find_lower_bound(const uint32_t *input, uint32_t input_count)
     return low;
 }
 
-uint32_t compose_locale_lookup(uint32_t input_count,
+uint32_t compose_locale_lookup(uint32_t kind, uint32_t input_count,
                                const uint32_t *input, uint32_t *output)
 {
     const uint8_t *records, *record;
     uint32_t index, i;
     if (!compose_locale_active || !mapped_pack || !input || !output ||
-        input_count < 2u || input_count > MAX_INPUTS) return 0;
+        kind > 1u || input_count < 2u || input_count > MAX_INPUTS) return 0;
     records = mapped_pack + HEADER_SIZE;
-    index = find_lower_bound(input, input_count);
+    index = find_lower_bound(kind, input, input_count);
     if (index >= mapped_record_count) return 0;
     record = records + index * RECORD_SIZE;
     if (record[0] != input_count ||
-        compare_record_input(record, input, input_count) != 0) return 0;
+        compare_record_input(record, kind, input, input_count) != 0) return 0;
     for (i = 0; i < record[1]; ++i)
         output[i] = read32(record + 20u + i * 4u);
     return record[1];
 }
 
-uint32_t compose_locale_prefix(uint32_t input_count, const uint32_t *input)
+uint32_t compose_locale_prefix(uint32_t kind, uint32_t input_count,
+                               const uint32_t *input)
 {
     const uint8_t *records, *record;
     uint32_t index;
     if (!compose_locale_active || !mapped_pack || !input ||
-        input_count < 1u || input_count >= MAX_INPUTS) return 0;
+        kind > 1u || input_count < 1u || input_count >= MAX_INPUTS) return 0;
     records = mapped_pack + HEADER_SIZE;
-    index = find_lower_bound(input, input_count);
+    index = find_lower_bound(kind, input, input_count);
     if (index >= mapped_record_count) return 0;
     record = records + index * RECORD_SIZE;
     return record[0] > input_count &&
-           compare_record_input(record, input, input_count) == 0;
+           compare_record_input(record, kind, input, input_count) == 0;
 }
 
 

@@ -18741,14 +18741,16 @@ doc_insert_keyboard_codepoint:
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_locale_second:
     mov dword ptr [rip + doc_compose_second], r12d
-    mov edi, 2
-    lea rsi, [rip + doc_compose_first]
-    lea rdx, [rip + compose_locale_output]
+    xor edi, edi
+    mov esi, 2
+    lea rdx, [rip + doc_compose_first]
+    lea rcx, [rip + compose_locale_output]
     call compose_locale_lookup
     test eax, eax
     jnz .Ldoc_keyboard_locale_result
-    mov edi, 2
-    lea rsi, [rip + doc_compose_first]
+    xor edi, edi
+    mov esi, 2
+    lea rdx, [rip + doc_compose_first]
     call compose_locale_prefix
     test eax, eax
     jnz .Ldoc_keyboard_locale_buffered
@@ -18756,14 +18758,16 @@ doc_insert_keyboard_codepoint:
     jmp .Ldoc_keyboard_locale_literal
 .Ldoc_keyboard_locale_third:
     mov dword ptr [rip + doc_compose_third], r12d
-    mov edi, 3
-    lea rsi, [rip + doc_compose_first]
-    lea rdx, [rip + compose_locale_output]
+    xor edi, edi
+    mov esi, 3
+    lea rdx, [rip + doc_compose_first]
+    lea rcx, [rip + compose_locale_output]
     call compose_locale_lookup
     test eax, eax
     jnz .Ldoc_keyboard_locale_result
-    mov edi, 3
-    lea rsi, [rip + doc_compose_first]
+    xor edi, edi
+    mov esi, 3
+    lea rdx, [rip + doc_compose_first]
     call compose_locale_prefix
     test eax, eax
     jnz .Ldoc_keyboard_locale_buffered
@@ -18771,9 +18775,10 @@ doc_insert_keyboard_codepoint:
     jmp .Ldoc_keyboard_locale_literal
 .Ldoc_keyboard_locale_fourth:
     mov dword ptr [rip + doc_compose_fourth], r12d
-    mov edi, 4
-    lea rsi, [rip + doc_compose_first]
-    lea rdx, [rip + compose_locale_output]
+    xor edi, edi
+    mov esi, 4
+    lea rdx, [rip + doc_compose_first]
+    lea rcx, [rip + compose_locale_output]
     call compose_locale_lookup
     test eax, eax
     jnz .Ldoc_keyboard_locale_result
@@ -18812,6 +18817,26 @@ doc_insert_keyboard_codepoint:
     test r13d, r13d
     jz .Ldoc_keyboard_plain_scalar
     mov dword ptr [rip + doc_pending_dead_mark], 0
+    # Locale kind 1 stores [combining mark, following scalar], independently
+    # of Multi_key kind 0 even when both namespaces share the same scalars.
+    cmp dword ptr [rip + compose_locale_active], 0
+    je .Ldoc_keyboard_dead_builtin
+    mov dword ptr [rip + doc_compose_first], r13d
+    mov dword ptr [rip + doc_compose_second], r12d
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+    mov edi, 1
+    mov esi, 2
+    lea rdx, [rip + doc_compose_first]
+    lea rcx, [rip + compose_locale_output]
+    call compose_locale_lookup
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_result
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+.Ldoc_keyboard_dead_builtin:
     mov edi, r12d
     mov esi, r13d
     call doc_compose_precomposed
