@@ -5,8 +5,20 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **402** (401 previously recorded commits + the text-input-v3 change-cause implementation and mock regression; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **403** (402 previously recorded commits + the Compose locale Add-destination UI and path regression; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — clarify the Compose locale installation destination — Build and test #736 passed
+
+| Commit | Subject |
+|---|---|
+| [2fd44f25bde6](https://github.com/GraderGamer2/NekoEdit/commit/2fd44f25bde6db5ab9fd889b98a186e3fbcae18b) | ui: show locale pack install target in Add picker |
+
+The Add picker distinguishes the user-selected source directory from the installed destination, displaying `TARGET: ~/.nekoedit/locales/`. The host test asserts that the directory API resolves to `$HOME/.nekoedit/locales`; the complete Wayland mock checks Add/Remove installation behavior and source-file preservation.
+
+[Build and test #736](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047) passed, including the freestanding build, host tests, Wayland mock, pinned locale-source regeneration, pack builds, and artifact uploads. Editor artifact [13666405540](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13666405540), 125,184-byte ZIP, SHA-256 `8a9250a86fe2b751c45ad5270b27a4556d00a7b73c16629ea75210abafbb31f1`; locale packs [13665239303](https://github.com/GraderGamer2/NekoEdit/actions/runs/42601389047/artifacts/13665239303), 53,740-byte ZIP, SHA-256 `7a6c8edbeb28c3dbfc01c623705a2667c9d7ec7fec9ec04bae8d545353ad87ac`.
+
+---
 
 ## 2026-11-09 — text-input-v3 change-cause synchronization — Build and test #735 passed
 
