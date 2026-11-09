@@ -28,6 +28,9 @@ uint32_t compose_locale_output[MAX_OUTPUTS];
 
 static const uint8_t magic[8] = {'N','E','K','O','L','O','C','1'};
 static const char locale_env[] = "NEKOEDIT_LOCALE";
+static const char lc_all_env[] = "LC_ALL";
+static const char lc_ctype_env[] = "LC_CTYPE";
+static const char lang_env[] = "LANG";
 static const char home_env[] = "HOME";
 static const char directory_suffix[] = "/.nekoedit/locales/";
 static const char extension[] = ".nlp";
@@ -243,6 +246,12 @@ uint32_t compose_locale_load(const char *requested_tag)
 
     if (!tag || !tag[0])
         tag = environment_value(locale_env);
+    if (!tag || !tag[0])
+        tag = environment_value(lc_all_env);
+    if (!tag || !tag[0])
+        tag = environment_value(lc_ctype_env);
+    if (!tag || !tag[0])
+        tag = environment_value(lang_env);
     compose_locale_active = 0;
     if (mapped_pack && mapped_pack_size)
         (void)syscall6(SYS_munmap, (long)mapped_pack, mapped_pack_size, 0, 0, 0, 0);
@@ -250,7 +259,9 @@ uint32_t compose_locale_load(const char *requested_tag)
     mapped_pack_size = 0;
     mapped_record_count = 0;
     if (!tag || !tag[0] || equals(tag, "en_US") ||
-        equals(tag, "en_US.UTF-8") || equals(tag, "C") || equals(tag, "POSIX"))
+        equals(tag, "en_US.UTF-8") || equals(tag, "en_US.utf8") ||
+        equals(tag, "C") || equals(tag, "C.UTF-8") || equals(tag, "C.utf8") ||
+        equals(tag, "POSIX"))
         return 0;
 
     tag_length = string_length(tag, MAX_TAG_LENGTH + 1u);

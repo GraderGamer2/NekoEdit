@@ -51,7 +51,7 @@ The embedded en_US tables remain static read-only data. Optional packs are opene
 
 ## Selecting an installed locale
 
-The Settings dropdown has a **COMPOSE LOCALE** row for the built-in `en_US` and optional `pt_BR` pack. The selection is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A persisted choice takes precedence over `NEKOEDIT_LOCALE`; when no preference is saved, the environment variable remains a first-run override. Selecting a locale never downloads or installs it.
+The Settings dropdown has a **COMPOSE LOCALE** row for the built-in `en_US` and optional `pt_BR` pack. The selection is persisted as `compose_locale=<tag>` in `~/.nekoedit/preferences`. A persisted choice takes precedence over environment selection. When no preference is saved, NekoEdit checks `NEKOEDIT_LOCALE`, then `LC_ALL`, `LC_CTYPE`, and `LANG` in that order. `C`, `C.UTF-8`, `C.utf8`, and `POSIX` select the embedded en_US fallback. Selecting a locale never downloads or installs it.
 
 Install the separate Release asset before selecting it:
 

@@ -240,6 +240,8 @@ def run(
     compose_locale_test: bool = False,
     compose_locale_invalid_test: bool = False,
     compose_locale_settings_test: bool = False,
+    compose_locale_system_test: bool = False,
+    compose_locale_c_fallback_test: bool = False,
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
@@ -255,12 +257,12 @@ def run(
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
-    if sum((compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test)) > 1:
+    if sum((compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test, compose_locale_system_test, compose_locale_c_fallback_test)) > 1:
         raise ValueError("locale-pack scenarios are mutually exclusive")
-    if compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test:
+    if compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test:
         locale_dir = os.path.join(runtime_dir, ".nekoedit", "locales")
         os.makedirs(locale_dir, mode=0o700, exist_ok=True)
-        pack_tag = "pt_BR.UTF-8" if compose_locale_settings_test else "xx_TEST.UTF-8"
+        pack_tag = "pt_BR.UTF-8" if (compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test) else "xx_TEST.UTF-8"
         pack_doc = {"locale":pack_tag, "sequences":[
             {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
             {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
@@ -336,7 +338,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test else 8)
+            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -664,7 +666,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test:
+                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -3744,6 +3746,30 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+
+
+                elif compose_locale_system_test:
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("LC_ALL pt_BR did not activate the installed pack")
+                    key_step(5200, 46, "system locale starts Compose")
+                    key_step(5202, 24, "system locale buffers o")
+                    key_step(5204, 23, "system locale resolves o i")
+                    if read_document_state()["doc_contents"] != bytes.fromhex("e29883efb88f"):
+                        raise AssertionError("LC_ALL-selected pt_BR pack did not resolve Compose input")
+                    observations.append(
+                        "system character-locale precedence: LC_ALL selected pt_BR over LC_CTYPE/LANG and loaded its pack"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                elif compose_locale_c_fallback_test:
+                    if child_u32("compose_locale_active") != 0:
+                        raise AssertionError("LC_ALL=C did not select built-in en_US over lower-priority pt_BR")
+                    observations.append(
+                        "system locale C/C.UTF-8 fallback: LC_ALL=C overrides pt_BR LC_CTYPE/LANG and keeps built-in en_US"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 elif compose_locale_settings_test:
                     if child_u32("compose_locale_active") != 0:
@@ -7059,6 +7085,25 @@ xkb_symbols "nekoedit-sparse" {
     environment.pop("NEKOEDIT_LOCALE", None)
     if compose_locale_test or compose_locale_invalid_test:
         environment["NEKOEDIT_LOCALE"] = "xx_TEST.UTF-8"
+    if compose_locale_test:
+        # The app-specific override must win even when the system locale differs.
+        environment["LC_ALL"] = "pt_BR.UTF-8"
+        environment["LC_CTYPE"] = "en_US.UTF-8"
+        environment["LANG"] = "en_US.UTF-8"
+    if compose_locale_settings_test:
+        # This case must begin with the embedded default before clicking Settings.
+        environment["LC_ALL"] = "C"
+        environment["LC_CTYPE"] = "pt_BR.UTF-8"
+        environment["LANG"] = "pt_BR.UTF-8"
+    if compose_locale_system_test:
+        # LC_ALL wins over both lower-priority character-locale variables.
+        environment["LC_ALL"] = "pt_BR.UTF-8"
+        environment["LC_CTYPE"] = "en_US.UTF-8"
+        environment["LANG"] = "en_US.UTF-8"
+    if compose_locale_c_fallback_test:
+        environment["LC_ALL"] = "C"
+        environment["LC_CTYPE"] = "pt_BR.UTF-8"
+        environment["LANG"] = "pt_BR.UTF-8"
     # Never let a caller's shell opt-in leak into the default-path regression.
     environment.pop("NEKOEDIT_ENABLE_TEXT_INPUT", None)
     if text_input_test:
@@ -7310,6 +7355,41 @@ if __name__ == "__main__":
         try: os.unlink(locale_path)
         except FileNotFoundError: pass
 
+
+
+    # With no explicit NekoEdit override or saved preference, discover pt_BR from LC_ALL.
+    system_locale_fd, system_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-system-")
+    try:
+        with os.fdopen(system_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(
+            sys.argv[1],
+            initial_file=system_locale_path,
+            unicode_keyboard_test=True,
+            compose_locale_system_test=True,
+        )
+    finally:
+        try:
+            os.unlink(system_locale_path)
+        except FileNotFoundError:
+            pass
+
+    # A higher-priority C locale must suppress a pt_BR value in LC_CTYPE and LANG.
+    c_locale_fd, c_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-c-")
+    try:
+        with os.fdopen(c_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(
+            sys.argv[1],
+            initial_file=c_locale_path,
+            unicode_keyboard_test=True,
+            compose_locale_c_fallback_test=True,
+        )
+    finally:
+        try:
+            os.unlink(c_locale_path)
+        except FileNotFoundError:
+            pass
 
     # Exercise the visible Settings locale selector against an installed pt_BR pack.
     print("Wayland: starting Settings locale selector scenario.")
