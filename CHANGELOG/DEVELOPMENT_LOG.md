@@ -1,3 +1,19 @@
+## 2026-11-09 — correct repeat-state storage and test Wayland timer gating
+
+### Build correction
+
+- Actions [Build and test #677](https://github.com/GraderGamer2/NekoEdit/actions/runs/42544941470) stopped during assembly before reaching the tests. The assembler rejected non-zero initializers for `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` because the declarations are in `.bss`.
+- Commit [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d) changes those declarations to `.zero 4`. `xkb_reset_keymap` sets the global default and parser temporary to one explicitly, while per-key defaults are initialized through the reset loops. The section now contains zero-initialized storage only.
+
+### Runtime regression coverage
+
+- Parser-table assertions alone did not prove that the Wayland key-down path uses the parsed flags, so the keyboard-layout mock now holds the four synthetic RPT keys through the actual key event path.
+- RPT0 inherits the section-level false value and RPT2 has an explicit false property; both must insert only once and leave `repeat_keycode` at zero after a 400 ms hold (the mock compositor's repeat delay is 180 ms).
+- RPT1 receives true from its matching Mod2 compatibility interpretation and RPT3 overrides the false section default with a direct true key property; both must start the repeat timer and produce a second edit while held.
+- Test commit: [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27). The next consolidated workflow is pending.
+
+---
+
 ## 2026-11-09 — honor XKB per-key repeat policy on Wayland
 
 ### Parser and policy

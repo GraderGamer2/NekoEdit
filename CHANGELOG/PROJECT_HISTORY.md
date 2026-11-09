@@ -1,5 +1,11 @@
 # NekoEdit project history
 
+## 2026-11-09 — validate repeat policy through the Wayland key event path
+
+The first CI attempt for the per-key repeat milestone stopped at assembly because two repeat defaults were incorrectly initialized with non-zero values in the `.bss` section. They are now zero-filled declarations with explicit runtime initialization in `xkb_reset_keymap` ([4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d)).
+
+The mock now tests more than the parser's internal tables. It holds four synthetic keys through the same Wayland key-down and repeat-timer path used by the editor: inherited `False` and explicit key-level `False` must not repeat, while a compatibility `True` and a direct key-level `True` must repeat. This checks policy-to-timer integration and explicit-key precedence. Test commit: [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27). The next full workflow is pending.
+
 ## 2026-11-09 — apply XKB per-key repeat policy in the Wayland backend
 
 The XKB text-v1 reader now distinguishes three levels of repeat configuration: the default (enabled), the `interpret.repeat` section default and per-interpret overrides in `xkb_compat`, and explicit per-key `repeat = True/False` properties in `xkb_symbols`. The matching compatibility rule is selected using the existing keysym and real-modifier specificity algorithm. Its repeat value is applied only from Group 1 / Level 1 because repeat is a property of the whole key; a direct key property wins.

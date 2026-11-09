@@ -3,7 +3,7 @@
 ## 2026-11-09 — implement XKB per-key repeat policy
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).
-**Source/test commit:** [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426); **test-fixture follow-up:** [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104). Full CI is pending.
+**Source/test commit:** [81ec309c6ffd](https://github.com/GraderGamer2/NekoEdit/commit/81ec309c6ff2da92e19fcdaa895c03cd9538e426); **parser-fixture follow-up:** [05b45faa9eee](https://github.com/GraderGamer2/NekoEdit/commit/05b45faa9eeec21d3b4b7985a41bc4bba6004104); **BSS initialization fix:** [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d); **Wayland event-path test:** [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27). Actions #677 initially stopped at assembly because two non-zero repeat defaults were placed in `.bss`; the BSS objects are now zero-filled and both defaults are initialized in `xkb_reset_keymap`. The next full workflow is pending.
 
 ### Implemented behavior
 
@@ -15,8 +15,9 @@
 
 ### Regression coverage and validation
 
-- The mock keymap covers a section default of `False`, a compatibility override to `True`, a direct key-level `False` override, a direct `True` override, and an unaffected default-repeat key. The assertions inspect the parsed default, per-key flags, explicit-property flags, and compatibility rule count.
-- Actions validation is pending. Do not treat the repeat parser or Wayland timer integration as validated until the consolidated workflow passes.
+- The mock keymap covers a section default of `False`, a compatibility override to `True`, a direct key-level `False` override, a direct `True` override, and an unaffected default-repeat key. Parser assertions inspect the section default, per-key flags, explicit-property flags, and compatibility rule count.
+- The keyboard integration scenario holds all four synthetic keys through the actual Wayland event path: inherited-false and explicit-false must not start the timer or repeat after the 180 ms test delay; compatibility-true and direct-true must start the timer and produce a repeated edit. The final event-path test is [fd41479a9268](https://github.com/GraderGamer2/NekoEdit/commit/fd41479a926812a83c9243b014ff6bca8866fd27).
+- Actions #677 failed before tests because `xkb_compat_default_repeat` and `.Lxkb_compat_tmp_repeat` used non-zero initializers in `.bss`. Commit [4bedb424cff2](https://github.com/GraderGamer2/NekoEdit/commit/4bedb424cff2804e64da879d280b26db7db9182d) changes both to zero-filled storage; `xkb_reset_keymap` explicitly initializes them. The next full workflow will validate the corrected source and event-path tests.
 
 ### Next work
 
@@ -88,7 +89,7 @@
 
 ### Scope not yet implemented
 
-This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates and virtual-modifier assignment but does not execute `action` or `repeat` statements, evaluate compatibility indicators/defaults, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
+This is a bounded XKB text-v1 reader, not a replacement for libxkbcommon. Indirect `modifier_map` lookup and compatibility matching recognize only the modifier/system keysym names in the internal table; arbitrary keysym canonicalization is not implemented. The compatibility reader supports the listed real-modifier predicates, virtual-modifier assignment, and bounded repeat policy described in the newer 2026-11-09 milestone, but does not execute stateful `action` statements, evaluate compatibility indicators, implement general key actions, or track `preserve[]` consumed modifiers. Direct key-level `virtualModifiers` properties take precedence over inferred compatibility maps. LevelThree and NumLock retain conventional Mod5/Mod2 fallback masks if a keymap omits explicit encodings. Locale-specific Compose sequences, advanced text-input-v3 preedit attributes/cursor styling, complex shaping, and bidirectional layout remain future work.
 
 ### Verification state
 
