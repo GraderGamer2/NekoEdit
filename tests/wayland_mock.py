@@ -3172,7 +3172,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"long History query caret escaped the visible search field: x={caret_x}"
                         )
-                    workflow_shortcut(2335, 30, "Ctrl+A clears the complete History filter")
+                    workflow_shortcut(2340, 30, "Ctrl+A clears the complete History filter")
                     if (
                         child_u32("history_search_length") != 0
                         or child_u32("history_search_display_start") != 0
@@ -3183,45 +3183,45 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Browse is a separate explicit action; it opens the native
                     # document picker without making the filter field inert.
-                    workflow_click(700, 185, 2340, "History Browse opens the document picker")
+                    workflow_click(2370, 185, 2340, "History Browse opens the document picker")
                     if child_u32("picker_mode") != 1:
                         raise AssertionError("History Browse did not open the Open picker")
-                    key_step(2341, 1, "Escape closes the History Browse picker")
+                    key_step(2372, 1, "Escape closes the History Browse picker")
                     if child_u32("picker_mode") != 0 or child_u32("history_tab_open") != 1:
                         raise AssertionError("closing the History Browse picker did not return to History")
-                    workflow_click(350, 185, 2344, "refocus History search after Browse")
+                    workflow_click(2376, 185, 2344, "refocus History search after Browse")
                     history_query_codes = (49, 18, 37, 24, 18, 32, 23, 20,
                                            12, 35, 23, 31, 20, 24, 19, 21)
                     for index, code in enumerate(history_query_codes):
-                        key_step(2350 + index * 2, code,
+                        key_step(2380 + index * 2, code,
                                  f"History search query character {index + 1}")
                     if child_u32("history_search_match_count") != 1:
                         raise AssertionError("History filter did not match the source document path")
-                    workflow_click(100, 345, 2400, "Open Selected button opens the highlighted history")
+                    workflow_click(2430, 345, 2400, "Open Selected button opens the highlighted history")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("opening a History search result did not restore the edited document")
                     if child_u32("history_tab_open") != 1:
                         raise AssertionError("opening a History search result left the History page")
-                    workflow_click(100, 434, 2440, "History page Undo button")
+                    workflow_click(2470, 434, 2440, "History page Undo button")
                     if read_document_state()["doc_contents"] != b"abc":
                         raise AssertionError("History page Undo button did not undo the latest edit")
-                    workflow_click(300, 434, 2450, "History page Redo button")
+                    workflow_click(2480, 434, 2450, "History page Redo button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History page Redo button did not redo the latest edit")
 
                     # Export must open the existing native Save picker in
                     # history-export mode; Escape safely returns to the page.
-                    workflow_click(480, 434, 2460, "History page Export button")
+                    workflow_click(2490, 434, 2460, "History page Export button")
                     if child_u32("picker_mode") != 2 or child_u32("history_export_mode") != 1:
                         raise AssertionError("History Export did not open its Save picker")
-                    key_step(2470, 1, "Escape cancels History export")
+                    key_step(2500, 1, "Escape cancels History export")
                     if child_u32("picker_mode") != 0 or child_u32("history_export_mode") != 0:
                         raise AssertionError("cancelling History Export did not close the picker cleanly")
 
                     # Delete removes only the journal. The document stays
                     # intact; the host-side journal test separately checks
                     # that the deleted journal exposes zero Undo/Redo records.
-                    workflow_click(660, 434, 2480, "History page Delete Selected History button")
+                    workflow_click(2520, 434, 2480, "History page Delete Selected History button")
                     if read_document_state()["doc_contents"] != b"abcq":
                         raise AssertionError("History Delete modified document bytes")
                     if child_u32("history_search_match_count") != 0:

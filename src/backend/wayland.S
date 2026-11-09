@@ -5002,7 +5002,7 @@ history_tab_open:       .long 0
 history_export_mode:    .long 0
 .global history_search_focus, history_search_length, history_search_cursor
 .global history_search_selected, history_search_scroll, history_search_match_count
-.global history_search_display_start, history_search_caret_x, history_search_display_buffer
+.global history_search_display_start, history_search_caret_x, history_search_query_display_buffer
 history_search_focus:   .long 0
 history_search_length:  .long 0
 history_search_cursor:  .long 0
@@ -5013,7 +5013,7 @@ history_search_display_start: .long 0
 history_search_caret_x: .long 60
 history_open_error:     .long 0
 history_search_query_buffer: .zero 128
-history_search_display_buffer: .zero 128
+history_search_query_display_buffer: .zero 128
 .global save_confirm_enabled, settings_locale_dropdown_open, settings_locale_dropdown_selected, settings_locale_dropdown_scroll
 save_confirm_enabled:   .long 0
 save_confirm_open:      .long 0
@@ -20670,15 +20670,18 @@ history_search_prepare_display:
     push r13
     push r14
     push r15
+    sub rsp, 16
     mov ebx, dword ptr [rip + history_search_length]
     cmp ebx, 127
     jbe .history_search_display_length_ready
     mov ebx, 127
 .history_search_display_length_ready:
+    mov dword ptr [rsp], ebx
+    lea rbx, [rip + history_search_query_buffer]
     mov r12d, dword ptr [rip + history_search_cursor]
-    cmp r12d, ebx
+    cmp r12d, dword ptr [rsp]
     jbe .history_search_display_cursor_ready
-    mov r12d, ebx
+    mov r12d, dword ptr [rsp]
 .history_search_display_cursor_ready:
     # Ten-pixel left/right inset inside the search field; the right edge
     # remains clear of the separate Browse button.
@@ -20693,7 +20696,7 @@ history_search_prepare_display:
 .history_search_measure_cursor:
     cmp r13d, r12d
     jae .history_search_scroll_start
-    movzx edi, byte ptr [rip + history_search_query_buffer + r13]
+    movzx edi, byte ptr [rbx + r13]
     call ui_font_advance_pixels
     add r14d, eax
     inc r13d
@@ -20707,7 +20710,7 @@ history_search_prepare_display:
     jbe .history_search_scroll_start_ready
     cmp r13d, r12d
     jae .history_search_scroll_start_ready
-    movzx edi, byte ptr [rip + history_search_query_buffer + r13]
+    movzx edi, byte ptr [rbx + r13]
     call ui_font_advance_pixels
     sub r14d, eax
     inc r13d
@@ -20716,26 +20719,27 @@ history_search_prepare_display:
 .history_search_scroll_start_ready:
     mov dword ptr [rip + history_search_display_start], r13d
     mov dword ptr [rip + history_search_caret_x], 60
-    mov byte ptr [rip + history_search_display_buffer], 0
+    mov byte ptr [rip + history_search_query_display_buffer], 0
     xor r14d, r14d
 .history_search_display_loop:
-    cmp r13d, ebx
+    cmp r13d, dword ptr [rsp]
     jae .history_search_display_done
     cmp r13d, r12d
     jne .history_search_display_measure
     lea eax, [r14d + 60]
     mov dword ptr [rip + history_search_caret_x], eax
 .history_search_display_measure:
-    movzx edi, byte ptr [rip + history_search_query_buffer + r13]
+    movzx edi, byte ptr [rbx + r13]
     call ui_font_advance_pixels
     lea ecx, [r14d + eax]
     cmp ecx, r15d
     ja .history_search_display_done
+    mov r14d, ecx
     mov eax, r13d
     sub eax, dword ptr [rip + history_search_display_start]
-    mov dl, byte ptr [rip + history_search_query_buffer + r13]
-    mov byte ptr [rip + history_search_display_buffer + rax], dl
-    mov r14d, ecx
+    mov dl, byte ptr [rbx + r13]
+    lea rcx, [rip + history_search_query_display_buffer]
+    mov byte ptr [rcx + rax], dl
     inc r13d
     cmp r13d, r12d
     jne .history_search_display_loop
@@ -20746,19 +20750,20 @@ history_search_prepare_display:
 .history_search_display_done:
     mov eax, r13d
     sub eax, dword ptr [rip + history_search_display_start]
-    mov byte ptr [rip + history_search_display_buffer + rax], 0
+    lea rdx, [rip + history_search_query_display_buffer]
+    mov byte ptr [rdx + rax], 0
     cmp r13d, r12d
     jne .history_search_display_return
     lea eax, [r14d + 60]
     mov dword ptr [rip + history_search_caret_x], eax
 .history_search_display_return:
+    add rsp, 16
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
     ret
-.size history_search_prepare_display, . - history_search_prepare_display
 
 .type render_history_manager, @function
 render_history_manager:
@@ -20831,7 +20836,7 @@ render_history_manager:
     lea rdx, [rip + ui_history_search_label]
     jmp .render_history_search_draw_text
 .render_history_search_text:
-    lea rdx, [rip + history_search_display_buffer]
+    lea rdx, [rip + history_search_query_display_buffer]
 .render_history_search_draw_text:
     call draw_text
     cmp dword ptr [rip + history_search_focus], 0
