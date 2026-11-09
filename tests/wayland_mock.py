@@ -4190,7 +4190,7 @@ xkb_symbols "nekoedit-sparse" {
                     pt_tag_bytes = bytes(
                         child_u32_at("compose_locale_current_tag", i) & 0xFF
                         for i in range(32)
-                    ).split(b"\\0", 1)[0]
+                    ).split(bytes((0,)), 1)[0]
                     pt_keymap_values = (
                         child_u32_at("xkb_unicode_levels", 54 * 128),
                         child_u32_at("xkb_unicode_levels", 26 * 128),
@@ -7709,10 +7709,10 @@ xkb_symbols "nekoedit-sparse" {
             # so the compositor observes EOF when the child closes its socket.
             client_endpoint.close()
             client_endpoint = None
-        # The expanded XKB and rendered-glyph integration cases inspect
-        # child mappings and shared-memory pixels; allow extra scheduler
-        # variance on slower CI hosts while keeping a finite upper bound.
-        timeout_seconds = 50 if file_workflow else 20
+        # File and Settings-locale workflows include several sequential
+        # picker/menu/install interactions; allow them a longer finite bound.
+        # The regular keyboard/XKB cases retain the shorter timeout.
+        timeout_seconds = 50 if (file_workflow or compose_locale_settings_test) else 20
         try:
             stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
