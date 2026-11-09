@@ -1463,7 +1463,7 @@ xkb_symbols "nekoedit-sparse" {
                                 },
                             })
                         )
-                    expected_virtual_masks = (128, 16, 192, 80, 8, 0, 0, 128, 8, 4, 0, 1, 0, 8, 16, 128) + (0,) * 7 + (0x80000000,)
+                    expected_virtual_masks = (128, 16, 192, 80, 8, 0, 0, 128, 8, 4, 0, 1, 0, 8, 16, 128) + (128,) + (0,) * 6 + (0x80000000,)
                     if (
                         (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
                         or virtual_masks != expected_virtual_masks
