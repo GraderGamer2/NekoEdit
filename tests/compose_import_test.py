@@ -15,6 +15,7 @@ KEYSYMS = """
 #define XK_q 0x0071 /* U+0071 LATIN SMALL LETTER Q */
 #define XK_z 0x007A /* U+007A LATIN SMALL LETTER Z */
 #define XK_x 0x0078 /* U+0078 LATIN SMALL LETTER X */
+#define XK_c 0x0063 /* U+0063 LATIN SMALL LETTER C */
 #define XK_test_canonical 0x07AB /* U+1E9E CAPITAL SHARP S */
 #define XK_test_legacy_alias 0x07AB
 """
@@ -56,7 +57,7 @@ def main() -> None:
         raise AssertionError("the locale dead-key rule did not override its base mapping")
     if document["statistics"]["dropped_shorter_prefix_rules"] != 1:
         raise AssertionError("shorter prefix was not removed deterministically")
-    if (ord("a"), ord("e")) in mapping:
+    if ("multi_key", (ord("a"), ord("e"))) in mapping:
         raise AssertionError("shorter pair prefix should yield to the longer locale rule")
     if mapping[("multi_key", (ord("a"), ord("e"), ord("x")))] != (0x2605,):
         raise AssertionError("three-input locale rule was not retained")
