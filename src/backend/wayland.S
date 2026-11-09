@@ -2386,6 +2386,7 @@ recv_msg_control:      .zero 64
 .extern xkb_parse_keymap
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
+.extern xkb_key_repeats
 .extern xkb_level_three_mask
 .extern xkb_num_lock_mask
 .extern font_init
@@ -4051,6 +4052,11 @@ wayland_main:
 .keyboard_key_pressed:
     cmp dword ptr [rip + ctrl_down], 0
     jne .keyboard_key_no_repeat
+    mov edi, dword ptr [rip + event_payload + 8]
+    call xkb_key_repeats
+    test eax, eax
+    jz .keyboard_key_no_repeat
+    mov eax, dword ptr [rip + event_payload + 8]
     call repeat_start_if_supported
 .keyboard_key_no_repeat:
     mov eax, dword ptr [rip + event_payload + 8]

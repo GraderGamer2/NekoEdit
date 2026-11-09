@@ -1303,6 +1303,7 @@ xkb_symbols "nekoedit-sparse" {
                                             "group2": grp2_virtual_map,
                                             "ralt_explicit": ralt_explicit_virtual,
                                             "rule_count": compat_rule_count,
+                                            "repeat_policy": (repeat_default, repeat_values, repeat_explicit),
                                             "predicate_specificity": {
                                                 "real_masks": (tie_real_mask, all_real_mask, exact_real_mask),
                                                 "virtual_maps": (tie_virtual_map, all_virtual_map, exact_virtual_map),

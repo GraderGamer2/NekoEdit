@@ -2,9 +2,9 @@
 
 # Bounded, dependency-free XKB text-v1 reader. It parses keycodes, symbols,
 # per-group key types, 32-bit modifier masks, virtual-modifier encodings, and
-# a limited xkb_compat interpretation subset for keysym/modmap matching and
-# virtualModifier assignment. It does not implement general key actions or
-# preserve[] consumed-modifier semantics and is not a replacement for libxkbcommon.
+# a limited xkb_compat interpretation subset for keysym/modmap matching,
+# virtualModifier assignment, and per-key repeat policy. It does not execute
+# general key actions or implement preserve[] consumed-modifier semantics.
 
 .section .rodata
 .Lxkb_section_keycodes: .asciz "xkb_keycodes"
@@ -17,6 +17,9 @@
 .Lxkb_word_interpret:   .asciz "interpret"
 .Lxkb_word_virtual_modifier: .asciz "virtualModifier"
 .Lxkb_word_use_mod_map_mods: .asciz "useModMapMods"
+.Lxkb_word_repeat:       .asciz "repeat"
+.Lxkb_word_true:         .asciz "True"
+.Lxkb_word_false:        .asciz "False"
 .Lxkb_compat_any:       .asciz "Any"
 .Lxkb_compat_no_symbol: .asciz "NoSymbol"
 .Lxkb_compat_anyofornone: .asciz "AnyOfOrNone"
@@ -1132,7 +1135,13 @@ xkb_pending_modmap_targets: .zero 1024 # 256 deferred modifier_map targets
 xkb_pending_modmap_masks: .zero 1024
 xkb_pending_modmap_kinds: .zero 256    # 1=keycode target, 2=keysym target
 .global xkb_key_virtual_explicit
-xkb_key_virtual_explicit: .zero 256      # direct key property overrides compat interprets
+xkb_key_virtual_explicit: .zero 256      # direct key property overrides compat vmods
+.global xkb_key_repeat_flags
+xkb_key_repeat_flags: .zero 256           # default true; indexed by XKB keycode
+.global xkb_key_repeat_explicit
+xkb_key_repeat_explicit: .zero 256        # direct key repeat setting overrides compat
+.global xkb_compat_default_repeat
+xkb_compat_default_repeat: .long 1        # interpret.repeat default
 .global xkb_compat_rule_count
 xkb_compat_rule_count: .long 0
 .global xkb_compat_rules
@@ -1143,6 +1152,7 @@ xkb_compat_rules: .zero 2048             # 128 records * 16 bytes
 .Lxkb_compat_tmp_predicate: .long 0
 .Lxkb_compat_tmp_scope: .long 0
 .Lxkb_compat_tmp_valid: .long 0
+.Lxkb_compat_tmp_repeat: .long 1
 .global xkb_level_three_mask
 xkb_level_three_mask:  .long 0           # initialized by xkb_reset_keymap
 .global xkb_num_lock_mask
@@ -1223,6 +1233,15 @@ xkb_reset_keymap:
     lea rdi, [rip + xkb_key_virtual_explicit]
     mov ecx, 256
     rep stosb
+    lea rdi, [rip + xkb_key_repeat_flags]
+    mov al, 1
+    mov ecx, 256
+    rep stosb
+    xor eax, eax
+    lea rdi, [rip + xkb_key_repeat_explicit]
+    mov ecx, 256
+    rep stosb
+    mov dword ptr [rip + xkb_compat_default_repeat], 1
     mov dword ptr [rip + xkb_compat_rule_count], 0
     lea rdi, [rip + xkb_compat_rules]
     mov ecx, 2048
@@ -1233,6 +1252,7 @@ xkb_reset_keymap:
     mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_valid], 0
+    mov dword ptr [rip + .Lxkb_compat_tmp_repeat], 1
     mov dword ptr [rip + .Lxkb_pending_modmap_count], 0
     mov dword ptr [rip + .Lxkb_keysym_tmp], 0
     lea rdi, [rip + xkb_group_types]
@@ -3193,6 +3213,10 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jnz .Lxkb_key_block_virtual_modifiers
+    lea rdi, [rip + .Lxkb_word_repeat]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_key_block_repeat
     jmp .Lxkb_key_block_loop
 .Lxkb_key_block_virtual_modifiers:
     # Direct key-level virtualModifiers property. Names must already have been
@@ -3228,6 +3252,36 @@ xkb_reset_keymap:
     je .Lxkb_key_block_done
     jmp .Lxkb_key_block_fail
 
+
+.Lxkb_key_block_repeat:
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_key_block_fail
+    call .Lxkb_next_token
+    lea rdi, [rip + .Lxkb_word_true]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_key_block_repeat_true
+    lea rdi, [rip + .Lxkb_word_false]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_key_block_fail
+    xor r12d, r12d
+    jmp .Lxkb_key_block_repeat_store
+.Lxkb_key_block_repeat_true:
+    mov r12d, 1
+.Lxkb_key_block_repeat_store:
+    mov eax, dword ptr [rip + .Lxkb_keycode]
+    lea rbx, [rip + xkb_key_repeat_flags]
+    mov byte ptr [rbx + rax], r12b
+    lea rbx, [rip + xkb_key_repeat_explicit]
+    mov byte ptr [rbx + rax], 1
+    call .Lxkb_next_token
+    cmp eax, ','
+    je .Lxkb_key_block_loop
+    cmp eax, '}'
+    je .Lxkb_key_block_done
+    jmp .Lxkb_key_block_fail
 
 .Lxkb_key_block_type:
     mov dword ptr [rip + .Lxkb_type_group], -1
@@ -3842,6 +3896,10 @@ xkb_reset_keymap:
     call .Lxkb_token_is
     test eax, eax
     jnz .Lxkb_compat_body_use_modmap
+    lea rdi, [rip + .Lxkb_word_repeat]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_body_repeat
     call .Lxkb_compat_skip_statement
     cmp eax, 1
     je .Lxkb_compat_body_done
@@ -3893,6 +3951,31 @@ xkb_reset_keymap:
     test eax, eax
     js .Lxkb_compat_body_fail
     jmp .Lxkb_compat_body_loop
+.Lxkb_compat_body_repeat:
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_compat_body_fail
+    call .Lxkb_next_token
+    lea rdi, [rip + .Lxkb_word_true]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_body_repeat_true
+    lea rdi, [rip + .Lxkb_word_false]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_compat_body_fail
+    xor eax, eax
+    jmp .Lxkb_compat_body_repeat_store
+.Lxkb_compat_body_repeat_true:
+    mov eax, 1
+.Lxkb_compat_body_repeat_store:
+    mov dword ptr [rip + .Lxkb_compat_tmp_repeat], eax
+    call .Lxkb_compat_skip_statement
+    cmp eax, 1
+    je .Lxkb_compat_body_done
+    test eax, eax
+    js .Lxkb_compat_body_fail
+    jmp .Lxkb_compat_body_loop
 .Lxkb_compat_body_done:
     xor eax, eax
     ret
@@ -3910,6 +3993,8 @@ xkb_reset_keymap:
     mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_scope], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_valid], 1
+    mov eax, dword ptr [rip + xkb_compat_default_repeat]
+    mov dword ptr [rip + .Lxkb_compat_tmp_repeat], eax
     call .Lxkb_next_token
     cmp eax, '.'
     je .Lxkb_compat_interpret_global_property
@@ -4023,13 +4108,38 @@ xkb_reset_keymap:
     mov byte ptr [rbx + 12], al
     mov al, byte ptr [rip + .Lxkb_compat_tmp_scope]
     mov byte ptr [rbx + 13], al
+    mov al, byte ptr [rip + .Lxkb_compat_tmp_repeat]
+    mov byte ptr [rbx + 14], al
     inc ecx
     mov dword ptr [rip + xkb_compat_rule_count], ecx
 .Lxkb_compat_interpret_success:
     xor eax, eax
     ret
 .Lxkb_compat_interpret_global_property:
-    # "interpret.repeat = False;" is a section default, not an interpretation.
+    # Section-level interpret.repeat supplies the default inherited by rules.
+    call .Lxkb_next_token
+    lea rdi, [rip + .Lxkb_word_repeat]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_compat_interpret_fail
+    call .Lxkb_next_token
+    cmp eax, '='
+    jne .Lxkb_compat_interpret_fail
+    call .Lxkb_next_token
+    lea rdi, [rip + .Lxkb_word_true]
+    call .Lxkb_token_is
+    test eax, eax
+    jnz .Lxkb_compat_interpret_global_true
+    lea rdi, [rip + .Lxkb_word_false]
+    call .Lxkb_token_is
+    test eax, eax
+    jz .Lxkb_compat_interpret_fail
+    xor eax, eax
+    jmp .Lxkb_compat_interpret_global_store
+.Lxkb_compat_interpret_global_true:
+    mov eax, 1
+.Lxkb_compat_interpret_global_store:
+    mov dword ptr [rip + xkb_compat_default_repeat], eax
     call .Lxkb_compat_skip_statement
     ret
 .Lxkb_compat_interpret_fail:
@@ -4106,9 +4216,6 @@ xkb_reset_keymap:
 .Lxkb_compat_apply_key_loop:
     cmp r12d, 256
     jae .Lxkb_compat_apply_done
-    lea rsi, [rip + xkb_key_virtual_explicit]
-    cmp byte ptr [rsi + r12], 0
-    jne .Lxkb_compat_apply_next_key
     xor r13d, r13d
 .Lxkb_compat_apply_group_loop:
     cmp r13d, 4
@@ -4133,6 +4240,7 @@ xkb_reset_keymap:
     mov r9d, dword ptr [rsi + rax]
     mov ebp, -1
     mov ebx, -1
+    mov r10d, -1
     xor r15d, r15d
 .Lxkb_compat_apply_rule_loop:
     cmp r15d, dword ptr [rip + xkb_compat_rule_count]
@@ -4208,14 +4316,21 @@ xkb_reset_keymap:
     jle .Lxkb_compat_apply_next_rule
     mov ebp, ecx
     mov ebx, dword ptr [rsi + 8]
+    movzx r10d, byte ptr [rsi + 14]
 .Lxkb_compat_apply_next_rule:
     inc r15d
     jmp .Lxkb_compat_apply_rule_loop
 .Lxkb_compat_apply_rule_done:
+    # Direct key virtualModifiers overrides only compatibility vmod output.
+    # It must not suppress a separate compatibility repeat interpretation.
     cmp ebx, -1
-    je .Lxkb_compat_apply_next_level
+    je .Lxkb_compat_apply_repeat
     cmp ebx, 24
-    jae .Lxkb_compat_apply_next_level
+    jae .Lxkb_compat_apply_repeat
+    mov eax, r12d
+    lea rsi, [rip + xkb_key_virtual_explicit]
+    cmp byte ptr [rsi + rax], 0
+    jne .Lxkb_compat_apply_repeat
     mov ecx, ebx
     mov edx, 1
     shl edx, cl
@@ -4223,6 +4338,20 @@ xkb_reset_keymap:
     shl eax, 2
     lea rsi, [rip + xkb_key_virtual_maps]
     or dword ptr [rsi + rax], edx
+.Lxkb_compat_apply_repeat:
+    # Compatibility repeat is key-wide but determined from Group1/Level1.
+    test r13d, r13d
+    jnz .Lxkb_compat_apply_next_level
+    test r14d, r14d
+    jnz .Lxkb_compat_apply_next_level
+    cmp r10d, -1
+    je .Lxkb_compat_apply_next_level
+    mov eax, r12d
+    lea rsi, [rip + xkb_key_repeat_explicit]
+    cmp byte ptr [rsi + rax], 0
+    jne .Lxkb_compat_apply_next_level
+    lea rsi, [rip + xkb_key_repeat_flags]
+    mov byte ptr [rsi + rax], r10b
 .Lxkb_compat_apply_next_level:
     inc r14d
     jmp .Lxkb_compat_apply_level_loop
@@ -4553,6 +4682,27 @@ xkb_parse_keymap:
     pop rbx
     ret
 .size .Lxkb_select_level, . - .Lxkb_select_level
+
+# RDI=Linux evdev keycode. EAX=1 if this key is configured to repeat.
+# Modifier/group actions remain compositor-owned; this query only reads keymap policy.
+.global xkb_key_repeats
+.type xkb_key_repeats, @function
+xkb_key_repeats:
+    cmp dword ptr [rip + xkb_keymap_ready], 1
+    jne .Lxkb_key_repeat_default
+    cmp edi, 247
+    ja .Lxkb_key_repeat_invalid
+    lea eax, [rdi + 8]
+    lea rdx, [rip + xkb_key_repeat_flags]
+    movzx eax, byte ptr [rdx + rax]
+    ret
+.Lxkb_key_repeat_default:
+    mov eax, 1
+    ret
+.Lxkb_key_repeat_invalid:
+    xor eax, eax
+    ret
+.size xkb_key_repeats, . - xkb_key_repeats
 
 # RDI=evdev keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
 # Returns an ASCII byte or zero. Wayland keycodes need the XKB +8 offset.
