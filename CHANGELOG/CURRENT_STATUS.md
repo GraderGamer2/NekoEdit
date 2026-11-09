@@ -1,3 +1,32 @@
+## 2026-11-09 — implement minimal document context menu
+
+**Implementation:** [0c9fee44200b](https://github.com/GraderGamer2/NekoEdit/commit/0c9fee44200b1528c1c3d148dd525c5319c6dd7d) on the early-alpha branch; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open.  
+**CI:** [Build and test #698](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) — all eight workflow steps passed on the first attempt.
+
+- Added a small in-surface right-click menu in the document viewport with exactly three commands: **Copy**, **Paste**, and **Cut**. The popup is positioned at the pointer and clamped to the document viewport/window.
+- Opening the popup does not move the caret or discard the current selection. Escape, another right-click, and an outside left-click dismiss it; the outside click does not activate the covered control.
+- Copy and Cut reuse the existing immutable Wayland clipboard snapshots and data-source implementation. The clipboard code now uses the most recent input serial, including the menu-item pointer-press serial required for a pointer-triggered Wayland set_selection request.
+- Paste reuses the existing asynchronous Wayland data-offer receive path. The mock verifies insertion, one Undo action, and Redo.
+- Added an end-to-end mock scenario for right-click opening, Escape dismissal, selection retention, Copy snapshot contents, Cut snapshot-before-delete behavior, external asynchronous Paste, Undo/Redo, and outside-click dismissal. The scenario tests the real data-device protocol rather than only checking UI state.
+- No new build/runtime dependency or separate clipboard process was introduced for the menu.
+- **Artifact:** [nekoedit-linux-x86_64 — 13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472), 116,962 bytes; SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80.
+
+### Validation boundary
+
+The complete Wayland mock and ELF checks passed in CI. This is not a claim that the menu has already been manually checked on the user's live GNOME/Mutter desktop; that visual/input retest remains separate.
+
+### Locale-pack architecture decision
+
+- **en_US.UTF-8 remains the built-in default** and the only locale data embedded in the core executable.
+- Other locales are planned as optional, versioned **data-only** packs attached to GitHub Releases. The editor will load an installed compatible pack at runtime and fall back to built-in en_US if it is absent or invalid.
+- Packs must not contain native shared objects or executable plugin code. The bounded loader will validate the format version, sizes, record counts, scalar ranges, and input-sequence limits before exposing the table.
+- Installing/downloading packs is a separate, explicit release workflow. The editor remains offline-capable and must not silently download data at runtime.
+- This is a documented design direction, not an implemented loader or pack format yet.
+
+**Snapshot date:** 2026-11-09 (Asia/Jakarta).
+
+---
+
 ## 2026-11-09 — add three-symbol XKB Compose sequences
 
 **Implementation commit:** [bf3a1891dd63](https://github.com/GraderGamer2/NekoEdit/commit/bf3a1891dd6318ad70f99bf7e75e4afbf481dc56)  

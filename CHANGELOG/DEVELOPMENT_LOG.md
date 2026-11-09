@@ -1,3 +1,52 @@
+## 2026-11-09 — minimal document context menu and locale-pack architecture
+
+### Implementation
+
+- Added right-button (BTN_RIGHT) handling for the document viewport only. A right-click opens a compact 128×78 in-surface popup anchored at the pointer and clamped to the usable document area.
+- The popup contains exactly three 26-pixel rows: **Copy**, **Paste**, and **Cut**. It is painted above document content and the other surface UI.
+- Opening it does not call the document hit-test/caret-placement path, so an existing selection remains intact.
+- Menu actions call the existing clipboard command API. Copy retains the selected range in an immutable snapshot; Cut publishes that snapshot before deleting the range; Paste starts the existing data-offer receive operation.
+- Added a distinct clipboard_serial handoff from the most recent input event. Keyboard commands update it from the keyboard event; menu Copy/Cut update it from the menu-item pointer-press event. The clipboard C module uses that value for wl_data_device.set_selection, avoiding reuse of an unrelated keyboard serial for a pointer-originated request.
+- Escape, a second right-click, or an outside left-click closes the popup. The outside click is intentionally consumed rather than passed through to the document or another control.
+- Added no new executable, service, library, or runtime dependency.
+
+### Regression coverage
+
+The added Wayland mock scenario uses the real pointer event and data-device exchange. It validates:
+- right-click opens the menu at the requested location;
+- Escape closes it;
+- opening the menu preserves an active select-all selection;
+- Copy sends the selected bytes without changing document contents or clearing selection;
+- Cut sends an independent snapshot before deleting the selection;
+- Paste requests the external UTF-8 MIME offer, receives asynchronously, and inserts the text;
+- Ctrl+Z / Ctrl+Y undo and redo the menu-initiated asynchronous paste;
+- outside click closes the popup without click-through.
+
+### Validation
+
+- [Build and test #698](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) passed all eight steps on the first attempt: freestanding build, CLI/host checks, complete Wayland mock (including the new context-menu scenario), ELF inspection, and artifact upload.
+- Artifact [13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472): 116,962 bytes; ZIP SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80; expires 2026-11-16 06:12:58 UTC.
+- No live GNOME/Mutter desktop test is claimed. The user has not yet reported a manual test of this newly added popup.
+
+### Roadmap decision: modular Compose locales
+
+- Keep en_US.UTF-8 as the default, built-in Compose dataset in the core binary.
+- Keep every other locale optional and separately distributed as a versioned, data-only pack in GitHub Releases.
+- Add a bounded runtime data loader in a later milestone; reject incompatible versions, invalid records, excessive sizes/counts, and bad Unicode scalars, and fall back to built-in en_US.
+- Do not load native libraries or arbitrary executable plugin code. Do not require network access or automatic downloads for the editor to function.
+- Treat optional locale download/install as a separate explicit workflow. Four-symbol sequences and multi-codepoint results should be generated into packs rather than inflating the core binary.
+- The format, pack builder, release assets, installation UX, and loader are all future work; this milestone only records the architecture.
+
+### Files changed
+
+- src/backend/wayland.S
+- src/backend/clipboard.c
+- tests/wayland_mock.py
+- README.md
+- docs/COMPOSE.md
+
+---
+
 ## 2026-11-09 — add three-symbol XKB Compose sequences — Actions passed
 
 ### Implementation

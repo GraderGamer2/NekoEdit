@@ -5,8 +5,20 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **386** (385 previously recorded commits + this three-symbol Compose implementation/test commit; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **387** (386 previously recorded commits + this document-context-menu implementation/test commit; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — minimal document context menu — Build and test #698 passed
+
+| Commit | Subject |
+|---|---|
+| [0c9fee44200b](https://github.com/GraderGamer2/NekoEdit/commit/0c9fee44200b1528c1c3d148dd525c5319c6dd7d) | feat: add minimal document context menu |
+
+Added a small right-click menu in the document viewport with exactly Copy, Paste, and Cut. The popup preserves selection, clamps to the usable viewport, and dismisses with Escape, another right-click, or an outside click without click-through. It reuses the current Wayland clipboard implementation; pointer-originated Copy/Cut now pass the menu click's pointer serial to wl_data_device.set_selection. The mock covers selection preservation, immutable Copy/Cut snapshots, Cut deletion ordering, external asynchronous Paste, Undo/Redo, and dismissal.
+
+Actions [Build and test #42571651703](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703) passed all eight workflow steps on the first attempt. Artifact [13653517472](https://github.com/GraderGamer2/NekoEdit/actions/runs/42571651703/artifacts/13653517472) is 116,962 bytes; SHA-256 8fef7f76439a09c662161cc65b24241a6efc425dd6ee3ea942243a72059d2b80.
+
+The same milestone documents the future locale design: built-in en_US, other locales as optional versioned data-only GitHub Release packs with a bounded runtime loader and built-in fallback. This is not yet implemented.
 
 ## 2026-11-09 — add three-symbol XKB Compose sequences
 
