@@ -70,6 +70,7 @@ def _read_rules(text: str, keysyms: dict[str, int], stats: dict[str, int],
                 *, allow_base_include: bool) -> dict[tuple[int, ...], tuple[int, ...]]:
     rules: dict[tuple[int, ...], tuple[int, ...]] = {}
     include_count = 0
+    valid_rule_lines = 0
     for line_number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith("XCOMM") or stripped.startswith("#"):
@@ -123,8 +124,10 @@ def _read_rules(text: str, keysyms: dict[str, int], stats: dict[str, int],
                     any(not _valid_scalar(value) for value in output_values)):
                 stats["invalid_output"] += 1
                 continue
+            valid_rule_lines += 1
             rules[tuple(input_values)] = output_values
 
+    stats["locale_rule_lines" if allow_base_include else "base_rule_lines"] = valid_rule_lines
     if allow_base_include and include_count != 1:
         raise ValueError(f"expected exactly one en_US Compose include, found {include_count}")
     return rules
@@ -144,6 +147,7 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
     stats = {
         "unsupported_input": 0, "invalid_output": 0, "invalid_string": 0,
         "short_sequence": 0, "too_long": 0, "unsupported_lead": 0,
+        "base_rule_lines": 0, "locale_rule_lines": 0,
     }
     base_rules = _read_rules(base_text, keysyms, stats, allow_base_include=False)
     locale_rules = _read_rules(locale_text, keysyms, stats, allow_base_include=True)
@@ -198,14 +202,14 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
         "locale": locale,
         "source": metadata,
         "statistics": {
-            "base_rules": len(base_rules),
-            "locale_rules": len(locale_rules),
+            "base_rules": stats["base_rule_lines"],
+            "locale_rules": stats["locale_rule_lines"],
             "locale_overrides": overrides,
             "dropped_shorter_prefix_rules": len(dropped_prefixes),
             "final_rules": len(records),
             "input_sequence_lengths": input_lengths,
             "multi_scalar_outputs": sum(len(record["output"]) > 1 for record in records),
-            **stats,
+            **{key: value for key, value in stats.items() if key not in ("base_rule_lines", "locale_rule_lines")},
         },
         "sequences": records,
     }

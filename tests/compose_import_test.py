@@ -23,6 +23,7 @@ BASE = r'''
 XCOMM minimal base fixture
 <Multi_key> <a> <e> : "æ" ae
 <Multi_key> <q> <q> : "©" copyright
+<Multi_key> <q> <q> : "®" registered
 <Multi_key> <z> <z> : "u\u0301" U0075
 <Multi_key> <test_canonical> <a> : "ẞ" U1E9E
 <dead_acute> <c> : "ç" ccedilla
@@ -45,6 +46,8 @@ def main() -> None:
         tuple(record["input"]): tuple(record["output"])
         for record in document["sequences"]
     }
+    if document["statistics"]["base_rules"] != 5:
+        raise AssertionError("base_rules must count valid source lines, including duplicates")
     if document["statistics"]["dropped_shorter_prefix_rules"] != 1:
         raise AssertionError("shorter prefix was not removed deterministically")
     if (ord("a"), ord("e")) in mapping:
