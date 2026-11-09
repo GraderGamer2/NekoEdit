@@ -1158,6 +1158,11 @@ xkb_symbols "nekoedit-test" {
                                 b"key <AC01> { [ U00E9, U1F600 ] };",
                                 b"key <AC01> { [ Cyrillic_a ] };",
                             )
+                        if compose_locale_finnish_test or compose_locale_serbian_test:
+                            keymap_data = keymap_data.replace(
+                                b"key <AC08> { [ k, K ] };",
+                                b"key <AC08> { [ Cyrillic_ka ] };",
+                            )
                         if (
                             b"EuroSign, eacute" not in keymap_data
                             or b"[ emdash ]" not in keymap_data
@@ -1166,6 +1171,10 @@ xkb_symbols "nekoedit-test" {
                             or b"[ Greek_alpha ]" not in keymap_data
                             or b"[ Cyrillic_ya ]" not in keymap_data
                             or (compose_locale_serbian_test and b"[ Cyrillic_a ]" not in keymap_data)
+                            or (
+                                (compose_locale_finnish_test or compose_locale_serbian_test)
+                                and b"[ Cyrillic_ka ]" not in keymap_data
+                            )
                             or b"[ Multi_key ]" not in keymap_data
                             or b"[ period ]" not in keymap_data
                             or b"[ S ]" not in keymap_data
@@ -4015,24 +4024,82 @@ xkb_symbols "nekoedit-sparse" {
                 elif compose_locale_finnish_test:
                     if child_u32("compose_locale_active") != 1:
                         raise AssertionError("fi_FI.utf8 did not normalize to the installed fi_FI.UTF-8 pack")
+                    if (
+                        child_u32_at("xkb_unicode_levels", 232 * 128) != 0x110002
+                        or child_u32_at("xkb_unicode_levels", 45 * 128) != 0x043A
+                    ):
+                        raise AssertionError("Finnish dead-key fixture did not map dead_apostrophe and Cyrillic_ka")
                     key_step(6100, 46, "Finnish locale starts Compose")
                     key_step(6102, 33, "Finnish locale buffers f")
                     key_step(6104, 23, "Finnish locale resolves f i to the fi ligature")
                     if read_document_state()["doc_contents"] != bytes.fromhex("efac81"):
                         raise AssertionError("Finnish fi ligature did not produce U+FB01")
-                    observations.append("fi_FI.utf8 alias loaded the actual Finnish pack and resolved Multi_key f i to U+FB01")
+
+                    before_fi_dead = child_u32("doc_length")
+                    key_step(6106, 224, "Finnish locale dead_acute arms its combining mark")
+                    if (
+                        child_u32("doc_pending_dead_mark") != 0x0301
+                        or child_u32("doc_length") != before_fi_dead
+                    ):
+                        raise AssertionError("Finnish dead_acute did not arm without inserting text")
+                    key_step(6108, 37, "Finnish dead_acute plus Cyrillic_ka resolves to U+045C")
+                    fi_after_dead = read_document_state()["doc_contents"]
+                    fi_locale_output = child_u32_at("compose_locale_output", 0)
+                    if (
+                        fi_after_dead != bytes.fromhex("efac81d19c")
+                        or child_u32("doc_pending_dead_mark") != 0
+                        or fi_locale_output != 0x045C
+                    ):
+                        raise AssertionError(
+                            "Finnish locale dead-key rule did not insert U+045C after the fi ligature: "
+                            f"actual={fi_after_dead.hex()}, "
+                            f"pending=U+{child_u32('doc_pending_dead_mark'):04X}, "
+                            f"locale_output=U+{fi_locale_output:04X}"
+                        )
+                    observations.append(
+                        "fi_FI.utf8 alias loaded the actual Finnish pack; Multi_key f i produced U+FB01 and dead_acute + Cyrillic_ka produced locale rule U+045C"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
                 elif compose_locale_serbian_test:
                     if child_u32("compose_locale_active") != 1:
                         raise AssertionError("sr_RS.utf8 did not normalize to the installed sr_RS.UTF-8 pack")
+                    if (
+                        child_u32_at("xkb_unicode_levels", 232 * 128) != 0x110002
+                        or child_u32_at("xkb_unicode_levels", 45 * 128) != 0x043A
+                    ):
+                        raise AssertionError("Serbian dead-key fixture did not map dead_apostrophe and Cyrillic_ka")
                     key_step(6200, 46, "Serbian locale starts Compose")
                     key_step(6202, 41, "Serbian locale buffers grave accent")
                     key_step(6204, 30, "Serbian locale resolves Cyrillic a with combining grave")
                     if read_document_state()["doc_contents"] != bytes.fromhex("d0b0cc80"):
                         raise AssertionError("Serbian Cyrillic accent did not produce U+0430 U+0300")
-                    observations.append("sr_RS.utf8 alias loaded the actual Serbian pack and resolved grave plus Cyrillic_a to decomposed Cyrillic output")
+
+                    before_sr_dead = child_u32("doc_length")
+                    key_step(6206, 224, "Serbian locale dead_acute arms its combining mark")
+                    if (
+                        child_u32("doc_pending_dead_mark") != 0x0301
+                        or child_u32("doc_length") != before_sr_dead
+                    ):
+                        raise AssertionError("Serbian dead_acute did not arm without inserting text")
+                    key_step(6208, 37, "Serbian dead_acute plus Cyrillic_ka resolves to U+045C")
+                    sr_after_dead = read_document_state()["doc_contents"]
+                    sr_locale_output = child_u32_at("compose_locale_output", 0)
+                    if (
+                        sr_after_dead != bytes.fromhex("d0b0cc80d19c")
+                        or child_u32("doc_pending_dead_mark") != 0
+                        or sr_locale_output != 0x045C
+                    ):
+                        raise AssertionError(
+                            "Serbian locale dead-key rule did not insert U+045C after the Cyrillic accent: "
+                            f"actual={sr_after_dead.hex()}, "
+                            f"pending=U+{child_u32('doc_pending_dead_mark'):04X}, "
+                            f"locale_output=U+{sr_locale_output:04X}"
+                        )
+                    observations.append(
+                        "sr_RS.utf8 alias loaded the actual Serbian pack; Multi_key grave + Cyrillic_a produced decomposed output and dead_acute + Cyrillic_ka produced locale rule U+045C"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 

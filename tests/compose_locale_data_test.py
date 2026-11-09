@@ -100,6 +100,7 @@ def main() -> None:
     for key, value in fi_expected.items():
         expect(fi_map, "multi_key", key, value, "fi_FI")
     expect(fi_map, "dead_key", (0x0301, ord("a")), (0x00E1,), "fi_FI")
+    expect(fi_map, "dead_key", (0x0301, 0x043A), (0x045C,), "fi_FI")
 
     sr, sr_map = load("sr_RS.UTF-8")
     sr_stats = sr["statistics"]
@@ -124,6 +125,7 @@ def main() -> None:
     for key, value in sr_expected.items():
         expect(sr_map, "multi_key", key, value, "sr_RS")
     expect(sr_map, "dead_key", (0x0300, 0x0430), (0x0430, 0x0300), "sr_RS")
+    expect(sr_map, "dead_key", (0x0301, 0x043A), (0x045C,), "sr_RS")
 
     print("pt_BR, fi_FI, and sr_RS typed locale tables and NLP1 encodings passed")
 
