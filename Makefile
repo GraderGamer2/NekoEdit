@@ -8,6 +8,7 @@ BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
+COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 
 PREFIX ?= /usr/local
 USER_PREFIX ?= $(HOME)/.local
@@ -53,13 +54,14 @@ inspect: $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
 
-test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) test-install-user
+test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
 	$(PYTHON) tests/compose_pack_test.py
 	$(PYTHON) tests/compose_import_test.py
 	$(PYTHON) tests/compose_locale_data_test.py
+	$(PYTHON) tests/compose_locale_manager_test.py ./$(COMPOSE_LOCALE_MANAGER_TEST)
 
 test-install-user: $(APP_BINARY)
 	sh tests/install_user.sh
@@ -111,3 +113,7 @@ $(LOCALE_PACK): data/locales/pt_BR.UTF-8.json tools/compose_pack.py
 	@mkdir -p "$(@D)"
 	$(PYTHON) tools/compose_pack.py build --input "$<" --output "$@"
 	cp data/locales/pt_BR.UTF-8.NOTICE.txt "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.NOTICE.txt"
+
+$(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/compose_locale.c
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
