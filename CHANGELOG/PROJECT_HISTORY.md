@@ -1,3 +1,11 @@
+## 2026-11-09 — exercise user XCompose conversion through pack installation and runtime lookup
+
+The offline user XCompose importer is now validated beyond JSON and binary encoding. The locale-manager integration fixture builds a small user file with an allowlisted home include, converts it with the public CLI, builds an NLP1 file with the pack CLI, and sends the result through the freestanding C locale manager. That manager installs the custom pack under the isolated HOME/.nekoedit/locales directory, verifies private permissions, activates the locale, checks Multi_key e e → U+018F and dead_acute+c → ç through the binary lookup API, then removes the pack and restores built-in en_US.
+
+Build and test #767 passed all 12 workflow steps, including the full Wayland protocol mock, all host tests, pinned X.Org source regeneration, three shipped locale packs, and both artifact uploads. The next boundary is testing user files from a broader set of real-world Compose syntax and evaluating whether a manual Settings import UI can be added without bringing Python or other runtime dependencies into the editor.
+
+---
+
 ## 2026-11-09 — validate bounded user XCompose importer and stabilize held-key test sequencing
 
 The new offline XCompose converter's host tests now pass, including include traversal, resource bounds, escaping, Unicode resolution, safe output, and NLP1 encoding. Build and test #766 passed the entire command-line/host test set. The first remaining failure occurred in the existing Wayland keyboard-repeat test: the mock began the held Enter phase before the application had acknowledged key-up/repeat cancellation for the preceding printable key. The document had received the newline, but the frame assertion observed a stale caret row.

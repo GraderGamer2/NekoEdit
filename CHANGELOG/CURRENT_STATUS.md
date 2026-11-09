@@ -1,3 +1,15 @@
+## 2026-11-09 — end-to-end user XCompose pack-to-runtime coverage added
+
+- Build and test [#767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 12 workflow steps. The offline user XCompose importer host test, complete Wayland mock, pinned X.Org regeneration, locale-pack builds, and editor/locale artifact uploads are green.
+- Added a second integration boundary to the existing freestanding C locale-manager test. It invokes the user XCompose CLI on a selected file containing a permitted %H include, converts the resulting JSON with the real compose_pack CLI, then passes that generated binary into the C manager.
+- The C manager test installs the generated user_TEST.UTF-8 pack beneath HOME/.nekoedit/locales, checks mode 0600, activates it, verifies Multi_key e e → U+018F and dead_acute + c → ç through the actual binary lookup functions, removes it, and confirms en_US fallback. This exercises the converter-to-runtime pack ABI without changing the editor runtime.
+- The preceding #766 Wayland failure was fixed by waiting for repeat_keycode=0 after the held printable-key release before starting the held Enter test. #767 confirms the full Wayland mock now passes.
+- The importer remains manually invoked. Automatic ~/.XCompose/$XCOMPOSEFILE discovery, system startup merging, and Settings UI integration remain outside this milestone. Live GNOME/Mutter behavior is not claimed.
+
+**Next:** validate the converter's integration against a wider real-world set of user Compose files and decide whether a Settings-driven local import workflow is worth implementing without adding a runtime dependency.
+
+---
+
 ## 2026-11-09 — XCompose parser host tests pass; Wayland mock release ordering correction pending
 
 **Branch:** early-alpha; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

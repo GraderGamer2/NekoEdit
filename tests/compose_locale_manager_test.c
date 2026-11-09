@@ -28,14 +28,16 @@ static void fail(const char *message)
 int main(int argc, char **argv)
 {
     char app_path[4096], locale_dir[4096], installed_path[4096];
+    char user_installed_path[4096];
     char actual_directory[4096], expected_directory[4096];
     struct stat st;
     uint32_t input[2] = { 'o', 'i' }, output[8] = {0};
     uint32_t dead_input[2] = { 0x0301u, 'c' };
+    uint32_t user_input[2] = { 'e', 'e' };
     uint32_t output_count;
 
-    if (argc != 5)
-        fail("expected HOME, valid pack, corrupt pack and symlink path");
+    if (argc != 6)
+        fail("expected HOME, valid pack, corrupt pack, symlink and converted user pack");
     if (setenv("HOME", argv[1], 1) < 0)
         fail("could not set HOME");
     process_envp = environ;
@@ -101,6 +103,32 @@ int main(int argc, char **argv)
     if (compose_locale_remove_pack("pt_BR.UTF-8"))
         fail("missing pack was reported as removed");
 
-    puts("Compose locale manager tests passed (validation, safe install, permissions, activation, corrupt/symlink rejection, safe removal).");
+    if (!compose_locale_install_pack(argv[5]))
+        fail("pack produced by the user XCompose converter was not installed");
+    if (strcmp(compose_locale_installed_tag, "user_TEST.UTF-8") != 0)
+        fail("converted user pack installed with the wrong locale tag");
+    if (snprintf(user_installed_path, sizeof(user_installed_path),
+                 "%s/.nekoedit/locales/user_TEST.UTF-8.nlp", argv[1]) <= 0)
+        fail("could not construct converted user pack destination");
+    if (stat(user_installed_path, &st) < 0 || (st.st_mode & 0777) != 0600 ||
+        !S_ISREG(st.st_mode))
+        fail("converted user pack was not installed as a private regular file");
+    if (!compose_locale_load("user_TEST.UTF-8") || !compose_locale_active)
+        fail("converted user pack could not be loaded by the freestanding manager");
+    output_count = compose_locale_lookup(0, 2, user_input, output);
+    if (output_count != 1 || output[0] != 0x018f)
+        fail("converted user Multi_key e e rule did not resolve to U+018F");
+    output_count = compose_locale_lookup(1, 2, dead_input, output);
+    if (output_count != 1 || output[0] != 0x00e7)
+        fail("converted user dead_acute + c rule did not resolve to cedilla");
+    if (!compose_locale_remove_pack("user_TEST.UTF-8"))
+        fail("converted user pack could not be removed after activation");
+    if (lstat(user_installed_path, &st) == 0)
+        fail("converted user pack remained on disk after removal");
+    if (compose_locale_active ||
+        strcmp(compose_locale_current_tag, "en_US.UTF-8") != 0)
+        fail("removing the converted user pack did not restore en_US");
+
+    puts("Compose locale manager tests passed (pinned and user-converted pack validation, safe installation, permissions, activation, Multi_key/dead-key lookup, corrupt/symlink rejection and removal).");
     return 0;
 }

@@ -1,3 +1,14 @@
+## 2026-11-09 — test the user XCompose converter through the freestanding locale manager
+
+- Build and test #767 passed all 12 steps after a held-key mock race was corrected.
+- Extended tests/compose_locale_manager_test.py to build a user pack through the actual CLI sequence: selected XCompose file → import_user_xcompose.py → JSON → compose_pack.py → NLP1.
+- The fixture includes an allowed %H fragment and a root dead-key rule. It emits a Multi_key e e mapping to U+018F and dead_acute+c to ç.
+- Extended tests/compose_locale_manager_test.c to receive the generated pack, install it under the temporary HOME/.nekoedit/locales directory, verify private file permissions, load the custom locale, query both kind-0 and kind-1 records, and remove the pack while confirming en_US fallback.
+- This is host/runtime-manager integration coverage only; the editor assembly, pack format, and converter runtime remain unchanged. The user importer still is not wired into Settings or automatic ~/.XCompose discovery.
+- The preceding #766 failure was a test event-order race: the held Enter test started before the previous printable key's repeat cancellation was acknowledged. The new wait for repeat_keycode=0 is covered by successful #767.
+
+---
+
 ## 2026-11-09 — validate offline XCompose importer and serialize held-key mock transitions
 
 - Build and test #766 passed the freestanding build, command-line tests, existing X.Org importer, the new bounded user XCompose importer test, all three locale table checks, and locale manager validation.
