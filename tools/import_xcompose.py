@@ -187,7 +187,7 @@ def import_compose_sources(base_text: str, locale_text: str, keysym_text: str,
         "keysymdef_path": "include/X11/keysymdef.h",
         "keysymdef_blob": KEYSYMDEF_BLOB,
         "import_policy": (
-            "Flatten the en_US include, apply locale Multi_key overrides, retain only "
+            "Flatten the en_US include, apply pt_BR Multi_key overrides, retain only "
             "input keysyms mapped to Unicode scalars, and drop shorter sequences that "
             "prefix longer sequences."
         ),
