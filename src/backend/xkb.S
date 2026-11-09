@@ -4833,8 +4833,10 @@ xkb_parse_keymap:
 .global xkb_lookup_consumed_modifiers
 .type xkb_lookup_consumed_modifiers, @function
 xkb_lookup_consumed_modifiers:
+    # Keep SysV call-site alignment before the nested level lookup.
     push rbx
     push r12
+    push r13
     cmp dword ptr [rip + xkb_keymap_ready], 1
     jne .Lxkb_consumed_none
     cmp edi, 247
@@ -4854,6 +4856,7 @@ xkb_lookup_consumed_modifiers:
 .Lxkb_consumed_none:
     xor eax, eax
 .Lxkb_consumed_exit:
+    pop r13
     pop r12
     pop rbx
     ret

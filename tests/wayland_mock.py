@@ -1106,6 +1106,7 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_type_map_counts",
                         "xkb_type_map_masks",
                         "xkb_type_map_levels",
+                        "xkb_type_map_preserves",
                         "xkb_virtual_count",
                         "xkb_virtual_masks",
                         "xkb_key_real_masks",

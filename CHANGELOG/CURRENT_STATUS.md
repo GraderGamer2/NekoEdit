@@ -1,3 +1,12 @@
+## 2026-11-09 — fix XKB preserve mock symbol inspection
+
+- Actions [Build and test #680](https://github.com/GraderGamer2/NekoEdit/actions/runs/42548911081) built and linked the new XKB preserve implementation, passed ELF checks and all host tests, then stopped in the Wayland mock before the new XKB assertions. The mock attempted to inspect `xkb_type_map_preserves` through `/proc/<pid>/mem`, but its `wanted_symbols` allow-list did not include the newly exported symbol, causing a harness `KeyError`.
+- Added the exported preserve table to the mock symbol allow-list. This is a test-harness correction, not a source parser failure; #680 did not validate the preserve parser or runtime scenarios.
+- Also aligned the new nested-call consumed-mask wrapper to the SysV ABI by preserving an additional callee-saved register around `.Lxkb_select_level`.
+- Consolidated follow-up commit and full workflow result are pending. The next run must reach the preserve-memory assertions and both key-specific shortcut cases before this milestone is considered validated.
+
+---
+
 # NekoEdit current status
 
 ## 2026-11-09 — XKB type preserve masks and key-specific consumed Control
