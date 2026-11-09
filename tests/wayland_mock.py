@@ -695,6 +695,8 @@ xkb_keycodes "nekoedit-test" {
     <AB06> = 57;
     <AB07> = 58;
     <AB09> = 60;
+    <LEFT> = 113;
+    <RGHT> = 114;
     <RCTL> = 105;
     <RALT> = 108;
     <LVL3> = 200;
@@ -783,6 +785,17 @@ xkb_types "nekoedit-test" {
         map[Shift] = Level2;
         map[Control] = Level3;
         map[Shift+Control] = Level4;
+    };
+    type "CUSTOM_SHIFT_PRESERVE" {
+        modifiers = Shift;
+        map[None] = Level1;
+        preserve[Shift] = Shift;
+        map[Shift] = Level2;
+    };
+    type "CUSTOM_SHIFT_CONSUMED" {
+        modifiers = Shift;
+        map[None] = Level1;
+        map[Shift] = Level2;
     };
 };
 xkb_compat "nekoedit-test" {
@@ -920,6 +933,8 @@ xkb_symbols "nekoedit-test" {
         type[Group1] = "CUSTOM_EIGHT_LEVEL",
         symbols[Group1] = [ m, M, at, quotedbl, q, Q, EuroSign, eacute ]
     };
+    key <LEFT> { type[Group1] = "CUSTOM_SHIFT_CONSUMED" };
+    key <RGHT> { type[Group1] = "CUSTOM_SHIFT_PRESERVE" };
     # xkbcomp emits the ordinary number row and several punctuation keys
     # in this shorthand form, with no "symbols[Group1] =" attribute.
     key <AE01> { [ 1, exclam ] };
@@ -1261,6 +1276,26 @@ xkb_symbols "nekoedit-sparse" {
                         consumed_map_values = struct.unpack(
                             "<4I", child_memory("xkb_type_map_preserves", 11 * 128, 16)
                         )
+                        shift_preserve_type_id = child_memory("xkb_group_types", 114 * 4, 1)[0]
+                        shift_consumed_type_id = child_memory("xkb_group_types", 113 * 4, 1)[0]
+                        shift_preserve_type_mask = struct.unpack(
+                            "<I", child_memory("xkb_type_modifiers", 12 * 4, 4)
+                        )[0]
+                        shift_consumed_type_mask = struct.unpack(
+                            "<I", child_memory("xkb_type_modifiers", 13 * 4, 4)
+                        )[0]
+                        shift_preserve_map_masks = struct.unpack(
+                            "<2I", child_memory("xkb_type_map_masks", 12 * 128, 8)
+                        )
+                        shift_consumed_map_masks = struct.unpack(
+                            "<2I", child_memory("xkb_type_map_masks", 13 * 128, 8)
+                        )
+                        shift_preserve_values = struct.unpack(
+                            "<2I", child_memory("xkb_type_map_preserves", 12 * 128, 8)
+                        )
+                        shift_consumed_values = struct.unpack(
+                            "<2I", child_memory("xkb_type_map_preserves", 13 * 128, 8)
+                        )
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -1343,6 +1378,14 @@ xkb_symbols "nekoedit-sparse" {
                          or preserve_map_levels != bytes((1, 2, 3, 4))
                          or preserve_map_values != (0, 0, 4, 4)
                          or consumed_map_values != (0, 0, 0, 0)
+                         or shift_preserve_type_id != 12
+                         or shift_consumed_type_id != 13
+                         or shift_preserve_type_mask != 1
+                         or shift_consumed_type_mask != 1
+                         or shift_preserve_map_masks != (0, 1)
+                         or shift_consumed_map_masks != (0, 1)
+                         or shift_preserve_values != (0, 1)
+                         or shift_consumed_values != (0, 0)
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
@@ -3721,6 +3764,34 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     observations.append(
                         "XKB preserve[] keeps Control available to shortcuts while an unpreserved Control map consumes it"
+                    )
+
+                    workflow_shortcut(
+                        1410, 105,
+                        "consumed Shift is removed from Ctrl+Shift+Left shortcut state",
+                        shift=True,
+                    )
+                    workflow_redraw("consumed-Shift key release completes")
+                    if child_u32("doc_selection_active") != 0:
+                        raise AssertionError(
+                            "an unpreserved Shift map incorrectly retained Shift-selection behavior"
+                        )
+
+                    workflow_shortcut(
+                        1420, 106,
+                        "preserved Shift remains available to Ctrl+Shift+Right",
+                        shift=True,
+                    )
+                    workflow_redraw("preserved-Shift key release completes")
+                    if child_u32("doc_selection_active") != 1:
+                        raise AssertionError(
+                            "preserve[Shift] did not retain Shift-selection behavior"
+                        )
+                    key_step(1430, 106, "collapse selection after preserved Shift check")
+                    if child_u32("doc_selection_active") != 0:
+                        raise AssertionError("Right did not collapse the preserved Shift selection")
+                    observations.append(
+                        "XKB consumed Shift is filtered from shortcuts while preserve[Shift] keeps it"
                     )
 
                     def check_key_repeat_policy(

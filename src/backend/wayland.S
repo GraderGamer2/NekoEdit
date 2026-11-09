@@ -2215,6 +2215,7 @@ doc_drag_timer_read:    .quad 0
 buffer_busy:            .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
+shift_physical_down:    .long 0
 caps_lock:              .long 0
 num_lock:               .long 0
 ctrl_down:              .long 0
@@ -3952,6 +3953,7 @@ wayland_main:
     test eax, 1
     setnz al
     movzx eax, al
+    mov dword ptr [rip + shift_physical_down], eax
     mov dword ptr [rip + shift_down], eax
     mov eax, dword ptr [rip + event_payload + 12]
     and eax, 2
@@ -4010,6 +4012,8 @@ wayland_main:
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + ctrl_physical_down], 0
+    mov dword ptr [rip + shift_down], 0
+    mov dword ptr [rip + shift_physical_down], 0
     mov dword ptr [rip + level3_down], 0
     mov dword ptr [rip + level3_physical_down], 0
     mov dword ptr [rip + level3_mod5_down], 0
@@ -4054,30 +4058,62 @@ wayland_main:
     xor dword ptr [rip + xkb_modifiers], ecx
     jmp .keyboard_changed
 .keyboard_key_pressed:
-    # A type may use Control to select an alternate symbol. XKB preserve[]
-    # determines whether that active Control remains available to shortcuts.
-    # Keep raw physical/compositor state separate so this decision stays
-    # scoped to the current key and cannot leak to the next key event.
+    # Shortcut processing must not reuse modifiers consumed by this key's
+    # XKB type. Keep raw compositor/physical state separately; symbol lookup
+    # still receives the complete modifier state. Filtering is scoped to this
+    # key event, and both shortcut modifiers are restored on key-up.
     cmp dword ptr [rip + keymap_format], 1
-    jne .Lkeyboard_key_ctrl_ready
+    jne .Lkeyboard_key_modifiers_ready
     mov eax, dword ptr [rip + xkb_modifiers]
-    test eax, 4
-    jz .Lkeyboard_key_ctrl_physical_fallback
+    mov ecx, eax
+    and eax, 5                       # Shift | Control
+    test eax, eax
+    jz .Lkeyboard_key_use_physical_modifiers
     mov edi, dword ptr [rip + event_payload + 8]
-    mov esi, eax
+    mov esi, ecx
     mov edx, dword ptr [rip + keyboard_group]
     call xkb_lookup_consumed_modifiers
+    mov ecx, eax                     # consumed modifier mask
+
+    # Control: compositor state includes depressed, latched, and locked bits.
+    mov eax, dword ptr [rip + xkb_modifiers]
     test eax, 4
+    jz .Lkeyboard_key_ctrl_physical
+    test ecx, 4
     jnz .Lkeyboard_key_ctrl_consumed
-    mov dword ptr [rip + ctrl_down], 1
-    jmp .Lkeyboard_key_ctrl_ready
-.Lkeyboard_key_ctrl_physical_fallback:
+    mov eax, 1
+    jmp .Lkeyboard_key_ctrl_store
+.Lkeyboard_key_ctrl_physical:
+    mov eax, dword ptr [rip + ctrl_physical_down]
+    jmp .Lkeyboard_key_ctrl_store
+.Lkeyboard_key_ctrl_consumed:
+    xor eax, eax
+.Lkeyboard_key_ctrl_store:
+    mov dword ptr [rip + ctrl_down], eax
+
+    # Shift follows the same per-key consumed/preserved decision.
+    mov eax, dword ptr [rip + xkb_modifiers]
+    test eax, 1
+    jz .Lkeyboard_key_shift_physical
+    test ecx, 1
+    jnz .Lkeyboard_key_shift_consumed
+    mov eax, 1
+    jmp .Lkeyboard_key_shift_store
+.Lkeyboard_key_shift_physical:
+    mov eax, dword ptr [rip + shift_physical_down]
+    jmp .Lkeyboard_key_shift_store
+.Lkeyboard_key_shift_consumed:
+    xor eax, eax
+.Lkeyboard_key_shift_store:
+    mov dword ptr [rip + shift_down], eax
+    jmp .Lkeyboard_key_modifiers_ready
+
+.Lkeyboard_key_use_physical_modifiers:
     mov eax, dword ptr [rip + ctrl_physical_down]
     mov dword ptr [rip + ctrl_down], eax
-    jmp .Lkeyboard_key_ctrl_ready
-.Lkeyboard_key_ctrl_consumed:
-    mov dword ptr [rip + ctrl_down], 0
-.Lkeyboard_key_ctrl_ready:
+    mov eax, dword ptr [rip + shift_physical_down]
+    mov dword ptr [rip + shift_down], eax
+.Lkeyboard_key_modifiers_ready:
     cmp dword ptr [rip + ctrl_down], 0
     jne .keyboard_key_no_repeat
     mov edi, dword ptr [rip + event_payload + 8]
@@ -4102,12 +4138,19 @@ wayland_main:
     movzx eax, al
     or eax, dword ptr [rip + ctrl_physical_down]
     mov dword ptr [rip + ctrl_down], eax
+    mov eax, dword ptr [rip + xkb_modifiers]
+    and eax, 1
+    setnz al
+    movzx eax, al
+    or eax, dword ptr [rip + shift_physical_down]
+    mov dword ptr [rip + shift_down], eax
     mov eax, dword ptr [rip + event_payload + 8]
     cmp eax, dword ptr [rip + repeat_keycode]
     jne .event_loop
     call repeat_cancel
     jmp .event_loop
 .keyboard_shift:
+    mov dword ptr [rip + shift_physical_down], edx
     mov dword ptr [rip + shift_down], edx
     mov eax, dword ptr [rip + xkb_modifiers]
     test edx, edx

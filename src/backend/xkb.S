@@ -1,10 +1,10 @@
 .intel_syntax noprefix
 
 # Bounded, dependency-free XKB text-v1 reader. It parses keycodes, symbols,
-# per-group key types, 32-bit modifier masks, virtual-modifier encodings, and
-# a limited xkb_compat interpretation subset for keysym/modmap matching,
-# virtualModifier assignment, and per-key repeat policy. It does not execute
-# general key actions or implement preserve[] consumed-modifier semantics.
+# per-group key types, 32-bit modifier masks, virtual-modifier encodings,
+# per-entry preserve[] masks, and a limited xkb_compat subset for
+# keysym/modmap matching, virtualModifier assignment, and per-key repeat.
+# General stateful key actions remain compositor-owned.
 
 .section .rodata
 .Lxkb_section_keycodes: .asciz "xkb_keycodes"
