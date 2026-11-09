@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-09 — valid XCompose result syntax in the locale-manager integration fixture
+
+| Commit | Subject |
+|---|---|
+| Pending | test: use valid result syntax in locale manager XCompose fixture |
+
+Build and test #771 compiled the History-filter assembly successfully, then failed because the new locale-manager fixture used two unquoted result keysyms. The fixture is corrected to a quoted Unicode result plus one conventional result-keysym annotation. The History-filter mock assertions have not yet reached CI.
+
+---
+
 ## 2026-11-09 — History path-filter caret and horizontal query scrolling
 
 | Commit | Subject |

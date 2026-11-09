@@ -1,3 +1,12 @@
+## 2026-11-09 — correct the locale-manager XCompose result fixture discovered during History-filter CI
+
+- Build and test #771 successfully assembled and linked the freestanding executable after the History-query BSS/address corrections.
+- `make test` then reached the locale-manager user-XCompose integration fixture and rejected `<Multi_key> <e> <e> : U018F U018F`. The importer intentionally accepts either a quoted output string (optionally followed by one result keysym) or a single Unicode-resolvable keysym. The two-symbol unquoted result was invalid and contradicted the public converter example.
+- Corrected the synthetic fixture to `<Multi_key> <e> <e> : "Ə" U018F`, which emits U+018F as quoted Unicode text while retaining the conventional result-keysym annotation. The parser was not weakened.
+- The new History filter viewport/caret assertions have not yet executed in CI; Build and test #772 must validate both the manager fixture and the long-query Wayland scenario.
+
+---
+
 ## 2026-11-09 — make the History path filter usable with long queries
 
 - Added a dedicated visible-query buffer for the History search field. The original 128-byte query buffer remains the source of truth for filtering.

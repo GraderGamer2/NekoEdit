@@ -4,7 +4,7 @@
 **Baseline:** [216e466a48d8](https://github.com/GraderGamer2/NekoEdit/commit/216e466a48d862d0fdcc908f1e2e329373f7a583); latest full workflow [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 13 steps, including the full Wayland mock and executable/locale artifact uploads.
 **Current change:** add a visible History search caret and horizontally scrolled query display; leave the full 127-byte filter buffer and path matching logic unchanged. The Wayland test types a 127-character non-match, verifies zero results and an in-field caret after horizontal scrolling, clears the query, then verifies the path-match sequence.
 
-**Validation:** this revision has been pushed for its first full Actions run. No result is claimed until the workflow completes.
+**Validation:** Actions #768–#770 exposed and corrected the assembly/BSS and indexed-address issues before the compiler accepted the History-filter change. Build #771 then passed `make clean all`, but `make test` stopped in the user-XCompose locale-manager integration fixture: its synthetic rule used two unquoted result keysyms (`U018F U018F`), which is outside the converter's documented result grammar. The fixture now uses the canonical quoted Unicode string plus one keysym annotation (`\"Ə\" U018F`). The History filter Wayland case has not yet run; the next push-triggered workflow must verify it.
 
 ---
 

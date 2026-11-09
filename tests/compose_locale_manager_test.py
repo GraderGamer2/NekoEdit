@@ -43,7 +43,7 @@ def main() -> None:
         fragments.mkdir(parents=True)
         system_root.mkdir()
         (fragments / "basic").write_text(
-            '<Multi_key> <e> <e> : U018F U018F\n',
+            '<Multi_key> <e> <e> : "Ə" U018F\n',
             encoding="utf-8",
         )
         selected_compose = source_home / ".XCompose"

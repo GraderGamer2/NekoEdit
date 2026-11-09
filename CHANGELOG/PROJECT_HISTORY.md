@@ -1,3 +1,9 @@
+## 2026-11-09 — correct locale-manager user XCompose fixture syntax
+
+The locale-manager integration fixture had used two unquoted result keysyms, a result form that the bounded user XCompose converter intentionally does not implement. It now uses a quoted Unicode result plus one keysym annotation, matching the documented syntax and preserving the narrow parser grammar. Build and test #771 confirmed that the History-filter assembly compiles and links after the BSS correction, but host tests stopped at the invalid fixture before the Wayland History filter scenario. The follow-up workflow must cover both.
+
+---
+
 ## 2026-11-09 — improve History path-filter usability
 
 The History search field now keeps a visible insertion caret and displays a horizontally scrolled query slice when its 127-byte search buffer exceeds the available pixel width. The underlying case-insensitive path substring match and full query buffer are unchanged. The Wayland mock now checks a 127-character non-matching query, zero results, a visible in-field caret after scrolling, Ctrl+A clearing back to the unfiltered result, and the existing positive path match plus History operations.
