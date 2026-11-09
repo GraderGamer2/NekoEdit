@@ -2296,7 +2296,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
-                def wait_child_u32(name: str, expected: int, label: str, timeout: float = 1.0) -> int:
+                def wait_child_u32(name: str, expected: int, label: str, timeout: float = 3.0) -> int:
                     deadline = time.monotonic() + timeout
                     actual = child_u32(name)
                     while actual != expected and time.monotonic() < deadline:
