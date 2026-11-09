@@ -3772,6 +3772,12 @@ wayland_main:
     jmp .keyboard_changed
 .pointer_menu_outside:
     mov dword ptr [rip + file_menu_open], 0
+    cmp dword ptr [rip + settings_menu_open], 1
+    jne .pointer_menu_outside_document
+    # Dismissing a modal must not click through to the document or History.
+    mov dword ptr [rip + settings_menu_open], 0
+    jmp .keyboard_changed
+.pointer_menu_outside_document:
     mov dword ptr [rip + settings_menu_open], 0
 .pointer_document_click:
     cmp edx, DOC_TOP
@@ -16384,6 +16390,17 @@ render_file_menu:
     ret
 .render_file_menu_draw_settings:
     push rbp
+    # Settings is modal: clear the document/History workspace while leaving
+    # the title bar and tab strip visible. The panel is then painted above it.
+    mov dword ptr [rip + ui_transform_active], 0
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, 76
+    mov ecx, dword ptr [rip + window_width]
+    mov r8d, dword ptr [rip + window_height]
+    sub r8d, 76
+    mov r9d, 0xff252a33
+    call draw_rect
     mov dword ptr [rip + ui_transform_active], 1
     mov eax, dword ptr [rip + settings_ui_font_size]
     mov dword ptr [rip + ui_transform_font_size], eax
