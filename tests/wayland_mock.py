@@ -4076,6 +4076,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("installed locale dropdown unexpectedly opened the file picker")
                     if child_u32("picker_entry_count") != 2:
                         raise AssertionError("installed locale dropdown did not discover both installed packs")
+                    key_step(5012, 1, "dismiss locale dropdown with Escape")
+                    if child_u32("settings_locale_dropdown_open") != 0 or child_u32("settings_menu_open") != 1:
+                        raise AssertionError("Escape did not dismiss only the locale dropdown")
+                    click_settings_design(200, 200, 5014, "reopen locale dropdown after Escape")
                     click_settings_design(200, 112, 5020, "select alphabetically first installed locale")
                     if child_u32("settings_locale_dropdown_open") != 0:
                         raise AssertionError("selecting a locale did not close the dropdown")
@@ -4185,7 +4189,11 @@ xkb_symbols "nekoedit-sparse" {
                         saved_after_remove = preference_file.read()
                     if "compose_locale=en_US.UTF-8\n" not in saved_after_remove:
                         raise AssertionError("Remove Pack did not persist the en_US fallback")
-                    observations.append("Settings Remove Pack requires confirmation, deletes the validated installed pack, restores en_US, and persists the fallback")
+                    if child_u32("picker_entry_count") != 1:
+                        raise AssertionError("Remove did not refresh the dropdown's installed-locale list")
+                    if child_u32("settings_locale_dropdown_selected") != 0:
+                        raise AssertionError("Remove did not reset the refreshed selection to built-in en_US")
+                    observations.append("Settings Remove Pack requires confirmation, refreshes the locale list, deletes the validated pack, restores en_US, and persists the fallback")
                     client.sendall(wire_message(10, 1))
                     return
 
