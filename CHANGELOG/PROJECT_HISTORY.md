@@ -6,7 +6,43 @@
 **Current development PR:** [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) — open against main  
 **Previous PR:** [#1](https://github.com/GraderGamer2/NekoEdit/pull/1) — closed, unmerged
 
-This document reconstructs the development of NekoEdit from the first repository prototype through the fixed-capacity gap-buffer milestone. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
+This document reconstructs the development of NekoEdit from the first repository prototype through the current Wayland window-management and picker milestones. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
+
+
+## 2026-11-09 — make Settings a true modal over the editor and History
+
+A repository screenshot revealed that opening Settings while the History tab was active left History controls visible around the Settings panel. The root cause was the render stack: the History page was painted first, but the Settings menu only painted its centered 256×192 rectangle. There was no opaque layer between the panel and the rest of the workspace. A related pointer-dispatch path closed Settings after an outside click but continued hit-testing the underlying page.
+
+The Settings renderer now clears the entire workspace below the tab strip before drawing the centered panel, with the coordinate transform disabled for the backdrop and restored for panel content. Outside clicks dismiss Settings without activating covered controls. The title bar and tabs remain visible, while the underlying editor/History workspace is hidden until dismissal.
+
+The mock History-page workflow now checks framebuffer pixels on the covered Open Selected action and inside the panel, tests that outside-click dismissal does not activate the History Browse control, and confirms Browse works after dismissal. Implementation commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0); test-harness synchronization follow-up: [ad2aad837634](https://github.com/GraderGamer2/NekoEdit/commit/ad2aad837634aa54e72c3a8f3f16bb6f68f85b04). Actions [Build and test #676](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558) passed all eight workflow steps, including the new History/Settings framebuffer and click-through assertions. Artifact [13642440538](https://github.com/GraderGamer2/NekoEdit/actions/runs/42543083558/artifacts/13642440538) is 94,472 bytes; SHA-256 `1959b61ef8050d10472b59a5a14ec8ed61eb885ccc2fe3c1216c9d2de86eed0f`.
+
+The user also confirmed that normal physical typing works again following the separate text-input-v3 default-off fix. That input milestone was validated by Actions #667; this modal work does not change keyboard or IME behavior.
+
+
+## 2026-11-08 — Extend named XKB Unicode coverage
+
+The bounded XKB named-symbol table now resolves 273 case-sensitive non-ASCII aliases. Alongside the pre-existing Latin-1, EuroSign, and punctuation entries, the parser now recognizes the Greek upper/lower alphabets and accented forms; core Cyrillic upper/lower alphabets; and common Ukrainian, Belarusian, Serbian, and Macedonian letters.
+
+The new entries reuse the existing scalar table and UTF-8 insertion path. Mock-compositor coverage reads U+03B1 from `Greek_alpha` and U+044F from `Cyrillic_ya`, then verifies the inserted document bytes as part of the full Unicode/dead-key fixture. This expands named alias coverage; it does not make the parser fully xkbcommon-compatible. General custom key types, virtual modifiers and actions, other unlisted scripts/aliases, general Compose tables, and Wayland text-input/IME remain future work.
+
+
+## 2026-11-08 — Add bounded XKB Multi_key Compose input
+
+NekoEdit now recognizes the XKB `Multi_key` symbol as an editor-side Compose action. After it is pressed, the next two printable symbols are buffered and matched against a curated 20-pair table. Covered pairs include `oe/OE` → œ/Œ, `ae/AE` → æ/Æ, `ss` → ß, common accent-letter pairs, plus/minus, right arrow, guillemets, one-half, and cedilla-c. Successful matches insert a single Unicode scalar. Unsupported pairs are inserted unchanged as two literal characters.
+
+Compose state is transient: Backspace and Escape cancel an unfinished sequence without deleting document text, and losing keyboard focus clears the pending sequence. Mock-compositor tests verify successful composition, literal fallback, and both cancellation keys. This is not general Compose support: multi-stage/longer sequences, locale-provided Compose tables, full XKB type/modifier/action semantics, and Wayland text-input/IME are still future work.
+
+
+## 2026-11-08 — Selection confirmed; clipboard persistence and scalable history requested
+
+The user manually confirmed that the latest selection behavior now feels like a conventional text editor: selecting text works as expected, and edge auto-scroll follows the drag correctly. This is a user-reported desktop result and should not be conflated with mock-compositor CI.
+
+The user requested a future improvement to make sequential copy/paste effectively unlimited and keep the latest copied text available after NekoEdit closes. Current clipboard code already snapshots selected bytes independently and recycles bounded source/send records, but clipboard data is not guaranteed to survive process exit unless a desktop clipboard manager captures the offer. The review direction is to investigate manager handoff first and consider a first-party companion only if necessary.
+
+The user also requested practically unlimited Undo/Redo. Current history stores full-document snapshots, with a 4 MiB per-snapshot ceiling, a 32 MiB aggregate memory budget, and 16 entries per stack; it clears history when a new snapshot cannot be captured. A delta-based, preferably disk-backed journal is the recommended direction to reduce RAM usage and avoid an arbitrary operation-count limit.
+
+These requirements were reviewed and documented only. No clipboard, history, editor, or test implementation was changed. Undo history surviving NekoEdit restart remains an unresolved scope question. Wait for explicit user authorization before implementing either feature.
 
 ---
 
@@ -288,3 +324,442 @@ At creation, GitHub compared 185 commits ahead and 4 behind the target branch, w
 The PR description records the implementation, limitations, and the latest user-reported punctuation-key regression. The user's latest manual test reported that alphabetic input worked again but most shifted symbols produced `?`; this remains unresolved and is not negated by mock-compositor CI.
 
 No source or test code was changed as part of opening the PR. Future implementation work remains paused pending explicit authorization.
+
+
+---
+
+## 15. Phase J — native directory-browser file picker
+
+**Implementation milestone:** the native in-window Open/Save browser implementation, with final correctness fixes in [`f3189b1bbe6e`](https://github.com/GraderGamer2/NekoEdit/commit/f3189b1bbe6e73060fa8a47ffd23a56984e70b82) and [`07bc16d71ac5`](https://github.com/GraderGamer2/NekoEdit/commit/07bc16d71ac5940d206d31a792e46ec6f130c7fd).  
+**Verification:** [Build and test #208](https://github.com/GraderGamer2/NekoEdit/actions/runs/42231898800), all eight workflow steps successful.
+
+The native picker is an in-process modal directory browser drawn by the existing Wayland software renderer. It uses direct Linux filesystem syscalls and does not call GTK, Qt, a desktop portal, D-Bus, or an external file manager.
+
+The interface contains an editable location field, Up and Home controls, Show hidden toggle, directory-first/file-second list, filename field, and Cancel/Open or Save actions. Directories are entered on double-click, regular files are opened on double-click or explicit activation, and Save As confirms replacement of an existing regular file. Failed or oversized Open and failed Save As preserve the previously active document/path.
+
+The mock-compositor tests exercised Untitled Save, named Save, Open, nested-directory navigation, hidden-file visibility, Save As, overwrite confirmation/cancellation, missing/oversized Open rollback, failed Save As rollback, and Escape cancellation.
+
+The strengthened exact-path test exposed two real defects: directory scans retained the prior row/time double-click history, and the relative path builder did not write a new terminating NUL after copying a shorter filename. Both were corrected. The test now checks the selected active pathname and loaded bytes, not only a rendered glyph.
+
+The picker is intentionally small. At this milestone it was capped at 128 entries with 15 visible rows. Path/name entry was append/backspace-oriented, file filters and unsaved-document confirmation were absent, and real GNOME Wayland smoke testing remained separate from mock-compositor CI. These limitations and the full intermediate failure history are recorded in [DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md).
+
+---
+
+## 16. Phase K — robust empty-file Open, scrollable picker, and editable location/search fields
+
+**Implementation and validation:** [Build and test #235](https://github.com/GraderGamer2/NekoEdit/actions/runs/42239055258), all eight workflow steps successful on [`d071d832dbbf`](https://github.com/GraderGamer2/NekoEdit/commit/d071d832dbbf4c9a8efcf02b495d0e32d6f9bb49).
+
+The file workflow now explicitly tests empty documents through both single-click-plus-Open and double-click activation. It asserts the exact active path and zero document length, then verifies that typing and Ctrl+S write to that same empty file. Keyboard selection now refreshes the filename field from the selected row, and Open confirmation uses the current search-match state rather than silently reusing an unrelated previous row.
+
+The picker list responds to vertical `wl_pointer.axis` events, accumulates fixed-point scroll deltas, and uses a proportional draggable scrollbar. The Show hidden control is a bordered checkbox with a visible check mark; both the control and label toggle it, and every new picker session starts with dotfiles hidden.
+
+The location and filename/search fields now support mouse-positioned caret placement, Left/Right, Home/End, insertion, Backspace, forward Delete, Ctrl+A replacement, and horizontal follow as the cursor moves. In Open mode, the filename field provides case-insensitive prefix matching over regular files in the current directory listing; the first match is selected and brought into view. A no-match query clears the old selection. The editable path field can commit a directory navigation with Enter and returns focus to the listing after success.
+
+The integration suite covers zero-byte Open by both routes, exact path and document state, wheel movement, scrollbar thumb geometry/dragging, path middle insertion and Backspace, edited-path navigation, filename prefix matching, middle insertion/deletion, Home/End, Ctrl+A replacement, and opening the exact matched empty file. All of these run alongside the established editor, XKB, UTF-8, gap-buffer, repeat, selection, and protocol tests.
+
+Actions run #235 passed all eight steps and uploaded `nekoedit-linux-x86_64` (27,216 bytes; SHA-256 `1afeefccb7c594100137e91538d30c0d8e661d026be964c956871c5a9eb64175`; artifact ID `13515385312`; expires 2026-11-13). Path/name input remains ASCII-only; clipboard paste and partial Shift selection are future work. Prefix search is limited to the current loaded directory listing, and the 128-entry limit remains. No third-party runtime library was added, and the launch form remains `./nekoedit --backend=wayland`.
+
+Real GNOME Wayland desktop validation is still distinct from the passing mock-compositor suite. The user's previous report about shifted punctuation keys also remains awaiting manual confirmation against a recent artifact.
+
+---
+
+## 17. Phase L — filename autocomplete and native Wayland window management
+
+**Autocomplete implementation:** [`019113014bd6`](https://github.com/GraderGamer2/NekoEdit/commit/019113014bd6eaf9ba1355c9f7e37b13ae0e0519), validated by [Actions #245](https://github.com/GraderGamer2/NekoEdit/actions/runs/42245683431), all eight workflow steps successful.
+
+The Open-mode filename Search field renders up to five matching filenames as a visible suggestion popup. Suggestions update while typing, Up/Down changes the highlighted result, Tab accepts it, and mouse selection is supported. Enter opens the highlighted entry. The integration fixture includes similarly named files and checks that choosing the second result opens that exact path and contents rather than defaulting to the first prefix match.
+
+**Window-management implementation:** [`f516fc1a9b31`](https://github.com/GraderGamer2/NekoEdit/commit/f516fc1a9b316aa34a6c07533948822913469f02), subsequently corrected by [`77c8f9884e84`](https://github.com/GraderGamer2/NekoEdit/commit/77c8f9884e843d529ea89a317e3a915a245b2969).
+
+The Wayland window draws Minimize, Maximize/Restore, and Close controls in its title bar. It starts at 800×480, and renderer geometry, hit testing, status area, and editor viewport use the compositor-configured dimensions. The client retains a bounded memfd mapping and replaces its shared-memory buffer only after compositor release.
+
+The GNOME window-management report prompted a focused correction. Maximize/Restore/Minimize no longer trigger an immediate stale-size attach/damage/commit after the state request; the client waits for the compositor's `xdg_toplevel.configure` / `xdg_surface.configure` sequence, acknowledges it, then redraws using the configured dimensions. Blank title-bar dragging now sends `xdg_toplevel.move`; a 6-pixel edge/corner hit region sends `xdg_toplevel.resize` using the serial from the initiating pointer press. Resize configures are applied through the existing buffer-release gate. Minimize remains a compositor request, so the resulting GNOME presentation is still subject to Mutter policy.
+
+Actions [#251](https://github.com/GraderGamer2/NekoEdit/actions/runs/42255454769) passed the full freestanding build, CLI, and Wayland mock suite through both `WAYLAND_DISPLAY` and inherited `WAYLAND_SOCKET`. The expanded scenario checks multiple toplevel configures, final state selection, configure-before-release deferral, title-bar move, and edge resize. Artifact `13521663942` (29,625 bytes) was uploaded. The user has not yet confirmed the fix in a real GNOME session; CI does not substitute for Mutter testing.
+
+The one-active-buffer rendering model remains release-safe but can stall redraws while the compositor owns the buffer. Output-scale handling, fractional scaling, and a multi-buffer/frame-scheduling strategy remain future work. The supported launch command and freestanding/no-third-party-runtime design are unchanged.
+
+## 18. Phase M — correct compositor geometry, edge resize targeting, and idle picker scrollbar
+
+The user's real GNOME Wayland test exposed that the preceding mock-tested implementation had only fixed title-bar movement: Maximize still terminated the app and edge resizing did not take effect. The same report identified a scrollbar drawn outside its track when a directory had no overflow.
+
+Implementation [`f990dc0aa9b1`](https://github.com/GraderGamer2/NekoEdit/commit/f990dc0aa9b1d25617e0a385cafe23acbeef84f7) addresses those reports. The picker now omits the entire scrollbar when 15 or fewer entries fit, and the gutter cannot start a drag in that state. The Wayland client advertises its supported min/max window geometry, uses positive compositor-configured dimensions exactly within its preallocated shared-memory bound instead of silently clamping them, and clips rectangle/glyph writes to the active surface. Interactive resize hit targets are 12 pixels wide, with explicit tests for all four edges and four corners.
+
+Actions [#253](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598) passed the build, CLI checks, and expanded mock-compositor suite through both Wayland transports. The suite covers the 1920×1080 maximize/restore path, configure/acknowledge and buffer replacement, non-overflow scrollbar behavior, and resize request serialization. Artifact [`13524092766`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42260289598/artifacts/13524092766) was uploaded.
+
+This is not yet a confirmed GNOME fix. The user must retest the new artifact in Mutter; the #251 artifact was confirmed to crash on Maximize and fail to resize on the user's desktop. No unrelated feature work was started.
+---
+
+## 19. Phase N — dynamically growing document storage and large-file Open
+
+**Implementation:** [8af89d509003](https://github.com/GraderGamer2/NekoEdit/commit/8af89d509003997272479ff2271542a304bdec07).  
+**Verification:** [Build and test #312](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234), all eight workflow steps successful.
+
+The fixed-capacity document array and separate fixed-capacity Open scratch area are replaced by independent mmap-backed buffers. Each starts at 64 KiB and doubles geometrically through mremap as data requires, with a 1 GiB safety ceiling. The document remains a byte-oriented gap buffer: when growth occurs, the suffix is relocated to the high end of the enlarged mapping, expanding the free interval into one contiguous gap while preserving logical byte offsets.
+
+Initial command-line loading can now exceed 64 KiB. Picker Open reads into its own growable staging buffer, grows for larger files, reserves live document capacity before committing, and only changes the active document/path after a successful read and close. Failed Open continues to preserve the previous document.
+
+The mock suite fills the initial 65,536-byte document exactly, inserts at byte zero, checks that capacity doubles to 131,072 bytes, verifies that all original suffix bytes survive, and saves the split gap as the exact expected byte stream. A second workflow opens and saves a 65,537-byte file through the native picker, confirming the active path, length, full contents, and on-disk result. Actions #312 also reruns the existing file-picker, UTF-8, gap-buffer, window-management, responsive-layout, protocol, and both Wayland-transport regressions.
+
+Artifact [13556529585](https://github.com/GraderGamer2/NekoEdit/actions/runs/42330915234/artifacts/13556529585) contains the freestanding Linux x86-64 executable (32,119 bytes; SHA-256 bb5666e76505c08b90e4ffac094af79bd2d4c4078014c0e81bf98c63cc3ba0f4). The user subsequently confirmed that a 70 KB file opens, accepts edits, and saves correctly on the live GNOME/Mutter desktop without crashing or behaving anomalously. This completes the real-desktop dynamic-storage/large-file verification.
+
+The indexed line-navigation implementation is recorded in Phase P and grapheme-aware editing in Phase Q. The next rendering milestone is the installed-font parser and software glyph rasterizer; Unicode input/IME, shaping, undo/redo, horizontal scrolling, and clipboard integration remain unfinished.
+
+---
+
+## 20. Phase O — editor vertical scrollbar and mouse-wheel navigation
+
+**Implementation:** [e3489badd178](https://github.com/GraderGamer2/NekoEdit/commit/e3489badd178d4db59c30e6660f9768f224f7e35), with initialization correction [028379b66a6b](https://github.com/GraderGamer2/NekoEdit/commit/028379b66a6bbfb0adb1d65d2c24696147258f96).
+**Regression coverage:** [d4c0fcc5710b](https://github.com/GraderGamer2/NekoEdit/commit/d4c0fcc5710b0ab5ff49bc5831a3a334ecfaa01e).
+**Verification:** [Build and test #316](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333006563), all eight workflow steps successful.
+
+The document area now has a proportional vertical scrollbar when its visual content exceeds the viewport. Thumb height reflects visible visual rows relative to total rows, including soft-wrapped text, and the track is omitted when scrolling is unnecessary. The user can drag the thumb or click another point on the track to reposition it. Wayland vertical-axis events scroll the editor when the picker and path prompt are inactive; the directory picker keeps its independent scrolling. Manual scrolling redraws the viewport without forcing the caret back into view.
+
+The editor reserves a 24-pixel gutter for the scrollbar, and line wrapping, selection clipping, and caret clipping use the reduced text width. Mock-compositor tests check empty-document hiding, the rendered thumb pixel on a 65,537-byte wrapped file, three-row wheel movement, drag-to-bottom, and one-row reverse scrolling. The full existing wrapping, resizing, selection, file, and protocol suite passes in Actions #316.
+
+Artifact [13557973435](https://github.com/GraderGamer2/NekoEdit/actions/runs/42333808492/artifacts/13557973435) contains the freestanding Linux x86-64 executable (32,919 bytes; SHA-256 `34ab58c1e8e3ebade7a85bdef2656900c7f2fa7595af15119b85cac8a24189ef`). The live GNOME/Mutter scrollbar check has not yet been performed. The user's separate 70 KB file edit/save test confirms the preceding dynamic-storage phase, but does not validate this new pointer and wheel interaction.
+
+The next document-core milestone is a dynamic per-line index for byte lengths and visual-row counts, using prefix-sum trees so normal character edits do not shift all subsequent line offsets. Grapheme-aware cursor movement and Unicode input/rendering follow. The custom system-font parser and glyph rasterizer remain in the later rendering/font phase.
+
+
+---
+
+## 21. Phase P — indexed document line navigation
+
+**Implementation:** [87a33b203501](https://github.com/GraderGamer2/NekoEdit/commit/87a33b20350180f324b70ce1bff091deabef0bab), feat: add indexed document line navigation.  
+**Transactional Open correction:** [78db904b063f](https://github.com/GraderGamer2/NekoEdit/commit/78db904b063fc44cda4d2eabfd84aa5954da626c), invalidate the old index when a new document is committed.  
+**Verification:** [Build and test #326](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320), all eight workflow steps successful.
+
+The document core now maintains one compact record per logical line. Each 16-byte record stores the line's byte span (including LF), its soft-wrapped visual-row count, and the corresponding nodes of two Fenwick prefix trees. One tree indexes byte lengths; the other indexes visual-row counts. Both byte-offset-to-line and visual-row-to-line lookups use O(log N) prefix searches, then scan only within the selected logical line to locate the exact character boundary.
+
+Ordinary byte insertion and deletion update the current line's metadata and point-update the Fenwick paths. Inserting LF splits a record; deleting LF merges two records. Since records remain in a compact contiguous array, structural newline edits shift the following records and rebuild the prefix trees. A window-width change recalculates the visual-row count for each logical line and rebuilds the row tree.
+
+The index is integrated into caret/visual mapping, pointer hit-testing, scrollbar geometry, logical line status, and the renderer's first visible byte. As a result, painting a scrolled viewport no longer has to walk all preceding document bytes. The mmap-backed index starts at 256 records and grows geometrically to a bounded maximum of 0x01000000 lines. If it cannot be allocated or the document exceeds that line bound, the editor marks the index unavailable and retains the previous scan-based mapping as a fallback. Successful transactional Open invalidates the previous file's records before the next lookup rebuilds the index for the new document.
+
+The regression suite inspects the actual per-line records and independently verifies both Fenwick node arrays on a document containing hard newlines, a soft-wrapped line, and a tab. It exercises ordinary insert/delete, newline split/merge, and exact save preservation. The complete Actions #326 run also confirms the existing 65,537-byte Open/save and editor-scrollbar path, including visibility, proportional thumb geometry, wheel movement, and thumb dragging. The live GNOME/Mutter index path still requires manual confirmation.
+
+Artifact [13559973130](https://github.com/GraderGamer2/NekoEdit/actions/runs/42337883320/artifacts/13559973130) contains the freestanding Linux x86-64 executable (34,965 bytes; SHA-256 e2e0e7b77095ece17f2b0573cb37fcb6e0823c56d95a0f4d3003e826ae40134a).
+
+
+---
+
+## 22. Phase Q — Unicode 18.0 extended grapheme-cluster editing
+
+**Implementation:** [1eb5894443aa](https://github.com/GraderGamer2/NekoEdit/commit/1eb5894443aafcccd73e2463e91e7d85787dfaf1), navigate and delete extended grapheme clusters.  
+**CRLF pointer correction:** [fd8020b4fe67](https://github.com/GraderGamer2/NekoEdit/commit/fd8020b4fe67fe056e61d69e819210b41268dd7e), keep hit-testing outside CRLF graphemes.  
+**Verification:** [Build and test #331](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462), all eight workflow steps successful.
+
+The document model now distinguishes UTF-8 scalar decoding from user-visible cursor positions. Valid scalar sequences are segmented into Unicode 18.0 extended grapheme clusters using embedded Grapheme_Cluster_Break, Indic_Conjunct_Break, and Extended_Pictographic property tables. The implementation follows the extended grapheme boundary rules in UAX #29, including CRLF, combining and spacing marks, Hangul syllable composition, Prepend, Indic conjuncts, emoji modifier and ZWJ sequences, and regional-indicator pairing. The tables are embedded in the assembly read-only section; no third-party runtime library or external property file is needed.
+
+Left/Right and Shift+Left/Right now move between grapheme boundaries. Backspace and Delete remove the entire previous/next cluster, including clusters formed from several scalars. The same segmentation is used by visual-row measurement, byte/visual mapping, pointer hit-testing, selection painting, document rendering, and status-bar column counting. This keeps the line index and the rendered text layout consistent with the editing model. A grapheme occupies one cell in the current bitmap renderer; non-ASCII clusters still render as a question-mark placeholder until the custom font phase.
+
+CRLF is one extended grapheme cluster. Deleting it removes both bytes, and the line-index merge uses the complete deleted byte span. Pointer hit-testing at the end of a CRLF-terminated line lands before the pair rather than between CR and LF.
+
+The mock-compositor regression uses mixed UTF-8 cases for combining marks, emoji modifiers, family ZWJ, regional-indicator pairing, Hangul, Indic conjuncts, Prepend, SpacingMark, and CRLF. It checks each expected forward/backward boundary, pointer placement, whole-cluster Backspace/Delete, and line-index state after CRLF removal. The complete Actions #331 run also passes the existing line-index, large-file Open/scrollbar, picker, selection, keyboard, resize, and Wayland protocol regressions. Manual GNOME/Mutter validation of grapheme editing remains pending.
+
+Artifact [13561405061](https://github.com/GraderGamer2/NekoEdit/actions/runs/42339128462/artifacts/13561405061) contains the freestanding Linux x86-64 executable (43,886 bytes; SHA-256 25b80bd07ea11f7bc82816bdfae9c125878e67058f2e5ac563ae03bbfe86740c).
+
+
+
+---
+
+## 23. Phase R — proportional TrueType layout and font-metric line boxes
+
+**Horizontal metric integration:** [`0cc839c72181`](https://github.com/GraderGamer2/NekoEdit/commit/0cc839c72181c8ac0ec6792db01996e1ebafa8fd) exposes TrueType horizontal advances; [`3b566344ee8a`](https://github.com/GraderGamer2/NekoEdit/commit/3b566344ee8aaf83fa3f89f4d0ffa5ec9463771d) applies them to document layout and hit-testing; [`fd2e4793aa3d`](https://github.com/GraderGamer2/NekoEdit/commit/fd2e4793aa3d0b16920f90429c289f57eeb27a8f) aligns selection painting; [`3efdcbc537a4`](https://github.com/GraderGamer2/NekoEdit/commit/3efdcbc537a4b9a63224d8b68c34d24a16fe9a8e) applies advances to picker and path-prompt text.  
+**Cleanup:** [`3bc0b93a9994`](https://github.com/GraderGamer2/NekoEdit/commit/3bc0b93a999402400111b75a8644307d6ece3141) removes temporary pointer/visual hit-test diagnostics.  
+**Vertical metric integration:** [`f6d735b21549`](https://github.com/GraderGamer2/NekoEdit/commit/f6d735b215493d7a67759de2f0aa269fc66d5e21), derives document line pitch from hhea ascent, descent, and line gap; [`beac1f4a9622`](https://github.com/GraderGamer2/NekoEdit/commit/beac1f4a96229817bc3444fd035330d12914cd53), zero-initializes its runtime state for the freestanding BSS section.  
+**Verification:** [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260), all eight substantive checks successful.
+
+The first variable-width document layout now uses each grapheme's first decoded Unicode scalar to obtain a TrueType glyph advance from `hmtx`. At the fixed 12-pixel em, the advance is scaled to pixels, rounded to the nearest integer, and bounded to 1–32 pixels. This one measurement is shared by soft wrapping, indexed visual-row counts, byte/visual mapping, pointer hit-testing, selection painting, and document rendering. Picker and path-prompt text also consume these advances. The no-font/invalid-metric fallback retains the legacy eight-pixel advance.
+
+Vertical document geometry uses OS/2 sTypoAscender, sTypoDescender, and sTypoLineGap when a version 4+ OS/2 table declares USE_TYPO_METRICS; otherwise it falls back to hhea ascent, descent, and line gap. The selected line box is scaled to the fixed 12-pixel em, rounded upward, and clamped to 12–32 pixels. A single runtime line-pitch value is used by viewport row counts, pointer row selection, document/selection painting, and caret placement. With no loaded font, the original 12-pixel row pitch is retained.
+
+The synthetic-font regression deliberately assigns 900-unit ascent, −300-unit descent, and 100-unit line gap in a 1000-unit em. It verifies the resulting 16-pixel line pitch, 23 visible rows in an 800×480 surface, proportional 8px/5px advances, a correct pointer-to-caret result, the indexed wrapping record, and actual glyph pixels on both visual rows. The initial attempt failed at assembly because a nonzero value was emitted in `.bss`; the state was changed to zero initialization and Actions #400 then passed the complete workflow.
+
+Font selection and font-size controls remain unimplemented. The em size is fixed at 12 pixels, and layout currently handles only the first Unicode scalar of a grapheme; full shaping, kerning, ligatures, combining-mark positioning, bidirectional/complex-script layout, hinting, variable/color fonts, and IME remain future work. Manual GNOME/Mutter validation of the metric-aware font rendering is still pending.
+
+---
+
+## 24. Phase S — TrueType typographic metrics and responsive picker text alignment
+
+**Metric parsing and layout:** [32e54ad242d5](https://github.com/GraderGamer2/NekoEdit/commit/32e54ad242d5a95f100946629e43d6d214a8fe83) adds OS/2 typographic line metrics and cmap/hmtx-based space advances; [668da6cafbe7](https://github.com/GraderGamer2/NekoEdit/commit/668da6cafbe7d6aadf4e40c21c3b10c508a712c9) corrects SFNT hmtx validation and path-prompt centering after CI exposed register-lifetime errors.
+**Dialog metric/transform alignment:** [961e19fec1a9](https://github.com/GraderGamer2/NekoEdit/commit/961e19fec1a903e061cc7804a164fb4426145825) measures picker and overlay glyph advances at the active raster size and converts them through the same horizontal transform used by glyph origins. Caret position, visible-text clipping, and pointer hit-testing therefore share the rendered glyph widths, including when the dialog is height-constrained.
+**Regression and verification:** [8106dd3e109d](https://github.com/GraderGamer2/NekoEdit/commit/8106dd3e109d4b0afea3847b30503f78cca8088c) and [5324e05b45c8](https://github.com/GraderGamer2/NekoEdit/commit/5324e05b45c8f1bba8906fe6a1453f05958ab2f5) adapt the compact mock-compositor fixture and assert transformed row geometry. GitHub Actions [Build and test #414](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432) passed the complete workflow and uploaded artifact [13570135812](https://github.com/GraderGamer2/NekoEdit/actions/runs/42361027432/artifacts/13570135812).
+
+The font parser now uses OS/2 typographic ascent, descent, and line gap when a version 4+ OS/2 table sets USE_TYPO_METRICS, while retaining hhea as a fallback. U+0020 SPACE resolves through cmap and hmtx like other glyphs, so proportional fonts no longer inherit a hard-coded space width. The Open/Save picker and path prompt keep glyph raster size and advance calculations in one coordinate system: advances are measured at the actual UI font size, then mapped back through the dialog's horizontal scale before later glyph origins are transformed. Picker prefix measurement, clipping, caret position, and mouse hit-testing all use this same metric.
+
+The compact 800x360 synthetic-font test deliberately constrains the picker by height. It verifies the 8px rendered size, exact caret and focus-line pixels, a pointer coordinate that distinguishes the 8px metrics from the previous fixed 10px advance, and filename glyph pixels inside the selected-row highlight. It also retains selected-row top/bottom pixel checks.
+
+The intermediate CI failures were preserved and corrected rather than bypassed: #409 and #410 exposed incorrect SFNT table-length validation after OS/2 parsing; #412 and #413 exposed stale 480px and unscaled-row assumptions in the new compact-window test. The final #414 run passed the full build, CLI, mock Wayland, ELF inspection, and artifact-upload workflow.
+
+The result is verified in the mock compositor only. A live GNOME/Mutter run is still needed to confirm the user's original appearance issue is fully resolved. Font-size selection UI, runtime font switching, hinting, kerning, script shaping, and combining-mark positioning remain unfinished.
+
+---
+
+## 25. Phase T — Persistent-open font Settings and native Wayland clipboard shortcuts
+
+**Implementation:** [`6a1db52996c8`](https://github.com/GraderGamer2/NekoEdit/commit/6a1db52996c8c134f11736d0f173eaf70ca1af11) keeps the Settings dropdown open during repeated font-size changes and adds an independent UI font-size control. [`b5c52ecca8a1`](https://github.com/GraderGamer2/NekoEdit/commit/b5c52ecca8a1973ffb97f5541b119103887cad46) adds the native Wayland clipboard backend; [`78a67be968b3`](https://github.com/GraderGamer2/NekoEdit/commit/78a67be968b39bf9b123952fcef311584be73170) corrects event dispatch so data-device events reach the clipboard state machine.
+
+The Settings dropdown exposes two independent controls: document em size from 8–24px in two-pixel steps and UI text size from 8–14px in one-pixel steps. Neither plus/minus action closes the menu, including at its limits. The UI size affects ordinary interface text without changing document layout metrics; picker height-fitted text remains separately scaled. Preferences currently remain session-only.
+
+The Wayland clipboard manager creates a data device for the application seat. Ctrl+C publishes an immutable copy of the selected bytes; Ctrl+X first establishes clipboard ownership from that snapshot and only then deletes the range; Ctrl+V requests UTF-8 plain text (or plain-text fallback) and receives the response asynchronously through a nonblocking pipe. Outgoing snapshots are independent of the document gap buffer and remain alive through in-flight sends. A 64 MiB transfer cap bounds clipboard payloads. The poll loop services send and receive descriptors without blocking key handling.
+
+**Regression coverage:** the Settings test performs repeated increments/decrements without reopening the dropdown and checks the two settings independently. The clipboard test runs a separate compositor-side receiver for Copy/Cut, verifies the original bytes remain transferable after Cut deletes the document selection, and sends an external MIME offer through Ctrl+V to verify asynchronous insertion. Actions [#432](https://github.com/GraderGamer2/NekoEdit/actions/runs/42367881187) passed the settings milestone; Actions [#437](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369161877) passed the clipboard end-to-end test. The initial clipboard test exposed fixture/dispatcher defects, which were fixed before #437 rather than bypassed.
+
+## 26. Phase U — Bounded undo/redo history and core editor shortcuts
+
+**Implementation:** [`4fa444ef96d8`](https://github.com/GraderGamer2/NekoEdit/commit/4fa444ef96d8a3f9ef70ede628db6d1b34ec28af) adds `src/editor/history.c`, an independent bounded snapshot-history module. The Wayland keyboard path maps Ctrl+Z to Undo, Ctrl+Y and Ctrl+Shift+Z to Redo. Document edits are grouped by input action, rather than recording a new history state for each inserted byte. Snapshots store document bytes, caret offset, selection anchor and selection-active state. Loading a different document resets history; a new edit after Undo invalidates the Redo branch.
+
+The history store is intentionally bounded: 16 entries per Undo/Redo stack, a 32 MiB aggregate snapshot budget, and a 4 MiB per-snapshot ceiling. Each snapshot is an independent mmap allocation; restoring a state reserves sufficient gap-buffer capacity, replaces its contents, invalidates the per-line index, and refreshes caret visibility. Documents larger than the snapshot ceiling remain editable but cannot be fully represented by this history implementation.
+
+**Regression coverage and verification:** the Wayland integration test replaces a selected document, checks Undo and Redo byte-for-byte, verifies restoration of the prior caret and active selection, collapses that selection with Right Arrow, then types a new character and checks that a stale Redo action cannot alter the new branch. An intermediate #439 failure was a test-expectation error: it expected typing after Undo to append despite Undo correctly restoring the selected range; the test was corrected to collapse that range before branching. Actions [#440](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425) passed all build, CLI, Wayland mock, ELF inspection and artifact-upload stages. Artifact [`13572958390`](https://github.com/GraderGamer2/NekoEdit/actions/runs/42369791425/artifacts/13572958390) is 61,359 bytes with SHA-256 `e8d1c2027d934efa7dc7661819c28de22af7538a23c5c07eec00ae939d45a2e7`. Live GNOME/Mutter validation of this artifact remains outstanding.
+
+
+---
+
+## 15. Phase V — soft-wrap control and horizontal document viewport
+
+**Implementation:** [80c2fdc6916f](https://github.com/GraderGamer2/NekoEdit/commit/80c2fdc6916f8403350d10826043f90936642f0a) adds horizontal scrolling for unwrapped document lines; follow-up fixes and integration-test corrections are recorded in [COMMIT_INDEX.md](COMMIT_INDEX.md).
+
+The Settings menu now includes a session-only **Wrap Lines** switch, enabled by default. In wrapped mode, long logical lines continue to use pixel-advance-based soft wrapping and the line index records the resulting visual rows. In no-wrap mode, each logical line maps to one visual row and the editor maintains a horizontal pixel origin for the document viewport.
+
+Wayland horizontal-axis wheel events and Shift+vertical-wheel events scroll the viewport horizontally. The caret is kept visible as it moves along a long line. Pointer hit-testing includes the horizontal offset and continues to use the same font advances and grapheme-boundary mapping as the renderer. No-wrap selection backgrounds are painted through a viewport-clipped path. Turning wrapping back on resets the horizontal origin and rebuilds the wrapped row index. The existing vertical scrollbar represents wrapped visual rows in wrapped mode and logical lines in no-wrap mode; a dedicated draggable horizontal scrollbar remains future work.
+
+The dedicated 200-byte-line mock-compositor scenario verifies the Settings toggle, one-row no-wrap index, caret-following horizontal offset, 14px horizontal wheel movement, pointer hit-testing with a nonzero horizontal origin, and restoration of wrapped layout. GitHub Actions [#447](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911) passed the complete freestanding build, CLI, Wayland mock, ELF inspection, and artifact-upload workflow. Artifact [13574342289](https://github.com/GraderGamer2/NekoEdit/actions/runs/42372524911/artifacts/13574342289) is 62,237 bytes. Manual GNOME/Mutter verification of this exact build remains outstanding.
+
+
+---
+
+## 27. Phase W — Responsive controls, horizontal scrollbar, selection, and search
+
+**Responsive interface:** [`4b116c25e730`](https://github.com/GraderGamer2/NekoEdit/commit/4b116c25e7304743ff54cd3c731da887cbd0eb01) scales Settings controls with the selected UI typography. Follow-up layout fixes use a centered, aspect-ratio-preserving panel transform so the panel, glyph raster size, and pointer hit map stay in the same coordinate system. Find/Replace follows the same sizing policy.
+
+**Horizontal document scrollbar:** [`ed9f432dca08`](https://github.com/GraderGamer2/NekoEdit/commit/ed9f432dca0883be6c2e1d76b3ecbca589703466) adds the bottom horizontal rail for no-wrap documents. The thumb maps the widest logical line to the document viewport; track clicks reposition it and mouse dragging retains the thumb grab offset. Horizontal-wheel and Shift+vertical-wheel inputs use the same pixel-scroll path. The viewport height is reduced while the rail is visible so it never obscures document content.
+
+**Selection and keyboard navigation:** [`9ba8ec298672`](https://github.com/GraderGamer2/NekoEdit/NekoEdit/commit/9ba8ec298672201d31551eb5bacd90116eeaf098) adds word selection on double-click and Ctrl+Left/Right word navigation. [`844da8f8a8fb`](https://github.com/GraderGamer2/NekoEdit/commit/844da8f8a8fbaeb447f03e99480fb13ad541f4b7) adds Ctrl+Up/Down movement between logical lines; Shift variants extend selections. Ctrl+Home/End and Ctrl+Backspace/Delete provide document-boundary and word-deletion operations.
+
+**Find/Replace:** [`a8bd382bbd75`](https://github.com/GraderGamer2/NekoEdit/commit/a8bd382bbd75b4fb99786ae8c83cf91a83cfd3f2) adds a centered Find/Replace modal. Ctrl+F/ Ctrl+H open Find and Replace, Enter/F3/Shift+F3 navigate literal matches, Ctrl+Enter replaces a selected match, and Replace All iterates through the document. Query text entry follows the currently supported ASCII XKB subset.
+
+**Verification:** the full Wayland mock-compositor suite checks horizontal track dragging and both wheel paths, panel centering and UI-font scale, Ctrl+word and logical-line movement, Shift-extended selection, double-click word selection, and Find/Replace byte results. Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed all workflow stages and uploaded artifact [13581805940](https://github.com/GraderGamer2/NekoEdit/NekoEdit/actions/runs/42391111760/artifacts/13581805940), 67,298 bytes. The user has manually confirmed runtime font selection; the newly added interactions still need a GNOME/Mutter desktop smoke test.
+
+
+---
+
+## 28. Phase X — persistent typography, font, and editor preferences
+
+The responsive editor controls and search interactions were followed by a small persistent-settings layer. The implementation lives in `src/editor/preferences.c` and follows the project's freestanding design: it uses raw Linux syscalls rather than libc or a third-party configuration dependency.
+
+The preference file is stored at `$XDG_CONFIG_HOME/nekoedit/preferences`, or `~/.config/nekoedit/preferences` when `XDG_CONFIG_HOME` is unset. It records document font size, UI font size, Wrap Lines, Confirm before saving, and the last successfully loaded TrueType path. Startup restores these values before the first layout calculation and before font initialization. An explicit `NEKOEDIT_FONT` environment setting continues to take priority over the saved font; the saved path is tried before the deterministic system-font candidates.
+
+Values are parsed with bounded input and range checks. Font paths must be absolute and cannot contain carriage returns or newlines. The application directory is created with mode 0700 and the file is mode 0600. Updates go to a same-directory temporary file, handle partial writes and EINTR, fsync the file, atomically rename it, and fsync the containing directory. `NEKOEDIT_DISABLE_PREFERENCES=1` leaves runtime defaults/settings alone and bypasses persistence.
+
+The preference-specific unit test verifies initial defaults, persistence and reload of every supported setting, the TTF path, restrictive file mode, invalid/range-out-of-bounds values, path-format rejection, and the disable switch. The Wayland mock-compositor test sets the disable switch so machine-specific user settings cannot change the expected pixel/input fixtures.
+
+GitHub Actions [Build and test #505](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391762592) passed the full build, ELF, CLI, preferences, Wayland, executable-inspection, and artifact-upload workflow on commit [`8dc43ea3a1a3`](https://github.com/GraderGamer2/NekoEdit/commit/8dc43ea3a1a34350d45aa016e8c815e58e713ef7). The artifact is 70,250 bytes with SHA-256 `796dc4ceb118b364eccd37ff58db88c5bf33e50dbd5263b76ffaf314ce4c2279`. This remains mock-compositor/automated verification; manual GNOME/Mutter testing of the scrollbar, responsive overlays, Find/Replace, and preference restoration is still required.
+
+
+---
+
+## 29. Phase Y — home-level settings, document-wide search highlighting, and Unicode keyboard input
+
+### Home-level settings storage
+
+The preferences implementation was moved from the XDG-style configuration directories to a single hidden application folder directly under the user's home directory: `$HOME/.nekoedit/preferences`. The application no longer reads XDG_CONFIG_HOME. The directory retains mode 0700 and the preference file mode 0600; same-directory temporary writes, fsync, atomic rename, and directory fsync are retained. The preferences test sets both HOME and XDG_CONFIG_HOME and proves that only the HOME-level `.nekoedit` directory is created.
+
+### Typography panel refinement
+
+Settings and Find/Replace no longer scale their outer panel dimensions with the UI font-size preference. They retain 256×168 and 448×192 design dimensions respectively, centered and fitted to the available window. The actual glyph size follows the selected UI font and the pointer transform remains in the same coordinate space. The regression test sets the UI font to 16px and checks the two panel dimensions stay at their fixed values while both overlay font-size values report 16px.
+
+### Document-wide Find highlighting
+
+The renderer now runs a literal query scan over the document while Find/Replace is open. Every occurrence is highlighted in amber, including repeated and overlapping results. The active result is painted afterward using the selection renderer, so the current match remains distinct. The Find integration test inspects the framebuffer to prove that the second non-active occurrence is also painted.
+
+### Unicode keysyms and UTF-8 document insertion
+
+The XKB text-v1 parser now maintains a parallel Unicode-scalar table in addition to its existing ASCII byte lookup table. It recognizes explicit Unicode keysym tokens in Uxxxx, Uxxxxx, and Uxxxxxx form, rejects values outside Unicode's scalar range, surrogate values and control characters, and stores each value by keycode, group and level. Document keyboard input uses the Unicode lookup path when a parsed keymap is available and encodes the selected scalar into one to four UTF-8 bytes through the normal document insertion path. The built-in US-QWERTY fallback remains unchanged.
+
+The regression map maps one physical key to U+00E9 (é) and its Shift level to U+1F600 (😀). The mock test verifies the document contains the exact byte sequence C3 A9 F0 9F 98 80. Existing ASCII layout tests still exercise keycode offset, group switching, Shift, LevelThree, and the shifted punctuation rows. This is explicit Unicode-keysym support only; named keysym aliases, full XKB modifier/type/action handling, compose/dead keys and Wayland text-input/IME remain future work.
+
+### Verification and boundaries
+
+Actions [Build and test #518](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393599670) passed the three requested refinement tests. After the Unicode-input work, Actions [Build and test #523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784) passed the complete build, CLI, preferences, Wayland mock, ELF inspection, and artifact-upload workflow on [`72695a3d9f3d`](https://github.com/GraderGamer2/NekoEdit/commit/72695a3d9f3dd7a714c5f80bf014b9e1d7fd28e6). Artifact [13582597118](https://github.com/GraderGamer2/NekoEdit/actions/runs/42393972784/artifacts/13582597118) is 70,702 bytes. This is automated mock-compositor verification; GNOME/Mutter desktop testing of the latest settings restoration, responsive panels, search highlights, and Unicode typing remains outstanding.
+
+
+---
+
+## 30. Phase Z — whole-word pointer dragging, edge auto-scroll, and named Unicode keysyms
+
+### Whole-word mouse dragging
+
+Double-click now creates a complete word selection while preserving the active pointer grab. Dragging the held button extends the selection by whole words; moving to the left of the original word retains its right boundary and extends toward earlier words, while moving right retains the original left boundary. Single-click dragging continues to operate at character/grapheme boundaries.
+
+### Selection edge auto-scroll
+
+Selection motion is handled even when the pointer is outside the document viewport or the application surface. NekoEdit clamps the hit-test position to the nearest document edge while retaining the actual pointer location to determine the scroll direction. A separate timerfd drives scrolling while the mouse button is held and the pointer is outside the viewport. Vertical scrolling works in both soft-wrap modes; horizontal scrolling follows the pointer when Wrap Lines is disabled. Timer-driven scrolling continues if the pointer stops moving at the edge and stops on button release.
+
+### Named XKB Unicode keysyms
+
+The parser now resolves a curated set of 105 common named non-ASCII keysyms, covering Latin-1 symbol/letter names and selected currency, punctuation, quotation-mark, and typographic symbols such as EuroSign, endash, emdash, bullet, ellipsis, and trademark. These aliases populate the same per-key/group/level scalar table as explicit Uxxxx/Uxxxxx/Uxxxxxx tokens and use the existing UTF-8 document insertion path. This is a deliberate subset rather than full XKB support; complete virtual-modifier and action semantics, arbitrary custom type maps, compose/dead keys, and text-input/IME remain future work.
+
+### Regression coverage and verification
+
+The mock compositor verifies forward and reverse whole-word dragging after double-click; character-selection continuation after pointer-leave; vertical auto-scroll both immediately and while the pointer is stationary; horizontal auto-scroll with Wrap Lines disabled; and timer cleanup on release. XKB tests inspect the parsed scalar table and confirm explicit U+00E9/U+1F600 plus EuroSign/eacute/emdash insertion. GitHub Actions [Build and test #544](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885) passed the complete freestanding build, CLI, preferences, Wayland integration, ELF inspection, and artifact-upload workflow on [e9bbc7a6ff04](https://github.com/GraderGamer2/NekoEdit/commit/e9bbc7a6ff048b53e4961d2bd9014cac45a7569a). Artifact [13583613881](https://github.com/GraderGamer2/NekoEdit/actions/runs/42396964885/artifacts/13583613881) is 72,303 bytes with SHA-256 `4d01116a148ed94405a5f6623927a7d7bf41c6b207f02e8ab105a9d6ec318a13`. A GNOME/Mutter desktop test of the new mouse interaction remains outstanding.
+
+
+---
+
+## 31. Phase AA — bounded XKB dead-key composition
+
+Six common XKB dead-key names are now recognized: grave, acute, circumflex, tilde, diaeresis, and cedilla. Their keysyms use reserved action tokens rather than pretending to be ordinary Unicode scalars. The Wayland keyboard path stores a pending combining mark and applies it to the next printable scalar. A 52-pair mapping produces common Latin-1 precomposed letters. When no precomposed result exists, the editor inserts the base scalar followed by the combining mark, preserving the input. Backspace and Escape cancel a pending mark without modifying the document, and keyboard focus loss clears it.
+
+The mock compositor verifies that AC04 maps to the reserved dead_acute action, dead acute followed by e inserts UTF-8 for é, dead acute followed by g preserves g plus U+0301, and Backspace/Escape cancellation leaves document bytes and length unchanged. This is a deliberately bounded first compose implementation: general Compose sequences/tables, locale-specific mappings, full XKB actions/types, and Wayland text-input/IME remain unimplemented.
+
+GitHub Actions [Build and test #551](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256) passed the full build/ELF, CLI, preferences, Wayland mock-compositor, executable-inspection, and artifact-upload workflow on [cb469d616f8b](https://github.com/GraderGamer2/NekoEdit/commit/cb469d616f8b40cd27e4d37fe2e1320169a826ad). Artifact [13584292417](https://github.com/GraderGamer2/NekoEdit/actions/runs/42397866256/artifacts/13584292417) is 72,887 bytes with uploaded ZIP SHA-256 947dd732391b1f7f792ca60c0b60b28114f81cff0e8a4b066989d3a64705a6f8. Automated verification is complete; live GNOME/Mutter testing remains outstanding.
+
+
+---
+
+## 32. Phase AB — process-exit clipboard service and disk-backed edit history
+
+### Clipboard service bundled into NekoEdit
+
+The optional Clipboard Service preference is stored in ~/.nekoedit/preferences and defaults to enabled. When NekoEdit owns a clipboard selection at window close, the existing executable forks a small child and labels the process nekoedit-clip. It inherits the original Wayland connection, existing wl_data_source, and independent immutable clipboard snapshot; it does not reconnect as another client or attempt to reacquire ownership. The service handles future wl_data_source.send requests through the existing nonblocking transfer state machine.
+
+The helper exits when the compositor reports that the selection has changed, the source is cancelled, or the Wayland connection closes. It only retains the latest selection for the current session; it is not a clipboard manager or persistent clipboard history. The helper is not running beside the editor during normal editing; the fork occurs in the editor's window-close path. The feature is disabled when the persisted setting is off.
+
+The first post-exit integration test failed with an empty transfer pipe. Inspection found that the assembly application_exit call site did not align the stack for the nested C handoff call under the SysV x86-64 ABI. The call is now bracketed by an eight-byte stack adjustment. Actions [Build and test #600](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445630695) then passed and the mock log confirmed the helper served the copied bytes after the parent exited, then disconnected after selection replacement.
+
+### Disk-backed per-document Undo/Redo
+
+Replaced the former full-document snapshot stacks with a disk-backed delta journal in src/editor/history.c. Each named document receives a private .history file under ~/.nekoedit/, keyed by a hash of the pathname identity. The journal stores baseline bytes, grouped changed ranges, the bytes removed/inserted, before/after caret and selection state, an Undo/Redo cursor, and a checksum of the last successfully saved document. The directory is created mode 0700; journal/export files use 0600.
+
+Undo/Redo now scales with changed bytes and edit metadata instead of copying the entire document for each history entry. New edits after Undo discard the obsolete Redo branch. A saved-document checksum protects recovery: on restart, the journal is replayed only if the current file still matches the last successful save. External modifications reset the journal rather than allowing stale edits to replace external content. Untitled documents use a per-process identity, so restart recovery requires a named document path.
+
+The History tab beside the document tab displays Undo/Redo counts and exposes Undo, Redo, Export, and Delete. Export copies the current journal through the native Save picker with atomic replacement. Delete removes the journal without changing the open document; future edits start a new journal. An isolated host test covers grouping/replacement, Redo invalidation, more than 16 actions, restart recovery, export, deletion, and permissions.
+
+External Wayland paste arrives asynchronously after the Ctrl+V key event, so the insertion routine now wraps the actual received-byte mutation in its own history transaction. This makes delayed external paste one Undo/Redo action, like local paste. The Wayland mock checks Ctrl+Z removes that paste and Ctrl+Y restores it.
+
+### Regression coverage and verification
+
+The Wayland mock now verifies the helper lifetime after parent exit and selection replacement, asynchronous paste Undo/Redo, and the visible History-tab controls (tab switch, Undo/Redo buttons, Export picker open/cancel, Delete). The host history test verifies persistent journal recovery and file management independently of Wayland.
+
+Actions [Build and test #601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) passed the complete suite after the asynchronous paste transaction fix. The first History-page test iteration passed its UI assertions but failed during teardown after a redundant no-op Ctrl+Z following Delete; that extra shortcut was removed because the host test already verifies that a deleted journal no longer has Undo entries. Actions [Build and test #603](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746) then passed all eight workflow steps on [ae633fa5d654](https://github.com/GraderGamer2/NekoEdit/commit/ae633fa5d6545d64dbdeca25f68392abb5b37440), including build/ELF checks, CLI/preferences/history tests, the entire Wayland mock, executable inspection, and artifact upload. Artifact [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42446143746/artifacts/13602839495) is 80,540 bytes (artifact ID 13602839495).
+
+The helper and History tab are validated by the mock compositor. A live GNOME/Mutter session check remains outstanding; do not claim user-side desktop behavior until the user reports it.
+
+## 2026-11-08 — lazy history files, document path search, and copy regression coverage
+
+The History subsystem now creates a document journal only when a byte is first inserted or removed. Opening an unedited/empty document, navigating, selecting, and copying should not create an empty `.history` file. Existing journals are still recovered when the corresponding document is opened.
+
+A new History search reads and validates original paths stored in the journal headers. It lists named document histories, filters by path, and opens the selected document so its own Undo/Redo state can be managed. Untitled process identities are omitted from the reopenable search list. The page is arranged to fit the default 800×480 window.
+
+The keyboard path now closes the empty history transaction after Ctrl+C, and the Wayland mock repeats Ctrl+C while verifying superseded Wayland data sources are retired. These changes target the reported crash path and improve regression coverage, but live GNOME/Mutter validation is still necessary to establish whether the desktop crash is fixed.
+
+
+---
+
+## 33. Phase AC — clipboard-helper teardown, compact History records, launcher and expanded Compose input (2026-11-08)
+
+The latest user review found three usability issues that the existing mock suite did not fully cover: the clipboard helper could leave the inherited editor window objects alive; the History page's fixed controls and search affordances did not form a usable layout; and small edits still accumulated substantial record metadata. The editor now destroys the inherited xdg_toplevel/xdg_surface/wl_surface/wl_buffer in the post-exit clipboard child, detaches that child from the launching terminal, and clears its history-journal state while retaining the original clipboard data-device/source and snapshot. The event loop treats `poll()` interruption by EINTR as a retry rather than a fatal Wayland failure.
+
+The History page now has a true path filter, a separate Browse picker, Open Selected, visible Undo/Redo counters, responsive action controls, and Delete Selected History semantics. Deleting a highlighted non-active history removes only that hashed journal. New version-2 journals compress the common per-action metadata with a 24-byte record header and variable-length operation fields; a one-byte typing action at a short offset takes 28 bytes, compared with 49 bytes for the previous v1 record. Version-1 journals remain readable and writable. Host tests assert the compact record size, simulate a v1 legacy journal and test its recovery/Undo/Redo path, and delete a non-active journal without disturbing the active history.
+
+The build now includes a per-user install/uninstall workflow and desktop launcher/icon, with an install smoke test integrated into `make test`. The XKB `Multi_key` subset has advanced from 20 to 40 two-symbol pairs; extra tests validate degree, paragraph, registered-mark and ø output. This remains a bounded subset, not complete locale XCompose, XKB actions, or an IME.
+
+Implementation commit: [f3f6da21af1c](https://github.com/GraderGamer2/NekoEdit/commit/f3f6da21af1c50a1716a1ef684321e219116c333). Automated validation of this follow-up is pending on the final PR branch update. GNOME/Mutter live testing remains the user's desktop milestone.
+
+
+### Build correction for the compact journal encoder
+
+The first complete branch Actions attempt for Phase AC stopped in the strict C build: `encode_transaction_v2()` referenced the existing `map_mem()` helper before a prototype, triggering `-Werror=implicit-function-declaration`. Added a forward declaration without changing the v2 disk layout or the version-1 compatibility path. Corrected source commit: [55c28440d88a](https://github.com/GraderGamer2/NekoEdit/commit/55c28440d88ad251f5898293e58722b54f000fe6). The complete corrected workflow is pending; no downstream tests from failed Actions #608 ran.
+
+
+### Compact collapsed-caret metadata correction
+
+Actions #609 found that the compact record encoder was writing its optional 10-byte state extension whenever the selection anchor differed from the caret, even when no selection was active. Such an inactive anchor is not semantically used by Undo/Redo. The writer now includes before/after anchors only when either state has an active selection, and playback normalizes the collapsed anchor to the caret. Source correction: [9454373ea04e](https://github.com/GraderGamer2/NekoEdit/commit/9454373ea04eb2fb3ad41dcbc73f4cf7ab5a1df1). The 28-byte compact-record host test covers a collapsed caret with a stale anchor. Full host and Wayland validation is pending.
+
+
+### Phase AC automated validation result
+
+The corrected branch snapshot [5a5ea78458e4](https://github.com/GraderGamer2/NekoEdit/commit/5a5ea78458e4daa71fb9e4f3fc2eaf23daca0ea9) passed all eight steps in GitHub Actions [Build and test #610](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428). This includes the freestanding/ELF build, CLI and preferences tests, compact-history/legacy-v1 host tests, install/uninstall smoke, full Wayland mock coverage, executable inspection, and artifact upload. Artifact [13606921648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42453763428/artifacts/13606921648) is 86,304 bytes, SHA-256 `fc4216b2c0a57ac3bced774b8d1d7bdb6aef912f843f10e9704f6cfd98a76792`. The mock suite passed; manual GNOME/Mutter verification remains open.
+
+
+## 2026-11-08 — Optional Wayland text-input-v3 integration
+
+NekoEdit now discovers `zwp_text_input_manager_v3` when the compositor advertises it and creates a text-input object for its active seat. The existing `wl_keyboard` Unicode path remains the fallback on compositors without the extension. When enabled, text-input-v3 is scoped to the focused document; other application panels retain their previous input behavior.
+
+The implementation sends bounded UTF-8 surrounding text with caret/anchor byte offsets, normal content type, a cursor rectangle, and commit serials. It stages preedit, committed text, and surrounding deletion until the protocol's `done` event. Preedit is displayed as a transient underlined overlay. Commit text is validated as UTF-8; surrounding deletion is bounds-checked and rejected if either endpoint would split a scalar. Valid delete-plus-commit edits form one history action.
+
+The mock compositor now exercises the complete protocol lifecycle, including enable/disable, preedit, a multibyte commit, valid and invalid deletion, serial handling, and redraw sequencing. Actions #621 passed all eight steps on the initial fully tested IME snapshot. A subsequent audit moved history transaction creation after deletion validation and added a dedicated invalid-range test; those last hardening changes await a fresh CI run. Live GNOME/Mutter testing with a real input method remains necessary.
+
+This is basic text-input-v3 integration, not complete IME presentation or Unicode text layout. Preedit attributes/cursor-end styling, candidate positioning at the preedit caret, complex shaping, and bidirectional layout remain future work. Clipboard, History UI/storage, and source-independent desktop installation packaging are unaffected by this milestone.
+
+ 
+## 2026-11-08 — XKB declared modifier maps and eight-level key types
+
+The physical keyboard path now evaluates declared XKB text-v1 key types from their actual modifier maps. Each key retains per-group type assignment, and type-map selection uses the full 32-bit modifier-index state delivered by Wayland. The parser supports up to four groups, eight symbol levels per group, 64 type definitions, 32 map entries per type, and 24 declared virtual modifiers. It handles named and numeric modifier masks and both numeric and `LevelN` level values.
+
+A deliberately custom eight-level fixture exercises combinations that cannot be inferred from conventional type names, including a virtual modifier at bit 31. Assertions inspect the parsed type tables and verify actual UTF-8 output for each level. Built-in family records remain as fallback for conventional keymaps; unknown/malformed types do not silently fall through to a guessed type.
+
+This remains a bounded XKB implementation rather than a reimplementation of libxkbcommon. The compositor supplies the modifier state; NekoEdit does not yet interpret `xkb_compat` rules, derive automatic virtual-modifier bindings, evaluate arbitrary key actions, or implement preserve/consumed-modifier reporting. The new source/test snapshot awaits its own complete Actions validation; live GNOME/Mutter and real IME behavior remain user-side checks.
+
+
+### Declared XKB type-map implementation — Actions #649 passed
+
+Actions #648 first stopped in the generic Wayland mock at the soft-wrap caret pixel check, before the custom XKB fixture ran. The test failure path was made more diagnostic in commit [7d02040aabea](https://github.com/GraderGamer2/NekoEdit/commit/7d02040aabea72734a45f4d7a3813d227ba98f8d). Actions #649 then passed the complete eight-step workflow on that snapshot, including custom eight-level type-map assertions, the high virtual-modifier bit, saved UTF-8 verification, all existing Wayland/IME cases, host tests, ELF checks, and artifact upload. No executable-source change was made between the #648 and #649 workflow attempts, so the first pixel failure remains an unreproduced test observation rather than a confirmed fix.
+
+The resulting artifact is 91,295 bytes with SHA-256 `20deebd4e34ef86a00ad789bb333602165878c3cca059c4c3e1cee19d0f33c91`. Live GNOME/Mutter input-method and candidate-position testing remains outstanding.
+
+
+## 2026-11-08 — arbitrary alphabetic XKB types and final validation
+
+The parser's accepted-keymap threshold now recognizes alphabetic keys from the actual Group 1 lowercase/uppercase symbol pair rather than requiring the type to resolve to the built-in `ALPHABETIC` identifier. This supports real layouts using `FOUR_LEVEL_ALPHABETIC` and user-named custom types. Twelve keys in the Wayland fixture are now assigned the arbitrary type `CUSTOM_ALPHA`; the mock confirms its parsed map and an actual Shift-selected uppercase insertion. The independent eight-level custom-type test remains.
+
+The test suite also replaces the old fixed wrapped-caret x coordinate with a row-based caret-presence assertion, and its Unicode fixture replacements now match the changed key definitions. The final [Actions #653](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041) run passed all eight workflow steps, including the complete Wayland mock, host tests, build/ELF checks, install smoke, and artifact upload. Artifact [13613378978](https://github.com/GraderGamer2/NekoEdit/actions/runs/42471600041/artifacts/13613378978) is 91,292 bytes with SHA-256 `88e13f511c210a092b9efc4f8c08bd5682d5eea9a1731d83f82141f939a5a97e`. Live GNOME/Mutter input-method testing remains outstanding.
+
+
+### Repeat-test synchronization and Actions #655
+
+The mock now waits for the client to consume an Enter key release and clear the active repeat key before beginning the following Tab repeat case. This prevents a queued release/timer race in the test harness and preserves the same repeat behavior assertions. Actions #655 passed the complete workflow on commit [9824b62d8507](https://github.com/GraderGamer2/NekoEdit/commit/9824b62d85072d852cbf73e8ec31782c6f46480a), including the custom XKB type-map tests and Wayland text-input-v3 mock. Artifact [13614540028](https://github.com/GraderGamer2/NekoEdit/actions/runs/42472328636/artifacts/13614540028) is 91,292 bytes.
+
+
+## 2026-11-08 — explicit virtual-modifier masks
+
+The XKB reader no longer equates a virtual modifier's declaration order with the bit used in the compositor's state mask. It keeps a separate effective 32-bit encoding per declared virtual modifier and parses explicit text-v1 assignments from real modifier names, plus-separated masks, numeric literals, and `none`. The lookup path uses that effective mask when expanding a virtual name in a key type's `modifiers` or `map[]` statement.
+
+The expanded mock uses `LevelThree = Mod5`, `NumLock = Mod2`, `V02 = Mod4+Mod5`, and a high-bit `V23 = 0x80000000`; remaining declared virtual names are explicitly unbound. It verifies the mask table, modifier-to-level lookup, and repeated declarations in a later component. Automatic virtual-modifier bindings through key `virtualModifiers`/`modifier_map` and `xkb_compat` remain deferred, as do general actions and `preserve[]` semantics. The new parser/test snapshot is pending its complete Actions run.
+
+
+### Explicit virtual-modifier encoding validation — Actions #657
+
+Actions #657 passed all eight workflow steps on the explicit virtual-modifier parser snapshot. The Wayland mock verified independent effective masks for LevelThree/Mod5, NumLock/Mod2, a combined Mod4+Mod5 virtual modifier, an unbound virtual modifier, and a bit-31 numeric mask; it also verified that repeated declarations in later components preserve earlier encodings. The same run passed the type-map, arbitrary alphabetic type, eight-level, IME, editing, clipboard, history, font, host, ELF, and installation checks. Artifact 13615510231 is 91,474 bytes with SHA-256 `374f97796d2633b81ffc356e1e4a330278f5aedfca99478db614b6107ad72e9e`. Live GNOME/Mutter validation remains outstanding.
+
+
+## 2026-11-08 — direct implicit virtual-modifier mapping
+
+The reader now parses direct `virtualModifiers` properties on keys and direct keycode `modifier_map` entries. It stores the per-key virtual map and real modifier separately, then computes each virtual modifier's effective encoding by ORing the explicit encoding with the real modifiers attached to all keys in that virtual map. Declared XKB types are reparsed against those effective masks, ensuring custom type maps resolve the same way as the compositor's state.
+
+The regression fixture assigns a virtual modifier with explicit encoding `none` to two keys, binds one key to Mod4 and the other to Mod2, and asserts the effective mask becomes `0x50`. It also sends Mod2+Mod4 through the Wayland mock and checks the associated custom type selects Level2 and inserts the expected symbol. Indirect keysym-based modifier-map lookup, `xkb_compat`-driven virtual binding, general key actions, and preserve/consumed-modifier behavior remain deferred. The current implementation snapshot awaits its complete Actions run.
+
+
+### Direct implicit virtual-modifier aggregation — Actions #659 passed
+
+Actions #659 passed all eight workflow steps on the direct implicit-binding implementation. The mock verified that V03, explicitly encoded as none, receives Mod4 from one key and Mod2 from a second key via key-level `virtualModifiers` and direct keycode `modifier_map` statements. The effective encoding is 0x50; the type maps were reparsed against that mask, and a Wayland modifier-state event containing Mod2+Mod4 caused the test key to insert its Level2 symbol. All prior XKB, IME, editor, clipboard, History, font, host, ELF, and install tests passed. Artifact 13615747665 is 91,922 bytes with SHA-256 `8b58ca484f0012aa2c55837fce148915b176dbe2ea92c073bbae4ab4ebbf4bcc`. Indirect keysym modifier-map entries and xkb_compat interpret resolution remain future work; live GNOME/Mutter verification remains outstanding.
+
+
+## 2026-11-08 — bounded XKB compatibility interpretation and virtual modifiers
+
+The XKB reader now resolves a bounded subset of `xkb_compat` interpretation rules after key symbols and real modifier maps are available. A fixed rule table stores recognized modifier-keysyms or wildcard selectors, real-modifier predicates, optional virtual-modifier assignments, and the `useModMapMods` scope. Evaluation applies keysym specificity first and predicate specificity second, with declaration order retained for equal-specificity ties. Direct key-level `virtualModifiers` values continue to override inferred compatibility assignments.
+
+The new fixture exercises five interpretations, supported predicates, nested action-block skipping, direct-key precedence, and the rule's Group 1/Level 1 restriction using otherwise identical symbols at different levels/groups. Inferred compatibility mappings feed the same existing effective-encoding aggregation and custom-type reparse path as direct key virtual maps. Actions are deliberately not executed; action semantics, repeat settings, and `preserve[]` remain outside this milestone.
+
+Implementation commit [25865bc26754](https://github.com/GraderGamer2/NekoEdit/commit/25865bc267549dd3fb788801dd3e38f78d9e3e8e) passed all nine steps in Actions [Build and test #662](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332). The 94,032-byte artifact [13619186848](https://github.com/GraderGamer2/NekoEdit/actions/runs/42485461332/artifacts/13619186848) has SHA-256 `8f013c5c6ae54dfca8e57dba489fecfcc8e39632d262bea554615bb7547ff25d`. The earlier #661 seat-v3 event-loop failure was not reproduced; its root cause remains unconfirmed. Real GNOME/Mutter and IME testing remains outstanding.
+
+
+## 2026-11-08 — XKB compatibility specificity and ISO group/level keysyms
+
+The bounded XKB modifier-keysym table now recognizes additional standard group/level selectors: `Shift_Lock`, `ISO_Lock`, `ISO_Level2_Latch`, `ISO_Group_Shift` and its `Greek_switch`/`script_switch` aliases, plus ISO group latch/lock and next/previous/first/last group variants. These names participate in the existing deferred indirect `modifier_map` lookup, so their key association can be resolved after symbols are read.
+
+The Wayland mock's compatibility fixture now contains twelve interpretations. In addition to the earlier `AnyOf`/`NoneOf`, wildcard/specific keysym, action-skipping, direct-key precedence, and `useModMapMods=level1` checks, it verifies `AllOf`, `Exactly` priority over `AllOf`, first-declaration precedence for equally specific `NoneOf` matches, and indirect modifier maps for `ISO_Group_Shift` and `ISO_Next_Group`. Each fixture key has at most one real modifier assignment, as required by the XKB format.
+
+Implementation commit [a1791e03bdb0](https://github.com/GraderGamer2/NekoEdit/commit/a1791e03bdb0608a082f7d7d5a3c5f23e1b7bba6) passed all nine steps in Actions [Build and test #664](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592). Artifact [13619847523](https://github.com/GraderGamer2/NekoEdit/actions/runs/42486931592/artifacts/13619847523) is 94,317 bytes and has SHA-256 `54d23fd997cd19fbec58a9281b4e3bf75a2afb443e3cd2638a792de0ae8257a4`. Real GNOME/Mutter and IME testing remains outstanding.
