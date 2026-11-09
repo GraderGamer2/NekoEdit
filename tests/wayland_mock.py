@@ -286,11 +286,19 @@ def run(
                                        "data", "locales", pack_tag + ".json")
             with open(source_json, "r", encoding="utf-8") as source_file:
                 pack_doc = json.load(source_file)
+        elif compose_locale_settings_test:
+            # The visible Settings workflow must exercise the shipped dataset,
+            # including its locale-specific dead-key mappings and Add Pack copy.
+            pack_tag = "pt_BR.UTF-8"
+            source_json = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                       "data", "locales", pack_tag + ".json")
+            with open(source_json, "r", encoding="utf-8") as source_file:
+                pack_doc = json.load(source_file)
         else:
             pack_tag = "pt_BR.UTF-8" if (
-                compose_locale_settings_test or compose_locale_system_test or
-                compose_locale_c_fallback_test or compose_locale_ctype_test or
-                compose_locale_lang_test or compose_locale_saved_preference_test
+                compose_locale_system_test or compose_locale_c_fallback_test or
+                compose_locale_ctype_test or compose_locale_lang_test or
+                compose_locale_saved_preference_test
             ) else "xx_TEST.UTF-8"
             pack_doc = {"locale":pack_tag, "sequences":[
                 {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
