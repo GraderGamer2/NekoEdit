@@ -278,7 +278,7 @@ def run(
         if compose_locale_saved_preference_test:
             preferences_path = os.path.join(runtime_dir, ".nekoedit", "preferences")
             with open(preferences_path, "wb") as preferences_file:
-                preferences_file.write(b"version=1\\ncompose_locale=en_US.UTF-8\\n")
+                preferences_file.write(b"version=1\ncompose_locale=en_US.UTF-8\n")
     display_name = "wayland-mock"
     if use_wayland_socket:
         client_endpoint, compositor_endpoint = socket.socketpair()
