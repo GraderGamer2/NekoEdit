@@ -20,8 +20,9 @@
 | [2d518e3f70b1](https://github.com/GraderGamer2/NekoEdit/commit/2d518e3f70b1a12e9ee0e55b879e35c28be8454d) | test: use real pt_BR Compose mapping in Settings |
 | [0bb95b5c5e4f](https://github.com/GraderGamer2/NekoEdit/commit/0bb95b5c5e4ff80b21c0ae40d129eb01473be011) | docs: describe typed locale dead-key packs |
 | [0df8881843cd](https://github.com/GraderGamer2/NekoEdit/commit/0df8881843cd9ec3a16dfecaf181dddd2d78907d) | test: expose pt_BR Compose lookup diagnostics |
+| [bbbb1c167a48](https://github.com/GraderGamer2/NekoEdit/commit/bbbb1c167a485702ca12f5fe6129fc54e4eb9002) | test: correct U+018F UTF-8 bytes in locale assertions |
 
-Actions #752 and #753 still failed at the real pt_BR e e assertion. The latest test revision adds runtime-state diagnostics; do not mark this milestone CI-verified yet.
+Diagnostic runs #754/#755 confirmed successful pt_BR lookup and insertion: the actual stream was U+2605 followed by U+018F, and the output buffer contained U+018F. The previous test expected C7 8F instead of the correct UTF-8 C6 8F. Commit bbbb1c167a48 corrects that byte sequence, the later dead-key cumulative check, and the post-Add check. Build and test #756 is required to confirm the full Wayland scenario.
 
 ---
 ## 2026-11-09 — repair missing development-branch Actions trigger
