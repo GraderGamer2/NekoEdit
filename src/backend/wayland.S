@@ -6487,6 +6487,8 @@ wayland_main:
     call settings_pointer_to_design
     cmp dword ptr [rip + settings_locale_dropdown_open], 1
     jne .pointer_settings_no_locale_dropdown
+    cmp eax, 160
+    jb .pointer_settings_no_locale_dropdown
     cmp edx, 88
     jb .pointer_settings_no_locale_dropdown
     cmp edx, 184
@@ -6572,9 +6574,16 @@ wayland_main:
 
 .pointer_settings_locale_remove:
     mov dword ptr [rip + settings_locale_dropdown_open], 0
+    cmp qword ptr [rip + preferences_locale_ptr], 0
+    je .pointer_settings_locale_remove_environment
     call preferences_locale_is_builtin
     test eax, eax
     jnz .pointer_settings_locale_remove_disabled
+    jmp .pointer_settings_locale_remove_ready
+.pointer_settings_locale_remove_environment:
+    cmp dword ptr [rip + compose_locale_active], 0
+    je .pointer_settings_locale_remove_disabled
+.pointer_settings_locale_remove_ready:
     call request_locale_remove_confirmation
     jmp .keyboard_changed
 .pointer_settings_locale_remove_disabled:
