@@ -4126,6 +4126,8 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(5060, 46, "keyboard-selected pt_BR starts Compose")
                     key_step(5062, 24, "keyboard-selected pt_BR buffers o")
                     key_step(5064, 23, "keyboard-selected pt_BR resolves o i")
+                    if child_u32("doc_compose_active") != 0:
+                        raise AssertionError("successful pt_BR Multi_key composition left Compose state active")
                     if read_document_state()["doc_contents"] != bytes.fromhex("e29885e29883efb88f"):
                         raise AssertionError("keyboard-selected pt_BR did not append its snowman output after aa_TEST")
 
@@ -4134,8 +4136,16 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_pending_dead_mark") != 0x301 or child_u32("doc_length") != before_pt_dead:
                         raise AssertionError("pt_BR dead_acute did not arm without inserting text")
                     key_step(5068, 232, "pt_BR dead_acute plus c uses its locale-specific cedilla rule")
-                    if child_u32("doc_pending_dead_mark") != 0 or read_document_state()["doc_contents"] != bytes.fromhex("e29885e29883efb88fc3a7"):
-                        raise AssertionError("pt_BR dead-key pack rule did not insert ç after the locale Compose result")
+                    actual_pt_dead = read_document_state()["doc_contents"]
+                    pending_after_pt_dead = child_u32("doc_pending_dead_mark")
+                    locale_output_first = child_u32_at("compose_locale_output", 0)
+                    if pending_after_pt_dead != 0 or actual_pt_dead != bytes.fromhex("e29885e29883efb88fc3a7"):
+                        raise AssertionError(
+                            "pt_BR dead-key pack rule did not insert ç after the locale Compose result: "
+                            f"actual={actual_pt_dead.hex()}, pending=U+{pending_after_pt_dead:04X}, "
+                            f"locale_output[0]=U+{locale_output_first:04X}, "
+                            f"compose_active={child_u32('doc_compose_active')}"
+                        )
 
                     click_settings(180, 10, 5070, "reopen Settings to choose Base")
                     click_settings_design(200, 200, 5080, "open locale dropdown for Base")
