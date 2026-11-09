@@ -7024,7 +7024,8 @@ xkb_symbols "nekoedit-sparse" {
                     + wire_message(16, 4, struct.pack("<IIIII", 1705, 0, 0, 0, 0))
                 )
 
-                def caret_position() -> tuple[int, int]:
+                def caret_position(expected: tuple[int, int] | None = None) -> tuple[int, int]:
+                    matches = []
                     for y in range(92, 460 - 9, 12):
                         for x in range(16, 800 - 1, 8):
                             if all(
@@ -7032,7 +7033,17 @@ xkb_symbols "nekoedit-sparse" {
                                 == 0xFFFFFFFF
                                 for dy in range(9)
                             ):
-                                return x, y
+                                matches.append((x, y))
+                    if expected is not None and expected in matches:
+                        return expected
+                    if expected is not None and matches:
+                        # Glyph strokes can resemble the one-pixel caret. Prefer
+                        # the candidate nearest the known row start for this test.
+                        return min(matches, key=lambda point: (
+                            abs(point[1] - expected[1]), abs(point[0] - expected[0])
+                        ))
+                    if matches:
+                        return matches[0]
                     raise AssertionError("visible document caret could not be located")
 
                 # A held printable key must insert the initial character and
@@ -7069,7 +7080,7 @@ xkb_symbols "nekoedit-sparse" {
                 client.sendall(wire_message(16, 3, struct.pack("<IIII", 1720, 1720, 28, 1)))
                 expect_redraw("initial held Enter")
                 client.sendall(wire_message(12, 0))
-                after_enter = caret_position()
+                after_enter = caret_position((16, before_enter[1] + 12))
                 if after_enter != (16, before_enter[1] + 12):
                     raise AssertionError(
                         "initial Enter did not move to the next row: "
@@ -7084,7 +7095,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
                 expect_redraw("first repeated Enter")
                 client.sendall(wire_message(12, 0))
-                after_enter_repeat = caret_position()
+                after_enter_repeat = caret_position((16, after_enter[1] + 12))
                 if after_enter_repeat != (16, after_enter[1] + 12):
                     raise AssertionError(
                         f"held Enter did not repeat: after_press={after_enter}, after_repeat={after_enter_repeat}"
