@@ -707,6 +707,7 @@ xkb_keycodes "nekoedit-test" {
     <EXT1> = 205;
     <GRP1> = 206;
     <NXT1> = 207;
+    <GRPANY> = 208;
     <RPT0> = 210;
     <RPT1> = 211;
     <RPT2> = 212;
@@ -818,6 +819,12 @@ xkb_compat "nekoedit-test" {
         useModMapMods = level1;
         virtualModifier = V07;
     };
+    # Same condition at lower precedence, but valid on every group/level.
+    # Level1 above wins Group1/Level1; this rule handles the other matches.
+    interpret ISO_Level3_Shift + Any {
+        useModMapMods = any;
+        virtualModifier = V16;
+    };
     # Action-only rules are retained for precedence but never executed.
     interpret Shift_L + AnyOf(Shift) {
         action = { SetMods(modifiers=Shift), SetGroup(group=2) };
@@ -857,7 +864,7 @@ xkb_symbols "nekoedit-test" {
     modifier_map Control { <TIE1> };
     modifier_map Shift { <ALL1> };
     modifier_map Mod1 { <EXT1> };
-    modifier_map Mod2 { ISO_Group_Shift };
+    modifier_map Mod2 { ISO_Group_Shift, <GRPANY> };
     modifier_map Mod5 { ISO_Next_Group };
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
@@ -920,6 +927,12 @@ xkb_symbols "nekoedit-test" {
     key <EXT1> { symbols[Group1] = [ Control_L ] };
     key <GRP1> { symbols[Group1] = [ ISO_Group_Shift ] };
     key <NXT1> { symbols[Group1] = [ ISO_Next_Group ] };
+    # No useModMapMods attribute: the compat default is any group/level.
+    key <GRPANY> {
+        type = "ONE_LEVEL",
+        symbols[Group1] = [ x ],
+        symbols[Group2] = [ ISO_Group_Shift ]
+    };
     key <AB05> {
         virtualModifiers = V03,
         symbols[Group1] = [ b, B ]
@@ -1133,6 +1146,7 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_key_repeat_explicit",
                         "xkb_compat_default_repeat",
                         "xkb_compat_rule_count",
+                        "xkb_compat_rules",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
@@ -1237,8 +1251,13 @@ xkb_symbols "nekoedit-sparse" {
                         lvl3_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 200 * 4, 4))[0]
                         lvl2_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 201 * 4, 4))[0]
                         grp2_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 202 * 4, 4))[0]
+                        grpany_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 208 * 4, 4))[0]
+                        grpany_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 208 * 4, 4))[0]
+                        grpany_raw_keysym = struct.unpack("<I", child_memory("xkb_keysym_levels", (208 * 32 + 8) * 4, 4))[0]
                         ralt_explicit_virtual = child_memory("xkb_key_virtual_explicit", 108, 1)[0]
                         compat_rule_count = struct.unpack("<I", child_memory("xkb_compat_rule_count", 0, 4))[0]
+                        compat_scope_level1 = child_memory("xkb_compat_rules", 4 * 16 + 13, 1)[0]
+                        compat_scope_any = child_memory("xkb_compat_rules", 5 * 16 + 13, 1)[0]
                         tie_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 203 * 4, 4))[0]
                         all_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 204 * 4, 4))[0]
                         exact_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 205 * 4, 4))[0]
@@ -1352,9 +1371,14 @@ xkb_symbols "nekoedit-sparse" {
                         or ad12_virtual_map != 64
                         or ab03_virtual_map != 256
                         or lvl3_virtual_map != 128
-                        or lvl2_virtual_map != 0
-                        or grp2_virtual_map != 0
-                        or ralt_explicit_virtual != 1
+                        or lvl2_virtual_map != (1 << 16)
+                        or grp2_virtual_map != (1 << 16)
+                        or grpany_real_mask != 16
+                         or grpany_virtual_map != (1 << 14)
+                         or grpany_raw_keysym != 0xff7e
+                         or compat_scope_level1 != 1
+                         or compat_scope_any != 0
+                         or ralt_explicit_virtual != 1
                         or tie_real_mask != 4
                         or all_real_mask != 1
                         or exact_real_mask != 8
@@ -1367,7 +1391,7 @@ xkb_symbols "nekoedit-sparse" {
                         or next_virtual_map != (1 << 15)
                         or group_raw_keysym != 0xff7e
                         or next_raw_keysym != 0xfe08
-                         or compat_rule_count != 13
+                         or compat_rule_count != 14
                          or repeat_default != 0
                          or repeat_values != (1, bytes((0, 1, 0, 1)))
                          or repeat_explicit != bytes((0, 0, 1, 1))
