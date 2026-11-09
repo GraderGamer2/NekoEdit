@@ -704,6 +704,10 @@ xkb_keycodes "nekoedit-test" {
     <EXT1> = 205;
     <GRP1> = 206;
     <NXT1> = 207;
+    <RPT0> = 210;
+    <RPT1> = 211;
+    <RPT2> = 212;
+    <RPT3> = 213;
 };
 xkb_types "nekoedit-test" {
     virtual_modifiers LevelThree = Mod5, NumLock = Mod2,
@@ -776,6 +780,9 @@ xkb_compat "nekoedit-test" {
     interpret Any + AnyOf(Mod1) {
         virtualModifier = V08;
     };
+    interpret Any + AnyOf(Mod2) {
+        repeat = True;
+    };
     interpret ISO_Level3_Shift + Any {
         useModMapMods = level1;
         virtualModifier = V07;
@@ -803,6 +810,9 @@ xkb_symbols "nekoedit-test" {
     modifier_map Mod1 { <AB03> };
     modifier_map Mod4 { <AB06> };
     modifier_map Mod2 { <AB05> };
+    # Dedicated keycodes test inherited, compat, and direct repeat policies.
+    modifier_map Mod1 { <RPT0>, <RPT3> };
+    modifier_map Mod2 { <RPT1>, <RPT2> };
     # A matching keycode None removes a previously direct binding.
     modifier_map Mod3 { <RCTL> };
     modifier_map None { <RCTL> };
@@ -920,6 +930,10 @@ xkb_symbols "nekoedit-test" {
         symbols[Group1] = [ x, 7 ]
     };
     key <AB09> { [ period, greater ] };
+    key <RPT0> { symbols[Group1] = [ q ] };
+    key <RPT1> { symbols[Group1] = [ w ] };
+    key <RPT2> { repeat = False, symbols[Group1] = [ e ] };
+    key <RPT3> { repeat = True, symbols[Group1] = [ r ] };
 };
 };
 \0"""
@@ -1069,6 +1083,9 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_key_real_map_kinds",
                         "xkb_key_real_map_targets",
                         "xkb_key_virtual_explicit",
+                        "xkb_key_repeat_flags",
+                        "xkb_key_repeat_explicit",
+                        "xkb_compat_default_repeat",
                         "xkb_compat_rule_count",
                         "xkb_level_three_mask",
                         "xkb_num_lock_mask",
@@ -1192,6 +1209,12 @@ xkb_symbols "nekoedit-sparse" {
                         level_three_mask = struct.unpack("<I", child_memory("xkb_level_three_mask", 0, 4))[0]
                         num_lock_mask = struct.unpack("<I", child_memory("xkb_num_lock_mask", 0, 4))[0]
                         virtual_masks = struct.unpack("<24I", child_memory("xkb_virtual_masks", 0, 96))
+                        repeat_default = struct.unpack("<I", child_memory("xkb_compat_default_repeat", 0, 4))[0]
+                        repeat_values = (
+                            child_memory("xkb_key_repeat_flags", 10, 1)[0],
+                            child_memory("xkb_key_repeat_flags", 210, 4),
+                        )
+                        repeat_explicit = child_memory("xkb_key_repeat_explicit", 210, 4)
                     finally:
                         os.close(mem_fd)
                     if ready != 1 or key_name != b"AD01" or key_type != bytes([3]):
@@ -1263,7 +1286,10 @@ xkb_symbols "nekoedit-sparse" {
                         or next_virtual_map != (1 << 15)
                         or group_raw_keysym != 0xff7e
                         or next_raw_keysym != 0xfe08
-                        or compat_rule_count != 12
+                         or compat_rule_count != 13
+                         or repeat_default != 0
+                         or repeat_values != (1, bytes((0, 1, 0, 1)))
+                         or repeat_explicit != bytes((0, 0, 1, 1))
                     ):
                         raise AssertionError(
                             "custom XKB type mapping was not parsed exactly: "
