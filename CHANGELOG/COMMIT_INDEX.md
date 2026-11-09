@@ -5,8 +5,18 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **410** (403 previously recorded commits + seven commits for the dynamic installed-locale Settings dropdown and Wayland mock coverage; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **412** (410 previously recorded commits + the dead-key expansion and its mock-fixture correction; comment-only and changelog continuity commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — expand XKB combining dead-key actions — CI pending
+
+| Commit | Subject |
+|---|---|
+| [2bfe46ee19b0](https://github.com/GraderGamer2/NekoEdit/commit/2bfe46ee19b0dda91d39fd4b208a805abebf6418) | feat: expand XKB combining dead-key actions |
+| [42747acc3102](https://github.com/GraderGamer2/NekoEdit/commit/42747acc3102ab133b4a263d55f09d98b74e89d0) | docs: update expanded dead-key action range comment [skip ci] |
+| [528b8d680652](https://github.com/GraderGamer2/NekoEdit/commit/528b8d68065213173c9bdde9ba24bf2262da0fec) | fix: correct UTF-8 escape literals in dead-key mock |
+
+The implementation adds the standard combining dead-key names/actions and their combining-mark values, expands the generic action range without changing the legacy marker IDs, and adds 30 curated Latin Extended-A precomposition entries. The Wayland mock checks macron, caron, and below-dot through actual typing, including decomposed fallback. CI has not returned a workflow run for the implementation/test head; see `CHANGELOG/CURRENT_STATUS.md` for the precise validation boundary.
 
 ## 2026-11-09 — dynamic installed-locale Settings dropdown — CI pending
 

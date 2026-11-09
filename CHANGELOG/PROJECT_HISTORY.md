@@ -1,3 +1,11 @@
+## 2026-11-09 — expand XKB combining dead-key actions
+
+NekoEdit now recognizes 35 standard combining dead-key actions through the XKB named-keysym path. The original six action marker IDs and the dedicated `Multi_key` marker were preserved; the additional actions occupy a contiguous range after the reserved Compose marker. The generic input layer maps actions to Unicode combining marks, precomposes a curated set of Latin Extended-A characters, and falls back to base-plus-mark when no precomposed scalar is available. The mock covers the new actions through both parser state and actual document input. This is not yet locale-specific Compose support: NLP1 remains a `Multi_key` data format, and dead-key-led locale rules plus `.XCompose` import remain future work.
+
+Implementation/test: [2bfe46ee19b0](https://github.com/GraderGamer2/NekoEdit/commit/2bfe46ee19b0dda91d39fd4b208a805abebf6418) and [528b8d680652](https://github.com/GraderGamer2/NekoEdit/commit/528b8d68065213173c9bdde9ba24bf2262da0fec). Comment correction: [42747acc3102](https://github.com/GraderGamer2/NekoEdit/commit/42747acc3102ab133b4a263d55f09d98b74e89d0). CI has not reported a run for the new implementation head; the older Build and test #736 belongs to the prior locale-manager commit and is not evidence for this milestone.
+
+---
+
 ## 2026-11-09 — select installed Compose locales directly in Settings
 
 Implementation/test commits: [748ca5ba9704](https://github.com/GraderGamer2/NekoEdit/commit/748ca5ba97042b137a64211da07a641e409a567c), [5514f193dd04](https://github.com/GraderGamer2/NekoEdit/commit/5514f193dd0436cfd9af641e0069f4069771f611), [0dbe8df16673](https://github.com/GraderGamer2/NekoEdit/commit/0dbe8df16673ea2d595f7a25c7529c2647a26062), [c6c380a08257](https://github.com/GraderGamer2/NekoEdit/commit/c6c380a08257c24ec1a19edf2bbefb8d36e9e902), [65d2a43e2f72](https://github.com/GraderGamer2/NekoEdit/commit/65d2a43e2f729526548187677c95efb6f62b847e), [1d4168b8683c](https://github.com/GraderGamer2/NekoEdit/commit/1d4168b8683cd705c701f5b5aef8b836b6048ab0), [241391a4e279](https://github.com/GraderGamer2/NekoEdit/commit/241391a4e279bc7404e27cc0fad39566a499681a).
