@@ -1,3 +1,16 @@
+## 2026-11-09 — restore PR validation after skipped HEAD commit
+
+The user clarified that the missing run was not a workflow-sidebar selection issue: they were already viewing **All workflows**. Inspection of PR #2 showed its current HEAD, `457695f8f6ea364a15b25b555e8c628ed6af1cbb`, had the subject `docs: record XKB dead-key expansion status [skip ci]`.
+
+GitHub's documented behavior is that a `[skip ci]` marker in the HEAD commit of a pull request suppresses workflows triggered by `pull_request`. The same marker suppresses relevant `push` runs. The existing Build and test workflow already targets PRs to `main`, so the appropriate repair is a normal follow-up commit without the marker—not another overlapping trigger or a UI instruction.
+
+- Added this documentation-only follow-up with a normal commit subject so PR #2 moves to a non-skipped HEAD and can trigger the existing `pull_request` synchronization event.
+- No application source, tests, workflow filters, or PR metadata were changed.
+- CI must still be confirmed against the new PR head. Previous Actions #736 is older and does not validate the dead-key expansion.
+- Future open-PR commits must not leave `[skip ci]` on the HEAD when validation is required; use that marker only when intentionally suppressing the PR workflow.
+
+---
+
 ## 2026-11-09 — expand XKB combining dead-key actions — CI pending
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
