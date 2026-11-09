@@ -1,3 +1,37 @@
+## 2026-11-09 — persistent Settings locale selector — Build and test #709 passed
+
+### Preference and loader integration
+
+- Added a bounded compose_locale=<tag> value to the existing per-user preferences file. The config remains version 1 and line-oriented; locale tags are validated before storage or path construction.
+- A saved choice takes precedence over NEKOEDIT_LOCALE. If no preference is present, the environment override remains available as a first-run choice. Saving en_US.UTF-8 explicitly returns to the embedded table and suppresses the environment.
+- Preference host tests cover both locale values, persistence, reload, and rejection of traversal, separators, newline injection, and overlong tags.
+
+### Settings UI
+
+- Added a COMPOSE LOCALE row in the lower part of the existing Settings dropdown. It toggles between built-in en_US and an installed pt_BR.UTF-8 pack without increasing the panel footprint.
+- If pt_BR is selected but unavailable, the row displays MISSING and the embedded en_US table remains active. Selecting a locale never downloads or installs a pack.
+- The new UI test exposed a title-bar hit-test conflict: the top resize band previously intercepted clicks over Settings. The shared resize hit-test now exempts the Settings button while retaining the blank top-edge resize region.
+
+### Wayland integration and regression coverage
+
+- The Settings mock opens the dropdown through pointer input, clicks the locale row, verifies that pt_BR is active without changing document contents, closes Settings, types the o-i Compose sequence and checks the multiscalar UTF-8 output, then returns to en_US.
+- The mock checks that compose_locale=en_US.UTF-8 was saved. A guard fails the test if the Settings scenario is requested but its success observation is missing.
+- The first attempts found two issues: a legitimate cursor-shape request needed to be consumed by the mock before checking surface redraw, and the application resize hit band needed to stop overlapping the Settings button. The latter is a real application fix; the former is test-harness handling.
+- [Build and test #709](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652) passed all 12 steps. Its log explicitly contains Settings start/completion markers and the successful Settings/Compose/persistence observation.
+
+### Artifacts
+
+- pt_BR NLP1 pack: 151,288 bytes; artifact [13657516254](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657516254), ZIP 17,943 bytes.
+- Editor executable artifact [13657600927](https://github.com/GraderGamer2/NekoEdit/actions/runs/42581390652/artifacts/13657600927), 120,129 bytes.
+
+**Commits:** [7343175f2584](https://github.com/GraderGamer2/NekoEdit/commit/7343175f258430e55db1252d8dcb31dbe9bce40e), [70f216f2197d](https://github.com/GraderGamer2/NekoEdit/commit/70f216f2197d30b3c6af75481d542aad864b12fe), [05d080417878](https://github.com/GraderGamer2/NekoEdit/commit/05d080417878bb71dae54fda4638cd554c3bea08), [241401ea9d1e](https://github.com/GraderGamer2/NekoEdit/commit/241401ea9d1e2529d6da9e5ada340bf64cce84e7), [ce35e0803d0a](https://github.com/GraderGamer2/NekoEdit/commit/ce35e0803d0a586074aa5ddb11d65208cb24fb99).
+
+### Remaining work
+
+Add a Settings-based pack installer/remover, provide more locale datasets, consider automatic system-locale selection, and evaluate system/user Compose-file imports and locale-specific dead-key rules. Live GNOME/Mutter manual verification remains outstanding.
+
+---
+
 ## 2026-11-09 — add the first external Compose locale pack — Build and test #704 passed
 
 ### Source data and import pipeline
