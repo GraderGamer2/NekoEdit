@@ -5,8 +5,16 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **385** (384 previously recorded commits + this Compose implementation/test commit; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **386** (385 previously recorded commits + this three-symbol Compose implementation/test commit; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — add three-symbol XKB Compose sequences
+
+| Commit | Subject |
+|---|---|
+| [bf3a1891dd63](https://github.com/GraderGamer2/NekoEdit/commit/bf3a1891dd6318ad70f99bf7e75e4afbf481dc56) | feat: add three-symbol XKB Compose sequences |
+
+Added 564 three-symbol sequences from X.Org libX11 `en_US.UTF-8` on top of the 2,140 two-symbol pairs. The Wayland state machine buffers a recognized second-symbol prefix and resolves the third scalar; it preserves literal input on mismatch and cancels pending prefixes cleanly. Mock tests cover en dash, em dash, and Backspace cancellation. Actions [Build and test #42564500183](https://github.com/GraderGamer2/NekoEdit/actions/runs/42564500183) passed all eight steps on the first attempt. Artifact [13650369672](https://github.com/GraderGamer2/NekoEdit/actions/runs/42564500183/artifacts/13650369672).
 
 ## 2026-11-09 — expanded XKB default Compose coverage
 
