@@ -708,6 +708,7 @@ xkb_keycodes "nekoedit-test" {
     <GRP1> = 206;
     <NXT1> = 207;
     <GRPANY> = 208;
+    <IMPL> = 209;
     <RPT0> = 210;
     <RPT1> = 211;
     <RPT2> = 212;
@@ -837,6 +838,8 @@ xkb_compat "nekoedit-test" {
     # Exactly outranks AllOf when both match the same key modifier map.
     interpret Control_L + AllOf(Mod1) { virtualModifier = V12; };
     interpret Control_L + Exactly(Mod1) { virtualModifier = V13; };
+    # Omitting the predicate operator is the XKB shorthand for Exactly(mask).
+    interpret Control_L + (Mod2) { virtualModifier = V17; };
     interpret ISO_Group_Shift + Any { virtualModifier = V14; };
     interpret ISO_Next_Group + Any { virtualModifier = V15; };
 };
@@ -865,6 +868,7 @@ xkb_symbols "nekoedit-test" {
     modifier_map Shift { <ALL1> };
     modifier_map Mod1 { <EXT1> };
     modifier_map Mod2 { ISO_Group_Shift, <GRPANY> };
+    modifier_map Mod2 { <IMPL> };
     modifier_map Mod5 { ISO_Next_Group };
     key <AD01> {
         type = "FOUR_LEVEL_ALPHABETIC",
@@ -927,6 +931,7 @@ xkb_symbols "nekoedit-test" {
     key <EXT1> { symbols[Group1] = [ Control_L ] };
     key <GRP1> { symbols[Group1] = [ ISO_Group_Shift ] };
     key <NXT1> { symbols[Group1] = [ ISO_Next_Group ] };
+    key <IMPL> { symbols[Group1] = [ Control_L ] };
     # No useModMapMods attribute: the compat default is any group/level.
     key <GRPANY> {
         type = "ONE_LEVEL",
@@ -1264,6 +1269,10 @@ xkb_symbols "nekoedit-sparse" {
                         exact_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 205 * 4, 4))[0]
                         group_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 206 * 4, 4))[0]
                         next_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 207 * 4, 4))[0]
+                        implicit_exact_real_mask = struct.unpack("<I", child_memory("xkb_key_real_masks", 209 * 4, 4))[0]
+                        implicit_exact_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 209 * 4, 4))[0]
+                        implicit_exact_raw_keysym = struct.unpack("<I", child_memory("xkb_keysym_levels", 209 * 32 * 4, 4))[0]
+                        implicit_exact_predicate = child_memory("xkb_compat_rules", 14 * 16 + 12, 1)[0]
                         tie_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 203 * 4, 4))[0]
                         all_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 204 * 4, 4))[0]
                         exact_virtual_map = struct.unpack("<I", child_memory("xkb_key_virtual_maps", 205 * 4, 4))[0]
@@ -1391,9 +1400,13 @@ xkb_symbols "nekoedit-sparse" {
                         or exact_virtual_map != (1 << 13)
                         or group_virtual_map != (1 << 14)
                         or next_virtual_map != (1 << 15)
+                        or implicit_exact_real_mask != 16
+                        or implicit_exact_virtual_map != (1 << 17)
+                        or implicit_exact_raw_keysym != 0xffe3
+                        or implicit_exact_predicate != 4
                         or group_raw_keysym != 0xff7e
                         or next_raw_keysym != 0xfe08
-                         or compat_rule_count != 14
+                         or compat_rule_count != 15
                          or repeat_default != 0
                          or repeat_values != (1, bytes((0, 1, 0, 1)))
                          or repeat_explicit != bytes((0, 0, 1, 1))
@@ -1457,13 +1470,19 @@ xkb_symbols "nekoedit-sparse" {
                                                 "virtual_maps": (tie_virtual_map, all_virtual_map, exact_virtual_map),
                                                 "group_keysyms": (group_raw_keysym, next_raw_keysym),
                                                 "group_masks": (group_real_mask, next_real_mask),
+                                                "implicit_exact": {
+                                                    "real_mask": implicit_exact_real_mask,
+                                                    "virtual_map": implicit_exact_virtual_map,
+                                                    "keysym": implicit_exact_raw_keysym,
+                                                    "predicate": implicit_exact_predicate,
+                                                },
                                             },
                                         },
                                     },
                                 },
                             })
                         )
-                    expected_virtual_masks = (128, 16, 192, 80, 8, 0, 0, 128, 8, 4, 0, 1, 0, 8, 16, 128) + (128,) + (0,) * 6 + (0x80000000,)
+                    expected_virtual_masks = (128, 16, 192, 80, 8, 0, 0, 128, 8, 4, 0, 1, 0, 8, 16, 128) + (128, 16) + (0,) * 5 + (0x80000000,)
                     if (
                         (virtual_count, level_three_mask, num_lock_mask) != (24, 128, 16)
                         or virtual_masks != expected_virtual_masks
@@ -1487,6 +1506,9 @@ xkb_symbols "nekoedit-sparse" {
                             "XKB shorthand AE02 parse failed: "
                             f"name={ae02_name!r}, levels={ae02_levels!r}"
                         )
+                    observations.append(
+                        "XKB compatibility defaults an omitted matching operator to Exactly(mask) and matches only the exact modifier map"
+                    )
                     observations.append(
                         "XKB parser exported AD01 keycode 24 with alphabetic/LevelThree flags and the expected Group1/Group2 symbols"
                     )

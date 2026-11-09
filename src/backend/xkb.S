@@ -4147,6 +4147,8 @@ xkb_reset_keymap:
     jne .Lxkb_compat_interpret_fail
 .Lxkb_compat_interpret_predicate:
     call .Lxkb_next_token
+    cmp eax, '('
+    je .Lxkb_compat_interpret_predicate_implicit_exactly
     lea rdi, [rip + .Lxkb_compat_any]
     call .Lxkb_token_is
     test eax, eax
@@ -4191,10 +4193,16 @@ xkb_reset_keymap:
     jmp .Lxkb_compat_interpret_predicate_parenthesis
 .Lxkb_compat_interpret_predicate_exactly:
     mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 4
+    jmp .Lxkb_compat_interpret_predicate_parenthesis
+.Lxkb_compat_interpret_predicate_implicit_exactly:
+    # XKB shorthand: omitting the operator before (mask) means Exactly(mask).
+    mov dword ptr [rip + .Lxkb_compat_tmp_predicate], 4
+    jmp .Lxkb_compat_interpret_predicate_parse_mask
 .Lxkb_compat_interpret_predicate_parenthesis:
     call .Lxkb_next_token
     cmp eax, '('
     jne .Lxkb_compat_interpret_fail
+.Lxkb_compat_interpret_predicate_parse_mask:
     call .Lxkb_compat_parse_real_mask
     test edx, edx
     jz .Lxkb_compat_interpret_fail
