@@ -9,6 +9,17 @@
 This document reconstructs the development of NekoEdit from the first repository prototype through the current Wayland window-management and picker milestones. The exact history is retained in [COMMIT_INDEX.md](COMMIT_INDEX.md), including the original prototype, PR #1 implementation, changelog setup, and subsequent maintenance commits captured on 2026-11-06. This document explains what those changes built.
 
 
+## 2026-11-09 — make Settings a true modal over the editor and History
+
+A repository screenshot revealed that opening Settings while the History tab was active left History controls visible around the Settings panel. The root cause was the render stack: the History page was painted first, but the Settings menu only painted its centered 256×192 rectangle. There was no opaque layer between the panel and the rest of the workspace. A related pointer-dispatch path closed Settings after an outside click but continued hit-testing the underlying page.
+
+The Settings renderer now clears the entire workspace below the tab strip before drawing the centered panel, with the coordinate transform disabled for the backdrop and restored for panel content. Outside clicks dismiss Settings without activating covered controls. The title bar and tabs remain visible, while the underlying editor/History workspace is hidden until dismissal.
+
+The mock History-page workflow now checks framebuffer pixels on the covered Open Selected action and inside the panel, tests that outside-click dismissal does not activate the History Browse control, and confirms Browse works after dismissal. Implementation/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0). CI is pending at this snapshot.
+
+The user also confirmed that normal physical typing works again following the separate text-input-v3 default-off fix. That input milestone was validated by Actions #667; this modal work does not change keyboard or IME behavior.
+
+
 ## 2026-11-08 — Extend named XKB Unicode coverage
 
 The bounded XKB named-symbol table now resolves 273 case-sensitive non-ASCII aliases. Alongside the pre-existing Latin-1, EuroSign, and punctuation entries, the parser now recognizes the Greek upper/lower alphabets and accented forms; core Cyrillic upper/lower alphabets; and common Ukrainian, Belarusian, Serbian, and Macedonian letters.

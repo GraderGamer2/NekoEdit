@@ -5,9 +5,17 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **365** (363 previously recorded commits + the 2026-11-09 physical-typing fix and its one-shot key-release regression-test follow-up; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **366** (365 previously recorded commits + the 2026-11-09 Settings modal/rendering regression fix; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
+
+## Settings modal and History overlay isolation (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) | fix: isolate Settings as a modal over the editor and History |
+
+The Settings layer now clears the workspace behind its centered panel, preserving the title and tab strip, and outside-click dismissal no longer activates covered document/History controls. The History mock checks framebuffer pixels and click-through behavior, then confirms Browse works after dismissal. The full workflow for this commit is pending.
 
 ## Wayland mock one-shot key-repeat synchronization (2026-11-09)
 

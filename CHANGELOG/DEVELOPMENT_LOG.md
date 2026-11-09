@@ -1,3 +1,29 @@
+## 2026-11-09 — diagnose and isolate Settings modal over the History page
+
+### Screenshot and root cause
+
+- Retrieved and inspected `Screenshots for debugging/inconsistent UI.png` directly from the new `Screenshots for debugging` folder on `early-alpha`; no image upload to the chat was needed.
+- The 800×460 screenshot has the History tab active while Settings is open. Source tracing confirmed the History page is painted first and then the Settings renderer paints only its centered 256×192 panel. The History search field, Browse action, Open Selected button, counters, and four action buttons therefore remain visible around the panel. The problem is an incomplete modal layer, not two History views being rendered simultaneously.
+- The pointer handler had a second related defect: an outside click closed Settings but continued into the underlying document/History hit-test path, so hidden controls could receive the click.
+
+### Implementation
+
+- `src/backend/wayland.S` now paints an opaque workspace backdrop from the bottom of the tab strip (y=76) to the window bottom before drawing Settings. It temporarily disables the Settings design-coordinate transform for this surface-sized fill and restores the transform for the existing panel, preserving the current panel geometry and text/button alignment.
+- Outside-click dismissal of Settings now terminates pointer dispatch after closing the modal. The File menu remains non-modal and keeps its previous click handling.
+
+### Regression coverage
+
+- `tests/wayland_mock.py` extends the existing History UI scenario. It opens Settings over History, checks a pixel that previously belonged to the Open Selected button and a pixel inside the Settings panel, clicks outside the panel and asserts that History Browse did not open, then opens Browse successfully after dismissal.
+- This tests both visual isolation and input isolation, not just the Settings state variable.
+
+### Validation
+
+- Source/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0).
+- The full workflow for this commit is pending. The previously validated physical-typing correction remains Actions [#667](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292), with artifact [13637810575](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292/artifacts/13637810575); the user has since confirmed ordinary typing works again.
+- Do not mark the new modal pixel and click-through assertions green until CI validates this commit.
+
+---
+
 ## 2026-11-09 — synchronize one-shot Wayland mock key releases
 
 - Actions [Build and test #666](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531482671) compiled the application and passed the preferences test, default physical XKB typing with an advertised-but-unbound text-input manager, and the opt-in text-input-v3 mock.

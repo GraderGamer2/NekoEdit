@@ -1,5 +1,38 @@
 # NekoEdit current status
 
+## 2026-11-09 — physical typing restored; isolate Settings over History
+
+**Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
+**Current source/test commit:** [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0) — `fix: isolate Settings as a modal over the editor and History`.
+
+### User confirmation and latest validated input build
+
+- The user confirms that ordinary typing works again after the text-input-v3 default-off correction.
+- Actions [Build and test #667](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292) passed all eight steps on the corrected physical-typing source/test tree. The uploaded artifact is [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/42531669292/artifacts/13637810575), 94,377 bytes, SHA-256 `921bf1f2e4bfbec1bc33b7737ac6d8a1dbc4f8d3578e94bb972ef46e455fcf30`. Live IME behavior when explicitly opting in remains separate from the confirmed normal typing path.
+
+### Screenshot diagnosis
+
+- Inspected the repository screenshot [`Screenshots for debugging/inconsistent UI.png`](https://github.com/GraderGamer2/NekoEdit/blob/early-alpha/Screenshots%20for%20debugging/inconsistent%20UI.png) directly from the `early-alpha` branch.
+- The screenshot shows the History tab underneath the centered Settings panel. This was caused by render order, not a duplicated History renderer: `render_surface` drew `render_history_manager` first, then `render_file_menu` drew only a 256×192 Settings rectangle. Since there was no modal backdrop, History search/results, Open Selected, counters, and action buttons remained visible around the smaller panel.
+- The outside-click path also closed Settings and fell through into document/History hit-testing, allowing the same click to activate content that should have been covered by a modal.
+
+### Correction and regression coverage
+
+- Settings now disables the coordinate transform temporarily and clears the workspace from y=76 to the bottom of the window before drawing the panel. The title bar and document/History tab strip remain visible; the underlying workspace controls do not.
+- A pointer click outside an open Settings panel now dismisses that modal and ends the click dispatch. It no longer falls through to the covered document or History controls. The non-modal File menu retains its existing behavior.
+- The History integration test now opens Settings while History is active, checks the pixels where Open Selected used to remain visible and inside the panel, verifies that an outside click does not open History Browse, then confirms Browse works normally after the modal closes.
+- Implementation/test commit: [015a3e60c374](https://github.com/GraderGamer2/NekoEdit/commit/015a3e60c3749493dc94f3235c46b640947c5fe0).
+- Full CI for this visual correction is pending; do not treat the new pixel/click-through assertions as passed until the consolidated workflow completes.
+
+### Next work
+
+- Keep the History path filter marked as user-reported nonfunctional; the modal correction does not claim to fix it.
+- After the modal tests pass, continue the bounded XKB work with general key/action and repeat semantics, then consumed/preserved-modifier behavior. Real GNOME/Mutter input-method validation remains a separate desktop acceptance check.
+
+**Snapshot date:** 2026-11-09 (Asia/Jakarta).
+
+---
+
 ## 2026-11-09 — restore physical typing; make text-input-v3 explicitly opt-in
 
 **Current branch:** `early-alpha` (PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2), open against `main`).  
