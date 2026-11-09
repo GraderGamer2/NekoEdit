@@ -1,16 +1,32 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define SYS_read 0
+#define SYS_write 1
 #define SYS_close 3
+#define SYS_fstat 5
 #define SYS_lseek 8
 #define SYS_mmap 9
 #define SYS_munmap 11
+#define SYS_getpid 39
+#define SYS_fsync 74
 #define SYS_openat 257
+#define SYS_mkdirat 258
+#define SYS_unlinkat 263
+#define SYS_renameat 264
 #define AT_FDCWD (-100)
 #define O_RDONLY 0
+#define O_WRONLY 1
+#define O_CREAT 64
+#define O_EXCL 128
 #define O_CLOEXEC 0x80000
 #define O_NONBLOCK 0x800
 #define O_NOFOLLOW 0x20000
+#define O_DIRECTORY 0x10000
+#define S_IFMT 0xf000
+#define S_IFREG 0x8000
+#define DIR_MODE 0700u
+#define FILE_MODE 0600u
 #define SEEK_END 2
 #define PROT_READ 1
 #define MAP_PRIVATE 2
@@ -25,6 +41,8 @@
 extern char **process_envp;
 uint32_t compose_locale_active;
 uint32_t compose_locale_output[MAX_OUTPUTS];
+char compose_locale_current_tag[MAX_TAG_LENGTH + 1u];
+char compose_locale_installed_tag[MAX_TAG_LENGTH + 1u];
 
 static const uint8_t magic[8] = {'N','E','K','O','L','O','C','1'};
 static const char locale_env[] = "NEKOEDIT_LOCALE";
@@ -260,6 +278,7 @@ uint32_t compose_locale_load(const char *requested_tag)
                 equals(tag, "pt_br.utf8") || equals(tag, "pt_br.UTF-8")))
         tag = pt_br_canonical;
     compose_locale_active = 0;
+    compose_locale_current_tag[0] = 0;
     if (mapped_pack && mapped_pack_size)
         (void)syscall6(SYS_munmap, (long)mapped_pack, mapped_pack_size, 0, 0, 0, 0);
     mapped_pack = (const uint8_t *)0;
@@ -269,8 +288,13 @@ uint32_t compose_locale_load(const char *requested_tag)
         equals(tag, "en_US.UTF-8") || equals(tag, "en_US.utf8") ||
         equals(tag, "en_US.UTF8") || equals(tag, "C") ||
         equals(tag, "C.UTF-8") || equals(tag, "C.utf8") ||
-        equals(tag, "C.UTF8") || equals(tag, "POSIX"))
+        equals(tag, "C.UTF8") || equals(tag, "POSIX")) {
+        static const char builtin[] = "en_US.UTF-8";
+        uint32_t i;
+        for (i = 0; i < sizeof(builtin); ++i)
+            compose_locale_current_tag[i] = builtin[i];
         return 0;
+    }
 
     tag_length = string_length(tag, MAX_TAG_LENGTH + 1u);
     home_length = string_length(home, sizeof(path));
@@ -299,6 +323,11 @@ uint32_t compose_locale_load(const char *requested_tag)
     mapped_pack_size = (uint32_t)size;
     mapped_record_count = count;
     compose_locale_active = 1;
+    {
+        uint32_t i;
+        for (i = 0; i < tag_length; ++i) compose_locale_current_tag[i] = tag[i];
+        compose_locale_current_tag[tag_length] = 0;
+    }
     return 1;
 }
 
@@ -347,4 +376,302 @@ uint32_t compose_locale_prefix(uint32_t input_count, const uint32_t *input)
     record = records + index * RECORD_SIZE;
     return record[0] > input_count &&
            compare_record_input(record, input, input_count) == 0;
+}
+
+
+static int copy_ascii(char *destination, uint32_t capacity,
+                      const char *source, uint32_t length)
+{
+    uint32_t i;
+    if (!destination || !source || !capacity || length >= capacity) return 0;
+    for (i = 0; i < length; ++i) destination[i] = source[i];
+    destination[length] = 0;
+    return 1;
+}
+
+static int append_ascii(char *destination, uint32_t capacity,
+                        uint32_t *used, const char *source, uint32_t length)
+{
+    uint32_t i;
+    if (!destination || !used || !source || *used >= capacity ||
+        length >= capacity - *used) return 0;
+    for (i = 0; i < length; ++i) destination[(*used)++] = source[i];
+    destination[*used] = 0;
+    return 1;
+}
+
+static uint32_t append_decimal(char *destination, uint32_t capacity,
+                               uint32_t used, uint32_t value)
+{
+    char digits[10];
+    uint32_t count = 0;
+    if (!value) digits[count++] = '0';
+    while (value && count < sizeof(digits)) {
+        digits[count++] = (char)('0' + value % 10u);
+        value /= 10u;
+    }
+    while (count) {
+        if (used + 1u >= capacity) return UINT32_MAX;
+        destination[used++] = digits[--count];
+    }
+    destination[used] = 0;
+    return used;
+}
+
+/* The final component is opened with O_NOFOLLOW. This prevents a replaced
+ * .nekoedit or locales entry from redirecting pack writes outside HOME. */
+static long open_locale_directory(void)
+{
+    const char *home = environment_value(home_env);
+    long root_fd, app_fd, locale_fd, result;
+    if (!home || home[0] != '/' || !home[1]) return -1;
+    root_fd = syscall6(SYS_openat, AT_FDCWD, (long)home,
+                       O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0, 0, 0);
+    if (failed(root_fd)) return -1;
+    result = syscall6(SYS_mkdirat, root_fd, (long)".nekoedit",
+                      DIR_MODE, 0, 0, 0);
+    if (failed(result) && result != -17) {
+        (void)syscall6(SYS_close, root_fd, 0, 0, 0, 0, 0);
+        return -1;
+    }
+    app_fd = syscall6(SYS_openat, root_fd, (long)".nekoedit",
+                      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0, 0, 0);
+    (void)syscall6(SYS_close, root_fd, 0, 0, 0, 0, 0);
+    if (failed(app_fd)) return -1;
+    result = syscall6(SYS_mkdirat, app_fd, (long)"locales",
+                      DIR_MODE, 0, 0, 0);
+    if (failed(result) && result != -17) {
+        (void)syscall6(SYS_close, app_fd, 0, 0, 0, 0, 0);
+        return -1;
+    }
+    locale_fd = syscall6(SYS_openat, app_fd, (long)"locales",
+                         O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW, 0, 0, 0);
+    (void)syscall6(SYS_close, app_fd, 0, 0, 0, 0, 0);
+    return failed(locale_fd) ? -1 : locale_fd;
+}
+
+static int pack_tag(const uint8_t *bytes, uint32_t size,
+                    char tag[MAX_TAG_LENGTH + 1u], uint32_t *tag_length)
+{
+    uint32_t i, length = 0;
+    if (!bytes || size < HEADER_SIZE || !tag || !tag_length) return 0;
+    while (length < 32u && bytes[36u + length]) ++length;
+    if (!valid_tag((const char *)(bytes + 36u), length)) return 0;
+    for (i = 0; i < length; ++i) tag[i] = (char)bytes[36u + i];
+    tag[length] = 0;
+    *tag_length = length;
+    return 1;
+}
+
+static int builtin_tag(const char *tag)
+{
+    return equals(tag, "en_US") || equals(tag, "en_US.UTF-8") ||
+           equals(tag, "en_US.utf8") || equals(tag, "en_US.UTF8") ||
+           equals(tag, "C") || equals(tag, "C.UTF-8") ||
+           equals(tag, "C.utf8") || equals(tag, "C.UTF8") ||
+           equals(tag, "POSIX");
+}
+
+static int write_all_fd(long fd, const uint8_t *bytes, uint32_t length)
+{
+    uint32_t offset = 0;
+    while (offset < length) {
+        long result = syscall6(SYS_write, fd, (long)(bytes + offset),
+                               length - offset, 0, 0, 0);
+        if (result > 0) {
+            offset += (uint32_t)result;
+            continue;
+        }
+        if (result == -4) continue;
+        return 0;
+    }
+    return 1;
+}
+
+static int make_pack_names(const char *tag, uint32_t tag_length,
+                           char *destination, uint32_t destination_capacity,
+                           char *temporary, uint32_t temporary_capacity)
+{
+    static const char suffix[] = ".nlp";
+    uint32_t used = tag_length;
+    if (!copy_ascii(destination, destination_capacity, tag, tag_length) ||
+        !append_ascii(destination, destination_capacity, &used,
+                      suffix, sizeof(suffix) - 1u))
+        return 0;
+    used = 0;
+    if (!append_ascii(temporary, temporary_capacity, &used, ".", 1u) ||
+        !append_ascii(temporary, temporary_capacity, &used, tag, tag_length) ||
+        !append_ascii(temporary, temporary_capacity, &used, ".", 1u))
+        return 0;
+    {
+        long pid = syscall6(SYS_getpid, 0, 0, 0, 0, 0, 0);
+        uint32_t next;
+        if (failed(pid)) return 0;
+        next = append_decimal(temporary, temporary_capacity, used, (uint32_t)pid);
+        if (next == UINT32_MAX) return 0;
+        used = next;
+    }
+    return append_ascii(temporary, temporary_capacity, &used, ".tmp",
+                        sizeof(".tmp") - 1u);
+}
+
+static int map_pack_file(const char *path, long *fd_out,
+                         const uint8_t **map_out, uint32_t *size_out,
+                         char tag[MAX_TAG_LENGTH + 1u], uint32_t *tag_length,
+                         uint32_t *record_count)
+{
+    uint8_t stat_buffer[256] __attribute__((aligned(16)));
+    long fd, size, address, result;
+    const uint8_t *bytes;
+    uint32_t i;
+    if (!path || !fd_out || !map_out || !size_out || !tag_length ||
+        !record_count) return 0;
+    fd = syscall6(SYS_openat, AT_FDCWD, (long)path,
+                  O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0, 0, 0);
+    if (failed(fd)) return 0;
+    for (i = 0; i < sizeof(stat_buffer); ++i) stat_buffer[i] = 0;
+    result = syscall6(SYS_fstat, fd, (long)stat_buffer, 0, 0, 0, 0);
+    if (failed(result) || (read32(stat_buffer + 24u) & S_IFMT) != S_IFREG) {
+        (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+        return 0;
+    }
+    size = syscall6(SYS_lseek, fd, 0, SEEK_END, 0, 0, 0);
+    if (size < (long)HEADER_SIZE || size > (long)MAX_PACK_SIZE) {
+        (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+        return 0;
+    }
+    address = syscall6(SYS_mmap, 0, size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (failed(address)) {
+        (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+        return 0;
+    }
+    bytes = (const uint8_t *)(uintptr_t)address;
+    if (!pack_tag(bytes, (uint32_t)size, tag, tag_length) ||
+        !validate_pack(bytes, (uint32_t)size, tag, *tag_length, record_count)) {
+        (void)syscall6(SYS_munmap, address, size, 0, 0, 0, 0);
+        (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+        return 0;
+    }
+    *fd_out = fd;
+    *map_out = bytes;
+    *size_out = (uint32_t)size;
+    return 1;
+}
+
+/* Only a complete, validated, data-only pack reaches the private locale
+ * directory. A per-directory temporary and rename prevent partial installs. */
+uint32_t compose_locale_install_pack(const char *source_path)
+{
+    char tag[MAX_TAG_LENGTH + 1u], destination[48], temporary[80];
+    const uint8_t *mapped = (const uint8_t *)0;
+    uint32_t size = 0, tag_length = 0, records = 0;
+    long source_fd = -1, locale_fd = -1, target_fd = -1, result;
+    uint32_t ok = 0;
+    if (!map_pack_file(source_path, &source_fd, &mapped, &size,
+                       tag, &tag_length, &records))
+        return 0;
+    if (builtin_tag(tag)) goto install_done;
+    if (!make_pack_names(tag, tag_length, destination, sizeof(destination),
+                         temporary, sizeof(temporary)))
+        goto install_done;
+    locale_fd = open_locale_directory();
+    if (failed(locale_fd)) {
+        locale_fd = -1;
+        goto install_done;
+    }
+    (void)syscall6(SYS_unlinkat, locale_fd, (long)temporary, 0, 0, 0, 0);
+    target_fd = syscall6(SYS_openat, locale_fd, (long)temporary,
+                         O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW,
+                         FILE_MODE, 0, 0);
+    if (failed(target_fd)) {
+        target_fd = -1;
+        goto install_done;
+    }
+    if (!write_all_fd(target_fd, mapped, size)) goto install_done;
+    result = syscall6(SYS_fsync, target_fd, 0, 0, 0, 0, 0);
+    if (failed(result)) goto install_done;
+    (void)syscall6(SYS_close, target_fd, 0, 0, 0, 0, 0);
+    target_fd = -1;
+    result = syscall6(SYS_renameat, locale_fd, (long)temporary,
+                      locale_fd, (long)destination, 0, 0);
+    if (failed(result)) goto install_done;
+    (void)syscall6(SYS_fsync, locale_fd, 0, 0, 0, 0, 0);
+    for (uint32_t i = 0; i < tag_length; ++i) compose_locale_installed_tag[i] = tag[i];
+    compose_locale_installed_tag[tag_length] = 0;
+    ok = 1;
+install_done:
+    if (target_fd >= 0)
+        (void)syscall6(SYS_close, target_fd, 0, 0, 0, 0, 0);
+    if (locale_fd >= 0) {
+        if (!ok) (void)syscall6(SYS_unlinkat, locale_fd, (long)temporary, 0, 0, 0, 0);
+        (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
+    }
+    if (mapped) (void)syscall6(SYS_munmap, (long)mapped, size, 0, 0, 0, 0);
+    if (source_fd >= 0) (void)syscall6(SYS_close, source_fd, 0, 0, 0, 0, 0);
+    return ok;
+}
+
+/* A filename is removable only when it opens without following symlinks and
+ * its embedded locale tag, CRC, scalar records, and ordering all validate. */
+uint32_t compose_locale_remove_pack(const char *tag)
+{
+    char tag_copy[MAX_TAG_LENGTH + 1u], destination[48], temporary[80];
+    uint8_t stat_buffer[256] __attribute__((aligned(16)));
+    uint32_t tag_length, records = 0, i;
+    long locale_fd, source_fd, result, file_size, address;
+    const uint8_t *mapped;
+    (void)temporary;
+    if (!tag) return 0;
+    tag_length = string_length(tag, MAX_TAG_LENGTH + 1u);
+    if (!valid_tag(tag, tag_length) || builtin_tag(tag) ||
+        !copy_ascii(tag_copy, sizeof(tag_copy), tag, tag_length))
+        return 0;
+    {
+        uint32_t unused_length = 0;
+        if (!make_pack_names(tag_copy, tag_length, destination, sizeof(destination),
+                             temporary, sizeof(temporary)) ||
+            unused_length != 0)
+            return 0;
+    }
+    locale_fd = open_locale_directory();
+    if (failed(locale_fd)) return 0;
+    source_fd = syscall6(SYS_openat, locale_fd, (long)destination,
+                         O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0, 0, 0);
+    if (failed(source_fd)) {
+        (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
+        return 0;
+    }
+    for (i = 0; i < sizeof(stat_buffer); ++i) stat_buffer[i] = 0;
+    result = syscall6(SYS_fstat, source_fd, (long)stat_buffer, 0, 0, 0, 0);
+    if (failed(result) || (read32(stat_buffer + 24u) & S_IFMT) != S_IFREG)
+        goto remove_done;
+    file_size = syscall6(SYS_lseek, source_fd, 0, SEEK_END, 0, 0, 0);
+    if (file_size < (long)HEADER_SIZE || file_size > (long)MAX_PACK_SIZE)
+        goto remove_done;
+    address = syscall6(SYS_mmap, 0, file_size, PROT_READ, MAP_PRIVATE, source_fd, 0);
+    if (failed(address)) goto remove_done;
+    mapped = (const uint8_t *)(uintptr_t)address;
+    {
+        char embedded[MAX_TAG_LENGTH + 1u];
+        uint32_t embedded_length = 0;
+        if (!pack_tag(mapped, (uint32_t)file_size, embedded, &embedded_length) ||
+            !equals(embedded, tag_copy) ||
+            !validate_pack(mapped, (uint32_t)file_size, tag_copy, tag_length, &records)) {
+            (void)syscall6(SYS_munmap, address, file_size, 0, 0, 0, 0);
+            goto remove_done;
+        }
+    }
+    (void)syscall6(SYS_munmap, address, file_size, 0, 0, 0, 0);
+    result = syscall6(SYS_unlinkat, locale_fd, (long)destination, 0, 0, 0, 0);
+    if (failed(result)) goto remove_done;
+    (void)syscall6(SYS_fsync, locale_fd, 0, 0, 0, 0, 0);
+    if (equals(compose_locale_current_tag, tag_copy))
+        (void)compose_locale_load("en_US.UTF-8");
+    (void)syscall6(SYS_close, source_fd, 0, 0, 0, 0, 0);
+    (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
+    return 1;
+remove_done:
+    (void)syscall6(SYS_close, source_fd, 0, 0, 0, 0, 0);
+    (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
+    return 0;
 }
