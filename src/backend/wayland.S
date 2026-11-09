@@ -4814,6 +4814,7 @@ text_input_object: .long 0
 text_input_entered: .long 0
 text_input_enabled: .long 0
 text_input_commit_serial: .long 0
+text_input_change_cause: .long 0
 text_input_state_ready: .long 0
 text_input_pending_flags: .long 0
 text_input_pending_delete_before: .long 0
@@ -7931,6 +7932,11 @@ wayland_main:
     mov edi, 32
     call doc_insert_byte
 .keyboard_changed:
+    mov dword ptr [rip + text_input_change_cause], 1
+    jmp .Lkeyboard_changed_common
+.keyboard_changed_ime:
+    mov dword ptr [rip + text_input_change_cause], 0
+.Lkeyboard_changed_common:
     call history_commit_action
     call doc_ensure_cursor_visible
     cmp dword ptr [rip + text_input_object], 0
@@ -7972,7 +7978,7 @@ wayland_main:
     mov edi, dword ptr [rip + last_opcode]
     call text_input_handle_event
     cmp eax, 2
-    je .keyboard_changed
+    je .keyboard_changed_ime
     cmp eax, 1
     je .text_input_redraw_only
     jmp .event_loop
@@ -12487,6 +12493,7 @@ text_input_commit_request:
     test rax, rax
     js .Lti_commit_request_return
     inc dword ptr [rip + text_input_commit_serial]
+    mov dword ptr [rip + text_input_change_cause], 0
 .Lti_commit_request_return:
     ret
 .size text_input_commit_request, . - text_input_commit_request
@@ -12630,6 +12637,19 @@ text_input_update_state:
 .Lti_update_send_state:
     cmp dword ptr [rip + text_input_state_ready], 1
     jne .Lti_update_done
+
+    # Tell the compositor whether this document-state change came from the
+    # editor (keyboard/pointer) or from the input method. The cause and the
+    # following surrounding/cursor state are committed atomically.
+    mov eax, dword ptr [rip + text_input_change_cause]
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, dword ptr [rip + text_input_object]
+    mov esi, 4
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .Lti_update_return
 
     # Keep no more than 4000 bytes around the caret; offsets remain UTF-8 boundaries.
     mov r12d, dword ptr [rip + doc_cursor]

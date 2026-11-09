@@ -1992,7 +1992,16 @@ xkb_symbols "nekoedit-sparse" {
                         expected_text: bytes, expected_cursor: int, label: str,
                         expected_anchor: int | None = None,
                         expected_rectangle: tuple[int, int, int, int] | None = None,
+                        *, expected_cause: int = 0,
                     ) -> tuple[int, int, int, int]:
+                        cause_message = recv_wayland_message(client)
+                        if cause_message[0:2] != (18, 4) or len(cause_message[2]) != 4 or cause_message[3]:
+                            raise AssertionError(f"{label}: expected set_text_change_cause before surrounding text, got {cause_message!r}")
+                        actual_cause = struct.unpack("<I", cause_message[2])[0]
+                        if actual_cause != expected_cause:
+                            raise AssertionError(
+                                f"{label}: expected text change cause {expected_cause}, got {actual_cause}"
+                            )
                         message = recv_wayland_message(client)
                         if message[0:2] != (18, 3) or message[3]:
                             raise AssertionError(f"{label}: unexpected surrounding-text request {message!r}")
@@ -2234,7 +2243,9 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 3, struct.pack("<IIII", 7001, 7001, 42, 1))
                         + wire_message(16, 3, struct.pack("<IIII", 7002, 7002, 105, 1))
                     )
-                    expect_state(committed, 3, "selected UTF-8 scalar", 6)
+                    expect_state(
+                        committed, 3, "selected UTF-8 scalar", 6, expected_cause=1
+                    )
                     release_frame("IME selection redraw")
                     if child_u32("doc_selection_active") != 1:
                         raise AssertionError("Shift+Left did not produce the expected active selection")
