@@ -20,7 +20,7 @@ ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
 
 SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
-C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/editor/history.c src/editor/preferences.c
+C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
 .PHONY: all clean test test-wayland test-install-user check inspect install install-user uninstall-user
@@ -57,6 +57,7 @@ test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
+	$(PYTHON) tests/compose_pack_test.py
 
 test-install-user: $(APP_BINARY)
 	sh tests/install_user.sh

@@ -12,13 +12,13 @@ The pair table stores Unicode scalar triples (first input, second input, result)
 
 The regression mock exercises the existing `o e` ligature plus newly added `period period` → U+2026, `S S` → U+1E9E, `period greater` → U+203A, `minus minus period` → U+2013, and `minus minus minus` → U+2014 paths. It also verifies that a recognized triple prefix stays buffered until the third symbol and that Backspace cancels a pending two-symbol prefix. These tests inspect text insertion and document bytes, not font availability or visual glyph rendering.
 
-## Locale-pack direction
+## Optional locale packs
 
-The product default will remain **en_US.UTF-8** and its Compose baseline will be built into the core executable. Other locales are planned as optional, separately downloadable locale packs attached to GitHub Releases. The editor will load an installed pack at runtime and fall back to built-in en_US when no matching pack is installed or a pack fails validation.
+The core executable keeps **en_US.UTF-8 as its built-in default**. A bounded runtime loader now supports explicitly selected, data-only locale packs installed in `~/.nekoedit/locales/` and selected through `NEKOEDIT_LOCALE`. A selected pack replaces that locale's Compose table; it does not merge with en_US. It supports two- to four-scalar input sequences and one- to eight-scalar output strings. Missing or invalid packs fall back to the embedded en_US tables. No shared libraries, executable plugin code, or network access are required.
 
-These packs are data, not executable plugins: no native shared objects, arbitrary code, or third-party runtime dependencies. A versioned, bounded format should permit the runtime loader to reject incompatible, oversized, malformed, or out-of-range records before they are used. The editor itself should remain usable offline; downloading/installing packs belongs to a separate release workflow, not an automatic network dependency in the core editor.
+The binary layout, generator, validation rules, and installation example are documented in [COMPOSE_PACK_FORMAT.md](COMPOSE_PACK_FORMAT.md). The pack generator is a Python build/release tool; Python is not a runtime dependency.
 
-This architecture is planned, not implemented by the current static en_US tables.
+Actual non-en_US release assets, a Settings selector/installer, and locale-specific system/user Compose-file import remain future work.
 
 ## Explicit limits
 
@@ -46,4 +46,4 @@ The source is distributed as part of X.Org libX11. Its repository `COPYING` file
 
 ## Runtime impact
 
-The expanded table is static read-only data. It adds no build-time or runtime library dependency and does not alter Wayland keyboard protocol handling. The linear table search runs only while the user is in an active Compose sequence.
+The embedded en_US tables remain static read-only data. Optional packs are opened and mapped only when a non-built-in `NEKOEDIT_LOCALE` is explicitly selected. The loader rejects files larger than 2 MiB and validates the header, locale tag, CRC-32, record ordering, prefix ambiguity, and Unicode scalar fields before enabling a locale. Lookups use a sorted bounded table and binary search. The executable gains no dynamic dependency and performs no automatic download.

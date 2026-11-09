@@ -4853,10 +4853,12 @@ doc_word_drag_start:     .long 0
 doc_word_drag_end:       .long 0
 .global doc_pending_dead_mark
 doc_pending_dead_mark: .long 0
-.global doc_compose_active, doc_compose_first, doc_compose_second
+.global doc_compose_active, doc_compose_first, doc_compose_second, doc_compose_third, doc_compose_fourth
 doc_compose_active: .long 0
 doc_compose_first:  .long 0
 doc_compose_second: .long 0
+doc_compose_third:  .long 0
+doc_compose_fourth: .long 0
 doc_view_top_row:       .long 0
 doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
@@ -5078,6 +5080,11 @@ recv_msg_control:      .zero 64
 .extern font_init
 .extern preferences_load
 .extern preferences_save
+.extern compose_locale_load
+.extern compose_locale_active
+.extern compose_locale_lookup
+.extern compose_locale_prefix
+.extern compose_locale_output
 .extern preferences_set_font_path
 .extern history_open
 .extern history_begin_action
@@ -5109,6 +5116,8 @@ wayland_main:
     mov dword ptr [rip + ui_font_size], 10
     # Load validated persistent settings before the first layout calculation.
     call preferences_load
+    # A selected optional pack replaces the Compose table only after full validation.
+    call compose_locale_load
     mov dword ptr [rip + window_buffer_id], 12
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -6796,6 +6805,8 @@ wayland_main:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + ctrl_physical_down], 0
     mov dword ptr [rip + shift_down], 0
@@ -7377,6 +7388,8 @@ wayland_main:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_escape_cancel_dead:
@@ -7788,6 +7801,8 @@ wayland_main:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_backspace_cancel_dead:
@@ -12906,6 +12921,8 @@ text_input_apply_done:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lti_apply_insert
     call doc_delete_selection
@@ -17773,6 +17790,8 @@ doc_insert_keyboard_codepoint:
     push r13
     push r14
     push r15
+    push rbp
+    sub rsp, 8
     mov r12d, edi
     cmp r12d, 0x110007
     je .Ldoc_keyboard_compose_start
@@ -17788,17 +17807,31 @@ doc_insert_keyboard_codepoint:
     je .Ldoc_keyboard_dead_after_compose
     mov r14d, dword ptr [rip + doc_compose_first]
     mov r15d, dword ptr [rip + doc_compose_second]
+    mov ebx, dword ptr [rip + doc_compose_third]
+    mov ebp, dword ptr [rip + doc_compose_fourth]
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     test r14d, r14d
     jz .Ldoc_keyboard_dead_after_compose
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
     test r15d, r15d
-    jz .Ldoc_keyboard_dead_after_compose
+    jz .Ldoc_keyboard_dead_flush_third
     mov edi, r15d
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_dead_flush_third:
+    test ebx, ebx
+    jz .Ldoc_keyboard_dead_flush_fourth
+    mov edi, ebx
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_dead_flush_fourth:
+    test ebp, ebp
+    jz .Ldoc_keyboard_dead_after_compose
+    mov edi, ebp
     call doc_insert_codepoint_utf8
 .Ldoc_keyboard_dead_after_compose:
     cmp dword ptr [rip + doc_pending_dead_mark], 0
@@ -17826,19 +17859,33 @@ doc_insert_keyboard_codepoint:
     je .Ldoc_keyboard_compose_arm
     mov r14d, dword ptr [rip + doc_compose_first]
     mov r15d, dword ptr [rip + doc_compose_second]
+    mov ebx, dword ptr [rip + doc_compose_third]
+    mov ebp, dword ptr [rip + doc_compose_fourth]
     test r14d, r14d
     jz .Ldoc_keyboard_compose_arm
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
     test r15d, r15d
-    jz .Ldoc_keyboard_compose_arm
+    jz .Ldoc_keyboard_compose_restart_third
     mov edi, r15d
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_compose_restart_third:
+    test ebx, ebx
+    jz .Ldoc_keyboard_compose_restart_fourth
+    mov edi, ebx
+    call doc_insert_codepoint_utf8
+.Ldoc_keyboard_compose_restart_fourth:
+    test ebp, ebp
+    jz .Ldoc_keyboard_compose_arm
+    mov edi, ebp
     call doc_insert_codepoint_utf8
 .Ldoc_keyboard_compose_arm:
     mov dword ptr [rip + doc_compose_active], 1
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     mov eax, 1
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_insert_scalar:
@@ -17846,11 +17893,15 @@ doc_insert_keyboard_codepoint:
     ja .Ldoc_keyboard_insert_done
     cmp dword ptr [rip + doc_compose_active], 0
     je .Ldoc_keyboard_insert_pending_dead
+    cmp dword ptr [rip + compose_locale_active], 0
+    jne .Ldoc_keyboard_locale_compose
     mov r13d, dword ptr [rip + doc_compose_first]
     test r13d, r13d
     jnz .Ldoc_keyboard_compose_second
     mov dword ptr [rip + doc_compose_first], r12d
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     mov eax, 1
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_compose_second:
@@ -17875,6 +17926,8 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
@@ -17890,6 +17943,8 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
@@ -17900,6 +17955,8 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call doc_delete_selection
     mov edi, r13d
     call doc_insert_codepoint_utf8
@@ -17913,12 +17970,98 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_active], 0
     mov dword ptr [rip + doc_compose_first], 0
     mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call doc_delete_selection
     mov edi, r13d
     call doc_insert_codepoint_utf8
     mov edi, r12d
     call doc_insert_codepoint_utf8
     jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_locale_compose:
+    # Optional packs support 2-4 inputs and up to 8 output scalars.
+    # Ambiguous-prefix records are rejected by the loader.
+    mov eax, dword ptr [rip + doc_compose_first]
+    test eax, eax
+    jz .Ldoc_keyboard_locale_first
+    mov eax, dword ptr [rip + doc_compose_second]
+    test eax, eax
+    jz .Ldoc_keyboard_locale_second
+    mov eax, dword ptr [rip + doc_compose_third]
+    test eax, eax
+    jz .Ldoc_keyboard_locale_third
+    jmp .Ldoc_keyboard_locale_fourth
+.Ldoc_keyboard_locale_first:
+    mov dword ptr [rip + doc_compose_first], r12d
+    mov eax, 1
+    jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_locale_second:
+    mov dword ptr [rip + doc_compose_second], r12d
+    mov edi, 2
+    lea rsi, [rip + doc_compose_first]
+    lea rdx, [rip + compose_locale_output]
+    call compose_locale_lookup
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_result
+    mov edi, 2
+    lea rsi, [rip + doc_compose_first]
+    call compose_locale_prefix
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_buffered
+    mov r14d, 2
+    jmp .Ldoc_keyboard_locale_literal
+.Ldoc_keyboard_locale_third:
+    mov dword ptr [rip + doc_compose_third], r12d
+    mov edi, 3
+    lea rsi, [rip + doc_compose_first]
+    lea rdx, [rip + compose_locale_output]
+    call compose_locale_lookup
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_result
+    mov edi, 3
+    lea rsi, [rip + doc_compose_first]
+    call compose_locale_prefix
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_buffered
+    mov r14d, 3
+    jmp .Ldoc_keyboard_locale_literal
+.Ldoc_keyboard_locale_fourth:
+    mov dword ptr [rip + doc_compose_fourth], r12d
+    mov edi, 4
+    lea rsi, [rip + doc_compose_first]
+    lea rdx, [rip + compose_locale_output]
+    call compose_locale_lookup
+    test eax, eax
+    jnz .Ldoc_keyboard_locale_result
+    mov r14d, 4
+    jmp .Ldoc_keyboard_locale_literal
+.Ldoc_keyboard_locale_result:
+    mov r14d, eax
+    lea r15, [rip + compose_locale_output]
+    jmp .Ldoc_keyboard_locale_commit
+.Ldoc_keyboard_locale_literal:
+    lea r15, [rip + doc_compose_first]
+.Ldoc_keyboard_locale_commit:
+    mov dword ptr [rip + doc_compose_active], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+    call doc_delete_selection
+    xor ebx, ebx
+.Ldoc_keyboard_locale_insert_loop:
+    cmp ebx, r14d
+    jae .Ldoc_keyboard_locale_insert_done
+    mov edi, dword ptr [r15 + rbx*4]
+    call doc_insert_codepoint_utf8
+    inc ebx
+    jmp .Ldoc_keyboard_locale_insert_loop
+.Ldoc_keyboard_locale_insert_done:
+    jmp .Ldoc_keyboard_insert_done
+.Ldoc_keyboard_locale_buffered:
+    mov eax, 1
+    jmp .Ldoc_keyboard_insert_done
+
 .Ldoc_keyboard_insert_pending_dead:
     mov r13d, dword ptr [rip + doc_pending_dead_mark]
     test r13d, r13d
@@ -17947,6 +18090,8 @@ doc_insert_keyboard_codepoint:
     mov edi, r12d
     call doc_insert_codepoint_utf8
 .Ldoc_keyboard_insert_done:
+    add rsp, 8
+    pop rbp
     pop r15
     pop r14
     pop r13

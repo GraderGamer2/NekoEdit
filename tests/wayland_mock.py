@@ -18,6 +18,9 @@ import threading
 import time
 import traceback
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+from compose_pack import encode_pack as encode_compose_pack
+
 
 def wire_message(object_id: int, opcode: int, payload: bytes = b"") -> bytes:
     size = 8 + len(payload)
@@ -234,6 +237,8 @@ def run(
     font_picker_test: bool = False,
     clipboard_test: bool = False,
     context_menu_test: bool = False,
+    compose_locale_test: bool = False,
+    compose_locale_invalid_test: bool = False,
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
@@ -249,6 +254,20 @@ def run(
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
+    if compose_locale_test and compose_locale_invalid_test:
+        raise ValueError("valid and invalid locale-pack scenarios are mutually exclusive")
+    if compose_locale_test or compose_locale_invalid_test:
+        locale_dir = os.path.join(runtime_dir, ".nekoedit", "locales")
+        os.makedirs(locale_dir, mode=0o700, exist_ok=True)
+        pack_doc = {"locale":"xx_TEST.UTF-8", "sequences":[
+            {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
+            {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
+            {"input":[0x79,0x75,0x69],"output":[0x2605]},
+        ]}
+        pack_data = bytearray(encode_compose_pack(pack_doc))
+        if compose_locale_invalid_test: pack_data[-1] ^= 1
+        with open(os.path.join(locale_dir, "xx_TEST.UTF-8.nlp"), "wb") as pack_file:
+            pack_file.write(pack_data)
     display_name = "wayland-mock"
     if use_wayland_socket:
         client_endpoint, compositor_endpoint = socket.socketpair()
@@ -315,7 +334,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
-            client.settimeout(45 if file_workflow or context_menu_test else 8)
+            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -643,7 +662,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test or unicode_keyboard_test:
+                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -3658,7 +3677,74 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
-                if unicode_keyboard_test:
+                if compose_locale_test:
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("valid optional Compose pack was not activated")
+                    key_step(4100, 46, "optional locale starts Compose pair")
+                    key_step(4102, 24, "optional locale buffers o")
+                    if child_u32("doc_compose_first") != ord("o") or child_u32("doc_length") != 0:
+                        raise AssertionError("optional locale did not buffer its first input")
+                    key_step(4104, 23, "optional locale resolves o i to a two-scalar output")
+                    expected = bytes.fromhex("e29883efb88f")
+                    actual = read_document_state()["doc_contents"]
+                    if actual != expected or child_u32("doc_compose_active") != 0:
+                        raise AssertionError("multi-scalar output mismatch: " + repr(actual))
+                    key_step(4110, 46, "optional locale starts three-input Compose")
+                    key_step(4112, 21, "optional locale buffers y")
+                    key_step(4114, 22, "optional locale buffers u")
+                    key_step(4116, 23, "optional locale resolves y u i")
+                    expected += bytes.fromhex("e29885")
+                    actual = read_document_state()["doc_contents"]
+                    if actual != expected:
+                        raise AssertionError("three-input mapping mismatch: " + repr(actual))
+                    before = child_u32("doc_length")
+                    key_step(4120, 46, "optional locale starts four-input Compose")
+                    key_step(4122, 17, "optional locale buffers w")
+                    key_step(4124, 18, "optional locale buffers e")
+                    key_step(4126, 19, "optional locale buffers r")
+                    if child_u32("doc_compose_third") != ord("r") or child_u32("doc_length") != before:
+                        raise AssertionError("four-input prefix was not buffered")
+                    key_step(4128, 20, "optional locale resolves w e r t")
+                    expected += bytes.fromhex("f09f9982")
+                    actual = read_document_state()["doc_contents"]
+                    if actual != expected:
+                        raise AssertionError("four-input mapping mismatch: " + repr(actual))
+                    key_step(4130, 46, "optional locale starts unknown pair")
+                    key_step(4132, 25, "optional locale buffers p")
+                    key_step(4134, 25, "unknown locale pair falls back literally")
+                    expected += b"pp"
+                    actual = read_document_state()["doc_contents"]
+                    if actual != expected:
+                        raise AssertionError("unknown input was not preserved: " + repr(actual))
+                    before_cancel = child_u32("doc_length")
+                    key_step(4140, 46, "optional locale starts Escape-cancel sequence")
+                    key_step(4142, 17, "optional locale buffers w before Escape")
+                    key_step(4144, 18, "optional locale buffers e before Escape")
+                    key_step(4146, 19, "optional locale buffers r before Escape")
+                    key_step(4148, 1, "Escape cancels buffered locale inputs")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_compose_third") != 0 or child_u32("doc_length") != before_cancel:
+                        raise AssertionError("Escape did not clear the locale Compose prefix")
+                    key_step(4150, 46, "optional locale starts Backspace-cancel sequence")
+                    key_step(4152, 17, "optional locale buffers w before Backspace")
+                    key_step(4154, 18, "optional locale buffers e before Backspace")
+                    key_step(4156, 19, "optional locale buffers r before Backspace")
+                    key_step(4158, 14, "Backspace cancels buffered locale inputs")
+                    if (
+                        child_u32("doc_compose_active") != 0
+                        or child_u32("doc_compose_first") != 0
+                        or child_u32("doc_compose_second") != 0
+                        or child_u32("doc_compose_third") != 0
+                        or child_u32("doc_compose_fourth") != 0
+                        or child_u32("doc_length") != before_cancel
+                    ):
+                        raise AssertionError("Backspace did not clear the locale Compose state")
+                    observations.append("validated optional locale pack: pair/multi-output, triple, four-input, unknown fallback, Escape and Backspace")
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                elif unicode_keyboard_test:
+                    if compose_locale_invalid_test and child_u32("compose_locale_active") != 0:
+                        raise AssertionError("CRC-invalid locale pack was not rejected")
                     # Inspect the parser's scalar table before exercising
                     # modifiers and insertion. Layout index is keycode*16+level.
                     alias_scalars = (
@@ -6891,6 +6977,9 @@ xkb_symbols "nekoedit-sparse" {
     thread = threading.Thread(target=fake_compositor, daemon=True)
     thread.start()
     environment = os.environ.copy()
+    environment.pop("NEKOEDIT_LOCALE", None)
+    if compose_locale_test or compose_locale_invalid_test:
+        environment["NEKOEDIT_LOCALE"] = "xx_TEST.UTF-8"
     # Never let a caller's shell opt-in leak into the default-path regression.
     environment.pop("NEKOEDIT_ENABLE_TEXT_INPUT", None)
     if text_input_test:
@@ -7112,6 +7201,28 @@ if __name__ == "__main__":
             os.unlink(unicode_path)
         except FileNotFoundError:
             pass
+
+    # CRC-invalid optional data must be rejected; built-in en_US remains usable.
+    bad_locale_fd, bad_locale_path = tempfile.mkstemp(prefix="nekoedit-locale-bad-")
+    try:
+        with os.fdopen(bad_locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(sys.argv[1], initial_file=bad_locale_path,
+            unicode_keyboard_test=True, compose_locale_invalid_test=True)
+    finally:
+        try: os.unlink(bad_locale_path)
+        except FileNotFoundError: pass
+
+    # Exercise an installed optional pack through real Wayland keyboard events.
+    locale_fd, locale_path = tempfile.mkstemp(prefix="nekoedit-locale-valid-")
+    try:
+        with os.fdopen(locale_fd, "wb") as locale_document:
+            locale_document.write(b"")
+        run(sys.argv[1], initial_file=locale_path,
+            unicode_keyboard_test=True, compose_locale_test=True)
+    finally:
+        try: os.unlink(locale_path)
+        except FileNotFoundError: pass
 
     # Basic bounded snapshot undo/redo, including replacement of a selection.
     history_fd, history_path = tempfile.mkstemp(prefix="nekoedit-history-")
