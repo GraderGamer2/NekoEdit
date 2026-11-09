@@ -5,8 +5,27 @@ This is the commit-level audit trail reconstructed from GitHub on **2026-11-09**
 - Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - Current review PR: [#2 — feat: build out the Wayland text editor prototype](https://github.com/GraderGamer2/NekoEdit/pull/2) (early-alpha → main; open, unmerged).
 - Historical implementation PR: [#1 — feat: add Wayland editing and initial editor UI](https://github.com/GraderGamer2/NekoEdit/pull/1) (closed, unmerged).
-- Recorded implementation/test commits: **375** (372 previously recorded commits + the XKB preserve implementation and its two test corrections; documentation/continuity-only commits remain separate).
+- Recorded implementation/test commits: **377** (375 previously recorded commits + the consumed-Shift implementation and its test synchronization correction; documentation/continuity-only commits remain separate).
 - Dates are commit-author timestamps in UTC.
+
+## 2026-11-09 — screenshot debugging directory cleanup
+
+| Commit | Subject |
+|---|---|
+| [f3baa58e77f0](https://github.com/GraderGamer2/NekoEdit/commit/f3baa58e77f06a1c17abbbfe0373ead218f7eb81) | Delete Screenshots for debugging directory |
+
+The temporary screenshot collection was removed from the development branch; no application source or runtime behavior changed.
+
+## XKB preserve and consumed Control/Shift shortcut handling (2026-11-09)
+
+| Commit | Subject |
+|---|---|
+| [1b9d2da39977](https://github.com/GraderGamer2/NekoEdit/commit/1b9d2da399779ae306011e04e0509748b17afd87) | feat: filter consumed Shift from shortcut dispatch |
+| [29bada7cd1d8](https://github.com/GraderGamer2/NekoEdit/commit/29bada7cd1d8b153d4aa1c895e600c2cc68bbe82) | docs: describe consumed Control and Shift shortcuts |
+| [97cc62949fb7](https://github.com/GraderGamer2/NekoEdit/commit/97cc62949fb794c632242ea8c4c289d91aab8628) | test: wait for consumed modifier state reset |
+
+The implementation extends the per-key consumed-modifier filter from Control to Shift without changing the compositor-owned action boundary or the complete state used for keysym lookup. The Wayland mock verifies both consumed Shift suppression and preserved Shift selection, plus the parser's exact type/map/preserve data. Actions #684 and #685 exposed a test-only assumption that modifier release would cause a repaint; the final synchronization fix waits for the actual modifier-state reset. Actions [Build and test #686](https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163) passed all eight workflow steps and produced artifact [13645133185](https://github.com/GraderGamer2/NekoEdit/actions/runs/42550654163/artifacts/13645133185), 95,324 bytes, SHA-256 `4817ba43f7015796080a570879664407b0b51578a7f501d3ddaf2c166fb22035`.
+
 - This index records commit subjects, including intermediate tests, debugging, documentation, fixes, and reverts. The milestone narrative in [PROJECT_HISTORY.md](PROJECT_HISTORY.md) explains the functional changes.
 
 ## XKB type preserve and consumed-Control handling (2026-11-09)

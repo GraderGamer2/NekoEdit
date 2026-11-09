@@ -20,6 +20,15 @@ Repository: [GraderGamer2/NekoEdit](https://github.com/GraderGamer2/NekoEdit)
 - **COMMIT_INDEX.md** — exact commit subjects, dates, and links for the original `main` history and the complete development PR history captured on 2026-11-06.
 - **DEVELOPMENT_LOG.md** — append-only work log. Add a dated entry for every future development session/change.
 - **CURRENT_STATUS.md** — concise source-of-truth snapshot. Update it whenever implementation, test status, branch, or known limitations change.
+- The current implementation includes optional Wayland text-input-v3 integration in `src/backend/wayland.S`, `src/backend/clipboard.c` for Wayland clipboard transfers and the bundled `nekoedit-clip` process-exit owner, plus `src/editor/history.c` for compact version-2 per-document delta journals with version-1 compatibility. `docs/CLIPBOARD.md` records helper teardown/lifecycle and session limits; `docs/UNDO.md` describes compact record formats, recovery validation, permissions, and History-tab management. `make install-user` installs a per-user executable and desktop-menu launcher; `make test` includes an install/uninstall smoke test.
+
+## Wayland window management and resize behavior
+
+The pointer lifecycle, 16-unit edge hit areas, `xdg_toplevel.resize` request, optional cursor-shape feedback, and mock-compositor coverage are documented in [docs/WAYLAND_WINDOW_RESIZE.md](../docs/WAYLAND_WINDOW_RESIZE.md).
+
+## Wayland Maximize crash investigation
+
+The removed temporary diagnostics and sync barrier are documented in [docs/WAYLAND_MAXIMIZE_DEBUGGING.md](../docs/WAYLAND_MAXIMIZE_DEBUGGING.md). It records the confirmed dense-object-ID root cause, the historical commits containing the probes, and safe guidance for reintroducing them if the issue returns.
 
 ## Mandatory rule for future NekoEdit development
 
@@ -52,10 +61,17 @@ A small typo or truly documentation-only correction still receives a commit entr
 - Explicitly state what is implemented, partially implemented, planned, and unsupported.
 - Do not call code "full Unicode support" merely because UTF-8 byte sequences are preserved or code-point boundaries are respected. Record grapheme handling, Unicode rendering, text input, and IME separately.
 - Preserve the project's design constraints: Linux x86-64, GNU assembly, direct syscalls, no third-party runtime/shared-library dependency, and native Wayland/X11 protocols. Do not introduce dependencies or change the established launch interface without an explicit reason and a documented decision.
-- Keep the executable's supported launch command working. Current user-validated Wayland launch form: `./nekoedit --backend=wayland` (the Makefile build output is `./build/nekoedit`).
+- Keep the executable's supported launch command working. Direct build launch: `./build/nekoedit [FILE]` (explicit backend selection remains available as `./build/nekoedit --backend=wayland`). The per-user desktop/terminal install is `make install-user`, which adds `~/.local/bin/nekoedit [FILE]` and a NekoEdit application-menu launcher; `make uninstall-user` removes it.
 
 ## Historical coverage
 
 The initial history was reconstructed from GitHub on 2026-11-06 and includes **188 commits**: 20 commits from the original `main` prototype history and 168 commits in development PR #1. See `COMMIT_INDEX.md` for the exact commit-by-commit record and `PROJECT_HISTORY.md` for the functional narrative.
 
-The project state in these files must be refreshed with every future development change.
+The project state in these files must be refreshed with every future development change. The compact-journal encoder declaration correction and inactive-selection-anchor size correction are recorded in `CHANGELOG/DEVELOPMENT_LOG.md`. Actions #608 and #609 stopped before the Wayland tests; corrected Actions #610 then passed the full build, host, install, Wayland mock, and artifact workflow. Live GNOME/Mutter verification remains separate.
+
+
+## Current keyboard-input milestone
+
+The current branch has optional `zwp_text_input_manager_v3` discovery/binding, document-scoped enable/disable, surrounding-text state, preedit/commit/delete event staging, UTF-8 validation, and mock coverage. Its XKB text-v1 reader parses declared per-key/per-group type maps, exact modifier filters, up to eight levels, explicit per-name 32-bit virtual-modifier encodings, direct key-level `virtualModifiers`, direct and recognized indirect keysym `modifier_map` bindings, and a bounded `xkb_compat` interpretation subset (recognized modifier-keysyms, all five real-modifier predicates, `virtualModifier`, specificity ordering, equal-specificity declaration order, and `useModMapMods=level1`). The keysym table now includes ISO group/level selectors such as `ISO_Group_Shift` and `ISO_Next_Group`. Actions #664 passed all nine workflow steps on implementation commit `a1791e03bdb0`, including the twelve-rule compatibility fixture and full Wayland/Unicode/IME mock suite. General stateful key actions remain compositor-owned. Per-key repeat policy and XKB type `preserve[]`/consumed-modifier handling for Control and Shift shortcut state are implemented and mock-tested; live GNOME/Mutter input-method and real-keymap verification remain outstanding. Read the newest section in `CURRENT_STATUS.md` and `DEVELOPMENT_LOG.md` before continuing.
+
+The History path filter is user-reported nonfunctional, and deeper journal compaction remains deferred. Do not describe the filter as working or mix History fixes into the input/shaping roadmap unless the user changes that priority.
