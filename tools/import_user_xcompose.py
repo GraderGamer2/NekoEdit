@@ -32,6 +32,48 @@ _KEY_TOKEN = re.compile(r"<([^<>]+)>")
 _UNICODE_KEYSYM = re.compile(r"U([0-9A-Fa-f]{4,6})\Z")
 _SYMBOL_RESULT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
+# Printable ASCII names from the standard X.Org keysym set. These common
+# aliases are useful in ordinary .XCompose files and must not require the
+# optional full keysymdef.h input. Single-character letters/digits already
+# resolve through the direct ASCII path in _keysym_scalar().
+_ASCII_KEYSYM_SCALARS = {
+    "space": 0x0020,
+    "exclam": 0x0021,
+    "quotedbl": 0x0022,
+    "numbersign": 0x0023,
+    "dollar": 0x0024,
+    "percent": 0x0025,
+    "ampersand": 0x0026,
+    "apostrophe": 0x0027,
+    "quoteright": 0x0027,
+    "parenleft": 0x0028,
+    "parenright": 0x0029,
+    "asterisk": 0x002A,
+    "plus": 0x002B,
+    "comma": 0x002C,
+    "minus": 0x002D,
+    "period": 0x002E,
+    "slash": 0x002F,
+    "colon": 0x003A,
+    "semicolon": 0x003B,
+    "less": 0x003C,
+    "equal": 0x003D,
+    "greater": 0x003E,
+    "question": 0x003F,
+    "at": 0x0040,
+    "bracketleft": 0x005B,
+    "backslash": 0x005C,
+    "bracketright": 0x005D,
+    "asciicircum": 0x005E,
+    "underscore": 0x005F,
+    "grave": 0x0060,
+    "quoteleft": 0x0060,
+    "braceleft": 0x007B,
+    "bar": 0x007C,
+    "braceright": 0x007D,
+    "asciitilde": 0x007E,
+}
+
 
 def _valid_scalar(value: int) -> bool:
     return (
@@ -200,7 +242,9 @@ def _keysym_scalar(name: str, keysyms: dict[str, int]) -> int:
         return value if _valid_scalar(value) else 0
     if len(name) == 1 and 0x20 <= ord(name) <= 0x7E:
         return ord(name)
-    return keysyms.get(name, 0)
+    if name in keysyms:
+        return keysyms[name]
+    return _ASCII_KEYSYM_SCALARS.get(name, 0)
 
 
 def _is_modifier_residue(value: str) -> bool:

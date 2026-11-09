@@ -1,3 +1,18 @@
+## 2026-11-10 — built-in printable ASCII X keysym names — CI pending
+
+**Branch:** `early-alpha`; PR #2 remains open and unmerged.
+**Implementation:** this source/test commit is the first revision of the fix; the exact SHA and CI result will be recorded in the follow-up continuity entry.
+
+- Added an internal mapping for the standard printable ASCII names from the X.Org keysym set, including punctuation names and the `quoteleft`/`quoteright` aliases. Literal one-character ASCII keysyms remain on their existing fast path.
+- The resolver checks a supplied keysymdef.h first, then falls back to the built-in ASCII mapping. Non-ASCII named keysyms still require the optional header; Unicode-form `Uxxxx` names remain self-contained.
+- Added a regression using no keysymdef.h. It verifies named event inputs and keysym-only results for `space`, `quotedbl`, `grave`, `asciitilde`, `quoteleft`, `quoteright`, and `apostrophe`.
+- Updated `docs/COMPOSE_USER_IMPORT.md` to distinguish built-in printable ASCII names from other named character keysyms.
+- Full CI for this parser/test change is pending. Build and test #774 validates the installer baseline but predates this addition.
+
+**Next:** validate against more actual user-authored Compose files and document remaining unsupported constructs. Preserve the explicit offline/manual import boundary; do not add automatic startup discovery.
+
+---
+
 ## 2026-11-09 — one-command user XCompose installer — Build and test #774 passed
 
 **Branch:** early-alpha; PR #2 remains open and unmerged.

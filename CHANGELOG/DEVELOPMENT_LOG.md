@@ -1,3 +1,13 @@
+## 2026-11-10 — resolve named printable ASCII keysyms without keysymdef.h — CI pending
+
+- Inspected the current `early-alpha` source, importer specification, tests, PR head, and the #774 installer validation before changing code.
+- Added a static fallback for the standard printable ASCII X keysym names. It covers named punctuation keysyms and their deprecated quote aliases; literal ASCII letters/digits continue through the existing one-character path.
+- Preserved precedence for the optional caller-supplied X.Org keysym definitions. Non-ASCII named symbols still require that header, while `Uxxxx` keysyms remain self-contained.
+- Added a no-header regression that checks both input-key resolution and unquoted keysym-only result resolution. Existing include, encoding, cycle, resource-limit, and installation tests are unchanged.
+- Updated `docs/COMPOSE_USER_IMPORT.md` to make the no-header behavior explicit.
+- Full CI and the exact revision result are pending. #774 remains the latest green baseline and does not include this fix.
+
+---
 ## 2026-11-09 — one-command private user XCompose installer; Build and test #774 passed
 
 - Rechecked the live branch before continuing: the Finnish/Serbian physical dead-key keyboard tests were already implemented in 98144943b5ae and green in #759. The offline user XCompose importer and converter-to-manager integration were also already present.

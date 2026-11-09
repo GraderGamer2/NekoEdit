@@ -13,7 +13,7 @@ Examples of accepted rule shapes:
 
 - The first event must be Multi_key or a recognized dead_* action.
 - A Multi_key rule accepts two to four following keysyms. A dead-key rule accepts exactly one following keysym; the importer normalizes the action to its combining mark and emits a kind-1 NLP1 record.
-- Input keysyms are retained only when they resolve to Unicode scalar values. ASCII and Uxxxx–Uxxxxxx values work without an additional file. A Unicode-annotated X.Org keysymdef.h can be supplied for other named character keysyms.
+- Input keysyms are retained only when they resolve to Unicode scalar values. ASCII characters, standard printable ASCII keysym names (such as `space`, `quotedbl`, and `asciitilde`), and Uxxxx–Uxxxxxx values work without an additional file. A Unicode-annotated X.Org keysymdef.h can be supplied for other named character keysyms.
 - Results may be a quoted string of one to eight Unicode scalars, optionally followed by a keysym annotation, or a Unicode-resolvable keysym alone. Octal and hexadecimal byte escapes use the selected source encoding. Unicode scalar escapes are accepted as a convenience extension.
 - Later identical rules replace earlier ones, following include expansion order. Shorter rules that prefix longer rules are dropped within the same NLP1 rule kind.
 - Modifier-qualified entries are counted and skipped: NLP1 does not represent modifier-state constraints. Unsupported leading keysyms and non-Unicode input symbols are also skipped and counted. Malformed syntax, unsafe includes, and resource-limit violations fail the import.

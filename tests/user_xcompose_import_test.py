@@ -147,6 +147,29 @@ def main() -> None:
         if str(home) in serialized_source or str(root) in serialized_source:
             raise AssertionError("private source paths leaked into generated metadata")
 
+        # Printable named ASCII keysyms must work without an optional
+        # keysymdef.h. This covers named event inputs and keysym-only results.
+        ascii_names = write(
+            home / "ascii-keysyms",
+            '<Multi_key> <space> <quotedbl> : apostrophe\\n'
+            '<Multi_key> <grave> <asciitilde> : space\\n'
+            '<Multi_key> <quoteleft> <quoteright> : asciitilde\\n',
+        )
+        ascii_importer = user_import.ComposeImporter(
+            keysyms={},
+            locale="custom.UTF-8",
+            home_root=home,
+            system_root=system,
+            locale_compose=None,
+        )
+        ascii_result = mapping(ascii_importer.import_file(ascii_names))
+        if ascii_result[("multi_key", (0x0020, 0x0022))] != (0x0027,):
+            raise AssertionError("named printable ASCII input/result keysyms need no header")
+        if ascii_result[("multi_key", (0x0060, 0x007E))] != (0x0020,):
+            raise AssertionError("space keysym-only result did not resolve")
+        if ascii_result[("multi_key", (0x0060, 0x0027))] != (0x007E,):
+            raise AssertionError("quote aliases or asciitilde result did not resolve")
+
         # Repeated, non-recursive includes are legal and preserve textual
         # override order; a canonical path is only a cycle while active.
         repeated = write(
