@@ -6,7 +6,7 @@
 
 This applies to newly uploaded artifacts only. Existing Build and test #777 artifacts 13722915782 and 13721843648 keep their original 2027-02-08 expiry; they were not deleted or retroactively shortened. The editor build workflow ignores changelog-only updates and changes confined to the separate manual/release locale-pack workflow. No application source or runtime behavior changed.
 
-**Validation:** Build and test for the workflow commit is pending. The new artifact metadata will be checked for one-day expiry.
+**Validation boundary:** the workflow YAML is verified, but the GitHub connector available in this session only exposes pull-request-triggered workflow-run lookup. It did not provide the push-triggered run ID or the new artifacts' `expires_at` values. Check [Build and test runs on early-alpha](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Aearly-alpha) to confirm the push run and its artifacts.
 
 ---
 
