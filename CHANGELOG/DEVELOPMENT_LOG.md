@@ -1,3 +1,13 @@
+## 2026-11-10 — branch-only handoff: Wayland multi-dead-key chains — #802 passed
+
+- Recorded the `early-alpha` Wayland change for continuity; application code, tests, locale JSON, and workflow changes remain on that branch and were not copied to `main`.
+- The validated early-alpha source/test head is `91a92c38210362def100026afd60e7b08132d08f`; Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps.
+- The runtime buffers one to three dead-key combining marks plus a final character, queries existing typed NLP1 records, and preserves unmatched chains literally. Fourth-key overflow, Multi_key transition, Escape and Backspace have bounded behavior; the 52-byte pack record is unchanged.
+- The three XCompose import paths now accept the same bounded grammar. Pinned optional tables were regenerated and verified; counts are pt_BR 4,484, fi_FI 4,488, sr_RS 4,495, and el_GR 5,730. The en_US-derived dead-key baseline is 1,576.
+- CI includes source-derived two-mark Portuguese and three-mark Greek data assertions plus the Wayland keyboard-event mock. This is not a live GNOME/Mutter test.
+- Temporary workflow artifact/debug and write-permission steps were removed on early-alpha; its workflow is read-only again. Main contains only these changelog handoff notes.
+
+
 ## 2026-11-10 — early-alpha-only XCompose Unicode keysym compatibility — #797 passed
 
 - Recorded on main as a branch-only continuity handoff. No application source, tests, Makefile, or workflow changes from this implementation were copied to main; PR #2 remains open and unmerged.

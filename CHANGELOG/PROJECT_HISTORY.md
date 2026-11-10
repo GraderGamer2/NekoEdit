@@ -1,3 +1,14 @@
+## 2026-11-10 — early-alpha-only Wayland multi-dead-key milestone (handoff on main)
+
+This is a continuity-only record of work on `early-alpha`; no application source, tests, locale data, or build workflow changes were copied to `main`.
+
+The Wayland runtime now buffers one to three dead-key combining marks before a final base scalar and looks up the complete sequence through the existing kind-1 NLP1 record. Unmatched chains preserve the base and marks literally; overflow, Multi_key transition, Escape, and Backspace have explicit bounded behavior. The 52-byte NLP1 record, loader, and limits remain unchanged. The three Compose import paths recognize the matching bounded syntax.
+
+The pinned locale JSONs were regenerated after accepting additional source chains. The en_US-derived dead-key baseline is 1,576; final tables contain 4,484 pt_BR, 4,488 fi_FI, 4,495 sr_RS, and 5,730 el_GR records. Tests include source-derived two-mark Portuguese and three-mark Greek records and Wayland protocol-mock key events.
+
+Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on early-alpha source/test head [91a92c3](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f). The exact editor and locale artifact hashes and temporary-workflow cleanup are recorded in CURRENT_STATUS.md on both branches. This remains mock/CI evidence, not live Mutter or physical-keyboard validation. X11 backend work remains deferred.
+
+
 ## 2026-11-10 — early-alpha shared Unicode keysym resolver for native Compose import
 
 This is a branch-only milestone recorded on main for continuity; the application implementation remains on early-alpha and no source or build change was copied here. Early-alpha now shares its embedded XKB Unicode keysym resolver with the native Settings XCompose importer, broadening named character coverage across the existing X.Org table without duplicating data or adding runtime dependencies. Build and test #797 passed all 14 workflow steps after a test-only linker correction. Live GNOME/Mutter and physical-keyboard validation remain outstanding.

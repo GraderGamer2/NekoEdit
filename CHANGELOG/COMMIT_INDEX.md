@@ -1,3 +1,19 @@
+## 2026-11-10 — early-alpha-only Wayland multi-dead-key support — Build and test #802 passed
+
+These commits are recorded here for continuity only. They are on `early-alpha`, not `main`; no application implementation, tests, workflow, or locale data was brought into this branch.
+
+| Early-alpha commit | Subject |
+|---|---|
+| [e2521c401744](https://github.com/GraderGamer2/NekoEdit/commit/e2521c401744f2695b51b505f3ee6b7f53bd0d66) | feat: support bounded multi-dead-key chains on Wayland |
+| [39688a77d0c1](https://github.com/GraderGamer2/NekoEdit/commit/39688a77d0c19231b8055012c642c519e1aad036) | ci: retain regenerated locale JSON when source verification differs (temporary, removed) |
+| [94194470bbef](https://github.com/GraderGamer2/NekoEdit/commit/94194470bbef5c46e76fea8de67a15277d19cc21) | ci: refresh pinned locale data once for dead-key chains (temporary, removed) |
+| [c61453d2d180](https://github.com/GraderGamer2/NekoEdit/commit/c61453d2d180075e8d2eec323ad7bdde5dbdd30f) | data: refresh pinned Compose locale datasets [skip ci] |
+| [81e6272e95e5](https://github.com/GraderGamer2/NekoEdit/commit/81e6272e95e587327458a94c96957748291507b2) | chore: restore read-only locale verification workflow |
+| [91a92c382103](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f) | test: update pinned locale chain expectations |
+
+The first two data-comparison runs (#798/#799) exposed stale committed JSON after the importer admitted additional source rules. Run #800 recovered and committed exact pinned outputs; #801 found golden test counts that still described the old files. Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on the final code/test head. The temporary artifact and write-enabled refresh workflow changes were removed before the final read-only validation.
+
+
 ## 2026-11-10 — early-alpha-only native XCompose Unicode keysym compatibility — Build and test #797 passed
 
 These commits are recorded for continuity only; they are on `early-alpha` and are not reachable from `main`. No application source or build change was copied to this branch.

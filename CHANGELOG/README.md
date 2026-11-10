@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
-New GitHub Actions artifacts use one-day retention for future uploads; previously uploaded artifacts retain their assigned expiry. This continuity record now includes early-alpha Build and test #797, which passed the expanded native XCompose Unicode keysym importer. The shared X.Org keysym resolver, import tests, and link fix are on early-alpha only; no application code was copied to main. Editor and locale artifacts expire 2026-11-11 at 16:43 Jakarta. User-imported packs remain under ~/.nekoedit/locales. Live GNOME/Mutter layout/IME and physical-keyboard validation remain outstanding.
+Build and test #802 passed the Wayland multi-dead-key milestone on `early-alpha` source/test head `91a92c38210362def100026afd60e7b08132d08f`. The change buffers up to three combining marks plus the base scalar, preserves unmatched sequences literally, and keeps the NLP1 record format unchanged. The four separate locale tables were regenerated from pinned sources (pt_BR 4,484; fi_FI 4,488; sr_RS 4,495; el_GR 5,730 records). The final build workflow on early-alpha is read-only again. The Wayland mock, host/importer tests, pinned byte comparisons, pack build, and separate editor/locale uploads passed. Artifacts 13761918009 and 13762312971 expire 2026-11-11 at 18:48 Jakarta. This is a branch-only handoff: no app code, tests, locale data, or workflow change was copied to main; PR #2 remains open/unmerged. No X11 backend work was undertaken. Live GNOME/Mutter and physical-keyboard validation remains outstanding. See CURRENT_STATUS.md for the exact source commits, CI corrections, stats and hashes.
 
 ## Read this first in every new development chat
 

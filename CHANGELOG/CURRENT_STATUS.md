@@ -1,3 +1,26 @@
+## 2026-11-10 — early-alpha-only Wayland multi-dead-key milestone — Build and test #802 passed
+
+**Branch boundary:** This implementation and its regenerated locale data remain exclusively on `early-alpha`. No application source, tests, build files, workflow, or locale JSON was copied to `main`. This section is a continuity handoff only.
+**Validated early-alpha source/test head:** `91a92c38210362def100026afd60e7b08132d08f`; the subsequent branch-only changelog commit is `a16365ebc80151759b26be39f14a6316896dc99b`.
+**Implementation/data:** [Wayland dead-key chain implementation](https://github.com/GraderGamer2/NekoEdit/commit/e2521c401744f2695b51b505f3ee6b7f53bd0d66), [generated locale refresh](https://github.com/GraderGamer2/NekoEdit/commit/c61453d2d180075e8d2eec323ad7bdde5dbdd30f), [final golden test update](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f).
+**CI:** [Build and test #802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 workflow steps on the exact source/test head.
+
+### Branch-only implementation summary
+
+The Wayland keyboard runtime now buffers one to three consecutive dead-key combining marks and resolves them with the following ordinary scalar through typed kind-1 NLP1 records. The existing single-mark fallback is preserved; unmatched multi-mark input inserts the base followed by the marks literally. A fourth dead action flushes the first three marks and starts a new chain. Starting Multi_key flushes a pending chain; Escape and Backspace cancel the complete pending state.
+
+The fixed 52-byte NLP1 record, format version, loader, four-input ceiling, and eight-output ceiling are unchanged. The native Settings importer, offline user converter, and pinned X.Org importer accept one to three recognized dead-key actions followed by one ordinary character and reject malformed or deeper chains.
+
+Pinned en_US-derived tables were regenerated from the same source pins. The common dead-key baseline grew from 1,228 to 1,576 records. Final separate locale tables are pt_BR 4,484, fi_FI 4,488, sr_RS 4,495, and el_GR 5,730 records. All four tables compare byte-for-byte against CI regeneration. Locale packs remain separate data artifacts; none is embedded in the editor.
+
+Tests include actual source-derived Portuguese two-mark and Greek three-mark mappings, typed pack and locale-manager checks, malformed importer cases, and Wayland keyboard-event mock coverage for lookup, literal fallback, overflow, Escape and Backspace. This is automated CI/protocol-mock validation, not live GNOME/Mutter or physical-keyboard testing. The latest user-confirmed previous build launches; the new chained-key sequences remain to be tested manually.
+
+The first CI attempts identified the expected stale generated JSON after the importer began accepting additional rules; the exact four generated tables were recovered and committed on early-alpha. A later read-only run caught old locale-count assertions, corrected in the final test commit. Temporary artifact-debug/write-enabled workflow code was removed; the early-alpha workflow is back to `contents: read`. The main branch has no such workflow change.
+
+Final artifacts from #802: editor ZIP 13761918009 (135,673 bytes, SHA-256 `ab71efb788fcf25dc14c232c369a60a5edfa61dbecb339d08ee28fa238cd49e8`); locale ZIP 13762312971 (114,239 bytes, SHA-256 `5605356b9d3b38fe5fa1b08334645ba62e8224904119b702ec3f5709c8fd8a52`). Both expire 2026-11-11 11:48 UTC / 18:48 Jakarta.
+
+No X11 backend work was undertaken. Outstanding Wayland priorities remain live Mutter validation, modifier-qualified Compose semantics and automatic startup discovery/merging, then further optional locale data.
+
 ## 2026-11-10 — early-alpha native XCompose Unicode keysym compatibility — Build and test #797 passed
 
 **Branch boundary:** this implementation remains on `early-alpha`; no application source, tests, or build changes were copied to `main`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
