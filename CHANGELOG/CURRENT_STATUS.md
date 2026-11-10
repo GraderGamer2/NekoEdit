@@ -1,12 +1,25 @@
-## 2026-11-10 — native Settings XCompose importer shares the XKB Unicode keysym resolver — CI pending
+## 2026-11-10 — native Settings XCompose importer shares XKB Unicode keysym resolver — Build and test #797 passed
 
-**Branch:** `early-alpha` only; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged. No application source from this milestone is on `main`.
+**Branch:** `early-alpha`; exact validated head `b23b2ae61dd3422806d6155eec8ac3c9c16f327d`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [4079e8cfee89](https://github.com/GraderGamer2/NekoEdit/commit/4079e8cfee89611f45eecfbc938a54fda960b748). Test-link correction: [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d).
+**CI:** [Build and test #797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 workflow steps on the exact final head.
 
-- Replaced the native importer's small hand-maintained keysym alias list with a bounded call into the existing XKB Unicode keysym resolver. Settings imports now recognize the same embedded X.Org Unicode-annotated character names as physical XKB keymap parsing, including Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases.
-- Added an exported, length-bounded assembly entry point that saves and restores the XKB tokenizer's shared 64-byte scratch buffer and token length. The existing XKB table is reused; no second copy of its 1,600-plus-name table, bundled locale data, third-party library, or runtime dependency is introduced. Restored the native importer's older `quoteleft` and `quoteright` aliases in the shared ASCII keysym table.
-- Preserved the importer's prior explicit `Uxxxx` scalar path and scalar validation. X11 dead-key action names are rejected as ordinary Multi_key character inputs and remain handled only through the dedicated dead-key lead path. The NLP1 schema, modifier-qualified-rule skip behavior, import ceilings, and file/include security checks remain unchanged.
-- Added native pack-import/lookup regression cases for Greek/Cyrillic, Arabic/Hebrew, Thai/Hangul, accented Latin, xorgproto 2026.1 angle-quotation aliases, legacy quote aliases, and the dead-key action/character distinction. The native import test now links the existing XKB assembly object so tests exercise the same resolver used by the application.
-- Local build and test status: pending remote Actions validation; live GNOME/Mutter and physical-keyboard testing are not performed in this environment.
+The native **Settings → Locale → Import** parser now resolves named character keysyms through the same read-only X.Org Unicode-annotated table and bounded resolver used by physical XKB keymap parsing. The accepted name set therefore covers the embedded table's Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, Armenian, Georgian, Kana, Sinhala, Braille, and xorgproto 2026.1 aliases, rather than the previous short hand-maintained list of common Latin-1 names.
+
+A length-bounded assembly entry point saves and restores the XKB parser's shared 64-byte tokenizer buffer and token length. The importer continues to preserve its explicit `Uxxxx` scalar path. The shared ASCII resolver now also retains the importer's former `quoteleft` and `quoteright` aliases. Named `dead_*` function keysyms are rejected as ordinary Multi_key character inputs; dead-key action names remain accepted through the separate typed dead-key lead path. This matches the X.Org protocol distinction that dead keys are Function KeySyms, not Unicode KeySyms.
+
+The NLP1 schema, its input/output limits, typed record kinds, import path checks, include ceilings, modifier-qualified-rule skip behavior, and data-only locale packaging are unchanged. No external library, locale bundle, Python runtime, or duplicated Unicode name table was added.
+
+Native importer fixtures now validate pack import and lookup with Greek/Cyrillic, Arabic/Hebrew, Thai/Hangul, accented Latin, xorgproto 2026.1 angle-quotation names, the legacy quote aliases, and the dead-key/function-keysym distinction. The locale-manager host test also links the shared XKB object, so both host test binaries resolve the new symbol. CI logs explicitly report **Compose locale manager tests passed** and **Native in-app XCompose import tests passed**.
+
+Build and test #796 exposed one test-only link omission: the locale-manager test target also links `compose_locale.c`, so it needed the same XKB object as the new importer test target. The application ELF build had passed; the manager test link failed with an undefined reference. Commit `b23b2ae` corrected that Makefile dependency, and #797 then passed the full suite, Wayland mock, ELF inspection, pinned X.Org regeneration, optional locale-pack build, and both uploads.
+
+#797 artifacts (one-day retention):
+- Editor ZIP [13753236119](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159/artifacts/13753236119), 135,337 bytes, SHA-256 `6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac`.
+- Separate locale ZIP [13753071329](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159/artifacts/13753071329), 101,677 bytes, SHA-256 `4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3`.
+- Both expire **2026-11-11 09:43 UTC / 16:43 Jakarta**.
+
+This is automated CI/mock validation, not a real GNOME/Mutter or physical-keyboard test. The user should manually import a file containing the new named-key cases in Settings and exercise the corresponding sequences on the actual desktop. Remaining XCompose work includes modifier-qualified rule representation, broader syntax semantics, and automatic system/user startup discovery/merging; longer dead-key chains remain priority 2.
 
 ## 2026-11-10 — native XCompose rooted includes and compose.dir locale mapping — Build and test #795 passed
 

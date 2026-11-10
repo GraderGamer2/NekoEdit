@@ -1,3 +1,14 @@
+## 2026-11-10 — native Settings XCompose Unicode keysym compatibility — Build and test #797 passed
+
+| Commit | Subject |
+|---|---|
+| [4079e8cfee89](https://github.com/GraderGamer2/NekoEdit/commit/4079e8cfee89611f45eecfbc938a54fda960b748) | feat: share XKB Unicode keysyms with native XCompose import |
+| [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d) | fix: link XKB resolver into locale manager test |
+
+Build and test #796 exposed a missing test-only link dependency in `compose_locale_manager_test`: it also links `compose_locale.c` and now needs `xkb.S`. The application ELF build succeeded, but the test binary failed with an undefined reference. The Makefile dependency was corrected in `b23b2ae`. Build and test [#797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) then passed all 14 steps on exact head `b23b2ae61dd3`, including both native locale test binaries, the full Wayland mock, ELF inspection, pinned X.Org source verification, optional locale-pack build, and separate uploads.
+
+Artifacts: editor ZIP 13753236119 (135,337 bytes, SHA-256 `6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac`); locale ZIP 13753071329 (101,677 bytes, SHA-256 `4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3`). Both expire 2026-11-11 09:43 UTC / 16:43 Jakarta. This work remains on early-alpha; PR #2 is open and unmerged.
+
 # NekoEdit complete commit index
 
 ## 2026-11-10 — early-alpha native XCompose rooted includes and compose.dir mapping — Build and test #795 passed

@@ -1,3 +1,9 @@
+## 2026-11-10 — shared XKB Unicode keysym resolver in native Compose import
+
+The early-alpha Settings importer previously maintained a small list of common names separately from the application's much broader X.Org Unicode-annotated keysym resolver. The importer now calls the same bounded assembly resolver as the XKB keymap reader, reusing its existing read-only table rather than copying the 1,600-plus names or adding another dependency. Legacy quote aliases were kept, explicit Uxxxx inputs retain their previous policy, and dead-key Function KeySyms remain reserved for the dedicated dead-key record path.
+
+The native pack tests cover Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, newer xorgproto punctuation aliases, and quote-name compatibility. Build and test #796 caught a missing XKB link dependency in the separate locale-manager host test; the Makefile fix is in the second commit. Build and test [#797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 steps on [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d). This is automated validation only; live GNOME/Mutter and physical-keyboard checks remain outstanding. No application source was copied to main.
+
 ## 2026-11-10 — native XCompose include roots and X.Org locale mapping
 
 The native Settings → Locale → Import path on `early-alpha` now expands sibling includes and the XCompose `%H`, `%S`, and `%L` forms. Home and system includes are constrained to explicit roots; nested sibling paths remain relative to the containing file. Every path component is checked and opened without following symlinks, and the existing byte, file, expansion, cycle, depth, line, and record ceilings remain enforced.

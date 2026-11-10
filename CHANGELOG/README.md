@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
-Build and test #795 passed the current early-alpha native XCompose importer: selected-file imports support sibling, %H, %S, and %L includes, with %L resolved through X.Org compose.dir. User-imported and optional locale packs remain separate files under ~/.nekoedit/locales; the editor still embeds only en_US. Artifacts use one-day retention, so the #795 editor and locale ZIPs expire 2026-11-11 at 09:36 Jakarta. The user has confirmed successful pack installation; live GNOME/Mutter and physical-keyboard validation remains outstanding. CURRENT_STATUS.md records the source commits and CI result.
+Build and test #797 passed the early-alpha native XCompose importer with shared XKB Unicode keysym resolution (Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases). The implementation reuses the existing keysym table and adds no runtime dependency. Run #796 exposed a test-only link omission, corrected in commit b23b2ae; #797 passed all 14 steps. Editor and separate locale artifacts are 13753236119 and 13753071329; one-day retention expires 2026-11-11 at 16:43 Jakarta. Locale packs remain under ~/.nekoedit/locales and en_US remains the only embedded locale. PR #2 remains open/unmerged; live GNOME/Mutter and physical-keyboard validation is outstanding. CURRENT_STATUS.md records the source commits, CI result, and artifact hashes.
 
 ## Read this first in every new development chat
 
