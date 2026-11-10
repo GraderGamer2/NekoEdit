@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
-Build and test #776 passed all 13 steps for the built-in printable-ASCII X keysym resolver and its no-header regression. Standard printable ASCII X keysym names work without keysymdef.h. The user has manually confirmed the Settings locale dropdown works. Build and test executable/locale-pack artifacts are being changed to 90-day retention, the public-repository maximum; GitHub Free's 500 MB Actions storage allowance is shared with Packages, so prolonged retention must stay within that allowance or overage may be billed. The editor remains freestanding and user XCompose import remains optional/manual. Live GNOME/Mutter layout/IME validation is still outstanding. CURRENT_STATUS.md records the exact source/test commits, CI run, artifact IDs, and next compatibility work.
+Build and test #777 passed all 13 steps after both Build and test artifacts and the optional locale-pack workflow were set to 90-day retention. GitHub confirmed the refreshed editor and locale artifacts expire 2027-02-08 00:05:31 UTC. The earlier Build and test #776 printable-ASCII X keysym regression also passed; the user has manually confirmed the Settings locale dropdown works. The one-command offline XCompose installer remains optional and writes private packs to `~/.nekoedit/locales`; there is no automatic startup import or Settings import UI. The editor remains freestanding. Live GNOME/Mutter layout/IME validation is still outstanding. CURRENT_STATUS.md records artifact IDs and the current validation boundary.
 
 ## Read this first in every new development chat
 

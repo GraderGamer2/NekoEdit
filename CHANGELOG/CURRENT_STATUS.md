@@ -1,11 +1,12 @@
-## 2026-11-10 — retain Actions artifacts for the public-repository maximum — validation pending
+## 2026-11-10 — retain Actions artifacts for the public-repository maximum — Build and test #777 passed
 
 **Branch:** `early-alpha`; PR #2 remains open and unmerged.
-**Workflow change:** set the two Build and test artifact uploads and the optional locale-pack workflow upload to `retention-days: 90`, the documented maximum for public repositories.
+**Workflow change:** commit [d9a2d9cca407](https://github.com/GraderGamer2/NekoEdit/commit/d9a2d9cca407f5dc60f7d5e2947600b9329bd0f5) sets the two Build and test artifact uploads and the optional locale-pack workflow upload to `retention-days: 90`, the documented maximum for public repositories.
+**CI:** [Build and test #777](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725593861) passed all 13 workflow steps on this commit.
 
 - The Build and test workflow previously set both the executable and Compose locale-pack artifacts to 7 days. The separate manual/release locale-pack workflow used 30 days.
 - All three workflow artifact uploads now request 90 days. This affects newly uploaded artifacts only; GitHub does not retroactively extend existing artifacts when workflow retention is changed.
-- Existing artifacts from Build and test #776 (IDs 13697074317 and 13698660427) retain their existing 2026-11-16 expiry. The workflow-file push will generate new build artifacts under the revised retention setting if the repository's Actions retention policy permits 90 days.
+- Existing artifacts from Build and test #776 (IDs 13697074317 and 13698660427) retain their existing 2026-11-16 expiry. Build and test #777 confirms the repository accepts 90 days. Its newly uploaded editor artifact [13722915782](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725593861/artifacts/13722915782) (127,343 bytes) and locale artifact [13721843648](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725593861/artifacts/13721843648) (74,021 bytes) both expire **2027-02-08 00:05:31 UTC**.
 - The latest #776 artifacts total 201,364 bytes. GitHub Free includes 500 MB of Actions/Packages storage shared across those products; longer retention does not itself incur a fee, but storage beyond the included allowance may be billable.
 - No application source, binary, or runtime behavior changes in this work.
 

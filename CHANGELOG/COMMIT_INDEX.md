@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — 90-day GitHub Actions artifact retention — Build and test #777 passed
+
+| Commit | Subject |
+|---|---|
+| [d9a2d9cca407](https://github.com/GraderGamer2/NekoEdit/commit/d9a2d9cca407f5dc60f7d5e2947600b9329bd0f5) | ci: retain NekoEdit workflow artifacts for 90 days |
+
+The Build and test executable and locale-pack artifacts, plus the separate locale-pack workflow artifact, now request 90-day retention. Build and test #777 passed all 13 steps. GitHub reports editor artifact 13722915782 (127,343 bytes) and locale artifact 13721843648 (74,021 bytes) expiring 2027-02-08 00:05:31 UTC. Existing #776 artifacts keep their previous November 16 expiry.
+
+---
+
 ## 2026-11-10 — GitHub Actions artifact retention extended to 90 days — validation pending
 
 | Commit | Subject |
