@@ -1,3 +1,16 @@
+## 2026-11-10 — early-alpha Greek Compose locale pack and CI verification handoff
+
+**Branch boundary:** this milestone is on `early-alpha` only; the application/data changes are not present on `main`. PR #2 remains open and unmerged.
+**Implementation:** [953ae55d414c](https://github.com/GraderGamer2/NekoEdit/commit/953ae55d414c9a0866271b5a6f73be0d87895931); Greek test correction [f6a16b948983](https://github.com/GraderGamer2/NekoEdit/commit/f6a16b9489830db7f3ae199146b169b19ad6c83d); Wayland test timeout [0a03493b4eac](https://github.com/GraderGamer2/NekoEdit/commit/0a03493b4eacb5c54f193cfdb5eed4021d218241).
+**CI:** [Build and test #790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed on the exact `early-alpha` head after the upstream source regeneration, tests, full Wayland mock, and separate artifact uploads.
+
+- Added optional `el_GR.UTF-8` from pinned libX11 source blob `4a644258ce32cd34ddcc0c47605938db5f697b7d` at commit `ff8706a5eae25b8bafce300527079f68a201d27f`. Its standalone Compose source is explicitly merged over the pinned en_US baseline using `--locale-standalone`.
+- The generated data file has 4,690 records (922 accepted Greek Multi_key, 138 locale dead-key rules, 488 overrides, 13 dropped prefixes). The editor still embeds only en_US; Greek is a separate optional NLP1 pack built and uploaded separately.
+- Golden tests cover Greek tonos, uppercase iota diaeresis, and two breathing-mark results. These are automated data checks only; no live GNOME/Mutter or physical keyboard validation is claimed.
+- CI #788 corrected an inaccurate expected value (U+03AA, not U+03CA). CI #789 hit the existing 50-second cap in the extended Settings-locale Wayland mock; the test cap was raised to 90 seconds, with the ordinary keyboard/XKB bound unchanged.
+- Build and test [#790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed. Separate artifacts: editor ZIP 13727403952 (133,624 bytes) and locale ZIP 13727443844 (101,677 bytes), expiring 2026-11-11 around 01:53 UTC.
+- The user has confirmed that Settings Import successfully installs a separate .nlp under `~/.nekoedit/locales/`; symbol-by-symbol manual desktop testing remains outstanding.
+
 ## 2026-11-10 — bounded sibling includes in native Settings XCompose import — Build and test #787 passed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

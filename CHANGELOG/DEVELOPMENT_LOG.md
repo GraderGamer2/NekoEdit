@@ -1,3 +1,10 @@
+## 2026-11-10 — early-alpha-only Greek Compose locale pack
+
+- The early-alpha branch added an optional `el_GR.UTF-8` pack derived from pinned standalone libX11 Compose source blob `4a644258ce32cd34ddcc0c47605938db5f697b7d`. Its generator explicitly merges the source over the same pinned en_US baseline.
+- The data contains 4,690 final records (922 accepted locale Multi_key rules and 138 dead-key rules). Golden data tests cover Greek accent and breathing-mark sequences. These are not live keyboard test results.
+- Build and test [#790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed the full build, host tests, Wayland mock, pinned source re-import/byte-for-byte comparison, locale pack build, and separate artifact uploads.
+- This is a branch-only data/workflow milestone; `main` still embeds only its en_US prototype and does not contain the Greek pack or its release workflow changes. PR #2 remains open and unmerged.
+
 ## 2026-11-10 — safely expand sibling includes in native Settings XCompose import
 
 - Extended the freestanding native importer to expand quoted same-directory sibling includes in depth-first textual order. Repeated non-active includes are allowed; active cycles are rejected using device/inode identity.

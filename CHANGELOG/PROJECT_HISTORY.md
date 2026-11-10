@@ -1,3 +1,9 @@
+## 2026-11-10 — Greek Compose locale pack added on early-alpha
+
+The locale pipeline now includes an optional reproducible Greek `el_GR.UTF-8` dataset derived from pinned X.Org libX11 and xorgproto sources. Because the Greek Compose.pre file is standalone, the generator explicitly merges it over the en_US baseline before applying Greek rules. The resulting table contains 4,690 records, including 922 accepted locale Multi_key rules, 138 locale dead-key rules, and 488 overrides. The source and keysym header are pinned and CI regenerates the JSON byte-for-byte before packaging.
+
+The Greek dataset is a separate NLP1 pack; en_US remains the only Compose table embedded in the editor executable. Build and test #790 passed the complete workflow, including Wayland integration, pinned-source regeneration, and separate editor/locale asset uploads. The user has not yet manually checked the Greek sequences on a physical keyboard or GNOME/Mutter desktop.
+
 ## 2026-11-10 — bounded sibling includes in the in-app XCompose importer
 
 The native Settings → Locale → Import path now expands quoted sibling include files from the directory containing the selected root .XCompose file. Expansion is depth-first and preserves textual override order, including repeated includes after an earlier expansion returns. It rejects path traversal, absolute or cross-directory paths, percent/environment substitutions, symlinks, non-regular files, and active cycles. Bounded limits cap aggregate expanded bytes, file count, include expansions, recursion depth, line size, and NLP1 records. The importer validates the resulting data pack before its existing no-clobber atomic publish operation.

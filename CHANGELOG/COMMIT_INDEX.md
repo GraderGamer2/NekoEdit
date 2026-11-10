@@ -1,5 +1,16 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — early-alpha Greek Compose locale pack — Build and test #790 passed
+
+| Commit | Subject |
+|---|---|
+| [953ae55d414c](https://github.com/GraderGamer2/NekoEdit/commit/953ae55d414c9a0866271b5a6f73be0d87895931) | feat: add Greek Compose locale pack |
+| [f6a16b948983](https://github.com/GraderGamer2/NekoEdit/commit/f6a16b9489830db7f3ae199146b169b19ad6c83d) | test: correct Greek capital iota diaeresis expectation |
+| [0a03493b4eac](https://github.com/GraderGamer2/NekoEdit/commit/0a03493b4eacb5c54f193cfdb5eed4021d218241) | test: allow longer Settings locale Wayland mock run |
+
+Build and test [#788](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738183586) caught the incorrect Greek expected scalar; #789 then exposed the long Settings-locale mock's 50-second timeout. The fixture was corrected to U+03AA and the test-only timeout raised to 90 seconds. Build and test [#790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed all workflow steps. The Greek table is pinned/reproducible and built as an optional separate NLP1 pack; no non-en_US locale records were added to the executable.
+
+
 ## 2026-11-10 — native sibling XCompose includes — Build and test #787 passed
 
 | Commit | Subject |
