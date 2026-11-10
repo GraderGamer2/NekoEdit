@@ -1,3 +1,11 @@
+## 2026-11-10 — restore Mutter smoke-test script after #806 shell syntax error
+
+- Build and test #806 passed the core build, host/command-line tests, Wayland mock, ELF inspection, pinned X.Org data verification, and four separate locale-pack builds.
+- The new Mutter step then failed before input testing with `tests/mutter_gnome_smoke.sh: line 239: syntax error near unexpected token '('`.
+- The syntax issue came from the test-source text replacement expanding a literal dollar-sign sequence in a shell window-title regular expression. Rebuilt the script from the clean commit and applied the replacement using an ordinary callback; simplified the fallback window-title search to the literal text `GNOME Shell`.
+- The direct X window focus checks, geometry-relative center click, and plain-key + Ctrl+S canary remain in the corrected script. They have not yet been executed by CI because #806 stopped at parsing.
+- No production code or runtime dependencies changed. A new branch-push run is required.
+
 ## 2026-11-10 — make the nested Mutter test explicitly focus its X11 host window
 
 - Build and test #805 passed the freestanding build, command-line/host tests, Wayland protocol mock, ELF inspection, pinned X.Org source verification, and all four separate locale-pack builds. It failed only at the nested Mutter keyboard test: GNOME Shell/Mutter started, NekoEdit stayed alive, but the source document remained unchanged after XTest events.

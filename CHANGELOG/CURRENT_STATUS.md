@@ -1,3 +1,9 @@
+## 2026-11-10 — correct test-script replacement syntax after #806
+
+**CI #806:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42837121285) at shell parsing in `tests/mutter_gnome_smoke.sh` before input testing. The freestanding build, host tests, Wayland protocol mock, ELF inspection, pinned X.Org comparisons, and separate locale-pack builds all passed. The reported error was `line 239: syntax error near unexpected token '('`; inspection showed the fallback window-search line had been corrupted by the text-replacement operation around a literal dollar sign.
+**Correction:** rebuilt the test script from the clean pre-focus version and applied the X11-focus/canary block using a callback replacement, avoiding replacement-token expansion. The fallback window search now uses the unanchored literal window title `GNOME Shell`; the previous explicit PID search and direct focus checks remain.
+**Validation:** the corrected script is pushed below. The focus/canary behavior still requires a successful CI run; #806 never reached input injection.
+
 ## 2026-11-10 — improve Mutter input focus and add a keyboard-delivery canary after #805
 
 **CI #805:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42833913969) only in `make test-mutter`. The freestanding build, host tests, Wayland mock, ELF inspection, pinned X.Org input-data verification, and all four optional locale-pack builds passed. GNOME Shell 46 / Mutter 46.2 started, and NekoEdit stayed alive, but the temporary document remained `seed` after the test's XTest input.

@@ -151,15 +151,7 @@ for attempt in $(seq 1 100); do
     sleep 0.1
 done
 if [ -z "$SHELL_WINDOW" ]; then
-    SHELL_WINDOW="$(xdotool search --onlyvisible --name '^GNOME Shellif ! kill -0 "$SHELL_PID" 2>/dev/null; then
-    echo "nested Mutter exited during keyboard input" >&2
-    exit 1
-fi
-
-echo "PASS: GNOME Shell/Mutter delivered Multi_key and a two-mark dead-key chain"
-echo "PASS: Ctrl+S saved the expected UTF-8 bytes (U+2026 U+1EA6)"
-RESULT=passed
- 2>/dev/null | head -n 1 || true)"
+    SHELL_WINDOW="$(xdotool search --onlyvisible --name 'GNOME Shell' 2>/dev/null | head -n 1 || true)"
 fi
 if [ -z "$SHELL_WINDOW" ]; then
     echo "could not find GNOME Shell's visible outer X11 window" >&2

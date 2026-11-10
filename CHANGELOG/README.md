@@ -4,6 +4,8 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
+Build and test #806 passed all core, host, Wayland mock, ELF, pinned X.Org, and locale-pack checks but stopped at shell parsing in the Mutter test before input delivery. A literal-dollar expansion corrupted the fallback window-search line during editing. The test script has been rebuilt from the clean source and the explicit-focus + plain-key canary block reapplied safely. This correction still needs CI validation.
+
 Build and test #805 passed the freestanding build, host tests, Wayland mock, ELF inspection, pinned X.Org verification, and separate locale packs. It failed only in the nested Mutter input test: the compositor started, but the document remained unchanged. The harness relied on a click without explicitly focusing GNOME Shell's outer X11 window in bare Xvfb. The next correction now focuses/verifies that window and adds a simple printable-key + Ctrl+S canary before Compose. The fix awaits CI; no Mutter input success is claimed yet.
 
 Harness invocation correction [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73) is pushed to early-alpha. It now starts NekoEdit with a document path only; the nested Wayland socket selects the backend. Build and test #805 is running, but GitHub's latest available status remains at package installation. #804 passed the freestanding build, host tests, Wayland mock, ELF inspection, pinned locale data verification and separate locale-pack build; it failed before input delivery because of the old harness argument. The Mutter key-input scenario is still unverified.

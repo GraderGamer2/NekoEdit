@@ -1,3 +1,7 @@
+## 2026-11-10 — restore the nested Mutter harness after a shell syntax error
+
+Build and test #806 again passed the core build, host suite, Wayland protocol mock, ELF inspection, pinned locale data checks, and all optional locale packs. The integration step failed before input testing because the harness-edit replacement expanded a dollar-sign token in the X11 window-title search line and left invalid shell syntax. The script has been restored from the clean prior version and the focus/canary change reapplied with a literal-safe replacement. The corrected direct-focus + basic-key canary remains unverified pending CI.
+
 ## 2026-11-10 — improve nested Mutter XTest focus and separate keyboard delivery from Compose validation
 
 Build and test #805 passed the core build, host tests, Wayland protocol mock, ELF checks, pinned X.Org source regeneration, and separate locale packs, but the new Mutter test left the document unchanged after XTest input. The earlier harness relied on a pointer click at a root coordinate and never explicitly focused GNOME Shell's outer X11 window. The revised harness discovers the Shell window by PID, raises/focuses it with XSetInputFocus through xdotool, checks the resulting focus ID, and uses window-relative coordinates. A basic printable-key plus Ctrl+S canary now runs before the Compose test so a failed input route is distinguishable from a dead-key or locale lookup defect. This remains test/docs-only and has not yet passed CI.
