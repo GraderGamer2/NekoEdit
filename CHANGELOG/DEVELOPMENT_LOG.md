@@ -1,3 +1,10 @@
+## 2026-11-10 — reduce main-branch Actions artifact retention to one day
+
+- Changed the main-branch executable upload in `.github/workflows/build.yml` from `retention-days: 90` to `retention-days: 1` in commit [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).
+- Added changelog-only path exclusions to push and pull-request triggers so continuity documentation does not start unnecessary build runs.
+- The one-day setting affects newly uploaded artifacts only. Existing artifacts retain their previously assigned expiry dates.
+- No editor source, binary, or runtime behavior changed. Build and test validation for the workflow commit is pending.
+
 ## 2026-11-10 — align main-branch artifact retention with early-alpha — Build and test #778 passed
 
 - Updated `.github/workflows/build.yml` on `main` so its Linux executable artifact uses `retention-days: 90` rather than 7.
