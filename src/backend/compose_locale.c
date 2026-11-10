@@ -1040,7 +1040,8 @@ static int nx_prefix(const struct native_compose_rule *a,const struct native_com
 static int nx_compare(const struct native_compose_rule *a,const struct native_compose_rule *b)
 {
     uint32_t i,shared;
-    if(a->kind<b->kind)return -1;if(a->kind>b->kind)return 1;
+    if(a->kind<b->kind)return -1;
+    if(a->kind>b->kind)return 1;
     shared=a->input_count<b->input_count?a->input_count:b->input_count;
     for(i=0;i<shared;++i){if(a->input[i]<b->input[i])return -1;if(a->input[i]>b->input[i])return 1;}
     if(a->input_count<b->input_count)return -1;
@@ -1178,7 +1179,7 @@ static uint32_t nx_parse(uint8_t *source,uint32_t length,struct native_compose_r
     if(!n)return 0;
     nx_sort(rules,n);
     {
-        uint32_t unique=0,kept=0;
+        uint32_t unique=0,kept=0,i;
         for(i=0;i<n;++i){
             if(unique&&nx_same(&rules[unique-1u],&rules[i]))continue;
             if(unique!=i)rules[unique]=rules[i];
@@ -1199,7 +1200,7 @@ static int nx_make_tag(const char *path,char tag[MAX_TAG_LENGTH+1u],uint32_t *le
     static const char ext[]=".XCompose",suffix[]=".UTF-8";
     uint32_t n,used=0,i;
     for(p=path;*p;++p)if(*p=='/')base=p+1;
-    n=string_length(base,PATH_CAPACITY);
+    n=string_length(base,4096u);
     if(n>=sizeof(ext)-1u){
         uint32_t at=n-(sizeof(ext)-1u);int match=1;
         for(i=0;i<sizeof(ext)-1u;++i)if(nx_lower(base[at+i])!=nx_lower(ext[i]))match=0;
