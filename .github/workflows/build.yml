@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'CHANGELOG/**'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'CHANGELOG/**'
   workflow_dispatch:
 
 permissions:
@@ -51,4 +55,4 @@ jobs:
           name: nekoedit-linux-x86_64
           path: build/nekoedit
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 1
