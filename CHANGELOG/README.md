@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-Build and test #758/#759 both passed. #759 includes the Finnish/Serbian physical dead-key tests (`dead_apostrophe` + `Cyrillic_ka` → U+045C) and uploaded both editor and locale artifacts. The next bounded task is safe offline `.XCompose` import; CURRENT_STATUS.md records limits and continuity. Check the branch/Actions state before continuing.
+Build and test #776 passed the printable-ASCII X keysym importer regression. Build artifacts from both `main` and `early-alpha` are configured for 90-day retention, the public-repository maximum; only new uploads receive the changed expiry. GitHub Free includes 500 MB of Actions/Packages storage shared across both. The user has confirmed the Settings locale dropdown and newest editor build work normally. User XCompose import remains an optional host-side utility, not required for everyday use. CURRENT_STATUS.md records the current branch/Actions state and validation boundary.
 
 ## Read this first in every new development chat
 

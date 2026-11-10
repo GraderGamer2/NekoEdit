@@ -1,3 +1,9 @@
+## 2026-11-10 — set main-branch build artifact retention to 90 days — validation pending
+
+The default `main` branch's Build and test executable artifact upload now requests `retention-days: 90`, matching the active `early-alpha` workflow. This is the public-repository maximum. The change applies to future artifacts only; prior artifacts retain their original expiry. Build and test on this branch is triggered by the workflow update and remains pending.
+
+---
+
 ## 2026-11-09 — Finnish/Serbian locale dead-key integration green
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

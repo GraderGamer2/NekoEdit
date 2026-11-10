@@ -1,3 +1,12 @@
+## 2026-11-10 — align main-branch artifact retention with early-alpha — validation pending
+
+- Updated `.github/workflows/build.yml` on `main` so its Linux executable artifact uses `retention-days: 90` rather than 7.
+- The active `early-alpha` branch also uses 90 days for its executable and locale-pack build artifacts, plus the separate locale-pack workflow.
+- This affects future uploads only; existing artifact expiry dates are unchanged. The workflow push triggers validation on `main`.
+- No editor source or runtime behavior changed.
+
+---
+
 ## 2026-11-09 — verify Finnish and Serbian locale dead-key keyboard paths
 
 - Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed every workflow step, including the full Wayland protocol mock, pinned X.Org data regeneration, optional locale-pack builds, and both artifact uploads.

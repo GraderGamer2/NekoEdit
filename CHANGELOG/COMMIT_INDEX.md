@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — align main-branch artifact retention with 90-day public maximum — validation pending
+
+| Commit | Subject |
+|---|---|
+| Pending | ci: retain main branch build artifact for 90 days |
+
+The default branch's Build and test workflow now requests the same 90-day artifact retention as `early-alpha`. This changes newly uploaded artifacts only. The main-branch workflow run is pending.
+
+---
+
 ## 2026-11-09 — Finnish/Serbian physical locale dead-key tests
 
 | Commit | Subject |
