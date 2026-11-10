@@ -81,7 +81,7 @@ int main(void){
     snprintf(common,sizeof(common),"%s/common.XCompose",home);
     snprintf(nested,sizeof(nested),"%s/nested.XCompose",home);
     snprintf(include_src,sizeof(include_src),"%s/nekoedit-include.XCompose",home);
-    snprintf(include_pack,sizeof(include_pack),"%s/locales/nekoedit-include.UTF-8.nlp",loc);
+    snprintf(include_pack,sizeof(include_pack),"%s/nekoedit-include.UTF-8.nlp",loc);
     write_text(nested,"<Multi_key> <n> <e> : \"Nested\"\n");
     write_text(common,
         "<Multi_key> <o> <c> : \"included\"\n"
@@ -113,7 +113,7 @@ int main(void){
          "could not remove safe-include pack");
 
     snprintf(unsafe_src,sizeof(unsafe_src),"%s/nekoedit-unsafe.XCompose",home);
-    snprintf(unsafe_pack,sizeof(unsafe_pack),"%s/locales/nekoedit-unsafe.UTF-8.nlp",loc);
+    snprintf(unsafe_pack,sizeof(unsafe_pack),"%s/nekoedit-unsafe.UTF-8.nlp",loc);
     write_text(unsafe_src,
         "include \"../nekoedit-test.XCompose\"\n"
         "<Multi_key> <a> <b> : \"unsafe\"\n");
@@ -131,7 +131,7 @@ int main(void){
 
     snprintf(cycle_src,sizeof(cycle_src),"%s/nekoedit-cycle.XCompose",home);
     snprintf(cycle_child,sizeof(cycle_child),"%s/cycle-child.XCompose",home);
-    snprintf(cycle_pack,sizeof(cycle_pack),"%s/locales/nekoedit-cycle.UTF-8.nlp",loc);
+    snprintf(cycle_pack,sizeof(cycle_pack),"%s/nekoedit-cycle.UTF-8.nlp",loc);
     write_text(cycle_src,"include \"cycle-child.XCompose\"\n"
                          "<Multi_key> <c> <y> : \"cycle\"\n");
     write_text(cycle_child,"include \"nekoedit-cycle.XCompose\"\n");
@@ -141,7 +141,7 @@ int main(void){
          "include cycle left a partial pack");
 
     snprintf(expansion_src,sizeof(expansion_src),"%s/nekoedit-expand.XCompose",home);
-    snprintf(expansion_pack,sizeof(expansion_pack),"%s/locales/nekoedit-expand.UTF-8.nlp",loc);
+    snprintf(expansion_pack,sizeof(expansion_pack),"%s/nekoedit-expand.UTF-8.nlp",loc);
     snprintf(expansion_common,sizeof(expansion_common),"%s/expand-common.XCompose",home);
     write_text(expansion_common,"<Multi_key> <e> <x> : \"expanded\"\n");
     {
@@ -160,7 +160,7 @@ int main(void){
          "include expansion limit left a partial pack");
 
     snprintf(depth_src,sizeof(depth_src),"%s/nekoedit-deep.XCompose",home);
-    snprintf(depth_pack,sizeof(depth_pack),"%s/locales/nekoedit-deep.UTF-8.nlp",loc);
+    snprintf(depth_pack,sizeof(depth_pack),"%s/nekoedit-deep.UTF-8.nlp",loc);
     write_text(depth_src,"include \"depth-00.XCompose\"\n");
     for(depth_i=0;depth_i<=16u;++depth_i){
         snprintf(depth_name,sizeof(depth_name),"depth-%02u.XCompose",depth_i);
