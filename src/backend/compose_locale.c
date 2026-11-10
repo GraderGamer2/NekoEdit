@@ -1280,7 +1280,7 @@ static long nx_include_root(struct nx_import_state *state,uint32_t kind)
 }
 
 /* %L resolves via the process character locale; C/POSIX use en_US. */
-static int nx_system_locale_path(char path[XCOMPOSE_NAME_SIZE])
+static int nx_system_locale_path(char path[XCOMPOSE_INCLUDE_NAME+1u])
 {
     const char *value=environment_value(lc_all_env);
     char tag[MAX_TAG_LENGTH+1u];
@@ -1299,7 +1299,7 @@ static int nx_system_locale_path(char path[XCOMPOSE_NAME_SIZE])
     }
     at=0;
     for(i=0;i<n;++i)path[at++]=tag[i];
-    if(at+8u>=XCOMPOSE_NAME_SIZE)return 0;
+    if(at+8u>=XCOMPOSE_INCLUDE_NAME+1u)return 0;
     path[at++]='/';
     path[at++]='C';path[at++]='o';path[at++]='m';
     path[at++]='p';path[at++]='o';path[at++]='s';path[at++]='e';
