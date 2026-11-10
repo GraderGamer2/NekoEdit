@@ -55,7 +55,7 @@ jobs:
           name: nekoedit-compose-locales
           path: build/locales/*
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 1
 
       - name: Attach locale pack to published Release
         if: github.event_name == 'release'
