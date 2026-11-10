@@ -1,3 +1,9 @@
+## 2026-11-10 — early-alpha-only Greek Compose locale pack
+
+The early-alpha branch now includes a reproducible optional Greek `el_GR.UTF-8` dataset derived from pinned X.Org libX11 and xorgproto sources. Its standalone Compose.pre source is merged over the pinned en_US baseline, resulting in 4,690 data records including Greek Multi_key and supported dead-key entries. The pack is built and uploaded separately from the editor executable.
+
+Build and test #790 passed the early-alpha workflow, including the full Wayland mock and byte-for-byte source regeneration. This was not merged into main. No live Greek physical-keyboard or GNOME/Mutter verification is claimed.
+
 ## 2026-11-09 — complete Finnish/Serbian locale dead-key integration coverage
 
 Build and test [#759](https://github.com/GraderGamer2/NekoEdit/actions/runs/42631934236) passed all 12 workflow steps. The run verified the freestanding editor build, command-line tests, complete Wayland suite, source regeneration against pinned X.Org libX11/xorgproto inputs, locale-pack builds, and upload of both the Linux binary and external locale packs.

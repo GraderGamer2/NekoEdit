@@ -1,5 +1,16 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — early-alpha Greek locale verification handoff — Build and test #790 passed
+
+| Commit | Subject |
+|---|---|
+| [953ae55d414c](https://github.com/GraderGamer2/NekoEdit/commit/953ae55d414c9a0866271b5a6f73be0d87895931) | feat: add Greek Compose locale pack |
+| [f6a16b948983](https://github.com/GraderGamer2/NekoEdit/commit/f6a16b9489830db7f3ae199146b169b19ad6c83d) | test: correct Greek capital iota diaeresis expectation |
+| [0a03493b4eac](https://github.com/GraderGamer2/NekoEdit/commit/0a03493b4eacb5c54f193cfdb5eed4021d218241) | test: allow longer Settings locale Wayland mock run |
+
+Build and test [#790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed all steps on early-alpha after correcting the Greek U+03AA expectation and raising the long Settings-mock timeout to 90 seconds. The Greek pack is separately generated from a pinned standalone libX11 locale source merged over en_US; it is not on main and is not embedded in the executable.
+
+
 ## 2026-11-10 — early-alpha-only native Settings XCompose import milestone — verification handoff
 
 | Commit | Subject |

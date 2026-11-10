@@ -1,3 +1,12 @@
+## 2026-11-10 — early-alpha-only Greek Compose locale data and verification
+
+- Recorded on main as a continuity handoff only. The data and workflow changes are on early-alpha; no non-en_US locale table was added to the main-branch executable.
+- Early-alpha added a reproducible el_GR.UTF-8 dataset from pinned libX11 source blob 4a644258ce32cd34ddcc0c47605938db5f697b7d. The source is standalone; the explicit `--locale-standalone` mode merges its 922 accepted Greek Multi_key and 138 dead-key rules over the pinned en_US baseline.
+- The resulting pack contains 4,690 records, 488 locale overrides, and 13 dropped shorter prefixes. Golden tests cover representative Greek tonos, diaeresis, and breathing-mark outputs.
+- Build and test #790 passed the entire early-alpha workflow, including the Wayland mock, pinned source regeneration, JSON comparison, optional pack build, and separate editor/locale uploads.
+- CI #788 corrected a bad test scalar (U+03AA is correct); #789 exceeded the long Settings test's 50-second harness limit. The test-only limit was raised to 90 seconds; Build and test #790 then passed.
+- Latest editor and locale artifacts: 13727403952 (133,624 bytes) and 13727443844 (101,677 bytes), expiring November 11, 2026 around 01:53 UTC. Physical keyboard verification remains outstanding.
+
 ## 2026-11-10 — early-alpha-only native Settings XCompose import milestone
 
 - Recorded for continuity on `main` only; application code is **not** present on this branch. The implementation is on `early-alpha` and PR #2 remains open/unmerged.

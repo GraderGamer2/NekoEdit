@@ -1,3 +1,15 @@
+## 2026-11-10 — early-alpha Greek Compose locale milestone — verification handoff
+
+**Branch boundary:** the Greek data and workflow changes are on `early-alpha` only. They are not part of `main`; PR #2 remains open and unmerged.
+**Implementation:** [953ae55d414c](https://github.com/GraderGamer2/NekoEdit/commit/953ae55d414c9a0866271b5a6f73be0d87895931); test correction [f6a16b948983](https://github.com/GraderGamer2/NekoEdit/commit/f6a16b9489830db7f3ae199146b169b19ad6c83d); mock timeout adjustment [0a03493b4eac](https://github.com/GraderGamer2/NekoEdit/commit/0a03493b4eacb5c54f193cfdb5eed4021d218241).
+**CI:** [Build and test #790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed all stages on the exact early-alpha head.
+
+The early-alpha branch adds a separate optional `el_GR.UTF-8` NLP1 dataset from pinned libX11 source blob `4a644258ce32cd34ddcc0c47605938db5f697b7d` at commit `ff8706a5eae25b8bafce300527079f68a201d27f`. The source is standalone, so the generator's explicit `--locale-standalone` mode merges the Greek rules over the pinned en_US baseline before packaging. The table contains 4,690 records: 922 accepted locale Multi_key rules, 138 locale dead-key rules, 488 overrides, and 13 shorter-prefix drops. Golden data tests cover Greek tonos alpha, uppercase iota diaeresis (U+03AA), and two breathing-mark results.
+
+Build and test #788 caught an inaccurate expected scalar (U+03CA instead of U+03AA), corrected in [f6a16b948983](https://github.com/GraderGamer2/NekoEdit/commit/f6a16b9489830db7f3ae199146b169b19ad6c83d). Run #789 then reached the Settings locale Wayland mock but exceeded its 50-second test-harness timeout; [0a03493b4eac](https://github.com/GraderGamer2/NekoEdit/commit/0a03493b4eacb5c54f193cfdb5eed4021d218241) raised only the long file/Settings mock bound to 90 seconds. Build and test #790 passed the complete workflow, including full Wayland integration, pinned source regeneration/byte-for-byte comparison, optional pack build, and separate uploads.
+
+Artifacts from #790: editor ZIP 13727403952 (133,624 bytes) and separate locale ZIP 13727443844 (101,677 bytes), expiring 2026-11-11 around 01:53 UTC. The editor embeds only en_US; Greek and all other optional locale records remain separate files. No live Greek physical-keyboard or GNOME/Mutter test has been performed.
+
 ## 2026-11-10 — early-alpha native Settings XCompose import milestone — verification handoff
 
 **Important branch boundary:** this feature exists on `early-alpha`, not on `main`. It has not been merged into main or PR #2.
