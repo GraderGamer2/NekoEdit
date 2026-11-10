@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: nekoedit-ci-${{ github.ref }}
@@ -82,20 +82,6 @@ jobs:
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/fi_FI.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale fi_FI.UTF-8 --locale-compose-blob bebab219d279670dde30c2260f5712c9d311f1d5 --output build/upstream/fi_FI.UTF-8.json
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/sr_RS.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale sr_RS.UTF-8 --locale-compose-blob 68699325c905629f8fa22f94e5848fd06e6be9fe --output build/upstream/sr_RS.UTF-8.json
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/el_GR.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale el_GR.UTF-8 --locale-compose-blob 4a644258ce32cd34ddcc0c47605938db5f697b7d --locale-standalone --output build/upstream/el_GR.UTF-8.json
-          # One-time source-data refresh: only push generated tables on early-alpha push runs.
-          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF_NAME}" == "early-alpha" ]]; then
-            cp build/upstream/pt_BR.UTF-8.json data/locales/pt_BR.UTF-8.json
-            cp build/upstream/fi_FI.UTF-8.json data/locales/fi_FI.UTF-8.json
-            cp build/upstream/sr_RS.UTF-8.json data/locales/sr_RS.UTF-8.json
-            cp build/upstream/el_GR.UTF-8.json data/locales/el_GR.UTF-8.json
-            if ! git diff --quiet -- data/locales; then
-              git config user.name "github-actions[bot]"
-              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-              git add data/locales/*.json
-              git commit -m "data: refresh pinned Compose locale datasets [skip ci]"
-              git push origin "HEAD:${GITHUB_REF_NAME}"
-            fi
-          fi
           cmp build/upstream/pt_BR.UTF-8.json data/locales/pt_BR.UTF-8.json
           cmp build/upstream/fi_FI.UTF-8.json data/locales/fi_FI.UTF-8.json
           cmp build/upstream/sr_RS.UTF-8.json data/locales/sr_RS.UTF-8.json

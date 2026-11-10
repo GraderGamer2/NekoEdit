@@ -19,7 +19,7 @@ The locale-import workflow downloads these exact commits, verifies their Git blo
 - Output strings retain 1–8 Unicode scalars, including combining marks and variation selectors.
 - Non-Unicode input keysyms, unsupported sequence depths, dead-key chains exceeding three actions, invalid intermediate/final dead-key events, and invalid scalar values are omitted.
 - Prefix ambiguity is removed independently within each rule kind, so a Multi_key rule and dead-key rule may share the same scalar inputs.
-- pt_BR contains 4,136 records: 3,448 two-scalar, 582 three-scalar, and 106 four-scalar records; 246 records have multi-scalar output.
+- pt_BR contains 4,484 records: 3,448 two-scalar, 894 three-scalar, and 142 four-scalar records; 274 records have multi-scalar output.
 
 The generated binary is not embedded in NekoEdit. \`make locale-packs\` builds it in \`build/locales/\`; the normal Actions build uploads it separately, and the locale-pack Release workflow attaches the \`.nlp\` asset and this notice when a GitHub Release is published.
 
@@ -32,11 +32,11 @@ The additional datasets use the same pinned en_US Compose baseline and xorgproto
 
 | Locale | Upstream source path | Git blob | Final records | Multi_key source lines | Dead-key source lines | Multi_key overrides | Dead-key overrides |
 |---|---|---|---:|---:|---:|
-| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,132 | 6 | 278 | 5 | 278 |
-| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,147 | 40 | 50 | 36 | 38 |
-| `el_GR.UTF-8` | `nls/el_GR.UTF-8/Compose.pre` | `4a644258ce32cd34ddcc0c47605938db5f697b7d` | 4,690 | 922 | 138 | 394 | 94 |
+| `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,488 | 6 | 346 | 5 | 338 |
+| `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,495 | 40 | 50 | 36 | 38 |
+| `el_GR.UTF-8` | `nls/el_GR.UTF-8/Compose.pre` | `4a644258ce32cd34ddcc0c47605938db5f697b7d` | 5,730 | 922 | 970 | 394 | 234 |
 
-Finnish contributes six accepted locale-specific Multi_key rules and 278 dead-key rules (all overriding shared base entries). Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics. The Greek source contributes 922 accepted locale Multi_key rules and 138 supported one-scalar dead-key rules, with 488 total overrides (94 dead-key overrides); its standalone source is merged over en_US by the explicit importer mode.
+The refreshed common en_US baseline contributes 1,576 accepted dead-key records (348 more than the previous generated table), which are included in each flattened locale pack. Finnish contributes six accepted locale-specific Multi_key rules and 346 dead-key rules, of which 338 override shared base entries and eight add new inputs. Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics. The Greek source contributes 922 accepted locale Multi_key rules and 970 supported dead-key rules, with 628 total overrides (394 Multi_key and 234 dead-key overrides); its standalone source is merged over en_US by the explicit importer mode.
 
 The Build and test workflow fetches all four locale files from the pinned libX11 revision and verifies their blob IDs before regenerating the data. The importer receives each locale-specific source blob through `--locale-compose-blob`; all generated JSON files must compare byte-for-byte with the committed data before the packs are uploaded.
 
