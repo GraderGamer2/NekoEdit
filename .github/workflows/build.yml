@@ -87,6 +87,15 @@ jobs:
           cmp build/upstream/sr_RS.UTF-8.json data/locales/sr_RS.UTF-8.json
           cmp build/upstream/el_GR.UTF-8.json data/locales/el_GR.UTF-8.json
 
+      - name: Upload regenerated locale JSON for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nekoedit-generated-locale-json
+          path: build/upstream/*.json
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: Build optional Compose locale pack
         run: make locale-packs
 
