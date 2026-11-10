@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — one-day GitHub Actions artifact retention on main — validation pending
+
+| Commit | Subject |
+|---|---|
+| [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54) | ci: expire main build artifacts after one day |
+
+The main-branch executable upload now requests one-day retention. Changelog-only changes are excluded from Build and test triggers. New-artifact expiry validation is pending; previously uploaded artifacts retain their old expiry.
+
+---
+
 ## 2026-11-10 — align main-branch artifact retention with 90-day public maximum — validation pending
 
 | Commit | Subject |
