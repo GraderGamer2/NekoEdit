@@ -54,6 +54,8 @@ static const char lc_all_env[] = "LC_ALL";
 static const char lc_ctype_env[] = "LC_CTYPE";
 static const char lang_env[] = "LANG";
 static const char home_env[] = "HOME";
+static const char system_root_env[] = "NEKOEDIT_XCOMPOSE_SYSTEM_ROOT";
+static const char default_system_root[] = "/usr/share/X11/locale";
 static const char directory_suffix[] = "/.nekoedit/locales/";
 static const char extension[] = ".nlp";
 static const uint8_t *mapped_pack;
@@ -1118,7 +1120,8 @@ static int nx_add(struct native_compose_rule *rules,uint32_t *n,uint32_t kind,
     return 1;
 }
 struct nx_import_state {
-    int root_fd;
+    long home_root_fd;
+    long system_root_fd;
     uint8_t *workspace;
     uint32_t workspace_capacity;
     uint32_t workspace_used;
@@ -1139,54 +1142,185 @@ static uint64_t nx_read64(const uint8_t *p)
     return (uint64_t)read32(p) | ((uint64_t)read32(p + 4u) << 32);
 }
 
-static int nx_parse_buffer(struct nx_import_state *state, uint8_t *source,
-                           uint32_t length, struct native_compose_rule *rules);
+static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
+                           uint32_t length,long parent_fd,
+                           struct native_compose_rule *rules);
 
-static int nx_parse_include_name(const char *text, uint32_t length,
-                                 char name[XCOMPOSE_INCLUDE_NAME + 1u])
+#define NX_INCLUDE_SIBLING 0u
+#define NX_INCLUDE_HOME 1u
+#define NX_INCLUDE_SYSTEM 2u
+#define NX_INCLUDE_LOCALE 3u
+
+static int nx_component_valid(const char *name,uint32_t length)
 {
-    uint32_t at = 7u, start, end, i;
-    if (!text || length < 9u || !nx_equal_ci(text, "include") ||
-        !nx_space(text[7]))
-        return 0;
-    while (at < length && nx_space(text[at])) ++at;
-    if (at >= length || text[at] != '"') return 0;
-    start = ++at;
-    while (at < length && text[at] != '"') ++at;
-    if (at >= length) return 0;
-    end = at++;
-    if (end == start || end - start > XCOMPOSE_INCLUDE_NAME) return 0;
-    while (at < length && nx_space(text[at])) ++at;
-    if (at != length) return 0;
-    if (end - start == 1u && text[start] == '.') return 0;
-    if (end - start == 2u && text[start] == '.' && text[start + 1u] == '.') return 0;
-    for (i = start; i < end; ++i) {
-        unsigned char ch = (unsigned char)text[i];
-        if (ch < 0x21u || ch == 0x7fu || ch == '/' || ch == '\\' ||
-            ch == '%' || ch == '$' || ch == '~' || ch == ':' || ch == '"')
-            return 0;
-        name[i - start] = text[i];
+    uint32_t i;
+    if(!name||!length||length>=XCOMPOSE_NAME_SIZE||
+       (length==1u&&name[0]=='.')||
+       (length==2u&&name[0]=='.'&&name[1]=='.'))return 0;
+    for(i=0;i<length;++i){
+        unsigned char ch=(unsigned char)name[i];
+        if(ch<0x21u||ch==0x7fu||ch=='/'||ch=='\\'||ch=='%'||
+           ch=='$'||ch=='~'||ch==':'||ch=='"')return 0;
     }
-    name[end - start] = 0;
     return 1;
 }
 
-static int nx_parse_file(struct nx_import_state *state, const char *name,
-                         struct native_compose_rule *rules)
+/* Open each component beneath root_fd without following symlinks. */
+static long nx_open_relative_file(long root_fd,const char *path,long *parent_out)
+{
+    char component[XCOMPOSE_NAME_SIZE];
+    uint32_t length,start=0,end,i;
+    long directory,next,file;
+    if(root_fd<0||!path||!parent_out)return -1;
+    length=string_length(path,XCOMPOSE_NAME_SIZE);
+    if(!length||length>=XCOMPOSE_NAME_SIZE||
+       path[0]=='/'||path[length-1u]=='/')return -1;
+    directory=syscall6(SYS_openat,root_fd,(long)".",
+                       O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NOFOLLOW,0,0,0);
+    if(failed(directory))return -1;
+    while(start<length){
+        end=start;
+        while(end<length&&path[end]!='/')++end;
+        if(!nx_component_valid(path+start,end-start))goto fail;
+        for(i=start;i<end;++i)component[i-start]=path[i];
+        component[end-start]=0;
+        if(end<length){
+            next=syscall6(SYS_openat,directory,(long)component,
+                          O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NOFOLLOW,0,0,0);
+            if(failed(next))goto fail;
+            (void)syscall6(SYS_close,directory,0,0,0,0,0);
+            directory=next;
+            start=end+1u;
+        }else{
+            file=syscall6(SYS_openat,directory,(long)component,
+                          O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK,0,0,0);
+            if(failed(file))goto fail;
+            *parent_out=directory;
+            return file;
+        }
+    }
+fail:
+    (void)syscall6(SYS_close,directory,0,0,0,0,0);
+    return -1;
+}
+
+static int nx_parse_include_name(const char *text,uint32_t length,
+                                 char name[XCOMPOSE_INCLUDE_NAME+1u],
+                                 uint32_t *kind)
+{
+    uint32_t at=7u,start,end,i,n;
+    if(!text||!kind||length<9u||!nx_equal_ci(text,"include")||
+       !nx_space(text[7]))return 0;
+    while(at<length&&nx_space(text[at]))++at;
+    if(at>=length||text[at]!='"')return 0;
+    start=++at;
+    while(at<length&&text[at]!='"')++at;
+    if(at>=length)return 0;
+    end=at++;
+    if(end==start||end-start>XCOMPOSE_INCLUDE_NAME)return 0;
+    while(at<length&&nx_space(text[at]))++at;
+    if(at!=length)return 0;
+
+    n=end-start;
+    if(n==2u&&text[start]=='%'&&text[start+1u]=='L'){
+        *kind=NX_INCLUDE_LOCALE;
+        name[0]=0;
+        return 1;
+    }
+    if(n>3u&&text[start]=='%'&&text[start+2u]=='/'){
+        if(text[start+1u]=='H')*kind=NX_INCLUDE_HOME;
+        else if(text[start+1u]=='S')*kind=NX_INCLUDE_SYSTEM;
+        else return 0;
+        start+=3u;
+        n-=3u;
+    }else{
+        *kind=NX_INCLUDE_SIBLING;
+        for(i=0;i<n;++i)
+            if(text[start+i]=='/'||text[start+i]=='%')return 0;
+    }
+    if(!n||n>XCOMPOSE_INCLUDE_NAME||
+       text[start]=='/'||text[start+n-1u]=='/')return 0;
+    for(i=0;i<n;++i){
+        unsigned char ch=(unsigned char)text[start+i];
+        if(ch<0x21u||ch==0x7fu||ch=='\\'||ch=='%'||ch=='$'||
+           ch=='~'||ch==':'||ch=='"')return 0;
+        name[i]=text[start+i];
+    }
+    name[n]=0;
+    return 1;
+}
+
+static long nx_include_root(struct nx_import_state *state,uint32_t kind)
+{
+    const char *path;
+    long fd;
+    if(!state)return -1;
+    if(kind==NX_INCLUDE_HOME){
+        if(state->home_root_fd>=0)return state->home_root_fd;
+        path=environment_value(home_env);
+        if(!path||!path[0]||path[0]!='/')return -1;
+        fd=syscall6(SYS_openat,AT_FDCWD,(long)path,
+                    O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NOFOLLOW,0,0,0);
+        if(failed(fd))return -1;
+        state->home_root_fd=fd;
+        return fd;
+    }
+    if(kind==NX_INCLUDE_SYSTEM||kind==NX_INCLUDE_LOCALE){
+        if(state->system_root_fd>=0)return state->system_root_fd;
+        path=environment_value(system_root_env);
+        if(!path||!path[0])path=default_system_root;
+        if(path[0]!='/')return -1;
+        fd=syscall6(SYS_openat,AT_FDCWD,(long)path,
+                    O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NOFOLLOW,0,0,0);
+        if(failed(fd))return -1;
+        state->system_root_fd=fd;
+        return fd;
+    }
+    return -1;
+}
+
+/* %L resolves via the process character locale; C/POSIX use en_US. */
+static int nx_system_locale_path(char path[XCOMPOSE_NAME_SIZE])
+{
+    const char *value=environment_value(lc_all_env);
+    char tag[MAX_TAG_LENGTH+1u];
+    uint32_t n,i,at;
+    if(!value||!value[0])value=environment_value(lc_ctype_env);
+    if(!value||!value[0])value=environment_value(lang_env);
+    if(!value||!value[0])value="en_US.UTF-8";
+    n=normalize_locale_tag(value,tag,sizeof(tag));
+    if(!n)return 0;
+    if(equals(tag,"C")||equals(tag,"POSIX")||
+       equals(tag,"C.UTF-8")||equals(tag,"POSIX.UTF-8")){
+        const char fallback[]="en_US.UTF-8";
+        n=sizeof(fallback)-1u;
+        for(i=0;i<n;++i)tag[i]=fallback[i];
+        tag[n]=0;
+    }
+    at=0;
+    for(i=0;i<n;++i)path[at++]=tag[i];
+    if(at+8u>=XCOMPOSE_NAME_SIZE)return 0;
+    path[at++]='/';
+    path[at++]='C';path[at++]='o';path[at++]='m';
+    path[at++]='p';path[at++]='o';path[at++]='s';path[at++]='e';
+    path[at]=0;
+    return 1;
+}
+
+static int nx_parse_file(struct nx_import_state *state,long base_fd,
+                         const char *name,struct native_compose_rule *rules)
 {
     uint8_t stat_buffer[256] __attribute__((aligned(16)));
     uint64_t device, inode;
-    long fd, result, size;
-    uint32_t i, offset, workspace_start, unique = 0;
-    int ok = 0;
-    if (!state || !name || !name[0] ||
-        state->stack_depth >= XCOMPOSE_INCLUDE_DEPTH ||
-        state->opened_files >= XCOMPOSE_INCLUDE_EXPANSIONS + 1u)
+    long fd,parent_fd=-1,result,size;
+    uint32_t i,offset,workspace_start,unique=0;
+    int ok=0;
+    if(!state||!name||!name[0]||
+       state->stack_depth>=XCOMPOSE_INCLUDE_DEPTH||
+       state->opened_files>=XCOMPOSE_INCLUDE_EXPANSIONS+1u)
         return 0;
-
-    fd = syscall6(SYS_openat, state->root_fd, (long)name,
-                  O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0, 0, 0);
-    if (failed(fd)) return 0;
+    fd=nx_open_relative_file(base_fd,name,&parent_fd);
+    if(failed(fd))return 0;
     for (i = 0; i < sizeof(stat_buffer); ++i) stat_buffer[i] = 0;
     result = syscall6(SYS_fstat, fd, (long)stat_buffer, 0, 0, 0, 0);
     if (failed(result) || (read32(stat_buffer + 24u) & S_IFMT) != S_IFREG)
@@ -1251,19 +1385,21 @@ static int nx_parse_file(struct nx_import_state *state, const char *name,
             goto nx_parse_file_unwind;
     state->workspace[workspace_start + (uint32_t)size] = 0;
 
-    ok = nx_parse_buffer(state, state->workspace + workspace_start,
-                         (uint32_t)size, rules);
+    ok = nx_parse_buffer(state,state->workspace+workspace_start,
+                         (uint32_t)size,parent_fd,rules);
 
 nx_parse_file_unwind:
     --state->stack_depth;
     state->workspace_used = workspace_start;
 nx_parse_file_done:
-    (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+    (void)syscall6(SYS_close,fd,0,0,0,0,0);
+    if(parent_fd>=0)(void)syscall6(SYS_close,parent_fd,0,0,0,0,0);
     return ok;
 }
 
-static int nx_parse_buffer(struct nx_import_state *state, uint8_t *source,
-                           uint32_t length, struct native_compose_rule *rules)
+static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
+                           uint32_t length,long parent_fd,
+                           struct native_compose_rule *rules)
 {
     uint32_t at = 0;
     if (length >= 3u && source[0] == 0xefu &&
@@ -1310,9 +1446,20 @@ static int nx_parse_buffer(struct nx_import_state *state, uint8_t *source,
                 nx_equal_ci(line + left_a, "include") &&
                 (left_b - left_a == 7u || nx_space(line[left_a + 7u]))) {
                 char include_name[XCOMPOSE_INCLUDE_NAME + 1u];
-                if (!nx_parse_include_name(line + left_a, left_b - left_a,
-                                           include_name) ||
-                    !nx_parse_file(state, include_name, rules))
+                uint32_t include_kind=NX_INCLUDE_SIBLING;
+                long include_root=parent_fd;
+                if(!nx_parse_include_name(line+left_a,left_b-left_a,
+                                          include_name,&include_kind))
+                    return 0;
+                if(include_kind==NX_INCLUDE_HOME||
+                   include_kind==NX_INCLUDE_SYSTEM||
+                   include_kind==NX_INCLUDE_LOCALE)
+                    include_root=nx_include_root(state,include_kind);
+                if(include_kind==NX_INCLUDE_LOCALE&&
+                   !nx_system_locale_path(include_name))
+                    return 0;
+                if(failed(include_root)||include_root<0||!include_name[0]||
+                   !nx_parse_file(state,include_root,include_name,rules))
                     return 0;
                 continue;
             }
@@ -1377,7 +1524,8 @@ static uint32_t nx_parse_path(int root_fd, const char *root_name,
 {
     struct nx_import_state state;
     uint32_t i, unique = 0, kept = 0;
-    state.root_fd = root_fd;
+    state.home_root_fd=-1;
+    state.system_root_fd=-1;
     state.workspace = workspace;
     state.workspace_capacity = workspace_capacity;
     state.workspace_used = 0;
@@ -1387,10 +1535,10 @@ static uint32_t nx_parse_path(int root_fd, const char *root_name,
     state.stack_depth = 0;
     state.record_count = 0;
     state.order = 0;
-    if (!nx_parse_file(&state, root_name, rules) || !state.record_count)
-        return 0;
+    if(!nx_parse_file(&state,root_fd,root_name,rules)||!state.record_count)
+        goto nx_parse_path_cleanup;
 
-    nx_sort(rules, state.record_count);
+    nx_sort(rules,state.record_count);
     for (i = 0; i < state.record_count; ++i) {
         if (unique && nx_same(&rules[unique - 1u], &rules[i]))
             continue;
@@ -1403,6 +1551,11 @@ static uint32_t nx_parse_path(int root_fd, const char *root_name,
         if (kept != i) rules[kept] = rules[i];
         ++kept;
     }
+nx_parse_path_cleanup:
+    if(state.home_root_fd>=0)
+        (void)syscall6(SYS_close,state.home_root_fd,0,0,0,0,0);
+    if(state.system_root_fd>=0)
+        (void)syscall6(SYS_close,state.system_root_fd,0,0,0,0,0);
     return kept;
 }
 

@@ -23,6 +23,11 @@ int main(void){
     char cycle_src[512],cycle_child[512],cycle_pack[1024];
     char depth_src[512],depth_pack[1024],depth_path[512],depth_name[64],depth_next[64],depth_body[128];
     char expansion_src[512],expansion_pack[1024],expansion_common[512],expansion_content[4096];
+    char system_root[512],locale_dir[512],locale_file[768],iso_dir[512],iso_file[768];
+    char home_dir[512],home_file[768],system_src[512],system_pack[1024];
+    char traversal_src[512],traversal_pack[1024],macro_link_src[512],macro_link_pack[1024];
+    char macro_link[768],macro_dir_link[768],macro_dir_src[512],macro_dir_pack[1024];
+    char c_locale_src[512],c_locale_pack[1024];
     struct stat st;uint32_t in[4],out[8],n,depth_i,expansion_i,expansion_len;
     const char *rules=
       "# In-app native import test\n"
@@ -74,7 +79,94 @@ int main(void){
     need(symlink(src,sym)==0,"make symlink");need(compose_locale_import_xcompose(sym)==0,"symlink source refused");
     snprintf(inc,sizeof(inc),"%s/include.XCompose",home);
     write_text(inc,"include \"%L\"\n<Multi_key> <a> <b> : \"x\"\n");
-    need(compose_locale_import_xcompose(inc)==0,"%L include did not fail closed");
+    need(setenv("NEKOEDIT_XCOMPOSE_SYSTEM_ROOT","/nekoedit-missing-system-root",1)==0,
+         "set missing system root");
+    process_envp=environ;
+    need(compose_locale_import_xcompose(inc)==0,
+         "%L with a missing system locale root did not fail closed");
+
+    /* %L follows the process locale; %S and %H are confined to their roots. */
+    snprintf(system_root,sizeof(system_root),"%s/xorg-locale",home);
+    need(mkdir(system_root,0700)==0,"create system locale root");
+    snprintf(locale_dir,sizeof(locale_dir),"%s/en_US.UTF-8",system_root);
+    need(mkdir(locale_dir,0700)==0,"create locale directory");
+    snprintf(iso_dir,sizeof(iso_dir),"%s/iso8859-1",system_root);
+    need(mkdir(iso_dir,0700)==0,"create system include subdirectory");
+    snprintf(locale_file,sizeof(locale_file),"%s/Compose",locale_dir);
+    write_text(locale_file,
+        "<Multi_key> <s> <y> : \"System\"\n"
+        "include \"%S/iso8859-1/Compose\"\n");
+    snprintf(iso_file,sizeof(iso_file),"%s/Compose",iso_dir);
+    write_text(iso_file,"<Multi_key> <i> <s> : \"ISO\"\n");
+    snprintf(home_dir,sizeof(home_dir),"%s/.XCompose.d",home);
+    need(mkdir(home_dir,0700)==0,"create home include directory");
+    snprintf(home_file,sizeof(home_file),"%s/personal.XCompose",home_dir);
+    write_text(home_file,"<Multi_key> <h> <m> : \"Home\"\n");
+    snprintf(system_src,sizeof(system_src),"%s/nekoedit-system.XCompose",home);
+    snprintf(system_pack,sizeof(system_pack),"%s/nekoedit-system.UTF-8.nlp",loc);
+    write_text(system_src,
+        "include \"%L\"\n"
+        "include \"%H/.XCompose.d/personal.XCompose\"\n");
+    need(setenv("NEKOEDIT_XCOMPOSE_SYSTEM_ROOT",system_root,1)==0,
+         "set synthetic system root");
+    need(setenv("LC_ALL","en_US.UTF-8",1)==0,"set process character locale");
+    process_envp=environ;
+    need(compose_locale_import_xcompose(system_src)==1,
+         "%L/%S/%H include tree was not imported");
+    need(strcmp(compose_locale_installed_tag,"nekoedit-system.UTF-8")==0,
+         "macro include pack tag was incorrect");
+    need(compose_locale_load("nekoedit-system.UTF-8")==1,
+         "runtime rejected macro-include pack");
+    in[0]='s';in[1]='y';n=compose_locale_lookup(0,2,in,out);
+    need(n==6&&out[0]=='S'&&out[5]=='m',"%L locale file was not expanded");
+    in[0]='i';in[1]='s';n=compose_locale_lookup(0,2,in,out);
+    need(n==3&&out[0]=='I'&&out[2]=='O',"%S nested system path was not expanded");
+    in[0]='h';in[1]='m';n=compose_locale_lookup(0,2,in,out);
+    need(n==4&&out[0]=='H'&&out[3]=='e',"%H home path was not expanded");
+    need(compose_locale_remove_pack("nekoedit-system.UTF-8")==1,
+         "could not remove macro-include pack");
+
+    snprintf(c_locale_src,sizeof(c_locale_src),"%s/nekoedit-c-locale.XCompose",home);
+    snprintf(c_locale_pack,sizeof(c_locale_pack),"%s/nekoedit-c-locale.UTF-8.nlp",loc);
+    write_text(c_locale_src,"include \"%L\"\n");
+    need(setenv("LC_ALL","C",1)==0,"set C process locale");
+    process_envp=environ;
+    need(compose_locale_import_xcompose(c_locale_src)==1,
+         "%L did not use en_US fallback for the C locale");
+    need(compose_locale_load("nekoedit-c-locale.UTF-8")==1,
+         "runtime rejected C-locale fallback pack");
+    need(compose_locale_remove_pack("nekoedit-c-locale.UTF-8")==1,
+         "could not remove C-locale fallback pack");
+
+    snprintf(traversal_src,sizeof(traversal_src),"%s/nekoedit-traversal.XCompose",home);
+    snprintf(traversal_pack,sizeof(traversal_pack),"%s/nekoedit-traversal.UTF-8.nlp",loc);
+    write_text(traversal_src,
+        "include \"%S/../outside.XCompose\"\n"
+        "<Multi_key> <t> <r> : \"traversal\"\n");
+    need(compose_locale_import_xcompose(traversal_src)==0,
+         "%S parent traversal was followed");
+    need(access(traversal_pack,F_OK)!=0,
+         "%S traversal rejection left a partial pack");
+
+    snprintf(macro_link,sizeof(macro_link),"%s/linked.XCompose",iso_dir);
+    need(symlink(iso_file,macro_link)==0,"create macro include file symlink");
+    snprintf(macro_link_src,sizeof(macro_link_src),"%s/nekoedit-macro-link.XCompose",home);
+    snprintf(macro_link_pack,sizeof(macro_link_pack),"%s/nekoedit-macro-link.UTF-8.nlp",loc);
+    write_text(macro_link_src,"include \"%S/iso8859-1/linked.XCompose\"\n");
+    need(compose_locale_import_xcompose(macro_link_src)==0,
+         "%S file symlink was followed");
+    need(access(macro_link_pack,F_OK)!=0,
+         "%S file-symlink rejection left a partial pack");
+
+    snprintf(macro_dir_link,sizeof(macro_dir_link),"%s/iso-alias",system_root);
+    need(symlink(iso_dir,macro_dir_link)==0,"create macro include directory symlink");
+    snprintf(macro_dir_src,sizeof(macro_dir_src),"%s/nekoedit-macro-dir-link.XCompose",home);
+    snprintf(macro_dir_pack,sizeof(macro_dir_pack),"%s/nekoedit-macro-dir-link.UTF-8.nlp",loc);
+    write_text(macro_dir_src,"include \"%S/iso-alias/Compose\"\n");
+    need(compose_locale_import_xcompose(macro_dir_src)==0,
+         "%S intermediate directory symlink was followed");
+    need(access(macro_dir_pack,F_OK)!=0,
+         "%S directory-symlink rejection left a partial pack");
 
     /* Safe includes are sibling-only, depth-first, and preserve textual order.
      * A repeated include after a later parent rule must apply again. */
@@ -182,6 +274,12 @@ int main(void){
     unlink(sym);unlink(src);unlink(inc);unlink(common);unlink(nested);unlink(include_src);
     unlink(unsafe_src);unlink(linked_include);unlink(linked_src);unlink(cycle_src);unlink(cycle_child);
     unlink(expansion_src);unlink(expansion_common);unlink(depth_src);
+    unlink(system_src);unlink(c_locale_src);unlink(traversal_src);
+    unlink(macro_link_src);unlink(macro_dir_src);
+    unlink(macro_link);unlink(macro_dir_link);unlink(home_file);
+    unlink(locale_file);unlink(iso_file);
+    need(rmdir(home_dir)==0&&rmdir(locale_dir)==0&&rmdir(iso_dir)==0&&
+         rmdir(system_root)==0,"cleanup macro include directories");
     for(depth_i=0;depth_i<=16u;++depth_i){snprintf(depth_name,sizeof(depth_name),"depth-%02u.XCompose",depth_i);snprintf(depth_path,sizeof(depth_path),"%s/%s",home,depth_name);unlink(depth_path);}
     need(rmdir(loc)==0&&rmdir(app)==0&&rmdir(home)==0,"cleanup");
     puts("Native in-app XCompose import tests passed");
