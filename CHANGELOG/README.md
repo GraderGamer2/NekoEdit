@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
-Build and test #777 passed all 13 steps after both Build and test artifacts and the optional locale-pack workflow were set to 90-day retention. GitHub confirmed the refreshed editor and locale artifacts expire 2027-02-08 00:05:31 UTC. The earlier Build and test #776 printable-ASCII X keysym regression also passed; the user has manually confirmed the Settings locale dropdown works. The one-command offline XCompose installer remains optional and writes private packs to `~/.nekoedit/locales`; there is no automatic startup import or Settings import UI. The editor remains freestanding. Live GNOME/Mutter layout/IME validation is still outstanding. CURRENT_STATUS.md records artifact IDs and the current validation boundary.
+Build and test artifacts from `main` and `early-alpha`, including the optional locale-pack output, are now configured for one-day retention. The setting affects future uploads only; artifacts created before the workflow changes retain their prior expiry unless manually deleted. GitHub Free's 500 MB Actions/Packages storage allowance is shared across those products. The user has confirmed the Settings locale dropdown and newest editor build work normally. User XCompose import remains optional/manual and stores packs under `~/.nekoedit/locales`. Live GNOME/Mutter layout/IME validation remains outstanding. CURRENT_STATUS.md records the new workflow commits and verification status.
 
 ## Read this first in every new development chat
 
