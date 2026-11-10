@@ -120,7 +120,7 @@ $(LOCALE_PACK_DIR)/%.nlp: data/locales/%.json data/locales/%.NOTICE.txt tools/co
 	$(PYTHON) tools/compose_pack.py build --input "$<" --output "$@"
 	cp "data/locales/$*.NOTICE.txt" "$(LOCALE_PACK_DIR)/$*.NOTICE.txt"
 
-$(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/compose_locale.c
+$(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/compose_locale.c src/backend/xkb.S
 	@mkdir -p "$(@D)"
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
 
