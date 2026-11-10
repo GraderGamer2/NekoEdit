@@ -70,6 +70,7 @@ chmod 700 "$TEST_ROOT/home" "$TEST_ROOT/home/.nekoedit" \
     "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime"
 cp "$LOCALE_PACK" "$TEST_ROOT/home/.nekoedit/locales/pt_BR.UTF-8.nlp"
 printf 'seed' > "$TEST_ROOT/document.txt"
+printf 'x' > "$TEST_ROOT/expected_probe.txt"
 python3 - "$TEST_ROOT/expected.txt" <<'PY'
 import pathlib
 import sys
@@ -137,11 +138,82 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 
-# Focus the editor surface in the nested GNOME session. XTest sends virtual
-# key events through the host X server; Mutter then delivers wl_keyboard events
-# using the active us(intl) keymap.
-xdotool mousemove --sync 640 360 click 1
+# The nested compositor is an X11 client under Xvfb. There is no separate
+# window manager in this test session to perform the normal click-to-focus
+# transition, so explicitly focus Mutter's outer X11 window before injecting
+# XTest events.
+SHELL_WINDOW=
+for attempt in $(seq 1 100); do
+    SHELL_WINDOW="$(xdotool search --onlyvisible --pid "$SHELL_PID" 2>/dev/null | head -n 1 || true)"
+    if [ -n "$SHELL_WINDOW" ]; then
+        break
+    fi
+    sleep 0.1
+done
+if [ -z "$SHELL_WINDOW" ]; then
+    SHELL_WINDOW="$(xdotool search --onlyvisible --name '^GNOME Shellif ! kill -0 "$SHELL_PID" 2>/dev/null; then
+    echo "nested Mutter exited during keyboard input" >&2
+    exit 1
+fi
+
+echo "PASS: GNOME Shell/Mutter delivered Multi_key and a two-mark dead-key chain"
+echo "PASS: Ctrl+S saved the expected UTF-8 bytes (U+2026 U+1EA6)"
+RESULT=passed
+ 2>/dev/null | head -n 1 || true)"
+fi
+if [ -z "$SHELL_WINDOW" ]; then
+    echo "could not find GNOME Shell's visible outer X11 window" >&2
+    xdotool search --onlyvisible --name '.*' >&2 || true
+    exit 1
+fi
+xdotool windowraise "$SHELL_WINDOW"
+xdotool windowfocus --sync "$SHELL_WINDOW"
+FOCUSED_WINDOW="$(xdotool getwindowfocus -f)"
+if [ "$FOCUSED_WINDOW" != "$SHELL_WINDOW" ]; then
+    echo "Mutter outer window did not acquire X input focus: window=$SHELL_WINDOW focus=$FOCUSED_WINDOW" >&2
+    exit 1
+fi
+
+GEOMETRY="$(xdotool getwindowgeometry --shell "$SHELL_WINDOW")"
+SHELL_WIDTH="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
+SHELL_HEIGHT="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
+if [ -z "$SHELL_WIDTH" ] || [ -z "$SHELL_HEIGHT" ] || [ "$SHELL_WIDTH" -lt 800 ] || [ "$SHELL_HEIGHT" -lt 480 ]; then
+    echo "unexpected nested Mutter window geometry: $GEOMETRY" >&2
+    exit 1
+fi
+CENTER_X=$((SHELL_WIDTH / 2))
+CENTER_Y=$((SHELL_HEIGHT / 2))
+
+# Click the center of the nested display, where Mutter centers the 800x480
+# NekoEdit toplevel, then verify ordinary key delivery before Compose.
+xdotool mousemove --sync --window "$SHELL_WINDOW" "$CENTER_X" "$CENTER_Y"
+xdotool click 1
 sleep 0.25
+xdotool key --clearmodifiers --delay 120 ctrl+a
+xdotool key --clearmodifiers --delay 120 x
+xdotool key --clearmodifiers --delay 120 ctrl+s
+
+PROBE_SAVED=0
+for attempt in $(seq 1 50); do
+    if cmp -s "$TEST_ROOT/document.txt" "$TEST_ROOT/expected_probe.txt"; then
+        PROBE_SAVED=1
+        break
+    fi
+    if ! kill -0 "$APP_PID" 2>/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+if [ "$PROBE_SAVED" -ne 1 ]; then
+    echo "ordinary XTest keyboard input did not reach NekoEdit or Ctrl+S did not save" >&2
+    echo "Mutter window=$SHELL_WINDOW focused=$FOCUSED_WINDOW" >&2
+    echo "geometry: $GEOMETRY" >&2
+    echo "active outer X11 window: $(xdotool getactivewindow 2>/dev/null || true)" >&2
+    exit 1
+fi
+
+# Replace the canary with the Compose paths under test. The locale pack is
+# copied under the temporary HOME; it is never linked into the editor.
 xdotool key --clearmodifiers --delay 120 ctrl+a
 xdotool key --delay 120 Multi_key
 xdotool key --delay 120 period
@@ -149,7 +221,7 @@ xdotool key --delay 120 period
 xdotool key --delay 120 dead_grave
 xdotool key --delay 120 shift+6
 xdotool key --delay 120 shift+a
-xdotool key --delay 120 ctrl+s
+xdotool key --clearmodifiers --delay 120 ctrl+s
 
 SAVED=0
 for attempt in $(seq 1 100); do
@@ -164,7 +236,9 @@ for attempt in $(seq 1 100); do
 done
 
 if [ "$SAVED" -ne 1 ]; then
-    echo "expected UTF-8 output U+2026 U+1EA6 (…Ầ) was not saved" >&2
+    echo "ordinary keyboard canary passed, but expected Compose output U+2026 U+1EA6 (…Ầ) was not saved" >&2
+    echo "Mutter window=$SHELL_WINDOW focused=$FOCUSED_WINDOW" >&2
+    echo "geometry: $GEOMETRY" >&2
     exit 1
 fi
 if ! kill -0 "$SHELL_PID" 2>/dev/null; then

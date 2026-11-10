@@ -5,6 +5,8 @@
 | [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588) | test: validate Wayland input through nested GNOME Mutter |
 | [baaef829f1bb](https://github.com/GraderGamer2/NekoEdit/commit/baaef829f1bbc1452bbad7b89957704b3085c54f) | test: synchronize Wayland held-key repeat assertions |
 | [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73) | test: launch Mutter smoke test with supported CLI |
+| [bd9289ef8eba](https://github.com/GraderGamer2/NekoEdit/commit/bd9289ef8eba8cbc509503a178f4b84ff78544e1) | docs: record Mutter harness correction and CI handoff |
+| [acce2fcdf760](https://github.com/GraderGamer2/NekoEdit/commit/acce2fcdf7605da253d22d9f5ba9cc25a982f31e) | docs: index the Mutter harness and repeat-test commits |
 
 ## 2026-11-10 — Wayland dead-key chains and refreshed Compose locale tables — Build and test #802 passed
 

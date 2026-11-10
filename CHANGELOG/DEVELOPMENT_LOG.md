@@ -1,3 +1,12 @@
+## 2026-11-10 — make the nested Mutter test explicitly focus its X11 host window
+
+- Build and test #805 passed the freestanding build, command-line/host tests, Wayland protocol mock, ELF inspection, pinned X.Org source verification, and all four separate locale-pack builds. It failed only at the nested Mutter keyboard test: GNOME Shell/Mutter started, NekoEdit stayed alive, but the source document remained unchanged after XTest events.
+- The previous harness clicked a fixed root coordinate but never explicitly called XSetInputFocus on the outer GNOME Shell X11 window. CI uses bare Xvfb without a separate window manager, so the harness cannot assume normal click-to-focus management.
+- Updated the harness to locate the visible Shell window using its PID, raise and explicitly focus it, verify the focused XID, query its geometry, and click the display center with window-relative coordinates.
+- Added a plain printable-character + Ctrl+S canary before Compose. The expected one-byte file must be saved before the test proceeds to Right-Alt Multi_key and the two-mark dead-key chain. This distinguishes generic XTest routing from XKB Compose/locale behavior.
+- Updated the test documentation with the nested keyboard-routing limitation documented by GNOME's development guide. No runtime code or dependencies changed; the locale data remains separate.
+- Validation for the new focus/canary correction is pending its branch-push CI run.
+
 ## 2026-11-10 — document the nested Mutter CLI correction commit and #805 run
 
 - Source/harness correction committed as [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73); the command uses the supported one-file CLI form and relies on the private WAYLAND_DISPLAY for backend selection.

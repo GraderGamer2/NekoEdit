@@ -1,3 +1,11 @@
+## 2026-11-10 — improve Mutter input focus and add a keyboard-delivery canary after #805
+
+**CI #805:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42833913969) only in `make test-mutter`. The freestanding build, host tests, Wayland mock, ELF inspection, pinned X.Org input-data verification, and all four optional locale-pack builds passed. GNOME Shell 46 / Mutter 46.2 started, and NekoEdit stayed alive, but the temporary document remained `seed` after the test's XTest input.
+**Harness diagnosis:** the prior Xvfb flow clicked a hard-coded root coordinate but never explicitly set or verified X input focus on GNOME Shell's outer X11 window. Since this test runs without a separate X11 window manager, it could not rely on the usual click-to-focus policy. GNOME's nested-shell development notes also warn that keyboard shortcuts may not normally reach a nested compositor.
+**Correction:** the harness now locates the visible GNOME Shell X11 window by PID, raises it, explicitly calls `xdotool windowfocus --sync`, verifies the focused XID, and clicks the center using window-relative coordinates. Before Compose input it replaces the temporary document with a one-character `x` canary and confirms Ctrl+S saved it. Failure now distinguishes missing basic keyboard delivery from a Compose translation/output mismatch.
+**Scope:** test/docs only. The application and its runtime dependencies are unchanged; optional NLP1 packs remain external files under the temporary HOME's `~/.nekoedit/locales/`.
+**Validation:** the fix is committed before the next branch-push run. No successful Mutter result is claimed yet.
+
 ## 2026-11-10 — nested Mutter smoke-test launch correction pushed; Build and test #805 pending
 
 **Harness fix commit:** [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73). The harness now uses the supported `nekoedit <document>` invocation and selects Wayland through its private `WAYLAND_DISPLAY`.
