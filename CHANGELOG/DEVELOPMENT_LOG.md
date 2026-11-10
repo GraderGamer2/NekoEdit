@@ -1,3 +1,10 @@
+## 2026-11-10 — document the nested Mutter CLI correction commit and #805 run
+
+- Source/harness correction committed as [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73); the command uses the supported one-file CLI form and relies on the private WAYLAND_DISPLAY for backend selection.
+- Build and test #805 was triggered by this source commit. At the time of this handoff, GitHub reported the package-install step in progress; no #805 test result is claimed.
+- The #804 run had already passed the freestanding build, host suite, Wayland mock, ELF inspection, pinned-source comparison, and locale-pack build before the harness invocation failed. The compositor had started, but editor input was not exercised.
+- This entry is followed by a changelog-only commit to keep the exact source correction in COMMIT_INDEX.md without triggering another build.
+
 ## 2026-11-10 — correct the nested Mutter harness command line after #804
 
 - Build and test #804 passed the freestanding ELF build, command-line/host suite, full Wayland protocol mock, ELF inspection, pinned X.Org importer byte comparisons, and all four optional locale-pack builds.

@@ -1,3 +1,9 @@
+## 2026-11-10 — nested Mutter smoke-test launch correction pushed; Build and test #805 pending
+
+**Harness fix commit:** [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73). The harness now uses the supported `nekoedit <document>` invocation and selects Wayland through its private `WAYLAND_DISPLAY`.
+**CI:** [Build and test #805](https://github.com/GraderGamer2/NekoEdit/actions/runs/42833913969) is running on this exact source commit. The latest available job status is still **Install system Compose test corpus — in progress**; build, mocks, and Mutter have not yet reported results for #805.
+**Last completed run:** #804 passed the ELF build, host/command-line tests, Wayland mock, ELF inspection, pinned X.Org data comparisons, and all four optional locale-pack builds. It failed only because of the now-corrected combined CLI arguments in the new harness. Do not treat the Mutter keyboard scenario as validated until #805 completes successfully.
+
 ## 2026-11-10 — correct nested Mutter harness invocation after Build and test #804
 
 **Branch:** early-alpha; harness commit [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588); repeat-mock correction [baaef829f1bb](https://github.com/GraderGamer2/NekoEdit/commit/baaef829f1bbc1452bbad7b89957704b3085c54f).
