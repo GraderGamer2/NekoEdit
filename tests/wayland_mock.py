@@ -4396,6 +4396,47 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("settings_locale_dropdown_selected") != 0:
                         raise AssertionError("Remove did not reset the refreshed selection to built-in en_US")
                     observations.append("Settings Remove Pack requires confirmation, refreshes the locale list, deletes the validated pack, restores en_US, and persists the fallback")
+
+                    # Import a raw user .XCompose file through the new native Settings action.
+                    # This must not invoke the optional host-side Python converter.
+                    native_source = os.path.join(runtime_dir, "nekoedit-test.XCompose")
+                    native_source_text = (
+                        "# in-app native XCompose import test\n"
+                        '<Multi_key> <o> <c> : "Neko"\n'
+                        '<Multi_key> <t> <e> <s> <t> : "TEST"\n'
+                        '<dead_acute> <a> : "á"\n'
+                    )
+                    with open(native_source, "w", encoding="utf-8") as native_file:
+                        native_file.write(native_source_text)
+                    native_source_bytes = native_source_text.encode("utf-8")
+
+                    click_settings(180, 10, 5180, "reopen Settings for raw XCompose import")
+                    click_settings_design(392, 200, 5190, "open Import XCompose picker")
+                    if child_u32("picker_mode") != 6:
+                        raise AssertionError("Settings Import did not open raw XCompose picker mode")
+                    click_picker_design(200, 160, 5200, "select the raw .XCompose file")
+                    key_step(5210, 28, "import selected raw .XCompose file")
+                    native_pack_path = os.path.join(
+                        runtime_dir, ".nekoedit", "locales", "nekoedit-test.UTF-8.nlp"
+                    )
+                    if child_u32("compose_locale_active") != 1:
+                        raise AssertionError("native XCompose Import did not activate the generated locale")
+                    if child_u32("picker_mode") != 0:
+                        raise AssertionError("successful native XCompose Import did not close the picker")
+                    if not os.path.isfile(native_pack_path):
+                        raise AssertionError("native XCompose Import did not create the separate NLP1 pack")
+                    if os.stat(native_pack_path).st_mode & 0o777 != 0o600:
+                        raise AssertionError("native XCompose Import did not create a private 0600 pack")
+                    with open(native_source, "rb") as native_file:
+                        if native_file.read() != native_source_bytes:
+                            raise AssertionError("native XCompose Import modified the selected source file")
+                    with open(preference_path, "r", encoding="utf-8") as preference_file:
+                        imported_preference = preference_file.read()
+                    if "compose_locale=nekoedit-test.UTF-8\n" not in imported_preference:
+                        raise AssertionError("native XCompose Import did not persist its locale choice")
+                    observations.append(
+                        "Settings Import converted a raw .XCompose file natively, preserved the source, and installed a separate private NLP1 pack"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
@@ -7851,6 +7892,7 @@ xkb_symbols "nekoedit-sparse" {
             "Settings installed-locale dropdown dynamically lists generic packs, selects aa_TEST, and persists built-in en_US without opening a file picker",
             "Settings Add Pack copied/validated pt_BR, preserved the source, and refreshed the dynamic installed-locale list",
             "Settings Remove Pack requires confirmation, refreshes the locale list, deletes the validated pack, restores en_US, and persists the fallback",
+            "Settings Import converted a raw .XCompose file natively, preserved the source, and installed a separate private NLP1 pack",
         )
         missing_settings_observations = [
             expected for expected in required_settings_observations
