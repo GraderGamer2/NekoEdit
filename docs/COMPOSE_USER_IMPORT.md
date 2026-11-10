@@ -86,3 +86,12 @@ The integration test constructs the imported pack in memory inside a temporary d
 ## Integration boundary
 
 This is an explicit user-invoked host utility, not a runtime feature. NekoEdit does not automatically read $XCOMPOSEFILE, search for ~/.XCompose, merge it with system data at startup, or expose an importer in Settings. After running the installer, the resulting .nlp pack is discovered by the existing Settings locale dropdown. Importing does not move, delete, or modify the selected source file. The editor remains a freestanding executable with no Python/runtime-library dependency.
+
+
+## Direct import from Settings
+
+The editor provides a native Settings -> Locale -> Import action. Select a UTF-8 .XCompose rule file in the file picker; NekoEdit derives a locale tag from the filename (for example, nekoedit-test.XCompose becomes nekoedit-test.UTF-8), validates the generated NLP1 pack, and installs it directly under ~/.nekoedit/locales/. The source file is left untouched. Existing packs are never overwritten. Rename the source file to choose a different pack name, or remove the previous pack before importing again.
+
+The in-app importer is intentionally smaller than the optional Python host-side converter. It supports bounded, self-contained UTF-8 rule files containing unqualified Multi_key rules with two to four following keysyms, or one recognized dead-key action followed by one keysym. Results may be quoted UTF-8 strings with simple, octal, hexadecimal-byte, or Unicode-scalar escapes, or a Unicode-resolvable keysym. It recognizes printable ASCII names and a curated set of common Latin-1 names. Later duplicate rules override earlier rules; ambiguous shorter prefixes are dropped within the same rule kind. Modifier-qualified rules and unsupported symbols are skipped. Include directives are rejected rather than partially applied; use the optional host-side converter when a file depends on %H, %S, or %L includes, non-UTF-8 source encodings, or a broader X.Org keysym table.
+
+This conversion runs inside the freestanding editor using its own bounded parser and Linux syscalls. It does not launch Python or a helper process. The generated locale remains a separate data-only pack: importing does not add locale tables to the editor executable or modify the built-in en_US dataset.

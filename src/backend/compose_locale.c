@@ -15,6 +15,9 @@
 #define SYS_mkdirat 258
 #define SYS_unlinkat 263
 #define SYS_renameat 264
+#define SYS_linkat 265
+#define PROT_WRITE 2
+#define MAP_ANONYMOUS 0x20
 #define AT_FDCWD (-100)
 #define O_RDONLY 0
 #define O_WRONLY 1
@@ -846,4 +849,468 @@ remove_done:
     (void)syscall6(SYS_close, source_fd, 0, 0, 0, 0, 0);
     (void)syscall6(SYS_close, locale_fd, 0, 0, 0, 0, 0);
     return 0;
+}
+
+/* Native bounded .XCompose -> separate NLP1 pack importer. */
+#define XCOMPOSE_FILE_LIMIT (512u * 1024u)
+#define XCOMPOSE_LINE_LIMIT (64u * 1024u)
+#define XCOMPOSE_MAX_NAME 63u
+#define XCOMPOSE_TAG_BASE 25u
+
+struct native_compose_rule {
+    uint32_t input[MAX_INPUTS];
+    uint32_t output[MAX_OUTPUTS];
+    uint32_t order;
+    uint8_t input_count, output_count, kind, reserved;
+};
+
+static char nx_lower(char c)
+{
+    return c >= 'A' && c <= 'Z' ? (char)(c - 'A' + 'a') : c;
+}
+static int nx_equal(const char *a, const char *b)
+{
+    uint32_t i = 0;
+    if (!a || !b) return 0;
+    while (a[i] && b[i]) { if (a[i] != b[i]) return 0; ++i; }
+    return a[i] == 0 && b[i] == 0;
+}
+static int nx_equal_ci(const char *a, const char *b)
+{
+    uint32_t i = 0;
+    if (!a || !b) return 0;
+    while (a[i] && b[i]) { if (nx_lower(a[i]) != nx_lower(b[i])) return 0; ++i; }
+    return b[i] == 0;
+}
+static int nx_space(char c)
+{
+    return c == ' ' || c == '\t' || c == '\r' || c == '\f';
+}
+static int nx_hex(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    c = nx_lower(c);
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
+static int nx_put_byte(uint8_t *b, uint32_t *n, uint32_t cap, uint32_t v)
+{
+    if (*n >= cap || v > 255u) return 0;
+    b[(*n)++] = (uint8_t)v;
+    return 1;
+}
+static int nx_put_utf8(uint8_t *b, uint32_t *n, uint32_t cap, uint32_t v)
+{
+    if (!scalar_valid(v)) return 0;
+    if (v <= 0x7fu) return nx_put_byte(b,n,cap,v);
+    if (v <= 0x7ffu)
+        return nx_put_byte(b,n,cap,0xc0u|(v>>6)) &&
+               nx_put_byte(b,n,cap,0x80u|(v&0x3fu));
+    if (v <= 0xffffu)
+        return nx_put_byte(b,n,cap,0xe0u|(v>>12)) &&
+               nx_put_byte(b,n,cap,0x80u|((v>>6)&0x3fu)) &&
+               nx_put_byte(b,n,cap,0x80u|(v&0x3fu));
+    return nx_put_byte(b,n,cap,0xf0u|(v>>18)) &&
+           nx_put_byte(b,n,cap,0x80u|((v>>12)&0x3fu)) &&
+           nx_put_byte(b,n,cap,0x80u|((v>>6)&0x3fu)) &&
+           nx_put_byte(b,n,cap,0x80u|(v&0x3fu));
+}
+static int nx_utf8_scalars(const uint8_t *b, uint32_t n,
+                           uint32_t out[MAX_OUTPUTS], uint32_t *out_n)
+{
+    uint32_t at=0,count=0;
+    while (at<n) {
+        uint32_t v,need,min,i;
+        uint8_t first=b[at++];
+        if(first<0x80u){v=first;need=0;min=0;}
+        else if(first>=0xc2u&&first<=0xdfu){v=first&0x1fu;need=1;min=0x80u;}
+        else if(first>=0xe0u&&first<=0xefu){v=first&0x0fu;need=2;min=0x800u;}
+        else if(first>=0xf0u&&first<=0xf4u){v=first&7u;need=3;min=0x10000u;}
+        else return 0;
+        if(need>n-at) return 0;
+        for(i=0;i<need;++i){uint8_t x=b[at++];if((x&0xc0u)!=0x80u)return 0;v=(v<<6)|(x&0x3fu);}
+        if((need&&v<min)||!scalar_valid(v)||count>=MAX_OUTPUTS)return 0;
+        out[count++]=v;
+    }
+    if(!count)return 0;
+    *out_n=count;
+    return 1;
+}
+static uint32_t nx_dead_mark(const char *s)
+{
+#define NX_DEAD(n,v) if(nx_equal(s,n))return(v)
+    NX_DEAD("dead_acute",0x0301u);
+    NX_DEAD("dead_apostrophe",0x0301u);
+    NX_DEAD("dead_grave",0x0300u);
+    NX_DEAD("dead_diaeresis",0x0308u);
+    NX_DEAD("dead_circumflex",0x0302u);
+    NX_DEAD("dead_tilde",0x0303u);
+    NX_DEAD("dead_macron",0x0304u);
+    NX_DEAD("dead_breve",0x0306u);
+    NX_DEAD("dead_abovedot",0x0307u);
+    NX_DEAD("dead_cedilla",0x0327u);
+    NX_DEAD("dead_ogonek",0x0328u);
+    NX_DEAD("dead_caron",0x030cu);
+    NX_DEAD("dead_doubleacute",0x030bu);
+    NX_DEAD("dead_ring",0x030au);
+    NX_DEAD("dead_stroke",0x0338u);
+#undef NX_DEAD
+    return 0;
+}
+static uint32_t nx_keysym(const char *s)
+{
+    uint32_t n=string_length(s,XCOMPOSE_MAX_NAME+1u),v=0,i;
+    static const struct {const char *name;uint32_t value;} table[]={
+        {"space",0x20},{"exclam",0x21},{"quotedbl",0x22},{"numbersign",0x23},
+        {"dollar",0x24},{"percent",0x25},{"ampersand",0x26},{"apostrophe",0x27},
+        {"quoteright",0x27},{"parenleft",0x28},{"parenright",0x29},{"asterisk",0x2a},
+        {"plus",0x2b},{"comma",0x2c},{"minus",0x2d},{"period",0x2e},{"slash",0x2f},
+        {"colon",0x3a},{"semicolon",0x3b},{"less",0x3c},{"equal",0x3d},
+        {"greater",0x3e},{"question",0x3f},{"at",0x40},{"bracketleft",0x5b},
+        {"backslash",0x5c},{"bracketright",0x5d},{"asciicircum",0x5e},
+        {"underscore",0x5f},{"grave",0x60},{"quoteleft",0x60},{"braceleft",0x7b},
+        {"bar",0x7c},{"braceright",0x7d},{"asciitilde",0x7e},
+        {"eacute",0xe9},{"Eacute",0xc9},{"ntilde",0xf1},{"Ntilde",0xd1},
+        {"ccedilla",0xe7},{"Ccedilla",0xc7},{"EuroSign",0x20ac},{"degree",0xb0},
+        {"copyright",0xa9},{"registered",0xae},{"trademark",0x2122}
+    };
+    if(!n)return 0;
+    if(n==1u&&(uint8_t)s[0]>=0x20u&&(uint8_t)s[0]<=0x7eu)return(uint8_t)s[0];
+    if(n>=5u&&n<=7u&&s[0]=='U'){
+        for(i=1;i<n;++i){int d=nx_hex(s[i]);if(d<0)return 0;v=(v<<4)|(uint32_t)d;}
+        return scalar_valid(v)?v:0;
+    }
+    for(i=0;i<sizeof(table)/sizeof(table[0]);++i)
+        if(nx_equal(s,table[i].name))return table[i].value;
+    return 0;
+}
+static int nx_quoted(const char *s,uint32_t out[MAX_OUTPUTS],
+                     uint32_t *out_n,uint32_t *end)
+{
+    uint8_t bytes[MAX_OUTPUTS*4u];
+    uint32_t n=0,at=1;
+    if(!s||s[0]!='"')return 0;
+    while(s[at]){
+        uint32_t v,digits,i;
+        char ch=s[at++];
+        if(ch=='"'){if(!nx_utf8_scalars(bytes,n,out,out_n))return 0;*end=at;return 1;}
+        if(ch!='\\'){if(!nx_put_byte(bytes,&n,sizeof(bytes),(uint8_t)ch))return 0;continue;}
+        ch=s[at++];if(!ch)return 0;
+        switch(ch){
+        case '"':v='"';break;case '\\':v='\\';break;case '\'':v='\'';break;
+        case 'a':v=7;break;case 'b':v=8;break;case 'f':v=12;break;
+        case 'n':v=10;break;case 'r':v=13;break;case 't':v=9;break;case 'v':v=11;break;
+        case 'x':
+            v=0;digits=0;
+            while(digits<2u&&nx_hex(s[at])>=0){v=(v<<4)|(uint32_t)nx_hex(s[at++]);++digits;}
+            if(!digits||!nx_put_byte(bytes,&n,sizeof(bytes),v))return 0;
+            continue;
+        case 'u':case 'U':
+            digits=ch=='u'?4u:8u;v=0;
+            for(i=0;i<digits;++i){int d=nx_hex(s[at++]);if(d<0)return 0;v=(v<<4)|(uint32_t)d;}
+            if(!nx_put_utf8(bytes,&n,sizeof(bytes),v))return 0;
+            continue;
+        default:
+            if(ch>='0'&&ch<='7'){
+                v=(uint32_t)(ch-'0');digits=1;
+                while(digits<3u&&s[at]>='0'&&s[at]<='7'){v=(v<<3)|(uint32_t)(s[at++]-'0');++digits;}
+                if(!nx_put_byte(bytes,&n,sizeof(bytes),v))return 0;
+                continue;
+            }
+            return 0;
+        }
+        if(!nx_put_byte(bytes,&n,sizeof(bytes),v))return 0;
+    }
+    return 0;
+}
+static int nx_same(const struct native_compose_rule *a,const struct native_compose_rule *b)
+{
+    uint32_t i;
+    if(a->kind!=b->kind||a->input_count!=b->input_count)return 0;
+    for(i=0;i<a->input_count;++i)if(a->input[i]!=b->input[i])return 0;
+    return 1;
+}
+static int nx_prefix(const struct native_compose_rule *a,const struct native_compose_rule *b)
+{
+    uint32_t i;
+    if(a->kind!=b->kind||a->input_count>=b->input_count)return 0;
+    for(i=0;i<a->input_count;++i)if(a->input[i]!=b->input[i])return 0;
+    return 1;
+}
+static int nx_compare(const struct native_compose_rule *a,const struct native_compose_rule *b)
+{
+    uint32_t i,shared;
+    if(a->kind<b->kind)return -1;if(a->kind>b->kind)return 1;
+    shared=a->input_count<b->input_count?a->input_count:b->input_count;
+    for(i=0;i<shared;++i){if(a->input[i]<b->input[i])return -1;if(a->input[i]>b->input[i])return 1;}
+    if(a->input_count<b->input_count)return -1;
+    if(a->input_count>b->input_count)return 1;
+    if(a->order>b->order)return -1;
+    if(a->order<b->order)return 1;
+    return 0;
+}
+static void nx_swap(struct native_compose_rule *a,struct native_compose_rule *b)
+{
+    struct native_compose_rule t=*a;*a=*b;*b=t;
+}
+static void nx_sift(struct native_compose_rule *r,uint32_t root,uint32_t end)
+{
+    while(root<end/2u){
+        uint32_t child=root*2u+1u;
+        if(child+1u<end&&nx_compare(&r[child],&r[child+1u])<0)++child;
+        if(nx_compare(&r[root],&r[child])>=0)break;
+        nx_swap(&r[root],&r[child]);root=child;
+    }
+}
+static void nx_sort(struct native_compose_rule *r,uint32_t n)
+{
+    uint32_t i,end;
+    for(i=n/2u;i>0;--i)nx_sift(r,i-1u,n);
+    for(end=n;end>1u;--end){nx_swap(&r[0],&r[end-1u]);nx_sift(r,0,end-1u);}
+}
+static uint32_t nx_left(const char *s,uint32_t a,uint32_t b)
+{
+    while(a<b&&nx_space(s[a]))++a;
+    return a;
+}
+static uint32_t nx_right(const char *s,uint32_t a,uint32_t b)
+{
+    while(b>a&&nx_space(s[b-1u]))--b;
+    return b;
+}
+static int nx_events(const char *s,uint32_t n,char names[6][XCOMPOSE_MAX_NAME+1u],uint32_t *count)
+{
+    uint32_t at=0,num=0,residue=0;
+    while(at<n){
+        if(nx_space(s[at])){++at;continue;}
+        if(s[at]!='<'){residue=1;++at;continue;}
+        {
+            uint32_t start=++at,end,i;
+            while(at<n&&s[at]!='>')++at;
+            if(at>=n)return 0;
+            end=at++;
+            if(end==start||end-start>XCOMPOSE_MAX_NAME||num>=6u)return 0;
+            for(i=start;i<end;++i){if(nx_space(s[i])||s[i]=='<')return 0;names[num][i-start]=s[i];}
+            names[num][end-start]=0;++num;
+        }
+    }
+    if(residue||!num)return 0;
+    *count=num;return 1;
+}
+static int nx_add(struct native_compose_rule *rules,uint32_t *n,uint32_t kind,
+                  const uint32_t *in,uint32_t ni,const uint32_t *out,uint32_t no,uint32_t order)
+{
+    struct native_compose_rule *r;
+    uint32_t i;
+    if(*n>=MAX_RECORDS||kind>1u||ni<2u||ni>MAX_INPUTS||no<1u||no>MAX_OUTPUTS)return 0;
+    r=&rules[(*n)++];
+    for(i=0;i<MAX_INPUTS;++i)r->input[i]=i<ni?in[i]:0;
+    for(i=0;i<MAX_OUTPUTS;++i)r->output[i]=i<no?out[i]:0;
+    r->input_count=(uint8_t)ni;r->output_count=(uint8_t)no;r->kind=(uint8_t)kind;r->reserved=0;r->order=order;
+    return 1;
+}
+static uint32_t nx_parse(uint8_t *source,uint32_t length,struct native_compose_rule *rules)
+{
+    uint32_t at=0,n=0,order=0;
+    if(length>=3u&&source[0]==0xefu&&source[1]==0xbbu&&source[2]==0xbfu)at=3u;
+    while(at<length){
+        uint32_t start=at,end,comment=0xffffffffu,colon=0xffffffffu,quote=0,escape=0;
+        uint32_t left_a,left_b,right_a,names_n=0,i;
+        char names[6][XCOMPOSE_MAX_NAME+1u],*line;
+        while(at<length&&source[at]!='\n')++at;
+        end=at;if(at<length)++at;
+        if(end-start>XCOMPOSE_LINE_LIMIT)return 0;
+        if(end<length)source[end]=0;else source[length]=0;
+        line=(char *)(source+start);
+        if(end>start&&line[end-start-1u]=='\r')line[end-start-1u]=0;
+        {
+            uint32_t len=(uint32_t)string_length(line,XCOMPOSE_LINE_LIMIT+1u);
+            for(i=0;i<len;++i){
+                char ch=line[i];
+                if(quote){if(escape)escape=0;else if(ch=='\\')escape=1;else if(ch=='"')quote=0;}
+                else if(ch=='"')quote=1;
+                else {if(ch=='#'){comment=i;break;}if(ch==':'&&colon==0xffffffffu)colon=i;}
+            }
+            if(comment!=0xffffffffu){line[comment]=0;len=comment;}
+            left_a=nx_left(line,0,colon<len?colon:len);
+            left_b=nx_right(line,left_a,colon<len?colon:len);
+            if(left_a==left_b)continue;
+            if(left_b-left_a>=7u&&nx_equal_ci(line+left_a,"include")&&
+               (left_b-left_a==7u||nx_space(line[left_a+7u])))return 0;
+            if(left_b-left_a>=5u&&line[left_a]=='X'&&line[left_a+1u]=='C'&&
+               line[left_a+2u]=='O'&&line[left_a+3u]=='M'&&line[left_a+4u]=='M')continue;
+            if(colon==0xffffffffu||colon>=len)continue;
+            if(!nx_events(line+left_a,left_b-left_a,names,&names_n))continue;
+            {
+                uint32_t kind,inputs[MAX_INPUTS],ni=0,outputs[MAX_OUTPUTS],no=0,j,mark;
+                if(nx_equal(names[0],"Multi_key")){
+                    kind=0;if(names_n<3u||names_n>5u)continue;
+                }else{
+                    mark=nx_dead_mark(names[0]);if(!mark||names_n!=2u)continue;
+                    kind=1;inputs[ni++]=mark;
+                }
+                for(j=1u;j<names_n;++j){
+                    uint32_t scalar=nx_keysym(names[j]);
+                    if(!scalar||!scalar_valid(scalar)||ni>=MAX_INPUTS)break;
+                    inputs[ni++]=scalar;
+                }
+                if(j!=names_n||ni<2u||ni>MAX_INPUTS)continue;
+                right_a=nx_left(line,colon+1u,len);
+                if(right_a>=len)continue;
+                if(line[right_a]=='"'){
+                    uint32_t end_quote=0;
+                    if(!nx_quoted(line+right_a,outputs,&no,&end_quote))continue;
+                }else{
+                    char result[XCOMPOSE_MAX_NAME+1u];
+                    uint32_t right_b=right_a;
+                    while(right_b<len&&!nx_space(line[right_b]))++right_b;
+                    if(right_b==right_a||right_b-right_a>XCOMPOSE_MAX_NAME)continue;
+                    for(j=right_a;j<right_b;++j)result[j-right_a]=line[j];
+                    result[right_b-right_a]=0;
+                    outputs[0]=nx_keysym(result);
+                    if(!scalar_valid(outputs[0]))continue;
+                    no=1u;
+                }
+                if(!nx_add(rules,&n,kind,inputs,ni,outputs,no,order++))return 0;
+            }
+        }
+    }
+    if(!n)return 0;
+    nx_sort(rules,n);
+    {
+        uint32_t unique=0,kept=0;
+        for(i=0;i<n;++i){
+            if(unique&&nx_same(&rules[unique-1u],&rules[i]))continue;
+            if(unique!=i)rules[unique]=rules[i];
+            ++unique;
+        }
+        for(i=0;i<unique;++i){
+            if(i+1u<unique&&nx_prefix(&rules[i],&rules[i+1u]))continue;
+            if(kept!=i)rules[kept]=rules[i];
+            ++kept;
+        }
+        n=kept;
+    }
+    return n;
+}
+static int nx_make_tag(const char *path,char tag[MAX_TAG_LENGTH+1u],uint32_t *length)
+{
+    const char *base=path,*p;
+    static const char ext[]=".XCompose",suffix[]=".UTF-8";
+    uint32_t n,used=0,i;
+    for(p=path;*p;++p)if(*p=='/')base=p+1;
+    n=string_length(base,PATH_CAPACITY);
+    if(n>=sizeof(ext)-1u){
+        uint32_t at=n-(sizeof(ext)-1u);int match=1;
+        for(i=0;i<sizeof(ext)-1u;++i)if(nx_lower(base[at+i])!=nx_lower(ext[i]))match=0;
+        if(match)n=at;
+    }
+    if(!n){base="user";n=4u;}
+    for(i=0;i<n&&used<XCOMPOSE_TAG_BASE;++i){
+        char ch=base[i];
+        int valid=(ch>='a'&&ch<='z')||(ch>='A'&&ch<='Z')||
+                  (ch>='0'&&ch<='9')||ch=='_'||ch=='-';
+        tag[used++]=valid?ch:'_';
+    }
+    while(used&&(tag[used-1u]=='_'||tag[used-1u]=='-'))--used;
+    if(!used){tag[used++]='u';tag[used++]='s';tag[used++]='e';tag[used++]='r';}
+    for(i=0;i<sizeof(suffix)-1u;++i)tag[used++]=suffix[i];
+    tag[used]=0;
+    if(!valid_tag(tag,used)||builtin_tag(tag))return 0;
+    *length=used;return 1;
+}
+static void nx_store16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
+static void nx_store32(uint8_t *p,uint32_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);p[2]=(uint8_t)(v>>16);p[3]=(uint8_t)(v>>24);}
+static int nx_build_pack(uint8_t *pack,const char *tag,uint32_t tag_n,
+                         struct native_compose_rule *rules,uint32_t count,uint32_t *size)
+{
+    uint32_t i,payload;
+    if(!pack||!tag||!tag_n||!rules||!count||count>MAX_RECORDS||!size)return 0;
+    payload=count*RECORD_SIZE;if(HEADER_SIZE+payload>MAX_PACK_SIZE)return 0;
+    for(i=0;i<8u;++i)pack[i]=magic[i];
+    nx_store32(pack+8u,1u);nx_store32(pack+12u,HEADER_SIZE);nx_store32(pack+16u,RECORD_SIZE);
+    nx_store32(pack+20u,count);nx_store32(pack+24u,payload);nx_store32(pack+28u,0u);nx_store32(pack+32u,0u);
+    for(i=0;i<32u;++i)pack[36u+i]=i<tag_n?(uint8_t)tag[i]:0u;
+    nx_store32(pack+68u,0u);
+    for(i=0;i<count;++i){
+        uint32_t j;uint8_t *record=pack+HEADER_SIZE+i*RECORD_SIZE;
+        record[0]=rules[i].input_count;record[1]=rules[i].output_count;nx_store16(record+2u,rules[i].kind);
+        for(j=0;j<MAX_INPUTS;++j)nx_store32(record+4u+j*4u,rules[i].input[j]);
+        for(j=0;j<MAX_OUTPUTS;++j)nx_store32(record+20u+j*4u,rules[i].output[j]);
+    }
+    nx_store32(pack+28u,crc32(pack+HEADER_SIZE,payload));*size=HEADER_SIZE+payload;return 1;
+}
+
+/* Imports bounded UTF-8 rule files; includes are rejected, never half-applied. */
+uint32_t compose_locale_import_xcompose(const char *source_path)
+{
+    char tag[MAX_TAG_LENGTH+1u],destination[48],temporary[80];
+    struct native_compose_rule *rules=(struct native_compose_rule *)0;
+    uint8_t *source=(uint8_t *)0,*pack=(uint8_t *)0;
+    uint32_t tag_n=0,count=0,pack_size=0,offset=0,validated=0;
+    uint32_t rules_size=MAX_RECORDS*sizeof(*rules),ok=0,temp_ready=0;
+    uint8_t stat_buffer[256] __attribute__((aligned(16)));
+    long fd=-1,dir=-1,out=-1,result,size,mr,ms,mp;
+    if(!source_path||!source_path[0]||!nx_make_tag(source_path,tag,&tag_n))return 0;
+    mr=syscall6(SYS_mmap,0,rules_size,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    if(failed(mr))goto done;
+    rules=(struct native_compose_rule *)(uintptr_t)mr;
+    ms=syscall6(SYS_mmap,0,XCOMPOSE_FILE_LIMIT+1u,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    if(failed(ms))goto done;
+    source=(uint8_t *)(uintptr_t)ms;
+    mp=syscall6(SYS_mmap,0,MAX_PACK_SIZE,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    if(failed(mp))goto done;
+    pack=(uint8_t *)(uintptr_t)mp;
+    fd=syscall6(SYS_openat,AT_FDCWD,(long)source_path,O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK,0,0,0);
+    if(failed(fd)){fd=-1;goto done;}
+    for(offset=0;offset<sizeof(stat_buffer);++offset)stat_buffer[offset]=0;
+    result=syscall6(SYS_fstat,fd,(long)stat_buffer,0,0,0,0);
+    if(failed(result)||(read32(stat_buffer+24u)&S_IFMT)!=S_IFREG)goto done;
+    size=syscall6(SYS_lseek,fd,0,SEEK_END,0,0,0);
+    if(size<1||size>(long)XCOMPOSE_FILE_LIMIT)goto done;
+    result=syscall6(SYS_lseek,fd,0,0,0,0,0);if(failed(result))goto done;
+    offset=0;
+    while(offset<(uint32_t)size){
+        result=syscall6(SYS_read,fd,(long)(source+offset),(uint32_t)size-offset,0,0,0);
+        if(result>0){offset+=(uint32_t)result;continue;}
+        if(result==-4)continue;
+        goto done;
+    }
+    result=syscall6(SYS_read,fd,(long)(source+offset),1u,0,0,0);
+    if(result!=0)goto done;
+    for(offset=0;offset<(uint32_t)size;++offset)if(!source[offset])goto done;
+    count=nx_parse(source,(uint32_t)size,rules);
+    if(!count||!nx_build_pack(pack,tag,tag_n,rules,count,&pack_size)||
+       !validate_pack(pack,pack_size,tag,tag_n,&validated)||validated!=count)goto done;
+    if(!make_pack_names(tag,tag_n,destination,sizeof(destination),temporary,sizeof(temporary)))goto done;
+    temp_ready=1;
+    dir=open_locale_directory();if(failed(dir)){dir=-1;goto done;}
+    (void)syscall6(SYS_unlinkat,dir,(long)temporary,0,0,0,0);
+    out=syscall6(SYS_openat,dir,(long)temporary,O_WRONLY|O_CREAT|O_EXCL|O_CLOEXEC|O_NOFOLLOW,FILE_MODE,0,0);
+    if(failed(out)){out=-1;goto done;}
+    if(!write_all_fd(out,pack,pack_size))goto done;
+    result=syscall6(SYS_fsync,out,0,0,0,0,0);if(failed(result))goto done;
+    (void)syscall6(SYS_close,out,0,0,0,0,0);out=-1;
+    result=syscall6(SYS_linkat,dir,(long)temporary,dir,(long)destination,0,0);
+    if(failed(result))goto done;
+    result=syscall6(SYS_unlinkat,dir,(long)temporary,0,0,0,0);
+    if(failed(result)){
+        (void)syscall6(SYS_unlinkat,dir,(long)destination,0,0,0,0);
+        goto done;
+    }
+    result=syscall6(SYS_fsync,dir,0,0,0,0,0);
+    if(failed(result)){(void)syscall6(SYS_unlinkat,dir,(long)destination,0,0,0,0);goto done;}
+    for(offset=0;offset<tag_n;++offset)compose_locale_installed_tag[offset]=tag[offset];
+    compose_locale_installed_tag[tag_n]=0;ok=1;
+done:
+    if(out>=0)(void)syscall6(SYS_close,out,0,0,0,0,0);
+    if(dir>=0){
+        if(!ok&&temp_ready)(void)syscall6(SYS_unlinkat,dir,(long)temporary,0,0,0,0);
+        (void)syscall6(SYS_close,dir,0,0,0,0,0);
+    }
+    if(fd>=0)(void)syscall6(SYS_close,fd,0,0,0,0,0);
+    if(pack)(void)syscall6(SYS_munmap,(long)pack,MAX_PACK_SIZE,0,0,0,0);
+    if(source)(void)syscall6(SYS_munmap,(long)source,XCOMPOSE_FILE_LIMIT+1u,0,0,0,0);
+    if(rules)(void)syscall6(SYS_munmap,(long)rules,rules_size,0,0,0,0);
+    return ok;
 }

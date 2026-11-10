@@ -9,6 +9,7 @@ APP_BINARY := $(BUILD_DIR)/nekoedit
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
 COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
+COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
 
 PREFIX ?= /usr/local
 USER_PREFIX ?= $(HOME)/.local
@@ -54,7 +55,7 @@ inspect: $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
 
-test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) test-install-user
+test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
@@ -65,6 +66,7 @@ test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER
 	$(PYTHON) tests/install_user_xcompose_test.py
 	$(PYTHON) tests/compose_locale_data_test.py
 	$(PYTHON) tests/compose_locale_manager_test.py ./$(COMPOSE_LOCALE_MANAGER_TEST)
+	./$(COMPOSE_LOCALE_IMPORT_TEST)
 
 test-install-user: $(APP_BINARY)
 	sh tests/install_user.sh
@@ -120,4 +122,8 @@ $(LOCALE_PACK_DIR)/%.nlp: data/locales/%.json data/locales/%.NOTICE.txt tools/co
 
 $(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/compose_locale.c
 	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
+
+$(COMPOSE_LOCALE_IMPORT_TEST): tests/compose_locale_import_test.c src/backend/compose_locale.c
+	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
