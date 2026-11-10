@@ -116,6 +116,7 @@ def _read_rules(
     stats: dict[str, int],
     *,
     allow_base_include: bool,
+    require_base_include: bool = True,
 ) -> dict[tuple[int, tuple[int, ...]], tuple[int, ...]]:
     rules: dict[tuple[int, tuple[int, ...]], tuple[int, ...]] = {}
     include_count = 0
@@ -205,8 +206,13 @@ def _read_rules(
     stats[
         "locale_dead_key_lines" if allow_base_include else "base_dead_key_lines"
     ] = valid_dead_key_lines
-    if allow_base_include and include_count != 1:
-        raise ValueError(f"expected exactly one en_US Compose include, found {include_count}")
+    if allow_base_include:
+        expected_include_count = 1 if require_base_include else 0
+        if include_count != expected_include_count:
+            expectation = "exactly one" if require_base_include else "no"
+            raise ValueError(
+                f"expected {expectation} en_US Compose include, found {include_count}"
+            )
     return rules
 
 
@@ -216,6 +222,8 @@ def import_compose_sources(
     keysym_text: str,
     locale: str,
     source_info: dict[str, Any] | None = None,
+    *,
+    locale_has_base_include: bool = True,
 ) -> dict[str, Any]:
     try:
         locale_bytes = locale.encode("ascii")
@@ -238,7 +246,13 @@ def import_compose_sources(
         "locale_dead_key_lines": 0,
     }
     base_rules = _read_rules(base_text, keysyms, stats, allow_base_include=False)
-    locale_rules = _read_rules(locale_text, keysyms, stats, allow_base_include=True)
+    locale_rules = _read_rules(
+        locale_text,
+        keysyms,
+        stats,
+        allow_base_include=True,
+        require_base_include=locale_has_base_include,
+    )
     merged = dict(base_rules)
     overrides = 0
     dead_key_overrides = 0
@@ -283,8 +297,12 @@ def import_compose_sources(
         "keysymdef_path": "include/X11/keysymdef.h",
         "keysymdef_blob": KEYSYMDEF_BLOB,
         "import_policy": (
-            f"Flatten the en_US include, apply {locale} Multi_key and dead-key overrides, "
-            "retain only input keysyms mapped to Unicode scalars, and drop shorter "
+            (
+                f"Flatten the en_US include, apply {locale} Multi_key and dead-key overrides, "
+                if locale_has_base_include
+                else f"Merge the pinned en_US baseline, then apply standalone {locale} Multi_key and dead-key rules and overrides, "
+            )
+            + "retain only input keysyms mapped to Unicode scalars, and drop shorter "
             "sequences that prefix longer sequences."
         ),
     }
@@ -328,6 +346,11 @@ def main(argv: list[str] | None = None) -> int:
         default=LOCALE_COMPOSE_BLOB,
         help="Git blob SHA for the locale Compose.pre source",
     )
+    parser.add_argument(
+        "--locale-standalone",
+        action="store_true",
+        help="The locale Compose.pre has no en_US include; merge its rules over --base.",
+    )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     if not re.fullmatch(r"[0-9a-f]{40}", args.locale_compose_blob):
@@ -339,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
             args.keysymdef.read_text(encoding="utf-8"),
             args.locale,
             source_info={"locale_compose_blob": args.locale_compose_blob},
+            locale_has_base_include=not args.locale_standalone,
         )
         encoded = json.dumps(document, ensure_ascii=True, indent=2) + "\n"
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -109,7 +109,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 LOCALE_PACK_DIR := $(BUILD_DIR)/locales
-LOCALE_TAGS := pt_BR.UTF-8 fi_FI.UTF-8 sr_RS.UTF-8
+LOCALE_TAGS := pt_BR.UTF-8 fi_FI.UTF-8 sr_RS.UTF-8 el_GR.UTF-8
 LOCALE_PACKS := $(addprefix $(LOCALE_PACK_DIR)/,$(addsuffix .nlp,$(LOCALE_TAGS)))
 
 .PHONY: locale-packs

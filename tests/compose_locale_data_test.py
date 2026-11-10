@@ -127,7 +127,39 @@ def main() -> None:
     expect(sr_map, "dead_key", (0x0300, 0x0430), (0x0430, 0x0300), "sr_RS")
     expect(sr_map, "dead_key", (0x0301, 0x043A), (0x045C,), "sr_RS")
 
-    print("pt_BR, fi_FI, and sr_RS typed locale tables and NLP1 encodings passed")
+    el, el_map = load("el_GR.UTF-8")
+    el_stats = el["statistics"]
+    if (
+        el_stats["final_rules"] != 4690
+        or el_stats["locale_rules"] != 922
+        or el_stats["locale_dead_key_rules"] != 138
+        or el_stats["locale_overrides"] != 488
+        or el_stats["dead_key_overrides"] != 94
+        or el_stats["dropped_shorter_prefix_rules"] != 13
+    ):
+        raise AssertionError("el_GR standalone Compose rule counts changed")
+    if (
+        el_stats["input_sequence_lengths"] != {"2": 3589, "3": 779, "4": 322}
+        or el_stats["multi_scalar_outputs"] != 246
+    ):
+        raise AssertionError("el_GR sequence-depth or multi-scalar counts changed")
+    if (
+        el["source"]["locale_compose_path"] != "nls/el_GR.UTF-8/Compose.pre"
+        or el["source"]["locale_compose_blob"] != "4a644258ce32cd34ddcc0c47605938db5f697b7d"
+        or el["source"]["libx11_commit"] != "ff8706a5eae25b8bafce300527079f68a201d27f"
+        or "standalone el_GR.UTF-8" not in el["source"]["import_policy"]
+    ):
+        raise AssertionError("el_GR source pin or standalone import metadata changed")
+    el_expected = {
+        (ord("'"), 0x03B1): (0x03AC,),
+        (ord('"'), 0x0399): (0x03CA,),
+    }
+    for key, value in el_expected.items():
+        expect(el_map, "multi_key", key, value, "el_GR")
+    expect(el_map, "dead_key", (0x031B, 0x03B1), (0x1F00,), "el_GR")
+    expect(el_map, "dead_key", (0x0314, 0x03B1), (0x1F01,), "el_GR")
+
+    print("pt_BR, fi_FI, sr_RS, and el_GR typed locale tables and NLP1 encodings passed")
 
 
 if __name__ == "__main__":

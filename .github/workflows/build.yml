@@ -70,18 +70,22 @@ jobs:
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/mirror/libX11/ff8706a5eae25b8bafce300527079f68a201d27f/nls/pt_BR.UTF-8/Compose.pre" -o build/upstream/pt_BR.UTF-8.Compose.pre
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/mirror/libX11/ff8706a5eae25b8bafce300527079f68a201d27f/nls/fi_FI.UTF-8/Compose.pre" -o build/upstream/fi_FI.UTF-8.Compose.pre
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/mirror/libX11/ff8706a5eae25b8bafce300527079f68a201d27f/nls/sr_RS.UTF-8/Compose.pre" -o build/upstream/sr_RS.UTF-8.Compose.pre
+          curl --fail --location --retry 3 "https://raw.githubusercontent.com/mirror/libX11/ff8706a5eae25b8bafce300527079f68a201d27f/nls/el_GR.UTF-8/Compose.pre" -o build/upstream/el_GR.UTF-8.Compose.pre
           curl --fail --location --retry 3 "https://raw.githubusercontent.com/X11Libre/mirror.fdo.xorgproto/6d3907b6d5dc4aa7d7ee6ee5d7d8714e7466630b/include/X11/keysymdef.h" -o build/upstream/keysymdef.h
           test "$(git hash-object build/upstream/en_US.UTF-8.Compose.pre)" = "84888ef02bc1aa0ecaa939f59fcf4b10e5e7b3df"
           test "$(git hash-object build/upstream/pt_BR.UTF-8.Compose.pre)" = "29846c63171d944c34a320376051591da2a2df3b"
           test "$(git hash-object build/upstream/fi_FI.UTF-8.Compose.pre)" = "bebab219d279670dde30c2260f5712c9d311f1d5"
           test "$(git hash-object build/upstream/sr_RS.UTF-8.Compose.pre)" = "68699325c905629f8fa22f94e5848fd06e6be9fe"
+          test "$(git hash-object build/upstream/el_GR.UTF-8.Compose.pre)" = "4a644258ce32cd34ddcc0c47605938db5f697b7d"
           test "$(git hash-object build/upstream/keysymdef.h)" = "96d056662e822701a591f461842ac8c0e17fb560"
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/pt_BR.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale pt_BR.UTF-8 --locale-compose-blob 29846c63171d944c34a320376051591da2a2df3b --output build/upstream/pt_BR.UTF-8.json
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/fi_FI.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale fi_FI.UTF-8 --locale-compose-blob bebab219d279670dde30c2260f5712c9d311f1d5 --output build/upstream/fi_FI.UTF-8.json
           python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/sr_RS.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale sr_RS.UTF-8 --locale-compose-blob 68699325c905629f8fa22f94e5848fd06e6be9fe --output build/upstream/sr_RS.UTF-8.json
+          python3 tools/import_xcompose.py --base build/upstream/en_US.UTF-8.Compose.pre --locale-source build/upstream/el_GR.UTF-8.Compose.pre --keysymdef build/upstream/keysymdef.h --locale el_GR.UTF-8 --locale-compose-blob 4a644258ce32cd34ddcc0c47605938db5f697b7d --locale-standalone --output build/upstream/el_GR.UTF-8.json
           cmp build/upstream/pt_BR.UTF-8.json data/locales/pt_BR.UTF-8.json
           cmp build/upstream/fi_FI.UTF-8.json data/locales/fi_FI.UTF-8.json
           cmp build/upstream/sr_RS.UTF-8.json data/locales/sr_RS.UTF-8.json
+          cmp build/upstream/el_GR.UTF-8.json data/locales/el_GR.UTF-8.json
 
       - name: Build optional Compose locale pack
         run: make locale-packs

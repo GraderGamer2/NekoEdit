@@ -1,6 +1,6 @@
-# pt_BR.UTF-8 Compose locale data
+# NekoEdit Compose locale data
 
-This directory contains three non-en_US Compose datasets. Each JSON file is a **complete flattened table**, built from the pinned X.Org en_US Compose baseline plus its locale's `Multi_key` and dead-key additions and overrides. They are not small overlays.
+This directory contains four non-en_US Compose datasets. Each JSON file is a **complete flattened table**, built from the pinned X.Org en_US Compose baseline plus its locale's `Multi_key` and dead-key additions and overrides. They are not small overlays.
 
 ## Reproducible source pins
 
@@ -14,7 +14,7 @@ The locale-import workflow downloads these exact commits, verifies their Git blo
 
 ## Included scope and filtering
 
-- The importer follows the single en_US include, then applies pt_BR rules as overrides.
+- For pt_BR, fi_FI, and sr_RS, the importer follows the locale's en_US include and applies locale rules as overrides. The standalone el_GR source does not contain an include; the explicit `--locale-standalone` mode merges its rules over the same pinned en_US baseline.
 - XKB Multi_key rules import two to four following keysyms when each resolves to a Unicode scalar. Recognized dead_* actions import when followed by exactly one Unicode scalar; the action is normalized to its combining mark and stored in a separate dead_key namespace.
 - Output strings retain 1–8 Unicode scalars, including combining marks and variation selectors.
 - Non-Unicode input keysyms, unsupported sequence depths, dead-key rules requiring multiple following keysyms, and invalid scalar values are omitted.
@@ -26,7 +26,7 @@ The generated binary is not embedded in NekoEdit. \`make locale-packs\` builds i
 See [NOTICE](pt_BR.UTF-8.NOTICE.txt) for source attribution and licensing references.
 
 
-## fi_FI.UTF-8 and sr_RS.UTF-8
+## fi_FI.UTF-8, sr_RS.UTF-8, and el_GR.UTF-8
 
 The additional datasets use the same pinned en_US Compose baseline and xorgproto keysym definitions above. Their locale source files and Git blobs are:
 
@@ -34,7 +34,17 @@ The additional datasets use the same pinned en_US Compose baseline and xorgproto
 |---|---|---|---:|---:|---:|
 | `fi_FI.UTF-8` | `nls/fi_FI.UTF-8/Compose.pre` | `bebab219d279670dde30c2260f5712c9d311f1d5` | 4,132 | 6 | 278 | 5 | 278 |
 | `sr_RS.UTF-8` | `nls/sr_RS.UTF-8/Compose.pre` | `68699325c905629f8fa22f94e5848fd06e6be9fe` | 4,147 | 40 | 50 | 36 | 38 |
+| `el_GR.UTF-8` | `nls/el_GR.UTF-8/Compose.pre` | `4a644258ce32cd34ddcc0c47605938db5f697b7d` | 4,690 | 922 | 138 | 394 | 94 |
 
-Finnish contributes six accepted locale-specific Multi_key rules and 278 dead-key rules (all overriding shared base entries). Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics.
+Finnish contributes six accepted locale-specific Multi_key rules and 278 dead-key rules (all overriding shared base entries). Serbian contributes forty accepted Multi_key rules for Cyrillic accent composition and fifty locale dead-key rules, of which 38 override base entries and 12 add new inputs. The Brazilian Portuguese source contributes nine accepted locale Multi_key rules and two dead-key overrides; in particular, dead acute plus `c` and `C` produce `ç` and `Ç`. The generated tables retain source-line and unsupported-rule statistics. The Greek source contributes 922 accepted locale Multi_key rules and 138 supported one-scalar dead-key rules, with 488 total overrides (94 dead-key overrides); its standalone source is merged over en_US by the explicit importer mode.
 
-The Build and test workflow fetches all three locale files from the pinned libX11 revision and verifies their blob IDs before regenerating the data. The importer receives each locale-specific source blob through `--locale-compose-blob`; all generated JSON files must compare byte-for-byte with the committed data before the packs are uploaded.
+The Build and test workflow fetches all four locale files from the pinned libX11 revision and verifies their blob IDs before regenerating the data. The importer receives each locale-specific source blob through `--locale-compose-blob`; all generated JSON files must compare byte-for-byte with the committed data before the packs are uploaded.
+
+
+## el_GR.UTF-8
+
+The Greek dataset uses the same pinned en_US baseline and xorgproto keysym definitions. Its source file is standalone (it does not include en_US); the reproducible importer therefore merges the en_US baseline explicitly and then applies the Greek locale rules. The source file is `nls/el_GR.UTF-8/Compose.pre` (Git blob `4a644258ce32cd34ddcc0c47605938db5f697b7d` in libX11 commit `ff8706a5eae25b8bafce300527079f68a201d27f`).
+
+The standalone Greek source includes Latin-1 and Greek/ISO 8859-7 Compose material plus a Greek Extended section credited in the upstream file to Vasilis Vasaitis, based on the idea and initial implementation by Alejandros Diamandidis. The importer retains only records whose input keysyms resolve to Unicode scalars, supports the existing two-to-four input limit and one-following-scalar dead-key model, and drops shorter ambiguous prefixes. Multi-key rules and dead-key records remain typed and separate in NLP1.
+
+The Build and test workflow verifies the exact libX11 blob before running \`tools/import_xcompose.py --locale-standalone\`; it compares the regenerated JSON byte-for-byte with the committed dataset before creating the separate \`.nlp\` pack. See [NOTICE](el_GR.UTF-8.NOTICE.txt) for source attribution and licensing references.

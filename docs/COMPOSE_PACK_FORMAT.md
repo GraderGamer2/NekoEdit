@@ -68,7 +68,7 @@ The loader and input path support two-, three-, and four-scalar records and outp
 
 The repository includes reproducible Brazilian Portuguese, Finnish, and Serbian datasets derived from the pinned X.Org libX11 en_US Compose baseline and locale overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, imports `Multi_key` rules with two to four Unicode scalar inputs, and imports recognized dead-key actions followed by one Unicode scalar. A dead-key action is normalized to its combining mark and stored as a kind-1 `[mark, base]` pair. Non-Unicode input symbols and dead-key sequences requiring multiple following symbols remain outside the supported subset. Shorter prefixes are dropped independently within each rule kind.
 
-The committed source databases are [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), [`fi_FI.UTF-8.json`](../data/locales/fi_FI.UTF-8.json), and [`sr_RS.UTF-8.json`](../data/locales/sr_RS.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and [`pt_BR.UTF-8.NOTICE.txt`](../data/locales/pt_BR.UTF-8.NOTICE.txt). Rebuild from the committed JSON with:
+The committed source databases are [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), [`fi_FI.UTF-8.json`](../data/locales/fi_FI.UTF-8.json), [`sr_RS.UTF-8.json`](../data/locales/sr_RS.UTF-8.json), and [`el_GR.UTF-8.json`](../data/locales/el_GR.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and the per-locale notice files. Rebuild from the committed JSON with:
 
 ```sh
 make locale-packs
@@ -98,7 +98,7 @@ The first non-empty value is used as the locale tag. Empty values are ignored. F
 
 ## Additional locale datasets
 
-Three reproducible tables are included: pt_BR.UTF-8, fi_FI.UTF-8, and sr_RS.UTF-8. Their pinned source inputs, per-locale Git blob IDs, filtering statistics, and attribution are recorded in data/locales/README.md.
+Four reproducible tables are included: pt_BR.UTF-8, fi_FI.UTF-8, sr_RS.UTF-8, and el_GR.UTF-8. The Greek source is standalone and is merged over the pinned en_US baseline with the importer's explicit --locale-standalone mode. Their pinned source inputs, per-locale Git blob IDs, filtering statistics, and attribution are recorded in data/locales/README.md.
 
 The importer flattens the en_US include and applies locale overrides separately for Multi_key and dead-key rules. It keeps input keysyms only when they map to Unicode scalars. Multi_key sequences support two to four scalars. A dead-key rule supports a recognized dead_* action followed by one scalar; the action is normalized to its combining mark. Longer dead-key chains, non-Unicode input symbols, and unsupported sequence depths remain outside the supported subset. Shorter-prefix removal is scoped to the same rule kind.
 

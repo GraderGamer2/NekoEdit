@@ -94,6 +94,46 @@ def main() -> None:
         raise AssertionError("per-locale source blob metadata was not applied")
     if "xx_TEST.UTF-8 Multi_key and dead-key overrides" not in source_override["source"]["import_policy"]:
         raise AssertionError("import policy metadata is not locale-generic")
+
+    standalone = r'''
+<Multi_key> <q> <x> : "Ω" U03A9
+<dead_acute> <c> : "ć" U0107
+'''
+    standalone_document = import_compose_sources(
+        BASE, standalone, KEYSYMS, "el_TEST.UTF-8",
+        locale_has_base_include=False,
+    )
+    standalone_map = {
+        (record["kind"], tuple(record["input"])): tuple(record["output"])
+        for record in standalone_document["sequences"]
+    }
+    if standalone_map[("multi_key", (ord("a"), ord("e")))] != (0x00E6,):
+        raise AssertionError("standalone locale import dropped the en_US baseline")
+    if standalone_map[("multi_key", (ord("q"), ord("x")))] != (0x03A9,):
+        raise AssertionError("standalone locale Multi_key rule was not merged")
+    if standalone_map[("dead_key", (0x0301, ord("c")))] != (0x0107,):
+        raise AssertionError("standalone locale dead-key rule was not merged")
+    if "standalone el_TEST.UTF-8" not in standalone_document["source"]["import_policy"]:
+        raise AssertionError("standalone import policy metadata is missing")
+
+    try:
+        import_compose_sources(BASE, standalone, KEYSYMS, "el_TEST.UTF-8")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("source missing its required include was accepted by default")
+    try:
+        import_compose_sources(
+            BASE,
+            standalone + 'include "X11_LOCALEDATADIR/en_US.UTF-8/Compose"\n',
+            KEYSYMS,
+            "el_TEST.UTF-8",
+            locale_has_base_include=False,
+        )
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("standalone mode accepted a synthetic include")
     print("X.Org Compose importer tests passed")
 
 
