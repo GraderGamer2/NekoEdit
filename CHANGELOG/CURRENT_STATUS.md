@@ -1,3 +1,9 @@
+## 2026-11-10 — Build and test #807 running against literal-safe Mutter focus harness
+
+**Source commit:** [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a). The test script was restored from the clean pre-focus version and the explicit outer-window focus + ordinary-key canary was reapplied using a literal-safe replacement; the fallback window-title match no longer contains an anchored dollar sign.
+**CI:** [Build and test #807](https://github.com/GraderGamer2/NekoEdit/actions/runs/42837714490) was triggered by the source/test push. Latest check: **Install system Compose test corpus — in progress**. No #807 build or test result is claimed yet.
+**Previous run #806:** core build, host tests, Wayland mock, ELF verification, pinned X.Org comparisons, and separate locale-pack builds passed; the Mutter script failed at parsing before input delivery. The current run must reach the new test before its explicit focus and plain-key canary can be evaluated.
+
 ## 2026-11-10 — correct test-script replacement syntax after #806
 
 **CI #806:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42837121285) at shell parsing in `tests/mutter_gnome_smoke.sh` before input testing. The freestanding build, host tests, Wayland protocol mock, ELF inspection, pinned X.Org comparisons, and separate locale-pack builds all passed. The reported error was `line 239: syntax error near unexpected token '('`; inspection showed the fallback window-search line had been corrupted by the text-replacement operation around a literal dollar sign.

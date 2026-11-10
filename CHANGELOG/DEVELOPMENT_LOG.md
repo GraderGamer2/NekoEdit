@@ -1,3 +1,10 @@
+## 2026-11-10 — trigger Build and test #807 for the restored Mutter focus harness
+
+- Source/test commit [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a) restores the clean shell script and reapplies explicit GNOME Shell X11 window focus plus a basic printable-key/Save canary with a literal-safe replacement.
+- The fallback title search now uses `GNOME Shell` without an anchored dollar sign. The source file was re-read from the pushed branch and the malformed insertion pattern from #806 is absent.
+- Build and test #807 is running on the exact source commit. At the latest check, GitHub still reports the package-install step in progress. Do not treat the focus path or Compose input as validated until the workflow reaches and passes the Mutter step.
+- This commit-index/status update is documentation-only and excluded from the Build and test workflow's path trigger.
+
 ## 2026-11-10 — restore Mutter smoke-test script after #806 shell syntax error
 
 - Build and test #806 passed the core build, host/command-line tests, Wayland mock, ELF inspection, pinned X.Org data verification, and four separate locale-pack builds.

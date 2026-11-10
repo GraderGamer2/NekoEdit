@@ -4,6 +4,8 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
+The #806 shell syntax error is corrected in [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a). The test script is restored and the explicit X11 focus + normal-key canary is applied using a literal-safe replacement. Build and test #807 is running; GitHub's latest state is still package installation. Core tests passed in #806, but the Mutter step did not run because its script could not parse. See CURRENT_STATUS.md before claiming any new validation.
+
 Build and test #806 passed all core, host, Wayland mock, ELF, pinned X.Org, and locale-pack checks but stopped at shell parsing in the Mutter test before input delivery. A literal-dollar expansion corrupted the fallback window-search line during editing. The test script has been rebuilt from the clean source and the explicit-focus + plain-key canary block reapplied safely. This correction still needs CI validation.
 
 Build and test #805 passed the freestanding build, host tests, Wayland mock, ELF inspection, pinned X.Org verification, and separate locale packs. It failed only in the nested Mutter input test: the compositor started, but the document remained unchanged. The harness relied on a click without explicitly focusing GNOME Shell's outer X11 window in bare Xvfb. The next correction now focuses/verifies that window and adds a simple printable-key + Ctrl+S canary before Compose. The fix awaits CI; no Mutter input success is claimed yet.
