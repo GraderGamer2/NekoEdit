@@ -1,3 +1,21 @@
+## 2026-11-10 — bounded sibling includes in native Settings XCompose import — Build and test #787 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [d56bffc9ebe7](https://github.com/GraderGamer2/NekoEdit/commit/d56bffc9ebe79c16d37e9d95ed776f1beb331233); fixture correction [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9).
+**CI:** [Build and test #787](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984) passed all 14 workflow steps, including the native import tests, full Wayland mock, ELF inspection, pinned X.Org source verification, locale-pack build, and separate artifact uploads.
+
+- The native **Settings → Locale → Import** parser now supports quoted relative `include "sibling.XCompose"` directives. Included files are expanded depth-first at the exact directive position. Later parent rules override earlier included records; re-including a file after its previous expansion has returned is allowed and is applied again in textual order.
+- The security boundary is intentionally same-directory only. The selected root file's containing directory is opened once and retained as a directory descriptor. Included paths must be a single basename; absolute paths, `/`, `\\`, `.`, `..`, `%H/%S/%L`, environment substitutions, and symlinks are rejected. Every opened input must be a regular file and uses `O_NOFOLLOW`.
+- Active cycles are detected by device/inode identity. The parser fails the entire import before any pack is built or published if a cycle, unsupported include, read error, malformed include, or resource ceiling is hit. It never installs a partial locale.
+- Fixed native limits: 512 KiB aggregate expanded input and 512 KiB per file; 32 unique files; 64 include expansions; 16 active include levels; 64 KiB per line; 32,768 records. Work buffers remain temporary mappings; no permanent locale table or third-party runtime dependency was added.
+- Added regression coverage for nested and repeated sibling includes, depth-first/last-rule precedence, parent-directory traversal rejection, symlinked include rejection, active-cycle rejection, the 64-expansion ceiling, and the 16-level recursion ceiling. Pack loading/lookup, source preservation, private file permissions, and no-overwrite behavior remain covered.
+- The optional host-side importer remains the route for `%H`, `%S`, and `%L`, cross-directory/system include resolution, non-UTF-8 encodings, and broader X.Org keysym definitions. The in-app parser does not shell out or launch Python.
+- Build and test #786 stopped at a test-path assertion because new fixtures accidentally appended `/locales/` twice to a path already pointing at that directory. The implementation returned a successful import; the fixture was corrected in [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9). Build and test #787 passed.
+- #787 editor artifact: ZIP [13727451420](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984/artifacts/13727451420), 133,624 bytes; locale pack ZIP [13727765638](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984/artifacts/13727765638), 74,021 bytes. They expire **2026-11-11 01:32:59 UTC / 08:32:59 Jakarta** and **2026-11-11 01:32:58 UTC / 08:32:58 Jakarta**, respectively.
+- The locale architecture remains modular: only the built-in en_US baseline is linked into the editor; imported locales remain separate NLP1 data files.
+
+**Next:** add another reproducible non-en_US locale dataset from a pinned X.Org source, with tests for its actual locale-specific Multi_key/dead-key records. Preserve en_US as the built-in default and keep the new locale pack separate from the executable.
+
 ## 2026-11-10 — native Settings import for raw user XCompose files — Build and test #785 passed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

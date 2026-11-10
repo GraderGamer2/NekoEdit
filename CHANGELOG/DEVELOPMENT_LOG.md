@@ -1,3 +1,14 @@
+## 2026-11-10 — safely expand sibling includes in native Settings XCompose import
+
+- Extended the freestanding native importer to expand quoted same-directory sibling includes in depth-first textual order. Repeated non-active includes are allowed; active cycles are rejected using device/inode identity.
+- Root and include files are opened relative to a retained root-directory descriptor. A target must be one basename in the same directory; path separators, absolute paths, traversal components, percent/environment substitutions, and symlinks are rejected. Inputs must be regular files opened with O_NOFOLLOW.
+- Added strict bounds: 512 KiB aggregate expanded input, 512 KiB per file, 32 unique files, 64 total include expansions, 16 active include levels, 64 KiB per line, and 32,768 records. Failure occurs before pack construction/publication, so no partial pack can be installed.
+- Regression tests verify nested/repeated include behavior and precedence, parent traversal, symlinks, cycles, include-expansion exhaustion, and recursion depth, in addition to existing import/pack/permissions tests.
+- Updated README and docs/COMPOSE_USER_IMPORT.md to distinguish the native sibling-include subset from the host-side converter's %H/%S/%L and cross-directory policy.
+- Build and test #786 failed only because the include test's expected output path had a duplicated /locales segment. Corrected in [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9). Build and test [#787](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984) passed all 14 steps.
+- Artifacts: editor ZIP 13727451420 (133,624 bytes) and locale ZIP 13727765638 (74,021 bytes), expiring 2026-11-11 01:32:59 UTC and 01:32:58 UTC respectively.
+- Implementation commit: [d56bffc9ebe7](https://github.com/GraderGamer2/NekoEdit/commit/d56bffc9ebe79c16d37e9d95ed776f1beb331233).
+
 ## 2026-11-10 — native raw XCompose import from Settings; Build and test #785 passed
 
 - Added a native, bounded UTF-8 XCompose parser to `src/backend/compose_locale.c` and a new **Settings → Locale → Import** action/picker flow in `src/backend/wayland.S`. This is an in-app feature: the editor does not launch Python, shell commands, or an import helper.

@@ -1,3 +1,11 @@
+## 2026-11-10 — bounded sibling includes in the in-app XCompose importer
+
+The native Settings → Locale → Import path now expands quoted sibling include files from the directory containing the selected root .XCompose file. Expansion is depth-first and preserves textual override order, including repeated includes after an earlier expansion returns. It rejects path traversal, absolute or cross-directory paths, percent/environment substitutions, symlinks, non-regular files, and active cycles. Bounded limits cap aggregate expanded bytes, file count, include expansions, recursion depth, line size, and NLP1 records. The importer validates the resulting data pack before its existing no-clobber atomic publish operation.
+
+The host-side converter remains available for include forms that need explicit home/system roots (%H, %S, %L), non-UTF-8 source encodings, and broader keysym resolution. No Python, shell, native library, or executable plugin was added to the editor. Locale tables remain separate .nlp files; the binary still embeds only the en_US baseline.
+
+Build and test #786 exposed only a duplicated /locales segment in a new expected test path. The fixture was corrected in [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9), and Build and test [#787](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984) passed the complete 14-step workflow.
+
 ## 2026-11-09 — History filter validated; direct user XCompose installer added
 
 Build and test #773 passed the complete History path-filter flow after the test mock's Browse coordinates were corrected. The 127-character non-matching query, horizontal viewport/caret, Ctrl+A clear, positive stored-path match, Browse/Open Selected, Undo/Redo, Export, and selected-history Delete all passed in the full Wayland mock.

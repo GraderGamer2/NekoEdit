@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — native sibling XCompose includes — Build and test #787 passed
+
+| Commit | Subject |
+|---|---|
+| [d56bffc9ebe7](https://github.com/GraderGamer2/NekoEdit/commit/d56bffc9ebe79c16d37e9d95ed776f1beb331233) | feat: safely expand sibling XCompose includes in Settings importer |
+| [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9) | test: correct private locale fixture paths for include cases |
+
+Build and test [#786](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736277973) stopped in the native importer test at an incorrect expected test path; no importer implementation change was needed. After correcting the test fixture, Build and test [#787](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984) passed all 14 steps. The native Settings importer now supports quoted sibling-only relative includes with depth-first/repeated include ordering and strict no-symlink/no-traversal/resource limits. See the latest CURRENT_STATUS.md entry for the exact limits and artifact metadata.
+
+
 ## 2026-11-10 — native Settings import for raw XCompose files — Build and test #785 passed
 
 | Commit | Subject |
