@@ -1,4 +1,4 @@
-## 2026-11-10 — main-branch artifact retention set to one day — validation pending
+## 2026-11-10 — main-branch artifact retention set to one day — push-run metadata unavailable
 
 **Branch:** `main`.
 **Workflow commit:** [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).
