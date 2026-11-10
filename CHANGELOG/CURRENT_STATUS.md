@@ -1,3 +1,16 @@
+## 2026-11-10 — installed X.Org Compose corpus compatibility test — Build and test #781 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [a11a4b0ede67](https://github.com/GraderGamer2/NekoEdit/commit/a11a4b0ede6711f5abed47f8e8c2cf666fb5a841).
+**CI:** [Build and test #781](https://github.com/GraderGamer2/NekoEdit/actions/runs/42728278622) passed the freestanding build, command-line and host tests, complete Wayland protocol mock, executable inspection, pinned X.Org source regeneration, optional locale-pack build, and both artifact uploads.
+
+- Added `tests/system_xcompose_import_test.py` to exercise the installed X.Org `en_US.UTF-8/Compose` database through a temporary user `.XCompose` containing an explicit `include "%L"`.
+- The real system corpus test scanned **5,127** rules and produced **3,747** final records from two files. It verified the system dead-key mapping `dead_acute + e → é`, a user override of `Multi_key o c`, a user-only rule, and two include-order overrides. The resulting **194,916-byte** NLP1 pack passed the existing encoder/runtime-format validation in memory.
+- CI installs `libx11-data` and `x11proto-dev` solely to provide the system Compose corpus and keysym definitions for this test. These packages are not linked into NekoEdit and are not runtime dependencies. On developer systems without those optional files, the integration test reports a skip; the deterministic synthetic parser tests still run.
+- The test writes only inside a temporary directory, does not install the generated pack, and does not modify the system Compose data or the user's real home directory.
+- **Modular locale boundary preserved:** the editor continues to contain only its built-in en_US baseline. The generated optional locale packs are still separate downloadable assets, not linked into the editor executable. Build and test #781 uploaded `nekoedit-linux-x86_64` (127,343 bytes; artifact 13723627010) separately from `nekoedit-compose-locales` (74,021 bytes; artifact 13723811429). Both have the configured one-day artifact retention and expire on 2026-11-11 at 00:27 UTC.
+- No application runtime source or locale dataset changed.
+
 ## 2026-11-10 — early-alpha artifact retention set to one day — push-run metadata unavailable
 
 **Branch:** `early-alpha`; PR #2 remains open and unmerged.

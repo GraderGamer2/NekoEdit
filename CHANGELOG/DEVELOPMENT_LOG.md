@@ -1,3 +1,14 @@
+## 2026-11-10 — validate user XCompose import against the installed X.Org corpus
+
+- Added `tests/system_xcompose_import_test.py` and wired it into `make test`. It uses the actual installed `/usr/share/X11/locale/en_US.UTF-8/Compose` file through a temporary user `.XCompose` with `include "%L"`, rather than checking only synthetic parser fixtures.
+- The test asserts the known `Multi_key o c` system rule is overridden by a later user rule, `dead_acute + e` produces é, a user-only rule is imported, include order is counted, and the full corpus produces enough records to prove that it was traversed. The NLP1 encoder validates the generated pack in memory; no locale is installed.
+- Build and test [#781](https://github.com/GraderGamer2/NekoEdit/actions/runs/42728278622) passed the new system-corpus test, all existing host tests, the full Wayland mock, pinned X.Org regeneration, locale-pack build, and separate artifact uploads.
+- The test reported 5,127 scanned rules, 3,747 final records, two include-expanded files, two overrides, and 194,916 packed bytes.
+- Added only test-environment packages `libx11-data` and `x11proto-dev` to CI. They do not enter the build or runtime dependency graph.
+- Documented the modular packaging invariant: only en_US is built into the editor; non-en_US and user-created locale tables stay in separate `.nlp` files that can be offered as optional Release assets later. The app build remains independent of those pack files.
+- CI artifacts remain distinct: editor ZIP 13723627010 (127,343 bytes) and locale ZIP 13723811429 (74,021 bytes), each expiring 2026-11-11 00:27 UTC under the one-day policy.
+- Source/test/docs implementation: [a11a4b0ede67](https://github.com/GraderGamer2/NekoEdit/commit/a11a4b0ede6711f5abed47f8e8c2cf666fb5a841).
+
 ## 2026-11-10 — reduce early-alpha Actions artifact retention to one day
 
 - Changed both artifact uploads in `.github/workflows/build.yml` (the executable and optional Compose locale pack) from `retention-days: 90` to `retention-days: 1` in commit [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1).

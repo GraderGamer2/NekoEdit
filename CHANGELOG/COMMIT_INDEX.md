@@ -1,5 +1,14 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — installed X.Org Compose corpus compatibility test — Build and test #781 passed
+
+| Commit | Subject |
+|---|---|
+| [a11a4b0ede67](https://github.com/GraderGamer2/NekoEdit/commit/a11a4b0ede6711f5abed47f8e8c2cf666fb5a841) | test: validate user XCompose imports against installed X.Org data |
+
+The new CI integration test imports the installed X.Org en_US Compose database through a temporary user `.XCompose` and an explicit `%L` include. It scanned 5,127 rules, produced 3,747 final records, checked a system dead-key mapping and user override order, and validated a 194,916-byte NLP1 pack entirely in memory. Build and test [#781](https://github.com/GraderGamer2/NekoEdit/actions/runs/42728278622) passed the full Wayland mock, pinned-source validation, and separate editor/locale artifact uploads. Only the en_US baseline remains built into the editor; all optional locale packs remain separate files.
+
+
 ## 2026-11-10 — one-day GitHub Actions artifact retention on early-alpha — validation pending
 
 | Commit | Subject |
