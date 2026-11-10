@@ -17,7 +17,7 @@ static void need(int ok,const char *what){if(!ok){fprintf(stderr,"native XCompos
 static void write_text(const char *p,const char *s){FILE *f=fopen(p,"wb");need(f!=NULL,"create fixture");need(fwrite(s,1,strlen(s),f)==strlen(s),"write fixture");need(fclose(f)==0,"close fixture");}
 int main(void){
     char tmp[]="/tmp/nekoedit-xcompose-ui-XXXXXX",*home=mkdtemp(tmp);
-    char src[512],app[512],loc[512],pack[512],sym[512],inc[512];
+    char src[512],app[512],loc[768],pack[1024],sym[512],inc[512];
     struct stat st;uint32_t in[4],out[8],n;
     const char *rules=
       "# In-app native import test\n"
