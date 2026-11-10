@@ -124,8 +124,14 @@
     .byte 10
     .ascii "apostrophe"
     .byte 39
+    .byte 10
+    .ascii "quoteright"
+    .byte 39
     .byte 5
     .ascii "grave"
+    .byte 96
+    .byte 9
+    .ascii "quoteleft"
     .byte 96
     .byte 9
     .ascii "backslash"
@@ -7340,6 +7346,59 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_keysym_unicode, . - .Lxkb_keysym_unicode
+
+# RDI=keysym name bytes; ESI=length (1..63). EAX=Unicode scalar or zero.
+# Reuse the XKB parser's bounded resolver without leaving its shared tokenizer
+# scratch modified when the native Compose importer calls back into it.
+.global xkb_keysym_name_to_unicode
+.type xkb_keysym_name_to_unicode, @function
+xkb_keysym_name_to_unicode:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 64
+    test rdi, rdi
+    jz .Lxkb_name_unicode_bad
+    test esi, esi
+    jz .Lxkb_name_unicode_bad
+    cmp esi, 63
+    ja .Lxkb_name_unicode_bad
+    mov r12, rdi
+    mov r13d, esi
+    mov r15d, dword ptr [rip + .Lxkb_token_length]
+    lea rdi, [rsp]
+    lea rsi, [rip + .Lxkb_token]
+    mov ecx, 64
+    rep movsb
+    # The 63-byte maximum keeps the NUL terminator inside .Lxkb_token.
+    lea rdi, [rip + .Lxkb_token]
+    mov rsi, r12
+    mov ecx, r13d
+    rep movsb
+    mov byte ptr [rdi], 0
+    mov dword ptr [rip + .Lxkb_token_length], r13d
+    call .Lxkb_keysym_unicode
+    mov r14d, eax
+    lea rsi, [rsp]
+    lea rdi, [rip + .Lxkb_token]
+    mov ecx, 64
+    rep movsb
+    mov dword ptr [rip + .Lxkb_token_length], r15d
+    mov eax, r14d
+    jmp .Lxkb_name_unicode_done
+.Lxkb_name_unicode_bad:
+    xor eax, eax
+.Lxkb_name_unicode_done:
+    add rsp, 64
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size xkb_keysym_name_to_unicode, . - xkb_keysym_name_to_unicode
 
 # Resolve a bounded set of common named X11/XKB Unicode keysyms.
 # EAX is the mapped scalar, or zero when the token is not in this alias table.

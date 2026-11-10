@@ -43,7 +43,14 @@ int main(void){
       "<Multi_key> <a> <e> : \"short\"\n"
       "<Multi_key> <a> <e> <x> : \"long\"\n"
       "<dead_acute> <a> : \"á\"\n"
-      "<dead_grave> <e> : \"è\"\n";
+      "<dead_grave> <e> : \"è\"\n"
+      "<Multi_key> <Greek_alpha> <Cyrillic_ya> : \"Ω\"\n"
+      "<Multi_key> <Arabic_alef> <hebrew_aleph> : \"Ж\"\n"
+      "<Multi_key> <Thai_kokai> <Hangul_Kiyeog> : \"界\"\n"
+      "<Multi_key> <Aacute> <ssharp> : \"Å\"\n"
+      "<Multi_key> <leftsingleanglequotemark> <rightsingleanglequotemark> : \"Q\"\n"
+      "<Multi_key> <quoteleft> <quoteright> : \"quotes\"\n"
+      "<Multi_key> <dead_acute> <a> : \"not text\"\n";
     need(home!=NULL,"mkdtemp");
     need(setenv("HOME",home,1)==0,"set HOME");
     process_envp=environ;
@@ -65,6 +72,21 @@ int main(void){
     need(n==4&&out[0]=='T'&&out[3]=='T',"four-symbol sequence");
     in[0]=0x20;in[1]=0x22;n=compose_locale_lookup(0,2,in,out);
     need(n==5&&out[0]=='A'&&out[4]=='I',"named ASCII keysyms");
+    in[0]=0x03b1;in[1]=0x044f;n=compose_locale_lookup(0,2,in,out);
+    need(n==1&&out[0]==0x03a9,"Greek/Cyrillic named keysyms");
+    in[0]=0x0627;in[1]=0x05d0;n=compose_locale_lookup(0,2,in,out);
+    need(n==1&&out[0]==0x0416,"Arabic/Hebrew named keysyms");
+    in[0]=0x0e01;in[1]=0x3131;n=compose_locale_lookup(0,2,in,out);
+    need(n==1&&out[0]==0x754c,"Thai/Hangul named keysyms");
+    in[0]=0x00c1;in[1]=0x00df;n=compose_locale_lookup(0,2,in,out);
+    need(n==1&&out[0]==0x00c5,"Latin named keysym aliases");
+    in[0]=0x2039;in[1]=0x203a;n=compose_locale_lookup(0,2,in,out);
+    need(n==1&&out[0]=='Q',"xorgproto 2026.1 named keysym aliases");
+    in[0]=0x0060;in[1]=0x0027;n=compose_locale_lookup(0,2,in,out);
+    need(n==6&&out[0]=='q'&&out[5]=='s',"legacy quoteleft/quoteright aliases");
+    in[0]=0x0301;in[1]='a';
+    need(compose_locale_lookup(0,2,in,out)==0,
+         "dead action keysym was treated as a Multi_key character");
     in[0]='e';in[1]='x';n=compose_locale_lookup(0,2,in,out);
     need(n==1&&out[0]==0xe9,"hex byte escape");
     in[0]='u';in[1]='x';n=compose_locale_lookup(0,2,in,out);

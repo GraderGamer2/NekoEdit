@@ -43,6 +43,8 @@
 #define MAX_OUTPUTS 8u
 
 extern char **process_envp;
+/* Share the XKB parser's embedded Unicode-annotated X.Org name table. */
+extern uint32_t xkb_keysym_name_to_unicode(const char *name, uint32_t length);
 uint32_t compose_locale_active;
 uint32_t compose_locale_output[MAX_OUTPUTS];
 char compose_locale_current_tag[MAX_TAG_LENGTH + 1u];
@@ -969,29 +971,18 @@ static uint32_t nx_dead_mark(const char *s)
 static uint32_t nx_keysym(const char *s)
 {
     uint32_t n=string_length(s,XCOMPOSE_MAX_NAME+1u),v=0,i;
-    static const struct {const char *name;uint32_t value;} table[]={
-        {"space",0x20},{"exclam",0x21},{"quotedbl",0x22},{"numbersign",0x23},
-        {"dollar",0x24},{"percent",0x25},{"ampersand",0x26},{"apostrophe",0x27},
-        {"quoteright",0x27},{"parenleft",0x28},{"parenright",0x29},{"asterisk",0x2a},
-        {"plus",0x2b},{"comma",0x2c},{"minus",0x2d},{"period",0x2e},{"slash",0x2f},
-        {"colon",0x3a},{"semicolon",0x3b},{"less",0x3c},{"equal",0x3d},
-        {"greater",0x3e},{"question",0x3f},{"at",0x40},{"bracketleft",0x5b},
-        {"backslash",0x5c},{"bracketright",0x5d},{"asciicircum",0x5e},
-        {"underscore",0x5f},{"grave",0x60},{"quoteleft",0x60},{"braceleft",0x7b},
-        {"bar",0x7c},{"braceright",0x7d},{"asciitilde",0x7e},
-        {"eacute",0xe9},{"Eacute",0xc9},{"ntilde",0xf1},{"Ntilde",0xd1},
-        {"ccedilla",0xe7},{"Ccedilla",0xc7},{"EuroSign",0x20ac},{"degree",0xb0},
-        {"copyright",0xa9},{"registered",0xae},{"trademark",0x2122}
-    };
-    if(!n)return 0;
-    if(n==1u&&(uint8_t)s[0]>=0x20u&&(uint8_t)s[0]<=0x7eu)return(uint8_t)s[0];
+    if(!n||n>XCOMPOSE_MAX_NAME)return 0;
+    /* Preserve the existing explicit Uxxxx scalar policy; the shared XKB
+     * resolver's stricter keymap filter is only used for named keysyms. */
     if(n>=5u&&n<=7u&&s[0]=='U'){
         for(i=1;i<n;++i){int d=nx_hex(s[i]);if(d<0)return 0;v=(v<<4)|(uint32_t)d;}
         return scalar_valid(v)?v:0;
     }
-    for(i=0;i<sizeof(table)/sizeof(table[0]);++i)
-        if(nx_equal(s,table[i].name))return table[i].value;
-    return 0;
+    /* X11 defines dead keys as function keysyms, not as text character
+     * keysyms. They are accepted only in the dedicated dead-key lead path. */
+    if(n>=5u&&s[0]=='d'&&s[1]=='e'&&s[2]=='a'&&s[3]=='d'&&s[4]=='_')
+        return 0;
+    return xkb_keysym_name_to_unicode(s,n);
 }
 static int nx_quoted(const char *s,uint32_t out[MAX_OUTPUTS],
                      uint32_t *out_n,uint32_t *end)

@@ -1,3 +1,13 @@
+## 2026-11-10 — native Settings XCompose importer shares the XKB Unicode keysym resolver — CI pending
+
+**Branch:** `early-alpha` only; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged. No application source from this milestone is on `main`.
+
+- Replaced the native importer's small hand-maintained keysym alias list with a bounded call into the existing XKB Unicode keysym resolver. Settings imports now recognize the same embedded X.Org Unicode-annotated character names as physical XKB keymap parsing, including Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases.
+- Added an exported, length-bounded assembly entry point that saves and restores the XKB tokenizer's shared 64-byte scratch buffer and token length. The existing XKB table is reused; no second copy of its 1,600-plus-name table, bundled locale data, third-party library, or runtime dependency is introduced. Restored the native importer's older `quoteleft` and `quoteright` aliases in the shared ASCII keysym table.
+- Preserved the importer's prior explicit `Uxxxx` scalar path and scalar validation. X11 dead-key action names are rejected as ordinary Multi_key character inputs and remain handled only through the dedicated dead-key lead path. The NLP1 schema, modifier-qualified-rule skip behavior, import ceilings, and file/include security checks remain unchanged.
+- Added native pack-import/lookup regression cases for Greek/Cyrillic, Arabic/Hebrew, Thai/Hangul, accented Latin, xorgproto 2026.1 angle-quotation aliases, legacy quote aliases, and the dead-key action/character distinction. The native import test now links the existing XKB assembly object so tests exercise the same resolver used by the application.
+- Local build and test status: pending remote Actions validation; live GNOME/Mutter and physical-keyboard testing are not performed in this environment.
+
 ## 2026-11-10 — native XCompose macro includes and compose.dir locale mapping; Build and test #795 passed
 
 - Extended the freestanding Settings importer to expand `%H`, `%S`, and `%L` in addition to depth-first sibling includes. Home/system roots are cached; nested siblings resolve from the directory of the file containing each directive.

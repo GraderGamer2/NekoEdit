@@ -25,8 +25,8 @@ The external `pt_BR.UTF-8`, `fi_FI.UTF-8`, and `sr_RS.UTF-8` datasets are genera
 This is a **static en_US.UTF-8-derived two-/three-symbol baseline**, not full locale-aware Compose support. It does not currently:
 
 - load an arbitrary system-locale table without a matching installed NLP1 data pack (language/territory casing and common UTF-8 codeset spellings normalize to canonical pack names; unsupported/missing tags fall back to en_US);
-- load `/usr/share/X11/locale/compose.dir` or locale-specific `Compose` files;
-- automatically process system or user XCompose files at startup, consult compose.dir, or discover $XCOMPOSEFILE; Settings Import handles one user-selected file and expands only the documented bounded sibling, %H, %S, and %L include forms;
+- automatically load the system `compose.dir` database or locale `Compose` files at application startup; a selected Settings import that contains `include "%L"` does read the bounded system `compose.dir` mapping and resolves the chosen file beneath the configured system root;
+- automatically process system or user XCompose files at startup or discover $XCOMPOSEFILE; Settings Import handles one user-selected file and expands only the documented bounded sibling, %H, %S, and %L include forms;
 - automatically discover or merge ~/.XCompose; a user may explicitly select it as the converter input file;
 - add four-symbol sequences or multi-scalar results to the embedded static en_US table; optional NLP1 packs already support two- to four-scalar inputs and one- to eight-scalar outputs;
 - import dead-key sequences that require two or more following symbols after the dead action; the current pack subset resolves one dead action plus one following Unicode scalar;

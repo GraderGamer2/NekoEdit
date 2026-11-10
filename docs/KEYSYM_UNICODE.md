@@ -46,6 +46,10 @@ An entered dead key arms its combining mark without inserting bytes. The next sc
 
 The Wayland mock checks parser marker storage and real document insertion for the additional macron, caron, and below-dot actions. It verifies two precomposed results and the base-plus-mark fallback. Existing tests continue to cover Arabic, Hebrew, Thai, Hangul, Armenian, Georgian, Kana, Sinhala, Braille, German capital sharp S, angle quotation marks, and phone-numeric keysyms.
 
+## Compose importer interoperability
+
+The native Settings `.XCompose` importer calls the same bounded named-keysym resolver and read-only mapping table used by the XKB text-v1 parser. A character name accepted by the keyboard parser therefore resolves to the same Unicode scalar when it appears as a Compose input; there is no duplicate keysym table or extra runtime data. The importer retains its existing source-name length bound and handles explicit `Uxxxx`–`Uxxxxxx` notation through its existing scalar validation. Dead-key action names are excluded from ordinary Multi_key character positions; only a recognized dead-key lead uses the dedicated NLP1 dead-key record kind.
+
 This is not a claim of complete XKB/libxkbcommon support. Named function keysyms without Unicode character mappings stay on the editor's command/key-action paths. General XKB key actions and compatibility indicators are not executed by the client; Wayland modifier/group state remains compositor-owned. Rendering still depends on the selected font containing the corresponding glyph, and complete locale Compose import, full shaping, and advanced IME behavior remain separate work.
 
 ## Source and licensing

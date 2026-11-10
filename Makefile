@@ -124,6 +124,6 @@ $(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/
 	@mkdir -p "$(@D)"
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
 
-$(COMPOSE_LOCALE_IMPORT_TEST): tests/compose_locale_import_test.c src/backend/compose_locale.c
+$(COMPOSE_LOCALE_IMPORT_TEST): tests/compose_locale_import_test.c src/backend/compose_locale.c src/backend/xkb.S
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
