@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — GitHub Actions artifact retention extended to 90 days — validation pending
+
+| Commit | Subject |
+|---|---|
+| Pending | ci: retain NekoEdit workflow artifacts for 90 days |
+
+The Build and test workflow's executable and locale-pack uploads, along with the separate locale-pack workflow upload, now request the public-repository maximum of 90 days instead of 7/30 days. This affects new uploads only; the existing #776 artifacts retain their previous November 16 expiry. Full Build and test validation is pending.
+
+---
+
 ## 2026-11-10 — built-in printable ASCII XCompose keysyms — Build and test #776 passed
 
 | Commit | Subject |

@@ -85,7 +85,7 @@ jobs:
           name: nekoedit-compose-locales
           path: build/locales/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
 
       - name: Upload Linux x86-64 executable
         uses: actions/upload-artifact@v4
@@ -93,4 +93,4 @@ jobs:
           name: nekoedit-linux-x86_64
           path: build/nekoedit
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90

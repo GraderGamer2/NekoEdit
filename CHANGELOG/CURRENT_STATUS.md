@@ -1,3 +1,18 @@
+## 2026-11-10 — retain Actions artifacts for the public-repository maximum — validation pending
+
+**Branch:** `early-alpha`; PR #2 remains open and unmerged.
+**Workflow change:** set the two Build and test artifact uploads and the optional locale-pack workflow upload to `retention-days: 90`, the documented maximum for public repositories.
+
+- The Build and test workflow previously set both the executable and Compose locale-pack artifacts to 7 days. The separate manual/release locale-pack workflow used 30 days.
+- All three workflow artifact uploads now request 90 days. This affects newly uploaded artifacts only; GitHub does not retroactively extend existing artifacts when workflow retention is changed.
+- Existing artifacts from Build and test #776 (IDs 13697074317 and 13698660427) retain their existing 2026-11-16 expiry. The workflow-file push will generate new build artifacts under the revised retention setting if the repository's Actions retention policy permits 90 days.
+- The latest #776 artifacts total 201,364 bytes. GitHub Free includes 500 MB of Actions/Packages storage shared across those products; longer retention does not itself incur a fee, but storage beyond the included allowance may be billable.
+- No application source, binary, or runtime behavior changes in this work.
+
+**Validation:** the push-triggered Build and test run is pending. The existing #776 run remains the last fully passing application-source build.
+
+---
+
 ## 2026-11-10 — built-in printable ASCII X keysym names — Build and test #776 passed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

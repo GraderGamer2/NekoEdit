@@ -1,3 +1,14 @@
+## 2026-11-10 — set GitHub Actions artifact retention to 90 days — validation pending
+
+- Confirmed that NekoEdit is a public repository and that the active Build and test workflow explicitly shortened both uploaded artifacts to 7 days. The optional locale-pack workflow separately used 30 days.
+- Changed both Build and test artifact uploads and the locale-pack workflow upload to `retention-days: 90`, the maximum documented for public repositories.
+- This only affects future uploads. Existing #776 artifacts (editor ZIP 13697074317 and locale ZIP 13698660427) keep their original November 16, 2026 expiry; the workflow push will create fresh artifacts with the new retention period.
+- GitHub Free includes 500 MB of Actions artifact storage shared with Packages. The latest two NekoEdit artifacts total 201,364 bytes; usage above the included storage can incur charges. Standard GitHub-hosted runners are free for public repositories.
+- No editor source, binary, or runtime behavior changed. No new application dependencies were introduced.
+- The new push-triggered workflow run is pending. Do not claim the 90-day artifact expiry until its uploaded artifact metadata confirms the result.
+
+---
+
 ## 2026-11-10 — built-in printable ASCII X keysym names; Build and test #776 passed
 
 - Added a built-in mapping for standard printable ASCII X keysym names, including punctuation names and quote aliases. Literal ASCII characters remain on the existing direct path.
