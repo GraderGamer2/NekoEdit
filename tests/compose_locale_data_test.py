@@ -47,16 +47,16 @@ def main() -> None:
     pt, pt_map = load("pt_BR.UTF-8")
     pt_stats = pt["statistics"]
     if (
-        pt_stats["final_rules"] != 4136
-        or pt_stats["input_sequence_lengths"] != {"2": 3448, "3": 582, "4": 106}
-        or pt_stats["base_dead_key_rules"] != 1228
+        pt_stats["final_rules"] != 4484
+        or pt_stats["input_sequence_lengths"] != {"2": 3448, "3": 894, "4": 142}
+        or pt_stats["base_dead_key_rules"] != 1576
         or pt_stats["locale_dead_key_rules"] != 2
     ):
         raise AssertionError("pt_BR typed rule count or input-depth distribution changed")
     if (
         pt_stats["locale_overrides"] != 5
         or pt_stats["dead_key_overrides"] != 2
-        or pt_stats["multi_scalar_outputs"] != 246
+        or pt_stats["multi_scalar_outputs"] != 274
     ):
         raise AssertionError("pt_BR override or multi-scalar count changed")
     pt_expected = {
@@ -74,19 +74,20 @@ def main() -> None:
         raise AssertionError("pt_BR ambiguous shorter U-comma prefix should be omitted")
     expect(pt_map, "dead_key", (0x0301, ord("c")), (0x00E7,), "pt_BR")
     expect(pt_map, "dead_key", (0x0301, ord("C")), (0x00C7,), "pt_BR")
+    expect(pt_map, "dead_key", (0x0300, 0x0302, ord("A")), (0x1EA6,), "pt_BR")
 
     fi, fi_map = load("fi_FI.UTF-8")
     fi_stats = fi["statistics"]
     if (
-        fi_stats["final_rules"] != 4132 or fi_stats["locale_rules"] != 6
-        or fi_stats["locale_dead_key_rules"] != 278
-        or fi_stats["dead_key_overrides"] != 278
+        fi_stats["final_rules"] != 4488 or fi_stats["locale_rules"] != 6
+        or fi_stats["locale_dead_key_rules"] != 346
+        or fi_stats["dead_key_overrides"] != 338
     ):
         raise AssertionError("fi_FI typed rule counts changed")
     if (
-        fi_stats["locale_overrides"] != 283
-        or fi_stats["input_sequence_lengths"] != {"2": 3445, "3": 581, "4": 106}
-        or fi_stats["multi_scalar_outputs"] != 246
+        fi_stats["locale_overrides"] != 343
+        or fi_stats["input_sequence_lengths"] != {"2": 3445, "3": 901, "4": 142}
+        or fi_stats["multi_scalar_outputs"] != 274
     ):
         raise AssertionError("fi_FI override or sequence-depth counts changed")
     fi_expected = {
@@ -105,15 +106,15 @@ def main() -> None:
     sr, sr_map = load("sr_RS.UTF-8")
     sr_stats = sr["statistics"]
     if (
-        sr_stats["final_rules"] != 4147 or sr_stats["locale_rules"] != 40
+        sr_stats["final_rules"] != 4495 or sr_stats["locale_rules"] != 40
         or sr_stats["locale_dead_key_rules"] != 50
         or sr_stats["dead_key_overrides"] != 38
     ):
         raise AssertionError("sr_RS typed rule counts changed")
     if (
         sr_stats["locale_overrides"] != 74
-        or sr_stats["input_sequence_lengths"] != {"2": 3461, "3": 580, "4": 106}
-        or sr_stats["multi_scalar_outputs"] != 278
+        or sr_stats["input_sequence_lengths"] != {"2": 3461, "3": 892, "4": 142}
+        or sr_stats["multi_scalar_outputs"] != 306
     ):
         raise AssertionError("sr_RS override, sequence-depth, or multi-scalar counts changed")
     sr_expected = {
@@ -130,17 +131,17 @@ def main() -> None:
     el, el_map = load("el_GR.UTF-8")
     el_stats = el["statistics"]
     if (
-        el_stats["final_rules"] != 4690
+        el_stats["final_rules"] != 5730
         or el_stats["locale_rules"] != 922
-        or el_stats["locale_dead_key_rules"] != 138
-        or el_stats["locale_overrides"] != 488
-        or el_stats["dead_key_overrides"] != 94
+        or el_stats["locale_dead_key_rules"] != 970
+        or el_stats["locale_overrides"] != 628
+        or el_stats["dead_key_overrides"] != 234
         or el_stats["dropped_shorter_prefix_rules"] != 13
     ):
         raise AssertionError("el_GR standalone Compose rule counts changed")
     if (
-        el_stats["input_sequence_lengths"] != {"2": 3589, "3": 779, "4": 322}
-        or el_stats["multi_scalar_outputs"] != 246
+        el_stats["input_sequence_lengths"] != {"2": 3589, "3": 1387, "4": 754}
+        or el_stats["multi_scalar_outputs"] != 274
     ):
         raise AssertionError("el_GR sequence-depth or multi-scalar counts changed")
     if (
@@ -158,6 +159,7 @@ def main() -> None:
         expect(el_map, "multi_key", key, value, "el_GR")
     expect(el_map, "dead_key", (0x031B, 0x03B1), (0x1F00,), "el_GR")
     expect(el_map, "dead_key", (0x0314, 0x03B1), (0x1F01,), "el_GR")
+    expect(el_map, "dead_key", (0x0300, 0x0313, 0x0345, 0x0391), (0x1F8A,), "el_GR")
 
     print("pt_BR, fi_FI, sr_RS, and el_GR typed locale tables and NLP1 encodings passed")
 
