@@ -4,7 +4,7 @@
 **Workflow commit:** [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).
 The Linux executable upload now uses `retention-days: 1`. The workflow also ignores changelog-only changes for push and pull-request triggers. This affects new uploads only; previously uploaded artifacts retain their existing expiry dates. No application source or runtime behavior changed.
 
-**Validation:** the Build and test run triggered by this workflow update is pending. The newly uploaded artifact's `expires_at` will be checked before marking this milestone verified.
+**Validation boundary:** the workflow YAML is verified, but the GitHub connector available in this session only exposes pull-request-triggered workflow-run lookup. It did not provide the push-triggered run ID or the new artifact's `expires_at`. Check [Build and test runs on main](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Amain) to confirm the push run and its artifact.
 
 ---
 
