@@ -856,6 +856,13 @@ remove_done:
 #define XCOMPOSE_LINE_LIMIT (64u * 1024u)
 #define XCOMPOSE_MAX_NAME 63u
 #define XCOMPOSE_TAG_BASE 25u
+#define XCOMPOSE_INCLUDE_DEPTH 16u
+#define XCOMPOSE_INCLUDE_FILES 32u
+#define XCOMPOSE_INCLUDE_EXPANSIONS 64u
+#define XCOMPOSE_INCLUDE_NAME 127u
+#define XCOMPOSE_WORKSPACE_SIZE (XCOMPOSE_FILE_LIMIT + XCOMPOSE_INCLUDE_DEPTH + 1u)
+#define XCOMPOSE_PATH_SIZE 4096u
+#define XCOMPOSE_NAME_SIZE 256u
 
 struct native_compose_rule {
     uint32_t input[MAX_INPUTS];
@@ -1110,90 +1117,327 @@ static int nx_add(struct native_compose_rule *rules,uint32_t *n,uint32_t kind,
     r->input_count=(uint8_t)ni;r->output_count=(uint8_t)no;r->kind=(uint8_t)kind;r->reserved=0;r->order=order;
     return 1;
 }
-static uint32_t nx_parse(uint8_t *source,uint32_t length,struct native_compose_rule *rules)
+struct nx_import_state {
+    int root_fd;
+    uint8_t *workspace;
+    uint32_t workspace_capacity;
+    uint32_t workspace_used;
+    uint32_t total_bytes;
+    uint32_t opened_files;
+    uint32_t unique_files;
+    uint32_t stack_depth;
+    uint32_t record_count;
+    uint32_t order;
+    uint64_t stack_device[XCOMPOSE_INCLUDE_DEPTH];
+    uint64_t stack_inode[XCOMPOSE_INCLUDE_DEPTH];
+    uint64_t seen_device[XCOMPOSE_INCLUDE_FILES];
+    uint64_t seen_inode[XCOMPOSE_INCLUDE_FILES];
+};
+
+static uint64_t nx_read64(const uint8_t *p)
 {
-    uint32_t at=0,n=0,order=0;
-    if(length>=3u&&source[0]==0xefu&&source[1]==0xbbu&&source[2]==0xbfu)at=3u;
-    while(at<length){
-        uint32_t start=at,end,comment=0xffffffffu,colon=0xffffffffu,quote=0,escape=0;
-        uint32_t left_a,left_b,right_a,names_n=0,i;
-        char names[6][XCOMPOSE_MAX_NAME+1u],*line;
-        while(at<length&&source[at]!='\n')++at;
-        end=at;if(at<length)++at;
-        if(end-start>XCOMPOSE_LINE_LIMIT)return 0;
-        if(end<length)source[end]=0;else source[length]=0;
-        line=(char *)(source+start);
-        if(end>start&&line[end-start-1u]=='\r')line[end-start-1u]=0;
-        {
-            uint32_t len=(uint32_t)string_length(line,XCOMPOSE_LINE_LIMIT+1u);
-            for(i=0;i<len;++i){
-                char ch=line[i];
-                if(quote){if(escape)escape=0;else if(ch=='\\')escape=1;else if(ch=='"')quote=0;}
-                else if(ch=='"')quote=1;
-                else {if(ch=='#'){comment=i;break;}if(ch==':'&&colon==0xffffffffu)colon=i;}
-            }
-            if(comment!=0xffffffffu){line[comment]=0;len=comment;}
-            left_a=nx_left(line,0,colon<len?colon:len);
-            left_b=nx_right(line,left_a,colon<len?colon:len);
-            if(left_a==left_b)continue;
-            if(left_b-left_a>=7u&&nx_equal_ci(line+left_a,"include")&&
-               (left_b-left_a==7u||nx_space(line[left_a+7u])))return 0;
-            if(left_b-left_a>=5u&&line[left_a]=='X'&&line[left_a+1u]=='C'&&
-               line[left_a+2u]=='O'&&line[left_a+3u]=='M'&&line[left_a+4u]=='M')continue;
-            if(colon==0xffffffffu||colon>=len)continue;
-            if(!nx_events(line+left_a,left_b-left_a,names,&names_n))continue;
-            {
-                uint32_t kind,inputs[MAX_INPUTS],ni=0,outputs[MAX_OUTPUTS],no=0,j,mark;
-                if(nx_equal(names[0],"Multi_key")){
-                    kind=0;if(names_n<3u||names_n>5u)continue;
-                }else{
-                    mark=nx_dead_mark(names[0]);if(!mark||names_n!=2u)continue;
-                    kind=1;inputs[ni++]=mark;
-                }
-                for(j=1u;j<names_n;++j){
-                    uint32_t scalar=nx_keysym(names[j]);
-                    if(!scalar||!scalar_valid(scalar)||ni>=MAX_INPUTS)break;
-                    inputs[ni++]=scalar;
-                }
-                if(j!=names_n||ni<2u||ni>MAX_INPUTS)continue;
-                right_a=nx_left(line,colon+1u,len);
-                if(right_a>=len)continue;
-                if(line[right_a]=='"'){
-                    uint32_t end_quote=0;
-                    if(!nx_quoted(line+right_a,outputs,&no,&end_quote))continue;
-                }else{
-                    char result[XCOMPOSE_MAX_NAME+1u];
-                    uint32_t right_b=right_a;
-                    while(right_b<len&&!nx_space(line[right_b]))++right_b;
-                    if(right_b==right_a||right_b-right_a>XCOMPOSE_MAX_NAME)continue;
-                    for(j=right_a;j<right_b;++j)result[j-right_a]=line[j];
-                    result[right_b-right_a]=0;
-                    outputs[0]=nx_keysym(result);
-                    if(!scalar_valid(outputs[0]))continue;
-                    no=1u;
-                }
-                if(!nx_add(rules,&n,kind,inputs,ni,outputs,no,order++))return 0;
-            }
-        }
-    }
-    if(!n)return 0;
-    nx_sort(rules,n);
-    {
-        uint32_t unique=0,kept=0,i;
-        for(i=0;i<n;++i){
-            if(unique&&nx_same(&rules[unique-1u],&rules[i]))continue;
-            if(unique!=i)rules[unique]=rules[i];
-            ++unique;
-        }
-        for(i=0;i<unique;++i){
-            if(i+1u<unique&&nx_prefix(&rules[i],&rules[i+1u]))continue;
-            if(kept!=i)rules[kept]=rules[i];
-            ++kept;
-        }
-        n=kept;
-    }
-    return n;
+    return (uint64_t)read32(p) | ((uint64_t)read32(p + 4u) << 32);
 }
+
+static int nx_parse_buffer(struct nx_import_state *state, uint8_t *source,
+                           uint32_t length, struct native_compose_rule *rules);
+
+static int nx_parse_include_name(const char *text, uint32_t length,
+                                 char name[XCOMPOSE_INCLUDE_NAME + 1u])
+{
+    uint32_t at = 7u, start, end, i;
+    if (!text || length < 9u || !nx_equal_ci(text, "include") ||
+        !nx_space(text[7]))
+        return 0;
+    while (at < length && nx_space(text[at])) ++at;
+    if (at >= length || text[at] != '"') return 0;
+    start = ++at;
+    while (at < length && text[at] != '"') ++at;
+    if (at >= length) return 0;
+    end = at++;
+    if (end == start || end - start > XCOMPOSE_INCLUDE_NAME) return 0;
+    while (at < length && nx_space(text[at])) ++at;
+    if (at != length) return 0;
+    if (end - start == 1u && text[start] == '.') return 0;
+    if (end - start == 2u && text[start] == '.' && text[start + 1u] == '.') return 0;
+    for (i = start; i < end; ++i) {
+        unsigned char ch = (unsigned char)text[i];
+        if (ch < 0x21u || ch == 0x7fu || ch == '/' || ch == '\\' ||
+            ch == '%' || ch == '$' || ch == '~' || ch == ':' || ch == '"')
+            return 0;
+        name[i - start] = text[i];
+    }
+    name[end - start] = 0;
+    return 1;
+}
+
+static int nx_parse_file(struct nx_import_state *state, const char *name,
+                         struct native_compose_rule *rules)
+{
+    uint8_t stat_buffer[256] __attribute__((aligned(16)));
+    uint64_t device, inode;
+    long fd, result, size;
+    uint32_t i, offset, workspace_start, unique = 0;
+    int ok = 0;
+    if (!state || !name || !name[0] ||
+        state->stack_depth >= XCOMPOSE_INCLUDE_DEPTH ||
+        state->opened_files >= XCOMPOSE_INCLUDE_EXPANSIONS + 1u)
+        return 0;
+
+    fd = syscall6(SYS_openat, state->root_fd, (long)name,
+                  O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK, 0, 0, 0);
+    if (failed(fd)) return 0;
+    for (i = 0; i < sizeof(stat_buffer); ++i) stat_buffer[i] = 0;
+    result = syscall6(SYS_fstat, fd, (long)stat_buffer, 0, 0, 0, 0);
+    if (failed(result) || (read32(stat_buffer + 24u) & S_IFMT) != S_IFREG)
+        goto nx_parse_file_done;
+    device = nx_read64(stat_buffer);
+    inode = nx_read64(stat_buffer + 8u);
+
+    for (i = 0; i < state->stack_depth; ++i) {
+        if (state->stack_device[i] == device && state->stack_inode[i] == inode)
+            goto nx_parse_file_done;
+    }
+    for (i = 0; i < state->unique_files; ++i) {
+        if (state->seen_device[i] == device && state->seen_inode[i] == inode) {
+            unique = 1u;
+            break;
+        }
+    }
+    if (!unique) {
+        if (state->unique_files >= XCOMPOSE_INCLUDE_FILES)
+            goto nx_parse_file_done;
+        state->seen_device[state->unique_files] = device;
+        state->seen_inode[state->unique_files] = inode;
+        ++state->unique_files;
+    }
+
+    size = syscall6(SYS_lseek, fd, 0, SEEK_END, 0, 0, 0);
+    if (size < 0 || size > (long)XCOMPOSE_FILE_LIMIT ||
+        (uint64_t)size > (uint64_t)(XCOMPOSE_FILE_LIMIT - state->total_bytes))
+        goto nx_parse_file_done;
+    if ((uint64_t)size + 1u >
+        (uint64_t)(state->workspace_capacity - state->workspace_used))
+        goto nx_parse_file_done;
+    result = syscall6(SYS_lseek, fd, 0, 0, 0, 0, 0);
+    if (failed(result)) goto nx_parse_file_done;
+
+    workspace_start = state->workspace_used;
+    state->workspace_used += (uint32_t)size + 1u;
+    state->total_bytes += (uint32_t)size;
+    ++state->opened_files;
+    state->stack_device[state->stack_depth] = device;
+    state->stack_inode[state->stack_depth] = inode;
+    ++state->stack_depth;
+
+    offset = 0;
+    while (offset < (uint32_t)size) {
+        result = syscall6(SYS_read, fd,
+                          (long)(state->workspace + workspace_start + offset),
+                          (uint32_t)size - offset, 0, 0, 0);
+        if (result > 0) {
+            offset += (uint32_t)result;
+            continue;
+        }
+        if (result == -4) continue;
+        goto nx_parse_file_unwind;
+    }
+    result = syscall6(SYS_read, fd,
+                      (long)(state->workspace + workspace_start + offset),
+                      1u, 0, 0, 0);
+    if (result != 0) goto nx_parse_file_unwind;
+    for (offset = 0; offset < (uint32_t)size; ++offset)
+        if (!state->workspace[workspace_start + offset])
+            goto nx_parse_file_unwind;
+    state->workspace[workspace_start + (uint32_t)size] = 0;
+
+    ok = nx_parse_buffer(state, state->workspace + workspace_start,
+                         (uint32_t)size, rules);
+
+nx_parse_file_unwind:
+    --state->stack_depth;
+    state->workspace_used = workspace_start;
+nx_parse_file_done:
+    (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
+    return ok;
+}
+
+static int nx_parse_buffer(struct nx_import_state *state, uint8_t *source,
+                           uint32_t length, struct native_compose_rule *rules)
+{
+    uint32_t at = 0;
+    if (length >= 3u && source[0] == 0xefu &&
+        source[1] == 0xbbu && source[2] == 0xbfu)
+        at = 3u;
+    while (at < length) {
+        uint32_t start = at, end, comment = 0xffffffffu;
+        uint32_t colon = 0xffffffffu, quote = 0, escape = 0;
+        uint32_t left_a, left_b, right_a, names_n = 0, i;
+        char names[6][XCOMPOSE_MAX_NAME + 1u], *line;
+        while (at < length && source[at] != '\n') ++at;
+        end = at;
+        if (at < length) ++at;
+        if (end - start > XCOMPOSE_LINE_LIMIT) return 0;
+        if (end < length) source[end] = 0;
+        else source[length] = 0;
+        line = (char *)(source + start);
+        if (end > start && line[end - start - 1u] == '\r')
+            line[end - start - 1u] = 0;
+        {
+            uint32_t len = (uint32_t)string_length(line, XCOMPOSE_LINE_LIMIT + 1u);
+            for (i = 0; i < len; ++i) {
+                char ch = line[i];
+                if (quote) {
+                    if (escape) escape = 0;
+                    else if (ch == '\\') escape = 1;
+                    else if (ch == '"') quote = 0;
+                } else if (ch == '"') {
+                    quote = 1;
+                } else {
+                    if (ch == '#') { comment = i; break; }
+                    if (ch == ':' && colon == 0xffffffffu) colon = i;
+                }
+            }
+            if (comment != 0xffffffffu) {
+                line[comment] = 0;
+                len = comment;
+            }
+            left_a = nx_left(line, 0u, colon < len ? colon : len);
+            left_b = nx_right(line, left_a, colon < len ? colon : len);
+            if (left_a == left_b) continue;
+
+            if (left_b - left_a >= 7u &&
+                nx_equal_ci(line + left_a, "include") &&
+                (left_b - left_a == 7u || nx_space(line[left_a + 7u]))) {
+                char include_name[XCOMPOSE_INCLUDE_NAME + 1u];
+                if (!nx_parse_include_name(line + left_a, left_b - left_a,
+                                           include_name) ||
+                    !nx_parse_file(state, include_name, rules))
+                    return 0;
+                continue;
+            }
+
+            if (left_b - left_a >= 5u && line[left_a] == 'X' &&
+                line[left_a + 1u] == 'C' && line[left_a + 2u] == 'O' &&
+                line[left_a + 3u] == 'M' && line[left_a + 4u] == 'M')
+                continue;
+            if (colon == 0xffffffffu || colon >= len) continue;
+            if (!nx_events(line + left_a, left_b - left_a, names, &names_n))
+                continue;
+            {
+                uint32_t kind, inputs[MAX_INPUTS], ni = 0;
+                uint32_t outputs[MAX_OUTPUTS], no = 0, j, mark;
+                if (nx_equal(names[0], "Multi_key")) {
+                    kind = 0;
+                    if (names_n < 3u || names_n > 5u) continue;
+                } else {
+                    mark = nx_dead_mark(names[0]);
+                    if (!mark || names_n != 2u) continue;
+                    kind = 1;
+                    inputs[ni++] = mark;
+                }
+                for (j = 1u; j < names_n; ++j) {
+                    uint32_t scalar = nx_keysym(names[j]);
+                    if (!scalar || !scalar_valid(scalar) || ni >= MAX_INPUTS)
+                        break;
+                    inputs[ni++] = scalar;
+                }
+                if (j != names_n || ni < 2u || ni > MAX_INPUTS) continue;
+                right_a = nx_left(line, colon + 1u, len);
+                if (right_a >= len) continue;
+                if (line[right_a] == '"') {
+                    uint32_t end_quote = 0;
+                    if (!nx_quoted(line + right_a, outputs, &no, &end_quote))
+                        continue;
+                } else {
+                    char result[XCOMPOSE_MAX_NAME + 1u];
+                    uint32_t right_b = right_a;
+                    while (right_b < len && !nx_space(line[right_b])) ++right_b;
+                    if (right_b == right_a || right_b - right_a > XCOMPOSE_MAX_NAME)
+                        continue;
+                    for (j = right_a; j < right_b; ++j)
+                        result[j - right_a] = line[j];
+                    result[right_b - right_a] = 0;
+                    outputs[0] = nx_keysym(result);
+                    if (!scalar_valid(outputs[0])) continue;
+                    no = 1u;
+                }
+                if (!nx_add(rules, &state->record_count, kind, inputs, ni,
+                            outputs, no, state->order++))
+                    return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static uint32_t nx_parse_path(int root_fd, const char *root_name,
+                             uint8_t *workspace, uint32_t workspace_capacity,
+                             struct native_compose_rule *rules)
+{
+    struct nx_import_state state;
+    uint32_t i, unique = 0, kept = 0;
+    state.root_fd = root_fd;
+    state.workspace = workspace;
+    state.workspace_capacity = workspace_capacity;
+    state.workspace_used = 0;
+    state.total_bytes = 0;
+    state.opened_files = 0;
+    state.unique_files = 0;
+    state.stack_depth = 0;
+    state.record_count = 0;
+    state.order = 0;
+    if (!nx_parse_file(&state, root_name, rules) || !state.record_count)
+        return 0;
+
+    nx_sort(rules, state.record_count);
+    for (i = 0; i < state.record_count; ++i) {
+        if (unique && nx_same(&rules[unique - 1u], &rules[i]))
+            continue;
+        if (unique != i) rules[unique] = rules[i];
+        ++unique;
+    }
+    for (i = 0; i < unique; ++i) {
+        if (i + 1u < unique && nx_prefix(&rules[i], &rules[i + 1u]))
+            continue;
+        if (kept != i) rules[kept] = rules[i];
+        ++kept;
+    }
+    return kept;
+}
+
+static int nx_split_source_path(const char *path,
+                                char directory[XCOMPOSE_PATH_SIZE],
+                                char basename[XCOMPOSE_NAME_SIZE])
+{
+    uint32_t length, slash = 0xffffffffu, i;
+    if (!path || !path[0] || !directory || !basename) return 0;
+    length = string_length(path, XCOMPOSE_PATH_SIZE);
+    if (!length || length >= XCOMPOSE_PATH_SIZE) return 0;
+    for (i = 0; i < length; ++i)
+        if (path[i] == '/') slash = i;
+    if (slash == 0xffffffffu) {
+        directory[0] = '.';
+        directory[1] = 0;
+        i = 0;
+    } else {
+        i = slash + 1u;
+        if (slash == 0u) {
+            directory[0] = '/';
+            directory[1] = 0;
+        } else {
+            for (uint32_t j = 0; j < slash; ++j) directory[j] = path[j];
+            directory[slash] = 0;
+        }
+    }
+    if (i >= length || length - i >= XCOMPOSE_NAME_SIZE)
+        return 0;
+    for (uint32_t j = 0; j < length - i; ++j) basename[j] = path[i + j];
+    basename[length - i] = 0;
+    if (nx_equal(basename, ".") || nx_equal(basename, "..")) return 0;
+    return 1;
+}
+
 static int nx_make_tag(const char *path,char tag[MAX_TAG_LENGTH+1u],uint32_t *length)
 {
     const char *base=path,*p;
@@ -1242,46 +1486,36 @@ static int nx_build_pack(uint8_t *pack,const char *tag,uint32_t tag_n,
     nx_store32(pack+28u,crc32(pack+HEADER_SIZE,payload));*size=HEADER_SIZE+payload;return 1;
 }
 
-/* Imports bounded UTF-8 rule files; includes are rejected, never half-applied. */
+/* Imports bounded UTF-8 rule files with fail-closed sibling includes. */
 uint32_t compose_locale_import_xcompose(const char *source_path)
 {
     char tag[MAX_TAG_LENGTH+1u],destination[48],temporary[80];
+    char source_directory[XCOMPOSE_PATH_SIZE],source_name[XCOMPOSE_NAME_SIZE];
     struct native_compose_rule *rules=(struct native_compose_rule *)0;
     uint8_t *source=(uint8_t *)0,*pack=(uint8_t *)0;
-    uint32_t tag_n=0,count=0,pack_size=0,offset=0,validated=0;
+    uint32_t tag_n=0,count=0,pack_size=0,validated=0;
     uint32_t rules_size=MAX_RECORDS*sizeof(*rules),ok=0,temp_ready=0;
-    uint8_t stat_buffer[256] __attribute__((aligned(16)));
-    long fd=-1,dir=-1,out=-1,result,size,mr,ms,mp;
-    if(!source_path||!source_path[0]||!nx_make_tag(source_path,tag,&tag_n))return 0;
+    long source_dir=-1,dir=-1,out=-1,result,mr,ms,mp;
+    if(!source_path||!source_path[0]||!nx_make_tag(source_path,tag,&tag_n)||
+       !nx_split_source_path(source_path,source_directory,source_name))return 0;
     mr=syscall6(SYS_mmap,0,rules_size,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if(failed(mr))goto done;
     rules=(struct native_compose_rule *)(uintptr_t)mr;
-    ms=syscall6(SYS_mmap,0,XCOMPOSE_FILE_LIMIT+1u,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    ms=syscall6(SYS_mmap,0,XCOMPOSE_WORKSPACE_SIZE,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if(failed(ms))goto done;
     source=(uint8_t *)(uintptr_t)ms;
     mp=syscall6(SYS_mmap,0,MAX_PACK_SIZE,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if(failed(mp))goto done;
     pack=(uint8_t *)(uintptr_t)mp;
-    fd=syscall6(SYS_openat,AT_FDCWD,(long)source_path,O_RDONLY|O_CLOEXEC|O_NOFOLLOW|O_NONBLOCK,0,0,0);
-    if(failed(fd)){fd=-1;goto done;}
-    for(offset=0;offset<sizeof(stat_buffer);++offset)stat_buffer[offset]=0;
-    result=syscall6(SYS_fstat,fd,(long)stat_buffer,0,0,0,0);
-    if(failed(result)||(read32(stat_buffer+24u)&S_IFMT)!=S_IFREG)goto done;
-    size=syscall6(SYS_lseek,fd,0,SEEK_END,0,0,0);
-    if(size<1||size>(long)XCOMPOSE_FILE_LIMIT)goto done;
-    result=syscall6(SYS_lseek,fd,0,0,0,0,0);if(failed(result))goto done;
-    offset=0;
-    while(offset<(uint32_t)size){
-        result=syscall6(SYS_read,fd,(long)(source+offset),(uint32_t)size-offset,0,0,0);
-        if(result>0){offset+=(uint32_t)result;continue;}
-        if(result==-4)continue;
-        goto done;
-    }
-    result=syscall6(SYS_read,fd,(long)(source+offset),1u,0,0,0);
-    if(result!=0)goto done;
-    for(offset=0;offset<(uint32_t)size;++offset)if(!source[offset])goto done;
-    count=nx_parse(source,(uint32_t)size,rules);
-    if(!count||!nx_build_pack(pack,tag,tag_n,rules,count,&pack_size)||
+    source_dir=syscall6(SYS_openat,AT_FDCWD,(long)source_directory,
+                        O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NOFOLLOW,0,0,0);
+    if(failed(source_dir)){source_dir=-1;goto done;}
+    count=nx_parse_path((int)source_dir,source_name,source,
+                        XCOMPOSE_WORKSPACE_SIZE,rules);
+    if(!count)goto done;
+    (void)syscall6(SYS_close,source_dir,0,0,0,0,0);
+    source_dir=-1;
+    if(!nx_build_pack(pack,tag,tag_n,rules,count,&pack_size)||
        !validate_pack(pack,pack_size,tag,tag_n,&validated)||validated!=count)goto done;
     if(!make_pack_names(tag,tag_n,destination,sizeof(destination),temporary,sizeof(temporary)))goto done;
     temp_ready=1;
@@ -1301,7 +1535,7 @@ uint32_t compose_locale_import_xcompose(const char *source_path)
     }
     result=syscall6(SYS_fsync,dir,0,0,0,0,0);
     if(failed(result)){(void)syscall6(SYS_unlinkat,dir,(long)destination,0,0,0,0);goto done;}
-    for(offset=0;offset<tag_n;++offset)compose_locale_installed_tag[offset]=tag[offset];
+    for(uint32_t i=0;i<tag_n;++i)compose_locale_installed_tag[i]=tag[i];
     compose_locale_installed_tag[tag_n]=0;ok=1;
 done:
     if(out>=0)(void)syscall6(SYS_close,out,0,0,0,0,0);
@@ -1309,9 +1543,9 @@ done:
         if(!ok&&temp_ready)(void)syscall6(SYS_unlinkat,dir,(long)temporary,0,0,0,0);
         (void)syscall6(SYS_close,dir,0,0,0,0,0);
     }
-    if(fd>=0)(void)syscall6(SYS_close,fd,0,0,0,0,0);
+    if(source_dir>=0)(void)syscall6(SYS_close,source_dir,0,0,0,0,0);
     if(pack)(void)syscall6(SYS_munmap,(long)pack,MAX_PACK_SIZE,0,0,0,0);
-    if(source)(void)syscall6(SYS_munmap,(long)source,XCOMPOSE_FILE_LIMIT+1u,0,0,0,0);
+    if(source)(void)syscall6(SYS_munmap,(long)source,XCOMPOSE_WORKSPACE_SIZE,0,0,0,0);
     if(rules)(void)syscall6(SYS_munmap,(long)rules,rules_size,0,0,0,0);
     return ok;
 }
