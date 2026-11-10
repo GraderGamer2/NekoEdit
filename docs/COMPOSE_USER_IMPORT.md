@@ -75,6 +75,14 @@ python3 tools/compose_pack.py build \
 
 The JSON writer creates missing output directories privately (mode 0700), atomically replaces the selected output, and writes the file with mode 0600. It refuses to overwrite a file that contributed to the import or the supplied keysym header.
 
+## Installed system Compose compatibility test
+
+`make test` also runs `tests/system_xcompose_import_test.py`. When the standard files are present, it imports the installed `/usr/share/X11/locale/en_US.UTF-8/Compose` database through a temporary user `.XCompose` that includes it with `%L`. The test checks known Multi_key and dead-key results, a user override applied after the include, the imported record volume, and successful NLP1 validation.
+
+On Ubuntu CI, `libx11-data` supplies the real system Compose file and `x11proto-dev` supplies `keysymdef.h`. These are test-environment packages only; neither is linked to NekoEdit or required at runtime. On a development machine without those files the integration test reports a skip, while the deterministic synthetic parser tests still run. Override the locations with `NEKOEDIT_SYSTEM_COMPOSE_FILE`, `NEKOEDIT_SYSTEM_COMPOSE_ROOT`, and `NEKOEDIT_KEYSYMDEF` when testing a different installed X.Org corpus.
+
+The integration test constructs the imported pack in memory inside a temporary directory. It does not install a locale, write beneath the real home directory, modify the system Compose database, or add locale tables to the application executable.
+
 ## Integration boundary
 
 This is an explicit user-invoked host utility, not a runtime feature. NekoEdit does not automatically read $XCOMPOSEFILE, search for ~/.XCompose, merge it with system data at startup, or expose an importer in Settings. After running the installer, the resulting .nlp pack is discovered by the existing Settings locale dropdown. Importing does not move, delete, or modify the selected source file. The editor remains a freestanding executable with no Python/runtime-library dependency.

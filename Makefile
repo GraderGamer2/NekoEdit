@@ -61,6 +61,7 @@ test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER
 	$(PYTHON) tests/compose_pack_test.py
 	$(PYTHON) tests/compose_import_test.py
 	$(PYTHON) tests/user_xcompose_import_test.py
+	$(PYTHON) tests/system_xcompose_import_test.py
 	$(PYTHON) tests/install_user_xcompose_test.py
 	$(PYTHON) tests/compose_locale_data_test.py
 	$(PYTHON) tests/compose_locale_manager_test.py ./$(COMPOSE_LOCALE_MANAGER_TEST)
