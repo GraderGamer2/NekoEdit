@@ -1,4 +1,4 @@
-## 2026-11-10 — early-alpha artifact retention set to one day — validation pending
+## 2026-11-10 — early-alpha artifact retention set to one day — push-run metadata unavailable
 
 **Branch:** `early-alpha`; PR #2 remains open and unmerged.
 **Build and test workflow:** [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1) sets both the Linux executable and Compose locale-pack uploads to `retention-days: 1`.
