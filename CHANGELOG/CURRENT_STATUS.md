@@ -1,3 +1,11 @@
+## 2026-11-10 — synchronize held-key repeat assertions after Build and test #803
+
+**Branch:** early-alpha; nested Mutter integration harness source commit: [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588).
+**CI #803:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42832654453) in the pre-existing Wayland protocol mock. The freestanding build, command-line/host tests, and locale tests passed. The mock reported held Tab with unchanged caret coordinates (after_press=(48,128), after_repeat=(48,128)); it failed before pinned-data verification, locale-pack build, and the new Mutter step.
+**Diagnosis and test correction:** the Enter/Tab repeat assertions accepted a redraw without first proving that the repeat timer had inserted another newline/four spaces. The mock now waits for the corresponding shared document-cursor increment, sends key-up immediately after the first verified repeat, waits for repeat_keycode to clear, and only then checks the frame. This narrows the assertion to the actual first timer-driven edit and prevents later periodic ticks from moving the caret again. No editor runtime source was changed for this test-only synchronization fix.
+**Mutter validation:** the new nested GNOME Shell/Mutter test was skipped in #803 because the earlier mock step failed. It remains unverified until the next branch-push run passes the complete workflow.
+**Accuracy boundary:** #802 remains the last fully green build. Do not report the Mutter smoke test or this repeat-test correction as passing until the next run completes.
+
 ## 2026-11-10 — nested GNOME Shell/Mutter input integration harness — CI pending
 
 **Branch:** early-alpha, based on a16365ebc80151759b26be39f14a6316896dc99b. This is the next validation layer after the #802 multi-dead-key implementation.

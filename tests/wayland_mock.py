@@ -7755,7 +7755,19 @@ xkb_symbols "nekoedit-sparse" {
                         f"text_input_enabled={child_u32('text_input_enabled')}, "
                         f"doc_bytes={read_document_state()['doc_contents'][:24]!r}"
                     )
+                after_enter_cursor = child_u32("doc_cursor")
                 client.sendall(wire_message(12, 0))
+                wait_child_u32(
+                    "doc_cursor",
+                    after_enter_cursor + 1,
+                    "first repeated Enter insertion",
+                )
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
+                )
+                wait_child_u32(
+                    "repeat_keycode", 0, "held Enter release after first repeat"
+                )
                 expect_redraw("first repeated Enter")
                 after_enter_repeat = caret_position((16, after_enter[1] + 12))
                 if after_enter_repeat != (16, after_enter[1] + 12):
@@ -7763,22 +7775,9 @@ xkb_symbols "nekoedit-sparse" {
                         f"held Enter did not repeat: after_press={after_enter}, after_repeat={after_enter_repeat}"
                     )
                 client.sendall(wire_message(12, 0))
-                client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
-                    + wire_message(12, 0)
+                wait_child_u32(
+                    "repeat_keycode", 0, "Enter release before starting Tab"
                 )
-                # The client processes key release asynchronously on its
-                # Wayland event loop. Wait for repeat_cancel() to acknowledge
-                # it before starting a different key; otherwise a timer tick
-                # already ready at the instant of release can race this mock.
-                repeat_release_deadline = time.monotonic() + 0.5
-                while child_u32("repeat_keycode") != 0 and time.monotonic() < repeat_release_deadline:
-                    time.sleep(0.001)
-                if child_u32("repeat_keycode") != 0:
-                    raise AssertionError(
-                        "Enter key release was not consumed before starting Tab; "
-                        f"repeat_keycode={child_u32('repeat_keycode')}"
-                    )
 
                 # Tab inserts four spaces per action, both on initial press and repeat.
                 before_tab = caret_position()
@@ -7799,20 +7798,26 @@ xkb_symbols "nekoedit-sparse" {
                     raise AssertionError(
                         f"initial Tab did not insert four spaces: before={before_tab}, after={after_tab}"
                     )
+                after_tab_cursor = child_u32("doc_cursor")
                 client.sendall(wire_message(12, 0))
+                wait_child_u32(
+                    "doc_cursor",
+                    after_tab_cursor + 4,
+                    "first repeated Tab insertion",
+                )
+                client.sendall(
+                    wire_message(16, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
+                )
+                wait_child_u32(
+                    "repeat_keycode", 0, "held Tab release after first repeat"
+                )
                 expect_redraw("first repeated Tab")
                 after_tab_repeat = caret_position()
                 if after_tab_repeat != (after_tab[0] + 32, after_tab[1]):
                     raise AssertionError(
                         f"held Tab did not repeat: after_press={after_tab}, after_repeat={after_tab_repeat}"
                     )
-                client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
-                    + wire_message(12, 0)
-                )
-                # As with the preceding Enter release, wait until the client
-                # has processed Tab key-up and cancelled its repeat timer
-                # before the compositor sends xdg_toplevel.close.
+                client.sendall(wire_message(12, 0))
                 wait_child_u32(
                     "repeat_keycode", 0, "legacy seat-v3 Tab release before close"
                 )

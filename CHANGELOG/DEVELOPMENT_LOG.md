@@ -1,3 +1,11 @@
+## 2026-11-10 — make held-key repeat mock assertions wait for actual document edits
+
+- Recorded Build and test #803 failure: build, command-line/host tests and locale tests passed; tests/wayland_mock.py failed at the legacy seat-v3 held-Tab assertion with unchanged caret coordinates (48,128). The new nested Mutter step was not reached.
+- The mock's repeat sequence checked the next redraw but did not assert that a timer-driven edit had occurred before sampling the frame. Updated the held Enter and Tab cases to wait for doc_cursor to advance by one newline byte or four inserted spaces, respectively.
+- The mock now sends key-up after the first observed repeat, waits for repeat_keycode to clear, and then reads the repeat frame. This avoids accepting a queued initial redraw and avoids extra periodic timer ticks affecting the expected caret position.
+- No production assembly/C code or executable behavior was changed. The runtime's existing 300 ms / 30 Hz compatibility fallback is unchanged.
+- CI result for the correction is pending. Do not treat the new Mutter harness as validated; run #803 stopped before its step.
+
 ## 2026-11-10 — add nested GNOME Shell/Mutter Compose integration test (CI pending)
 
 - Added tests/mutter_gnome_smoke.sh, a test-only Xvfb + D-Bus harness that starts GNOME Shell as a nested Wayland compositor and connects the normal freestanding editor to its Wayland socket.

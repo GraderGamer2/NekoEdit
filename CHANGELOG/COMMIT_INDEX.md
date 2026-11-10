@@ -1,3 +1,9 @@
+## 2026-11-10 — nested GNOME Shell/Mutter integration harness — validation pending
+
+| Commit | Subject |
+|---|---|
+| [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588) | test: validate Wayland input through nested GNOME Mutter |
+
 ## 2026-11-10 — Wayland dead-key chains and refreshed Compose locale tables — Build and test #802 passed
 
 | Commit | Subject |
