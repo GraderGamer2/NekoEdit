@@ -159,8 +159,8 @@ def _read_rules(
             if len(input_names) < 1:
                 stats["short_sequence"] += 1
                 continue
-            # The current input path resolves a dead action plus one scalar.
-            if len(input_names) != 1:
+            # Up to three dead actions plus the final base fit four inputs.
+            if len(input_names) > 3:
                 stats["too_long"] += 1
                 continue
         else:
@@ -170,8 +170,12 @@ def _read_rules(
         input_values: list[int] = []
         if kind == 1:
             input_values.append(DEAD_KEY_MARKS[names[0]])
-        for name in input_names:
-            if re.fullmatch(r"U[0-9A-Fa-f]{4,6}", name):
+        for index, name in enumerate(input_names):
+            if kind == 1 and index + 1 < len(input_names):
+                scalar = DEAD_KEY_MARKS.get(name, 0)
+            elif kind == 1 and name in DEAD_KEY_MARKS:
+                scalar = 0
+            elif re.fullmatch(r"U[0-9A-Fa-f]{4,6}", name):
                 scalar = int(name[1:], 16)
             else:
                 scalar = keysyms.get(name, 0)

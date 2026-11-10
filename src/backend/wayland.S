@@ -7576,6 +7576,10 @@ wayland_main:
     jmp .keyboard_changed
 .Lkeyboard_escape_cancel_dead:
     mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_escape_menu_handling:
@@ -8025,6 +8029,10 @@ wayland_main:
     jmp .keyboard_changed
 .Lkeyboard_backspace_cancel_dead:
     mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_backspace_document:
@@ -18507,6 +18515,39 @@ doc_compose_precomposed:
     ret
 .size doc_compose_precomposed, . - doc_compose_precomposed
 
+# Flush pending dead-key marks literally. first..third hold up to three marks.
+.type doc_flush_pending_dead_literal, @function
+doc_flush_pending_dead_literal:
+    push rbx
+    push r12
+    sub rsp, 8
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    je .Ldoc_flush_pending_dead_done
+    call doc_delete_selection
+    lea rbx, [rip + doc_compose_first]
+    xor r12d, r12d
+.Ldoc_flush_pending_dead_loop:
+    cmp r12d, 3
+    jae .Ldoc_flush_pending_dead_clear
+    mov edi, dword ptr [rbx + r12*4]
+    test edi, edi
+    jz .Ldoc_flush_pending_dead_clear
+    call doc_insert_codepoint_utf8
+    inc r12d
+    jmp .Ldoc_flush_pending_dead_loop
+.Ldoc_flush_pending_dead_clear:
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+.Ldoc_flush_pending_dead_done:
+    add rsp, 8
+    pop r12
+    pop rbx
+    ret
+.size doc_flush_pending_dead_literal, . - doc_flush_pending_dead_literal
+
 # Insert a Unicode scalar, arm a dead key, or process a bounded Multi_key pair.
 # Dead-key actions use 0x110001..0x110024; 0x110007 remains reserved for
 # Multi_key and is handled before the dead-key range. None are Unicode scalars.
@@ -18660,25 +18701,36 @@ doc_insert_keyboard_codepoint:
     mov edi, ebp
     call doc_insert_codepoint_utf8
 .Ldoc_keyboard_dead_after_compose:
+    # A dead-key chain stores one to three combining marks in the first slots.
     cmp dword ptr [rip + doc_pending_dead_mark], 0
-    je .Ldoc_keyboard_store_dead
-    mov edi, dword ptr [rip + doc_pending_dead_mark]
-    call doc_delete_selection
-    mov edi, dword ptr [rip + doc_pending_dead_mark]
-    call doc_insert_codepoint_utf8
-.Ldoc_keyboard_store_dead:
+    je .Ldoc_keyboard_store_first_dead
+    cmp dword ptr [rip + doc_compose_second], 0
+    jne .Ldoc_keyboard_dead_second_present
+    mov dword ptr [rip + doc_compose_second], r13d
+    jmp .Ldoc_keyboard_dead_mark_saved
+.Ldoc_keyboard_dead_second_present:
+    cmp dword ptr [rip + doc_compose_third], 0
+    jne .Ldoc_keyboard_dead_chain_full
+    mov dword ptr [rip + doc_compose_third], r13d
+    jmp .Ldoc_keyboard_dead_mark_saved
+.Ldoc_keyboard_dead_chain_full:
+    # Four inputs are the NLP1 ceiling: three marks plus the final base.
+    # A fourth consecutive dead action flushes the old chain and starts anew.
+    call doc_flush_pending_dead_literal
+.Ldoc_keyboard_store_first_dead:
+    mov dword ptr [rip + doc_compose_first], r13d
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+.Ldoc_keyboard_dead_mark_saved:
     mov dword ptr [rip + doc_pending_dead_mark], r13d
     mov eax, 1
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_compose_start:
-    # Flush a pending dead mark before arming Multi_key.
-    mov r13d, dword ptr [rip + doc_pending_dead_mark]
-    test r13d, r13d
-    jz .Ldoc_keyboard_compose_start_ready
-    mov dword ptr [rip + doc_pending_dead_mark], 0
-    call doc_delete_selection
-    mov edi, r13d
-    call doc_insert_codepoint_utf8
+    # Flush every pending dead mark before arming Multi_key.
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    je .Ldoc_keyboard_compose_start_ready
+    call doc_flush_pending_dead_literal
 .Ldoc_keyboard_compose_start_ready:
     # Restarting Multi_key preserves any buffered symbols literally.
     cmp dword ptr [rip + doc_compose_active], 0
@@ -18899,43 +18951,70 @@ doc_insert_keyboard_codepoint:
     test r13d, r13d
     jz .Ldoc_keyboard_plain_scalar
     mov dword ptr [rip + doc_pending_dead_mark], 0
-    # Locale kind 1 stores [combining mark, following scalar], independently
-    # of Multi_key kind 0 even when both namespaces share the same scalars.
+    # first..third contain pending marks; append the following base scalar.
+    # The complete kind-1 input is two to four scalars (one to three marks).
+    mov r14d, 1
+    cmp dword ptr [rip + doc_compose_second], 0
+    je .Ldoc_keyboard_dead_append_base
+    inc r14d
+    cmp dword ptr [rip + doc_compose_third], 0
+    je .Ldoc_keyboard_dead_append_base
+    inc r14d
+.Ldoc_keyboard_dead_append_base:
+    lea rax, [rip + doc_compose_first]
+    mov dword ptr [rax + r14*4], r12d
+    mov r13d, dword ptr [rip + doc_compose_first]
     cmp dword ptr [rip + compose_locale_active], 0
-    je .Ldoc_keyboard_dead_builtin
-    mov dword ptr [rip + doc_compose_first], r13d
-    mov dword ptr [rip + doc_compose_second], r12d
-    mov dword ptr [rip + doc_compose_third], 0
-    mov dword ptr [rip + doc_compose_fourth], 0
+    je .Ldoc_keyboard_dead_fallback
     mov edi, 1
-    mov esi, 2
+    mov esi, r14d
+    inc esi
     lea rdx, [rip + doc_compose_first]
     lea rcx, [rip + compose_locale_output]
     call compose_locale_lookup
     test eax, eax
     jnz .Ldoc_keyboard_locale_result
-    mov dword ptr [rip + doc_compose_first], 0
-    mov dword ptr [rip + doc_compose_second], 0
-    mov dword ptr [rip + doc_compose_third], 0
-    mov dword ptr [rip + doc_compose_fourth], 0
-.Ldoc_keyboard_dead_builtin:
+.Ldoc_keyboard_dead_fallback:
+    cmp r14d, 1
+    jne .Ldoc_keyboard_dead_chain_fallback
+    # Preserve the original built-in precomposed path for a single mark.
     mov edi, r12d
     mov esi, r13d
     call doc_compose_precomposed
     test eax, eax
-    jz .Ldoc_keyboard_compose_fallback
+    jz .Ldoc_keyboard_dead_single_fallback
     mov r14d, eax
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
-    jmp .Ldoc_keyboard_insert_done
-.Ldoc_keyboard_compose_fallback:
-    # Preserve the base scalar and append its canonical combining mark.
+    jmp .Ldoc_keyboard_dead_clear
+.Ldoc_keyboard_dead_single_fallback:
     call doc_delete_selection
     mov edi, r12d
     call doc_insert_codepoint_utf8
     mov edi, r13d
     call doc_insert_codepoint_utf8
+    jmp .Ldoc_keyboard_dead_clear
+.Ldoc_keyboard_dead_chain_fallback:
+    # No locale rule: preserve the base followed by each mark in input order.
+    call doc_delete_selection
+    mov edi, r12d
+    call doc_insert_codepoint_utf8
+    lea r15, [rip + doc_compose_first]
+    xor ebx, ebx
+.Ldoc_keyboard_dead_chain_fallback_loop:
+    cmp ebx, r14d
+    jae .Ldoc_keyboard_dead_clear
+    mov edi, dword ptr [r15 + rbx*4]
+    call doc_insert_codepoint_utf8
+    inc ebx
+    jmp .Ldoc_keyboard_dead_chain_fallback_loop
+.Ldoc_keyboard_dead_clear:
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_plain_scalar:
     call doc_delete_selection

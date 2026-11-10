@@ -554,7 +554,7 @@ class ComposeImporter:
                     if not following:
                         self.stats["short_sequence"] += 1
                         continue
-                    if len(following) != 1:
+                    if len(following) > 3:
                         self.stats["too_long_input"] += 1
                         continue
                     input_values = [DEAD_KEY_MARKS[names[0]]]
@@ -563,8 +563,14 @@ class ComposeImporter:
                     continue
 
                 unsupported = False
-                for name in following:
-                    scalar = _keysym_scalar(name, self.keysyms)
+                for index, name in enumerate(following):
+                    if kind == 1 and index + 1 < len(following):
+                        scalar = DEAD_KEY_MARKS.get(name, 0)
+                    else:
+                        scalar = (
+                            0 if kind == 1 and name in DEAD_KEY_MARKS
+                            else _keysym_scalar(name, self.keysyms)
+                        )
                     if not _valid_scalar(scalar):
                         self.stats["unsupported_input"] += 1
                         unsupported = True

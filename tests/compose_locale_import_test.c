@@ -44,6 +44,9 @@ int main(void){
       "<Multi_key> <a> <e> <x> : \"long\"\n"
       "<dead_acute> <a> : \"á\"\n"
       "<dead_grave> <e> : \"è\"\n"
+      "<dead_acute> <dead_circumflex> <a> : \"chain3\"\n"
+      "<dead_grave> <dead_acute> <dead_circumflex> <a> : \"chain4\"\n"
+      "<dead_acute> <a> <dead_circumflex> : \"invalid-chain\"\n"
       "<Multi_key> <Greek_alpha> <Cyrillic_ya> : \"Ω\"\n"
       "<Multi_key> <Arabic_alef> <hebrew_aleph> : \"Ж\"\n"
       "<Multi_key> <Thai_kokai> <Hangul_Kiyeog> : \"界\"\n"
@@ -95,6 +98,14 @@ int main(void){
     need(n==2&&out[0]=='A'&&out[1]==0x301,"multi-scalar output");
     in[0]=0x301;in[1]='a';n=compose_locale_lookup(1,2,in,out);
     need(n==1&&out[0]==0xe1,"dead-key namespace");
+    in[0]=0x301;in[1]=0x302;in[2]='a';n=compose_locale_lookup(1,3,in,out);
+    need(n==6&&out[0]=='c'&&out[5]=='3',"two-mark dead-key chain");
+    in[0]=0x300;in[1]=0x301;in[2]=0x302;in[3]='a';
+    n=compose_locale_lookup(1,4,in,out);
+    need(n==6&&out[0]=='c'&&out[5]=='4',"three-mark dead-key chain");
+    in[0]=0x301;in[1]='a';in[2]=0x302;
+    need(compose_locale_lookup(1,3,in,out)==0,
+         "non-dead intermediate event was accepted in a dead-key chain");
     in[0]='a';in[1]='e';
     need(compose_locale_lookup(0,2,in,out)==0&&compose_locale_prefix(0,2,in)==1,"short prefix removed");
     need(compose_locale_import_xcompose(src)==0&&stat(pack,&st)==0,"refused overwrite");

@@ -304,6 +304,8 @@ def run(
                 {"input":[0x6f,0x69],"output":[0x2603,0xfe0f]},
                 {"input":[0x77,0x65,0x72,0x74],"output":[0x1f642]},
                 {"input":[0x79,0x75,0x69],"output":[0x2605]},
+                {"kind":"dead_key","input":[0x0301,0x030c,ord("g")],"output":[0x1f642]},
+                {"kind":"dead_key","input":[0x0301,0x0304,0x030c,ord("g")],"output":[0x2603,0xfe0f]},
             ]}
         pack_data = bytearray(encode_compose_pack(pack_doc))
         if compose_locale_invalid_test: pack_data[-1] ^= 1
@@ -4041,7 +4043,92 @@ xkb_symbols "nekoedit-sparse" {
                         or child_u32("doc_length") != before_cancel
                     ):
                         raise AssertionError("Backspace did not clear the locale Compose state")
-                    observations.append("validated optional locale pack: pair/multi-output, triple, four-input, unknown fallback, Escape and Backspace")
+                    # Kind-1 records accept two or three marks plus the final
+                    # base scalar through actual Wayland/XKB keyboard events.
+                    chain_start = child_u32("doc_length")
+                    key_step(4160, 33, "dead-chain starts with acute")
+                    if child_u32("doc_compose_first") != 0x0301 or child_u32("doc_length") != chain_start:
+                        raise AssertionError("first dead mark was not buffered")
+                    key_step(4162, 230, "dead-chain buffers caron")
+                    if (
+                        child_u32("doc_compose_first") != 0x0301
+                        or child_u32("doc_compose_second") != 0x030c
+                        or child_u32("doc_compose_third") != 0
+                        or child_u32("doc_pending_dead_mark") != 0x030c
+                        or child_u32("doc_length") != chain_start
+                    ):
+                        raise AssertionError("two-mark dead-key prefix was not buffered")
+                    key_step(4164, 34, "dead-chain base resolves the three-input locale rule")
+                    expected += bytes.fromhex("f09f9982")
+                    if (
+                        read_document_state()["doc_contents"] != expected
+                        or child_u32("doc_pending_dead_mark") != 0
+                        or child_u32("doc_compose_first") != 0
+                    ):
+                        raise AssertionError("two-mark dead-key rule did not resolve atomically")
+                    key_step(4170, 33, "three-mark chain buffers acute")
+                    key_step(4172, 229, "three-mark chain buffers macron")
+                    key_step(4174, 230, "three-mark chain buffers caron")
+                    if (
+                        child_u32("doc_compose_first") != 0x0301
+                        or child_u32("doc_compose_second") != 0x0304
+                        or child_u32("doc_compose_third") != 0x030c
+                        or child_u32("doc_pending_dead_mark") != 0x030c
+                    ):
+                        raise AssertionError("three dead marks did not occupy the pending slots")
+                    key_step(4176, 34, "three-mark chain resolves the four-input locale rule")
+                    expected += bytes.fromhex("e29883efb88f")
+                    if read_document_state()["doc_contents"] != expected:
+                        raise AssertionError("three-mark dead-key output mismatch")
+                    # Unknown chains fall back to base + combining marks in order.
+                    key_step(4180, 33, "fallback chain buffers acute")
+                    key_step(4182, 231, "fallback chain buffers belowdot")
+                    key_step(4184, 34, "fallback chain inserts base and both marks")
+                    expected += b"g\xcc\x81\xcc\xa3"
+                    if read_document_state()["doc_contents"] != expected:
+                        raise AssertionError("unknown dead-key chain was not preserved literally")
+                    # A fourth dead action flushes the three-mark maximum and starts anew.
+                    key_step(4190, 33, "maximum chain buffers acute")
+                    key_step(4192, 229, "maximum chain buffers macron")
+                    key_step(4194, 230, "maximum chain buffers caron")
+                    key_step(4196, 231, "fourth dead action flushes the old chain")
+                    expected += bytes.fromhex("cc81cc84cc8c")
+                    if (
+                        read_document_state()["doc_contents"] != expected
+                        or child_u32("doc_compose_first") != 0x0323
+                        or child_u32("doc_compose_second") != 0
+                    ):
+                        raise AssertionError("fourth dead action dropped or retained the wrong chain")
+                    key_step(4198, 34, "new chain resolves as a single-mark fallback")
+                    expected += b"g\xcc\xa3"
+                    if read_document_state()["doc_contents"] != expected:
+                        raise AssertionError("bounded fourth-key fallback did not preserve both sequences")
+                    before_chain_cancel = child_u32("doc_length")
+                    key_step(4200, 33, "Escape test arms acute")
+                    key_step(4202, 229, "Escape test appends macron")
+                    key_step(4204, 1, "Escape cancels the full dead-key chain")
+                    if (
+                        child_u32("doc_pending_dead_mark") != 0
+                        or any(child_u32(name) for name in (
+                            "doc_compose_first", "doc_compose_second",
+                            "doc_compose_third", "doc_compose_fourth",
+                        ))
+                        or child_u32("doc_length") != before_chain_cancel
+                    ):
+                        raise AssertionError("Escape left part of the dead-key chain pending")
+                    key_step(4210, 33, "Backspace test arms acute")
+                    key_step(4212, 230, "Backspace test appends caron")
+                    key_step(4214, 14, "Backspace cancels the full dead-key chain")
+                    if (
+                        child_u32("doc_pending_dead_mark") != 0
+                        or any(child_u32(name) for name in (
+                            "doc_compose_first", "doc_compose_second",
+                            "doc_compose_third", "doc_compose_fourth",
+                        ))
+                        or child_u32("doc_length") != before_chain_cancel
+                    ):
+                        raise AssertionError("Backspace left part of the dead-key chain pending")
+                    observations.append("validated optional locale pack: Multi_key pair/triple/four-input; two-/three-mark dead-key records; literal fallback, four-mark cap, Escape and Backspace")
                     client.sendall(wire_message(10, 1))
                     return
 

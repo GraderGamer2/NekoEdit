@@ -28,6 +28,8 @@ XCOMM minimal base fixture
 <Multi_key> <z> <z> : "u\u0301" U0075
 <Multi_key> <test_canonical> <a> : "ẞ" U1E9E
 <dead_acute> <c> : "ç" ccedilla
+<dead_acute> <dead_circumflex> <a> : "B3CHAIN"
+<dead_grave> <dead_acute> <dead_circumflex> <a> : "B4CHAIN"
 '''
 
 LOCALE = r'''
@@ -38,6 +40,7 @@ include "X11_LOCALEDATADIR/en_US.UTF-8/Compose"
 <Multi_key> <test_legacy_alias> <a> : "ẞ" U1E9E
 <Multi_key> <not_a_keysym> <a> : "x" x
 <dead_acute> <c> : "ñ" ntilde
+<dead_acute> <dead_circumflex> <a> : "L3CHAIN"
 '''
 
 
@@ -49,12 +52,12 @@ def main() -> None:
     }
     if document["statistics"]["base_rules"] != 5:
         raise AssertionError("base_rules must count valid Multi_key lines, including duplicates")
-    if document["statistics"]["base_dead_key_rules"] != 1:
-        raise AssertionError("the base dead-key rule was not imported")
-    if document["statistics"]["locale_dead_key_rules"] != 1:
-        raise AssertionError("the locale dead-key override was not imported")
-    if document["statistics"]["dead_key_overrides"] != 1:
-        raise AssertionError("the locale dead-key rule did not override its base mapping")
+    if document["statistics"]["base_dead_key_rules"] != 3:
+        raise AssertionError("base one-, two-mark, and three-mark dead-key rules were not imported")
+    if document["statistics"]["locale_dead_key_rules"] != 2:
+        raise AssertionError("the locale dead-key rules were not imported")
+    if document["statistics"]["dead_key_overrides"] != 2:
+        raise AssertionError("locale dead-key overrides were not applied to both chain and single-mark rules")
     if document["statistics"]["dropped_shorter_prefix_rules"] != 1:
         raise AssertionError("shorter prefix was not removed deterministically")
     if ("multi_key", (ord("a"), ord("e"))) in mapping:
@@ -69,6 +72,10 @@ def main() -> None:
         raise AssertionError("legacy keysym alias did not use the annotated canonical value")
     if mapping[("dead_key", (0x0301, ord("c")))] != (ord("ñ"),):
         raise AssertionError("locale dead_acute + c override was not retained as a typed rule")
+    if mapping[("dead_key", (0x0301, 0x0302, ord("a")))] != tuple(map(ord, "L3CHAIN")):
+        raise AssertionError("locale two-mark dead-key override was not retained")
+    if mapping[("dead_key", (0x0300, 0x0301, 0x0302, ord("a")))] != tuple(map(ord, "B4CHAIN")):
+        raise AssertionError("three-mark dead-key chain was not retained")
     if ("multi_key", (0x0301, ord("c"))) in mapping:
         raise AssertionError("dead-key record leaked into the Multi_key namespace")
     if document["statistics"]["unsupported_input"] != 1:
@@ -98,6 +105,7 @@ def main() -> None:
     standalone = r'''
 <Multi_key> <q> <x> : "Ω" U03A9
 <dead_acute> <c> : "ć" U0107
+<dead_acute> <dead_circumflex> <dead_grave> <a> : "δ" U03B4
 '''
     standalone_document = import_compose_sources(
         BASE, standalone, KEYSYMS, "el_TEST.UTF-8",
@@ -113,6 +121,8 @@ def main() -> None:
         raise AssertionError("standalone locale Multi_key rule was not merged")
     if standalone_map[("dead_key", (0x0301, ord("c")))] != (0x0107,):
         raise AssertionError("standalone locale dead-key rule was not merged")
+    if standalone_map[("dead_key", (0x0301, 0x0302, 0x0300, ord("a")))] != (0x03B4,):
+        raise AssertionError("standalone three-mark dead-key chain was not merged")
     if "standalone el_TEST.UTF-8" not in standalone_document["source"]["import_policy"]:
         raise AssertionError("standalone import policy metadata is missing")
 

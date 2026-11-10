@@ -34,6 +34,8 @@ int main(int argc, char **argv)
     uint32_t input[2] = { 'o', 'i' }, output[8] = {0};
     uint32_t dead_input[2] = { 0x0301u, 'c' };
     uint32_t user_input[2] = { 'e', 'e' };
+    uint32_t user_chain3[3] = { 0x0301u, 0x0302u, 'a' };
+    uint32_t user_chain4[4] = { 0x0300u, 0x0301u, 0x0302u, 'a' };
     uint32_t output_count;
 
     if (argc != 6)
@@ -121,6 +123,12 @@ int main(int argc, char **argv)
     output_count = compose_locale_lookup(1, 2, dead_input, output);
     if (output_count != 1 || output[0] != 0x00e7)
         fail("converted user dead_acute + c rule did not resolve to cedilla");
+    output_count = compose_locale_lookup(1, 3, user_chain3, output);
+    if (output_count != 2 || output[0] != 'C' || output[1] != '3')
+        fail("converted user two-mark dead-key chain did not resolve");
+    output_count = compose_locale_lookup(1, 4, user_chain4, output);
+    if (output_count != 2 || output[0] != 'C' || output[1] != '4')
+        fail("converted user three-mark dead-key chain did not resolve");
     if (!compose_locale_remove_pack("user_TEST.UTF-8"))
         fail("converted user pack could not be removed after activation");
     if (lstat(user_installed_path, &st) == 0)

@@ -1586,12 +1586,21 @@ static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
                     if (names_n < 3u || names_n > 5u) continue;
                 } else {
                     mark = nx_dead_mark(names[0]);
-                    if (!mark || names_n != 2u) continue;
+                    if (!mark || names_n < 2u || names_n > 4u) continue;
                     kind = 1;
                     inputs[ni++] = mark;
                 }
                 for (j = 1u; j < names_n; ++j) {
-                    uint32_t scalar = nx_keysym(names[j]);
+                    uint32_t scalar;
+                    if (kind == 1u && j + 1u < names_n) {
+                        /* Every intermediate event in a dead-key chain must
+                         * itself be a recognized dead action. */
+                        scalar = nx_dead_mark(names[j]);
+                    } else {
+                        /* The final event is the ordinary base character. */
+                        if (kind == 1u && nx_dead_mark(names[j])) break;
+                        scalar = nx_keysym(names[j]);
+                    }
                     if (!scalar || !scalar_valid(scalar) || ni >= MAX_INPUTS)
                         break;
                     inputs[ni++] = scalar;

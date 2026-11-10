@@ -49,7 +49,9 @@ def main() -> None:
         selected_compose = source_home / ".XCompose"
         selected_compose.write_text(
             'include "%H/fragments/basic"\n'
-            + r'<dead_acute> <c> : "\xC3\xA7" ccedilla' + "\n",
+            + r'<dead_acute> <c> : "\xC3\xA7" ccedilla' + "\n"
+            + r'<dead_acute> <dead_circumflex> <a> : "C3"' + "\n"
+            + r'<dead_grave> <dead_acute> <dead_circumflex> <a> : "C4"' + "\n",
             encoding="utf-8",
         )
         if import_user_xcompose.main([

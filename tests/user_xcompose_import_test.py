@@ -90,6 +90,10 @@ include "%L"
 <Multi_key> <a> <e> <x> : "T" t
 <Multi_key> <a> <a> : U1E9E
 <dead_acute> <c> : "ñ" ntilde
+<dead_acute> <dead_circumflex> <a> : "chain3"
+<dead_grave> <dead_acute> <dead_circumflex> <a> : "chain4"
+<dead_acute> <a> <dead_circumflex> : "invalid intermediate"
+<dead_acute> <dead_circumflex> : "invalid final"
 <Multi_key> <non_unicode> <a> : "skip" skip
 Shift <Multi_key> <g> <g> : "modifier" modifier
 <unknown_lead> <a> <e> : "lead" lead
@@ -116,8 +120,8 @@ def main() -> None:
             raise AssertionError("later file/root rules did not override included entries")
         if document["statistics"]["modifier_rules_skipped"] != 1:
             raise AssertionError("modifier-qualified entries were not explicitly skipped")
-        if document["statistics"]["unsupported_input"] != 1:
-            raise AssertionError("non-Unicode input keysym was not filtered")
+        if document["statistics"]["unsupported_input"] != 3:
+            raise AssertionError("non-Unicode and malformed dead-key-chain inputs were not filtered")
         if document["statistics"]["unsupported_lead"] != 1:
             raise AssertionError("unsupported leading keysym was not filtered")
         if document["statistics"]["too_long_input"] != 1:
@@ -138,6 +142,10 @@ def main() -> None:
             raise AssertionError("keysym-only Unicode result did not resolve")
         if result[("dead_key", (0x0301, ord("c")))] != (ord("ñ"),):
             raise AssertionError("locale dead-key record was not imported")
+        if result[("dead_key", (0x0301, 0x0302, ord("a")))] != tuple(map(ord, "chain3")):
+            raise AssertionError("two-mark dead-key chain was not imported")
+        if result[("dead_key", (0x0300, 0x0301, 0x0302, ord("a")))] != tuple(map(ord, "chain4")):
+            raise AssertionError("three-mark dead-key chain was not imported")
         if ("multi_key", (0x0301, ord("c"))) in result:
             raise AssertionError("dead-key record leaked into Multi_key namespace")
         packed = encode_pack(document)
