@@ -1,3 +1,7 @@
+## 2026-11-10 — fix the nested Mutter smoke-test editor invocation
+
+Build and test #804 confirmed the headless GNOME Shell 46/Mutter 46.2 compositor could start and publish its Wayland socket. The editor harness had incorrectly combined the backend-only `--backend=wayland` option with a filename, but the current command-line parser intentionally accepts a filename as the sole argument and selects Wayland from the environment. The harness now passes only its temporary document path while retaining the private WAYLAND_DISPLAY. The run's build, host tests, Wayland protocol mock, ELF inspection, pinned locale source comparison and separate locale packs all passed; the new keyboard integration test failed before the editor connected, so no Mutter input success is claimed.
+
 ## 2026-11-10 — tighten held-key repeat mock synchronization after CI #803
 
 Build and test #803 exposed a fragile assertion in the legacy seat-v3 held-Tab test: it observed a redraw without verifying that the timer had actually inserted the repeated spaces. The mock now checks the shared document cursor for the expected newline/four-space increment, releases the held key after that first repeat, and waits for the repeat state to clear before checking pixels or proceeding. This is test-harness synchronization only; no editor runtime code changed. The same run's freestanding build and host tests passed, but the Wayland mock failed, so the new GNOME Shell/Mutter integration step was not reached. The next branch-push result is required before declaring this verification layer green.

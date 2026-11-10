@@ -1,3 +1,10 @@
+## 2026-11-10 — correct nested Mutter harness invocation after Build and test #804
+
+**Branch:** early-alpha; harness commit [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588); repeat-mock correction [baaef829f1bb](https://github.com/GraderGamer2/NekoEdit/commit/baaef829f1bbc1452bbad7b89957704b3085c54f).
+**CI #804:** [failed in the new integration harness](https://github.com/GraderGamer2/NekoEdit/actions/runs/42833190272). The freestanding build, all host/command-line tests, corrected Wayland mock, ELF inspection, pinned X.Org source comparisons, and all four separate locale-pack builds passed. The nested GNOME Shell 46 / Mutter 46.2 compositor started and published its Wayland socket. NekoEdit then exited immediately with `unknown argument` because the harness passed both `--backend=wayland` and a document path; the current CLI accepts the explicit backend flag only by itself, while the normal invocation with a file selects Wayland from `WAYLAND_DISPLAY`.
+**Correction:** the harness now launches `nekoedit <temporary-document>` under its private nested `WAYLAND_DISPLAY`, which is the supported file-opening path and selects Wayland automatically. No editor CLI or backend code was changed.
+**Validation:** this specific correction is committed below. CI has not rerun yet. The Compose event delivery/output check remains unverified; the compositor starting alone is not counted as a passing input test.
+
 ## 2026-11-10 — synchronize held-key repeat assertions after Build and test #803
 
 **Branch:** early-alpha; nested Mutter integration harness source commit: [71d0040473d4](https://github.com/GraderGamer2/NekoEdit/commit/71d0040473d4b8b93f6f65f59741b8479c4d6588).

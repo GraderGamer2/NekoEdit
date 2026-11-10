@@ -1,3 +1,10 @@
+## 2026-11-10 — correct the nested Mutter harness command line after #804
+
+- Build and test #804 passed the freestanding ELF build, command-line/host suite, full Wayland protocol mock, ELF inspection, pinned X.Org importer byte comparisons, and all four optional locale-pack builds.
+- The nested GNOME Shell 46 / Mutter 46.2 compositor started and created the requested Wayland socket. NekoEdit exited before connecting because the harness supplied both `--backend=wayland` and a document path; the current argument parser supports either the backend-only switch or one document path, not both.
+- Corrected tests/mutter_gnome_smoke.sh to launch the executable with only the temporary document path. The private WAYLAND_DISPLAY selects the native Wayland connection automatically. No production code or supported CLI syntax was changed.
+- The original #804 run failed at the new integration test, so the Compose key and dead-key sequence have still not been validated through Mutter. The next branch-push run must complete before this milestone can be called green.
+
 ## 2026-11-10 — make held-key repeat mock assertions wait for actual document edits
 
 - Recorded Build and test #803 failure: build, command-line/host tests and locale tests passed; tests/wayland_mock.py failed at the legacy seat-v3 held-Tab assertion with unchanged caret coordinates (48,128). The new nested Mutter step was not reached.

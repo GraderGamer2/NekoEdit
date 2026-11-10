@@ -125,7 +125,7 @@ fi
 # Let the compositor finish its initial registry/configure cycle before the
 # freestanding editor connects.
 sleep 0.5
-NEKOEDIT_LOCALE=pt_BR.UTF-8 "$APP_BINARY" --backend=wayland \
+NEKOEDIT_LOCALE=pt_BR.UTF-8 "$APP_BINARY" \
     "$TEST_ROOT/document.txt" > "$TEST_ROOT/nekoedit.log" 2>&1 &
 APP_PID=$!
 
