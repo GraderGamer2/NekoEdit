@@ -1,5 +1,16 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — one-day GitHub Actions artifact retention on early-alpha — validation pending
+
+| Commit | Subject |
+|---|---|
+| [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1) | ci: expire development build artifacts after one day |
+| [9859912d75d3](https://github.com/GraderGamer2/NekoEdit/commit/9859912d75d3d8dc8941653e09316e141fc0ac3f) | ci: expire locale release artifacts after one day |
+
+All three artifact uploads on `early-alpha` now request one-day retention: executable, Compose locale pack in Build and test, and manual/release locale pack. The workflow run's actual expiry metadata remains to be verified. Previously uploaded artifacts retain their old expiry.
+
+---
+
 ## 2026-11-10 — 90-day GitHub Actions artifact retention — Build and test #777 passed
 
 | Commit | Subject |
