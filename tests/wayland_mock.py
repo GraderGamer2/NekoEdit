@@ -7848,9 +7848,10 @@ xkb_symbols "nekoedit-sparse" {
             client_endpoint.close()
             client_endpoint = None
         # File and Settings-locale workflows include several sequential
-        # picker/menu/install interactions; allow them a longer finite bound.
-        # The regular keyboard/XKB cases retain the shorter timeout.
-        timeout_seconds = 50 if (file_workflow or compose_locale_settings_test) else 20
+        # picker/menu/install/import interactions. Keep a finite but generous
+        # bound for slower hosted runners; regular keyboard/XKB cases retain
+        # the shorter timeout.
+        timeout_seconds = 90 if (file_workflow or compose_locale_settings_test) else 20
         try:
             stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:
