@@ -23,10 +23,10 @@ int main(void){
     char cycle_src[512],cycle_child[512],cycle_pack[1024];
     char depth_src[512],depth_pack[1024],depth_path[512],depth_name[64],depth_next[64],depth_body[128];
     char expansion_src[512],expansion_pack[1024],expansion_common[512],expansion_content[4096];
-    char system_root[512],locale_dir[512],locale_file[768],iso_dir[512],iso_file[768];
+    char system_root[512],locale_dir[768],locale_file[1024],iso_dir[768],iso_file[1024];
     char home_dir[512],home_file[768],system_src[512],system_pack[1024];
     char traversal_src[512],traversal_pack[1024],macro_link_src[512],macro_link_pack[1024];
-    char macro_link[768],macro_dir_link[768],macro_dir_src[512],macro_dir_pack[1024];
+    char macro_link[1024],macro_dir_link[768],macro_dir_src[512],macro_dir_pack[1024];
     char c_locale_src[512],c_locale_pack[1024];
     struct stat st;uint32_t in[4],out[8],n,depth_i,expansion_i,expansion_len;
     const char *rules=
