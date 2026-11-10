@@ -1,3 +1,15 @@
+## 2026-11-10 — early-alpha artifact retention set to one day — validation pending
+
+**Branch:** `early-alpha`; PR #2 remains open and unmerged.
+**Build and test workflow:** [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1) sets both the Linux executable and Compose locale-pack uploads to `retention-days: 1`.
+**Manual/release locale workflow:** [9859912d75d3](https://github.com/GraderGamer2/NekoEdit/commit/9859912d75d3d8dc8941653e09316e141fc0ac3f) sets its locale-pack upload to `retention-days: 1`.
+
+This applies to newly uploaded artifacts only. Existing Build and test #777 artifacts 13722915782 and 13721843648 keep their original 2027-02-08 expiry; they were not deleted or retroactively shortened. The editor build workflow ignores changelog-only updates and changes confined to the separate manual/release locale-pack workflow. No application source or runtime behavior changed.
+
+**Validation:** Build and test for the workflow commit is pending. The new artifact metadata will be checked for one-day expiry.
+
+---
+
 ## 2026-11-10 — retain Actions artifacts for the public-repository maximum — Build and test #777 passed
 
 **Branch:** `early-alpha`; PR #2 remains open and unmerged.
