@@ -1,3 +1,12 @@
+## 2026-11-10 — early-alpha-only XCompose Unicode keysym compatibility — #797 passed
+
+- Recorded on main as a branch-only continuity handoff. No application source, tests, Makefile, or workflow changes from this implementation were copied to main; PR #2 remains open and unmerged.
+- Early-alpha commit 4079e8c routes native Settings XCompose named-character inputs through the same existing XKB Unicode keysym resolver used by keyboard keymap parsing. It broadens import coverage across Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases without duplicating the mapping table or adding runtime dependencies.
+- Commit b23b2ae corrected the test-only locale-manager link dependency after #796 exposed the missing xkb.S object.
+- Build and test [#797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 steps: freestanding build, native and host tests, full Wayland mock, ELF inspection, pinned X.Org regeneration, optional locale-pack build, and separate editor/locale uploads.
+- Artifacts: editor ZIP 13753236119 (135,337 bytes; SHA-256 6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac); locale ZIP 13753071329 (101,677 bytes; SHA-256 4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3). One-day expiry: 2026-11-11 09:43 UTC / 16:43 Jakarta.
+- Physical-keyboard and live GNOME/Mutter validation remain outstanding.
+
 ## 2026-11-10 — early-alpha-only native XCompose macro includes and compose.dir mapping
 
 - Recorded on main as a branch-only continuity handoff. No source, test, build, or runtime changes from this feature were copied to main; PR #2 remains open and unmerged.

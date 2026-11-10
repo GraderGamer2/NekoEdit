@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-10)
 
-New GitHub Actions artifacts from both branches use one-day retention for future uploads; previously uploaded artifacts retain their assigned expiry. The user has confirmed the Settings locale dropdown and newest editor build work normally. This continuity history records that early-alpha Build and test #795 passed native sibling/%H/%S/%L XCompose import, including compose.dir locale aliases. That code remains on early-alpha only and is not part of main. User-imported packs continue to live under ~/.nekoedit/locales. Live GNOME/Mutter layout/IME and physical-keyboard validation remain outstanding.
+New GitHub Actions artifacts use one-day retention for future uploads; previously uploaded artifacts retain their assigned expiry. This continuity record now includes early-alpha Build and test #797, which passed the expanded native XCompose Unicode keysym importer. The shared X.Org keysym resolver, import tests, and link fix are on early-alpha only; no application code was copied to main. Editor and locale artifacts expire 2026-11-11 at 16:43 Jakarta. User-imported packs remain under ~/.nekoedit/locales. Live GNOME/Mutter layout/IME and physical-keyboard validation remain outstanding.
 
 ## Read this first in every new development chat
 

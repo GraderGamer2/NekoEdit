@@ -1,3 +1,17 @@
+## 2026-11-10 — early-alpha native XCompose Unicode keysym compatibility — Build and test #797 passed
+
+**Branch boundary:** this implementation remains on `early-alpha`; no application source, tests, or build changes were copied to `main`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Early-alpha commits:** [4079e8cfee89](https://github.com/GraderGamer2/NekoEdit/commit/4079e8cfee89611f45eecfbc938a54fda960b748), [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d).
+**CI:** [Build and test #797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 steps on exact early-alpha head `b23b2ae61dd3`.
+
+The early-alpha Settings XCompose importer now shares the application's existing bounded XKB Unicode keysym resolver. It resolves the same embedded X.Org named character keysyms as physical keymap parsing across Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases. Legacy quote aliases were retained, explicit Uxxxx inputs keep their prior validation, and dead-key Function KeySyms remain separate from ordinary Multi_key character inputs. No duplicate mapping table or runtime dependency was added.
+
+CI #796 first exposed a test-only Makefile link omission for the locale-manager test binary; commit `b23b2ae` corrected it. #797 then passed native tests, full Wayland mock, ELF inspection, pinned X.Org source verification, optional locale-pack build, and separate artifact uploads.
+
+Artifacts: editor ZIP 13753236119 (135,337 bytes; SHA-256 `6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac`) and locale ZIP 13753071329 (101,677 bytes; SHA-256 `4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3`). Both expire 2026-11-11 09:43 UTC / 16:43 Jakarta.
+
+This remains a branch-only implementation and automated validation. Live GNOME/Mutter and physical-keyboard testing remain outstanding. The editor on `main` is unchanged.
+
 ## 2026-11-10 — early-alpha native XCompose include compatibility expanded — Build and test #795 passed
 
 **Branch boundary:** this implementation remains on `early-alpha` only; it is not part of the `main` executable. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

@@ -1,3 +1,7 @@
+## 2026-11-10 — early-alpha shared Unicode keysym resolver for native Compose import
+
+This is a branch-only milestone recorded on main for continuity; the application implementation remains on early-alpha and no source or build change was copied here. Early-alpha now shares its embedded XKB Unicode keysym resolver with the native Settings XCompose importer, broadening named character coverage across the existing X.Org table without duplicating data or adding runtime dependencies. Build and test #797 passed all 14 workflow steps after a test-only linker correction. Live GNOME/Mutter and physical-keyboard validation remain outstanding.
+
 ## 2026-11-10 — early-alpha-only XCompose include roots and compose.dir locale mapping
 
 The early-alpha Settings importer expands bounded sibling, %H, %S, and %L include directives. %L resolves the normalized process locale through X.Org compose.dir, including aliases such as el_CY.UTF-8 to el_GR.UTF-8/Compose and the separate C mapping. The mapping file is bounded, charged to import bytes, and opened without symlink following. Include targets retain path validation, no-follow opening, cycle detection, and resource ceilings.

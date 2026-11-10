@@ -1,3 +1,14 @@
+## 2026-11-10 — early-alpha-only native XCompose Unicode keysym compatibility — Build and test #797 passed
+
+These commits are recorded for continuity only; they are on `early-alpha` and are not reachable from `main`. No application source or build change was copied to this branch.
+
+| early-alpha commit | Subject |
+|---|---|
+| [4079e8cfee89](https://github.com/GraderGamer2/NekoEdit/commit/4079e8cfee89611f45eecfbc938a54fda960b748) | feat: share XKB Unicode keysyms with native XCompose import |
+| [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d) | fix: link XKB resolver into locale manager test |
+
+Build and test #796 stopped at the locale-manager test link because the new shared XKB resolver object was missing from that host-test target. #797 passed all 14 steps on `early-alpha`. See the early-alpha CURRENT_STATUS.md for test details and artifact hashes.
+
 # NekoEdit complete commit index
 
 ## 2026-11-10 — early-alpha-only XCompose rooted includes and compose.dir mapping — Build and test #795 passed
