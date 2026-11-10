@@ -1,3 +1,11 @@
+## 2026-11-10 — reduce early-alpha Actions artifact retention to one day
+
+- Changed both artifact uploads in `.github/workflows/build.yml` (the executable and optional Compose locale pack) from `retention-days: 90` to `retention-days: 1` in commit [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1).
+- Changed the manual/release locale-pack upload in `.github/workflows/locale-packs.yml` to `retention-days: 1` in commit [9859912d75d3](https://github.com/GraderGamer2/NekoEdit/commit/9859912d75d3d8dc8941653e09316e141fc0ac3f).
+- The Build and test path filter now ignores changelog-only updates and changes confined to the separate manual/release locale-pack workflow. This avoids redundant editor builds.
+- The one-day setting affects newly uploaded artifacts only. The existing artifacts from Build and test #777 keep their previously assigned 90-day expiry; this change does not delete or shorten them.
+- No editor source, binary, or runtime behavior changed. Build and test validation for the workflow commit is pending.
+
 ## 2026-11-10 — set GitHub Actions artifact retention to 90 days — Build and test #777 passed
 
 - Confirmed that NekoEdit is a public repository and that the active Build and test workflow explicitly shortened both uploaded artifacts to 7 days. The optional locale-pack workflow separately used 30 days.
