@@ -138,7 +138,7 @@ int main(void){
     snprintf(alias_dir,sizeof(alias_dir),"%s/el_GR.UTF-8",system_root);
     need(mkdir(alias_dir,0700)==0,"create mapped locale directory");
     snprintf(alias_file,sizeof(alias_file),"%s/Compose",alias_dir);
-    write_text(alias_file,"<Multi_key> <e> <c> : \"Greek alias\"\n");
+    write_text(alias_file,"<Multi_key> <e> <c> : \"Greek\"\n");
     snprintf(alias_src,sizeof(alias_src),"%s/nekoedit-locale-alias.XCompose",home);
     snprintf(alias_pack,sizeof(alias_pack),"%s/nekoedit-locale-alias.UTF-8.nlp",loc);
     write_text(alias_src,"include \"%L\"\n");
@@ -149,7 +149,7 @@ int main(void){
     need(compose_locale_load("nekoedit-locale-alias.UTF-8")==1,
          "runtime rejected compose.dir alias pack");
     in[0]='e';in[1]='c';n=compose_locale_lookup(0,2,in,out);
-    need(n==11&&out[0]=='G'&&out[10]=='s',
+    need(n==5&&out[0]=='G'&&out[4]=='k',
          "%L alias did not load mapped el_GR Compose file");
     need(compose_locale_remove_pack("nekoedit-locale-alias.UTF-8")==1,
          "could not remove compose.dir alias pack");
