@@ -4,9 +4,9 @@
 
 | Commit | Subject |
 |---|---|
-| Pending | ci: retain main branch build artifact for 90 days |
+| [14f45a5f00c0c](https://github.com/GraderGamer2/NekoEdit/commit/14f45a5f00c0cd7c085e32dabb67568f9757234b) | ci: retain main branch build artifacts for 90 days |
 
-The default branch's Build and test workflow now requests the same 90-day artifact retention as `early-alpha`. This changes newly uploaded artifacts only. The main-branch workflow run is pending.
+The default branch's Build and test workflow now requests the same 90-day artifact retention as `early-alpha`. Build and test #778 passed all 10 steps; new artifact 13722526145 expires 2027-02-08 00:06:32 UTC. This changes newly uploaded artifacts only.
 
 ---
 

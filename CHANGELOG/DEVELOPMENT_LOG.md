@@ -1,4 +1,4 @@
-## 2026-11-10 — align main-branch artifact retention with early-alpha — validation pending
+## 2026-11-10 — align main-branch artifact retention with early-alpha — Build and test #778 passed
 
 - Updated `.github/workflows/build.yml` on `main` so its Linux executable artifact uses `retention-days: 90` rather than 7.
 - The active `early-alpha` branch also uses 90 days for its executable and locale-pack build artifacts, plus the separate locale-pack workflow.

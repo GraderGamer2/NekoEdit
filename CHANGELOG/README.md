@@ -4,7 +4,7 @@ This directory is the project's durable development history and handoff source. 
 
 ## Latest handoff (2026-11-09)
 
-Build and test #776 passed the printable-ASCII X keysym importer regression. Build artifacts from both `main` and `early-alpha` are configured for 90-day retention, the public-repository maximum; only new uploads receive the changed expiry. GitHub Free includes 500 MB of Actions/Packages storage shared across both. The user has confirmed the Settings locale dropdown and newest editor build work normally. User XCompose import remains an optional host-side utility, not required for everyday use. CURRENT_STATUS.md records the current branch/Actions state and validation boundary.
+Build and test #777 passed on `early-alpha`, and #778 passed on `main`; both branches' build artifacts are configured for 90-day retention. The active development branch's refreshed editor and locale artifacts expire 2027-02-08 00:05:31 UTC. This is the public-repository maximum. GitHub Free includes 500 MB of Actions/Packages storage shared across both, so longer retention must remain within that allowance or overage may be billable. The user has confirmed the Settings locale dropdown and newest editor build work normally. User XCompose import remains an optional host-side utility, not required for everyday use. CURRENT_STATUS.md records the exact validation and artifact details.
 
 ## Read this first in every new development chat
 

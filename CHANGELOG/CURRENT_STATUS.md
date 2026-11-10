@@ -1,6 +1,6 @@
-## 2026-11-10 — set main-branch build artifact retention to 90 days — validation pending
+## 2026-11-10 — set main-branch build artifact retention to 90 days — Build and test #778 passed
 
-The default `main` branch's Build and test executable artifact upload now requests `retention-days: 90`, matching the active `early-alpha` workflow. This is the public-repository maximum. The change applies to future artifacts only; prior artifacts retain their original expiry. Build and test on this branch is triggered by the workflow update and remains pending.
+The default `main` branch's Build and test executable artifact upload now requests `retention-days: 90`, matching the active `early-alpha` workflow. This is the public-repository maximum. The workflow change is [14f45a5f00c0](https://github.com/GraderGamer2/NekoEdit/commit/14f45a5f00c0cd7c085e32dabb67568f9757234b). Build and test [#778](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725733326) passed all 10 steps on this branch. Its newly uploaded executable artifact [13722526145](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725733326/artifacts/13722526145) (4,934 bytes) expires **2027-02-08 00:06:32 UTC**. The change applies to future artifacts only; prior artifacts retain their original expiry.
 
 ---
 
