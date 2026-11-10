@@ -1131,6 +1131,8 @@ struct nx_import_state {
     uint32_t stack_depth;
     uint32_t record_count;
     uint32_t order;
+    uint32_t system_locale_ready;
+    char system_locale_path[XCOMPOSE_INCLUDE_NAME+1u];
     uint64_t stack_device[XCOMPOSE_INCLUDE_DEPTH];
     uint64_t stack_inode[XCOMPOSE_INCLUDE_DEPTH];
     uint64_t seen_device[XCOMPOSE_INCLUDE_FILES];
@@ -1279,32 +1281,146 @@ static long nx_include_root(struct nx_import_state *state,uint32_t kind)
     return -1;
 }
 
-/* %L resolves via the process character locale; C/POSIX use en_US. */
-static int nx_system_locale_path(char path[XCOMPOSE_INCLUDE_NAME+1u])
+static int nx_path_components_valid(const char *path,uint32_t length)
+{
+    uint32_t start=0,end,i;
+    if(!path||!length||length>XCOMPOSE_INCLUDE_NAME||
+       path[0]=='/'||path[length-1u]=='/')return 0;
+    while(start<length){
+        end=start;
+        while(end<length&&path[end]!='/')++end;
+        if(!nx_component_valid(path+start,end-start))return 0;
+        for(i=start;i<end;++i){
+            unsigned char ch=(unsigned char)path[i];
+            if(ch=='\\'||ch=='%'||ch=='$'||ch=='~'||ch==':'||ch=='"')
+                return 0;
+        }
+        start=end+1u;
+    }
+    return 1;
+}
+
+/* %L uses X.Org compose.dir to map the process locale to a Compose file. */
+static int nx_system_locale_path(struct nx_import_state *state,
+                                 char path[XCOMPOSE_INCLUDE_NAME+1u])
 {
     const char *value=environment_value(lc_all_env);
     char tag[MAX_TAG_LENGTH+1u];
-    uint32_t n,i,at;
+    uint32_t n,old_used=0,workspace_start=0,offset=0;
+    uint32_t line_end,colon,left_a,left_b,right_a,right_b,i;
+    long root,fd=-1,parent_fd=-1,result,size;
+    int ok=0,reserved=0;
+    if(!state||!path)return 0;
+    if(state->system_locale_ready){
+        n=string_length(state->system_locale_path,
+                        XCOMPOSE_INCLUDE_NAME+1u);
+        if(!n||n>XCOMPOSE_INCLUDE_NAME)return 0;
+        for(i=0;i<=n;++i)path[i]=state->system_locale_path[i];
+        return 1;
+    }
     if(!value||!value[0])value=environment_value(lc_ctype_env);
     if(!value||!value[0])value=environment_value(lang_env);
-    if(!value||!value[0])value="en_US.UTF-8";
+    if(!value||!value[0])value="C";
     n=normalize_locale_tag(value,tag,sizeof(tag));
     if(!n)return 0;
-    if(equals(tag,"C")||equals(tag,"POSIX")||
-       equals(tag,"C.UTF-8")||equals(tag,"POSIX.UTF-8")){
-        const char fallback[]="en_US.UTF-8";
-        n=sizeof(fallback)-1u;
-        for(i=0;i<n;++i)tag[i]=fallback[i];
-        tag[n]=0;
+    if(equals(tag,"POSIX")){
+        tag[0]='C';tag[1]=0;n=1u;
     }
-    at=0;
-    for(i=0;i<n;++i)path[at++]=tag[i];
-    if(at+8u>=XCOMPOSE_INCLUDE_NAME+1u)return 0;
-    path[at++]='/';
-    path[at++]='C';path[at++]='o';path[at++]='m';
-    path[at++]='p';path[at++]='o';path[at++]='s';path[at++]='e';
-    path[at]=0;
-    return 1;
+
+    root=nx_include_root(state,NX_INCLUDE_SYSTEM);
+    if(failed(root)||root<0)return 0;
+    fd=nx_open_relative_file(root,"compose.dir",&parent_fd);
+    if(failed(fd))goto nx_system_locale_done;
+    {
+        uint8_t stat_buffer[256] __attribute__((aligned(16)));
+        for(i=0;i<sizeof(stat_buffer);++i)stat_buffer[i]=0;
+        result=syscall6(SYS_fstat,fd,(long)stat_buffer,0,0,0,0);
+        if(failed(result)||(read32(stat_buffer+24u)&S_IFMT)!=S_IFREG)
+            goto nx_system_locale_done;
+    }
+    size=syscall6(SYS_lseek,fd,0,SEEK_END,0,0,0);
+    if(size<=0||size>(long)XCOMPOSE_FILE_LIMIT||
+       (uint64_t)size>(uint64_t)(XCOMPOSE_FILE_LIMIT-state->total_bytes))
+        goto nx_system_locale_done;
+    old_used=state->workspace_used;
+    if((uint64_t)size+1u>
+       (uint64_t)(state->workspace_capacity-state->workspace_used))
+        goto nx_system_locale_done;
+    workspace_start=state->workspace_used;
+    state->workspace_used+=(uint32_t)size+1u;
+    state->total_bytes+=(uint32_t)size;
+    reserved=1;
+    result=syscall6(SYS_lseek,fd,0,0,0,0,0);
+    if(failed(result))goto nx_system_locale_done;
+    while(offset<(uint32_t)size){
+        result=syscall6(SYS_read,fd,
+                        (long)(state->workspace+workspace_start+offset),
+                        (uint32_t)size-offset,0,0,0);
+        if(result>0){offset+=(uint32_t)result;continue;}
+        if(result==-4)continue;
+        goto nx_system_locale_done;
+    }
+    result=syscall6(SYS_read,fd,
+                    (long)(state->workspace+workspace_start+offset),
+                    1u,0,0,0);
+    if(result!=0)goto nx_system_locale_done;
+    for(offset=0;offset<(uint32_t)size;++offset)
+        if(!state->workspace[workspace_start+offset])
+            goto nx_system_locale_done;
+    state->workspace[workspace_start+(uint32_t)size]=0;
+
+    offset=0;
+    while(offset<(uint32_t)size){
+        char *line=(char *)(state->workspace+workspace_start+offset);
+        uint32_t line_start=offset;
+        line_end=offset;
+        while(line_end<(uint32_t)size&&
+              state->workspace[workspace_start+line_end]!='\n')
+            ++line_end;
+        if(line_end-line_start>XCOMPOSE_LINE_LIMIT)
+            goto nx_system_locale_done;
+        offset=line_end<(uint32_t)size?line_end+1u:line_end;
+        if(line_end>line_start&&line[line_end-line_start-1u]=='\r')
+            line[line_end-line_start-1u]=0;
+        else
+            line[line_end-line_start]=0;
+        n=(uint32_t)string_length(line,XCOMPOSE_LINE_LIMIT+1u);
+        left_a=nx_left(line,0u,n);
+        left_b=nx_right(line,left_a,n);
+        if(left_a==left_b)continue;
+        if(line[left_a]=='#'||nx_equal_ci(line+left_a,"XCOMM"))
+            continue;
+        colon=0xffffffffu;
+        for(i=left_a;i<left_b;++i)
+            if(line[i]==':'){colon=i;break;}
+        if(colon==0xffffffffu)continue;
+        left_b=nx_right(line,left_a,colon);
+        right_a=nx_left(line,colon+1u,n);
+        right_b=nx_right(line,right_a,n);
+        if(left_a==left_b||right_a==right_b)continue;
+        if(right_b-right_a!=string_length(tag,MAX_TAG_LENGTH+1u))
+            continue;
+        for(i=0;i<right_b-right_a;++i)
+            if(line[right_a+i]!=tag[i])break;
+        if(i!=right_b-right_a)continue;
+        if(left_b-left_a>XCOMPOSE_INCLUDE_NAME||
+           !nx_path_components_valid(line+left_a,left_b-left_a))
+            goto nx_system_locale_done;
+        for(i=0;i<left_b-left_a;++i)
+            state->system_locale_path[i]=line[left_a+i];
+        state->system_locale_path[left_b-left_a]=0;
+        state->system_locale_ready=1u;
+        for(i=0;i<=left_b-left_a;++i)
+            path[i]=state->system_locale_path[i];
+        ok=1;
+        break;
+    }
+
+nx_system_locale_done:
+    if(reserved)state->workspace_used=old_used;
+    if(fd>=0)(void)syscall6(SYS_close,fd,0,0,0,0,0);
+    if(parent_fd>=0)(void)syscall6(SYS_close,parent_fd,0,0,0,0,0);
+    return ok;
 }
 
 static int nx_parse_file(struct nx_import_state *state,long base_fd,
@@ -1456,7 +1572,7 @@ static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
                    include_kind==NX_INCLUDE_LOCALE)
                     include_root=nx_include_root(state,include_kind);
                 if(include_kind==NX_INCLUDE_LOCALE&&
-                   !nx_system_locale_path(include_name))
+                   !nx_system_locale_path(state,include_name))
                     return 0;
                 if(failed(include_root)||include_root<0||!include_name[0]||
                    !nx_parse_file(state,include_root,include_name,rules))
@@ -1535,6 +1651,8 @@ static uint32_t nx_parse_path(int root_fd, const char *root_name,
     state.stack_depth = 0;
     state.record_count = 0;
     state.order = 0;
+    state.system_locale_ready=0;
+    state.system_locale_path[0]=0;
     if(!nx_parse_file(&state,root_fd,root_name,rules)||!state.record_count)
         goto nx_parse_path_cleanup;
 

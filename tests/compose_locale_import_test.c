@@ -24,6 +24,7 @@ int main(void){
     char depth_src[512],depth_pack[1024],depth_path[512],depth_name[64],depth_next[64],depth_body[128];
     char expansion_src[512],expansion_pack[1024],expansion_common[512],expansion_content[4096];
     char system_root[512],locale_dir[768],locale_file[1024],iso_dir[768],iso_file[1024];
+    char compose_dir[768],alias_dir[768],alias_file[1024],alias_src[512],alias_pack[1024];
     char home_dir[512],home_file[768],system_src[512],system_pack[1024];
     char traversal_src[512],traversal_pack[1024],macro_link_src[512],macro_link_pack[1024];
     char macro_link[1024],macro_dir_link[768],macro_dir_src[512],macro_dir_pack[1024];
@@ -97,7 +98,15 @@ int main(void){
         "<Multi_key> <s> <y> : \"System\"\n"
         "include \"%S/iso8859-1/Compose\"\n");
     snprintf(iso_file,sizeof(iso_file),"%s/Compose",iso_dir);
-    write_text(iso_file,"<Multi_key> <i> <s> : \"ISO\"\n");
+    write_text(iso_file,
+        "<Multi_key> <i> <s> : \"ISO\"\n"
+        "<Multi_key> <c> <l> : \"C locale\"\n");
+    snprintf(compose_dir,sizeof(compose_dir),"%s/compose.dir",system_root);
+    write_text(compose_dir,
+        "XCOMM locale compose mapping test\n"
+        "en_US.UTF-8/Compose: en_US.UTF-8\n"
+        "el_GR.UTF-8/Compose: el_CY.UTF-8\n"
+        "iso8859-1/Compose: C\n");
     snprintf(home_dir,sizeof(home_dir),"%s/.XCompose.d",home);
     need(mkdir(home_dir,0700)==0,"create home include directory");
     snprintf(home_file,sizeof(home_file),"%s/personal.XCompose",home_dir);
@@ -126,17 +135,39 @@ int main(void){
     need(compose_locale_remove_pack("nekoedit-system.UTF-8")==1,
          "could not remove macro-include pack");
 
+    snprintf(alias_dir,sizeof(alias_dir),"%s/el_GR.UTF-8",system_root);
+    need(mkdir(alias_dir,0700)==0,"create mapped locale directory");
+    snprintf(alias_file,sizeof(alias_file),"%s/Compose",alias_dir);
+    write_text(alias_file,"<Multi_key> <e> <c> : \"Greek alias\"\n");
+    snprintf(alias_src,sizeof(alias_src),"%s/nekoedit-locale-alias.XCompose",home);
+    snprintf(alias_pack,sizeof(alias_pack),"%s/nekoedit-locale-alias.UTF-8.nlp",loc);
+    write_text(alias_src,"include \"%L\"\n");
+    need(setenv("LC_ALL","el_CY.UTF-8",1)==0,"set aliased process locale");
+    process_envp=environ;
+    need(compose_locale_import_xcompose(alias_src)==1,
+         "%L did not resolve locale through compose.dir");
+    need(compose_locale_load("nekoedit-locale-alias.UTF-8")==1,
+         "runtime rejected compose.dir alias pack");
+    in[0]='e';in[1]='c';n=compose_locale_lookup(0,2,in,out);
+    need(n==11&&out[0]=='G'&&out[10]=='s',
+         "%L alias did not load mapped el_GR Compose file");
+    need(compose_locale_remove_pack("nekoedit-locale-alias.UTF-8")==1,
+         "could not remove compose.dir alias pack");
+
     snprintf(c_locale_src,sizeof(c_locale_src),"%s/nekoedit-c-locale.XCompose",home);
     snprintf(c_locale_pack,sizeof(c_locale_pack),"%s/nekoedit-c-locale.UTF-8.nlp",loc);
     write_text(c_locale_src,"include \"%L\"\n");
     need(setenv("LC_ALL","C",1)==0,"set C process locale");
     process_envp=environ;
     need(compose_locale_import_xcompose(c_locale_src)==1,
-         "%L did not use en_US fallback for the C locale");
+         "%L did not resolve the C locale through compose.dir");
     need(compose_locale_load("nekoedit-c-locale.UTF-8")==1,
-         "runtime rejected C-locale fallback pack");
+         "runtime rejected C-locale compose.dir pack");
+    in[0]='c';in[1]='l';n=compose_locale_lookup(0,2,in,out);
+    need(n==8&&out[0]=='C'&&out[7]=='e',
+         "%L C locale did not load its mapped Compose file");
     need(compose_locale_remove_pack("nekoedit-c-locale.UTF-8")==1,
-         "could not remove C-locale fallback pack");
+         "could not remove C-locale pack");
 
     snprintf(traversal_src,sizeof(traversal_src),"%s/nekoedit-traversal.XCompose",home);
     snprintf(traversal_pack,sizeof(traversal_pack),"%s/nekoedit-traversal.UTF-8.nlp",loc);
@@ -274,12 +305,12 @@ int main(void){
     unlink(sym);unlink(src);unlink(inc);unlink(common);unlink(nested);unlink(include_src);
     unlink(unsafe_src);unlink(linked_include);unlink(linked_src);unlink(cycle_src);unlink(cycle_child);
     unlink(expansion_src);unlink(expansion_common);unlink(depth_src);
-    unlink(system_src);unlink(c_locale_src);unlink(traversal_src);
+    unlink(system_src);unlink(c_locale_src);unlink(alias_src);unlink(traversal_src);
     unlink(macro_link_src);unlink(macro_dir_src);
     unlink(macro_link);unlink(macro_dir_link);unlink(home_file);
-    unlink(locale_file);unlink(iso_file);
-    need(rmdir(home_dir)==0&&rmdir(locale_dir)==0&&rmdir(iso_dir)==0&&
-         rmdir(system_root)==0,"cleanup macro include directories");
+    unlink(locale_file);unlink(iso_file);unlink(compose_dir);unlink(alias_file);
+    need(rmdir(home_dir)==0&&rmdir(locale_dir)==0&&rmdir(alias_dir)==0&&
+         rmdir(iso_dir)==0&&rmdir(system_root)==0,"cleanup macro include directories");
     for(depth_i=0;depth_i<=16u;++depth_i){snprintf(depth_name,sizeof(depth_name),"depth-%02u.XCompose",depth_i);snprintf(depth_path,sizeof(depth_path),"%s/%s",home,depth_name);unlink(depth_path);}
     need(rmdir(loc)==0&&rmdir(app)==0&&rmdir(home)==0,"cleanup");
     puts("Native in-app XCompose import tests passed");
