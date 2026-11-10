@@ -1,5 +1,17 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — native Settings import for raw XCompose files — Build and test #785 passed
+
+| Commit | Subject |
+|---|---|
+| [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978) | feat: import raw XCompose files from Settings |
+| [81fb2ca891cd](https://github.com/GraderGamer2/NekoEdit/commit/81fb2ca891cdf897c6c7509124fe719264c5a2f7) | fix: correct native XCompose importer build |
+| [86ea3d00ee2b](https://github.com/GraderGamer2/NekoEdit/commit/86ea3d00ee2b59cf10fb6b0426b4d0abe75dbab3) | test: size native XCompose path buffers safely |
+| [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d) | test: exercise raw XCompose import from Settings |
+
+Build and test [#784](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731335861) passed the host-side native importer test and the existing Wayland mock. Build and test [#785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) then passed all 14 steps with an added end-to-end Settings test that selects a raw .XCompose source, imports it through the in-app picker, and verifies the separate private NLP1 pack, activation, preference persistence, and source preservation. The editor still embeds only en_US; additional locales remain separate downloadable .nlp files. #785 editor artifact 13725565793 (132,507 bytes) and locale artifact 13725635467 (74,021 bytes) expire 2026-11-11 00:54 UTC.
+
+
 ## 2026-11-10 — installed X.Org Compose corpus compatibility test — Build and test #781 passed
 
 | Commit | Subject |

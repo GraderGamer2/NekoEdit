@@ -1,3 +1,21 @@
+## 2026-11-10 — native Settings import for raw user XCompose files — Build and test #785 passed
+
+**Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978); compile fixes [81fb2ca891cd](https://github.com/GraderGamer2/NekoEdit/commit/81fb2ca891cdf897c6c7509124fe719264c5a2f7) and [86ea3d00ee2b](https://github.com/GraderGamer2/NekoEdit/commit/86ea3d00ee2b59cf10fb6b0426b4d0abe75dbab3); Settings integration mock [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d).
+**CI:** [Build and test #785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 workflow steps, including the new end-to-end Settings Import scenario in the full Wayland mock.
+
+- Added **Settings → Locale → Import** for selecting a raw user `.XCompose` file. NekoEdit performs the conversion inside its freestanding editor; it does not invoke Python or launch a helper process.
+- The in-app importer creates a separate `.nlp` pack under `~/.nekoedit/locales/`, derives the locale tag from the selected filename (for example, `nekoedit-test.XCompose` → `nekoedit-test.UTF-8`), validates it through the runtime NLP1 validator, and atomically publishes it without replacing an existing pack. The source file is left untouched. The new locale is activated and persisted in `~/.nekoedit/preferences`.
+- The native importer is deliberately bounded: UTF-8 self-contained files only; unqualified `Multi_key` rules with two to four following keysyms; one recognized dead-key action plus one following keysym; quoted UTF-8 output and supported simple/octal/hex/Unicode escapes; a printable-ASCII and curated common keysym subset. Later duplicates override earlier entries and shorter same-kind prefixes are dropped. Include directives are rejected fail-closed. Use the optional host-side converter for `%H`, `%S`, or `%L` includes, non-UTF-8 encodings, or broader X.Org keysym resolution.
+- Native regression coverage verifies generated-pack loading and lookup, two-/three-/four-key sequences, named printable ASCII, escapes, multi-scalar output, dead-key namespace separation, duplicate override/prefix handling, 0700/0600 storage permissions, source preservation, symlink rejection, include rejection, and no-overwrite behavior.
+- The extended Wayland mock now drives **Settings → Locale → Import**, selects a raw `.XCompose` fixture, and verifies the generated separate pack, activation, persisted locale preference, 0600 file mode, and unchanged source contents.
+- **Modular locale boundary preserved:** only the built-in en_US baseline remains in the editor executable. The imported locale is a separate `.nlp` file. The release datasets remain independent of the editor and are uploaded separately.
+- Build and test #784 [passed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731335861) the native importer host test and full existing Wayland mock. #785 then passed all 14 workflow steps after adding the Settings UI integration assertion.
+- Build and test #785 artifacts: editor ZIP [13725565793](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293/artifacts/13725565793), 132,507 bytes; separate locale ZIP [13725635467](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293/artifacts/13725635467), 74,021 bytes. Both expire **2026-11-11 00:54 UTC** (2026-11-11 07:54 Jakarta) under the one-day policy.
+- No non-en_US locale tables were added to the binary. No runtime libraries, Python interpreter, network dependency, or automatic import behavior were added.
+
+**Next:** add coverage for safe relative includes in the in-app importer, or route include-rich imports through an explicitly selected host converter; do not silently weaken the path/size limits. Preserve the no-overwrite and separate-pack guarantees.
+
 ## 2026-11-10 — installed X.Org Compose corpus compatibility test — Build and test #781 passed
 
 **Branch:** `early-alpha`; PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
