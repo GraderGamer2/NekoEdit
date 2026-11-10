@@ -152,7 +152,7 @@ def main() -> None:
         raise AssertionError("el_GR source pin or standalone import metadata changed")
     el_expected = {
         (ord("'"), 0x03B1): (0x03AC,),
-        (ord('"'), 0x0399): (0x03CA,),
+        (ord('"'), 0x0399): (0x03AA,),
     }
     for key, value in el_expected.items():
         expect(el_map, "multi_key", key, value, "el_GR")
