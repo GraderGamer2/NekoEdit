@@ -3,7 +3,7 @@
 - Changed the main-branch executable upload in `.github/workflows/build.yml` from `retention-days: 90` to `retention-days: 1` in commit [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).
 - Added changelog-only path exclusions to push and pull-request triggers so continuity documentation does not start unnecessary build runs.
 - The one-day setting affects newly uploaded artifacts only. Existing artifacts retain their previously assigned expiry dates.
-- No editor source, binary, or runtime behavior changed. Build and test validation for the workflow commit is pending.
+- No editor source, binary, or runtime behavior changed. The available GitHub connector only exposes pull-request-triggered workflow-run lookup, so the push-triggered run ID and artifact `expires_at` could not be independently retrieved in this session. The workflow YAML itself is verified. Check [Build and test runs on main](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Amain) for the push run.
 
 ## 2026-11-10 — align main-branch artifact retention with early-alpha — Build and test #778 passed
 
