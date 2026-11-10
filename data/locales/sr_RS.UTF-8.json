@@ -19,21 +19,21 @@
     "locale_rules": 40,
     "locale_overrides": 74,
     "dropped_shorter_prefix_rules": 0,
-    "final_rules": 4147,
+    "final_rules": 4495,
     "input_sequence_lengths": {
       "2": 3461,
-      "3": 580,
-      "4": 106
+      "3": 892,
+      "4": 142
     },
-    "multi_scalar_outputs": 278,
-    "base_dead_key_rules": 1228,
+    "multi_scalar_outputs": 306,
+    "base_dead_key_rules": 1576,
     "locale_dead_key_rules": 50,
     "dead_key_overrides": 38,
-    "unsupported_input": 603,
+    "unsupported_input": 929,
     "invalid_output": 0,
     "invalid_string": 0,
     "short_sequence": 0,
-    "too_long": 806,
+    "too_long": 132,
     "unsupported_lead": 127
   },
   "sequences": [
@@ -30567,6 +30567,731 @@
       "kind": "dead_key",
       "input": [
         768,
+        770,
+        65
+      ],
+      "output": [
+        7846
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        770,
+        69
+      ],
+      "output": [
+        7872
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        770,
+        79
+      ],
+      "output": [
+        7890
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        770,
+        97
+      ],
+      "output": [
+        7847
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        770,
+        101
+      ],
+      "output": [
+        7873
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        770,
+        111
+      ],
+      "output": [
+        7891
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        65
+      ],
+      "output": [
+        65,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        69
+      ],
+      "output": [
+        69,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        73
+      ],
+      "output": [
+        73,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        79
+      ],
+      "output": [
+        79,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        85
+      ],
+      "output": [
+        85,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        97
+      ],
+      "output": [
+        97,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        101
+      ],
+      "output": [
+        101,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        105
+      ],
+      "output": [
+        105,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        111
+      ],
+      "output": [
+        111,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        117
+      ],
+      "output": [
+        117,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        390
+      ],
+      "output": [
+        390,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        398
+      ],
+      "output": [
+        398,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        400
+      ],
+      "output": [
+        400,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        477
+      ],
+      "output": [
+        477,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        596
+      ],
+      "output": [
+        596,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        771,
+        603
+      ],
+      "output": [
+        603,
+        771,
+        768
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        772,
+        69
+      ],
+      "output": [
+        7700
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        772,
+        79
+      ],
+      "output": [
+        7760
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        772,
+        101
+      ],
+      "output": [
+        7701
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        772,
+        111
+      ],
+      "output": [
+        7761
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        774,
+        65
+      ],
+      "output": [
+        7856
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        774,
+        97
+      ],
+      "output": [
+        7857
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        776,
+        85
+      ],
+      "output": [
+        475
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        776,
+        117
+      ],
+      "output": [
+        476
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        776,
+        953
+      ],
+      "output": [
+        8146
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        776,
+        965
+      ],
+      "output": [
+        8162
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        913
+      ],
+      "output": [
+        7946
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        917
+      ],
+      "output": [
+        7962
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        919
+      ],
+      "output": [
+        7978
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        921
+      ],
+      "output": [
+        7994
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        927
+      ],
+      "output": [
+        8010
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        937
+      ],
+      "output": [
+        8042
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        945
+      ],
+      "output": [
+        7938
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        949
+      ],
+      "output": [
+        7954
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        951
+      ],
+      "output": [
+        7970
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        953
+      ],
+      "output": [
+        7986
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        959
+      ],
+      "output": [
+        8002
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        965
+      ],
+      "output": [
+        8018
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        787,
+        969
+      ],
+      "output": [
+        8034
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        913
+      ],
+      "output": [
+        7947
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        917
+      ],
+      "output": [
+        7963
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        919
+      ],
+      "output": [
+        7979
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        921
+      ],
+      "output": [
+        7995
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        927
+      ],
+      "output": [
+        8011
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        933
+      ],
+      "output": [
+        8027
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        937
+      ],
+      "output": [
+        8043
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        945
+      ],
+      "output": [
+        7939
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        949
+      ],
+      "output": [
+        7955
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        951
+      ],
+      "output": [
+        7971
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        953
+      ],
+      "output": [
+        7987
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        959
+      ],
+      "output": [
+        8003
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        965
+      ],
+      "output": [
+        8019
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        788,
+        969
+      ],
+      "output": [
+        8035
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        795,
+        79
+      ],
+      "output": [
+        7900
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        795,
+        85
+      ],
+      "output": [
+        7914
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        795,
+        111
+      ],
+      "output": [
+        7901
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
+        795,
+        117
+      ],
+      "output": [
+        7915
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        768,
         913
       ],
       "output": [
@@ -32025,6 +32750,822 @@
       "kind": "dead_key",
       "input": [
         769,
+        770,
+        65
+      ],
+      "output": [
+        7844
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        770,
+        69
+      ],
+      "output": [
+        7870
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        770,
+        79
+      ],
+      "output": [
+        7888
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        770,
+        97
+      ],
+      "output": [
+        7845
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        770,
+        101
+      ],
+      "output": [
+        7871
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        770,
+        111
+      ],
+      "output": [
+        7889
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        65
+      ],
+      "output": [
+        65,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        69
+      ],
+      "output": [
+        69,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        73
+      ],
+      "output": [
+        73,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        79
+      ],
+      "output": [
+        7756
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        85
+      ],
+      "output": [
+        7800
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        97
+      ],
+      "output": [
+        97,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        101
+      ],
+      "output": [
+        101,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        105
+      ],
+      "output": [
+        105,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        111
+      ],
+      "output": [
+        7757
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        117
+      ],
+      "output": [
+        7801
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        390
+      ],
+      "output": [
+        390,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        398
+      ],
+      "output": [
+        398,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        400
+      ],
+      "output": [
+        400,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        477
+      ],
+      "output": [
+        477,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        596
+      ],
+      "output": [
+        596,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        771,
+        603
+      ],
+      "output": [
+        603,
+        771,
+        769
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        772,
+        69
+      ],
+      "output": [
+        7702
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        772,
+        79
+      ],
+      "output": [
+        7762
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        772,
+        101
+      ],
+      "output": [
+        7703
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        772,
+        111
+      ],
+      "output": [
+        7763
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        774,
+        65
+      ],
+      "output": [
+        7854
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        774,
+        97
+      ],
+      "output": [
+        7855
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        32
+      ],
+      "output": [
+        901
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        73
+      ],
+      "output": [
+        7726
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        85
+      ],
+      "output": [
+        471
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        105
+      ],
+      "output": [
+        7727
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        117
+      ],
+      "output": [
+        472
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        953
+      ],
+      "output": [
+        912
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        776,
+        965
+      ],
+      "output": [
+        944
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        778,
+        65
+      ],
+      "output": [
+        506
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        778,
+        97
+      ],
+      "output": [
+        507
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        913
+      ],
+      "output": [
+        7948
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        917
+      ],
+      "output": [
+        7964
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        919
+      ],
+      "output": [
+        7980
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        921
+      ],
+      "output": [
+        7996
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        927
+      ],
+      "output": [
+        8012
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        937
+      ],
+      "output": [
+        8044
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        945
+      ],
+      "output": [
+        7940
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        949
+      ],
+      "output": [
+        7956
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        951
+      ],
+      "output": [
+        7972
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        953
+      ],
+      "output": [
+        7988
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        959
+      ],
+      "output": [
+        8004
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        965
+      ],
+      "output": [
+        8020
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        787,
+        969
+      ],
+      "output": [
+        8036
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        913
+      ],
+      "output": [
+        7949
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        917
+      ],
+      "output": [
+        7965
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        919
+      ],
+      "output": [
+        7981
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        921
+      ],
+      "output": [
+        7997
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        927
+      ],
+      "output": [
+        8013
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        933
+      ],
+      "output": [
+        8029
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        937
+      ],
+      "output": [
+        8045
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        945
+      ],
+      "output": [
+        7941
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        949
+      ],
+      "output": [
+        7957
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        951
+      ],
+      "output": [
+        7973
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        953
+      ],
+      "output": [
+        7989
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        959
+      ],
+      "output": [
+        8005
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        965
+      ],
+      "output": [
+        8021
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        788,
+        969
+      ],
+      "output": [
+        8037
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        795,
+        79
+      ],
+      "output": [
+        7898
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        795,
+        85
+      ],
+      "output": [
+        7912
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        795,
+        111
+      ],
+      "output": [
+        7899
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        795,
+        117
+      ],
+      "output": [
+        7913
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        807,
+        67
+      ],
+      "output": [
+        7688
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        807,
+        99
+      ],
+      "output": [
+        7689
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        824,
+        79
+      ],
+      "output": [
+        510
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
+        824,
+        111
+      ],
+      "output": [
+        511
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        769,
         913
       ],
       "output": [
@@ -33448,6 +34989,270 @@
       "kind": "dead_key",
       "input": [
         770,
+        768,
+        65
+      ],
+      "output": [
+        7846
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        768,
+        69
+      ],
+      "output": [
+        7872
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        768,
+        79
+      ],
+      "output": [
+        7890
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        768,
+        97
+      ],
+      "output": [
+        7847
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        768,
+        101
+      ],
+      "output": [
+        7873
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        768,
+        111
+      ],
+      "output": [
+        7891
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        65
+      ],
+      "output": [
+        7844
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        69
+      ],
+      "output": [
+        7870
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        79
+      ],
+      "output": [
+        7888
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        97
+      ],
+      "output": [
+        7845
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        101
+      ],
+      "output": [
+        7871
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        769,
+        111
+      ],
+      "output": [
+        7889
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        65
+      ],
+      "output": [
+        7848
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        69
+      ],
+      "output": [
+        7874
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        79
+      ],
+      "output": [
+        7892
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        97
+      ],
+      "output": [
+        7849
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        101
+      ],
+      "output": [
+        7875
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        777,
+        111
+      ],
+      "output": [
+        7893
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        65
+      ],
+      "output": [
+        7852
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        69
+      ],
+      "output": [
+        7878
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        79
+      ],
+      "output": [
+        7896
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        97
+      ],
+      "output": [
+        7853
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        101
+      ],
+      "output": [
+        7879
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
+        803,
+        111
+      ],
+      "output": [
+        7897
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        770,
         1040
       ],
       "output": [
@@ -34288,6 +36093,369 @@
       "kind": "dead_key",
       "input": [
         771,
+        770,
+        65
+      ],
+      "output": [
+        7850
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        770,
+        69
+      ],
+      "output": [
+        7876
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        770,
+        79
+      ],
+      "output": [
+        7894
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        770,
+        97
+      ],
+      "output": [
+        7851
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        770,
+        101
+      ],
+      "output": [
+        7877
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        770,
+        111
+      ],
+      "output": [
+        7895
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        774,
+        65
+      ],
+      "output": [
+        7860
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        774,
+        97
+      ],
+      "output": [
+        7861
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        776,
+        953
+      ],
+      "output": [
+        8151
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        776,
+        965
+      ],
+      "output": [
+        8167
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        913
+      ],
+      "output": [
+        7950
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        919
+      ],
+      "output": [
+        7982
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        921
+      ],
+      "output": [
+        7998
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        937
+      ],
+      "output": [
+        8046
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        945
+      ],
+      "output": [
+        7942
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        951
+      ],
+      "output": [
+        7974
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        953
+      ],
+      "output": [
+        7990
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        965
+      ],
+      "output": [
+        8022
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        787,
+        969
+      ],
+      "output": [
+        8038
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        913
+      ],
+      "output": [
+        7951
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        919
+      ],
+      "output": [
+        7983
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        921
+      ],
+      "output": [
+        7999
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        933
+      ],
+      "output": [
+        8031
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        937
+      ],
+      "output": [
+        8047
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        945
+      ],
+      "output": [
+        7943
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        951
+      ],
+      "output": [
+        7975
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        953
+      ],
+      "output": [
+        7991
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        965
+      ],
+      "output": [
+        8023
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        788,
+        969
+      ],
+      "output": [
+        8039
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        795,
+        79
+      ],
+      "output": [
+        7904
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        795,
+        85
+      ],
+      "output": [
+        7918
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        795,
+        111
+      ],
+      "output": [
+        7905
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
+        795,
+        117
+      ],
+      "output": [
+        7919
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        771,
         945
       ],
       "output": [
@@ -35100,6 +37268,204 @@
       "kind": "dead_key",
       "input": [
         772,
+        771,
+        79
+      ],
+      "output": [
+        556
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        771,
+        111
+      ],
+      "output": [
+        557
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        775,
+        65
+      ],
+      "output": [
+        480
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        775,
+        79
+      ],
+      "output": [
+        560
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        775,
+        97
+      ],
+      "output": [
+        481
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        775,
+        111
+      ],
+      "output": [
+        561
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        65
+      ],
+      "output": [
+        478
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        79
+      ],
+      "output": [
+        554
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        85
+      ],
+      "output": [
+        469
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        97
+      ],
+      "output": [
+        479
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        111
+      ],
+      "output": [
+        555
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        776,
+        117
+      ],
+      "output": [
+        470
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        803,
+        76
+      ],
+      "output": [
+        7736
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        803,
+        82
+      ],
+      "output": [
+        7772
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        803,
+        108
+      ],
+      "output": [
+        7737
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        803,
+        114
+      ],
+      "output": [
+        7773
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        808,
+        79
+      ],
+      "output": [
+        492
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
+        808,
+        111
+      ],
+      "output": [
+        493
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        772,
         913
       ],
       "output": [
@@ -35539,6 +37905,50 @@
       "input": [
         774,
         553
+      ],
+      "output": [
+        7709
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        774,
+        803,
+        65
+      ],
+      "output": [
+        7862
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        774,
+        803,
+        97
+      ],
+      "output": [
+        7863
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        774,
+        807,
+        69
+      ],
+      "output": [
+        7708
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        774,
+        807,
+        101
       ],
       "output": [
         7709
@@ -36228,6 +38638,83 @@
       "kind": "dead_key",
       "input": [
         775,
+        769,
+        83
+      ],
+      "output": [
+        7780
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        769,
+        115
+      ],
+      "output": [
+        7781
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        780,
+        83
+      ],
+      "output": [
+        7782
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        780,
+        115
+      ],
+      "output": [
+        7783
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        803,
+        83
+      ],
+      "output": [
+        7784
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        803,
+        115
+      ],
+      "output": [
+        7785
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
+        824,
+        106
+      ],
+      "output": [
+        607
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        775,
         7778
       ],
       "output": [
@@ -36592,6 +39079,94 @@
       ],
       "output": [
         474
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        769,
+        32
+      ],
+      "output": [
+        901
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        769,
+        953
+      ],
+      "output": [
+        912
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        769,
+        965
+      ],
+      "output": [
+        944
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        771,
+        79
+      ],
+      "output": [
+        7758
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        771,
+        111
+      ],
+      "output": [
+        7759
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        772,
+        85
+      ],
+      "output": [
+        7802
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        772,
+        117
+      ],
+      "output": [
+        7803
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        776,
+        804,
+        61
+      ],
+      "output": [
+        10871
       ]
     },
     {
@@ -37472,6 +40047,138 @@
       ],
       "output": [
         602
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        65
+      ],
+      "output": [
+        7848
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        69
+      ],
+      "output": [
+        7874
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        79
+      ],
+      "output": [
+        7892
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        97
+      ],
+      "output": [
+        7849
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        101
+      ],
+      "output": [
+        7875
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        770,
+        111
+      ],
+      "output": [
+        7893
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        774,
+        65
+      ],
+      "output": [
+        7858
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        774,
+        97
+      ],
+      "output": [
+        7859
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        795,
+        79
+      ],
+      "output": [
+        7902
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        795,
+        85
+      ],
+      "output": [
+        7916
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        795,
+        111
+      ],
+      "output": [
+        7903
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        777,
+        795,
+        117
+      ],
+      "output": [
+        7917
       ]
     },
     {
@@ -38449,6 +41156,28 @@
     {
       "kind": "dead_key",
       "input": [
+        780,
+        776,
+        85
+      ],
+      "output": [
+        473
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        780,
+        776,
+        117
+      ],
+      "output": [
+        474
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
         783,
         65
       ],
@@ -39414,6 +42143,50 @@
       "kind": "dead_key",
       "input": [
         795,
+        803,
+        79
+      ],
+      "output": [
+        7906
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        795,
+        803,
+        85
+      ],
+      "output": [
+        7920
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        795,
+        803,
+        111
+      ],
+      "output": [
+        7907
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        795,
+        803,
+        117
+      ],
+      "output": [
+        7921
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        795,
         7886
       ],
       "output": [
@@ -40003,6 +42776,50 @@
     {
       "kind": "dead_key",
       "input": [
+        803,
+        795,
+        79
+      ],
+      "output": [
+        7906
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        803,
+        795,
+        85
+      ],
+      "output": [
+        7920
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        803,
+        795,
+        111
+      ],
+      "output": [
+        7907
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        803,
+        795,
+        117
+      ],
+      "output": [
+        7921
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
         804,
         85
       ],
@@ -40018,6 +42835,17 @@
       ],
       "output": [
         7795
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        804,
+        776,
+        61
+      ],
+      "output": [
+        10871
       ]
     },
     {
@@ -41344,6 +44172,39 @@
       "kind": "dead_key",
       "input": [
         824,
+        769,
+        79
+      ],
+      "output": [
+        510
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        824,
+        769,
+        111
+      ],
+      "output": [
+        511
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        824,
+        775,
+        106
+      ],
+      "output": [
+        607
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        824,
         8804
       ],
       "output": [
@@ -41368,6 +44229,1065 @@
       ],
       "output": [
         890
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        913
+      ],
+      "output": [
+        8074
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        919
+      ],
+      "output": [
+        8090
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        937
+      ],
+      "output": [
+        8106
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        945
+      ],
+      "output": [
+        8066
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        951
+      ],
+      "output": [
+        8082
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        787,
+        969
+      ],
+      "output": [
+        8098
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        913
+      ],
+      "output": [
+        8075
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        919
+      ],
+      "output": [
+        8091
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        937
+      ],
+      "output": [
+        8107
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        945
+      ],
+      "output": [
+        8067
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        951
+      ],
+      "output": [
+        8083
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        788,
+        969
+      ],
+      "output": [
+        8099
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        945
+      ],
+      "output": [
+        8114
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        951
+      ],
+      "output": [
+        8130
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        969
+      ],
+      "output": [
+        8178
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7936
+      ],
+      "output": [
+        8066
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7937
+      ],
+      "output": [
+        8067
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7944
+      ],
+      "output": [
+        8074
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7945
+      ],
+      "output": [
+        8075
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7968
+      ],
+      "output": [
+        8082
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7969
+      ],
+      "output": [
+        8083
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7976
+      ],
+      "output": [
+        8090
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        7977
+      ],
+      "output": [
+        8091
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        8032
+      ],
+      "output": [
+        8098
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        8033
+      ],
+      "output": [
+        8099
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        8040
+      ],
+      "output": [
+        8106
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        768,
+        8041
+      ],
+      "output": [
+        8107
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        913
+      ],
+      "output": [
+        8076
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        919
+      ],
+      "output": [
+        8092
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        937
+      ],
+      "output": [
+        8108
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        945
+      ],
+      "output": [
+        8068
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        951
+      ],
+      "output": [
+        8084
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        787,
+        969
+      ],
+      "output": [
+        8100
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        913
+      ],
+      "output": [
+        8077
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        919
+      ],
+      "output": [
+        8093
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        937
+      ],
+      "output": [
+        8109
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        945
+      ],
+      "output": [
+        8069
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        951
+      ],
+      "output": [
+        8085
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        788,
+        969
+      ],
+      "output": [
+        8101
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        945
+      ],
+      "output": [
+        8116
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        951
+      ],
+      "output": [
+        8132
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        969
+      ],
+      "output": [
+        8180
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7936
+      ],
+      "output": [
+        8068
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7937
+      ],
+      "output": [
+        8069
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7944
+      ],
+      "output": [
+        8076
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7945
+      ],
+      "output": [
+        8077
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7968
+      ],
+      "output": [
+        8084
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7969
+      ],
+      "output": [
+        8085
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7976
+      ],
+      "output": [
+        8092
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        7977
+      ],
+      "output": [
+        8093
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        8032
+      ],
+      "output": [
+        8100
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        8033
+      ],
+      "output": [
+        8101
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        8040
+      ],
+      "output": [
+        8108
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        769,
+        8041
+      ],
+      "output": [
+        8109
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        913
+      ],
+      "output": [
+        8078
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        919
+      ],
+      "output": [
+        8094
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        937
+      ],
+      "output": [
+        8110
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        945
+      ],
+      "output": [
+        8070
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        951
+      ],
+      "output": [
+        8086
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        787,
+        969
+      ],
+      "output": [
+        8102
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        913
+      ],
+      "output": [
+        8079
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        919
+      ],
+      "output": [
+        8095
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        937
+      ],
+      "output": [
+        8111
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        945
+      ],
+      "output": [
+        8071
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        951
+      ],
+      "output": [
+        8087
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        788,
+        969
+      ],
+      "output": [
+        8103
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        945
+      ],
+      "output": [
+        8119
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        951
+      ],
+      "output": [
+        8135
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        969
+      ],
+      "output": [
+        8183
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7936
+      ],
+      "output": [
+        8070
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7937
+      ],
+      "output": [
+        8071
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7944
+      ],
+      "output": [
+        8078
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7945
+      ],
+      "output": [
+        8079
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7968
+      ],
+      "output": [
+        8086
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7969
+      ],
+      "output": [
+        8087
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7976
+      ],
+      "output": [
+        8094
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        7977
+      ],
+      "output": [
+        8095
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        8032
+      ],
+      "output": [
+        8102
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        8033
+      ],
+      "output": [
+        8103
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        8040
+      ],
+      "output": [
+        8110
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        771,
+        8041
+      ],
+      "output": [
+        8111
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        913
+      ],
+      "output": [
+        8072
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        919
+      ],
+      "output": [
+        8088
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        937
+      ],
+      "output": [
+        8104
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        945
+      ],
+      "output": [
+        8064
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        951
+      ],
+      "output": [
+        8080
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        787,
+        969
+      ],
+      "output": [
+        8096
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        913
+      ],
+      "output": [
+        8073
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        919
+      ],
+      "output": [
+        8089
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        937
+      ],
+      "output": [
+        8105
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        945
+      ],
+      "output": [
+        8065
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        951
+      ],
+      "output": [
+        8081
+      ]
+    },
+    {
+      "kind": "dead_key",
+      "input": [
+        837,
+        788,
+        969
+      ],
+      "output": [
+        8097
       ]
     },
     {
