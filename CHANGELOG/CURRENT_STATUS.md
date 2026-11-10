@@ -1,3 +1,12 @@
+## 2026-11-10 — nested GNOME Shell/Mutter input integration harness — CI pending
+
+**Branch:** early-alpha, based on a16365ebc80151759b26be39f14a6316896dc99b. This is the next validation layer after the #802 multi-dead-key implementation.
+**Added:** tests/mutter_gnome_smoke.sh, docs/MUTTER_INTEGRATION_TEST.md, and the Makefile test-mutter target. The GitHub Actions workflow now installs GNOME Shell/Xvfb/XTest dependencies and runs this target after building the separate locale packs.
+**Scenario:** a private D-Bus session and Xvfb host a nested GNOME Shell Wayland compositor. NekoEdit connects through its ordinary --backend=wayland path with a temporary HOME and separately installed pt_BR pack. XTest injects a Multi_key period-period sequence and dead_grave + dead_circumflex + A; Ctrl+S must save exactly U+2026 U+1EA6.
+**Architecture boundary:** GNOME/Xvfb/xdotool are test-only packages. No GNOME library, compositor dependency, locale bundle, or input automation component was added to the editor binary. The four optional locale packs remain separate files below ~/.nekoedit/locales.
+**Validation:** the script and workflow change are committed together so the branch-push workflow tests the exact tree. At commit time, CI has not yet run. This connector session has no GNOME/Mutter display available for local execution. Do not treat this as a passing compositor test until the branch-push Actions run succeeds.
+**Limitations:** XTest input is synthetic, not a physical keyboard. The harness validates GNOME Shell/Mutter's nested Wayland event path and the tested us(intl) sequences, not the user's actual desktop, hardware, IME preedit behavior, or complex shaping.
+
 ## 2026-11-10 — Wayland dead-key chains support one to three combining marks — Build and test #802 passed
 
 **Branch:** `early-alpha`; exact validated source/test head `91a92c38210362def100026afd60e7b08132d08f`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

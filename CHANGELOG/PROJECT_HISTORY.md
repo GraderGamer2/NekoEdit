@@ -1,3 +1,7 @@
+## 2026-11-10 — nested GNOME Shell/Mutter input integration coverage (CI pending)
+
+The development branch now has a test-only harness for a real GNOME Shell/Mutter Wayland compositor. It runs GNOME Shell 46 in nested mode under Xvfb and a private D-Bus session, then launches the freestanding editor against the resulting Wayland socket. A test us(intl) keymap maps Right Alt to Multi_key and supplies the two dead-key actions used by the latest locale milestone. With a separate pt_BR pack under a temporary HOME, the injected sequence must save U+2026 followed by U+1EA6. This adds compositor-level coverage beyond the protocol mock without adding GNOME, Xvfb, xdotool, or locale-data dependencies to NekoEdit itself. The input is XTest-generated rather than physical hardware input. CI validation is pending; this entry does not claim the integration test has passed.
+
 ## 2026-11-10 — bounded multi-dead-key composition on Wayland
 
 The `early-alpha` Wayland keyboard runtime now buffers up to three consecutive dead-key actions as combining marks and resolves them together with the next ordinary character through kind-1 NLP1 records. A single mark continues through the existing built-in precomposition fallback; unmatched longer chains preserve the base plus marks literally. The fourth consecutive dead action flushes the previous three marks and starts a new chain, while Multi_key begins only after pending marks are flushed. Escape and Backspace clear the full pending chain.

@@ -184,6 +184,8 @@ Correctness and interoperability take priority over arbitrary binary-size target
 
 ## Documentation
 
+- [GNOME Shell/Mutter integration smoke test](docs/MUTTER_INTEGRATION_TEST.md)
+
 - [Architecture](docs/ARCHITECTURE.md)
 - [Wayland backend](docs/WAYLAND_BACKEND.md)
 - [Clipboard behavior](docs/CLIPBOARD.md)

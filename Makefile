@@ -25,7 +25,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-install-user locale-packs check inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-install-user locale-packs check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -81,6 +81,9 @@ $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
+
+test-mutter: $(APP_BINARY) locale-packs
+	xvfb-run -a -s "-screen 0 1280x720x24 +extension GLX +render -noreset" dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
 
 install: $(APP_BINARY)
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/applications" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps"

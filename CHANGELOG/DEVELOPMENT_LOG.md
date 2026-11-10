@@ -1,3 +1,13 @@
+## 2026-11-10 — add nested GNOME Shell/Mutter Compose integration test (CI pending)
+
+- Added tests/mutter_gnome_smoke.sh, a test-only Xvfb + D-Bus harness that starts GNOME Shell as a nested Wayland compositor and connects the normal freestanding editor to its Wayland socket.
+- The harness configures us(intl) with compose:ralt, selects a separately copied pt_BR.UTF-8 NLP1 pack beneath a temporary HOME, and sends XTest events for Right-Alt Multi_key + period + period, followed by dead_grave + dead_circumflex + A. It then checks that Ctrl+S saved exactly U+2026 U+1EA6.
+- Added make test-mutter after the separate locale-pack build; the regular host and protocol-mock targets remain independent of GNOME/Xvfb packages.
+- Updated the branch-push workflow to install gnome-shell, xvfb, xauth, xdotool, x11-xkb-utils, and dbus-daemon, then run the new target. Increased the job timeout to accommodate the additional compositor packages and startup.
+- Added docs/MUTTER_INTEGRATION_TEST.md and linked it from README. The documentation explicitly distinguishes real Mutter protocol delivery from physical keyboard validation.
+- Local execution was unavailable in this connector session; CI is pending on the push of this source/workflow commit. No successful run is claimed here. Follow up by recording the exact run and job results after Actions reports.
+- Test input uses a temporary HOME and data-only locale file. No locale packs or test dependencies were added to the runtime binary.
+
 ## 2026-11-10 — Wayland multi-dead-key chains and locale data refresh — #802 passed
 
 - Added a Wayland keyboard dead-key state that buffers up to three combining marks, then queries a kind-1 locale record with the final base scalar. Preserved the existing one-mark precomposition path and added base-plus-marks literal fallback when no multi-mark locale rule exists.

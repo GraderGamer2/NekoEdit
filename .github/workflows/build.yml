@@ -31,7 +31,7 @@ jobs:
   build:
     name: Freestanding x86-64 build
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -47,7 +47,7 @@ jobs:
       - name: Install system Compose test corpus
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev
+          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev gnome-shell xvfb xauth xdotool x11-xkb-utils dbus-daemon
 
       - name: Build and verify ELF
         run: make clean all
@@ -89,6 +89,9 @@ jobs:
 
       - name: Build optional Compose locale pack
         run: make locale-packs
+
+      - name: Run nested GNOME Shell/Mutter Wayland integration test
+        run: make test-mutter
 
       - name: Upload Compose locale packs
         uses: actions/upload-artifact@v4
