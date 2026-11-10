@@ -1,3 +1,11 @@
+## 2026-11-10 — early-alpha-only native Settings XCompose import milestone
+
+- Recorded for continuity on `main` only; application code is **not** present on this branch. The implementation is on `early-alpha` and PR #2 remains open/unmerged.
+- The early-alpha implementation adds a native Settings → Locale → Import path for bounded UTF-8 self-contained `.XCompose` files. It creates a separate private validated NLP1 pack under `~/.nekoedit/locales/`, preserves the selected source, refuses overwrite, activates and persists the choice, and does not invoke Python. Include directives remain unsupported in this in-app parser and fail closed.
+- The extended Settings UI Wayland mock verifies the raw-file import flow. Build and test [#785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 steps on the early-alpha test commit.
+- Only built-in en_US is embedded. The optional release locale datasets and user-imported packs remain separate files, not linked into the executable.
+- Implementation: [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978); UI integration test: [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d).
+
 ## 2026-11-10 — reduce main-branch Actions artifact retention to one day
 
 - Changed the main-branch executable upload in `.github/workflows/build.yml` from `retention-days: 90` to `retention-days: 1` in commit [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).

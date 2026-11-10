@@ -1,5 +1,15 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — early-alpha-only native Settings XCompose import milestone — verification handoff
+
+| Commit | Subject |
+|---|---|
+| [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978) | feat: import raw XCompose files from Settings |
+| [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d) | test: exercise raw XCompose import from Settings |
+
+**Branch scope:** these commits are on `early-alpha` only and are not part of `main`. Build and test [#785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 steps on early-alpha, including the native importer test and actual Settings Import flow in the Wayland mock. The editor still embeds only en_US; optional locales remain separate data-only files. Consult `early-alpha/CHANGELOG/CURRENT_STATUS.md` for the implementation limits and artifact details.
+
+
 ## 2026-11-10 — one-day GitHub Actions artifact retention on main — validation pending
 
 | Commit | Subject |

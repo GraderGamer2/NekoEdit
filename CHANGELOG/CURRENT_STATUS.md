@@ -1,3 +1,13 @@
+## 2026-11-10 — early-alpha native Settings XCompose import milestone — verification handoff
+
+**Important branch boundary:** this feature exists on `early-alpha`, not on `main`. It has not been merged into main or PR #2.
+**Implementation:** [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978); compile fixes [81fb2ca891cd](https://github.com/GraderGamer2/NekoEdit/commit/81fb2ca891cdf897c6c7509124fe719264c5a2f7) and [86ea3d00ee2b](https://github.com/GraderGamer2/NekoEdit/commit/86ea3d00ee2b59cf10fb6b0426b4d0abe75dbab3); Settings integration test [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d).
+**CI:** [Build and test #785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 workflow steps on `early-alpha`.
+
+The early-alpha Settings → Locale → Import action natively imports a bounded UTF-8 self-contained `.XCompose` file into a separate validated NLP1 pack under `~/.nekoedit/locales/`. It does not invoke Python. Its current subset supports Multi_key sequences of two to four following keysyms, one following scalar after recognized dead keys, supported UTF-8/escape outputs, duplicate override and prefix handling; include directives fail closed. The selected source is preserved, existing packs are not overwritten, and the pack is activated and persisted. The Wayland mock covers the actual Settings import click/picker flow and checks activation, pack permissions, preferences, and source preservation.
+
+**Packaging invariant:** the editor executable keeps only the built-in en_US baseline. Optional locale packs remain separate data-only files; no locale dataset was added to the binary. The native importer is still branch-only until PR #2 is merged. See the early-alpha changelog for implementation details and exact artifact metadata.
+
 ## 2026-11-10 — main-branch artifact retention set to one day — push-run metadata unavailable
 
 **Branch:** `main`.
