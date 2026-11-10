@@ -4,7 +4,7 @@
 - Changed the manual/release locale-pack upload in `.github/workflows/locale-packs.yml` to `retention-days: 1` in commit [9859912d75d3](https://github.com/GraderGamer2/NekoEdit/commit/9859912d75d3d8dc8941653e09316e141fc0ac3f).
 - The Build and test path filter now ignores changelog-only updates and changes confined to the separate manual/release locale-pack workflow. This avoids redundant editor builds.
 - The one-day setting affects newly uploaded artifacts only. The existing artifacts from Build and test #777 keep their previously assigned 90-day expiry; this change does not delete or shorten them.
-- No editor source, binary, or runtime behavior changed. Build and test validation for the workflow commit is pending.
+- No editor source, binary, or runtime behavior changed. The available GitHub connector only exposes pull-request-triggered workflow-run lookup, so the push-triggered run ID and artifact `expires_at` could not be independently retrieved in this session. The workflow YAML itself is verified. Check [Build and test runs on early-alpha](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Aearly-alpha) for the push run.
 
 ## 2026-11-10 — set GitHub Actions artifact retention to 90 days — Build and test #777 passed
 
