@@ -1,3 +1,9 @@
+## 2026-11-10 — early-alpha-only XCompose include roots and compose.dir locale mapping
+
+The early-alpha Settings importer expands bounded sibling, %H, %S, and %L include directives. %L resolves the normalized process locale through X.Org compose.dir, including aliases such as el_CY.UTF-8 to el_GR.UTF-8/Compose and the separate C mapping. The mapping file is bounded, charged to import bytes, and opened without symlink following. Include targets retain path validation, no-follow opening, cycle detection, and resource ceilings.
+
+Build and test [#795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 steps. This milestone is early-alpha-only; it is not part of main and PR #2 remains open/unmerged. Only en_US is embedded in the editor. Optional locale/user packs remain data-only files. No live GNOME/Mutter or physical-keyboard validation is claimed.
+
 ## 2026-11-10 — early-alpha-only Greek Compose locale pack
 
 The early-alpha branch now includes a reproducible optional Greek `el_GR.UTF-8` dataset derived from pinned X.Org libX11 and xorgproto sources. Its standalone Compose.pre source is merged over the pinned en_US baseline, resulting in 4,690 data records including Greek Multi_key and supported dead-key entries. The pack is built and uploaded separately from the editor executable.

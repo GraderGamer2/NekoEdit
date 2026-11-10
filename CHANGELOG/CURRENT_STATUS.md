@@ -1,3 +1,15 @@
+## 2026-11-10 — early-alpha native XCompose include compatibility expanded — Build and test #795 passed
+
+**Branch boundary:** this implementation remains on `early-alpha` only; it is not part of the `main` executable. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation series:** [391b0c66d89c](https://github.com/GraderGamer2/NekoEdit/commit/391b0c66d89c9ee734c5f652de8bf733a30ab6af), [575db597c7b0](https://github.com/GraderGamer2/NekoEdit/commit/575db597c7b0b8e0c3874d9fd7c1ffdb0c6bcddd), [6bf83dce7b34](https://github.com/GraderGamer2/NekoEdit/commit/6bf83dce7b3437aadda06574f6cccd4175cd83e8), [ae6323501b66](https://github.com/GraderGamer2/NekoEdit/commit/ae6323501b66e1d8bf5d36d044454c0ad7f00570), [a4bdccc12147](https://github.com/GraderGamer2/NekoEdit/commit/a4bdccc12147c38e81008dee37c545c75e628e48).
+**CI:** [Build and test #795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 workflow steps on the early-alpha head.
+
+The early-alpha importer supports bounded sibling, `%H`, `%S`, and `%L` include forms. `%L` resolves the normalized process locale through X.Org `compose.dir`, including aliases such as `el_CY.UTF-8` → `el_GR.UTF-8/Compose` and the separate C mapping. The mapping file is bounded, opened without following symlinks, and counted against the aggregate import-byte budget. Include paths retain traversal/symlink checks and existing cycle, depth, file, expansion, line, and record ceilings.
+
+The full workflow covered the freestanding build, native and host tests, the Wayland mock, executable inspection, pinned X.Org verification, optional locale-pack build, and separate editor/locale uploads. Artifacts: editor ZIP 13729764162 (135,652 bytes); locale ZIP 13730980366 (101,677 bytes), expiring 2026-11-11 02:36 UTC / 09:36 Jakarta.
+
+This is a continuity handoff only: no application code was copied to main. Automatic startup discovery, non-UTF-8 parsing, full XKB Compose semantics, and live GNOME/Mutter/physical-keyboard verification remain outstanding.
+
 ## 2026-11-10 — early-alpha Greek Compose locale milestone — verification handoff
 
 **Branch boundary:** the Greek data and workflow changes are on `early-alpha` only. They are not part of `main`; PR #2 remains open and unmerged.

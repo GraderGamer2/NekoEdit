@@ -1,3 +1,12 @@
+## 2026-11-10 — early-alpha-only native XCompose macro includes and compose.dir mapping
+
+- Recorded on main as a branch-only continuity handoff. No source, test, build, or runtime changes from this feature were copied to main; PR #2 remains open and unmerged.
+- The early-alpha Settings importer supports sibling, %H, %S, and %L include expansion. %L resolves the normalized process locale through X.Org compose.dir, including aliases and C's mapping. Component validation, no-follow opens, and the established resource bounds remain active.
+- Regression coverage includes nested home/system includes, compose.dir alias resolution, C mapping, parent traversal, symlinked files/directories, and the eight-scalar NLP1 output ceiling.
+- Build and test #795 passed all 14 workflow steps on early-alpha, including the freestanding build, native/host tests, Wayland mock, ELF inspection, pinned X.Org verification, optional pack build, and both artifact uploads.
+- Artifacts: editor ZIP 13729764162 (135,652 bytes); locale ZIP 13730980366 (101,677 bytes), expiring 2026-11-11 02:36 UTC / 09:36 Jakarta.
+- Commits: 391b0c66d89c, 575db597c7b0, 6bf83dce7b34, ae6323501b66, a4bdccc12147. Automatic startup discovery, non-UTF-8 native import, and live desktop/physical-keyboard verification remain outstanding.
+
 ## 2026-11-10 — early-alpha-only Greek Compose locale data and verification
 
 - Recorded on main as a continuity handoff only. The data and workflow changes are on early-alpha; no non-en_US locale table was added to the main-branch executable.
