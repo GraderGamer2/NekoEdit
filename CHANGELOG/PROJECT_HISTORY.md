@@ -1,3 +1,17 @@
+## 2026-11-10 — bounded multi-dead-key composition on Wayland
+
+The `early-alpha` Wayland keyboard runtime now buffers up to three consecutive dead-key actions as combining marks and resolves them together with the next ordinary character through kind-1 NLP1 records. A single mark continues through the existing built-in precomposition fallback; unmatched longer chains preserve the base plus marks literally. The fourth consecutive dead action flushes the previous three marks and starts a new chain, while Multi_key begins only after pending marks are flushed. Escape and Backspace clear the full pending chain.
+
+The 52-byte NLP1 record, four-scalar input ceiling, loader, and eight-scalar output limit did not change. The native Settings parser, offline user converter, and pinned X.Org data importer now recognize the same one-to-three-leading-dead-actions plus final-character grammar and reject malformed intermediate/final actions. No X11 backend work was undertaken.
+
+Accepting the new grammar admitted previously skipped pinned X.Org base and locale rules. All four optional JSON datasets were regenerated from the same pinned source blobs and checked byte-for-byte in CI. The shared base dead-key table rose from 1,228 to 1,576 records; the four final tables contain 4,484 (pt_BR), 4,488 (fi_FI), 4,495 (sr_RS), and 5,730 (el_GR) records. The optional packs remain external data files and are not embedded in the editor binary.
+
+Tests exercise importer syntax, NLP1 records, locale-manager lookup, real source-derived two-mark Portuguese and three-mark Greek mappings, and the Wayland keyboard event path (successful locale lookup, literal fallback, overflow boundary, Escape, and Backspace). Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on [91a92c3](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f). This remains CI and protocol-mock evidence, not a live Mutter/physical-keyboard test.
+
+The first two attempts identified the expected stale locale JSON comparison after the importer began accepting the extra rules. The exact generated tables were recovered and committed in [c61453d](https://github.com/GraderGamer2/NekoEdit/commit/c61453d2d180075e8d2eec323ad7bdde5dbdd30f). A subsequent test run caught stale locale count expectations, fixed in [91a92c3](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f). Temporary artifact capture and write-enabled data-refresh code were removed in [81e6272](https://github.com/GraderGamer2/NekoEdit/commit/81e6272e95e587327458a94c96957748291507b2); the normal workflow is again read-only.
+
+## 2026-11-10 — shared XKB Unicode keysym resolver in native Compose import
+
 ## 2026-11-10 — shared XKB Unicode keysym resolver in native Compose import
 
 The early-alpha Settings importer previously maintained a small list of common names separately from the application's much broader X.Org Unicode-annotated keysym resolver. The importer now calls the same bounded assembly resolver as the XKB keymap reader, reusing its existing read-only table rather than copying the 1,600-plus names or adding another dependency. Legacy quote aliases were kept, explicit Uxxxx inputs retain their previous policy, and dead-key Function KeySyms remain reserved for the dedicated dead-key record path.

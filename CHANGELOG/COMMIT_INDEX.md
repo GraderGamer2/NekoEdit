@@ -1,3 +1,20 @@
+## 2026-11-10 — Wayland dead-key chains and refreshed Compose locale tables — Build and test #802 passed
+
+| Commit | Subject |
+|---|---|
+| [e2521c401744](https://github.com/GraderGamer2/NekoEdit/commit/e2521c401744f2695b51b505f3ee6b7f53bd0d66) | feat: support bounded multi-dead-key chains on Wayland |
+| [39688a77d0c1](https://github.com/GraderGamer2/NekoEdit/commit/39688a77d0c19231b8055012c642c519e1aad036) | ci: retain regenerated locale JSON when source verification differs (temporary artifact instrumentation; removed) |
+| [94194470bbef](https://github.com/GraderGamer2/NekoEdit/commit/94194470bbef5c46e76fea8de67a15277d19cc21) | ci: refresh pinned locale data once for dead-key chains (temporary write-enabled step; removed) |
+| [c61453d2d180](https://github.com/GraderGamer2/NekoEdit/commit/c61453d2d180075e8d2eec323ad7bdde5dbdd30f) | data: refresh pinned Compose locale datasets [skip ci] |
+| [81e6272e95e5](https://github.com/GraderGamer2/NekoEdit/commit/81e6272e95e587327458a94c96957748291507b2) | chore: restore read-only locale verification workflow |
+| [91a92c382103](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f) | test: update pinned locale chain expectations |
+
+The one-time workflow instrumentation was not retained. The final workflow has `permissions: contents: read`; it has neither an artifact-debug step nor code that pushes generated data. The data JSON itself is committed as a separate source-data change. Runs #798 and #799 stopped at the stale pinned output comparison; #800 refreshed the exact generated files and passed its remaining steps; #801 caught stale golden counts. Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) then passed all 14 steps on exact head `91a92c38210362def100026afd60e7b08132d08f`.
+
+Final artifacts: editor ZIP 13761918009 (135,673 bytes, SHA-256 `ab71efb788fcf25dc14c232c369a60a5edfa61dbecb339d08ee28fa238cd49e8`); separate locale ZIP 13762312971 (114,239 bytes, SHA-256 `5605356b9d3b38fe5fa1b08334645ba62e8224904119b702ec3f5709c8fd8a52`). Both expire 2026-11-11 11:48 UTC / 18:48 Jakarta. This milestone is on early-alpha; PR #2 remains open and unmerged.
+
+# NekoEdit complete commit index
+
 ## 2026-11-10 — native Settings XCompose Unicode keysym compatibility — Build and test #797 passed
 
 | Commit | Subject |

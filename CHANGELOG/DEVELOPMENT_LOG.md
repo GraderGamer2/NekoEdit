@@ -1,3 +1,32 @@
+## 2026-11-10 — Wayland multi-dead-key chains and locale data refresh — #802 passed
+
+- Added a Wayland keyboard dead-key state that buffers up to three combining marks, then queries a kind-1 locale record with the final base scalar. Preserved the existing one-mark precomposition path and added base-plus-marks literal fallback when no multi-mark locale rule exists.
+- Implemented a bounded flush path for a fourth dead action and when entering Multi_key; Escape and Backspace clear all pending dead-key state. NLP1's 52-byte record and four-input maximum remain unchanged.
+- Extended the native Settings importer, offline user XCompose converter, and pinned X.Org Compose importer to accept one to three leading `dead_*` actions plus one final ordinary character. Invalid intermediate or final dead-key actions and deeper chains are excluded.
+- Regenerated the four pinned optional locale tables. The shared baseline now has 1,576 dead-key records. Final counts are pt_BR 4,484; fi_FI 4,488; sr_RS 4,495; el_GR 5,730. Detailed distributions and override counts are in `data/locales/README.md`.
+- Added importer, pack, locale-manager, locale-data, and Wayland mock tests. Coverage includes two-/three-mark lookup, literal fallback, the four-mark cap, cancellation, and real generated Portuguese and Greek chain records.
+- CI #798 and #799 exposed only the expected old-JSON/pinned-importer mismatch after newly accepted source rules. A one-time refresh in #800 committed exact outputs as `c61453d`; this used temporary write permissions that were removed by `81e6272`. The intermediate read-only run #801 then caught stale expected statistics; updated the golden test in `91a92c3`.
+- Final [Build and test #802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on `91a92c38210362def100026afd60e7b08132d08f`, including the freestanding ELF check, all host tests, Wayland protocol mock, executable inspection, pinned source regeneration/comparison, optional pack generation, and separate uploads.
+- Final artifacts: editor ZIP 13761918009 (135,673 bytes, SHA-256 `ab71efb788fcf25dc14c232c369a60a5edfa61dbecb339d08ee28fa238cd49e8`); locale ZIP 13762312971 (114,239 bytes, SHA-256 `5605356b9d3b38fe5fa1b08334645ba62e8224904119b702ec3f5709c8fd8a52`). Both expire 2026-11-11 11:48 UTC / 18:48 Jakarta.
+- The temporary workflow changes are gone: `.github/workflows/build.yml` is read-only (`contents: read`) with no artifact-debug or data-push block. No runtime dependency, embedded optional locale, or binary pack-format change was introduced.
+- Automated Wayland mock success is not live Mutter validation. The latest user-confirmed build launches, but new chained-key behavior still needs physical GNOME/Mutter testing. X11 backend work remains deferred.
+
+### Commit and CI sequence
+
+| Commit / run | Result |
+|---|---|
+| `e2521c4` | Implemented the Wayland and importer multi-dead-key chain support. |
+| #798 | Built and passed the command/Wayland/ELF checks; stopped at stale pinned locale JSON comparison. |
+| `39688a7` | Temporary artifact-only workflow instrumentation to retain exact generated JSON. |
+| #799 | Captured generated outputs; stopped at the same expected old-data comparison. |
+| `9419447` | Temporary one-time CI data refresh permission/step. |
+| #800 | Passed all steps and produced the refreshed data commit below. |
+| `c61453d` | CI-generated exact locale-table refresh. |
+| `81e6272` | Removed temporary write step, restored read-only permissions, updated locale-data counts. |
+| #801 | Correctly caught stale golden data assertions against the refreshed JSON. |
+| `91a92c3` / #802 | Updated locale count/depth and real chain assertions; all 14 steps passed. |
+
+
 ## 2026-11-10 — native XCompose import uses the shared XKB Unicode keysym table — #797 passed
 
 **Branch:** `early-alpha`; exact validated head `b23b2ae61dd3422806d6155eec8ac3c9c16f327d`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.

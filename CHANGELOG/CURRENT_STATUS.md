@@ -1,3 +1,47 @@
+## 2026-11-10 — Wayland dead-key chains support one to three combining marks — Build and test #802 passed
+
+**Branch:** `early-alpha`; exact validated source/test head `91a92c38210362def100026afd60e7b08132d08f`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Wayland implementation:** [e2521c401744](https://github.com/GraderGamer2/NekoEdit/commit/e2521c401744f2695b51b505f3ee6b7f53bd0d66). Generated locale data: [c61453d2d180](https://github.com/GraderGamer2/NekoEdit/commit/c61453d2d180075e8d2eec323ad7bdde5dbdd30f). Workflow/data notice cleanup: [81e6272e95e5](https://github.com/GraderGamer2/NekoEdit/commit/81e6272e95e587327458a94c96957748291507b2). Final fixture update: [91a92c382103](https://github.com/GraderGamer2/NekoEdit/commit/91a92c38210362def100026afd60e7b08132d08f).
+**CI:** [Build and test #802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on the exact final source/test head.
+
+### Wayland input behavior
+
+The Wayland keyboard path now buffers a chain of one to three dead-key actions (stored as their combining-mark scalars) and the following ordinary base scalar. It queries the active optional NLP1 locale pack with the complete two-to-four-scalar kind-1 record. The existing built-in single-mark precomposition fallback remains intact. When a multi-mark chain has no locale rule, the editor preserves the base character followed by each combining mark in input order rather than dropping input.
+
+The chain is bounded by the unchanged four-input NLP1 ceiling. A fourth consecutive dead action flushes the first three marks literally and starts a new chain. Starting `Multi_key` flushes a pending dead-key chain before beginning that separate compose state; Escape and Backspace cancel the entire pending chain and clear all prefix slots. The fixed 52-byte record, header, format version, loader, and output ceiling are unchanged, so older NLP1 packs remain readable.
+
+The native Settings XCompose importer, offline user-file converter, and pinned X.Org locale importer now accept the same grammar: one to three leading recognized `dead_*` actions followed by one ordinary Unicode keysym. Intermediate events must be recognized dead actions; the final event must be a character, not another dead action. Longer chains and malformed intermediate/final events are rejected within the existing limits.
+
+### Regenerated separate locale data
+
+Extending the pinned importer admitted additional multi-dead-key source records, so the four committed JSON tables were regenerated from the same pinned libX11/xorgproto inputs and verified byte-for-byte in CI. The common en_US baseline now contains 1,576 accepted dead-key records, up from 1,228; the locale packs remain separate files and are not embedded into the editor.
+
+| Locale | Final records | 2-input | 3-input | 4-input | Locale Multi_key | Locale dead-key | Total overrides |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `pt_BR.UTF-8` | 4,484 | 3,448 | 894 | 142 | 9 | 2 | 5 |
+| `fi_FI.UTF-8` | 4,488 | 3,445 | 901 | 142 | 6 | 346 | 343 |
+| `sr_RS.UTF-8` | 4,495 | 3,461 | 892 | 142 | 40 | 50 | 74 |
+| `el_GR.UTF-8` | 5,730 | 3,589 | 1,387 | 754 | 922 | 970 | 628 |
+
+The locale-specific dead-key override counts are 2 (pt_BR), 338 (fi_FI), 38 (sr_RS), and 234 (el_GR). The remaining locale-specific dead-key records add previously absent input sequences. `data/locales/README.md` now records the regenerated counts and override breakdowns.
+
+### Regression coverage and CI recovery
+
+The host tests now verify one-, two-, and three-mark import/lookup paths and reject malformed dead-key chains. The locale-data test checks the new totals and real source-derived mappings, including Portuguese `dead_grave + dead_circumflex + A → U+1EA6` and the Greek three-mark sequence `U+0300 + U+0313 + U+0345 + U+0391 → U+1F8A`. The Wayland mock sends keyboard events through the runtime and checks two-/three-mark locale lookup, literal fallback, the fourth-mark boundary, Escape, and Backspace.
+
+The first two CI attempts (#798 and #799) stopped at the expected pinned-data comparison because the importer had begun accepting records that were absent from the previous JSON tables. A short-lived CI artifact step recovered the exact regenerated outputs; a one-time CI refresh committed those outputs in `c61453d`. The first read-only validation then caught stale golden counts in `tests/compose_locale_data_test.py`; [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed after updating those assertions.
+
+The temporary artifact-upload and write-enabled refresh logic was removed. The final `.github/workflows/build.yml` has `contents: read`, contains no data-push code, and the pinned-source compare passed without special workflow permissions.
+
+#802 artifacts (one-day retention):
+- Editor ZIP [13761918009](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303/artifacts/13761918009), 135,673 bytes, SHA-256 `ab71efb788fcf25dc14c232c369a60a5edfa61dbecb339d08ee28fa238cd49e8`.
+- Separate locale ZIP [13762312971](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303/artifacts/13762312971), 114,239 bytes, SHA-256 `5605356b9d3b38fe5fa1b08334645ba62e8224904119b702ec3f5709c8fd8a52`.
+- Both expire **2026-11-11 11:48 UTC / 18:48 Jakarta**. The locale ZIP contains separate pt_BR, fi_FI, sr_RS, and el_GR `.nlp` packs and their notices.
+
+This is automated build, host-test, and Wayland protocol-mock validation. It is not a live GNOME/Mutter session or physical-keyboard test; the user has confirmed the previous build launches, but the newly added chained sequences still need to be exercised on the desktop. Example imported rules for manual testing are `<dead_grave> <dead_circumflex> <A> : "Ầ"` and `<dead_grave> <dead_psili> <dead_iota> <Greek_Alpha> : "ᾊ"`. No X11 backend was added or changed in this milestone.
+
+Next Wayland work remains live GNOME/Mutter validation, modifier-qualified Compose semantics and startup discovery/merging, then additional optional locale datasets. Chains longer than three dead actions remain outside the current bounded record model.
+
 ## 2026-11-10 — native Settings XCompose importer shares XKB Unicode keysym resolver — Build and test #797 passed
 
 **Branch:** `early-alpha`; exact validated head `b23b2ae61dd3422806d6155eec8ac3c9c16f327d`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
