@@ -1,3 +1,21 @@
+## 2026-11-10 — native XCompose rooted includes and compose.dir locale mapping — Build and test #795 passed
+
+**Branch:** `early-alpha` only. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged; this implementation is not on `main`.
+**Implementation series:** [391b0c66d89c](https://github.com/GraderGamer2/NekoEdit/commit/391b0c66d89c9ee734c5f652de8bf733a30ab6af), [575db597c7b0](https://github.com/GraderGamer2/NekoEdit/commit/575db597c7b0b8e0c3874d9fd7c1ffdb0c6bcddd), [6bf83dce7b34](https://github.com/GraderGamer2/NekoEdit/commit/6bf83dce7b3437aadda06574f6cccd4175cd83e8), [ae6323501b66](https://github.com/GraderGamer2/NekoEdit/commit/ae6323501b66e1d8bf5d36d044454c0ad7f00570), [a4bdccc12147](https://github.com/GraderGamer2/NekoEdit/commit/a4bdccc12147c38e81008dee37c545c75e628e48).
+**CI:** [Build and test #795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 workflow steps on `a4bdccc12147`.
+
+The freestanding Settings importer now supports bounded quoted sibling, `%H`, `%S`, and `%L` includes. `%H/path` resolves beneath HOME; `%S/path` resolves beneath `/usr/share/X11/locale` (overridable through `NEKOEDIT_XCOMPOSE_SYSTEM_ROOT`). Nested sibling includes remain relative to the file containing each directive, including when that file was reached through a macro root.
+
+`%L` selects the first non-empty `LC_ALL`, `LC_CTYPE`, or `LANG` value (otherwise `C`); `POSIX` aliases `C`. The normalized locale is matched through X.Org's system `compose.dir`, so aliases such as `el_CY.UTF-8` map to `el_GR.UTF-8/Compose`, and `C` and `C.UTF-8` use their respective entries. The map is bounded, opened without following symlinks, and charged to the aggregate import-byte budget. The mapped path is validated component by component and opened beneath the same system root.
+
+Limits remain 512 KiB aggregate bytes including compose.dir, 512 KiB per Compose file, 32 unique Compose files, 64 expansions, 16 active include levels, 64 KiB per line, and 32,768 output records. The importer remains a bounded UTF-8/Multi_key/dead-key subset; non-UTF-8 source encodings, full XKB modifier semantics, broader keysym coverage, and automatic startup discovery/merging remain unsupported.
+
+Regression coverage includes %L/%H/%S, nested system includes, compose.dir aliases, the C mapping, missing system roots, traversal, final/intermediate symlinks, and existing sibling ordering/cycle/expansion/depth protections. CI #791 exposed the initial helper buffer declaration mismatch; #792 caught strict fixture-path truncation warnings; #793 passed the first macro-include version; #794 caught an alias fixture that exceeded NLP1's eight-scalar output limit. The fixes are recorded in the commit series above; #795 passed the complete workflow.
+
+#795 artifacts: editor ZIP [13729764162](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387/artifacts/13729764162), 135,652 bytes; separate locale ZIP [13730980366](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387/artifacts/13730980366), 101,677 bytes. Both expire **2026-11-11 02:36 UTC / 09:36 Jakarta**.
+
+The user has confirmed that Settings Import installs a separate .nlp under `~/.nekoedit/locales/`; live GNOME/Mutter and physical-keyboard Compose validation remains outstanding.
+
 ## 2026-11-10 — early-alpha Greek Compose locale pack and CI verification handoff
 
 **Branch boundary:** this milestone is on `early-alpha` only; the application/data changes are not present on `main`. PR #2 remains open and unmerged.

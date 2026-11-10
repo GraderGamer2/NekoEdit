@@ -1,3 +1,11 @@
+## 2026-11-10 — native XCompose include roots and X.Org locale mapping
+
+The native Settings → Locale → Import path on `early-alpha` now expands sibling includes and the XCompose `%H`, `%S`, and `%L` forms. Home and system includes are constrained to explicit roots; nested sibling paths remain relative to the containing file. Every path component is checked and opened without following symlinks, and the existing byte, file, expansion, cycle, depth, line, and record ceilings remain enforced.
+
+Locale include `%L` resolves through X.Org's `compose.dir`: the normalized process locale is selected from LC_ALL, LC_CTYPE, LANG, or C, then matched against the system map. Tests cover `el_CY.UTF-8` mapping to `el_GR.UTF-8/Compose` and the distinct C mapping. The mapping file is bounded and counted against the aggregate import budget.
+
+Build and test [#795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 workflow steps. This milestone remains on `early-alpha`; PR #2 is open and unmerged. Locale packs stay data-only, with only en_US linked into the editor. Automatic startup discovery, non-UTF-8 parsing, full XKB Compose semantics, and live GNOME/Mutter/physical-keyboard validation remain outstanding.
+
 ## 2026-11-10 — Greek Compose locale pack added on early-alpha
 
 The locale pipeline now includes an optional reproducible Greek `el_GR.UTF-8` dataset derived from pinned X.Org libX11 and xorgproto sources. Because the Greek Compose.pre file is standalone, the generator explicitly merges it over the en_US baseline before applying Greek rules. The resulting table contains 4,690 records, including 922 accepted locale Multi_key rules, 138 locale dead-key rules, and 488 overrides. The source and keysym header are pinned and CI regenerates the JSON byte-for-byte before packaging.

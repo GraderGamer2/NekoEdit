@@ -1,5 +1,20 @@
 # NekoEdit complete commit index
 
+## 2026-11-10 — early-alpha native XCompose rooted includes and compose.dir mapping — Build and test #795 passed
+
+| Commit | Subject |
+|---|---|
+| [391b0c66d89c](https://github.com/GraderGamer2/NekoEdit/commit/391b0c66d89c9ee734c5f652de8bf733a30ab6af) | feat: support XCompose locale and rooted includes |
+| [575db597c7b0](https://github.com/GraderGamer2/NekoEdit/commit/575db597c7b0b8e0c3874d9fd7c1ffdb0c6bcddd) | fix: bound XCompose locale include path |
+| [6bf83dce7b34](https://github.com/GraderGamer2/NekoEdit/commit/6bf83dce7b3437aadda06574f6cccd4175cd83e8) | test: size nested XCompose include fixtures safely |
+| [ae6323501b66](https://github.com/GraderGamer2/NekoEdit/commit/ae6323501b66e1d8bf5d36d044454c0ad7f00570) | fix: resolve XCompose locale through compose.dir |
+| [a4bdccc12147](https://github.com/GraderGamer2/NekoEdit/commit/a4bdccc12147c38e81008dee37c545c75e628e48) | test: keep compose.dir alias output within NLP1 bounds |
+
+Build and test #791 exposed a helper-buffer declaration mismatch; #792 caught strict fixture-path truncation warnings. The corrected macro-include version passed all 13 steps in #793. The compose.dir mapping implementation passed compilation and smoke tests in #794, where the alias fixture exceeded NLP1's eight-scalar result ceiling; the fixture was shortened without changing the format or runtime limit. Build and test [#795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 steps on the final source head.
+
+The #795 artifacts are editor ZIP 13729764162 (135,652 bytes) and locale ZIP 13730980366 (101,677 bytes), expiring 2026-11-11 02:36 UTC / 09:36 Jakarta. This feature remains on early-alpha and has not been merged into main.
+
+
 ## 2026-11-10 — early-alpha Greek Compose locale pack — Build and test #790 passed
 
 | Commit | Subject |
