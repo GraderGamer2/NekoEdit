@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus xdotool setxkbmap; do
+for tool in gnome-shell gsettings gdbus xdotool setxkbmap xinput stdbuf; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -40,6 +40,7 @@ fi
 TEST_ROOT="$(mktemp -d /tmp/nekoedit-mutter.XXXXXX)"
 APP_PID=
 SHELL_PID=
+XINPUT_PID=
 RESULT=failed
 
 cleanup() {
@@ -52,11 +53,15 @@ cleanup() {
         kill "$SHELL_PID" 2>/dev/null
         wait "$SHELL_PID" 2>/dev/null
     fi
+    if [ -n "$XINPUT_PID" ]; then
+        kill "$XINPUT_PID" 2>/dev/null
+        wait "$XINPUT_PID" 2>/dev/null
+    fi
     if [ "$RESULT" = passed ]; then
         rm -rf "$TEST_ROOT"
     else
         echo "Mutter integration diagnostics (temporary directory: $TEST_ROOT)" >&2
-        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log"; do
+        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log" "$TEST_ROOT/xi2-events.log"; do
             if [ -f "$log" ]; then
                 echo "--- $log ---" >&2
                 tail -n 120 "$log" >&2
@@ -271,12 +276,33 @@ fi
 echo "GNOME focus verified: outer X11=$SHELL_WINDOW; inner Wayland=$FOCUS_RESULT"
 echo "Clicked NekoEdit frame center: $APP_CENTER_X,$APP_CENTER_Y"
 
+# Observe XI2 raw keyboard events on the Xvfb root independently of
+# GNOME Shell's Clutter event dispatch. This distinguishes XTest injection from
+# nested-compositor forwarding to its Wayland client.
+stdbuf -oL xinput test-xi2 --root > "$TEST_ROOT/xi2-events.log" 2>&1 &
+XINPUT_PID=$!
+sleep 0.25
+
 # Send a basic key/save canary through XTest after both focus layers have
 # been confirmed. The X server delivers it to GNOME Shell's focused host window,
 # and the nested compositor forwards it as Wayland wl_keyboard input.
 xdotool key --clearmodifiers --delay 120 ctrl+a
 xdotool key --delay 120 x
 xdotool key --clearmodifiers --delay 120 ctrl+s
+sleep 0.3
+kill "$XINPUT_PID" 2>/dev/null || true
+wait "$XINPUT_PID" 2>/dev/null || true
+XINPUT_PID=
+
+if ! grep -Eq 'RawKeyPress|KeyPress' "$TEST_ROOT/xi2-events.log"; then
+    echo "XTest did not produce an XI2 key event on the Xvfb root" >&2
+    echo "X server focus: $(xdotool getwindowfocus -f 2>&1 || true)" >&2
+    echo "X input devices:" >&2
+    xinput list --short >&2 || true
+    exit 1
+fi
+echo "Xvfb XI2 key events observed:"
+grep -E 'RawKeyPress|KeyPress' "$TEST_ROOT/xi2-events.log" | tail -n 12
 
 PROBE_SAVED=0
 for attempt in $(seq 1 50); do

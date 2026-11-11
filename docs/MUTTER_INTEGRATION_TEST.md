@@ -24,7 +24,7 @@ The extension, GSettings keyfile, editor preferences, locale pack, and runtime d
 On Ubuntu 24.04, install the test-only tools and run:
 
     sudo apt-get update
-    sudo apt-get install --no-install-recommends gnome-shell xvfb xauth dbus-daemon libglib2.0-bin xdotool x11-xkb-utils
+    sudo apt-get install --no-install-recommends gnome-shell xvfb xauth dbus-daemon libglib2.0-bin xdotool x11-xkb-utils xinput
     make clean all
     make test-mutter
 
@@ -32,6 +32,6 @@ The Make target builds the optional locale packs separately and launches the har
 
 ## Validation boundary
 
-This is compositor-level Wayland event-path coverage, not a physical-keyboard test. The harness confirms that both the X11 host window and NekoEdit's inner Wayland toplevel have focus before input. The host X server's XTest event path and the inner Wayland window focus are checked separately; both are required for the injected events to reach the editor. The tested input is synthetic and does not validate physical keyboard hardware, the user's desktop session, other keyboard layouts, input-method-v3 preedit, or complex-script shaping. Those still require manual desktop checks.
+This is compositor-level Wayland event-path coverage, not a physical-keyboard test. The harness confirms that both the X11 host window and NekoEdit's inner Wayland toplevel have focus before input. During the ordinary-key canary, `xinput test-xi2 --root` independently records XInput2 raw/device key events on the Xvfb root; the harness requires at least one key press before evaluating the saved document. The host X server's XTest event path and the inner Wayland window focus are checked separately; both are required for the injected events to reach the editor. The tested input is synthetic and does not validate physical keyboard hardware, the user's desktop session, other keyboard layouts, input-method-v3 preedit, or complex-script shaping. Those still require manual desktop checks.
 
 The test extension exposes only focus-by-PID and readiness operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all test tools are removed with the temporary directory after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell or Xvfb.
