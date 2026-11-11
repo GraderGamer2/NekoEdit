@@ -1,6 +1,6 @@
 # Wayland text-input-v3 integration
 
-NekoEdit implements an opt-in `zwp_text_input_v3` client for the document surface. It is disabled by default until a real input-method handoff is validated; set `NEKOEDIT_ENABLE_TEXT_INPUT=1` to exercise it. The capability-aware Mutter smoke test now starts a second editor with this opt-in and checks the compositor-dependent activation boundary.
+NekoEdit implements an opt-in `zwp_text_input_v3` client for the document surface. It remains disabled by default; set `NEKOEDIT_ENABLE_TEXT_INPUT=1` to exercise it. The capability-aware Mutter smoke test starts a second editor with this opt-in, checks the compositor-dependent activation boundary, and exercises a live IBus Simple preedit/commit exchange.
 
 ## State synchronization
 
@@ -17,6 +17,13 @@ Preedit bytes are staged separately and accepted only after NUL-termination, UTF
 
 The preedit string is drawn as a temporary overlay; it is not committed into the document buffer. Committed text and delete-surrounding requests use the existing document editing/history paths. Surrounding-text windows are limited to 4,000 bytes and aligned to UTF-8 boundaries.
 
+## Live GNOME Shell / IBus coverage
+
+The Mutter integration test keeps its original `us(intl)` physical-XKB/Compose session intact. For the second editor process, the isolated GNOME input-source settings switch to IBus engine `xkb:us:intl:eng`, which is IBus Simple's XKB-backed engine for the same US International layout. The test confirms that IBus reports that engine as active before starting the text-input-v3 client.
+
+The test enables IBus Simple's documented Ctrl+Shift+U Unicode-entry path in the test-session environment, then sends the sequence through Mutter's native virtual keyboard. It verifies the live preedit strings `u`, `u1`, `u1F`, `u1F6`, `u1F60`, and `u1F600`; Backspace must revise the preedit to `u1F60` without changing the document. Return terminates the IBus hex sequence, after which the editor must contain exactly U+1F600 and save those four UTF-8 bytes after the normal confirmation prompt.
+
+This exercises the real IBus engine → GNOME Shell's IBus input context → Mutter `Clutter.InputMethod` → text-input-v3 → NekoEdit path. It is no longer only a protocol-manager handshake or a synthetic compositor event. It still does not validate Fcitx, every third-party IBus engine, or a real provider's `delete-surrounding-text` request; the latter remains covered by the deterministic Wayland mock.
 ## Mock coverage
 
 The Wayland mock verifies enable/disable and enter/leave, set-content-type and serial synchronization, text change cause ordering, editor-originated selection movement (cause 1), IME-originated updates (cause 0), valid and malformed multibyte preedit updates, forward/reversed/hidden cursor ranges, multibyte commit, selection deletion, and UTF-8-boundary-safe surrounding deletion.
@@ -27,6 +34,6 @@ The live Mutter probe is intentionally narrower than a full IME test:
 - If the compositor advertises `zwp_text_input_manager_v3`, it verifies the manager bind, text-input `enter`, focused-document `enable`, and outbound state commit.
 - If the global is absent, it verifies that the opt-in does not create a partial text-input object and that ordinary XKB key delivery and save remain functional.
 
-This confirms protocol discovery and client-side activation only. It does not synthesize `preedit_string`, `commit_string`, or `delete_surrounding_text` from IBus/Fcitx, nor does it establish correct behavior with a real input-method engine. The existing Wayland mock remains responsible for deterministic incoming-event, UTF-8, cursor-offset, delete, and serial regression tests. A live IBus/Fcitx composition pass and desktop-session checks are still required before enabling text-input-v3 by default.
+The live IBus Simple test confirms real `preedit_string` and `commit_string` delivery through GNOME Shell/Mutter. It does not verify a provider-originated `delete_surrounding_text` request, Fcitx, or all third-party engines. The existing Wayland mock remains responsible for deterministic incoming-event, UTF-8, cursor-offset, delete, and serial regression tests. Broader desktop/engine checks are still required before enabling text-input-v3 by default.
 
 The mock does not replace a live compositor/input-method test. GNOME/Mutter behavior with a physical keyboard and installed IME still requires desktop validation.
