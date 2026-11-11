@@ -4,7 +4,7 @@ The live Mutter text-input-v3 handshake is now verified by Build and test [#833]
 
 This follow-up adds a complementary Wayland-mock case for the other capability branch: the test compositor deliberately omits `zwp_text_input_manager_v3`, while the child process still starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. It requires every text-input object/state symbol to remain zero and then runs the full real-keymap keyboard editing/save scenario. Thus it checks that opting in cannot disable physical XKB typing when the compositor does not advertise the manager.
 
-The fallback test has been committed to the staging branch `work/text-input-opt-in-fallback`. Its test and documentation changes still need one fast-forward to `early-alpha` and one normal Build and test workflow run. No result for this follow-up is claimed yet.
+The fallback regression was fast-forwarded to `early-alpha` at [cadf39a](https://github.com/GraderGamer2/NekoEdit/commit/cadf39a3a4b03ce890c1bf57a43c6bdb999368c5). Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) was triggered by that push; its result is pending at this handoff.
 
 ---
 ## 2026-11-12 — capability-aware live text-input-v3 probe — Build and test #833 passed
