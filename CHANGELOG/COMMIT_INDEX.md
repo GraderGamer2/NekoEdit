@@ -1,4 +1,12 @@
-## 2026-11-12 — capability-aware live text-input-v3 probe
+## 2026-11-12 — text-input-v3 opt-in fallback regression (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [799f57ac2a10](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) | test: verify text-input opt-in falls back without manager |
+| [54a0daea9423](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) | test: correct UTF-8 expected bytes in XKB fallback case |
+
+---
+## 2026-11-12 — live Mutter text-input-v3 activation — Build and test #833 passed
 
 | Commit | Subject |
 |---|---|
@@ -11,10 +19,9 @@
 | [f2976f53a990](https://github.com/GraderGamer2/NekoEdit/commit/f2976f53a99093c0d1f89b47e14449c2a6db77c5) | docs: record capability-aware Mutter text-input probe |
 | [38d44ff7b372](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034) | docs: update NekoEdit continuity status for Mutter probe |
 
-The test implementation and documentation are recorded on `early-alpha`. The test branches on the actual compositor registry capability and must not be described as a real IBus/Fcitx IME test. Build and test status for the code push is unconfirmed in this handoff.
+Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 steps. The Mutter 46.2 log confirms that the compositor advertised text-input-v3 and NekoEdit completed manager binding, focus `enter`, document `enable`, and outbound state commit. This is not a real IBus/Fcitx provider test.
 
 ---
-
 ## 2026-11-11 — Build and test #832: seven-mark optional Compose dead-key chains — passed
 
 | Commit | Subject |
