@@ -1,3 +1,12 @@
+## 2026-11-12 — live IBus Simple preedit/commit integration (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [9fb3ce1023c7](https://github.com/GraderGamer2/NekoEdit/commit/9fb3ce1023c70306978e4b662eba5705e1d45c3f) | test: exercise live IBus preedit and commit via text-input-v3 |
+| [f1fcc39b536a](https://github.com/GraderGamer2/NekoEdit/commit/f1fcc39b536a49141af31e2bd08e6e1de3e9773c) | test: include preedit buffer in live probe symbol map |
+| [e24bbda13314](https://github.com/GraderGamer2/NekoEdit/commit/e24bbda13314dc218cc9a83dd47a001cdce5e1a6) | test: route Mutter text-input phase through IBus Simple |
+
+---
 ## 2026-11-12 — text-input-v3 opt-in fallback regression — Build and test #834 passed
 
 | Commit | Subject |
