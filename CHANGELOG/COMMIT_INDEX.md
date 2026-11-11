@@ -1,9 +1,11 @@
-## 2026-11-12 — text-input-v3 opt-in fallback regression (CI pending)
+## 2026-11-12 — text-input-v3 opt-in fallback regression — Build and test #834 passed
 
 | Commit | Subject |
 |---|---|
 | [799f57ac2a10](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) | test: verify text-input opt-in falls back without manager |
 | [54a0daea9423](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) | test: correct UTF-8 expected bytes in XKB fallback case |
+
+Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) passed all 14 steps; its mock log confirms seven inactive text-input fields and successful physical-XKB editing/save with `NEKOEDIT_ENABLE_TEXT_INPUT=1` but no advertised manager.
 ## 2026-11-12 — capability-aware live text-input-v3 probe
 
 | Commit | Subject |
