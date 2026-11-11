@@ -1,3 +1,9 @@
+## 2026-11-12 — text-input-v3 opt-in fallback regression (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [799f57ac2a10](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) | test: verify text-input opt-in falls back without manager |
+| [54a0daea9423](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) | test: correct UTF-8 expected bytes in XKB fallback case |
 ## 2026-11-12 — capability-aware live text-input-v3 probe
 
 | Commit | Subject |
