@@ -1,3 +1,12 @@
+## 2026-11-12 — IBus Simple live-engine bootstrap correction (CI pending)
+
+Build and test [#835](https://github.com/GraderGamer2/NekoEdit/actions/runs/43114137743) passed every stage through the full Wayland mock, ELF inspection, native XKB parser, X.Org import verification, and locale-pack build. The GNOME Shell/Mutter integration stage still passed the physical `us(intl)` Compose and pt_BR dead-key canaries, confirmed `xkb:us:intl:eng` as the active IBus engine, and completed the text-input-v3 manager/focus/enable handshake. It then observed `doc_length=1` and empty preedit after Ctrl+Shift+U, meaning the initial `u` was forwarded as ordinary text rather than starting IBus Simple's Unicode preedit. No production application code failed or was changed by this run.
+
+The likely test-harness issue is the environment of the IBus engine process. The follow-up now exports `IBUS_ENABLE_CTRL_SHIFT_U=1`, updates the private D-Bus activation environment, starts `ibus-daemon --panel disable` directly from that environment before GNOME Shell, and verifies the daemon inherited the flag through `/proc/<pid>/environ`. It also records the daemon log on integration failure. This keeps the setting in the ephemeral test session and does not touch application runtime behavior.
+
+Staging commits: [b3268af](https://github.com/GraderGamer2/NekoEdit/commit/b3268af32ce62eda43d4c3da6affb3bc35a1c228) starts the private IBus daemon and updates the activation environment; [f28ff31](https://github.com/GraderGamer2/NekoEdit/commit/f28ff314418e67e786a1e9463ddf498701d56662) asserts the daemon environment. The corrected follow-up requires one Build and test run; no pass is claimed yet.
+
+---
 ## 2026-11-12 — live IBus Simple preedit/commit integration (CI pending)
 
 The Mutter test's second phase now switches the isolated GNOME input source to IBus Simple's `xkb:us:intl:eng` engine while preserving the `us(intl)` keyboard layout. The harness enables IBus Simple's documented Ctrl+Shift+U path in its private test environment and verifies the actual active IBus engine before launching NekoEdit with text-input-v3 explicitly enabled.
