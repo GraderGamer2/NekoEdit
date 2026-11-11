@@ -56,8 +56,11 @@ def main():
         raise AssertionError("eight-input dead-key record was not serialized")
 
     # Equal scalar inputs in different namespaces are legal.
-    if records[-1][2] == records[-2][2]:
-        raise AssertionError("dead-key record was not isolated from Multi_key")
+    if (
+        records[3][2] != 0 or records[-2][2] != 1
+        or records[3][3:5] != records[-2][3:5]
+    ):
+        raise AssertionError("equal inputs were not isolated by rule kind")
     rejected({"locale": "fr_FR", "sequences": [
         {"kind": "multi_key", "input": [97, 98], "output": [65]},
         {"kind": "multi_key", "input": [97, 98, 99], "output": [66]},
