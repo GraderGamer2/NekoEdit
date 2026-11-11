@@ -120,6 +120,11 @@ unset DISPLAY || true
 dbus-update-activation-environment --all
 ibus-daemon --panel disable > "$TEST_ROOT/ibus-daemon.log" 2>&1 &
 IBUS_PID=$!
+if ! tr '\0' '\n' < "/proc/$IBUS_PID/environ" | grep -Fxq 'IBUS_ENABLE_CTRL_SHIFT_U=1'; then
+    echo "private IBus daemon did not inherit IBUS_ENABLE_CTRL_SHIFT_U=1" >&2
+    cat "$TEST_ROOT/ibus-daemon.log" >&2 || true
+    exit 1
+fi
 IBUS_READY=0
 for attempt in $(seq 1 100); do
     if ibus list-engine --name-only 2>/dev/null | grep -Fxq 'xkb:us:intl:eng'; then
