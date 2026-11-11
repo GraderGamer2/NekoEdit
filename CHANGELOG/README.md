@@ -1,3 +1,12 @@
+## 2026-11-12 — test opt-in fallback when text-input-v3 is not advertised — Build and test #834 passed
+
+Added a Wayland-mock scenario that launches NekoEdit with `NEKOEDIT_ENABLE_TEXT_INPUT=1` while deliberately omitting `zwp_text_input_manager_v3` from the compositor registry. The test requires manager/object/enter/enable/serial/state-ready fields to remain zero, then runs the complete real-keymap keyboard-layout editing and confirmed-save sequence. It checks that the opt-in cannot suppress the normal XKB path when the compositor does not provide text-input-v3.
+
+Commits: [799f57a](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) adds the opt-in no-global scenario; [54a0dae](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) corrects its exact expected UTF-8 output bytes. Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) passed all 14 steps. The Wayland log explicitly records that all seven text-input state fields remained inactive while the real `us(intl)` keymap, XKB translation, editing, and save assertions completed.
+
+Artifact: editor [13893597286](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760/artifacts/13893597286), 137,017 bytes; separate Compose locale packs [13894166119](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760/artifacts/13894166119), 120,536 bytes.
+
+---
 ## 2026-11-12 — live Mutter text-input-v3 activation — Build and test #833 passed
 
 Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 workflow steps on source commit [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The Mutter 46.2 headless session actually advertised `zwp_text_input_manager_v3`; the second NekoEdit process, started with `NEKOEDIT_ENABLE_TEXT_INPUT=1`, bound the manager, received text-input `enter`, enabled its focused document, and committed text-input state. The original real Mutter input test also passed ordinary edit/save, Right Alt `Multi_key` → U+2026, and the pt_BR two-dead-key chain → U+1EA6.
