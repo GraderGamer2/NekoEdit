@@ -28,7 +28,11 @@ SYMBOLS = (
     "text_input_enabled",
     "text_input_commit_serial",
     "text_input_state_ready",
+    "text_input_preedit_length",
+    "doc_length",
 )
+
+BUFFER_SYMBOLS = ("text_input_preedit_buffer",)
 
 
 def fail(message: str) -> None:
@@ -49,7 +53,7 @@ def run_nm(binary: str) -> dict[str, int]:
             name = match.group(2).strip()
             if name in SYMBOLS:
                 addresses[name] = int(match.group(1), 16)
-    missing = [name for name in SYMBOLS if name not in addresses]
+    missing = [name for name in (*SYMBOLS, *BUFFER_SYMBOLS) if name not in addresses]
     if missing:
         fail("unavailable NekoEdit probe symbols from nm: " + ", ".join(missing))
     return addresses
@@ -72,6 +76,8 @@ def call_gdbus(method: str, *arguments: object) -> str:
 def read_state(memory_fd: int, addresses: dict[str, int]) -> dict[str, int]:
     values: dict[str, int] = {}
     for name, address in addresses.items():
+        if name in BUFFER_SYMBOLS:
+            continue
         raw = os.pread(memory_fd, 4, address)
         if len(raw) != 4:
             fail(f"could not read 4-byte probe symbol {name}")
@@ -112,6 +118,141 @@ def wait_input_idle() -> None:
             fail("Mutter virtual input failed: " + last)
         time.sleep(0.05)
     fail("Mutter virtual input queue did not drain: " + last)
+
+
+def read_preedit(
+    memory_fd: int, addresses: dict[str, int], state: dict[str, int]
+) -> str:
+    length = state["text_input_preedit_length"]
+    if length > 4095:
+        fail(f"NekoEdit reported an out-of-bounds preedit length: {length}")
+    raw = os.pread(memory_fd, length, addresses["text_input_preedit_buffer"])
+    if len(raw) != length:
+        fail(f"could not read complete preedit buffer: expected {length}, got {len(raw)}")
+    try:
+        return raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        fail(f"NekoEdit exposed invalid UTF-8 in its committed preedit state: {error}")
+
+
+def wait_preedit(
+    memory_fd: int,
+    addresses: dict[str, int],
+    expected: str,
+    *,
+    timeout: float = 6.0,
+) -> dict[str, int]:
+    deadline = time.monotonic() + timeout
+    state: dict[str, int] = {}
+    actual = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] != 0:
+            fail(
+                "IBus committed document bytes before the explicit hex-sequence "
+                f"terminator; state={state}, preedit={actual!r}"
+            )
+        if actual == expected:
+            return state
+        time.sleep(0.025)
+    fail(
+        f"live IBus preedit did not reach {expected!r}; "
+        f"observed {actual!r}, state={state}"
+    )
+
+
+def wait_document_commit(
+    memory_fd: int, addresses: dict[str, int], expected_length: int
+) -> dict[str, int]:
+    deadline = time.monotonic() + 6.0
+    state: dict[str, int] = {}
+    actual_preedit = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual_preedit = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] == expected_length and actual_preedit == "":
+            return state
+        time.sleep(0.025)
+    fail(
+        "live IBus commit was not applied to the document buffer; "
+        f"expected_length={expected_length}, state={state}, "
+        f"preedit={actual_preedit!r}"
+    )
+
+
+def require_ibus_engine(expected: str) -> None:
+    result = subprocess.run(
+        ["ibus", "engine"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    actual = result.stdout.strip()
+    if actual != expected:
+        fail(f"GNOME Shell selected IBus engine {actual!r}, expected {expected!r}")
+
+
+def exercise_live_ibus_preedit_commit(
+    memory_fd: int, addresses: dict[str, int], document: Path
+) -> None:
+    # GNOME Shell's IBus Simple engine supports the standard Ctrl+Shift+U
+    # Unicode entry path when IBUS_ENABLE_CTRL_SHIFT_U is enabled for its
+    # daemon. Releasing the modifiers immediately after U uses the engine's
+    # documented modifier-dropped form, so hex digits are sent unmodified.
+    require_ibus_engine("xkb:us:intl:eng")
+    send_key(65507, True)  # Control_L
+    send_key(65505, True)  # Shift_L
+    send_keysym(85)        # uppercase U
+    send_key(65505, False)
+    send_key(65507, False)
+    wait_input_idle()
+    wait_preedit(memory_fd, addresses, "u")
+
+    digits = ""
+    for character in "1F600":
+        send_keysym(ord(character))
+        wait_input_idle()
+        digits += character
+        wait_preedit(memory_fd, addresses, "u" + digits)
+
+    # Backspace is handled inside the IBus composition buffer. It must update
+    # the live preedit rather than deleting bytes from NekoEdit's document.
+    send_keysym(65288)  # BackSpace
+    wait_input_idle()
+    wait_preedit(memory_fd, addresses, "u1F60")
+
+    send_keysym(ord("0"))
+    wait_input_idle()
+    wait_preedit(memory_fd, addresses, "u1F600")
+
+    # Return terminates the IBus hex sequence and emits commit-text. GNOME
+    # Shell translates that into text-input-v3 commit_string + done.
+    send_keysym(65293)  # Return
+    wait_input_idle()
+    wait_document_commit(memory_fd, addresses, 4)
+
+    # The editor's default Save confirmation is part of the real input path.
+    send_shortcut(65507, 115)  # Ctrl+S
+    send_keysym(65293)         # Enter accepts confirmation
+    wait_input_idle()
+
+    expected = "\U0001f600".encode("utf-8")
+    deadline = time.monotonic() + 6.0
+    while time.monotonic() < deadline:
+        if document.read_bytes() == expected:
+            print(
+                "PASS: live IBus Simple engine delivered preedit updates, "
+                "Backspace correction, and U+1F600 commit through Mutter "
+                "text-input-v3; confirmed save preserved exact UTF-8 bytes."
+            )
+            return
+        time.sleep(0.05)
+    fail(
+        "live IBus commit/save produced unexpected document bytes: "
+        + repr(document.read_bytes())
+    )
 
 
 def read_log(path: Path) -> str:
@@ -214,6 +355,9 @@ def main() -> int:
                         "PASS: compositor advertised text-input-v3; NekoEdit "
                         "bound the manager, received text-input enter, enabled "
                         "the focused document, and committed state."
+                    )
+                    exercise_live_ibus_preedit_commit(
+                        memory_fd, addresses, document
                     )
                     return 0
                 time.sleep(0.1)
