@@ -29,7 +29,7 @@ int main(void){
     char traversal_src[512],traversal_pack[1024],macro_link_src[512],macro_link_pack[1024];
     char macro_link[1024],macro_dir_link[768],macro_dir_src[512],macro_dir_pack[1024];
     char c_locale_src[512],c_locale_pack[1024];
-    struct stat st;uint32_t in[4],out[8],n,depth_i,expansion_i,expansion_len;
+    struct stat st;uint32_t in[8],out[8],n,depth_i,expansion_i,expansion_len;
     const char *rules=
       "# In-app native import test\n"
       "<Multi_key> <o> <c> : \"©\"\n"
@@ -46,6 +46,7 @@ int main(void){
       "<dead_grave> <e> : \"è\"\n"
       "<dead_acute> <dead_circumflex> <a> : \"chain3\"\n"
       "<dead_grave> <dead_acute> <dead_circumflex> <a> : \"chain4\"\n"
+      "<dead_acute> <dead_circumflex> <dead_grave> <dead_tilde> <dead_macron> <dead_breve> <dead_caron> <a> : \"chain8\"\n"
       "<dead_acute> <a> <dead_circumflex> : \"invalid-chain\"\n"
       "<Multi_key> <Greek_alpha> <Cyrillic_ya> : \"Ω\"\n"
       "<Multi_key> <Arabic_alef> <hebrew_aleph> : \"Ж\"\n"
@@ -103,6 +104,10 @@ int main(void){
     in[0]=0x300;in[1]=0x301;in[2]=0x302;in[3]='a';
     n=compose_locale_lookup(1,4,in,out);
     need(n==6&&out[0]=='c'&&out[5]=='4',"three-mark dead-key chain");
+    in[0]=0x301;in[1]=0x302;in[2]=0x300;in[3]=0x303;
+    in[4]=0x304;in[5]=0x306;in[6]=0x30c;in[7]='a';
+    n=compose_locale_lookup(1,8,in,out);
+    need(n==6&&out[0]=='c'&&out[5]=='8',"seven-mark dead-key chain");
     in[0]=0x301;in[1]='a';in[2]=0x302;
     need(compose_locale_lookup(1,3,in,out)==0,
          "non-dead intermediate event was accepted in a dead-key chain");

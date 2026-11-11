@@ -12,13 +12,13 @@ Examples of accepted rule shapes:
     <dead_acute> <c> : "ç" ccedilla
 
 - The first event must be Multi_key or a recognized dead_* action.
-- A Multi_key rule accepts two to four following keysyms. A dead-key rule accepts one to three following events: every non-final event must be another recognized dead_* action, and the last event must be an ordinary Unicode keysym. Each action is normalized to its combining mark; the kind-1 NLP1 record stores one to three marks followed by the base scalar.
+- A Multi_key rule accepts two to four following keysyms. A v2 dead-key rule accepts one to seven following events: every non-final event must be another recognized dead_* action, and the last event must be an ordinary Unicode keysym. Each action is normalized to its combining mark; the kind-1 record stores one to seven marks followed by the base scalar. The runtime remains compatible with legacy v1 packs, whose dead-key record limit is three marks.
 - Input keysyms are retained only when they resolve to Unicode scalar values. The native Settings importer uses the same embedded Unicode-annotated X.Org keysym table as the physical XKB parser, covering named character keysyms across Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and the xorgproto 2026.1 aliases without an external header. Printable ASCII names and Uxxxx–Uxxxxxx values remain supported. The separate host-side converter can additionally read a supplied Unicode-annotated X.Org `keysymdef.h`.
 - Results may be a quoted string of one to eight Unicode scalars, optionally followed by a keysym annotation, or a Unicode-resolvable keysym alone. Octal and hexadecimal byte escapes use the selected source encoding. Unicode scalar escapes are accepted as a convenience extension.
 - Later identical rules replace earlier ones, following include expansion order. Shorter rules that prefix longer rules are dropped within the same NLP1 rule kind.
 - Modifier-qualified entries are counted and skipped: NLP1 does not represent modifier-state constraints. Unsupported leading keysyms and non-Unicode input symbols are also skipped and counted. Malformed syntax, unsafe includes, and resource-limit violations fail the import.
 
-This is not full libX11/libxkbcommon Compose interpretation. It does not support arbitrary modifier semantics, relative include names, wildcards, compose.dir locale mapping, arbitrary environment substitution, or dead-key chains longer than three actions plus the final base scalar.
+This is not full libX11/libxkbcommon Compose interpretation. It does not support arbitrary modifier semantics, relative include names, wildcards, compose.dir locale mapping, arbitrary environment substitution, or dead-key chains longer than seven actions plus the final base scalar.
 
 ## Include policy
 
@@ -30,7 +30,7 @@ Includes expand depth-first at the point where they occur. Only these quoted for
 
 Each include target is canonicalized before use. Symlinks that resolve outside their allowlisted root are rejected. An active include cycle is rejected; a repeated include that is no longer active is allowed and re-applied in textual order. Absolute paths, .., ~, $, unknown percent substitutions, relative include names, and nested substitutions are rejected. The converter never invokes a shell.
 
-The fixed resource bounds are in tools/import_user_xcompose.py: 512 KiB per file, 4 MiB total expanded input, 32 unique files, 64 include expansions, depth 16, 64 KiB per line, 32,768 unique records, at most four following Multi_key inputs, up to three leading dead-key actions plus one final scalar, and eight output scalars.
+The fixed resource bounds are in tools/import_user_xcompose.py: 512 KiB per file, 4 MiB total expanded input, 32 unique files, 64 include expansions, depth 16, 64 KiB per line, 32,768 unique records, at most four following Multi_key inputs, up to seven leading dead-key actions plus one final scalar, and eight output scalars.
 
 ## One-command install into NekoEdit
 
@@ -91,7 +91,7 @@ The host-side converter and installer remain explicit user-invoked utilities. Th
 
 The editor provides a native Settings -> Locale -> Import action. Select a UTF-8 .XCompose rule file in the file picker; NekoEdit derives a locale tag from the filename (for example, nekoedit-test.XCompose becomes nekoedit-test.UTF-8), validates the generated NLP1 pack, and installs it directly under ~/.nekoedit/locales/. The source file is left untouched. Existing packs are never overwritten. Rename the source file to choose a different pack name, or remove the previous pack before importing again.
 
-The in-app importer supports bounded UTF-8 rule files containing unqualified Multi_key rules with two to four following keysyms, or a chain of one to three recognized dead-key actions followed by one ordinary keysym. Results may be quoted UTF-8 strings with simple, octal, hexadecimal-byte, or Unicode-scalar escapes, or a Unicode-resolvable keysym. Input names use the same embedded X.Org Unicode-annotated keysym resolver as the keyboard keymap parser, alongside printable ASCII names and Uxxxx–Uxxxxxx forms. Later duplicate rules override earlier ones; ambiguous shorter prefixes are dropped within the same rule kind. Modifier-qualified rules and symbols without a Unicode character mapping are skipped.
+The in-app importer supports bounded UTF-8 rule files containing unqualified Multi_key rules with two to four following keysyms, or a v2 chain of one to seven recognized dead-key actions followed by one ordinary keysym. Results may be quoted UTF-8 strings with simple, octal, hexadecimal-byte, or Unicode-scalar escapes, or a Unicode-resolvable keysym. Input names use the same embedded X.Org Unicode-annotated keysym resolver as the keyboard keymap parser, alongside printable ASCII names and Uxxxx–Uxxxxxx forms. Later duplicate rules override earlier ones; ambiguous shorter prefixes are dropped within the same rule kind. Modifier-qualified rules and symbols without a Unicode character mapping are skipped.
 
 Quoted include directives expand depth-first at the point where they occur. Repeated includes are permitted after an earlier expansion returns; active cycles are rejected by device/inode identity. The native importer accepts four forms:
 
@@ -102,7 +102,7 @@ Quoted include directives expand depth-first at the point where they occur. Repe
 
 The system root can be overridden with NEKOEDIT_XCOMPOSE_SYSTEM_ROOT, which is useful for nonstandard installations and isolated tests. %L reads the bounded compose.dir file beneath that root, resolves an exact locale mapping, then opens the mapped Compose file without following symlink components. The mapping file is included in the aggregate byte budget. %L uses process LC_*/LANG, not the NekoEdit Settings locale-pack selection. %H and %S paths may contain subdirectories, but every component must be non-empty and cannot be . or ..; absolute paths, backslashes, nested percent substitutions, and other path syntax are rejected. Every intermediate directory and final file is opened with O_NOFOLLOW, and every input must be a regular file. Sibling includes resolve relative to the containing file, including files reached through %L, %H, or %S.
 
-The native import limits remain 512 KiB aggregate expanded input, 512 KiB per file, 32 unique files, 64 total include expansions, 16 active levels, 64 KiB per line, and 32,768 output records. Exceeding a limit or encountering an unsafe/malformed include fails the entire import; it never installs a partial pack. The importer retains the bounded UTF-8 and keysym subset, with Multi_key inputs and up to three-mark dead-key chains.
+The native import limits remain 512 KiB aggregate expanded input, 512 KiB per file, 32 unique files, 64 total include expansions, 16 active levels, 64 KiB per line, and 32,768 output records. Exceeding a limit or encountering an unsafe/malformed include fails the entire import; it never installs a partial pack. The importer retains the bounded UTF-8 and keysym subset, with two-to-four-input Multi_key rules and v2 dead-key chains of up to seven marks; legacy v1 records remain supported.
 
 The optional host-side converter remains useful for non-UTF-8 source encodings, broader X.Org keysym definitions, and syntax outside the in-app parser subset. Its canonical-root and symlink policy and detailed limits are documented above.
 

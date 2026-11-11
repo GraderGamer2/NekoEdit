@@ -36,10 +36,13 @@ int main(int argc, char **argv)
     uint32_t user_input[2] = { 'e', 'e' };
     uint32_t user_chain3[3] = { 0x0301u, 0x0302u, 'a' };
     uint32_t user_chain4[4] = { 0x0300u, 0x0301u, 0x0302u, 'a' };
+    uint32_t user_chain8[8] = {0x0301u,0x0302u,0x0300u,0x0303u,0x0304u,0x0306u,0x030cu,'a'};
+    uint32_t legacy_multi[2] = { 'a', 'b' };
+    uint32_t legacy_dead[2] = { 0x0301u, 'c' };
     uint32_t output_count;
 
-    if (argc != 6)
-        fail("expected HOME, valid pack, corrupt pack, symlink and converted user pack");
+    if (argc != 7)
+        fail("expected HOME, valid pack, corrupt pack, symlink, converted user pack and legacy v1 pack");
     if (setenv("HOME", argv[1], 1) < 0)
         fail("could not set HOME");
     process_envp = environ;
@@ -129,6 +132,9 @@ int main(int argc, char **argv)
     output_count = compose_locale_lookup(1, 4, user_chain4, output);
     if (output_count != 2 || output[0] != 'C' || output[1] != '4')
         fail("converted user three-mark dead-key chain did not resolve");
+    output_count = compose_locale_lookup(1, 8, user_chain8, output);
+    if (output_count != 2 || output[0] != 'C' || output[1] != '8')
+        fail("converted user seven-mark dead-key chain did not resolve");
     if (!compose_locale_remove_pack("user_TEST.UTF-8"))
         fail("converted user pack could not be removed after activation");
     if (lstat(user_installed_path, &st) == 0)
@@ -137,6 +143,22 @@ int main(int argc, char **argv)
         strcmp(compose_locale_current_tag, "en_US.UTF-8") != 0)
         fail("removing the converted user pack did not restore en_US");
 
-    puts("Compose locale manager tests passed (pinned and user-converted pack validation, safe installation, permissions, activation, Multi_key/dead-key lookup, corrupt/symlink rejection and removal).");
+    /* Legacy v1 records keep the original 52-byte input/output offsets. */
+    if (!compose_locale_install_pack(argv[6]))
+        fail("valid legacy v1 pack was not installed");
+    if (!compose_locale_load("legacy_TEST.UTF-8") || !compose_locale_active)
+        fail("legacy v1 pack could not be loaded");
+    output_count = compose_locale_lookup(0, 2, legacy_multi, output);
+    if (output_count != 1 || output[0] != 0x2603)
+        fail("legacy v1 Multi_key record did not resolve");
+    output_count = compose_locale_lookup(1, 2, legacy_dead, output);
+    if (output_count != 1 || output[0] != 0x00e7)
+        fail("legacy v1 typed dead-key record did not resolve");
+    if (!compose_locale_remove_pack("legacy_TEST.UTF-8"))
+        fail("legacy v1 pack could not be removed after activation");
+    if (compose_locale_active || strcmp(compose_locale_current_tag, "en_US.UTF-8") != 0)
+        fail("removing the legacy pack did not restore built-in en_US");
+
+    puts("Compose locale manager tests passed (v1/v2 pack validation, seven-mark dead-key lookup, safe installation, permissions, corrupt/symlink rejection and removal).");
     return 0;
 }

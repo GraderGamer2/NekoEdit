@@ -4922,11 +4922,16 @@ doc_word_drag_end:       .long 0
 .global doc_pending_dead_mark
 doc_pending_dead_mark: .long 0
 .global doc_compose_active, doc_compose_first, doc_compose_second, doc_compose_third, doc_compose_fourth
+.global doc_compose_fifth, doc_compose_sixth, doc_compose_seventh, doc_compose_eighth
 doc_compose_active: .long 0
 doc_compose_first:  .long 0
 doc_compose_second: .long 0
 doc_compose_third:  .long 0
 doc_compose_fourth: .long 0
+doc_compose_fifth:  .long 0
+doc_compose_sixth:  .long 0
+doc_compose_seventh: .long 0
+doc_compose_eighth: .long 0
 doc_view_top_row:       .long 0
 doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
@@ -6990,6 +6995,10 @@ wayland_main:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     mov dword ptr [rip + ctrl_down], 0
     mov dword ptr [rip + ctrl_physical_down], 0
     mov dword ptr [rip + shift_down], 0
@@ -7584,6 +7593,10 @@ wayland_main:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_escape_cancel_dead:
@@ -7592,6 +7605,10 @@ wayland_main:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_escape_menu_handling:
@@ -8037,6 +8054,10 @@ wayland_main:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_backspace_cancel_dead:
@@ -8045,6 +8066,10 @@ wayland_main:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call repeat_cancel
     jmp .keyboard_changed
 .Lkeyboard_backspace_document:
@@ -13768,6 +13793,10 @@ text_input_apply_done:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lti_apply_insert
     call doc_delete_selection
@@ -18527,7 +18556,7 @@ doc_compose_precomposed:
     ret
 .size doc_compose_precomposed, . - doc_compose_precomposed
 
-# Flush pending dead-key marks literally. first..third hold up to three marks.
+# Flush pending dead-key marks literally. first..seventh hold up to seven marks.
 .type doc_flush_pending_dead_literal, @function
 doc_flush_pending_dead_literal:
     push rbx
@@ -18539,7 +18568,7 @@ doc_flush_pending_dead_literal:
     lea rbx, [rip + doc_compose_first]
     xor r12d, r12d
 .Ldoc_flush_pending_dead_loop:
-    cmp r12d, 3
+    cmp r12d, 7
     jae .Ldoc_flush_pending_dead_clear
     mov edi, dword ptr [rbx + r12*4]
     test edi, edi
@@ -18553,6 +18582,10 @@ doc_flush_pending_dead_literal:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
 .Ldoc_flush_pending_dead_done:
     add rsp, 8
     pop r12
@@ -18693,6 +18726,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     test r14d, r14d
     jz .Ldoc_keyboard_dead_after_compose
     call doc_delete_selection
@@ -18713,27 +18750,34 @@ doc_insert_keyboard_codepoint:
     mov edi, ebp
     call doc_insert_codepoint_utf8
 .Ldoc_keyboard_dead_after_compose:
-    # A dead-key chain stores one to three combining marks in the first slots.
+    # A dead-key chain stores up to seven combining marks in contiguous slots.
     cmp dword ptr [rip + doc_pending_dead_mark], 0
     je .Ldoc_keyboard_store_first_dead
-    cmp dword ptr [rip + doc_compose_second], 0
-    jne .Ldoc_keyboard_dead_second_present
-    mov dword ptr [rip + doc_compose_second], r13d
-    jmp .Ldoc_keyboard_dead_mark_saved
-.Ldoc_keyboard_dead_second_present:
-    cmp dword ptr [rip + doc_compose_third], 0
-    jne .Ldoc_keyboard_dead_chain_full
-    mov dword ptr [rip + doc_compose_third], r13d
+    # The first slot is already occupied. Find the next empty mark slot;
+    # an eighth consecutive dead action flushes the old chain and starts anew.
+    lea rax, [rip + doc_compose_first]
+    mov ecx, 1
+.Ldoc_keyboard_dead_find_empty:
+    cmp ecx, 7
+    jae .Ldoc_keyboard_dead_chain_full
+    cmp dword ptr [rax + rcx*4], 0
+    je .Ldoc_keyboard_dead_slot_found
+    inc ecx
+    jmp .Ldoc_keyboard_dead_find_empty
+.Ldoc_keyboard_dead_slot_found:
+    mov dword ptr [rax + rcx*4], r13d
     jmp .Ldoc_keyboard_dead_mark_saved
 .Ldoc_keyboard_dead_chain_full:
-    # Four inputs are the NLP1 ceiling: three marks plus the final base.
-    # A fourth consecutive dead action flushes the old chain and starts anew.
     call doc_flush_pending_dead_literal
 .Ldoc_keyboard_store_first_dead:
     mov dword ptr [rip + doc_compose_first], r13d
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
 .Ldoc_keyboard_dead_mark_saved:
     mov dword ptr [rip + doc_pending_dead_mark], r13d
     mov eax, 1
@@ -18776,6 +18820,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     mov eax, 1
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_insert_scalar:
@@ -18792,6 +18840,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     mov eax, 1
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_compose_second:
@@ -18818,6 +18870,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
@@ -18835,6 +18891,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call doc_delete_selection
     mov edi, r14d
     call doc_insert_codepoint_utf8
@@ -18847,6 +18907,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call doc_delete_selection
     mov edi, r13d
     call doc_insert_codepoint_utf8
@@ -18862,6 +18926,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     call doc_delete_selection
     mov edi, r13d
     call doc_insert_codepoint_utf8
@@ -18869,7 +18937,7 @@ doc_insert_keyboard_codepoint:
     call doc_insert_codepoint_utf8
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_locale_compose:
-    # Optional packs support 2-4 inputs and up to 8 output scalars.
+    # Optional-pack Multi_key rules remain limited to 2-4 inputs; dead-key rules use the separate chain path.
     # Ambiguous-prefix records are rejected by the loader.
     mov eax, dword ptr [rip + doc_compose_first]
     test eax, eax
@@ -18953,6 +19021,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_locale_buffered:
     mov eax, 1
@@ -18963,17 +19035,18 @@ doc_insert_keyboard_codepoint:
     test r13d, r13d
     jz .Ldoc_keyboard_plain_scalar
     mov dword ptr [rip + doc_pending_dead_mark], 0
-    # first..third contain pending marks; append the following base scalar.
-    # The complete kind-1 input is two to four scalars (one to three marks).
-    mov r14d, 1
-    cmp dword ptr [rip + doc_compose_second], 0
-    je .Ldoc_keyboard_dead_append_base
-    inc r14d
-    cmp dword ptr [rip + doc_compose_third], 0
-    je .Ldoc_keyboard_dead_append_base
-    inc r14d
-.Ldoc_keyboard_dead_append_base:
+    # Count contiguous pending marks, then append the final base scalar.
+    # Kind-1 records hold one to seven marks followed by the base.
     lea rax, [rip + doc_compose_first]
+    xor r14d, r14d
+.Ldoc_keyboard_dead_count_marks:
+    cmp r14d, 7
+    jae .Ldoc_keyboard_dead_append_base
+    cmp dword ptr [rax + r14*4], 0
+    je .Ldoc_keyboard_dead_append_base
+    inc r14d
+    jmp .Ldoc_keyboard_dead_count_marks
+.Ldoc_keyboard_dead_append_base:
     mov dword ptr [rax + r14*4], r12d
     mov r13d, dword ptr [rip + doc_compose_first]
     cmp dword ptr [rip + compose_locale_active], 0
@@ -19027,6 +19100,10 @@ doc_insert_keyboard_codepoint:
     mov dword ptr [rip + doc_compose_second], 0
     mov dword ptr [rip + doc_compose_third], 0
     mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
     jmp .Ldoc_keyboard_insert_done
 .Ldoc_keyboard_plain_scalar:
     call doc_delete_selection

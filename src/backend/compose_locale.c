@@ -35,11 +35,15 @@
 #define PROT_READ 1
 #define MAP_PRIVATE 2
 #define HEADER_SIZE 72u
-#define RECORD_SIZE 52u
+#define RECORD_SIZE_V1 52u
+#define RECORD_SIZE 68u
+#define FORMAT_VERSION_V1 1u
+#define FORMAT_VERSION 2u
 #define MAX_RECORDS 32768u
 #define MAX_PACK_SIZE (2u * 1024u * 1024u)
 #define MAX_TAG_LENGTH 31u
-#define MAX_INPUTS 4u
+#define MAX_INPUTS 8u
+#define MAX_MULTI_KEY_INPUTS 4u
 #define MAX_OUTPUTS 8u
 
 extern char **process_envp;
@@ -63,6 +67,8 @@ static const char extension[] = ".nlp";
 static const uint8_t *mapped_pack;
 static uint32_t mapped_pack_size;
 static uint32_t mapped_record_count;
+static uint32_t mapped_record_size;
+static uint32_t mapped_input_capacity;
 
 static long syscall6(long number, long a1, long a2, long a3,
                      long a4, long a5, long a6)
@@ -293,10 +299,12 @@ static int compare_records(const uint8_t *a, const uint8_t *b)
         if (av < bv) return -1;
         if (av > bv) return 1;
     }
+    /* Equality across the shared prefix also rejects duplicate and
+     * prefix-ambiguous records, regardless of which one is shorter. */
     return 0;
 }
 
-/* A stored longer sequence compares equal when it begins with the input prefix. */
+/* A stored longer sequence compares equal when it begins with input[]. */
 static int compare_record_input(const uint8_t *record, uint32_t kind,
                                 const uint32_t *input, uint32_t input_count)
 {
@@ -316,53 +324,70 @@ static int compare_record_input(const uint8_t *record, uint32_t kind,
 
 static int validate_pack(const uint8_t *data, uint32_t size,
                          const char *tag, uint32_t tag_length,
-                         uint32_t *record_count)
+                         uint32_t *record_count, uint32_t *record_size_out,
+                         uint32_t *input_capacity_out)
 {
     const uint8_t *payload;
-    uint32_t count, payload_size, i;
-    if (!data || size < HEADER_SIZE || size > MAX_PACK_SIZE) return 0;
+    uint32_t count, payload_size, record_size, input_capacity, output_offset;
+    uint32_t version, i;
+    if (!data || size < HEADER_SIZE || size > MAX_PACK_SIZE ||
+        !record_count) return 0;
     for (i = 0; i < sizeof(magic); ++i)
         if (data[i] != magic[i]) return 0;
-    if (read32(data + 8) != 1u || read32(data + 12) != HEADER_SIZE ||
-        read32(data + 16) != RECORD_SIZE || read32(data + 32) != 0u ||
-        read32(data + 68) != 0u) return 0;
 
-    count = read32(data + 20);
-    payload_size = read32(data + 24);
+    version = read32(data + 8u);
+    if (version == FORMAT_VERSION_V1) {
+        record_size = RECORD_SIZE_V1;
+        input_capacity = 4u;
+    } else if (version == FORMAT_VERSION) {
+        record_size = RECORD_SIZE;
+        input_capacity = MAX_INPUTS;
+    } else {
+        return 0;
+    }
+    if (read32(data + 12u) != HEADER_SIZE ||
+        read32(data + 16u) != record_size || read32(data + 32u) != 0u ||
+        read32(data + 68u) != 0u) return 0;
+
+    count = read32(data + 20u);
+    payload_size = read32(data + 24u);
     if (!count || count > MAX_RECORDS ||
-        payload_size != count * RECORD_SIZE ||
+        payload_size != count * record_size ||
         size != HEADER_SIZE + payload_size) return 0;
-    if (data[36u + tag_length] != 0u) return 0;
+    if (tag_length >= 32u || data[36u + tag_length] != 0u) return 0;
     for (i = 0; i < tag_length; ++i)
         if (data[36u + i] != (uint8_t)tag[i]) return 0;
     for (i = tag_length + 1u; i < 32u; ++i)
         if (data[36u + i] != 0u) return 0;
 
     payload = data + HEADER_SIZE;
-    if (crc32(payload, payload_size) != read32(data + 28)) return 0;
+    if (crc32(payload, payload_size) != read32(data + 28u)) return 0;
+    output_offset = 4u + input_capacity * 4u;
     for (i = 0; i < count; ++i) {
-        const uint8_t *record = payload + i * RECORD_SIZE;
+        const uint8_t *record = payload + i * record_size;
         uint32_t inputs = record[0], outputs = record[1], j;
-        uint32_t kind = read16(record + 2);
-        if (inputs < 2u || inputs > MAX_INPUTS ||
-            outputs < 1u || outputs > MAX_OUTPUTS ||
-            kind > 1u) return 0;
-        for (j = 0; j < MAX_INPUTS; ++j) {
+        uint32_t kind = read16(record + 2u);
+        uint32_t max_inputs = kind == 0u ? MAX_MULTI_KEY_INPUTS : input_capacity;
+        if (kind > 1u || inputs < 2u || inputs > max_inputs ||
+            outputs < 1u || outputs > MAX_OUTPUTS) return 0;
+        for (j = 0; j < input_capacity; ++j) {
             uint32_t value = read32(record + 4u + j * 4u);
             if (j < inputs) {
                 if (!scalar_valid(value)) return 0;
             } else if (value) return 0;
         }
         for (j = 0; j < MAX_OUTPUTS; ++j) {
-            uint32_t value = read32(record + 20u + j * 4u);
+            uint32_t value = read32(record + output_offset + j * 4u);
             if (j < outputs) {
                 if (!scalar_valid(value)) return 0;
             } else if (value) return 0;
         }
-        if (i && compare_records(record - RECORD_SIZE, record) >= 0)
+        if (i && compare_records(record - record_size, record) >= 0)
             return 0;
     }
     *record_count = count;
+    if (record_size_out) *record_size_out = record_size;
+    if (input_capacity_out) *input_capacity_out = input_capacity;
     return 1;
 }
 
@@ -396,6 +421,7 @@ uint32_t compose_locale_load(const char *requested_tag)
     const char *tag = requested_tag;
     const char *home = environment_value(home_env);
     uint32_t tag_length, home_length, count = 0;
+    uint32_t record_size = 0, input_capacity = 0;
     char path[4096];
     char normalized_tag[MAX_TAG_LENGTH + 9u];
     long fd, size, address;
@@ -423,6 +449,8 @@ uint32_t compose_locale_load(const char *requested_tag)
     mapped_pack = (const uint8_t *)0;
     mapped_pack_size = 0;
     mapped_record_count = 0;
+    mapped_record_size = 0;
+    mapped_input_capacity = 0;
     if (!tag || !tag[0] || equals(tag, "en_US") ||
         equals(tag, "en_US.UTF-8") || equals(tag, "en_US.utf8") ||
         equals(tag, "en_US.UTF8") || equals(tag, "C") ||
@@ -454,13 +482,16 @@ uint32_t compose_locale_load(const char *requested_tag)
     (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
     if (failed(address)) return 0;
     candidate = (const uint8_t *)(uintptr_t)address;
-    if (!validate_pack(candidate, (uint32_t)size, tag, tag_length, &count)) {
+    if (!validate_pack(candidate, (uint32_t)size, tag, tag_length,
+                        &count, &record_size, &input_capacity)) {
         (void)syscall6(SYS_munmap, address, size, 0, 0, 0, 0);
         return 0;
     }
     mapped_pack = candidate;
     mapped_pack_size = (uint32_t)size;
     mapped_record_count = count;
+    mapped_record_size = record_size;
+    mapped_input_capacity = input_capacity;
     compose_locale_active = 1;
     {
         uint32_t i;
@@ -477,7 +508,7 @@ static uint32_t find_lower_bound(uint32_t kind, const uint32_t *input,
     const uint8_t *records = mapped_pack + HEADER_SIZE;
     while (low < high) {
         uint32_t mid = low + (high - low) / 2u;
-        const uint8_t *record = records + mid * RECORD_SIZE;
+        const uint8_t *record = records + mid * mapped_record_size;
         if (compare_record_input(record, kind, input, input_count) < 0)
             low = mid + 1u;
         else
@@ -492,15 +523,17 @@ uint32_t compose_locale_lookup(uint32_t kind, uint32_t input_count,
     const uint8_t *records, *record;
     uint32_t index, i;
     if (!compose_locale_active || !mapped_pack || !input || !output ||
-        kind > 1u || input_count < 2u || input_count > MAX_INPUTS) return 0;
+        kind > 1u || input_count < 2u ||
+        (kind == 0u ? input_count > MAX_MULTI_KEY_INPUTS :
+                      input_count > mapped_input_capacity)) return 0;
     records = mapped_pack + HEADER_SIZE;
     index = find_lower_bound(kind, input, input_count);
     if (index >= mapped_record_count) return 0;
-    record = records + index * RECORD_SIZE;
+    record = records + index * mapped_record_size;
     if (record[0] != input_count ||
         compare_record_input(record, kind, input, input_count) != 0) return 0;
     for (i = 0; i < record[1]; ++i)
-        output[i] = read32(record + 20u + i * 4u);
+        output[i] = read32(record + 4u + mapped_input_capacity * 4u + i * 4u);
     return record[1];
 }
 
@@ -510,11 +543,13 @@ uint32_t compose_locale_prefix(uint32_t kind, uint32_t input_count,
     const uint8_t *records, *record;
     uint32_t index;
     if (!compose_locale_active || !mapped_pack || !input ||
-        kind > 1u || input_count < 1u || input_count >= MAX_INPUTS) return 0;
+        kind > 1u || input_count < 1u ||
+        (kind == 0u ? input_count >= MAX_MULTI_KEY_INPUTS :
+                      input_count >= mapped_input_capacity)) return 0;
     records = mapped_pack + HEADER_SIZE;
     index = find_lower_bound(kind, input, input_count);
     if (index >= mapped_record_count) return 0;
-    record = records + index * RECORD_SIZE;
+    record = records + index * mapped_record_size;
     return record[0] > input_count &&
            compare_record_input(record, kind, input, input_count) == 0;
 }
@@ -697,7 +732,7 @@ static int map_pack_file(const char *path, long *fd_out,
     }
     bytes = (const uint8_t *)(uintptr_t)address;
     if (!pack_tag(bytes, (uint32_t)size, tag, tag_length) ||
-        !validate_pack(bytes, (uint32_t)size, tag, *tag_length, record_count)) {
+        !validate_pack(bytes, (uint32_t)size, tag, *tag_length, record_count, 0, 0)) {
         (void)syscall6(SYS_munmap, address, size, 0, 0, 0, 0);
         (void)syscall6(SYS_close, fd, 0, 0, 0, 0, 0);
         return 0;
@@ -835,7 +870,7 @@ uint32_t compose_locale_remove_pack(const char *tag)
         uint32_t embedded_length = 0;
         if (!pack_tag(mapped, (uint32_t)file_size, embedded, &embedded_length) ||
             !equals(embedded, tag_copy) ||
-            !validate_pack(mapped, (uint32_t)file_size, tag_copy, tag_length, &records)) {
+            !validate_pack(mapped, (uint32_t)file_size, tag_copy, tag_length, &records, 0, 0)) {
             (void)syscall6(SYS_munmap, address, file_size, 0, 0, 0, 0);
             goto remove_done;
         }
@@ -1079,7 +1114,7 @@ static uint32_t nx_right(const char *s,uint32_t a,uint32_t b)
     while(b>a&&nx_space(s[b-1u]))--b;
     return b;
 }
-static int nx_events(const char *s,uint32_t n,char names[6][XCOMPOSE_MAX_NAME+1u],uint32_t *count)
+static int nx_events(const char *s,uint32_t n,char names[8][XCOMPOSE_MAX_NAME+1u],uint32_t *count)
 {
     uint32_t at=0,num=0,residue=0;
     while(at<n){
@@ -1090,7 +1125,7 @@ static int nx_events(const char *s,uint32_t n,char names[6][XCOMPOSE_MAX_NAME+1u
             while(at<n&&s[at]!='>')++at;
             if(at>=n)return 0;
             end=at++;
-            if(end==start||end-start>XCOMPOSE_MAX_NAME||num>=6u)return 0;
+            if(end==start||end-start>XCOMPOSE_MAX_NAME||num>=8u)return 0;
             for(i=start;i<end;++i){if(nx_space(s[i])||s[i]=='<')return 0;names[num][i-start]=s[i];}
             names[num][end-start]=0;++num;
         }
@@ -1103,7 +1138,9 @@ static int nx_add(struct native_compose_rule *rules,uint32_t *n,uint32_t kind,
 {
     struct native_compose_rule *r;
     uint32_t i;
-    if(*n>=MAX_RECORDS||kind>1u||ni<2u||ni>MAX_INPUTS||no<1u||no>MAX_OUTPUTS)return 0;
+    if(*n>=MAX_RECORDS||kind>1u||ni<2u||
+       ni>(kind==0u?MAX_MULTI_KEY_INPUTS:MAX_INPUTS)||
+       no<1u||no>MAX_OUTPUTS)return 0;
     r=&rules[(*n)++];
     for(i=0;i<MAX_INPUTS;++i)r->input[i]=i<ni?in[i]:0;
     for(i=0;i<MAX_OUTPUTS;++i)r->output[i]=i<no?out[i]:0;
@@ -1516,7 +1553,7 @@ static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
         uint32_t start = at, end, comment = 0xffffffffu;
         uint32_t colon = 0xffffffffu, quote = 0, escape = 0;
         uint32_t left_a, left_b, right_a, names_n = 0, i;
-        char names[6][XCOMPOSE_MAX_NAME + 1u], *line;
+        char names[8][XCOMPOSE_MAX_NAME + 1u], *line;
         while (at < length && source[at] != '\n') ++at;
         end = at;
         if (at < length) ++at;
@@ -1586,7 +1623,7 @@ static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
                     if (names_n < 3u || names_n > 5u) continue;
                 } else {
                     mark = nx_dead_mark(names[0]);
-                    if (!mark || names_n < 2u || names_n > 4u) continue;
+                    if (!mark || names_n < 2u || names_n > 8u) continue;
                     kind = 1;
                     inputs[ni++] = mark;
                 }
@@ -1601,11 +1638,13 @@ static int nx_parse_buffer(struct nx_import_state *state,uint8_t *source,
                         if (kind == 1u && nx_dead_mark(names[j])) break;
                         scalar = nx_keysym(names[j]);
                     }
-                    if (!scalar || !scalar_valid(scalar) || ni >= MAX_INPUTS)
+                    if (!scalar || !scalar_valid(scalar) ||
+                        ni >= (kind == 0u ? MAX_MULTI_KEY_INPUTS : MAX_INPUTS))
                         break;
                     inputs[ni++] = scalar;
                 }
-                if (j != names_n || ni < 2u || ni > MAX_INPUTS) continue;
+                if (j != names_n || ni < 2u ||
+                    ni > (kind == 0u ? MAX_MULTI_KEY_INPUTS : MAX_INPUTS)) continue;
                 right_a = nx_left(line, colon + 1u, len);
                 if (right_a >= len) continue;
                 if (line[right_a] == '"') {
@@ -1744,7 +1783,7 @@ static int nx_build_pack(uint8_t *pack,const char *tag,uint32_t tag_n,
     if(!pack||!tag||!tag_n||!rules||!count||count>MAX_RECORDS||!size)return 0;
     payload=count*RECORD_SIZE;if(HEADER_SIZE+payload>MAX_PACK_SIZE)return 0;
     for(i=0;i<8u;++i)pack[i]=magic[i];
-    nx_store32(pack+8u,1u);nx_store32(pack+12u,HEADER_SIZE);nx_store32(pack+16u,RECORD_SIZE);
+    nx_store32(pack+8u,FORMAT_VERSION);nx_store32(pack+12u,HEADER_SIZE);nx_store32(pack+16u,RECORD_SIZE);
     nx_store32(pack+20u,count);nx_store32(pack+24u,payload);nx_store32(pack+28u,0u);nx_store32(pack+32u,0u);
     for(i=0;i<32u;++i)pack[36u+i]=i<tag_n?(uint8_t)tag[i]:0u;
     nx_store32(pack+68u,0u);
@@ -1752,7 +1791,7 @@ static int nx_build_pack(uint8_t *pack,const char *tag,uint32_t tag_n,
         uint32_t j;uint8_t *record=pack+HEADER_SIZE+i*RECORD_SIZE;
         record[0]=rules[i].input_count;record[1]=rules[i].output_count;nx_store16(record+2u,rules[i].kind);
         for(j=0;j<MAX_INPUTS;++j)nx_store32(record+4u+j*4u,rules[i].input[j]);
-        for(j=0;j<MAX_OUTPUTS;++j)nx_store32(record+20u+j*4u,rules[i].output[j]);
+        for(j=0;j<MAX_OUTPUTS;++j)nx_store32(record+36u+j*4u,rules[i].output[j]);
     }
     nx_store32(pack+28u,crc32(pack+HEADER_SIZE,payload));*size=HEADER_SIZE+payload;return 1;
 }
@@ -1787,7 +1826,7 @@ uint32_t compose_locale_import_xcompose(const char *source_path)
     (void)syscall6(SYS_close,source_dir,0,0,0,0,0);
     source_dir=-1;
     if(!nx_build_pack(pack,tag,tag_n,rules,count,&pack_size)||
-       !validate_pack(pack,pack_size,tag,tag_n,&validated)||validated!=count)goto done;
+       !validate_pack(pack,pack_size,tag,tag_n,&validated,0,0)||validated!=count)goto done;
     if(!make_pack_names(tag,tag_n,destination,sizeof(destination),temporary,sizeof(temporary)))goto done;
     temp_ready=1;
     dir=open_locale_directory();if(failed(dir)){dir=-1;goto done;}

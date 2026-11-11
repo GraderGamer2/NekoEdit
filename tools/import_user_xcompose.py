@@ -22,7 +22,8 @@ MAX_FILE_EXPANSIONS = 64
 MAX_INCLUDE_DEPTH = 16
 MAX_LINE_BYTES = 64 * 1024
 MAX_RECORDS = 32_768
-MAX_INPUTS = 4
+MAX_INPUTS = 8
+MAX_MULTI_KEY_INPUTS = 4
 MAX_OUTPUTS = 8
 
 _ALLOWED_ENCODINGS = {
@@ -544,7 +545,7 @@ class ComposeImporter:
                     if len(following) < 2:
                         self.stats["short_sequence"] += 1
                         continue
-                    if len(following) > MAX_INPUTS:
+                    if len(following) > MAX_MULTI_KEY_INPUTS:
                         self.stats["too_long_input"] += 1
                         continue
                     input_values: list[int] = []
@@ -554,7 +555,7 @@ class ComposeImporter:
                     if not following:
                         self.stats["short_sequence"] += 1
                         continue
-                    if len(following) > 3:
+                    if len(following) > 7:
                         self.stats["too_long_input"] += 1
                         continue
                     input_values = [DEAD_KEY_MARKS[names[0]]]

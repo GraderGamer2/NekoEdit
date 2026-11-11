@@ -92,6 +92,7 @@ include "%L"
 <dead_acute> <c> : "ñ" ntilde
 <dead_acute> <dead_circumflex> <a> : "chain3"
 <dead_grave> <dead_acute> <dead_circumflex> <a> : "chain4"
+<dead_acute> <dead_circumflex> <dead_grave> <dead_tilde> <dead_macron> <dead_breve> <dead_caron> <a> : "chain8"
 <dead_acute> <a> <dead_circumflex> : "invalid intermediate"
 <dead_acute> <dead_circumflex> : "invalid final"
 <Multi_key> <non_unicode> <a> : "skip" skip
@@ -146,6 +147,8 @@ def main() -> None:
             raise AssertionError("two-mark dead-key chain was not imported")
         if result[("dead_key", (0x0300, 0x0301, 0x0302, ord("a")))] != tuple(map(ord, "chain4")):
             raise AssertionError("three-mark dead-key chain was not imported")
+        if result[("dead_key", (0x0301, 0x0302, 0x0300, 0x0303, 0x0304, 0x0306, 0x030C, ord("a")))] != tuple(map(ord, "chain8")):
+            raise AssertionError("seven-mark dead-key chain was not imported")
         if ("multi_key", (0x0301, ord("c"))) in result:
             raise AssertionError("dead-key record leaked into Multi_key namespace")
         packed = encode_pack(document)

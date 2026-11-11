@@ -28,29 +28,32 @@ def main():
          "output": ["U+1F642"]},
         {"kind": "multi_key", "input": shared_input, "output": ["U+0023"]},
         {"kind": "dead_key", "input": shared_input, "output": ["U+00E7"]},
+        {"kind": "dead_key", "input": [0x0301, 0x0302, 0x0303, 0x0304, 0x0305, 0x0306, 0x0307, ord("g")], "output": [0x2603]},
     ]}
     packed = encode_pack(document)
     header = struct.unpack("<8s7I32sI", packed[:HEADER_SIZE])
     if (
         header[0] != MAGIC or header[1] != VERSION or header[2] != HEADER_SIZE
-        or header[3] != RECORD_SIZE or header[4] != 5
-        or header[5] != 5 * RECORD_SIZE
+        or header[3] != RECORD_SIZE or header[4] != 6
+        or header[5] != 6 * RECORD_SIZE
         or header[6] != (zlib.crc32(packed[HEADER_SIZE:]) & 0xFFFFFFFF)
         or header[7] != 0 or header[8].split(bytes(1), 1)[0] != b"fr_FR.UTF-8"
         or header[9] != 0 or len(packed) != HEADER_SIZE + header[5]
     ):
         raise AssertionError("NLP1 header or payload mismatch")
     records = [
-        struct.unpack_from("<BBH4I8I", packed, HEADER_SIZE + i * RECORD_SIZE)
-        for i in range(5)
+        struct.unpack_from("<BBH8I8I", packed, HEADER_SIZE + i * RECORD_SIZE)
+        for i in range(6)
     ]
     keys = [(record[2], record[3:3 + record[0]]) for record in records]
-    if keys != sorted(keys) or [record[2] for record in records] != [0, 0, 0, 0, 1]:
+    if keys != sorted(keys) or [record[2] for record in records] != [0, 0, 0, 0, 1, 1]:
         raise AssertionError("records were not sorted by kind and input sequence")
-    if records[0][3:5] != (0x006F, 0x0069) or records[0][7:9] != (0x2603, 0xFE0F):
+    if records[0][3:5] != (0x006F, 0x0069) or records[0][11:13] != (0x2603, 0xFE0F):
         raise AssertionError("legacy Multi_key record layout changed")
-    if records[-1][3:5] != (0x0301, ord("c")) or records[-1][7] != 0x00E7:
+    if records[-2][3:5] != (0x0301, ord("c")) or records[-2][11] != 0x00E7:
         raise AssertionError("dead-key record encoding or output mismatch")
+    if records[-1][0] != 8 or records[-1][3:11] != (0x0301, 0x0302, 0x0303, 0x0304, 0x0305, 0x0306, 0x0307, ord("g")):
+        raise AssertionError("eight-input dead-key record was not serialized")
 
     # Equal scalar inputs in different namespaces are legal.
     if records[-1][2] == records[-2][2]:
@@ -63,6 +66,12 @@ def main():
         {"kind": "dead_key", "input": [97, 98], "output": [65]},
         {"kind": "dead_key", "input": [97, 98], "output": [66]},
     ]}, "same-kind duplicate")
+    rejected({"locale": "fr_FR", "sequences": [
+        {"kind": "multi_key", "input": [97, 98, 99, 100, 101], "output": [65]},
+    ]}, "Multi_key remains limited to four inputs")
+    rejected({"locale": "fr_FR", "sequences": [
+        {"kind": "dead_key", "input": list(range(97, 106)), "output": [65]},
+    ]}, "dead-key sequence exceeds eight inputs")
     rejected({"locale": "fr_FR", "sequences": [
         {"kind": "unexpected", "input": [97, 98], "output": [65]},
     ]}, "unknown record kind")

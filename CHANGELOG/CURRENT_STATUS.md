@@ -1,3 +1,14 @@
+## 2026-11-11 — extend optional Compose dead-key chains to seven marks (CI pending)
+
+The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.
+
+The limit is carried consistently through the standard pack generator, pinned X.Org importer, offline user .XCompose converter, native Settings importer, freestanding validation/lookup, and Wayland document-input state. The editor buffers seven marks, queries the complete eight-scalar locale rule, preserves unmatched input literally, and flushes the previous seven marks only when an eighth consecutive dead action arrives. Multi_key continues to use its separate four-input state.
+
+Regression coverage includes v2 eight-scalar serialization and bounds, pinned/user/native importer fixtures, freestanding manager lookup, an explicitly constructed v1 pack with both Multi_key and typed dead-key records, and physical Wayland mock events for seven-mark success and eight-action overflow. Existing locale JSON datasets are unchanged because their source rules do not exceed the previous three-mark data ceiling; en_US remains the only embedded Compose dataset and optional locales remain separate data-only packs.
+
+The source and documentation updates are staged for one early-alpha commit. Build and test CI has not yet been run for this change.
+
+
 ## 2026-11-11 — preserve canonical XKB key names alongside aliases
 
 Actions #827 and #828 passed the freestanding build, CLI tests, Wayland mock, and ELF inspection, but the native libxkbcommon `us(intl)` parser test failed at the end of `xkb_symbols`. The #828 diagnostics identified the root cause: XKB keycodes define canonical names first (for example `<AD01> = 24`) and later define aliases (for example `alias <LatQ> = <AD01>`). NekoEdit stored only one name per keycode and overwrote the canonical name with each alias. The symbols section still refers to the canonical name, so those key blocks were skipped; the same happened to `RALT` when `ALGR` was recorded.

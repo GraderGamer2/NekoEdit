@@ -308,6 +308,7 @@ def run(
                 {"input":[0x79,0x75,0x69],"output":[0x2605]},
                 {"kind":"dead_key","input":[0x0301,0x030c,ord("g")],"output":[0x1f642]},
                 {"kind":"dead_key","input":[0x0301,0x0304,0x030c,ord("g")],"output":[0x2603,0xfe0f]},
+                {"kind":"dead_key","input":[0x0301,0x030c,0x0304,0x0301,0x030c,0x0304,0x0301,ord("g")],"output":[0x2603,0xfe0f]},
             ]}
         pack_data = bytearray(encode_compose_pack(pack_doc))
         if compose_locale_invalid_test: pack_data[-1] ^= 1
@@ -4133,26 +4134,32 @@ xkb_symbols "nekoedit-sparse" {
                     expected += b"g\xcc\x81\xcc\xa3"
                     if read_document_state()["doc_contents"] != expected:
                         raise AssertionError("unknown dead-key chain was not preserved literally")
-                    # A fourth dead action flushes the three-mark maximum and starts anew.
-                    key_step(4190, 33, "maximum chain buffers acute")
-                    key_step(4192, 229, "maximum chain buffers macron")
-                    key_step(4194, 230, "maximum chain buffers caron")
-                    key_step(4196, 231, "fourth dead action flushes the old chain")
-                    expected += bytes.fromhex("cc81cc84cc8c")
+                    # Seven marks are buffered; only the eighth dead action
+                    # flushes them literally and starts a fresh one-mark chain.
+                    for timestamp, keycode, description in (
+                        (4190, 33, "acute"), (4192, 229, "macron"),
+                        (4194, 230, "caron"), (4196, 33, "acute"),
+                        (4198, 230, "caron"), (4200, 229, "macron"),
+                        (4202, 33, "final acute"),
+                    ):
+                        key_step(timestamp, keycode, "seven-mark maximum buffers " + description)
+                    key_step(4204, 231, "eighth dead action flushes the old chain")
+                    expected += bytes.fromhex("cc81cc84cc8ccc81cc8ccc84cc81")
                     if (
                         read_document_state()["doc_contents"] != expected
                         or child_u32("doc_compose_first") != 0x0323
+                        or child_u32("doc_pending_dead_mark") != 0x0323
                         or child_u32("doc_compose_second") != 0
                     ):
-                        raise AssertionError("fourth dead action dropped or retained the wrong chain")
-                    key_step(4198, 34, "new chain resolves as a single-mark fallback")
-                    expected += b"g\xcc\xa3"
+                        raise AssertionError("eighth dead action did not flush seven marks and restart cleanly")
+                    key_step(4206, 34, "new chain resolves as a single-mark fallback")
+                    expected += bytes.fromhex("67cca3")
                     if read_document_state()["doc_contents"] != expected:
-                        raise AssertionError("bounded fourth-key fallback did not preserve both sequences")
+                        raise AssertionError("overflow fallback did not preserve both sequences")
                     before_chain_cancel = child_u32("doc_length")
-                    key_step(4200, 33, "Escape test arms acute")
-                    key_step(4202, 229, "Escape test appends macron")
-                    key_step(4204, 1, "Escape cancels the full dead-key chain")
+                    key_step(4210, 33, "Escape test arms acute")
+                    key_step(4212, 229, "Escape test appends macron")
+                    key_step(4214, 1, "Escape cancels the full dead-key chain")
                     if (
                         child_u32("doc_pending_dead_mark") != 0
                         or any(child_u32(name) for name in (
@@ -4162,9 +4169,9 @@ xkb_symbols "nekoedit-sparse" {
                         or child_u32("doc_length") != before_chain_cancel
                     ):
                         raise AssertionError("Escape left part of the dead-key chain pending")
-                    key_step(4210, 33, "Backspace test arms acute")
-                    key_step(4212, 230, "Backspace test appends caron")
-                    key_step(4214, 14, "Backspace cancels the full dead-key chain")
+                    key_step(4220, 33, "Backspace test arms acute")
+                    key_step(4222, 230, "Backspace test appends caron")
+                    key_step(4224, 14, "Backspace cancels the full dead-key chain")
                     if (
                         child_u32("doc_pending_dead_mark") != 0
                         or any(child_u32(name) for name in (
@@ -4174,7 +4181,41 @@ xkb_symbols "nekoedit-sparse" {
                         or child_u32("doc_length") != before_chain_cancel
                     ):
                         raise AssertionError("Backspace left part of the dead-key chain pending")
-                    observations.append("validated optional locale pack: Multi_key pair/triple/four-input; two-/three-mark dead-key records; literal fallback, four-mark cap, Escape and Backspace")
+                    # Exercise a full eight-input dead-key record through physical
+                    # XKB events: seven combining marks followed by the base scalar.
+                    chain8_start = child_u32("doc_length")
+                    for timestamp, keycode, description in (
+                        (4300, 33, "acute"), (4302, 230, "caron"),
+                        (4304, 229, "macron"), (4306, 33, "acute"),
+                        (4308, 230, "caron"), (4310, 229, "macron"),
+                        (4312, 33, "final acute"),
+                    ):
+                        key_step(timestamp, keycode, "seven-mark chain buffers " + description)
+                    if (
+                        child_u32("doc_compose_first") != 0x0301
+                        or child_u32("doc_compose_second") != 0x030c
+                        or child_u32("doc_compose_third") != 0x0304
+                        or child_u32("doc_compose_fourth") != 0x0301
+                        or child_u32("doc_compose_fifth") != 0x030c
+                        or child_u32("doc_compose_sixth") != 0x0304
+                        or child_u32("doc_compose_seventh") != 0x0301
+                        or child_u32("doc_pending_dead_mark") != 0x0301
+                        or child_u32("doc_length") != chain8_start
+                    ):
+                        raise AssertionError("seven dead-key marks did not remain buffered in order")
+                    key_step(4314, 34, "seven-mark chain resolves the eight-input dead-key rule")
+                    expected += bytes.fromhex("e29883efb88f")
+                    if (
+                        read_document_state()["doc_contents"] != expected
+                        or child_u32("doc_pending_dead_mark") != 0
+                        or any(child_u32(name) for name in (
+                            "doc_compose_first", "doc_compose_second", "doc_compose_third",
+                            "doc_compose_fourth", "doc_compose_fifth", "doc_compose_sixth",
+                            "doc_compose_seventh", "doc_compose_eighth",
+                        ))
+                    ):
+                        raise AssertionError("seven-mark dead-key rule did not resolve and clear all eight slots")
+                    observations.append("validated optional locale pack: Multi_key pair/triple/four-input; one-to-seven-mark dead-key records; literal fallback, eight-action overflow, Escape and Backspace")
                     client.sendall(wire_message(10, 1))
                     return
 

@@ -15,17 +15,17 @@ All integers are unsigned little-endian. The header is exactly 72 bytes:
 | Offset | Type | Meaning |
 |---:|---|---|
 | 0 | 8 bytes | ASCII magic `NEKOLOC1` |
-| 8 | u32 | Format version, currently 1 |
+| 8 | u32 | Format version: 1 (legacy) or 2 (current) |
 | 12 | u32 | Header size, exactly 72 |
-| 16 | u32 | Record size, exactly 52 |
+| 16 | u32 | Record size: 52 for v1, 68 for v2 |
 | 20 | u32 | Record count, 1–32,768 |
-| 24 | u32 | Payload byte length, exactly count × 52 |
+| 24 | u32 | Payload byte length, exactly count × version-specific record size |
 | 28 | u32 | IEEE CRC-32 of the payload |
-| 32 | u32 | Flags, zero in version 1 |
+| 32 | u32 | Flags, zero in versions 1 and 2 |
 | 36 | 32 bytes | NUL-terminated ASCII locale tag, zero-padded |
 | 68 | u32 | Reserved, zero |
 
-Each 52-byte record contains a one-byte input count, one-byte output count, a 16-bit rule kind, four input scalars, and eight output scalars. Kind `0` is a `Multi_key` rule; kind `1` is a dead-key rule. The low byte stores the kind and the high byte must remain zero. Old version-1 packs used zero in both bytes, so they remain valid and are interpreted as `Multi_key`-only packs. Input count is 2–4; output count is 1–8. Unused scalar slots must be zero. A kind-1 dead-key input stores one to three combining-mark scalars followed by the final base scalar; its total input count is two to four.
+Version 1 uses 52-byte records with four input-scalar slots; version 2 uses 68-byte records with eight input-scalar slots. Both layouts contain a one-byte input count, one-byte output count, a 16-bit rule kind, the input scalars, and eight output scalars. Kind `0` is a `Multi_key` rule and remains limited to 2–4 input scalars in both versions. Kind `1` is a dead-key rule: v1 accepts 2–4 input scalars (one to three combining marks plus the final base), while v2 accepts 2–8 (one to seven marks plus the base). The low byte stores the kind and the high byte must remain zero. The earliest v1 files had zero in both bytes and remain valid as `Multi_key`-only packs; typed v1 dead-key records from the initial extension also remain readable. Output count is 1–8. Unused input and output scalar slots must be zero. Current generators and importers write v2.
 
 Scalars must be nonzero Unicode scalar values no greater than U+10FFFF and outside the surrogate range. Multi-scalar results can represent combining marks and variation selectors.
 
@@ -61,12 +61,12 @@ Packs are data, not shared libraries or executable plugins. Python is used only 
 
 ## Implementation boundary
 
-The loader and input path support two-, three-, and four-scalar records and output strings of up to eight scalars. Kind 0 is used by `Multi_key` lookup and buffering; kind 1 is queried after a complete chain of one to three dead-key actions and the final base scalar. Old packs with a zero kind field continue to load as kind 0. The embedded en_US tables remain unchanged and active whenever no compatible optional pack is selected.
+The loader accepts legacy v1 and current v2 packs. `Multi_key` remains limited to two through four input scalars; v2 dead-key records support one through seven combining marks followed by the final base scalar (two through eight inputs). Both versions support output strings of up to eight scalars. Kind 0 is queried by `Multi_key`; kind 1 is queried after the complete dead-key chain and base. The embedded en_US tables remain unchanged and active whenever no compatible optional pack is selected.
 
 
 ## First external locale dataset: pt_BR.UTF-8
 
-The repository includes reproducible Brazilian Portuguese, Finnish, and Serbian datasets derived from the pinned X.Org libX11 en_US Compose baseline and locale overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, imports `Multi_key` rules with two to four Unicode scalar inputs, and imports recognized dead-key actions, with any additional leading dead actions normalized to combining marks and the final input event required to resolve to a Unicode scalar. Kind-1 records therefore store one to three marks followed by a base scalar. Non-Unicode inputs and chains exceeding three dead actions remain outside the supported subset. Shorter prefixes are dropped independently within each rule kind.
+The repository includes reproducible Brazilian Portuguese, Finnish, and Serbian datasets derived from the pinned X.Org libX11 en_US Compose baseline and locale overrides, with keysym-to-Unicode values resolved using the pinned xorgproto `keysymdef.h`. The importer flattens the en_US include, imports `Multi_key` rules with two to four Unicode scalar inputs, and imports recognized dead-key actions, with any additional leading dead actions normalized to combining marks and the final input event required to resolve to a Unicode scalar. Kind-1 v2 records therefore store one to seven marks followed by a base scalar. Non-Unicode inputs and chains exceeding seven dead actions remain outside the supported subset. Shorter prefixes are dropped independently within each rule kind.
 
 The committed source databases are [`data/locales/pt_BR.UTF-8.json`](../data/locales/pt_BR.UTF-8.json), [`fi_FI.UTF-8.json`](../data/locales/fi_FI.UTF-8.json), [`sr_RS.UTF-8.json`](../data/locales/sr_RS.UTF-8.json), and [`el_GR.UTF-8.json`](../data/locales/el_GR.UTF-8.json), with source pins, filter statistics, and attribution in [`data/locales/README.md`](../data/locales/README.md) and the per-locale notice files. Rebuild from the committed JSON with:
 
@@ -100,6 +100,6 @@ The first non-empty value is used as the locale tag. Empty values are ignored. F
 
 Four reproducible tables are included: pt_BR.UTF-8, fi_FI.UTF-8, sr_RS.UTF-8, and el_GR.UTF-8. The Greek source is standalone and is merged over the pinned en_US baseline with the importer's explicit --locale-standalone mode. Their pinned source inputs, per-locale Git blob IDs, filtering statistics, and attribution are recorded in data/locales/README.md.
 
-The importer flattens the en_US include and applies locale overrides separately for Multi_key and dead-key rules. It keeps input keysyms only when they map to Unicode scalars. Multi_key sequences support two to four scalars. A dead-key rule supports one to three recognized dead_* actions followed by one scalar; each action is normalized to its combining mark. Chains exceeding three actions, non-Unicode input symbols, and unsupported sequence depths remain outside the supported subset. Shorter-prefix removal is scoped to the same rule kind.
+The importer flattens the en_US include and applies locale overrides separately for Multi_key and dead-key rules. It keeps input keysyms only when they map to Unicode scalars. Multi_key sequences support two to four scalars. A v2 dead-key rule supports one to seven recognized dead_* actions followed by one scalar; each action is normalized to its combining mark. Chains exceeding seven actions, non-Unicode input symbols, and unsupported sequence depths remain outside the supported subset. Shorter-prefix removal is scoped to the same rule kind.
 
-NLP1 uses the former 16-bit reserved record field for the rule kind. Kind zero is Multi_key; kind one is dead-key. Older version-1 packs have a zero value in that field, remain compatible, and are treated as Multi_key-only packs. The standard build verifies all pinned source blobs, regenerates the three JSON inputs byte-for-byte, and uploads generated locale packs separately from the editor executable. The Release workflow attaches every generated .nlp file and matching notice.
+NLP1 uses the former 16-bit reserved record field for the rule kind. Kind zero is Multi_key; kind one is dead-key. The earliest version-1 packs have zero in both bytes and remain compatible as Multi_key-only packs; typed version-1 dead-key records are also accepted. Version 2 expands the input area to eight scalars without changing the magic or 72-byte header. The standard build verifies all pinned source blobs, regenerates all four JSON inputs byte-for-byte, and uploads generated locale packs separately from the editor executable. The Release workflow attaches every generated .nlp file and matching notice.

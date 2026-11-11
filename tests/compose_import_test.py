@@ -30,6 +30,7 @@ XCOMM minimal base fixture
 <dead_acute> <c> : "ç" ccedilla
 <dead_acute> <dead_circumflex> <a> : "B3CHAIN"
 <dead_grave> <dead_acute> <dead_circumflex> <a> : "B4CHAIN"
+<dead_acute> <dead_circumflex> <dead_grave> <dead_tilde> <dead_macron> <dead_breve> <dead_caron> <a> : "B8CHAIN"
 '''
 
 LOCALE = r'''
@@ -52,7 +53,7 @@ def main() -> None:
     }
     if document["statistics"]["base_rules"] != 5:
         raise AssertionError("base_rules must count valid Multi_key lines, including duplicates")
-    if document["statistics"]["base_dead_key_rules"] != 3:
+    if document["statistics"]["base_dead_key_rules"] != 4:
         raise AssertionError("base one-, two-mark, and three-mark dead-key rules were not imported")
     if document["statistics"]["locale_dead_key_rules"] != 2:
         raise AssertionError("the locale dead-key rules were not imported")
@@ -76,6 +77,8 @@ def main() -> None:
         raise AssertionError("locale two-mark dead-key override was not retained")
     if mapping[("dead_key", (0x0300, 0x0301, 0x0302, ord("a")))] != tuple(map(ord, "B4CHAIN")):
         raise AssertionError("three-mark dead-key chain was not retained")
+    if mapping[("dead_key", (0x0301, 0x0302, 0x0300, 0x0303, 0x0304, 0x0306, 0x030C, ord("a")))] != tuple(map(ord, "B8CHAIN")):
+        raise AssertionError("seven-mark dead-key chain was not retained")
     if ("multi_key", (0x0301, ord("c"))) in mapping:
         raise AssertionError("dead-key record leaked into the Multi_key namespace")
     if document["statistics"]["unsupported_input"] != 1:
@@ -106,6 +109,7 @@ def main() -> None:
 <Multi_key> <q> <x> : "Ω" U03A9
 <dead_acute> <c> : "ć" U0107
 <dead_acute> <dead_circumflex> <dead_grave> <a> : "δ" U03B4
+<dead_acute> <dead_circumflex> <dead_grave> <dead_tilde> <dead_macron> <dead_breve> <dead_caron> <a> : "Ω" U03A9
 '''
     standalone_document = import_compose_sources(
         BASE, standalone, KEYSYMS, "el_TEST.UTF-8",
@@ -123,6 +127,8 @@ def main() -> None:
         raise AssertionError("standalone locale dead-key rule was not merged")
     if standalone_map[("dead_key", (0x0301, 0x0302, 0x0300, ord("a")))] != (0x03B4,):
         raise AssertionError("standalone three-mark dead-key chain was not merged")
+    if standalone_map[("dead_key", (0x0301, 0x0302, 0x0300, 0x0303, 0x0304, 0x0306, 0x030C, ord("a")))] != (0x03A9,):
+        raise AssertionError("standalone seven-mark dead-key chain was not merged")
     if "standalone el_TEST.UTF-8" not in standalone_document["source"]["import_policy"]:
         raise AssertionError("standalone import policy metadata is missing")
 

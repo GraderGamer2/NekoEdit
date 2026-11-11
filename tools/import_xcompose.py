@@ -159,8 +159,8 @@ def _read_rules(
             if len(input_names) < 1:
                 stats["short_sequence"] += 1
                 continue
-            # Up to three dead actions plus the final base fit four inputs.
-            if len(input_names) > 3:
+            # Up to seven dead actions plus the final base fit eight inputs.
+            if len(input_names) > 7:
                 stats["too_long"] += 1
                 continue
         else:

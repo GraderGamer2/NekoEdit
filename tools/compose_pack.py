@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any
 
 MAGIC = b"NEKOLOC1"
-VERSION = 1
+VERSION = 2
 HEADER_SIZE = 72
-RECORD_SIZE = 52
+RECORD_SIZE = 68
 MAX_RECORDS = 32768
 MAX_PACK_SIZE = 2 * 1024 * 1024
-MAX_INPUTS = 4
+MAX_INPUTS = 8
+MAX_MULTI_KEY_INPUTS = 4
 MAX_OUTPUTS = 8
 RULE_KINDS = {"multi_key": 0, "dead_key": 1}
 
@@ -74,8 +75,10 @@ def normalize(document: Any):
             raise ValueError(f"sequences[{i}].kind must be 'multi_key' or 'dead_key'")
         kind = RULE_KINDS[kind_name]
         inputs, outputs = entry.get("input"), entry.get("output")
-        if not isinstance(inputs, list) or not 2 <= len(inputs) <= MAX_INPUTS:
-            raise ValueError(f"sequences[{i}].input must contain 2–4 scalars")
+        maximum_inputs = MAX_MULTI_KEY_INPUTS if kind == 0 else MAX_INPUTS
+        if not isinstance(inputs, list) or not 2 <= len(inputs) <= maximum_inputs:
+            maximum_label = "2–4" if kind == 0 else "2–8"
+            raise ValueError(f"sequences[{i}].input must contain {maximum_label} scalars")
         if not isinstance(outputs, list) or not 1 <= len(outputs) <= MAX_OUTPUTS:
             raise ValueError(f"sequences[{i}].output must contain 1–8 scalars")
         key = tuple(scalar(value, f"sequences[{i}].input") for value in inputs)
@@ -108,7 +111,7 @@ def encode_pack(document: Any) -> bytes:
         padded_outputs = outputs + (0,) * (MAX_OUTPUTS - len(outputs))
         # The old 16-bit reserved field is now: low byte kind, high byte zero.
         payload.extend(struct.pack(
-            "<BBH4I8I", len(inputs), len(outputs), kind,
+            "<BBH8I8I", len(inputs), len(outputs), kind,
             *padded_inputs, *padded_outputs
         ))
     if HEADER_SIZE + len(payload) > MAX_PACK_SIZE:
