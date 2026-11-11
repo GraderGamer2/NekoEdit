@@ -47,7 +47,7 @@ jobs:
       - name: Install system Compose test corpus
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev gnome-shell xvfb xauth xdotool x11-xkb-utils dbus-daemon
+          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev gnome-shell xvfb xauth dbus-daemon libglib2.0-bin
 
       - name: Build and verify ELF
         run: make clean all

@@ -12,8 +12,13 @@ case "$1" in
     *) APP_BINARY="$(pwd)/$1" ;;
 esac
 LOCALE_PACK="$2"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXTENSION_UUID="nekoedit-test@nekoedit.local"
+BUS_NAME="org.nekoedit.TestHarness"
+OBJECT_PATH="/org/nekoedit/TestHarness"
+DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell setxkbmap xdotool; do
+for tool in gnome-shell gsettings gdbus; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -65,9 +70,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime"
+EXTENSION_DIR="$TEST_ROOT/home/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
+mkdir -p "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime" \
+    "$TEST_ROOT/config/dconf" "$EXTENSION_DIR"
 chmod 700 "$TEST_ROOT/home" "$TEST_ROOT/home/.nekoedit" \
-    "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime"
+    "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime" \
+    "$TEST_ROOT/config" "$TEST_ROOT/config/dconf" "$EXTENSION_DIR"
+printf 'user-db:user\n' > "$TEST_ROOT/config/dconf/profile"
+cp "$SCRIPT_DIR/mutter_extension/metadata.json" "$EXTENSION_DIR/metadata.json"
+cp "$SCRIPT_DIR/mutter_extension/extension.js" "$EXTENSION_DIR/extension.js"
 cp "$LOCALE_PACK" "$TEST_ROOT/home/.nekoedit/locales/pt_BR.UTF-8.nlp"
 printf 'seed' > "$TEST_ROOT/document.txt"
 printf 'x' > "$TEST_ROOT/expected_probe.txt"
@@ -79,7 +90,10 @@ PY
 
 export HOME="$TEST_ROOT/home"
 export XDG_RUNTIME_DIR="$TEST_ROOT/runtime"
-export WAYLAND_DISPLAY="nekoedit-mutter-$$"
+export XDG_CONFIG_HOME="$TEST_ROOT/config"
+export XDG_DATA_HOME="$TEST_ROOT/home/.local/share"
+export DCONF_PROFILE="$XDG_CONFIG_HOME/dconf/profile"
+export WAYLAND_DISPLAY="nekoedit-mutter-${BASHPID}"
 export NEKOEDIT_LOCALE="pt_BR.UTF-8"
 export LC_ALL="C.UTF-8"
 export XKB_DEFAULT_RULES="evdev"
@@ -87,18 +101,15 @@ export XKB_DEFAULT_MODEL="pc105"
 export XKB_DEFAULT_LAYOUT="us"
 export XKB_DEFAULT_VARIANT="intl"
 export XKB_DEFAULT_OPTIONS="compose:ralt"
-export GSETTINGS_BACKEND="memory"
+unset GSETTINGS_BACKEND || true
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
 
-# Configure the Xvfb host keymap as well as the XKB defaults inherited by
-# Mutter, so XTest and the nested Wayland compositor agree on key positions.
-setxkbmap -layout us -variant intl -option compose:ralt
-setxkbmap -query > "$TEST_ROOT/keymap.txt"
-grep -Eq 'layout:[[:space:]]*us' "$TEST_ROOT/keymap.txt"
-grep -Eq 'variant:[[:space:]]*intl' "$TEST_ROOT/keymap.txt"
-grep -Eq 'options:.*compose:ralt' "$TEST_ROOT/keymap.txt"
+# Enable the isolated, test-scoped extension through a private dconf profile.
+# It exposes a narrow D-Bus API; GNOME Shell's arbitrary Eval interface stays off.
+gsettings set org.gnome.shell disable-user-extensions false
+gsettings set org.gnome.shell enabled-extensions "['$EXTENSION_UUID']"
 
 echo "Starting $(gnome-shell --version) as a nested Wayland compositor"
 gnome-shell --wayland --nested --no-x11 --sm-disable \
@@ -123,6 +134,24 @@ if [ "$READY" -ne 1 ]; then
     exit 1
 fi
 
+# Wait until the temporary extension has exported its narrowly scoped test API.
+HARNESS_READY=0
+for attempt in $(seq 1 100); do
+    if gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.Ping" >/dev/null 2>&1; then
+        HARNESS_READY=1
+        break
+    fi
+    if ! kill -0 "$SHELL_PID" 2>/dev/null; then
+        break
+    fi
+    sleep 0.1
+done
+if [ "$HARNESS_READY" -ne 1 ]; then
+    echo "temporary Mutter input extension did not register its D-Bus API" >&2
+    exit 1
+fi
+
 # Let the compositor finish its initial registry/configure cycle before the
 # freestanding editor connects.
 sleep 0.5
@@ -138,52 +167,44 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 
-# The nested compositor is an X11 client under Xvfb. There is no separate
-# window manager in this test session to perform the normal click-to-focus
-# transition, so explicitly focus Mutter's outer X11 window before injecting
-# XTest events.
-SHELL_WINDOW=
+# Focus the actual Wayland MetaWindow, not merely GNOME Shell's outer X11
+# window. The host window's X focus does not prove which inner Wayland toplevel
+# owns keyboard focus.
+FOCUS_RESULT=
 for attempt in $(seq 1 100); do
-    SHELL_WINDOW="$(xdotool search --onlyvisible --pid "$SHELL_PID" 2>/dev/null | head -n 1 || true)"
-    if [ -n "$SHELL_WINDOW" ]; then
+    FOCUS_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.Activate" "$APP_PID" 2>/dev/null || true)"
+    if [[ "$FOCUS_RESULT" == *"target=$APP_PID focus=$APP_PID"* ]]; then
+        break
+    fi
+    if ! kill -0 "$APP_PID" 2>/dev/null; then
         break
     fi
     sleep 0.1
 done
-if [ -z "$SHELL_WINDOW" ]; then
-    SHELL_WINDOW="$(xdotool search --onlyvisible --name 'GNOME Shell' 2>/dev/null | head -n 1 || true)"
-fi
-if [ -z "$SHELL_WINDOW" ]; then
-    echo "could not find GNOME Shell's visible outer X11 window" >&2
-    xdotool search --onlyvisible --name '.*' >&2 || true
+if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
+    echo "Mutter did not focus NekoEdit's Wayland toplevel: $FOCUS_RESULT" >&2
     exit 1
 fi
-xdotool windowraise "$SHELL_WINDOW"
-xdotool windowfocus --sync "$SHELL_WINDOW"
-FOCUSED_WINDOW="$(xdotool getwindowfocus -f)"
-if [ "$FOCUSED_WINDOW" != "$SHELL_WINDOW" ]; then
-    echo "Mutter outer window did not acquire X input focus: window=$SHELL_WINDOW focus=$FOCUSED_WINDOW" >&2
-    exit 1
-fi
+echo "Mutter focused NekoEdit: $FOCUS_RESULT"
 
-GEOMETRY="$(xdotool getwindowgeometry --shell "$SHELL_WINDOW")"
-SHELL_WIDTH="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
-SHELL_HEIGHT="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
-if [ -z "$SHELL_WIDTH" ] || [ -z "$SHELL_HEIGHT" ] || [ "$SHELL_WIDTH" -lt 800 ] || [ "$SHELL_HEIGHT" -lt 480 ]; then
-    echo "unexpected nested Mutter window geometry: $GEOMETRY" >&2
-    exit 1
-fi
-CENTER_X=$((SHELL_WIDTH / 2))
-CENTER_Y=$((SHELL_HEIGHT / 2))
+send_key() {
+    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.SendKey" "$1" >/dev/null
+    sleep 0.1
+}
+send_shortcut() {
+    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.SendShortcut" 65507 "$1" >/dev/null
+    sleep 0.1
+}
 
-# Click the center of the nested display, where Mutter centers the 800x480
-# NekoEdit toplevel, then verify ordinary key delivery before Compose.
-xdotool mousemove --sync --window "$SHELL_WINDOW" "$CENTER_X" "$CENTER_Y"
-xdotool click 1
-sleep 0.25
-xdotool key --clearmodifiers --delay 120 ctrl+a
-xdotool key --clearmodifiers --delay 120 x
-xdotool key --clearmodifiers --delay 120 ctrl+s
+# Use Mutter's Clutter virtual keyboard. These XKB keysyms are delivered by
+# Mutter through the normal Wayland wl_keyboard event path to the focused app.
+# Ctrl+A, x, Ctrl+S is a canary independent of Compose and locale lookup.
+send_shortcut 97
+send_key 120
+send_shortcut 115
 
 PROBE_SAVED=0
 for attempt in $(seq 1 50); do
@@ -197,23 +218,22 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 if [ "$PROBE_SAVED" -ne 1 ]; then
-    echo "ordinary XTest keyboard input did not reach NekoEdit or Ctrl+S did not save" >&2
-    echo "Mutter window=$SHELL_WINDOW focused=$FOCUSED_WINDOW" >&2
-    echo "geometry: $GEOMETRY" >&2
-    echo "active outer X11 window: $(xdotool getactivewindow 2>/dev/null || true)" >&2
+    echo "Mutter's virtual keyboard did not deliver the basic edit/save canary" >&2
+    echo "NekoEdit PID: $APP_PID" >&2
+    echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
     exit 1
 fi
 
-# Replace the canary with the Compose paths under test. The locale pack is
-# copied under the temporary HOME; it is never linked into the editor.
-xdotool key --clearmodifiers --delay 120 ctrl+a
-xdotool key --delay 120 Multi_key
-xdotool key --delay 120 period
-xdotool key --delay 120 period
-xdotool key --delay 120 dead_grave
-xdotool key --delay 120 shift+6
-xdotool key --delay 120 shift+a
-xdotool key --clearmodifiers --delay 120 ctrl+s
+# Replace the canary with the Compose paths under test, expressed directly as
+# XKB keysyms so the test isolates Compose resolution from host key layout.
+send_shortcut 97
+send_key 65312
+send_key 46
+send_key 46
+send_key 65104
+send_key 65106
+send_key 65
+send_shortcut 115
 
 SAVED=0
 for attempt in $(seq 1 100); do
@@ -229,8 +249,8 @@ done
 
 if [ "$SAVED" -ne 1 ]; then
     echo "ordinary keyboard canary passed, but expected Compose output U+2026 U+1EA6 (…Ầ) was not saved" >&2
-    echo "Mutter window=$SHELL_WINDOW focused=$FOCUSED_WINDOW" >&2
-    echo "geometry: $GEOMETRY" >&2
+    echo "NekoEdit PID: $APP_PID" >&2
+    echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
     exit 1
 fi
 if ! kill -0 "$SHELL_PID" 2>/dev/null; then

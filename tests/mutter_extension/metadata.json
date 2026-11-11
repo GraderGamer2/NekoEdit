@@ -1,0 +1,9 @@
+{
+  "uuid": "nekoedit-test@nekoedit.local",
+  "name": "NekoEdit Mutter Test Harness",
+  "description": "Temporary, isolated keyboard and focus bridge for NekoEdit's CI integration test.",
+  "version": 1,
+  "shell-version": [
+    "46"
+  ]
+}
