@@ -18,6 +18,7 @@ extern uint32_t xkb_parse_error_alpha_count;
 extern uint32_t xkb_parse_error_table_nonzero_count;
 extern uint32_t xkb_parse_error_table_sample_count;
 extern uint32_t xkb_parse_error_table_samples[16];
+extern uint32_t xkb_parse_error_key_samples[20];
 extern int xkb_key_is_level_three_modifier(uint32_t evdev_keycode);
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
@@ -156,6 +157,20 @@ main(void)
                     "  cell=%u keycode=%u group=%u level=%u value=0x%08x\n",
                     cell, cell >> 5, (cell >> 3) & 3u, cell & 7u,
                     (unsigned)value);
+        }
+        static const uint32_t diagnostic_keycodes[] = { 10u, 24u, 38u, 52u, 108u };
+        for (uint32_t i = 0; i < 5u; ++i) {
+            const uint32_t *sample = &xkb_parse_error_key_samples[i * 4u];
+            char name[5] = {
+                (char)(sample[0] & 0xffu),
+                (char)((sample[0] >> 8) & 0xffu),
+                (char)((sample[0] >> 16) & 0xffu),
+                (char)((sample[0] >> 24) & 0xffu),
+                '\0',
+            };
+            fprintf(stderr,
+                    "  keycode=%u name=\"%s\" group1_count=%u levels=%04x/%04x\n",
+                    diagnostic_keycodes[i], name, sample[1], sample[2], sample[3]);
         }
         free(text);
         xkb_keymap_unref(keymap);

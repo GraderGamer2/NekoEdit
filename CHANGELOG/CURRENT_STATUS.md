@@ -1,3 +1,11 @@
+## 2026-11-11 — trace missing XKB key blocks after Actions #827
+
+Actions #827 passed the freestanding build, CLI tests, full Wayland mock, and ELF inspection. The native libxkbcommon `us(intl)` test still rejected the keymap at the end of `xkb_symbols`: 84 canonical Unicode cells were populated, but zero alphabetic pairs were found. The first eight populated cells were number-row keycodes 10 and 11, confirming the table-wide counter was not the remaining fault.
+
+This diagnostic-only change preserves five targeted records before parser reset: keycodes 10/AE01, 24/AD01, 38/AC01, 52/AB01, and 108/RALT. For each it captures the parsed four-byte key name, Group1 symbol count, and first two canonical Unicode cells. The next native run will separate a keycodes-name lookup problem from symbols-section key-block parsing. No parser thresholds or acceptance behavior are changed.
+
+Right Alt dispatch is now keymap-aware in the source, and both focused Right Alt Wayland scenarios and the complete mock pass in #827. The real `compose:ralt` keymap remains unvalidated until the native parser accepts it.
+
 ## 2026-11-11 — Build and test #826: count alphabetic keys from canonical XKB Unicode levels
 
 **Run #825:** [failed at the final `xkb_symbols` validation](https://github.com/GraderGamer2/NekoEdit/actions/runs/42996770082). The parser successfully recorded 84 symbol values, so the minimum 16-symbol safeguard was satisfied. The alphabetic-key counter remained zero and rejected the map. The failure is isolated to the counter's use of the auxiliary byte-oriented `xkb_ascii_levels` table; no parser-stage or syntax failure occurred.

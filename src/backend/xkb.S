@@ -5373,6 +5373,9 @@ xkb_parse_error_table_sample_count: .long 0
 .global xkb_parse_error_table_samples
 # Eight bounded {linear cell index, scalar/action value} records.
 xkb_parse_error_table_samples: .zero 64
+.global xkb_parse_error_key_samples
+# Five {key_name, Group1 count, Group1 level0, Group1 level1} records.
+xkb_parse_error_key_samples: .zero 80
 .Lxkb_parse_stage:      .long 0
 
 .section .text
@@ -8983,6 +8986,10 @@ xkb_parse_keymap:
     xor eax, eax
     mov ecx, 16
     rep stosd
+    lea rdi, [rip + xkb_parse_error_key_samples]
+    xor eax, eax
+    mov ecx, 20
+    rep stosd
     lea rdi, [rip + xkb_parse_error_token]
     xor eax, eax
     mov ecx, 64
@@ -9065,6 +9072,59 @@ xkb_parse_keymap:
 .Lxkb_parse_error_table_scan_done:
     mov dword ptr [rip + xkb_parse_error_table_nonzero_count], ecx
     mov dword ptr [rip + xkb_parse_error_table_sample_count], r15d
+
+    # Record key-name and symbol-array state for representative keys.
+    # This distinguishes keycodes-name resolution failures from symbols
+    # blocks that are found but do not populate their canonical Group1 cells.
+    lea rdi, [rip + xkb_parse_error_key_samples]
+    lea rbx, [rip + xkb_key_names]
+    lea rdx, [rip + xkb_group_symbol_counts]
+    lea rsi, [rip + xkb_unicode_levels]
+
+    mov eax, dword ptr [rbx + 10*4]
+    mov dword ptr [rdi], eax
+    movzx eax, byte ptr [rdx + 10*4]
+    mov dword ptr [rdi + 4], eax
+    mov eax, dword ptr [rsi + 10*128]
+    mov dword ptr [rdi + 8], eax
+    mov eax, dword ptr [rsi + 10*128 + 4]
+    mov dword ptr [rdi + 12], eax
+
+    mov eax, dword ptr [rbx + 24*4]
+    mov dword ptr [rdi + 16], eax
+    movzx eax, byte ptr [rdx + 24*4]
+    mov dword ptr [rdi + 20], eax
+    mov eax, dword ptr [rsi + 24*128]
+    mov dword ptr [rdi + 24], eax
+    mov eax, dword ptr [rsi + 24*128 + 4]
+    mov dword ptr [rdi + 28], eax
+
+    mov eax, dword ptr [rbx + 38*4]
+    mov dword ptr [rdi + 32], eax
+    movzx eax, byte ptr [rdx + 38*4]
+    mov dword ptr [rdi + 36], eax
+    mov eax, dword ptr [rsi + 38*128]
+    mov dword ptr [rdi + 40], eax
+    mov eax, dword ptr [rsi + 38*128 + 4]
+    mov dword ptr [rdi + 44], eax
+
+    mov eax, dword ptr [rbx + 52*4]
+    mov dword ptr [rdi + 48], eax
+    movzx eax, byte ptr [rdx + 52*4]
+    mov dword ptr [rdi + 52], eax
+    mov eax, dword ptr [rsi + 52*128]
+    mov dword ptr [rdi + 56], eax
+    mov eax, dword ptr [rsi + 52*128 + 4]
+    mov dword ptr [rdi + 60], eax
+
+    mov eax, dword ptr [rbx + 108*4]
+    mov dword ptr [rdi + 64], eax
+    movzx eax, byte ptr [rdx + 108*4]
+    mov dword ptr [rdi + 68], eax
+    mov eax, dword ptr [rsi + 108*128]
+    mov dword ptr [rdi + 72], eax
+    mov eax, dword ptr [rsi + 108*128 + 4]
+    mov dword ptr [rdi + 76], eax
 
     mov eax, dword ptr [rip + .Lxkb_parse_stage]
     mov dword ptr [rip + xkb_parse_error_stage], eax
