@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus ibus; do
+for tool in gnome-shell gsettings gdbus ibus dbus-update-activation-environment; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -44,6 +44,7 @@ fi
 TEST_ROOT="$(mktemp -d /tmp/nekoedit-mutter.XXXXXX)"
 APP_PID=
 SHELL_PID=
+IBUS_PID=
 RESULT=failed
 
 cleanup() {
@@ -56,11 +57,15 @@ cleanup() {
         kill "$SHELL_PID" 2>/dev/null
         wait "$SHELL_PID" 2>/dev/null
     fi
+    if [ -n "$IBUS_PID" ]; then
+        kill "$IBUS_PID" 2>/dev/null
+        wait "$IBUS_PID" 2>/dev/null
+    fi
     if [ "$RESULT" = passed ]; then
         rm -rf "$TEST_ROOT"
     else
         echo "Mutter integration diagnostics (temporary directory: $TEST_ROOT)" >&2
-        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log"; do
+        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log" "$TEST_ROOT/ibus-daemon.log"; do
             if [ -f "$log" ]; then
                 echo "--- $log ---" >&2
                 tail -n 160 "$log" >&2
@@ -108,6 +113,32 @@ export NO_AT_BRIDGE="1"
 # engine behavior only; it is not an application runtime dependency.
 export IBUS_ENABLE_CTRL_SHIFT_U="1"
 unset DISPLAY || true
+
+# Pass the Unicode-entry setting to D-Bus-activated services as well as child
+# processes. Start IBus explicitly from this environment before GNOME Shell so
+# the simple engine inherits IBUS_ENABLE_CTRL_SHIFT_U when it is instantiated.
+dbus-update-activation-environment --all
+ibus-daemon --panel disable > "$TEST_ROOT/ibus-daemon.log" 2>&1 &
+IBUS_PID=$!
+IBUS_READY=0
+for attempt in $(seq 1 100); do
+    if ibus list-engine --name-only 2>/dev/null | grep -Fxq 'xkb:us:intl:eng'; then
+        IBUS_READY=1
+        break
+    fi
+    if ! kill -0 "$IBUS_PID" 2>/dev/null; then
+        echo "IBus daemon exited before registering its engines" >&2
+        cat "$TEST_ROOT/ibus-daemon.log" >&2 || true
+        exit 1
+    fi
+    sleep 0.1
+done
+if [ "$IBUS_READY" -ne 1 ]; then
+    echo "IBus daemon did not register xkb:us:intl:eng" >&2
+    cat "$TEST_ROOT/ibus-daemon.log" >&2 || true
+    exit 1
+fi
+echo "Private IBus daemon registered xkb:us:intl:eng with Ctrl+Shift+U enabled"
 
 # GNOME Shell writes its extension selection into this temporary GLib keyfile.
 gsettings set org.gnome.shell disable-user-extensions false
