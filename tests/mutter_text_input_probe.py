@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Capability-aware live probe for NekoEdit's optional text-input-v3 client.
+"""Live Mutter/IBus probe for NekoEdit's optional text-input-v3 client.
 
 The Python process is the direct parent of NekoEdit so Linux's normal
-parent-to-child /proc access rules permit inspection of the child's symbol
-state without ptrace attach or a debugger. This is test-only instrumentation;
-it does not add a diagnostic interface or dependency to the editor.
+parent-to-child /proc access rules permit inspection of the child's protocol
+and preedit state without ptrace attach or a debugger. This is test-only
+instrumentation; it does not add a diagnostic interface or dependency to the
+editor.
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ def run_nm(binary: str) -> dict[str, int]:
         match = re.match(r"^([0-9a-fA-F]+)\s+\w\s+(.+)$", line)
         if match:
             name = match.group(2).strip()
-            if name in SYMBOLS:
+            if name in (*SYMBOLS, *BUFFER_SYMBOLS):
                 addresses[name] = int(match.group(1), 16)
     missing = [name for name in (*SYMBOLS, *BUFFER_SYMBOLS) if name not in addresses]
     if missing:
