@@ -7,7 +7,7 @@ This follow-up adds a complementary Wayland-mock case for the other capability b
 The fallback test has been committed to the staging branch `work/text-input-opt-in-fallback`. Its test and documentation changes still need one fast-forward to `early-alpha` and one normal Build and test workflow run. No result for this follow-up is claimed yet.
 
 ---
-## 2026-11-12 — capability-aware live text-input-v3 probe (CI pending)
+## 2026-11-12 — capability-aware live text-input-v3 probe — Build and test #833 passed
 
 Continue from `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The change extends the existing successful Mutter Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
 
@@ -25,7 +25,7 @@ Also corrected `docs/ARCHITECTURE.md` and README to describe the actual hybrid A
 
 Files changed: `tests/mutter_text_input_probe.py`, `tests/mutter_gnome_smoke.sh`, `docs/MUTTER_INTEGRATION_TEST.md`, `docs/TEXT_INPUT_V3.md`, `docs/ARCHITECTURE.md`, `README.md`, `CHANGELOG/README.md`, and this status file.
 
-The eight-file change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The push should trigger the repository's normal Build and test workflow. The available GitHub status query returned no check records at handoff, so the Actions result remains unconfirmed; do not claim a pass until the run is inspected.
+The eight-file change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 steps, including the live Mutter manager/enter/enable/state-commit handshake. The test did not exercise an external IBus/Fcitx provider, so that remains a separate validation task.
 
 ---
 
