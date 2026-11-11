@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus; do
+for tool in gnome-shell gsettings gdbus xdotool; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -178,9 +178,49 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 
-# Focus the actual Wayland MetaWindow, not merely GNOME Shell's outer X11
-# window. The host window's X focus does not prove which inner Wayland toplevel
-# owns keyboard focus.
+# GNOME Shell is itself an X11 client in this nested setup. Clutter's
+# X11 virtual-input implementation injects key events with XTest, so the outer
+# GNOME Shell host window must have X input focus as well as NekoEdit's inner
+# Wayland MetaWindow. Bare Xvfb has no window manager to do click-to-focus.
+SHELL_WINDOW=
+for attempt in $(seq 1 100); do
+    SHELL_WINDOW="$(xdotool search --onlyvisible --pid "$SHELL_PID" 2>/dev/null | head -n 1 || true)"
+    if [ -n "$SHELL_WINDOW" ]; then
+        break
+    fi
+    sleep 0.1
+done
+if [ -z "$SHELL_WINDOW" ]; then
+    SHELL_WINDOW="$(xdotool search --onlyvisible --name 'GNOME Shell' 2>/dev/null | head -n 1 || true)"
+fi
+if [ -z "$SHELL_WINDOW" ]; then
+    echo "could not find GNOME Shell's visible outer X11 window" >&2
+    xdotool search --onlyvisible --name '.*' >&2 || true
+    exit 1
+fi
+xdotool windowraise "$SHELL_WINDOW"
+xdotool windowfocus --sync "$SHELL_WINDOW"
+OUTER_FOCUS="$(xdotool getwindowfocus -f)"
+if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
+    echo "GNOME Shell outer X11 window did not acquire input focus: window=$SHELL_WINDOW focus=$OUTER_FOCUS" >&2
+    exit 1
+fi
+
+GEOMETRY="$(xdotool getwindowgeometry --shell "$SHELL_WINDOW")"
+SHELL_WIDTH="$(printf '%s\\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
+SHELL_HEIGHT="$(printf '%s\\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
+if [ -z "$SHELL_WIDTH" ] || [ -z "$SHELL_HEIGHT" ] || [ "$SHELL_WIDTH" -lt 800 ] || [ "$SHELL_HEIGHT" -lt 480 ]; then
+    echo "unexpected nested Mutter window geometry: $GEOMETRY" >&2
+    exit 1
+fi
+CENTER_X=$((SHELL_WIDTH / 2))
+CENTER_Y=$((SHELL_HEIGHT / 2))
+xdotool mousemove --sync --window "$SHELL_WINDOW" "$CENTER_X" "$CENTER_Y"
+xdotool click 1
+sleep 0.25
+
+# Also activate and verify the actual Wayland MetaWindow. Focusing the outer
+# X11 host alone does not prove which nested Wayland toplevel owns keyboard focus.
 FOCUS_RESULT=
 for attempt in $(seq 1 100); do
     FOCUS_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
@@ -197,7 +237,12 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
     echo "Mutter did not focus NekoEdit's Wayland toplevel: $FOCUS_RESULT" >&2
     exit 1
 fi
-echo "Mutter focused NekoEdit: $FOCUS_RESULT"
+OUTER_FOCUS="$(xdotool getwindowfocus -f)"
+if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
+    echo "GNOME Shell lost outer X11 input focus after inner activation: window=$SHELL_WINDOW focus=$OUTER_FOCUS" >&2
+    exit 1
+fi
+echo "GNOME focus verified: outer X11=$SHELL_WINDOW; inner Wayland=$FOCUS_RESULT"
 
 send_key() {
     gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
