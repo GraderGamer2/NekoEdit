@@ -780,6 +780,11 @@ xkb_keycodes "nekoedit-test" {
     <RGHT> = 114;
     <RCTL> = 105;
     <RALT> = 108;
+    alias <LatQ> = <AD01>;
+    alias <LatA> = <AC01>;
+    alias <LatZ> = <AB01>;
+    alias <ALGR> = <RALT>;
+    alias <LatW> = <AD02>;
     <LVL3> = 200;
     <LVL2> = 201;
     <GRP2> = 202;
@@ -981,7 +986,7 @@ xkb_symbols "nekoedit-test" {
         type = "ALPHABETIC",
         symbols[Group1] = [ s, S ]
     };
-    key <AD02> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ w, W ] };
+    key <LatW> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ w, W ] };
     key <AD03> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ e, E ] };
     key <AD04> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ r, R ] };
     key <AD05> { type[Group1] = "CUSTOM_ALPHA", symbols[Group1] = [ t, T ] };
@@ -1295,6 +1300,7 @@ xkb_symbols "nekoedit-sparse" {
                     symbol_addresses = {}
                     wanted_symbols = {
                         "xkb_key_names",
+                        "xkb_key_alias_count",
                         "xkb_ascii_levels",
                         "xkb_keysym_levels",
                         "xkb_key_types",
@@ -1374,6 +1380,10 @@ xkb_symbols "nekoedit-sparse" {
                         ae01_levels = child_memory("xkb_ascii_levels", 10 * 32, 32)
                         ae02_name = child_memory("xkb_key_names", 11 * 4, 4)
                         ae02_levels = child_memory("xkb_ascii_levels", 11 * 32, 32)
+                        ad02_name = child_memory("xkb_key_names", 25 * 4, 4)
+                        ad02_levels = child_memory("xkb_ascii_levels", 25 * 32, 32)
+                        ralt_name = child_memory("xkb_key_names", 108 * 4, 4)
+                        alias_count = struct.unpack("<I", child_memory("xkb_key_alias_count", 0, 4))[0]
                         custom_alpha_type_id = child_memory("xkb_group_types", 25 * 4, 1)[0]
                         custom_alpha_name = child_memory("xkb_type_names", 6 * 64, 64).split(bytes([0]), 1)[0]
                         custom_alpha_mask = struct.unpack("<I", child_memory("xkb_type_modifiers", 6 * 4, 4))[0]
@@ -1671,6 +1681,26 @@ xkb_symbols "nekoedit-sparse" {
                             "XKB shorthand AE02 parse failed: "
                             f"name={ae02_name!r}, levels={ae02_levels!r}"
                         )
+                    if (
+                        key_name != b"AD01"
+                        or ad02_name != b"AD02"
+                        or ad02_levels[:2] != b"wW"
+                        or ralt_name != b"RALT"
+                        or alias_count != 5
+                    ):
+                        raise AssertionError(
+                            "XKB key aliases overwrote canonical names or failed symbol lookup: "
+                            + repr({
+                                "AD01": key_name,
+                                "AD02": ad02_name,
+                                "AD02_levels": ad02_levels[:2],
+                                "RALT": ralt_name,
+                                "alias_count": alias_count,
+                            })
+                        )
+                    observations.append(
+                        "XKB keycodes preserve canonical names, retain alias lookups, and parse symbols addressed through LatW"
+                    )
                     observations.append(
                         "XKB compatibility defaults an omitted matching operator to Exactly(mask) and matches only the exact modifier map"
                     )

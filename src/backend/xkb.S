@@ -1,5 +1,7 @@
 .intel_syntax noprefix
 
+.equ XKB_KEY_ALIAS_MAX, 256
+
 # Bounded, dependency-free XKB text-v1 reader. It parses keycodes, symbols,
 # per-group key types, 32-bit modifier masks, virtual-modifier encodings,
 # per-entry preserve[] masks, and a limited xkb_compat subset for
@@ -5284,7 +5286,13 @@
 .Lxkb_token:            .zero 64
 .balign 16
 .global xkb_key_names
-xkb_key_names:          .zero 1024        # 256 XKB keycodes, four-byte names
+xkb_key_names:          .zero 1024        # canonical four-byte name for each keycode
+.global xkb_key_alias_count
+xkb_key_alias_count:    .long 0
+.global xkb_key_alias_names
+xkb_key_alias_names:    .zero (XKB_KEY_ALIAS_MAX * 4)
+.global xkb_key_alias_codes
+xkb_key_alias_codes:    .zero XKB_KEY_ALIAS_MAX
 .global xkb_ascii_levels
 xkb_ascii_levels:       .zero 32768       # 256 codes * 4 groups * 8 levels plus guard space
 .balign 16
@@ -5373,9 +5381,6 @@ xkb_parse_error_table_sample_count: .long 0
 .global xkb_parse_error_table_samples
 # Eight bounded {linear cell index, scalar/action value} records.
 xkb_parse_error_table_samples: .zero 64
-.global xkb_parse_error_key_samples
-# Five {key_name, Group1 count, Group1 level0, Group1 level1} records.
-xkb_parse_error_key_samples: .zero 80
 .Lxkb_parse_stage:      .long 0
 
 .section .text
@@ -5388,6 +5393,13 @@ xkb_reset_keymap:
     xor eax, eax
     lea rdi, [rip + xkb_key_names]
     mov ecx, 1024
+    rep stosb
+    mov dword ptr [rip + xkb_key_alias_count], 0
+    lea rdi, [rip + xkb_key_alias_names]
+    mov ecx, XKB_KEY_ALIAS_MAX * 4
+    rep stosb
+    lea rdi, [rip + xkb_key_alias_codes]
+    mov ecx, XKB_KEY_ALIAS_MAX
     rep stosb
     lea rdi, [rip + xkb_ascii_levels]
     mov ecx, 32768
@@ -5870,6 +5882,24 @@ xkb_reset_keymap:
     mov eax, r12d
     jmp .Lxkb_find_keycode_done
 .Lxkb_find_keycode_missing:
+    xor r12d, r12d
+    mov ecx, dword ptr [rip + xkb_key_alias_count]
+.Lxkb_find_keycode_alias_loop:
+    cmp r12d, ecx
+    jae .Lxkb_find_keycode_missing_all
+    mov eax, r12d
+    shl eax, 2
+    lea rbx, [rip + xkb_key_alias_names]
+    mov edx, dword ptr [rbx + rax]
+    cmp edx, dword ptr [rip + .Lxkb_keyname_tmp]
+    je .Lxkb_find_keycode_alias_found
+    inc r12d
+    jmp .Lxkb_find_keycode_alias_loop
+.Lxkb_find_keycode_alias_found:
+    lea rbx, [rip + xkb_key_alias_codes]
+    movzx eax, byte ptr [rbx + r12]
+    jmp .Lxkb_find_keycode_done
+.Lxkb_find_keycode_missing_all:
     xor eax, eax
 .Lxkb_find_keycode_done:
     pop r12
@@ -5932,6 +5962,8 @@ xkb_reset_keymap:
     mov dword ptr [rbx], eax
     jmp .Lxkb_keycodes_loop
 .Lxkb_keycodes_alias:
+    # The first token is the alias; the token after '=' is its canonical
+    # target. Resolve the target before adding the alias record.
     mov eax, dword ptr [rip + .Lxkb_token]
     mov dword ptr [rip + .Lxkb_keyname_alias], eax
     mov eax, dword ptr [rip + .Lxkb_keyname_tmp]
@@ -5944,10 +5976,29 @@ xkb_reset_keymap:
     mov dword ptr [rip + .Lxkb_keyname_tmp], eax
     test r12d, r12d
     jz .Lxkb_keycodes_loop
-    lea rbx, [rip + xkb_key_names]
-    lea rbx, [rbx + r12*4]
-    mov eax, dword ptr [rip + .Lxkb_keyname_tmp]
-    mov dword ptr [rbx], eax
+
+    # An alias name may not redirect an existing canonical/alias name to a
+    # different keycode. Repeated identical alias declarations are harmless.
+    call .Lxkb_find_keycode
+    test eax, eax
+    jz .Lxkb_keycodes_alias_append
+    cmp eax, r12d
+    jne .Lxkb_keycodes_fail
+    jmp .Lxkb_keycodes_loop
+
+.Lxkb_keycodes_alias_append:
+    mov ecx, dword ptr [rip + xkb_key_alias_count]
+    cmp ecx, XKB_KEY_ALIAS_MAX
+    jae .Lxkb_keycodes_fail
+    mov eax, ecx
+    shl eax, 2
+    lea rbx, [rip + xkb_key_alias_names]
+    mov edx, dword ptr [rip + .Lxkb_keyname_tmp]
+    mov dword ptr [rbx + rax], edx
+    lea rbx, [rip + xkb_key_alias_codes]
+    mov byte ptr [rbx + rcx], r12b
+    inc ecx
+    mov dword ptr [rip + xkb_key_alias_count], ecx
     jmp .Lxkb_keycodes_loop
 .Lxkb_keycodes_nested_open:
     inc dword ptr [rip + .Lxkb_depth]
@@ -8986,10 +9037,6 @@ xkb_parse_keymap:
     xor eax, eax
     mov ecx, 16
     rep stosd
-    lea rdi, [rip + xkb_parse_error_key_samples]
-    xor eax, eax
-    mov ecx, 20
-    rep stosd
     lea rdi, [rip + xkb_parse_error_token]
     xor eax, eax
     mov ecx, 64
@@ -9072,59 +9119,6 @@ xkb_parse_keymap:
 .Lxkb_parse_error_table_scan_done:
     mov dword ptr [rip + xkb_parse_error_table_nonzero_count], ecx
     mov dword ptr [rip + xkb_parse_error_table_sample_count], r15d
-
-    # Record key-name and symbol-array state for representative keys.
-    # This distinguishes keycodes-name resolution failures from symbols
-    # blocks that are found but do not populate their canonical Group1 cells.
-    lea rdi, [rip + xkb_parse_error_key_samples]
-    lea rbx, [rip + xkb_key_names]
-    lea rdx, [rip + xkb_group_symbol_counts]
-    lea rsi, [rip + xkb_unicode_levels]
-
-    mov eax, dword ptr [rbx + 10*4]
-    mov dword ptr [rdi], eax
-    movzx eax, byte ptr [rdx + 10*4]
-    mov dword ptr [rdi + 4], eax
-    mov eax, dword ptr [rsi + 10*128]
-    mov dword ptr [rdi + 8], eax
-    mov eax, dword ptr [rsi + 10*128 + 4]
-    mov dword ptr [rdi + 12], eax
-
-    mov eax, dword ptr [rbx + 24*4]
-    mov dword ptr [rdi + 16], eax
-    movzx eax, byte ptr [rdx + 24*4]
-    mov dword ptr [rdi + 20], eax
-    mov eax, dword ptr [rsi + 24*128]
-    mov dword ptr [rdi + 24], eax
-    mov eax, dword ptr [rsi + 24*128 + 4]
-    mov dword ptr [rdi + 28], eax
-
-    mov eax, dword ptr [rbx + 38*4]
-    mov dword ptr [rdi + 32], eax
-    movzx eax, byte ptr [rdx + 38*4]
-    mov dword ptr [rdi + 36], eax
-    mov eax, dword ptr [rsi + 38*128]
-    mov dword ptr [rdi + 40], eax
-    mov eax, dword ptr [rsi + 38*128 + 4]
-    mov dword ptr [rdi + 44], eax
-
-    mov eax, dword ptr [rbx + 52*4]
-    mov dword ptr [rdi + 48], eax
-    movzx eax, byte ptr [rdx + 52*4]
-    mov dword ptr [rdi + 52], eax
-    mov eax, dword ptr [rsi + 52*128]
-    mov dword ptr [rdi + 56], eax
-    mov eax, dword ptr [rsi + 52*128 + 4]
-    mov dword ptr [rdi + 60], eax
-
-    mov eax, dword ptr [rbx + 108*4]
-    mov dword ptr [rdi + 64], eax
-    movzx eax, byte ptr [rdx + 108*4]
-    mov dword ptr [rdi + 68], eax
-    mov eax, dword ptr [rsi + 108*128]
-    mov dword ptr [rdi + 72], eax
-    mov eax, dword ptr [rsi + 108*128 + 4]
-    mov dword ptr [rdi + 76], eax
 
     mov eax, dword ptr [rip + .Lxkb_parse_stage]
     mov dword ptr [rip + xkb_parse_error_stage], eax

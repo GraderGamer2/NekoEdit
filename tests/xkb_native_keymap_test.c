@@ -9,6 +9,8 @@
 
 extern int xkb_parse_keymap(const char *text, uint32_t size);
 extern uint32_t xkb_keymap_ready;
+extern char xkb_key_names[256u * 4u];
+extern uint32_t xkb_key_alias_count;
 extern uint32_t xkb_parse_error_stage;
 extern uint32_t xkb_parse_error_offset;
 extern uint32_t xkb_parse_error_token_length;
@@ -18,7 +20,6 @@ extern uint32_t xkb_parse_error_alpha_count;
 extern uint32_t xkb_parse_error_table_nonzero_count;
 extern uint32_t xkb_parse_error_table_sample_count;
 extern uint32_t xkb_parse_error_table_samples[16];
-extern uint32_t xkb_parse_error_key_samples[20];
 extern int xkb_key_is_level_three_modifier(uint32_t evdev_keycode);
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
@@ -158,20 +159,6 @@ main(void)
                     cell, cell >> 5, (cell >> 3) & 3u, cell & 7u,
                     (unsigned)value);
         }
-        static const uint32_t diagnostic_keycodes[] = { 10u, 24u, 38u, 52u, 108u };
-        for (uint32_t i = 0; i < 5u; ++i) {
-            const uint32_t *sample = &xkb_parse_error_key_samples[i * 4u];
-            char name[5] = {
-                (char)(sample[0] & 0xffu),
-                (char)((sample[0] >> 8) & 0xffu),
-                (char)((sample[0] >> 16) & 0xffu),
-                (char)((sample[0] >> 24) & 0xffu),
-                '\0',
-            };
-            fprintf(stderr,
-                    "  keycode=%u name=\"%s\" group1_count=%u levels=%04x/%04x\n",
-                    diagnostic_keycodes[i], name, sample[1], sample[2], sample[3]);
-        }
         free(text);
         xkb_keymap_unref(keymap);
         xkb_context_unref(context);
@@ -179,6 +166,24 @@ main(void)
     }
 
     int failed = 0;
+    if (memcmp(&xkb_key_names[24u * 4u], "AD01", 4u) != 0 ||
+        memcmp(&xkb_key_names[38u * 4u], "AC01", 4u) != 0 ||
+        memcmp(&xkb_key_names[52u * 4u], "AB01", 4u) != 0 ||
+        memcmp(&xkb_key_names[108u * 4u], "RALT", 4u) != 0 ||
+        xkb_key_alias_count < 4u) {
+        fprintf(stderr,
+                "XKB canonical/alias names mismatch: AD01=%.*s AC01=%.*s AB01=%.*s "
+                "RALT=%.*s aliases=%u\n",
+                4, &xkb_key_names[24u * 4u],
+                4, &xkb_key_names[38u * 4u],
+                4, &xkb_key_names[52u * 4u],
+                4, &xkb_key_names[108u * 4u],
+                xkb_key_alias_count);
+        failed = 1;
+    } else {
+        printf("verified canonical XKB names and %u retained aliases\n",
+               xkb_key_alias_count);
+    }
     failed |= check_symbol(keymap, "Multi_key", XKB_KEY_Multi_key, 0x110007u);
     failed |= check_symbol(keymap, "dead_grave", XKB_KEY_dead_grave, 0x110001u);
     failed |= check_symbol(keymap, "dead_circumflex", XKB_KEY_dead_circumflex, 0x110003u);
