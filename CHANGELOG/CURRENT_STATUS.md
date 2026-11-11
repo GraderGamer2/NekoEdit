@@ -1,6 +1,6 @@
 ## 2026-11-12 — capability-aware live text-input-v3 probe (CI pending)
 
-Continue from `early-alpha` after this change is fast-forwarded. The current change extends the existing successful Mutter 46 Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
+Continue from `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The change extends the existing successful Mutter Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
 
 New test file: `tests/mutter_text_input_probe.py`. After the original editor exits, the helper starts a second NekoEdit child, activates its Mutter window, clicks the document area, and reads the child's existing non-PIE ELF state symbols through `nm` + read-only `/proc/<pid>/mem`. No application-side diagnostics or runtime dependency were added.
 
@@ -16,7 +16,7 @@ Also corrected `docs/ARCHITECTURE.md` and README to describe the actual hybrid A
 
 Files changed: `tests/mutter_text_input_probe.py`, `tests/mutter_gnome_smoke.sh`, `docs/MUTTER_INTEGRATION_TEST.md`, `docs/TEXT_INPUT_V3.md`, `docs/ARCHITECTURE.md`, `README.md`, `CHANGELOG/README.md`, and this status file.
 
-The work is currently committed to the temporary staging branch `work/mutter-text-input-capability` to avoid firing one Actions run per file update. It still needs one fast-forward to `early-alpha`, followed by the repository's single normal Build and test run. No CI result is claimed yet.
+The eight-file change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The push should trigger the repository's normal Build and test workflow. The available GitHub status query returned no check records at handoff, so the Actions result remains unconfirmed; do not claim a pass until the run is inspected.
 
 ---
 
