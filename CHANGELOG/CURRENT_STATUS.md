@@ -1,3 +1,12 @@
+## 2026-11-12 — explicit opt-in fallback regression (CI pending)
+
+The live Mutter text-input-v3 handshake is now verified by Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452). On GNOME Shell 46 / Mutter 46.2, the compositor advertised the protocol and NekoEdit bound the manager, received `enter`, enabled the focused document, and committed state. The same workflow passed all 14 steps, including the unchanged physical Compose canaries; it uploaded a 137,017-byte editor artifact and the separate 120,536-byte locale-pack artifact.
+
+This follow-up adds a complementary Wayland-mock case for the other capability branch: the test compositor deliberately omits `zwp_text_input_manager_v3`, while the child process still starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. It requires every text-input object/state symbol to remain zero and then runs the full real-keymap keyboard editing/save scenario. Thus it checks that opting in cannot disable physical XKB typing when the compositor does not advertise the manager.
+
+The fallback test has been committed to the staging branch `work/text-input-opt-in-fallback`. Its test and documentation changes still need one fast-forward to `early-alpha` and one normal Build and test workflow run. No result for this follow-up is claimed yet.
+
+---
 ## 2026-11-12 — capability-aware live text-input-v3 probe (CI pending)
 
 Continue from `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The change extends the existing successful Mutter Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
