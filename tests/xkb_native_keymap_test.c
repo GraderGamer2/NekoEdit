@@ -15,7 +15,10 @@ extern uint32_t xkb_parse_error_token_length;
 extern char xkb_parse_error_token[64];
 extern uint32_t xkb_parse_error_symbol_count;
 extern uint32_t xkb_parse_error_alpha_count;
-extern uint32_t xkb_parse_error_alpha_samples[12];
+extern uint32_t xkb_parse_error_table_nonzero_count;
+extern uint32_t xkb_parse_error_table_sample_count;
+extern uint32_t xkb_parse_error_table_samples[16];
+extern int xkb_key_is_level_three_modifier(uint32_t evdev_keycode);
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
 /*
@@ -143,15 +146,17 @@ main(void)
                 xkb_parse_error_token_length, xkb_parse_error_token);
         fprintf(stderr, "symbols=%u alpha=%u\n",
                 xkb_parse_error_symbol_count, xkb_parse_error_alpha_count);
-        fprintf(stderr,
-                "alpha samples (Unicode): AD01=%04x/%04x AC01=%04x/%04x AB01=%04x/%04x; "
-                "(ASCII): AD01=%u/%u AC01=%u/%u AB01=%u/%u\n",
-                xkb_parse_error_alpha_samples[0], xkb_parse_error_alpha_samples[1],
-                xkb_parse_error_alpha_samples[2], xkb_parse_error_alpha_samples[3],
-                xkb_parse_error_alpha_samples[4], xkb_parse_error_alpha_samples[5],
-                xkb_parse_error_alpha_samples[6], xkb_parse_error_alpha_samples[7],
-                xkb_parse_error_alpha_samples[8], xkb_parse_error_alpha_samples[9],
-                xkb_parse_error_alpha_samples[10], xkb_parse_error_alpha_samples[11]);
+        fprintf(stderr, "canonical Unicode cells=%u; bounded samples=%u\n",
+                xkb_parse_error_table_nonzero_count,
+                xkb_parse_error_table_sample_count);
+        for (uint32_t i = 0; i < xkb_parse_error_table_sample_count; ++i) {
+            uint32_t cell = xkb_parse_error_table_samples[i * 2u];
+            uint32_t value = xkb_parse_error_table_samples[i * 2u + 1u];
+            fprintf(stderr,
+                    "  cell=%u keycode=%u group=%u level=%u value=0x%08x\n",
+                    cell, cell >> 5, (cell >> 3) & 3u, cell & 7u,
+                    (unsigned)value);
+        }
         free(text);
         xkb_keymap_unref(keymap);
         xkb_context_unref(context);
@@ -164,6 +169,26 @@ main(void)
     failed |= check_symbol(keymap, "dead_circumflex", XKB_KEY_dead_circumflex, 0x110003u);
     failed |= check_symbol(keymap, "period", XKB_KEY_period, (uint32_t)'.');
     failed |= check_symbol(keymap, "A", XKB_KEY_A, (uint32_t)'A');
+
+    const xkb_keycode_t ralt_keycode = 108u;
+    const xkb_keysym_t *ralt_symbols = NULL;
+    const int ralt_symbol_count =
+        xkb_keymap_key_get_syms_by_level(keymap, ralt_keycode, 0, 0, &ralt_symbols);
+    if (ralt_symbol_count != 1 || ralt_symbols == NULL ||
+        ralt_symbols[0] != XKB_KEY_Multi_key ||
+        xkb_unicode_levels[(size_t)ralt_keycode * 32u] != 0x110007u ||
+        xkb_key_is_level_three_modifier(100u) != 0) {
+        fprintf(stderr,
+                "compose:ralt mapping mismatch: symbols=%d first=0x%08x parsed=0x%08x level3=%d\n",
+                ralt_symbol_count,
+                (ralt_symbol_count > 0 && ralt_symbols != NULL)
+                    ? (unsigned)ralt_symbols[0] : 0u,
+                (unsigned)xkb_unicode_levels[(size_t)ralt_keycode * 32u],
+                xkb_key_is_level_three_modifier(100u));
+        failed = 1;
+    } else {
+        puts("verified Right Alt resolves as Multi_key, not LevelThree");
+    }
 
     if (failed == 0)
         puts("PASS: NekoEdit parsed the real us(intl) keymap and retained Compose/dead-key actions");

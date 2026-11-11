@@ -258,6 +258,8 @@ def run(
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
+    right_alt_compose_test: bool = False,
+    right_alt_level3_test: bool = False,
     expected_saved_bytes: bytes = b"z",
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
@@ -721,7 +723,7 @@ def run(
                     wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
-                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test:
+                if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test or right_alt_compose_test or right_alt_level3_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
     minimum = 8;
@@ -1226,6 +1228,20 @@ xkb_symbols "nekoedit-sparse" {
 \0"""
                 else:
                     keymap_data = b"xkb_keymap { };\0"
+                if right_alt_compose_test or right_alt_level3_test:
+                    original_ralt = b"""    key <RALT> {
+        virtualModifiers = V04,
+        symbols[Group1] = [ NoSymbol, Alt_L ]
+    };"""
+                    replacement_ralt = (
+                        b"    key <RALT> { symbols[Group1] = [ Multi_key ] };"
+                        if right_alt_compose_test
+                        else b"    key <RALT> { symbols[Group1] = [ ISO_Level3_Shift ] };"
+                    )
+                    if original_ralt not in keymap_data:
+                        raise AssertionError("Right Alt XKB fixture substitution did not find the base RALT key")
+                    keymap_data = keymap_data.replace(original_ralt, replacement_ralt, 1)
+
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
@@ -4808,6 +4824,50 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if right_alt_compose_test:
+                    if child_u32("keymap_format") != 1:
+                        raise AssertionError("Right Alt Compose fixture did not activate the parsed XKB keymap")
+                    key_step(900, 100, "Right Alt mapped to Multi_key")
+                    if child_u32("doc_compose_active") != 1 or child_u32("doc_length") != 0:
+                        raise AssertionError(
+                            "Right Alt Multi_key was consumed as a modifier instead of starting Compose: "
+                            + repr({
+                                "compose_active": child_u32("doc_compose_active"),
+                                "doc_length": child_u32("doc_length"),
+                            })
+                        )
+                    key_step(902, 1, "Escape cancels Right Alt Compose")
+                    if child_u32("doc_compose_active") != 0 or child_u32("doc_length") != 0:
+                        raise AssertionError("Escape did not cancel the Right Alt Compose sequence")
+                    observations.append(
+                        "Right Alt mapped to Multi_key reaches Compose dispatch and Escape cancels it cleanly"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if right_alt_level3_test:
+                    if child_u32("keymap_format") != 1:
+                        raise AssertionError("Right Alt LevelThree fixture did not activate the parsed XKB keymap")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1000, 1000, 100, 1))
+                    )
+                    key_step(1002, 16, "Right Alt mapped to ISO_Level3_Shift")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1004, 1004, 100, 0))
+                        + wire_message(12, 0)
+                    )
+                    contents = read_document_state()["doc_contents"]
+                    if contents != b"@":
+                        raise AssertionError(
+                            "Right Alt mapped to ISO_Level3_Shift did not select LevelThree: "
+                            + repr(contents)
+                        )
+                    observations.append(
+                        "Right Alt mapped to ISO_Level3_Shift activates LevelThree and selects the expected third-level symbol"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if keyboard_layout_test:
                     # XKB keycode 24 is evdev 16. Group 1 maps it to 'a',
                     # Shift maps it to 'A', and Group 2 remaps it to 'q'.
@@ -4820,13 +4880,15 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(16, 4, struct.pack("<IIIII", 1003, 0, 0, 0, 1))
                     )
                     key_step(1004, 16, "XKB second layout group")
-                    # Right Alt is the common physical LevelThree selector.
+                    # This fixture maps RALT to NoSymbol/Alt_L, not
+                    # ISO_Level3_Shift. Use the compositor's Mod5 state instead
+                    # of assuming evdev keycode 100 is always LevelThree.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1005, 1005, 100, 1))
+                        wire_message(16, 4, struct.pack("<IIIII", 1005, 128, 0, 0, 0))
                     )
-                    key_step(1006, 16, "XKB FOUR_LEVEL_ALPHABETIC LevelThree symbol")
+                    key_step(1006, 16, "XKB FOUR_LEVEL_ALPHABETIC compositor Mod5 symbol")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1007, 1007, 100, 0))
+                        wire_message(16, 4, struct.pack("<IIIII", 1007, 0, 0, 0, 0))
                         + wire_message(12, 0)
                     )
                     # LevelThree is commonly a virtual modifier resolved to
@@ -8097,6 +8159,27 @@ if __name__ == "__main__":
             os.unlink(xkb_path)
         except FileNotFoundError:
             pass
+
+    # The same physical evdev key follows its XKB symbol: Multi_key starts
+    # Compose, while ISO_Level3_Shift still activates the LevelThree modifier.
+    for test_flag, prefix in (
+        ("right_alt_compose_test", "nekoedit-right-alt-compose-"),
+        ("right_alt_level3_test", "nekoedit-right-alt-level3-"),
+    ):
+        right_alt_fd, right_alt_path = tempfile.mkstemp(prefix=prefix)
+        try:
+            with os.fdopen(right_alt_fd, "wb") as right_alt_document:
+                right_alt_document.write(b"")
+            run(
+                sys.argv[1],
+                initial_file=right_alt_path,
+                **{test_flag: True},
+            )
+        finally:
+            try:
+                os.unlink(right_alt_path)
+            except FileNotFoundError:
+                pass
 
     # With no explicit interpret.repeat section default, the compatibility
     # default is still False. Re-run the fixture without that assignment.

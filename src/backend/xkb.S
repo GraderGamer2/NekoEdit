@@ -5366,9 +5366,13 @@ xkb_parse_error_token:  .zero 64
 xkb_parse_error_symbol_count: .long 0
 .global xkb_parse_error_alpha_count
 xkb_parse_error_alpha_count: .long 0
-.global xkb_parse_error_alpha_samples
-# AD01, AC01, AB01 first/second Unicode levels, then their ASCII mirrors.
-xkb_parse_error_alpha_samples: .zero 48
+.global xkb_parse_error_table_nonzero_count
+xkb_parse_error_table_nonzero_count: .long 0
+.global xkb_parse_error_table_sample_count
+xkb_parse_error_table_sample_count: .long 0
+.global xkb_parse_error_table_samples
+# Eight bounded {linear cell index, scalar/action value} records.
+xkb_parse_error_table_samples: .zero 64
 .Lxkb_parse_stage:      .long 0
 
 .section .text
@@ -7811,28 +7815,6 @@ xkb_keysym_name_to_unicode:
     inc r14d
     jmp .Lxkb_key_block_infer_group
 .Lxkb_key_block_infer_done:
-    # Count alphabetic keys from their canonical Group1 Unicode values, not
-    # from the auxiliary byte-oriented ASCII lookup table. This table is also
-    # the source used by live key dispatch, and supports both ASCII keysyms and
-    # XKB Uxxxx aliases without depending on the auxiliary table's indexing.
-    mov eax, r15d
-    shl eax, 5
-    lea rbx, [rip + xkb_unicode_levels]
-    mov edx, dword ptr [rbx + rax*4]
-    cmp edx, 'a'
-    jb .Lxkb_key_block_return
-    cmp edx, 'z'
-    ja .Lxkb_key_block_return
-    mov ecx, dword ptr [rbx + rax*4 + 4]
-    cmp ecx, 'A'
-    jb .Lxkb_key_block_return
-    cmp ecx, 'Z'
-    ja .Lxkb_key_block_return
-    sub edx, 'a'
-    sub ecx, 'A'
-    cmp edx, ecx
-    jne .Lxkb_key_block_return
-    inc dword ptr [rip + .Lxkb_alpha_key_count]
 .Lxkb_key_block_return:
     xor eax, eax
     jmp .Lxkb_key_block_exit
@@ -8927,9 +8909,38 @@ xkb_keysym_name_to_unicode:
     jne .Lxkb_symbols_skip_key_body
     jmp .Lxkb_symbols_loop
 .Lxkb_symbols_done:
-    # Do not activate a partially understood map (for example one isolated
-    # punctuation key). Require a reasonable ASCII symbol population; normal
-    # desktop layouts contain many more entries than this minimum.
+    # Count alphabetic keys from the completed canonical scalar table. Doing
+    # this as a separate pass avoids coupling the safety guard to parser scratch
+    # registers while a key block is still being decoded.
+    mov dword ptr [rip + .Lxkb_alpha_key_count], 0
+    lea rbx, [rip + xkb_unicode_levels]
+    mov r14d, 8
+.Lxkb_symbols_alpha_scan:
+    cmp r14d, 256
+    jae .Lxkb_symbols_alpha_scan_done
+    mov eax, r14d
+    shl eax, 5
+    mov edx, dword ptr [rbx + rax*4]
+    cmp edx, 'a'
+    jb .Lxkb_symbols_alpha_scan_next
+    cmp edx, 'z'
+    ja .Lxkb_symbols_alpha_scan_next
+    mov ecx, dword ptr [rbx + rax*4 + 4]
+    cmp ecx, 'A'
+    jb .Lxkb_symbols_alpha_scan_next
+    cmp ecx, 'Z'
+    ja .Lxkb_symbols_alpha_scan_next
+    sub edx, 'a'
+    sub ecx, 'A'
+    cmp edx, ecx
+    jne .Lxkb_symbols_alpha_scan_next
+    inc dword ptr [rip + .Lxkb_alpha_key_count]
+.Lxkb_symbols_alpha_scan_next:
+    inc r14d
+    jmp .Lxkb_symbols_alpha_scan
+.Lxkb_symbols_alpha_scan_done:
+    # Reject maps that contain a few isolated symbols but not a usable
+    # alphabet. Keep both independent minimums unchanged.
     cmp dword ptr [rip + .Lxkb_symbol_count], 16
     jb .Lxkb_symbols_fail
     cmp dword ptr [rip + .Lxkb_alpha_key_count], 12
@@ -8966,9 +8977,11 @@ xkb_parse_keymap:
     mov dword ptr [rip + xkb_parse_error_token_length], 0
     mov dword ptr [rip + xkb_parse_error_symbol_count], 0
     mov dword ptr [rip + xkb_parse_error_alpha_count], 0
-    lea rdi, [rip + xkb_parse_error_alpha_samples]
+    mov dword ptr [rip + xkb_parse_error_table_nonzero_count], 0
+    mov dword ptr [rip + xkb_parse_error_table_sample_count], 0
+    lea rdi, [rip + xkb_parse_error_table_samples]
     xor eax, eax
-    mov ecx, 12
+    mov ecx, 16
     rep stosd
     lea rdi, [rip + xkb_parse_error_token]
     xor eax, eax
@@ -9026,36 +9039,32 @@ xkb_parse_keymap:
     mov eax, dword ptr [rip + .Lxkb_alpha_key_count]
     mov dword ptr [rip + xkb_parse_error_alpha_count], eax
 
-    # Preserve a few well-known alphabetic positions before reset. These are
-    # diagnostic only; the canonical Unicode table and its ASCII mirror are
-    # recorded independently so a parser/indexing discrepancy is visible.
-    lea rbx, [rip + xkb_parse_error_alpha_samples]
-    lea rdx, [rip + xkb_unicode_levels]
-    mov eax, dword ptr [rdx + 3072]
-    mov dword ptr [rbx], eax
-    mov eax, dword ptr [rdx + 3076]
-    mov dword ptr [rbx + 4], eax
-    mov eax, dword ptr [rdx + 4864]
-    mov dword ptr [rbx + 8], eax
-    mov eax, dword ptr [rdx + 4868]
-    mov dword ptr [rbx + 12], eax
-    mov eax, dword ptr [rdx + 6656]
-    mov dword ptr [rbx + 16], eax
-    mov eax, dword ptr [rdx + 6660]
-    mov dword ptr [rbx + 20], eax
-    lea rdx, [rip + xkb_ascii_levels]
-    mov eax, dword ptr [rdx + 768]
-    mov dword ptr [rbx + 24], eax
-    mov eax, dword ptr [rdx + 772]
-    mov dword ptr [rbx + 28], eax
-    mov eax, dword ptr [rdx + 1216]
-    mov dword ptr [rbx + 32], eax
-    mov eax, dword ptr [rdx + 1220]
-    mov dword ptr [rbx + 36], eax
-    mov eax, dword ptr [rdx + 1664]
-    mov dword ptr [rbx + 40], eax
-    mov eax, dword ptr [rdx + 1668]
-    mov dword ptr [rbx + 44], eax
+    # Capture the first nonzero cells from the full canonical table before
+    # reset. The linear index decodes as keycode*32 + group*8 + level.
+    lea rbx, [rip + xkb_unicode_levels]
+    lea rdi, [rip + xkb_parse_error_table_samples]
+    xor r14d, r14d
+    xor r15d, r15d
+    xor ecx, ecx
+.Lxkb_parse_error_table_scan:
+    cmp r14d, 32768
+    jae .Lxkb_parse_error_table_scan_done
+    mov edx, dword ptr [rbx + r14*4]
+    test edx, edx
+    jz .Lxkb_parse_error_table_scan_next
+    inc ecx
+    cmp r15d, 8
+    jae .Lxkb_parse_error_table_scan_next
+    mov eax, r14d
+    mov dword ptr [rdi + r15*8], eax
+    mov dword ptr [rdi + r15*8 + 4], edx
+    inc r15d
+.Lxkb_parse_error_table_scan_next:
+    inc r14d
+    jmp .Lxkb_parse_error_table_scan
+.Lxkb_parse_error_table_scan_done:
+    mov dword ptr [rip + xkb_parse_error_table_nonzero_count], ecx
+    mov dword ptr [rip + xkb_parse_error_table_sample_count], r15d
 
     mov eax, dword ptr [rip + .Lxkb_parse_stage]
     mov dword ptr [rip + xkb_parse_error_stage], eax
@@ -9201,6 +9210,39 @@ xkb_lookup_consumed_modifiers:
     pop rbx
     ret
 .size xkb_lookup_consumed_modifiers, . - xkb_lookup_consumed_modifiers
+
+# RDI=Linux evdev keycode. EAX=1 only when Group 1 / Level 1 in one
+# declared group is ISO_Level3_Shift. Do not infer this from a fixed evdev
+# position: compose:ralt maps the same physical key to Multi_key.
+.global xkb_key_is_level_three_modifier
+.type xkb_key_is_level_three_modifier, @function
+xkb_key_is_level_three_modifier:
+    cmp dword ptr [rip + xkb_keymap_ready], 1
+    jne .Lxkb_ralt_not_level_three
+    cmp edi, 247
+    ja .Lxkb_ralt_not_level_three
+    lea ecx, [rdi + 8]
+    lea r8, [rip + xkb_key_names]
+    cmp dword ptr [r8 + rcx*4], 0
+    je .Lxkb_ralt_not_level_three
+    mov eax, ecx
+    shl eax, 5
+    lea rdx, [rip + xkb_keysym_levels]
+    lea rdx, [rdx + rax*4]
+    mov ecx, 4
+.Lxkb_ralt_level_three_group:
+    cmp dword ptr [rdx], 0xfe03
+    je .Lxkb_ralt_is_level_three
+    add rdx, 32
+    dec ecx
+    jnz .Lxkb_ralt_level_three_group
+.Lxkb_ralt_not_level_three:
+    xor eax, eax
+    ret
+.Lxkb_ralt_is_level_three:
+    mov eax, 1
+    ret
+.size xkb_key_is_level_three_modifier, . - xkb_key_is_level_three_modifier
 
 # RDI=Linux evdev keycode. EAX=1 if this key is configured to repeat.
 # Modifier/group actions remain compositor-owned; this query only reads keymap policy.

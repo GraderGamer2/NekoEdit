@@ -5153,6 +5153,7 @@ recv_msg_control:      .zero 64
 .extern xkb_lookup_ascii
 .extern xkb_lookup_consumed_modifiers
 .extern xkb_key_repeats
+.extern xkb_key_is_level_three_modifier
 .extern xkb_level_three_mask
 .extern xkb_num_lock_mask
 .extern font_init
@@ -7019,8 +7020,19 @@ wayland_main:
     je .keyboard_shift
     cmp eax, 54
     je .keyboard_shift
-    cmp eax, 100                # Right Alt / common LevelThree key
-    je .keyboard_level3
+    cmp eax, 100                # Right Alt is LevelThree only if the map says so
+    jne .keyboard_key_not_level_three
+    cmp dword ptr [rip + keymap_format], 1
+    jne .keyboard_level3         # retain the legacy fallback without a parsed map
+    push rdx
+    mov edi, eax
+    call xkb_key_is_level_three_modifier
+    pop rdx
+    test eax, eax
+    jnz .keyboard_level3
+    # Otherwise dispatch the active mapping (for example Multi_key).
+    mov eax, dword ptr [rip + event_payload + 8]
+.keyboard_key_not_level_three:
     test edx, edx
     jz .keyboard_key_release
     cmp eax, 58
