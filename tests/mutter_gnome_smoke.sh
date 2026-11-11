@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus; do
+for tool in gnome-shell gsettings gdbus ibus; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -103,6 +103,10 @@ export LC_ALL="C.UTF-8"
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
+# Enable IBus Simple's documented Ctrl+Shift+U Unicode-entry path for the
+# second, isolated text-input-v3 test phase. This affects test-session IBus
+# engine behavior only; it is not an application runtime dependency.
+export IBUS_ENABLE_CTRL_SHIFT_U="1"
 unset DISPLAY || true
 
 # GNOME Shell writes its extension selection into this temporary GLib keyfile.
@@ -399,8 +403,34 @@ echo "PASS: Ctrl+S saved the expected UTF-8 bytes (U+2026 U+1EA6)"
 kill "$APP_PID" 2>/dev/null || true
 wait "$APP_PID" 2>/dev/null || true
 APP_PID=
-printf 'seed' > "$TEST_ROOT/text-input-document.txt"
-echo "Probing text-input-v3 activation/fallback with a second NekoEdit process"
+
+# Switch only the second phase to GNOME Shell's real IBus Simple engine. Its
+# xkb:us:intl:eng descriptor applies the same us(intl) layout while routing
+# keys through IBus and GNOME Shell's Clutter.InputMethod bridge.
+if ! ibus list-engine --name-only | grep -Fxq 'xkb:us:intl:eng'; then
+    echo "IBus Simple does not provide the required xkb:us:intl:eng test engine" >&2
+    exit 1
+fi
+gsettings set org.gnome.desktop.input-sources sources "[('ibus', 'xkb:us:intl:eng')]"
+gsettings set org.gnome.desktop.input-sources mru-sources "[('ibus', 'xkb:us:intl:eng')]"
+IBUS_ENGINE=""
+for attempt in $(seq 1 100); do
+    IBUS_ENGINE="$(ibus engine 2>/dev/null || true)"
+    if [ "$IBUS_ENGINE" = "xkb:us:intl:eng" ]; then
+        break
+    fi
+    sleep 0.1
+done
+if [ "$IBUS_ENGINE" != "xkb:us:intl:eng" ]; then
+    echo "GNOME Shell did not activate the expected IBus Simple engine: $IBUS_ENGINE" >&2
+    echo "IBus engines:" >&2
+    ibus list-engine --name-only >&2 || true
+    exit 1
+fi
+echo "GNOME Shell IBus engine verified: $IBUS_ENGINE"
+
+: > "$TEST_ROOT/text-input-document.txt"
+echo "Probing live IBus preedit/commit through text-input-v3 with a second NekoEdit process"
 python3 "$SCRIPT_DIR/mutter_text_input_probe.py" \
     "$APP_BINARY" "$TEST_ROOT/text-input-document.txt" \
     "$TEST_ROOT/text-input-nekoedit.log"
