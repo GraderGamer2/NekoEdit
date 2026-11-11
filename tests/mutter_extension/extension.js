@@ -1,9 +1,13 @@
-import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const BUS_NAME = 'org.nekoedit.TestHarness';
 const OBJECT_PATH = '/org/nekoedit/TestHarness';
+const REMOTE_DESKTOP_BUS = 'org.gnome.Mutter.RemoteDesktop';
+const REMOTE_DESKTOP_PATH = '/org/gnome/Mutter/RemoteDesktop';
+const REMOTE_DESKTOP_IFACE = 'org.gnome.Mutter.RemoteDesktop';
+const REMOTE_SESSION_IFACE = 'org.gnome.Mutter.RemoteDesktop.Session';
 
 const DBUS_XML = `
 <node>
@@ -15,25 +19,25 @@ const DBUS_XML = `
       <arg type="u" name="pid" direction="in"/>
       <arg type="s" name="result" direction="out"/>
     </method>
-    <method name="GetKeyEvents">
-      <arg type="as" name="events" direction="out"/>
+    <method name="BeginInput"/>
+    <method name="InputStatus">
+      <arg type="s" name="status" direction="out"/>
     </method>
+    <method name="SendKey">
+      <arg type="u" name="keysym" direction="in"/>
+      <arg type="b" name="pressed" direction="in"/>
+    </method>
+    <method name="EndInput"/>
   </interface>
 </node>`;
 
 export default class NekoEditMutterTestExtension extends Extension {
     enable() {
-        this._keyEvents = [];
-        this._capturedEventId = global.stage.connect('captured-event', (_actor, event) => {
-            const type = event.type();
-            if (type === Clutter.EventType.KEY_PRESS ||
-                type === Clutter.EventType.KEY_RELEASE) {
-                this._keyEvents.push(`${type}:${event.get_key_symbol()}`);
-                if (this._keyEvents.length > 64)
-                    this._keyEvents.shift();
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        this._remoteSessionPath = null;
+        this._inputState = 'not-started';
+        this._inputPending = 0;
+        this._inputError = null;
+
         this._dbusObject = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbusObject.export(Gio.DBus.session, OBJECT_PATH);
         this._nameOwnerId = Gio.bus_own_name(
@@ -44,15 +48,11 @@ export default class NekoEditMutterTestExtension extends Extension {
             null,
             null
         );
-        console.log('NekoEdit Mutter test bridge is ready');
+        console.log('NekoEdit Mutter headless test bridge is ready');
     }
 
     disable() {
-        if (this._capturedEventId) {
-            global.stage.disconnect(this._capturedEventId);
-            this._capturedEventId = 0;
-        }
-        this._keyEvents = [];
+        this._stopRemoteSession();
         if (this._nameOwnerId) {
             Gio.bus_unown_name(this._nameOwnerId);
             this._nameOwnerId = 0;
@@ -61,6 +61,63 @@ export default class NekoEditMutterTestExtension extends Extension {
             this._dbusObject.unexport();
             this._dbusObject = null;
         }
+    }
+
+    _callRemoteDesktop(method, parameters, replyType, callback) {
+        Gio.DBus.session.call(
+            REMOTE_DESKTOP_BUS,
+            REMOTE_DESKTOP_PATH,
+            REMOTE_DESKTOP_IFACE,
+            method,
+            parameters,
+            replyType,
+            Gio.DBusCallFlags.NONE,
+            5000,
+            null,
+            callback
+        );
+    }
+
+    _callRemoteSession(method, parameters, replyType, callback) {
+        if (!this._remoteSessionPath)
+            throw new Error('Mutter RemoteDesktop session has not been created');
+        Gio.DBus.session.call(
+            REMOTE_DESKTOP_BUS,
+            this._remoteSessionPath,
+            REMOTE_SESSION_IFACE,
+            method,
+            parameters,
+            replyType,
+            Gio.DBusCallFlags.NONE,
+            5000,
+            null,
+            callback
+        );
+    }
+
+    _stopRemoteSession() {
+        if (!this._remoteSessionPath)
+            return;
+        const path = this._remoteSessionPath;
+        this._remoteSessionPath = null;
+        Gio.DBus.session.call(
+            REMOTE_DESKTOP_BUS,
+            path,
+            REMOTE_SESSION_IFACE,
+            'Stop',
+            null,
+            new GLib.VariantType('()'),
+            Gio.DBusCallFlags.NONE,
+            1000,
+            null,
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (_error) {
+                    // Shell shutdown may already have closed the remote session.
+                }
+            }
+        );
     }
 
     Ping() {
@@ -81,7 +138,76 @@ export default class NekoEditMutterTestExtension extends Extension {
         return `target=${target.get_pid()} focus=${focusedPid} frame=${rect.x},${rect.y},${rect.width},${rect.height}`;
     }
 
-    GetKeyEvents() {
-        return this._keyEvents.slice();
+    BeginInput() {
+        if (this._inputState !== 'not-started')
+            return;
+
+        this._inputState = 'starting';
+        this._inputError = null;
+        this._callRemoteDesktop(
+            'CreateSession',
+            null,
+            new GLib.VariantType('(o)'),
+            (connection, result) => {
+                try {
+                    const [path] = connection.call_finish(result).deep_unpack();
+                    this._remoteSessionPath = path;
+                } catch (error) {
+                    this._inputError = String(error);
+                    this._inputState = 'failed';
+                    return;
+                }
+
+                this._callRemoteSession(
+                    'Start',
+                    null,
+                    new GLib.VariantType('()'),
+                    (sessionConnection, startResult) => {
+                        try {
+                            sessionConnection.call_finish(startResult);
+                            this._inputState = 'ready';
+                            console.log('NekoEdit native Mutter virtual keyboard is ready');
+                        } catch (error) {
+                            this._inputError = String(error);
+                            this._inputState = 'failed';
+                        }
+                    }
+                );
+            }
+        );
+    }
+
+    InputStatus() {
+        if (this._inputState === 'failed')
+            return `failed:${this._inputError ?? 'unknown error'}`;
+        return `${this._inputState}:pending=${this._inputPending}`;
+    }
+
+    SendKey(keysym, pressed) {
+        if (this._inputState !== 'ready' || !this._remoteSessionPath)
+            throw new Error(`native Mutter keyboard is not ready (${this._inputState})`);
+
+        this._inputPending++;
+        this._callRemoteSession(
+            'NotifyKeyboardKeysym',
+            new GLib.Variant('(ub)', [keysym, pressed]),
+            new GLib.VariantType('()'),
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (error) {
+                    this._inputError = String(error);
+                    this._inputState = 'failed';
+                }
+                this._inputPending--;
+            }
+        );
+    }
+
+    EndInput() {
+        this._stopRemoteSession();
+        this._inputState = 'not-started';
+        this._inputPending = 0;
+        this._inputError = null;
     }
 }

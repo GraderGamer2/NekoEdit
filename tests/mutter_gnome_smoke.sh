@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run inside an Xvfb display and a private D-Bus session.
+# Run inside a private D-Bus session; GNOME Shell uses Mutter's native headless backend.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -18,29 +18,32 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus xdotool setxkbmap xinput stdbuf; do
+for tool in gnome-shell gsettings gdbus; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
     fi
 done
-if [ -z "${DISPLAY:-}" ] || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-    echo "run this test under xvfb-run and dbus-run-session" >&2
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    echo "run this test under dbus-run-session" >&2
     exit 2
 fi
 if [ ! -x "$APP_BINARY" ] || [ ! -f "$LOCALE_PACK" ]; then
     echo "editor executable or separate pt_BR locale pack is missing" >&2
     exit 2
 fi
-if ! gnome-shell --help 2>&1 | grep -q -- '--nested'; then
-    echo "this smoke test requires GNOME Shell with the --nested option" >&2
+if ! gnome-shell --help 2>&1 | grep -q -- '--headless'; then
+    echo "this smoke test requires GNOME Shell with the native --headless backend" >&2
+    exit 2
+fi
+if ! gnome-shell --help 2>&1 | grep -q -- '--virtual-monitor'; then
+    echo "this smoke test requires Mutter's --virtual-monitor option" >&2
     exit 2
 fi
 
 TEST_ROOT="$(mktemp -d /tmp/nekoedit-mutter.XXXXXX)"
 APP_PID=
 SHELL_PID=
-XINPUT_PID=
 RESULT=failed
 
 cleanup() {
@@ -53,18 +56,14 @@ cleanup() {
         kill "$SHELL_PID" 2>/dev/null
         wait "$SHELL_PID" 2>/dev/null
     fi
-    if [ -n "$XINPUT_PID" ]; then
-        kill "$XINPUT_PID" 2>/dev/null
-        wait "$XINPUT_PID" 2>/dev/null
-    fi
     if [ "$RESULT" = passed ]; then
         rm -rf "$TEST_ROOT"
     else
         echo "Mutter integration diagnostics (temporary directory: $TEST_ROOT)" >&2
-        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log" "$TEST_ROOT/xi2-events.log"; do
+        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log"; do
             if [ -f "$log" ]; then
                 echo "--- $log ---" >&2
-                tail -n 120 "$log" >&2
+                tail -n 160 "$log" >&2
             fi
         done
         if [ -f "$TEST_ROOT/document.txt" ]; then
@@ -109,10 +108,9 @@ export XKB_DEFAULT_OPTIONS="compose:ralt"
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
+unset DISPLAY || true
 
-# Write GNOME settings directly to a temporary GLib keyfile. This avoids a
-# D-Bus-activated dconf daemon inheriting a different environment/profile from
-# the test process. Both the gsettings client and nested Shell use this backend.
+# GNOME Shell writes its extension selection into this temporary GLib keyfile.
 gsettings set org.gnome.shell disable-user-extensions false
 gsettings set org.gnome.shell disabled-extensions "[]"
 gsettings set org.gnome.shell enabled-extensions "['$EXTENSION_UUID']"
@@ -127,17 +125,9 @@ if [ ! -s "$XDG_CONFIG_HOME/glib-2.0/settings/keyfile" ]; then
 fi
 echo "Isolated GNOME enabled extensions: $ENABLED_EXTENSIONS"
 
-# Set the Xvfb host keymap as well as Mutter's XKB defaults. xdotool resolves
-# named keysyms against this map before sending XTest events to GNOME Shell.
-setxkbmap -layout us -variant intl -option compose:ralt
-setxkbmap -query > "$TEST_ROOT/keymap.txt"
-grep -Eq 'layout:[[:space:]]*us' "$TEST_ROOT/keymap.txt"
-grep -Eq 'variant:[[:space:]]*intl' "$TEST_ROOT/keymap.txt"
-grep -Eq 'options:.*compose:ralt' "$TEST_ROOT/keymap.txt"
-
-echo "Starting $(gnome-shell --version) as a nested Wayland user session"
-gnome-shell --mode=user --wayland --nested --no-x11 --sm-disable \
-    --wayland-display="$WAYLAND_DISPLAY" \
+echo "Starting $(gnome-shell --version) with Mutter's native headless backend"
+gnome-shell --mode=user --wayland --no-x11 --headless --virtual-monitor 1280x720 \
+    --sm-disable --wayland-display="$WAYLAND_DISPLAY" \
     > "$TEST_ROOT/mutter.log" 2>&1 &
 SHELL_PID=$!
 
@@ -154,11 +144,11 @@ for attempt in $(seq 1 150); do
     sleep 0.1
 done
 if [ "$READY" -ne 1 ]; then
-    echo "nested Mutter did not create its Wayland socket: $SOCKET" >&2
+    echo "headless Mutter did not create its Wayland socket: $SOCKET" >&2
     exit 1
 fi
 
-# Wait until the temporary extension has exported its narrowly scoped test API.
+# Wait until the temporary extension has exported its narrow D-Bus test API.
 HARNESS_READY=0
 for attempt in $(seq 1 100); do
     if gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
@@ -176,8 +166,6 @@ if [ "$HARNESS_READY" -ne 1 ]; then
     exit 1
 fi
 
-# Let the compositor finish its initial registry/configure cycle before the
-# freestanding editor connects.
 sleep 0.5
 NEKOEDIT_LOCALE=pt_BR.UTF-8 "$APP_BINARY" \
     "$TEST_ROOT/document.txt" > "$TEST_ROOT/nekoedit.log" 2>&1 &
@@ -191,49 +179,6 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 
-# GNOME Shell is itself an X11 client in this nested setup. Clutter's
-# X11 virtual-input implementation injects key events with XTest, so the outer
-# GNOME Shell host window must have X input focus as well as NekoEdit's inner
-# Wayland MetaWindow. Bare Xvfb has no window manager to do click-to-focus.
-SHELL_WINDOW=
-for attempt in $(seq 1 100); do
-    SHELL_WINDOW="$(xdotool search --onlyvisible --pid "$SHELL_PID" 2>/dev/null | head -n 1 || true)"
-    if [ -n "$SHELL_WINDOW" ]; then
-        break
-    fi
-    sleep 0.1
-done
-if [ -z "$SHELL_WINDOW" ]; then
-    SHELL_WINDOW="$(xdotool search --onlyvisible --name 'GNOME Shell' 2>/dev/null | head -n 1 || true)"
-fi
-if [ -z "$SHELL_WINDOW" ]; then
-    echo "could not find GNOME Shell's visible outer X11 window" >&2
-    xdotool search --onlyvisible --name '.*' >&2 || true
-    exit 1
-fi
-xdotool windowraise "$SHELL_WINDOW"
-xdotool windowfocus --sync "$SHELL_WINDOW"
-OUTER_FOCUS="$(xdotool getwindowfocus -f)"
-if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
-    echo "GNOME Shell outer X11 window did not acquire input focus: window=$SHELL_WINDOW focus=$OUTER_FOCUS" >&2
-    exit 1
-fi
-
-GEOMETRY="$(xdotool getwindowgeometry --shell "$SHELL_WINDOW")"
-SHELL_WIDTH="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
-SHELL_HEIGHT="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
-if [ -z "$SHELL_WIDTH" ] || [ -z "$SHELL_HEIGHT" ] || [ "$SHELL_WIDTH" -lt 800 ] || [ "$SHELL_HEIGHT" -lt 480 ]; then
-    echo "unexpected nested Mutter window geometry: $GEOMETRY" >&2
-    exit 1
-fi
-CENTER_X=$((SHELL_WIDTH / 2))
-CENTER_Y=$((SHELL_HEIGHT / 2))
-xdotool mousemove --sync --window "$SHELL_WINDOW" "$CENTER_X" "$CENTER_Y"
-xdotool click 1
-sleep 0.25
-
-# Also activate and verify the actual Wayland MetaWindow. Focusing the outer
-# X11 host alone does not prove which nested Wayland toplevel owns keyboard focus.
 FOCUS_RESULT=
 for attempt in $(seq 1 100); do
     FOCUS_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
@@ -250,59 +195,81 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
     echo "Mutter did not focus NekoEdit's Wayland toplevel: $FOCUS_RESULT" >&2
     exit 1
 fi
-FRAME_RECT="$(printf '%s\n' "$FOCUS_RESULT" | sed -n 's/.*frame=\([-0-9,]*\).*/\1/p')"
-if [ -z "$FRAME_RECT" ]; then
-    echo "Mutter did not report NekoEdit's frame rectangle: $FOCUS_RESULT" >&2
-    exit 1
-fi
-IFS=, read -r FRAME_X FRAME_Y FRAME_WIDTH FRAME_HEIGHT <<< "$FRAME_RECT"
-if [ -z "$FRAME_X" ] || [ -z "$FRAME_Y" ] || [ -z "$FRAME_WIDTH" ] || [ -z "$FRAME_HEIGHT" ] || \
-   [ "$FRAME_WIDTH" -lt 320 ] || [ "$FRAME_HEIGHT" -lt 240 ]; then
-    echo "unexpected NekoEdit MetaWindow frame rectangle: $FRAME_RECT" >&2
-    exit 1
-fi
-APP_CENTER_X=$((FRAME_X + FRAME_WIDTH / 2))
-APP_CENTER_Y=$((FRAME_Y + FRAME_HEIGHT / 2))
-xdotool mousemove --sync --window "$SHELL_WINDOW" "$APP_CENTER_X" "$APP_CENTER_Y"
-xdotool click 1
-sleep 0.25
-FOCUS_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-    --method "$DBUS_INTERFACE.Activate" "$APP_PID")"
-OUTER_FOCUS="$(xdotool getwindowfocus -f)"
-if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
-    echo "GNOME Shell lost outer X11 input focus after inner activation: window=$SHELL_WINDOW focus=$OUTER_FOCUS" >&2
-    exit 1
-fi
-echo "GNOME focus verified: outer X11=$SHELL_WINDOW; inner Wayland=$FOCUS_RESULT"
-echo "Clicked NekoEdit frame center: $APP_CENTER_X,$APP_CENTER_Y"
+echo "Mutter native headless focus verified: $FOCUS_RESULT"
 
-# Observe XI2 raw keyboard events on the Xvfb root independently of
-# GNOME Shell's Clutter event dispatch. This distinguishes XTest injection from
-# nested-compositor forwarding to its Wayland client.
-stdbuf -oL xinput test-xi2 --root > "$TEST_ROOT/xi2-events.log" 2>&1 &
-XINPUT_PID=$!
-sleep 0.25
+# Create the remote-desktop session from inside GNOME Shell. The extension
+# reuses Shell's own D-Bus connection for CreateSession, Start and key events,
+# satisfying Mutter's same-peer permission check. Its native backend creates
+# a physical-mode Clutter virtual keyboard instead of an XTEST device.
+gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.BeginInput" >/dev/null
 
-# Send a basic key/save canary through XTest after both focus layers have
-# been confirmed. The X server delivers it to GNOME Shell's focused host window,
-# and the nested compositor forwards it as Wayland wl_keyboard input.
-xdotool key --clearmodifiers --delay 120 ctrl+a
-xdotool key --delay 120 x
-xdotool key --clearmodifiers --delay 120 ctrl+s
-sleep 0.3
-kill "$XINPUT_PID" 2>/dev/null || true
-wait "$XINPUT_PID" 2>/dev/null || true
-XINPUT_PID=
-
-if ! grep -Eq 'RawKeyPress|KeyPress' "$TEST_ROOT/xi2-events.log"; then
-    echo "XTest did not produce an XI2 key event on the Xvfb root" >&2
-    echo "X server focus: $(xdotool getwindowfocus -f 2>&1 || true)" >&2
-    echo "X input devices:" >&2
-    xinput list --short >&2 || true
+INPUT_READY=0
+for attempt in $(seq 1 100); do
+    INPUT_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.InputStatus" 2>/dev/null || true)"
+    if [[ "$INPUT_STATUS" == *"ready:pending=0"* ]]; then
+        INPUT_READY=1
+        break
+    fi
+    if [[ "$INPUT_STATUS" == *"failed:"* ]]; then
+        echo "Mutter native virtual keyboard setup failed: $INPUT_STATUS" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+if [ "$INPUT_READY" -ne 1 ]; then
+    echo "Mutter native virtual keyboard did not become ready: $INPUT_STATUS" >&2
     exit 1
 fi
-echo "Xvfb XI2 key events observed:"
-grep -E 'RawKeyPress|KeyPress' "$TEST_ROOT/xi2-events.log" | tail -n 12
+echo "Mutter native virtual keyboard session started"
+
+send_key() {
+    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.SendKey" "$1" "$2" >/dev/null
+}
+send_keysym() {
+    local keysym="$1"
+    send_key "$keysym" true
+    sleep 0.05
+    send_key "$keysym" false
+    sleep 0.05
+}
+send_shortcut() {
+    local modifier="$1"
+    local keysym="$2"
+    send_key "$modifier" true
+    sleep 0.05
+    send_key "$keysym" true
+    sleep 0.05
+    send_key "$keysym" false
+    sleep 0.05
+    send_key "$modifier" false
+    sleep 0.05
+}
+wait_for_input_idle() {
+    local status
+    for attempt in $(seq 1 50); do
+        status="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+            --method "$DBUS_INTERFACE.InputStatus" 2>/dev/null || true)"
+        if [[ "$status" == *"ready:pending=0"* ]]; then
+            return 0
+        fi
+        if [[ "$status" == *"failed:"* ]]; then
+            echo "Mutter native virtual input failed: $status" >&2
+            return 1
+        fi
+        sleep 0.05
+    done
+    echo "Mutter virtual keyboard did not drain pending events: $status" >&2
+    return 1
+}
+
+# Basic typing and Save shortcut are a canary independent of Compose handling.
+send_shortcut 65507 97
+send_keysym 120
+send_shortcut 65507 115
+wait_for_input_idle
 
 PROBE_SAVED=0
 for attempt in $(seq 1 50); do
@@ -316,23 +283,22 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 if [ "$PROBE_SAVED" -ne 1 ]; then
-    echo "XTest keyboard input did not deliver the basic edit/save canary" >&2
+    echo "native Mutter virtual keyboard did not deliver the basic edit/save canary" >&2
     echo "NekoEdit PID: $APP_PID" >&2
-    echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
-    echo "GNOME Shell captured key events: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.GetKeyEvents" 2>&1 || true)" >&2
+    echo "input status: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.InputStatus" 2>&1 || true)" >&2
     exit 1
 fi
 
-# Replace the canary with the Compose and dead-key paths under test.
-# Right Alt is Multi_key under us(intl), and Shift+6 is dead_circumflex.
-xdotool key --clearmodifiers --delay 120 ctrl+a
-xdotool key --delay 120 Multi_key
-xdotool key --delay 120 period
-xdotool key --delay 120 period
-xdotool key --delay 120 dead_grave
-xdotool key --delay 120 shift+6
-xdotool key --delay 120 shift+a
-xdotool key --clearmodifiers --delay 120 ctrl+s
+# Replace the canary with the Compose and locale-specific two-dead-key chain.
+send_shortcut 65507 97
+send_keysym 65312
+send_keysym 46
+send_keysym 46
+send_keysym 65104
+send_keysym 65106
+send_keysym 65
+send_shortcut 65507 115
+wait_for_input_idle
 
 SAVED=0
 for attempt in $(seq 1 100); do
@@ -349,14 +315,16 @@ done
 if [ "$SAVED" -ne 1 ]; then
     echo "ordinary keyboard canary passed, but expected Compose output U+2026 U+1EA6 (…Ầ) was not saved" >&2
     echo "NekoEdit PID: $APP_PID" >&2
-    echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
+    echo "input status: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.InputStatus" 2>&1 || true)" >&2
     exit 1
 fi
 if ! kill -0 "$SHELL_PID" 2>/dev/null; then
-    echo "nested Mutter exited during keyboard input" >&2
+    echo "headless Mutter exited during keyboard input" >&2
     exit 1
 fi
 
-echo "PASS: GNOME Shell/Mutter delivered Multi_key and a two-mark dead-key chain"
+echo "PASS: native Mutter virtual keyboard delivered Multi_key and a two-mark dead-key chain"
 echo "PASS: Ctrl+S saved the expected UTF-8 bytes (U+2026 U+1EA6)"
+gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.EndInput" >/dev/null
 RESULT=passed
