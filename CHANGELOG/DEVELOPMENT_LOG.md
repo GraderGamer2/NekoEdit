@@ -1,61 +1,409 @@
-## 2026-11-10 — branch-only handoff: Wayland multi-dead-key chains — #802 passed
+## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
-- Recorded the `early-alpha` Wayland change for continuity; application code, tests, locale JSON, and workflow changes remain on that branch and were not copied to `main`.
-- The validated early-alpha source/test head is `91a92c38210362def100026afd60e7b08132d08f`; Build and test [#802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps.
-- The runtime buffers one to three dead-key combining marks plus a final character, queries existing typed NLP1 records, and preserves unmatched chains literally. Fourth-key overflow, Multi_key transition, Escape and Backspace have bounded behavior; the 52-byte pack record is unchanged.
-- The three XCompose import paths now accept the same bounded grammar. Pinned optional tables were regenerated and verified; counts are pt_BR 4,484, fi_FI 4,488, sr_RS 4,495, and el_GR 5,730. The en_US-derived dead-key baseline is 1,576.
-- CI includes source-derived two-mark Portuguese and three-mark Greek data assertions plus the Wayland keyboard-event mock. This is not a live GNOME/Mutter test.
-- Temporary workflow artifact/debug and write-permission steps were removed on early-alpha; its workflow is read-only again. Main contains only these changelog handoff notes.
+The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.
+
+The limit is carried consistently through the standard pack generator, pinned X.Org importer, offline user .XCompose converter, native Settings importer, freestanding validation/lookup, and Wayland document-input state. The editor buffers seven marks, queries the complete eight-scalar locale rule, preserves unmatched input literally, and flushes the previous seven marks only when an eighth consecutive dead action arrives. Multi_key continues to use its separate four-input state.
+
+Regression coverage includes v2 eight-scalar serialization and bounds, pinned/user/native importer fixtures, freestanding manager lookup, an explicitly constructed v1 pack with both Multi_key and typed dead-key records, and physical Wayland mock events for seven-mark success and eight-action overflow. The four generated JSON datasets retain exactly the same rule sequences and record counts; only importer diagnostics change for 132 malformed en_US dead-key lines, now categorized as unsupported intermediate events instead of over-limit sequences. The regenerated unsupported_input counts are 1,061 (pt_BR), 1,063 (fi_FI), 1,061 (sr_RS), and 1,072 (el_GR), with too_long now zero. en_US remains the only embedded Compose dataset and optional locales remain separate data-only packs.
+
+Commits: [bfa833f](https://github.com/GraderGamer2/NekoEdit/commit/bfa833f41448d46343f68ad77a045b4e7d3dc949) implements the v2 seven-mark chain path; [1b5b7e6](https://github.com/GraderGamer2/NekoEdit/commit/1b5b7e69f5117875aab444b3a25131b646ebd31f) corrects the namespace-isolation regression assertion; [2d43183](https://github.com/GraderGamer2/NekoEdit/commit/2d43183d6736cfddf93f5d960780b5eb24f1f0f5) refreshes only the four locale JSON diagnostic counters. Build and test [#832](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505) passed all workflow steps on the final early-alpha data head. The run validated the freestanding build, all command-line/host tests, the complete Wayland mock (including seven-mark resolution and eight-action overflow), ELF inspection, the real libxkbcommon us(intl)/compose:ralt keymap, byte-for-byte regeneration of all four locale JSON datasets, separate locale-pack builds, and the nested GNOME Shell/Mutter integration test. Both artifacts uploaded successfully: editor [13858886635](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505/artifacts/13858886635), 137,017 bytes; locale packs [13859156429](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505/artifacts/13859156429), 120,536-byte ZIP. Both expire 2026-11-12 13:19 UTC / 20:19 Jakarta.
 
 
-## 2026-11-10 — early-alpha-only XCompose Unicode keysym compatibility — #797 passed
+## 2026-11-11 — preserve canonical XKB key names alongside aliases
 
-- Recorded on main as a branch-only continuity handoff. No application source, tests, Makefile, or workflow changes from this implementation were copied to main; PR #2 remains open and unmerged.
-- Early-alpha commit 4079e8c routes native Settings XCompose named-character inputs through the same existing XKB Unicode keysym resolver used by keyboard keymap parsing. It broadens import coverage across Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, and xorgproto 2026.1 aliases without duplicating the mapping table or adding runtime dependencies.
-- Commit b23b2ae corrected the test-only locale-manager link dependency after #796 exposed the missing xkb.S object.
-- Build and test [#797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 steps: freestanding build, native and host tests, full Wayland mock, ELF inspection, pinned X.Org regeneration, optional locale-pack build, and separate editor/locale uploads.
-- Artifacts: editor ZIP 13753236119 (135,337 bytes; SHA-256 6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac); locale ZIP 13753071329 (101,677 bytes; SHA-256 4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3). One-day expiry: 2026-11-11 09:43 UTC / 16:43 Jakarta.
-- Physical-keyboard and live GNOME/Mutter validation remain outstanding.
+Actions #827 and #828 passed the freestanding build, CLI tests, Wayland mock, and ELF inspection, but the native libxkbcommon `us(intl)` parser test failed at the end of `xkb_symbols`. The #828 diagnostics identified the root cause: XKB keycodes define canonical names first (for example `<AD01> = 24`) and later define aliases (for example `alias <LatQ> = <AD01>`). NekoEdit stored only one name per keycode and overwrote the canonical name with each alias. The symbols section still refers to the canonical name, so those key blocks were skipped; the same happened to `RALT` when `ALGR` was recorded.
 
-## 2026-11-10 — early-alpha-only native XCompose macro includes and compose.dir mapping
+The parser now keeps the original canonical name in `xkb_key_names` and stores aliases in a bounded 256-entry name-to-keycode table. Lookup checks canonical names first and then aliases. Repeated aliases to the same keycode are harmless; conflicting names or table overflow fail closed. No safety thresholds were changed.
 
-- Recorded on main as a branch-only continuity handoff. No source, test, build, or runtime changes from this feature were copied to main; PR #2 remains open and unmerged.
-- The early-alpha Settings importer supports sibling, %H, %S, and %L include expansion. %L resolves the normalized process locale through X.Org compose.dir, including aliases and C's mapping. Component validation, no-follow opens, and the established resource bounds remain active.
-- Regression coverage includes nested home/system includes, compose.dir alias resolution, C mapping, parent traversal, symlinked files/directories, and the eight-scalar NLP1 output ceiling.
-- Build and test #795 passed all 14 workflow steps on early-alpha, including the freestanding build, native/host tests, Wayland mock, ELF inspection, pinned X.Org verification, optional pack build, and both artifact uploads.
-- Artifacts: editor ZIP 13729764162 (135,652 bytes); locale ZIP 13730980366 (101,677 bytes), expiring 2026-11-11 02:36 UTC / 09:36 Jakarta.
-- Commits: 391b0c66d89c, 575db597c7b0, 6bf83dce7b34, ae6323501b66, a4bdccc12147. Automatic startup discovery, non-UTF-8 native import, and live desktop/physical-keyboard verification remain outstanding.
+Regression coverage adds LatQ/LatA/LatZ/ALGR aliases to the synthetic Wayland keymap, routes one symbol block through LatW, verifies the canonical names remain intact, and checks the alias count. The native `us(intl)` probe now asserts canonical AD01/AC01/AB01/RALT names and retained aliases before comparing real keysyms. Build and test #829 will validate the full map, Compose/dead-key positions, and then the later X.Org/Mutter workflow steps.
 
-## 2026-11-10 — early-alpha-only Greek Compose locale data and verification
 
-- Recorded on main as a continuity handoff only. The data and workflow changes are on early-alpha; no non-en_US locale table was added to the main-branch executable.
-- Early-alpha added a reproducible el_GR.UTF-8 dataset from pinned libX11 source blob 4a644258ce32cd34ddcc0c47605938db5f697b7d. The source is standalone; the explicit `--locale-standalone` mode merges its 922 accepted Greek Multi_key and 138 dead-key rules over the pinned en_US baseline.
-- The resulting pack contains 4,690 records, 488 locale overrides, and 13 dropped shorter prefixes. Golden tests cover representative Greek tonos, diaeresis, and breathing-mark outputs.
-- Build and test #790 passed the entire early-alpha workflow, including the Wayland mock, pinned source regeneration, JSON comparison, optional pack build, and separate editor/locale uploads.
-- CI #788 corrected a bad test scalar (U+03AA is correct); #789 exceeded the long Settings test's 50-second harness limit. The test-only limit was raised to 90 seconds; Build and test #790 then passed.
-- Latest editor and locale artifacts: 13727403952 (133,624 bytes) and 13727443844 (101,677 bytes), expiring November 11, 2026 around 01:53 UTC. Physical keyboard verification remains outstanding.
+## 2026-11-11 — trace missing XKB key blocks after Actions #827
 
-## 2026-11-10 — early-alpha-only native Settings XCompose import milestone
+Actions #827 passed the freestanding build, CLI tests, full Wayland mock, and ELF inspection. The native libxkbcommon `us(intl)` test still rejected the keymap at the end of `xkb_symbols`: 84 canonical Unicode cells were populated, but zero alphabetic pairs were found. The first eight populated cells were number-row keycodes 10 and 11, confirming the table-wide counter was not the remaining fault.
 
-- Recorded for continuity on `main` only; application code is **not** present on this branch. The implementation is on `early-alpha` and PR #2 remains open/unmerged.
-- The early-alpha implementation adds a native Settings → Locale → Import path for bounded UTF-8 self-contained `.XCompose` files. It creates a separate private validated NLP1 pack under `~/.nekoedit/locales/`, preserves the selected source, refuses overwrite, activates and persists the choice, and does not invoke Python. Include directives remain unsupported in this in-app parser and fail closed.
-- The extended Settings UI Wayland mock verifies the raw-file import flow. Build and test [#785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 steps on the early-alpha test commit.
-- Only built-in en_US is embedded. The optional release locale datasets and user-imported packs remain separate files, not linked into the executable.
-- Implementation: [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978); UI integration test: [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d).
+This diagnostic-only change preserves five targeted records before parser reset: keycodes 10/AE01, 24/AD01, 38/AC01, 52/AB01, and 108/RALT. For each it captures the parsed four-byte key name, Group1 symbol count, and first two canonical Unicode cells. The next native run will separate a keycodes-name lookup problem from symbols-section key-block parsing. No parser thresholds or acceptance behavior are changed.
 
-## 2026-11-10 — reduce main-branch Actions artifact retention to one day
+Right Alt dispatch is now keymap-aware in the source, and both focused Right Alt Wayland scenarios and the complete mock pass in #827. The real `compose:ralt` keymap remains unvalidated until the native parser accepts it.
 
-- Changed the main-branch executable upload in `.github/workflows/build.yml` from `retention-days: 90` to `retention-days: 1` in commit [9f2f94b7f1d7](https://github.com/GraderGamer2/NekoEdit/commit/9f2f94b7f1d7208777bd0b7decd9a5033bf1bc54).
-- Added changelog-only path exclusions to push and pull-request triggers so continuity documentation does not start unnecessary build runs.
-- The one-day setting affects newly uploaded artifacts only. Existing artifacts retain their previously assigned expiry dates.
-- No editor source, binary, or runtime behavior changed. The available GitHub connector only exposes pull-request-triggered workflow-run lookup, so the push-triggered run ID and artifact `expires_at` could not be independently retrieved in this session. The workflow YAML itself is verified. Check [Build and test runs on main](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Amain) for the push run.
+## 2026-11-11 — derive the XKB alphabetic-key guard from canonical Unicode levels
 
-## 2026-11-10 — align main-branch artifact retention with early-alpha — Build and test #778 passed
+- Build and test [#825](https://github.com/GraderGamer2/NekoEdit/actions/runs/42996770082) passed the executable build, command-line tests, complete Wayland mock suite, and ELF inspection. The new native libxkbcommon probe then failed at the final `xkb_symbols` guard: it reported 84 parsed values but zero alphabetic key pairs.
+- The 84 count exceeds the minimum 16-symbol threshold. The rejected condition is the 12-letter-pair guard, which was reading `xkb_ascii_levels`, an auxiliary byte table, rather than the canonical `xkb_unicode_levels` cells that contain the actual symbols used by the editor.
+- Updated `.Lxkb_key_block_done` to count a lowercase Group1 symbol followed by its corresponding uppercase symbol from the Unicode scalar table. The minimum remains 12; this is a data-source correction, not a validation relaxation.
+- Added bounded error samples for AD01, AC01, and AB01 to preserve the first two Unicode levels and ASCII mirrors before `xkb_reset_keymap()` clears the failed map. The C probe prints these only if parsing still fails, and its counter line now emits a normal newline.
+- Build and test #826 will validate the real `us(intl)` map and exact Compose/dead-key positions. No Mutter pass is claimed until that and the later compositor stage complete.
+## 2026-11-11 — report symbol and alphabetic-key totals when the real map fails stage 4
 
-- Updated `.github/workflows/build.yml` on `main` so its Linux executable artifact uses `retention-days: 90` rather than 7.
-- The active `early-alpha` branch also uses 90 days for its executable and locale-pack build artifacts, plus the separate locale-pack workflow.
-- This affects future uploads only; existing artifact expiry dates are unchanged. The workflow push triggers validation on `main`.
-- No editor source or runtime behavior changed.
+- Build and test [#824](https://github.com/GraderGamer2/NekoEdit/actions/runs/42995879521) passed the freestanding build, CLI tests, complete Wayland mock suite, and ELF inspection. The native parser probe then reported stage 4 (`xkb_symbols`), byte offset 66,422, and final token `}`.
+- Inspected `.Lxkb_parse_symbols`: after reaching the symbols-section closing brace, it rejects maps with fewer than 16 parsed symbols or fewer than 12 alphabetic keys. The failure is therefore at section completion; the previous token/offset alone could not distinguish which threshold fired.
+- Exported two bounded diagnostic values copied before the parser resets its keymap state: `.Lxkb_symbol_count` and `.Lxkb_alpha_key_count`. The native C probe now prints both counters alongside the stage/token diagnostics.
+- Build and test #825 will distinguish whether the parser is not collecting enough symbols at all or whether its alphabetic-key detection is too strict for this valid XKB map. No minimum threshold or parser acceptance rule has been changed.
+## 2026-11-11 — instrument the XKB parser's top-level failure stage and token
+
+- Build and test [#823](https://github.com/GraderGamer2/NekoEdit/actions/runs/42994629933) passed executable build, CLI tests, Wayland mocks, ELF inspection, and compilation of the native probe. The probe generated a valid 66,429-byte libxkbcommon `us(intl)` / `compose:ralt` text-v1 keymap, then NekoEdit's `xkb_parse_keymap()` returned `-1` and reset `xkb_keymap_ready` to zero.
+- Added bounded parser diagnostics: the top-level pass, current text byte offset, token length, and last token. The parser records these immediately on failure before it resets its regular map data. Stage values are: 1 virtual-modifier scan, 2 keycodes, 3 first types pass, 4 symbols, 5 compat, 6 virtual-modifier resolution, 7 second types pass.
+- Extended `tests/xkb_native_keymap_test.c` to print the diagnostic fields when the real keymap is rejected. The instrumentation does not relax validation or alter the fallback path.
+- Build and test #824 will identify the exact parser stage and token so the next fix can target the unsupported XKB construct rather than broadly accepting unknown syntax.
+## 2026-11-11 — fix native XKB keymap probe compilation and inspect the correct table
+
+- Build and test [#822](https://github.com/GraderGamer2/NekoEdit/actions/runs/42992625113) passed the freestanding executable build, CLI tests, Wayland mock suite, and ELF inspection. It failed at the new host-side `test-xkb-native` step during C compilation.
+- The compiler error was an invalid assumption that libxkbcommon exposes `xkb_context` and `xkb_keymap` typedefs. Its public API uses `struct xkb_context *` and `struct xkb_keymap *`; corrected every declaration and function parameter accordingly.
+- Corrected the probe's assertion model as well. NekoEdit's `xkb_unicode_levels` stores the values consumed by keyboard dispatch: Unicode scalars and reserved internal action markers (`Multi_key` 0x110007, dead_grave 0x110001, dead_circumflex 0x110003). `xkb_keysym_levels` is intentionally only the raw modifier-keysym table, so comparing general symbols against it would be incorrect even after compilation.
+- The test now compares `xkb_unicode_levels[keycode*32 + group*8 + level]` against the corresponding action marker or Unicode scalar for each keymap symbol location returned by libxkbcommon.
+- Build and test #823 will run the corrected probe before pinned importer, locale pack, and Mutter integration stages. No editor source was changed in this correction.
+## 2026-11-11 — test the assembly XKB parser against a real us(intl) keymap
+
+- Build and test [#821](https://github.com/GraderGamer2/NekoEdit/actions/runs/42989531248) passed the freestanding build, CLI, full Wayland protocol mock, ELF, pinned X.Org importer, and four separate locale-pack stages. The Mutter test also confirmed the startup `us(intl)` keymap call, editor MetaWindow activation, native document-body click, and ordinary edit/save. Compose still left grave/circumflex as literal characters.
+- The remaining uncertainty is whether the editor's assembly parser accepts the exact keymap text generated for `us(intl)`, and whether its parsed keycode/group/level symbols match libxkbcommon. Mutter setup changes alone cannot establish that.
+- Added `tests/xkb_native_keymap_test.c`. It uses libxkbcommon to compile `evdev` / `pc105` / `us` / `intl` / `compose:ralt`, serializes the actual XKB v1 text, passes it to the existing `xkb_parse_keymap()` function, and checks that NekoEdit retains the keysyms `Multi_key`, `dead_grave`, `dead_circumflex`, `period`, and `A` at the same positions as libxkbcommon.
+- Added a separate `make test-xkb-native` target and CI step. CI installs `libxkbcommon-dev` only to build/run this host diagnostic; neither the application build nor its runtime dependency set links to libxkbcommon. The ordinary `make test` target is unchanged.
+- Build and test #822 will report whether a real `us(intl)` map is rejected or misparsed before the next live Mutter debugging change.
+## 2026-11-11 — send the configured Mutter keymap before NekoEdit's first wl_keyboard bind
+
+- Build and test [#820](https://github.com/GraderGamer2/NekoEdit/actions/runs/42988594141) passed all pre-Mutter checks, the native pointer click, and the ordinary edit/save canary. The extension's `ApplyKeymap` call also returned the expected `us` / `intl` / `compose:ralt` / `pc105` tuple, but the final file still contained literal grave/circumflex characters.
+- In #820, `ApplyKeymap` ran after NekoEdit had launched and bound `wl_keyboard` with the default plain-US keymap. NekoEdit's dynamic keymap listener exists, but the integration result did not establish that the new map had been consumed before the synthetic key sequence. The harness no longer uses that ambiguous order.
+- Moved the same direct Mutter backend call to after Shell startup and keyboard-device priming but before launching NekoEdit. The editor's initial `wl_keyboard.keymap` FD should therefore already describe `us(intl)` with `compose:ralt`; the Compose test no longer depends on a runtime keymap change. Session GSettings remains configured and verified.
+- Build and test #821 will validate the initial-map path and exact UTF-8 output. No application source or runtime dependencies were modified.
+## 2026-11-11 — call Mutter's backend keymap API directly before the Compose integration sequence
+
+- Build and test [#819](https://github.com/GraderGamer2/NekoEdit/actions/runs/42987693384) passed the build, CLI tests, Wayland protocol mock, ELF inspection, pinned X.Org regeneration, and all four separate locale-pack builds. The headless Mutter integration also passed native pointer focus and the basic typing/save canary.
+- The Compose phase still failed. The temporary GNOME keyfile read back `us+intl`, `compose:ralt`, and `pc105`, but Mutter emitted ordinary grave/circumflex symbols, so the Settings values had not been applied to the active native backend keymap before input.
+- Inspected GNOME Shell 46.2 `js/misc/keyboardManager.js`: its `KeyboardManager._applyLayoutGroup()` calls `global.backend.set_keymap(layouts, variants, options, model)` and locks the selected group through the same backend object.
+- Added a constrained `ApplyKeymap` method to the temporary extension. After the basic canary, the harness calls it to set `us`, `intl`, `compose:ralt`, `pc105`, then locks group 0 before injecting the Compose/dead-key sequence. This avoids a startup ordering dependency while using the same API as GNOME Shell's normal input-source manager.
+- Build and test #820 will verify keyval-to-keycode mapping and exact `…Ầ` output. No application source or runtime dependencies changed; the extension and GNOME settings remain test-scoped.
+## 2026-11-11 — configure GNOME Shell's actual XKB map before Mutter Compose testing
+
+- Build and test [#818](https://github.com/GraderGamer2/NekoEdit/actions/runs/42986520195) passed the full freestanding build, command-line tests, Wayland protocol mock, ELF inspection, pinned-source importer comparison, and all four locale-pack builds. The native Mutter test now successfully focused the document with a RemoteDesktop pointer click; its basic Ctrl+A / x / Ctrl+S / Enter canary saved exactly `x`.
+- The Compose phase failed with file bytes `..A`. Mutter logged `No keycode found` for `Multi_key` (0xff20), `dead_grave` (0xfe50), and `dead_circumflex` (0xfe52), while ordinary ASCII keysyms resolved. This directly showed that the native backend keymap did not contain the requested Compose/dead-key symbols.
+- Inspected Mutter 46.2: `meta_seat_native_new()` initializes the native seat with a plain `us` layout and empty options; the `XKB_DEFAULT_*` variables in the smoke test do not configure this backend. GNOME Shell `KeyboardManager` reads `org.gnome.desktop.input-sources` and applies its layout/options to the native backend.
+- Updated the isolated temporary GLib keyfile settings before Shell startup: `sources=[('xkb','us+intl')]`, `mru-sources=[('xkb','us+intl')]`, `xkb-options=['compose:ralt']`, and `xkb-model='pc105'`. The test reads the values back and aborts if any differ. Removed misleading ineffective XKB environment exports.
+- Documented the actual physical key sequence expected under `us(intl)`: Right Alt for Multi_key, grave for dead_grave, Shift+6 for dead_circumflex, and Shift+A for A. Build and test #819 will verify lookup and the final UTF-8 output. No editor source or runtime dependency changed.
+## 2026-11-11 — focus the document body with a native Mutter pointer click before key injection
+
+- Build and test [#817](https://github.com/GraderGamer2/NekoEdit/actions/runs/42982720723) passed the build, CLI tests, full Wayland mock, ELF inspection, pinned X.Org import comparisons, and four separate locale-pack builds. Mutter's native headless backend and virtual monitor started; NekoEdit's MetaWindow was focused; the RemoteDesktop keyboard device was created before the editor launched. The basic edit/save canary still left the file unchanged after Ctrl+S and Enter.
+- Confirmed from Mutter 46.2 source that RemoteDesktop virtual keyboard devices are physical-mode Clutter devices and pass the Wayland seat's supported-hardware filter. `MetaWindow.activate()` is connected through Mutter's `focus-window` signal to the Wayland seat input-focus surface. This makes the prior device-classification/focus explanations insufficient.
+- Added a bounded pointer-click operation to the temporary GNOME Shell extension. It reads the current stage pointer position, gets NekoEdit's frame rectangle, computes a target 65% down the frame (inside the document body), and uses `NotifyPointerMotionRelative` plus left-button press/release in the same RemoteDesktop session.
+- The harness waits for explicit pointer motion and button completion, then sends the basic keyboard/save canary. This exercises the editor's own document-area click path rather than assuming window activation alone established internal focus. No editor runtime code or dependencies changed.
+- Build and test #818 will validate the change. No success is claimed yet.
+## 2026-11-11 — prime the Mutter native virtual keyboard before NekoEdit binds wl_seat
+
+- Build and test #816 passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, pinned X.Org byte-for-byte regeneration, and four optional locale-pack builds. The native headless Mutter session focused NekoEdit, started the RemoteDesktop session, and completed the D-Bus key-notification calls. The basic edit/save canary still left the file unchanged even after Enter was sent to accept the default save-confirmation modal.
+- Inspected Mutter 46.2 source: `ensure_virtual_device()` creates the remote-desktop virtual keyboard lazily on the first pressed key. The resulting Clutter `device-added` signal recomputes `wl_seat` capabilities. When keyboard capability becomes enabled, `meta_wayland_keyboard_enable()` initializes the keyboard focus from the seat's current input-focus surface.
+- The previous harness started and focused NekoEdit before creating this virtual keyboard device. Changed test order to create/start the RemoteDesktop session and send/release Ctrl_L before launching NekoEdit. The first press instantiates the device; the editor should then see keyboard capability during its initial seat bind. The key is released while no editor window exists, so it cannot modify the document.
+- NekoEdit is then launched, its MetaWindow activated, and the two byte-checked keyboard scenarios run as before. No application source, runtime dependency, workflow package, or binary architecture changed.
+- Build and test #817 is triggered by this exact test-harness change. It must validate the native event path; no success is assumed beforehand.
+## 2026-11-11 — accept NekoEdit's default save confirmation in the native Mutter smoke test
+
+- Build and test [#815](https://github.com/GraderGamer2/NekoEdit/actions/runs/42965658728) passed all build, CLI, Wayland mock, ELF, pinned locale-data, and optional locale-pack stages. The native headless Mutter backend started, found and activated NekoEdit's MetaWindow, created the RemoteDesktop input session, and reported all queued key-notification D-Bus calls complete. The saved document nevertheless remained unchanged.
+- Rechecked the actual save-confirmation behavior in tests/wayland_mock.py: confirm-before-save defaults to enabled; Ctrl+S opens a modal without writing; Escape cancels it; Enter accepts and commits the save. The Mutter canary had sent Ctrl+S but omitted Enter. Its unchanged-file assertion therefore could not distinguish absent keyboard input from the expected pending confirmation dialog.
+- Updated both basic and Compose save paths in tests/mutter_gnome_smoke.sh to send Return (keysym 65293) after Ctrl+S. The file comparison happens only after the confirmation key and after the input queue drains. Failure text no longer mislabels a failed file comparison as proof that keys were not delivered.
+- Updated docs/MUTTER_INTEGRATION_TEST.md to document the confirmation requirement and exact canary.
+- Build and test #816 is triggered by this source/test commit. It must validate both the basic edit/save canary and the Multi_key / two-dead-key output; no success is assumed before the run completes.
+## 2026-11-11 — monitor Xvfb raw key events independently in the nested Mutter test
+
+- Build and test [#813](https://github.com/GraderGamer2/NekoEdit/actions/runs/42961793193) passed every pre-Mutter stage but failed the ordinary key/save canary. Mutter found NekoEdit's focused MetaWindow and reported frame rectangle `0,32,800,568`; the test clicked its frame center at `400,316`. The X11 host focus check remained valid, yet the document stayed `seed`.
+- The extension's Clutter stage `captured-event` callback observed no key events. This callback is not a sufficient diagnostic for events forwarded to an independently focused nested Wayland client, so it is not used as the sole indicator of host keyboard delivery.
+- Added an independent `xinput test-xi2 --root` event monitor around the plain Ctrl+A / x / Ctrl+S canary. The harness now captures raw/device key events from the Xvfb root and requires that at least one key press was emitted before evaluating the saved document. This separates XTest/Xvfb generation from nested-Mutter-to-Wayland forwarding.
+- Added `xinput` to the CI-only test tool installation and documented the monitor. No change to NekoEdit's freestanding binary or runtime dependency set.
+- Build and test [#814](https://github.com/GraderGamer2/NekoEdit/actions/runs/42963271284) is running on [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4). The build and command-line checks passed; the Wayland mock suite is in progress.
+
+## 2026-11-11 — replace Clutter keyval injection with XTest events from the focused Xvfb host
+
+- Build and test #810 passed all stages before the nested Mutter test. The test found NekoEdit, confirmed its inner Wayland MetaWindow was focused, and also verified the outer GNOME Shell X11 window had X input focus. Nevertheless, the Clutter virtual-keyboard sequence did not update the document.
+- Re-examined the test's input path rather than touching editor keyboard processing. Replaced the Clutter SendKey / SendShortcut D-Bus methods with direct XTest events generated by xdotool on the outer Xvfb display. The test still focuses the actual Wayland target by PID and confirms the X11 host owns X input focus before sending input.
+- The host XKB map is explicitly set to us(intl) with compose:ralt via setxkbmap, and the resulting layout, variant, and option are checked before GNOME Shell starts. The workflow installs x11-xkb-utils as a test-only package. The extension now has only readiness and PID-based activation methods.
+- Updated docs/MUTTER_INTEGRATION_TEST.md to describe the XTest-to-nested-Wayland route and removed claims that the extension injects keys. No editor source or runtime dependencies changed.
+- Build and test [#811](https://github.com/GraderGamer2/NekoEdit/actions/runs/42960747590) is running on [3477b605c01b](https://github.com/GraderGamer2/NekoEdit/commit/3477b605c01bba5fb686dc462766a47026f93d9a). Its build, CLI, Wayland mock, ELF, pinned data, and four locale-pack steps passed; the Mutter integration step is still in progress.
+
+## 2026-11-11 — verify the outer X11 host and inner Wayland focus before Mutter virtual input
+
+- Build and test [#809](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946768420) passed its build, CLI/host suite, Wayland mock, ELF inspection, pinned X.Org importer comparison, and all optional locale-pack builds. The nested GNOME Shell extension loaded correctly and reported NekoEdit's PID as the focused Mutter `MetaWindow`; nevertheless the basic Ctrl+A / `x` / Ctrl+S canary left the document unchanged.
+- Inspected the GNOME Mutter 46.2 source rather than changing NekoEdit input code speculatively. `MetaSeatX11.create_virtual_device()` constructs `MetaVirtualInputDeviceX11`; its `notify_keyval` implementation emits `XTestFakeKeyEvent` on the outer X display. In a nested compositor, this requires both the outer GNOME Shell X11 window and the inner NekoEdit Wayland `MetaWindow` to be focused.
+- Updated `tests/mutter_gnome_smoke.sh` to find, raise, and focus GNOME Shell's outer X11 window, verify its X focus, click the nested display center, activate NekoEdit's inner Mutter `MetaWindow` by PID, then verify the outer X focus was retained. The Clutter keyval injection remains the same.
+- Added `xdotool` back to the workflow's test-only packages and updated the integration-test documentation with the two-focus-layer requirement. No editor runtime source, ELF properties, or runtime dependencies changed.
+- Build and test [#810](https://github.com/GraderGamer2/NekoEdit/actions/runs/42959565212) is running on source commit [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). The complete Mutter input path remains unverified until that run passes the integration step.
+
+## 2026-11-11 — isolate the Mutter test extension's GSettings backend
+
+- Build and test [#808](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946147559) passed the freestanding build and command-line/Wayland mock stages but the test extension did not register its D-Bus bridge.
+- The test wrote settings through a D-Bus-activated dconf service whose environment was not reliably tied to the temporary profile. Replaced that setup with the GLib keyfile backend under the isolated `XDG_CONFIG_HOME`, asserted that the extension UUID was persisted, and declared its GNOME Shell 46 `user` session mode explicitly.
+- Build and test [#809](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946768420) confirmed the extension now loads and the actual NekoEdit MetaWindow can be located and activated. Its basic key/save canary still failed; the nested X11 host focus needed a separate correction, documented above.
+
+## 2026-11-10 — trigger Build and test #807 for the restored Mutter focus harness
+
+- Source/test commit [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a) restores the clean shell script and reapplies explicit GNOME Shell X11 window focus plus a basic printable-key/Save canary with a literal-safe replacement.
+- The fallback title search now uses `GNOME Shell` without an anchored dollar sign. The source file was re-read from the pushed branch and the malformed insertion pattern from #806 is absent.
+- Build and test #807 is running on the exact source commit. At the latest check, GitHub still reports the package-install step in progress. Do not treat the focus path or Compose input as validated until the workflow reaches and passes the Mutter step.
+- This commit-index/status update is documentation-only and excluded from the Build and test workflow's path trigger.
+
+## 2026-11-10 — restore Mutter smoke-test script after #806 shell syntax error
+
+- Build and test #806 passed the core build, host/command-line tests, Wayland mock, ELF inspection, pinned X.Org data verification, and four separate locale-pack builds.
+- The new Mutter step then failed before input testing with `tests/mutter_gnome_smoke.sh: line 239: syntax error near unexpected token '('`.
+- The syntax issue came from the test-source text replacement expanding a literal dollar-sign sequence in a shell window-title regular expression. Rebuilt the script from the clean commit and applied the replacement using an ordinary callback; simplified the fallback window-title search to the literal text `GNOME Shell`.
+- The direct X window focus checks, geometry-relative center click, and plain-key + Ctrl+S canary remain in the corrected script. They have not yet been executed by CI because #806 stopped at parsing.
+- No production code or runtime dependencies changed. A new branch-push run is required.
+
+## 2026-11-10 — make the nested Mutter test explicitly focus its X11 host window
+
+- Build and test #805 passed the freestanding build, command-line/host tests, Wayland protocol mock, ELF inspection, pinned X.Org source verification, and all four separate locale-pack builds. It failed only at the nested Mutter keyboard test: GNOME Shell/Mutter started, NekoEdit stayed alive, but the source document remained unchanged after XTest events.
+- The previous harness clicked a fixed root coordinate but never explicitly called XSetInputFocus on the outer GNOME Shell X11 window. CI uses bare Xvfb without a separate window manager, so the harness cannot assume normal click-to-focus management.
+- Updated the harness to locate the visible Shell window using its PID, raise and explicitly focus it, verify the focused XID, query its geometry, and click the display center with window-relative coordinates.
+- Added a plain printable-character + Ctrl+S canary before Compose. The expected one-byte file must be saved before the test proceeds to Right-Alt Multi_key and the two-mark dead-key chain. This distinguishes generic XTest routing from XKB Compose/locale behavior.
+- Updated the test documentation with the nested keyboard-routing limitation documented by GNOME's development guide. No runtime code or dependencies changed; the locale data remains separate.
+- Validation for the new focus/canary correction is pending its branch-push CI run.
+
+## 2026-11-10 — document the nested Mutter CLI correction commit and #805 run
+
+- Source/harness correction committed as [14e7a902699e](https://github.com/GraderGamer2/NekoEdit/commit/14e7a902699e8411bd95a4d6d332105bff665d73); the command uses the supported one-file CLI form and relies on the private WAYLAND_DISPLAY for backend selection.
+- Build and test #805 was triggered by this source commit. At the time of this handoff, GitHub reported the package-install step in progress; no #805 test result is claimed.
+- The #804 run had already passed the freestanding build, host suite, Wayland mock, ELF inspection, pinned-source comparison, and locale-pack build before the harness invocation failed. The compositor had started, but editor input was not exercised.
+- This entry is followed by a changelog-only commit to keep the exact source correction in COMMIT_INDEX.md without triggering another build.
+
+## 2026-11-10 — correct the nested Mutter harness command line after #804
+
+- Build and test #804 passed the freestanding ELF build, command-line/host suite, full Wayland protocol mock, ELF inspection, pinned X.Org importer byte comparisons, and all four optional locale-pack builds.
+- The nested GNOME Shell 46 / Mutter 46.2 compositor started and created the requested Wayland socket. NekoEdit exited before connecting because the harness supplied both `--backend=wayland` and a document path; the current argument parser supports either the backend-only switch or one document path, not both.
+- Corrected tests/mutter_gnome_smoke.sh to launch the executable with only the temporary document path. The private WAYLAND_DISPLAY selects the native Wayland connection automatically. No production code or supported CLI syntax was changed.
+- The original #804 run failed at the new integration test, so the Compose key and dead-key sequence have still not been validated through Mutter. The next branch-push run must complete before this milestone can be called green.
+
+## 2026-11-10 — make held-key repeat mock assertions wait for actual document edits
+
+- Recorded Build and test #803 failure: build, command-line/host tests and locale tests passed; tests/wayland_mock.py failed at the legacy seat-v3 held-Tab assertion with unchanged caret coordinates (48,128). The new nested Mutter step was not reached.
+- The mock's repeat sequence checked the next redraw but did not assert that a timer-driven edit had occurred before sampling the frame. Updated the held Enter and Tab cases to wait for doc_cursor to advance by one newline byte or four inserted spaces, respectively.
+- The mock now sends key-up after the first observed repeat, waits for repeat_keycode to clear, and then reads the repeat frame. This avoids accepting a queued initial redraw and avoids extra periodic timer ticks affecting the expected caret position.
+- No production assembly/C code or executable behavior was changed. The runtime's existing 300 ms / 30 Hz compatibility fallback is unchanged.
+- CI result for the correction is pending. Do not treat the new Mutter harness as validated; run #803 stopped before its step.
+
+## 2026-11-10 — add nested GNOME Shell/Mutter Compose integration test (CI pending)
+
+- Added tests/mutter_gnome_smoke.sh, a test-only Xvfb + D-Bus harness that starts GNOME Shell as a nested Wayland compositor and connects the normal freestanding editor to its Wayland socket.
+- The harness configures us(intl) with compose:ralt, selects a separately copied pt_BR.UTF-8 NLP1 pack beneath a temporary HOME, and sends XTest events for Right-Alt Multi_key + period + period, followed by dead_grave + dead_circumflex + A. It then checks that Ctrl+S saved exactly U+2026 U+1EA6.
+- Added make test-mutter after the separate locale-pack build; the regular host and protocol-mock targets remain independent of GNOME/Xvfb packages.
+- Updated the branch-push workflow to install gnome-shell, xvfb, xauth, xdotool, x11-xkb-utils, and dbus-daemon, then run the new target. Increased the job timeout to accommodate the additional compositor packages and startup.
+- Added docs/MUTTER_INTEGRATION_TEST.md and linked it from README. The documentation explicitly distinguishes real Mutter protocol delivery from physical keyboard validation.
+- Local execution was unavailable in this connector session; CI is pending on the push of this source/workflow commit. No successful run is claimed here. Follow up by recording the exact run and job results after Actions reports.
+- Test input uses a temporary HOME and data-only locale file. No locale packs or test dependencies were added to the runtime binary.
+
+## 2026-11-10 — Wayland multi-dead-key chains and locale data refresh — #802 passed
+
+- Added a Wayland keyboard dead-key state that buffers up to three combining marks, then queries a kind-1 locale record with the final base scalar. Preserved the existing one-mark precomposition path and added base-plus-marks literal fallback when no multi-mark locale rule exists.
+- Implemented a bounded flush path for a fourth dead action and when entering Multi_key; Escape and Backspace clear all pending dead-key state. NLP1's 52-byte record and four-input maximum remain unchanged.
+- Extended the native Settings importer, offline user XCompose converter, and pinned X.Org Compose importer to accept one to three leading `dead_*` actions plus one final ordinary character. Invalid intermediate or final dead-key actions and deeper chains are excluded.
+- Regenerated the four pinned optional locale tables. The shared baseline now has 1,576 dead-key records. Final counts are pt_BR 4,484; fi_FI 4,488; sr_RS 4,495; el_GR 5,730. Detailed distributions and override counts are in `data/locales/README.md`.
+- Added importer, pack, locale-manager, locale-data, and Wayland mock tests. Coverage includes two-/three-mark lookup, literal fallback, the four-mark cap, cancellation, and real generated Portuguese and Greek chain records.
+- CI #798 and #799 exposed only the expected old-JSON/pinned-importer mismatch after newly accepted source rules. A one-time refresh in #800 committed exact outputs as `c61453d`; this used temporary write permissions that were removed by `81e6272`. The intermediate read-only run #801 then caught stale expected statistics; updated the golden test in `91a92c3`.
+- Final [Build and test #802](https://github.com/GraderGamer2/NekoEdit/actions/runs/42810208303) passed all 14 steps on `91a92c38210362def100026afd60e7b08132d08f`, including the freestanding ELF check, all host tests, Wayland protocol mock, executable inspection, pinned source regeneration/comparison, optional pack generation, and separate uploads.
+- Final artifacts: editor ZIP 13761918009 (135,673 bytes, SHA-256 `ab71efb788fcf25dc14c232c369a60a5edfa61dbecb339d08ee28fa238cd49e8`); locale ZIP 13762312971 (114,239 bytes, SHA-256 `5605356b9d3b38fe5fa1b08334645ba62e8224904119b702ec3f5709c8fd8a52`). Both expire 2026-11-11 11:48 UTC / 18:48 Jakarta.
+- The temporary workflow changes are gone: `.github/workflows/build.yml` is read-only (`contents: read`) with no artifact-debug or data-push block. No runtime dependency, embedded optional locale, or binary pack-format change was introduced.
+- Automated Wayland mock success is not live Mutter validation. The latest user-confirmed build launches, but new chained-key behavior still needs physical GNOME/Mutter testing. X11 backend work remains deferred.
+
+### Commit and CI sequence
+
+| Commit / run | Result |
+|---|---|
+| `e2521c4` | Implemented the Wayland and importer multi-dead-key chain support. |
+| #798 | Built and passed the command/Wayland/ELF checks; stopped at stale pinned locale JSON comparison. |
+| `39688a7` | Temporary artifact-only workflow instrumentation to retain exact generated JSON. |
+| #799 | Captured generated outputs; stopped at the same expected old-data comparison. |
+| `9419447` | Temporary one-time CI data refresh permission/step. |
+| #800 | Passed all steps and produced the refreshed data commit below. |
+| `c61453d` | CI-generated exact locale-table refresh. |
+| `81e6272` | Removed temporary write step, restored read-only permissions, updated locale-data counts. |
+| #801 | Correctly caught stale golden data assertions against the refreshed JSON. |
+| `91a92c3` / #802 | Updated locale count/depth and real chain assertions; all 14 steps passed. |
+
+
+## 2026-11-10 — native XCompose import uses the shared XKB Unicode keysym table — #797 passed
+
+**Branch:** `early-alpha`; exact validated head `b23b2ae61dd3422806d6155eec8ac3c9c16f327d`. PR [#2](https://github.com/GraderGamer2/NekoEdit/pull/2) remains open and unmerged.
+**Implementation:** [4079e8cfee89](https://github.com/GraderGamer2/NekoEdit/commit/4079e8cfee89611f45eecfbc938a54fda960b748). Test-link correction: [b23b2ae61dd3](https://github.com/GraderGamer2/NekoEdit/commit/b23b2ae61dd3422806d6155eec8ac3c9c16f327d).
+**CI:** [Build and test #797](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159) passed all 14 workflow steps on the exact final head.
+
+The native **Settings → Locale → Import** parser now resolves named character keysyms through the same read-only X.Org Unicode-annotated table and bounded resolver used by physical XKB keymap parsing. The accepted name set therefore covers the embedded table's Latin, Greek, Cyrillic, Arabic, Hebrew, Thai, Hangul, Armenian, Georgian, Kana, Sinhala, Braille, and xorgproto 2026.1 aliases, rather than the previous short hand-maintained list of common Latin-1 names.
+
+A length-bounded assembly entry point saves and restores the XKB parser's shared 64-byte tokenizer buffer and token length. The importer continues to preserve its explicit `Uxxxx` scalar path. The shared ASCII resolver now also retains the importer's former `quoteleft` and `quoteright` aliases. Named `dead_*` function keysyms are rejected as ordinary Multi_key character inputs; dead-key action names remain accepted through the separate typed dead-key lead path. This matches the X.Org protocol distinction that dead keys are Function KeySyms, not Unicode KeySyms.
+
+The NLP1 schema, its input/output limits, typed record kinds, import path checks, include ceilings, modifier-qualified-rule skip behavior, and data-only locale packaging are unchanged. No external library, locale bundle, Python runtime, or duplicated Unicode name table was added.
+
+Native importer fixtures now validate pack import and lookup with Greek/Cyrillic, Arabic/Hebrew, Thai/Hangul, accented Latin, xorgproto 2026.1 angle-quotation names, the legacy quote aliases, and the dead-key/function-keysym distinction. The locale-manager host test also links the shared XKB object, so both host test binaries resolve the new symbol. CI logs explicitly report **Compose locale manager tests passed** and **Native in-app XCompose import tests passed**.
+
+Build and test #796 exposed one test-only link omission: the locale-manager test target also links `compose_locale.c`, so it needed the same XKB object as the new importer test target. The application ELF build had passed; the manager test link failed with an undefined reference. Commit `b23b2ae` corrected that Makefile dependency, and #797 then passed the full suite, Wayland mock, ELF inspection, pinned X.Org regeneration, optional locale-pack build, and both uploads.
+
+#797 artifacts (one-day retention):
+- Editor ZIP [13753236119](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159/artifacts/13753236119), 135,337 bytes, SHA-256 `6d77a6357686fbe065c456c7b99e931cebf0087857ce61a3dafde35dafbf04ac`.
+- Separate locale ZIP [13753071329](https://github.com/GraderGamer2/NekoEdit/actions/runs/42792816159/artifacts/13753071329), 101,677 bytes, SHA-256 `4d99b142af8f6ceb2c959289e1b222bed4375b65e0dc730d8578400a5b8624e3`.
+- Both expire **2026-11-11 09:43 UTC / 16:43 Jakarta**.
+
+This is automated CI/mock validation, not a real GNOME/Mutter or physical-keyboard test. The user should manually import a file containing the new named-key cases in Settings and exercise the corresponding sequences on the actual desktop. Remaining XCompose work includes modifier-qualified rule representation, broader syntax semantics, and automatic system/user startup discovery/merging; longer dead-key chains remain priority 2.
+
+## 2026-11-10 — native XCompose macro includes and compose.dir locale mapping; Build and test #795 passed
+
+- Extended the freestanding Settings importer to expand `%H`, `%S`, and `%L` in addition to depth-first sibling includes. Home/system roots are cached; nested siblings resolve from the directory of the file containing each directive.
+- Implemented bounded X.Org `compose.dir` lookup for `%L`. Locale precedence is `LC_ALL`, `LC_CTYPE`, `LANG`, then `C`; `POSIX` aliases `C`. Normalized locale names are matched exactly, including the `el_CY.UTF-8` → `el_GR.UTF-8/Compose` alias and separate `C`/`C.UTF-8` mappings.
+- The mapping file is a regular no-follow input, with bounded file/line sizes and bytes charged to the aggregate budget. Its mapped relative path is validated component-by-component and the target uses the same safe include opener.
+- Added tests for all three macros, nested system includes, locale aliasing, the C mapping, missing roots, traversal, file/directory symlinks, and existing cycle/depth/expansion and no-partial-publish checks.
+- CI #791 caught the helper buffer declaration mismatch; #792 caught `-Werror=format-truncation` in test path arrays; #793 passed the first rooted-include implementation. The compose.dir version compiled and passed smoke tests in #794, where the alias fixture exceeded NLP1's eight-scalar output cap; it was shortened without changing the runtime ceiling. Build and test [#795](https://github.com/GraderGamer2/NekoEdit/actions/runs/42743763387) passed all 14 steps, including the Wayland mock, ELF checks, pinned X.Org verification, locale build, and separate artifact uploads.
+- #795 artifacts: editor ZIP 13729764162 (135,652 bytes); locale ZIP 13730980366 (101,677 bytes), both expiring 2026-11-11 02:36 UTC / 09:36 Jakarta.
+- Commits: [391b0c66d89c](https://github.com/GraderGamer2/NekoEdit/commit/391b0c66d89c9ee734c5f652de8bf733a30ab6af), [575db597c7b0](https://github.com/GraderGamer2/NekoEdit/commit/575db597c7b0b8e0c3874d9fd7c1ffdb0c6bcddd), [6bf83dce7b34](https://github.com/GraderGamer2/NekoEdit/commit/6bf83dce7b3437aadda06574f6cccd4175cd83e8), [ae6323501b66](https://github.com/GraderGamer2/NekoEdit/commit/ae6323501b66e1d8bf5d36d044454c0ad7f00570), [a4bdccc12147](https://github.com/GraderGamer2/NekoEdit/commit/a4bdccc12147c38e81008dee37c545c75e628e48).
+- Limits remain 512 KiB aggregate input including compose.dir, 512 KiB per Compose file, 32 unique files, 64 expansions, 16 active levels, 64 KiB per line, and 32,768 records. Native input remains UTF-8-only and bounded; no startup discovery, non-UTF-8 parsing, external helper/runtime dependency, or optional locale table was added to the executable. No live GNOME/Mutter or physical-keyboard verification is claimed.
+
+## 2026-11-10 — early-alpha-only Greek Compose locale pack
+
+- The early-alpha branch added an optional `el_GR.UTF-8` pack derived from pinned standalone libX11 Compose source blob `4a644258ce32cd34ddcc0c47605938db5f697b7d`. Its generator explicitly merges the source over the same pinned en_US baseline.
+- The data contains 4,690 final records (922 accepted locale Multi_key rules and 138 dead-key rules). Golden data tests cover Greek accent and breathing-mark sequences. These are not live keyboard test results.
+- Build and test [#790](https://github.com/GraderGamer2/NekoEdit/actions/runs/42738784199) passed the full build, host tests, Wayland mock, pinned source re-import/byte-for-byte comparison, locale pack build, and separate artifact uploads.
+- This is a branch-only data/workflow milestone; `main` still embeds only its en_US prototype and does not contain the Greek pack or its release workflow changes. PR #2 remains open and unmerged.
+
+## 2026-11-10 — safely expand sibling includes in native Settings XCompose import
+
+- Extended the freestanding native importer to expand quoted same-directory sibling includes in depth-first textual order. Repeated non-active includes are allowed; active cycles are rejected using device/inode identity.
+- Root and include files are opened relative to a retained root-directory descriptor. A target must be one basename in the same directory; path separators, absolute paths, traversal components, percent/environment substitutions, and symlinks are rejected. Inputs must be regular files opened with O_NOFOLLOW.
+- Added strict bounds: 512 KiB aggregate expanded input, 512 KiB per file, 32 unique files, 64 total include expansions, 16 active include levels, 64 KiB per line, and 32,768 records. Failure occurs before pack construction/publication, so no partial pack can be installed.
+- Regression tests verify nested/repeated include behavior and precedence, parent traversal, symlinks, cycles, include-expansion exhaustion, and recursion depth, in addition to existing import/pack/permissions tests.
+- Updated README and docs/COMPOSE_USER_IMPORT.md to distinguish the native sibling-include subset from the host-side converter's %H/%S/%L and cross-directory policy.
+- Build and test #786 failed only because the include test's expected output path had a duplicated /locales segment. Corrected in [752c24664911](https://github.com/GraderGamer2/NekoEdit/commit/752c24664911f672c7c672cfd2a01fc33ad6cdd9). Build and test [#787](https://github.com/GraderGamer2/NekoEdit/actions/runs/42736381984) passed all 14 steps.
+- Artifacts: editor ZIP 13727451420 (133,624 bytes) and locale ZIP 13727765638 (74,021 bytes), expiring 2026-11-11 01:32:59 UTC and 01:32:58 UTC respectively.
+- Implementation commit: [d56bffc9ebe7](https://github.com/GraderGamer2/NekoEdit/commit/d56bffc9ebe79c16d37e9d95ed776f1beb331233).
+
+## 2026-11-10 — native raw XCompose import from Settings; Build and test #785 passed
+
+- Added a native, bounded UTF-8 XCompose parser to `src/backend/compose_locale.c` and a new **Settings → Locale → Import** action/picker flow in `src/backend/wayland.S`. This is an in-app feature: the editor does not launch Python, shell commands, or an import helper.
+- The importer creates a separate NLP1 data pack under `~/.nekoedit/locales/`. The tag is derived from the selected filename, e.g. `nekoedit-test.XCompose` becomes `nekoedit-test.UTF-8`. It validates with the same NLP1 runtime validator, writes privately and atomically, refuses to overwrite an existing pack, preserves the selected source, activates the imported locale, and persists the choice.
+- Bounded in-app support: UTF-8 self-contained rule files; Multi_key with two to four following Unicode keysyms; a recognized dead-key action plus one following keysym; quoted UTF-8 results and simple/octal/hex/Unicode escapes; printable ASCII keysym names and a curated common set. Later identical rules override earlier rules and shorter same-kind prefixes are removed. Includes and unsupported syntax fail closed or are skipped; the optional host converter remains the route for include-rich or broader X.Org input.
+- Work buffers are mapped only during import and released afterward. They do not reserve multi-megabyte static locale tables in the editor. No locale datasets are linked into the executable.
+- Added `tests/compose_locale_import_test.c` to verify pack generation and actual runtime lookup, permissions, no-overwrite, source preservation, symlink rejection, include rejection, dead-key and multi-input behavior, and Unicode escapes.
+- Extended `tests/wayland_mock.py` to use the actual Settings Import button and picker with a raw `.XCompose` file. The test verifies the generated file, activation, preference persistence, source preservation, and private mode.
+- Build and test [#784](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731335861) passed the native importer host test and all previous checks. Build and test [#785](https://github.com/GraderGamer2/NekoEdit/actions/runs/42731684293) passed all 14 workflow steps with the new end-to-end Settings Import mock.
+- The separate artifacts from #785 are editor ZIP 13725565793 (132,507 bytes) and locale ZIP 13725635467 (74,021 bytes), both expiring 2026-11-11 00:54 UTC.
+- Implementation and UI-test commits: [a5e75d0d6cee](https://github.com/GraderGamer2/NekoEdit/commit/a5e75d0d6cee29167c33bddb11e00fc75b0a1978), [81fb2ca891cd](https://github.com/GraderGamer2/NekoEdit/commit/81fb2ca891cdf897c6c7509124fe719264c5a2f7), [86ea3d00ee2b](https://github.com/GraderGamer2/NekoEdit/commit/86ea3d00ee2b59cf10fb6b0426b4d0abe75dbab3), and [4572affe38eb](https://github.com/GraderGamer2/NekoEdit/commit/4572affe38ebf9b771913fff85b8ca7a0f25fb5d).
+
+## 2026-11-10 — validate user XCompose import against the installed X.Org corpus
+
+- Added `tests/system_xcompose_import_test.py` and wired it into `make test`. It uses the actual installed `/usr/share/X11/locale/en_US.UTF-8/Compose` file through a temporary user `.XCompose` with `include "%L"`, rather than checking only synthetic parser fixtures.
+- The test asserts the known `Multi_key o c` system rule is overridden by a later user rule, `dead_acute + e` produces é, a user-only rule is imported, include order is counted, and the full corpus produces enough records to prove that it was traversed. The NLP1 encoder validates the generated pack in memory; no locale is installed.
+- Build and test [#781](https://github.com/GraderGamer2/NekoEdit/actions/runs/42728278622) passed the new system-corpus test, all existing host tests, the full Wayland mock, pinned X.Org regeneration, locale-pack build, and separate artifact uploads.
+- The test reported 5,127 scanned rules, 3,747 final records, two include-expanded files, two overrides, and 194,916 packed bytes.
+- Added only test-environment packages `libx11-data` and `x11proto-dev` to CI. They do not enter the build or runtime dependency graph.
+- Documented the modular packaging invariant: only en_US is built into the editor; non-en_US and user-created locale tables stay in separate `.nlp` files that can be offered as optional Release assets later. The app build remains independent of those pack files.
+- CI artifacts remain distinct: editor ZIP 13723627010 (127,343 bytes) and locale ZIP 13723811429 (74,021 bytes), each expiring 2026-11-11 00:27 UTC under the one-day policy.
+- Source/test/docs implementation: [a11a4b0ede67](https://github.com/GraderGamer2/NekoEdit/commit/a11a4b0ede6711f5abed47f8e8c2cf666fb5a841).
+
+## 2026-11-10 — reduce early-alpha Actions artifact retention to one day
+
+- Changed both artifact uploads in `.github/workflows/build.yml` (the executable and optional Compose locale pack) from `retention-days: 90` to `retention-days: 1` in commit [a0d707c5a30c](https://github.com/GraderGamer2/NekoEdit/commit/a0d707c5a30ca6ff27b4005939ffa80fc4678cc1).
+- Changed the manual/release locale-pack upload in `.github/workflows/locale-packs.yml` to `retention-days: 1` in commit [9859912d75d3](https://github.com/GraderGamer2/NekoEdit/commit/9859912d75d3d8dc8941653e09316e141fc0ac3f).
+- The Build and test path filter now ignores changelog-only updates and changes confined to the separate manual/release locale-pack workflow. This avoids redundant editor builds.
+- The one-day setting affects newly uploaded artifacts only. The existing artifacts from Build and test #777 keep their previously assigned 90-day expiry; this change does not delete or shorten them.
+- No editor source, binary, or runtime behavior changed. The available GitHub connector only exposes pull-request-triggered workflow-run lookup, so the push-triggered run ID and artifact `expires_at` could not be independently retrieved in this session. The workflow YAML itself is verified. Check [Build and test runs on early-alpha](https://github.com/GraderGamer2/NekoEdit/actions/workflows/build.yml?query=branch%3Aearly-alpha) for the push run.
+
+## 2026-11-10 — set GitHub Actions artifact retention to 90 days — Build and test #777 passed
+
+- Confirmed that NekoEdit is a public repository and that the active Build and test workflow explicitly shortened both uploaded artifacts to 7 days. The optional locale-pack workflow separately used 30 days.
+- Changed both Build and test artifact uploads and the locale-pack workflow upload to `retention-days: 90`, the maximum documented for public repositories.
+- This only affects future uploads. Existing #776 artifacts (editor ZIP 13697074317 and locale ZIP 13698660427) keep their original November 16, 2026 expiry; the workflow push will create fresh artifacts with the new retention period.
+- GitHub Free includes 500 MB of Actions artifact storage shared with Packages. The latest two NekoEdit artifacts total 201,364 bytes; usage above the included storage can incur charges. Standard GitHub-hosted runners are free for public repositories.
+- No editor source, binary, or runtime behavior changed. No new application dependencies were introduced.
+- Commit [d9a2d9cca407](https://github.com/GraderGamer2/NekoEdit/commit/d9a2d9cca407f5dc60f7d5e2947600b9329bd0f5) pushed the workflow changes to `early-alpha`. Build and test [#777](https://github.com/GraderGamer2/NekoEdit/actions/runs/42725593861) passed all 13 steps, including the Wayland mock, pinned X.Org verification, and both artifact uploads.
+- GitHub confirms the new editor artifact 13722915782 (127,343 bytes) and locale artifact 13721843648 (74,021 bytes) expire on 2027-02-08 00:05:31 UTC, exactly the 90-day retention period.
+- The prior #776 artifacts retain their original 2026-11-16 expiry.
+
+---
+
+## 2026-11-10 — built-in printable ASCII X keysym names; Build and test #776 passed
+
+- Added a built-in mapping for standard printable ASCII X keysym names, including punctuation names and quote aliases. Literal ASCII characters remain on the existing direct path.
+- The resolver retains caller-supplied X.Org keysym definitions as first priority, then uses the built-in ASCII aliases. Named non-ASCII keysyms still require the optional Unicode-annotated keysymdef.h.
+- Added no-header regression cases for both event inputs and keysym-only results. Updated docs/COMPOSE_USER_IMPORT.md to reflect the exact no-header boundary.
+- Source change: [f05a54158632](https://github.com/GraderGamer2/NekoEdit/commit/f05a541586329b0c05097aa5078944e6db0d7187). Regression-fixture correction: [74a0a7780885](https://github.com/GraderGamer2/NekoEdit/commit/74a0a7780885f95ffcd1a709d3d2ae55c66d1898).
+- Build and test #775 failed in the new fixture because its Python newline escapes were double-escaped. Build and test [#776](https://github.com/GraderGamer2/NekoEdit/actions/runs/42669196064) passed all 13 workflow steps on the corrected head: freestanding ELF build, command-line/host tests, complete Wayland mock, executable inspection, pinned X.Org regeneration/verification, locale-pack build, and both artifact uploads.
+- Artifacts: editor ZIP 13697074317 (127,343 bytes); locale ZIP 13698660427 (74,021 bytes), both expiring 2026-11-16.
+- The user separately confirmed the Settings locale dropdown works in the desktop build. No live GNOME/Mutter layout or IME test was performed during this session.
+
+**Next:** exercise the manual importer with a wider set of actual user-authored Compose files. Preserve its bounded offline include policy and the freestanding runtime.
+
+---
+
+## 2026-11-09 — one-command private user XCompose installer; Build and test #774 passed
+
+- Rechecked the live branch before continuing: the Finnish/Serbian physical dead-key keyboard tests were already implemented in 98144943b5ae and green in #759. The offline user XCompose importer and converter-to-manager integration were also already present.
+- Verified that Build and test #773 passed all 13 workflow steps on 669d552ff0ed. It closed the History long-query test's Browse-coordinate regression and passed the full Wayland History workflow.
+- Added tools/install_user_xcompose.py. It calls the existing bounded ComposeImporter and compose_pack encoder in memory and installs the result directly under ~/.nekoedit/locales/<locale>.nlp. No intermediate JSON file or second pack-builder command is required.
+- The utility is optional and host-side. No Python interpreter, subprocess, shell invocation, network request, or extra runtime library was added to the freestanding editor.
+- Directory creation/opening uses home-relative directory file descriptors and O_NOFOLLOW checks. The installer rejects non-owned/symlinked .nekoedit path components, tightens both app directories to mode 0700, installs a 0600 pack, and fsyncs file and directory.
+- The default publish is atomic and no-clobber. --replace is explicit and only replaces a regular existing pack. The selected XCompose file, included files, and keysymdef.h are protected from output collisions.
+- Added tests/install_user_xcompose_test.py to verify pack header/size/locale, fixed destination, permissions, source preservation, refusal to overwrite, explicit replacement, temporary-file cleanup, and symlink rejection. Added it to make test.
+- Updated docs/COMPOSE_USER_IMPORT.md and README with the one-command path and the explicit boundary: manual import only, no auto-discovery/startup merge or Settings importer UI.
+- Build and test #774 passed all 13 steps on source commit b53ffd4809fa, including the new test, existing host checks, full Wayland mock, pinned X.Org regeneration, locale pack builds, and both artifact uploads. Artifacts: editor ZIP 13691852154 (127,343 bytes) and locale ZIP 13691932145 (74,021 bytes), expiring 2026-11-16.
+- No live GNOME/Mutter test was run. The new tool only writes a data-only NLP1 pack; the existing Settings dropdown discovers it on refresh.
+
+Source commit: [b53ffd4809fa](https://github.com/GraderGamer2/NekoEdit/commit/b53ffd4809fa390709f9947bde383ac570ac81d7). Validation: [Build and test #774](https://github.com/GraderGamer2/NekoEdit/actions/runs/42656480878).
+
+---
+## 2026-11-09 — correct History mock pointer coordinates after long-query test
+
+- Build and test #772 passed the freestanding build and all host-side tests, including the user-XCompose locale-manager fixture after the quoted-result correction.
+- The Wayland mock reached the new History search case: it typed all 127 query characters, saw zero matches, observed a horizontally scrolled display start and an in-field caret, and successfully cleared the query back to one match.
+- The test then timed out waiting for the History Browse redraw because the follow-up edit passed the new serial value as the first `workflow_click` argument (x) instead of the third argument (serial). The application was not receiving a click inside the Browse button.
+- Restored the actual History control coordinates (Browse x=700, Open Selected x=100, Undo x=100, Redo x=300, Export x=480, Delete x=660) and assigned the larger serials to the third argument. This is a test-harness correction only; no runtime behavior is changed.
+- Build and test #773 passed the full History path, including the positive path match and Browse/Open/Undo/Redo/Export/Delete operations.
+
+---
+
+## 2026-11-09 — correct the locale-manager XCompose result fixture discovered during History-filter CI
+
+- Build and test #771 successfully assembled and linked the freestanding executable after the History-query BSS/address corrections.
+- `make test` then reached the locale-manager user-XCompose integration fixture and rejected `<Multi_key> <e> <e> : U018F U018F`. The importer intentionally accepts either a quoted output string (optionally followed by one result keysym) or a single Unicode-resolvable keysym. The two-symbol unquoted result was invalid and contradicted the public converter example.
+- Corrected the synthetic fixture to `<Multi_key> <e> <e> : "Ə" U018F`, which emits U+018F as quoted Unicode text while retaining the conventional result-keysym annotation. The parser was not weakened.
+- The new History filter viewport/caret assertions have not yet executed in CI; Build and test #772 must validate both the manager fixture and the long-query Wayland scenario.
+
+---
+
+## 2026-11-09 — make the History path filter usable with long queries
+
+- Added a dedicated visible-query buffer for the History search field. The original 128-byte query buffer remains the source of truth for filtering.
+- The display slice now follows the insertion point and horizontally scrolls when the typed path/query exceeds the available field width. A visible caret tracks pointer focus, Left/Right, Home/End, insertion, Backspace, Delete, and Ctrl+A clear.
+- Extended the Wayland integration scenario to type the full 127-character query limit, assert zero matches, verify horizontal scrolling and an in-field caret, clear the query, then continue with the existing positive path-match, Browse, Open Selected, Undo/Redo, Export, and Delete checks.
+- The filter remains a case-insensitive substring search over stored document paths. This change does not modify journal formats, stored paths, query limits, or runtime dependencies.
+
+Baseline [Build and test #767](https://github.com/GraderGamer2/NekoEdit/actions/runs/42640512116) passed all 13 steps. Validation of this History filter revision is pending its push-triggered Actions run.
+
+---
+
+## 2026-11-09 — test the user XCompose converter through the freestanding locale manager
+
+- Build and test #767 passed all 12 steps after a held-key mock race was corrected.
+- Extended tests/compose_locale_manager_test.py to build a user pack through the actual CLI sequence: selected XCompose file → import_user_xcompose.py → JSON → compose_pack.py → NLP1.
+- The fixture includes an allowed %H fragment and a root dead-key rule. It emits a Multi_key e e mapping to U+018F and dead_acute+c to ç.
+- Extended tests/compose_locale_manager_test.c to receive the generated pack, install it under the temporary HOME/.nekoedit/locales directory, verify private file permissions, load the custom locale, query both kind-0 and kind-1 records, and remove the pack while confirming en_US fallback.
+- This is host/runtime-manager integration coverage only; the editor assembly, pack format, and converter runtime remain unchanged. The user importer still is not wired into Settings or automatic ~/.XCompose discovery.
+- The preceding #766 failure was a test event-order race: the held Enter test started before the previous printable key's repeat cancellation was acknowledged. The new wait for repeat_keycode=0 is covered by successful #767.
+
+---
+
+## 2026-11-09 — validate offline XCompose importer and serialize held-key mock transitions
+
+- Build and test #766 passed the freestanding build, command-line tests, existing X.Org importer, the new bounded user XCompose importer test, all three locale table checks, and locale manager validation.
+- The new importer test now separately covers repeated non-recursive includes, explicit %H/%S/%L handling, path/canonical symlink boundaries, cycle detection, per-file/aggregate bytes, lines, records, include depth/expansions/unique files, modifier skips, Unicode keysyms, Latin-1 escape decoding, UTF-8 BOM, private output, and source/output collision.
+- #766 failed later in the broad Wayland test, before any new XCompose runtime integration. The held printable key's key-up was sent together with a buffer release; the test started holding Enter before the child event loop acknowledged repeat cancellation. The mock then observed document bytes aaa plus newline and repeat_keycode=28, but its caret-frame assertion saw the prior row.
+- Added a bounded wait for repeat_keycode=0 immediately after the printable key-up and before initiating Enter. This serializes the mock's held-key phases without altering the runtime repeat delay or reducing assertions.
+- This is a Wayland test-harness ordering fix, not an editor implementation change. Build and test #767 must confirm the entire protocol suite.
+
+---
+
+## 2026-11-09 — add bounded offline user XCompose conversion
+
+- Added a separate tools/import_user_xcompose.py rather than modifying the pinned X.Org Compose.pre regeneration tool. It converts an explicitly selected user file into JSON accepted by the existing NLP1 pack builder.
+- Implemented quoted-result parsing with source encodings and octal/hex byte escapes, Unicode-scalar keysyms, quoted include parsing, depth-first expansion, later duplicate overrides, same-kind prefix filtering, Multi_key/dead-key namespaces, and explicit unsupported-rule statistics.
+- Include resolution is allowlisted to %H/relative, %S/relative, and exact %L with a caller-supplied Compose file. Canonical path containment prevents symlink escape; an active include stack rejects cycles while repeated non-recursive includes remain valid.
+- Bounded the import at 512 KiB per file, 4 MiB aggregate expanded bytes, 32 unique files, 64 expansions, depth 16, 64 KiB per line, 32,768 records, four following Multi_key inputs, and eight output scalars. Modifier-qualified rules are skipped because NLP1 does not encode modifier-state predicates.
+- JSON writes are atomic and private (file mode 0600); newly created output directories are mode 0700. The CLI blocks output collision with its imported input or keysym header. No network downloads, shell expansion, plugin loading, or runtime shared library was added.
+- Added a host test covering nested %H/%S/%L includes, source order/overrides, modifier skipping, unsupported keysyms, cycles, traversal and symlink escapes, per-file/aggregate/line/count/depth/expansion limits, encoding/BOM behavior, private output, and source/output collision.
+- Actions #761/#763/#764 exposed fixture escaping and a bytes-literal syntax error. #765 then reached the resource tests but failed because the unique-file-limit test reused the .XCompose file intentionally replaced by the previous cycle test. The current correction uses a separate valid root for unique-file and aggregate-byte limits; full CI remains pending.
+- Documentation now distinguishes manual conversion from automatic ~/.XCompose discovery and Settings integration, neither of which is implemented yet.
+
+Importer commits: 94d0f9661a01, 198ec64b7ab8, bf39555139a9, ac038c35eb16, df4c0d8bf3a7. The resource-fixture correction and documentation commit is listed in CURRENT_STATUS.md and COMMIT_INDEX.md.
 
 ---
 
