@@ -1,22 +1,11 @@
-## 2026-11-12 — capability-aware live text-input-v3 probe (CI pending)
+## 2026-11-12 — explicit opt-in fallback regression (CI pending)
 
-Continue from `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The change extends the existing successful Mutter Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
+The live Mutter text-input-v3 handshake is now verified by Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452). On GNOME Shell 46 / Mutter 46.2, the compositor advertised the protocol and NekoEdit bound the manager, received `enter`, enabled the focused document, and committed state. The same workflow passed all 14 steps, including the unchanged physical Compose canaries; it uploaded a 137,017-byte editor artifact and the separate 120,536-byte locale-pack artifact.
 
-New test file: `tests/mutter_text_input_probe.py`. After the original editor exits, the helper starts a second NekoEdit child, activates its Mutter window, clicks the document area, and reads the child's existing non-PIE ELF state symbols through `nm` + read-only `/proc/<pid>/mem`. No application-side diagnostics or runtime dependency were added.
+This follow-up adds a complementary Wayland-mock case for the other capability branch: the test compositor deliberately omits `zwp_text_input_manager_v3`, while the child process still starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. It requires every text-input object/state symbol to remain zero and then runs the full real-keymap keyboard editing/save scenario. Thus it checks that opting in cannot disable physical XKB typing when the compositor does not advertise the manager.
 
-Expected branches:
-- Protocol global present: the probe requires a manager object, text-input object, compositor `enter`, document `enable`, and at least one outbound state commit.
-- Protocol global absent: the probe requires no partial text-input setup and then sends Ctrl+A, `z`, Ctrl+S, Enter through Mutter to verify that explicit opt-in does not suppress the ordinary XKB path.
+The fallback regression was fast-forwarded to `early-alpha` at [cadf39a](https://github.com/GraderGamer2/NekoEdit/commit/cadf39a3a4b03ce890c1bf57a43c6bdb999368c5). Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) was triggered by that push; its result is pending at this handoff.
 
-The probe intentionally does not claim that an actual IBus/Fcitx engine has sent `preedit_string`, `commit_string`, or `delete_surrounding_text`. Those incoming-event paths remain covered by `tests/wayland_mock.py`; live provider integration remains outstanding and text-input-v3 must remain disabled by default.
-
-The original Compose test leaves the RemoteDesktop input session active until after the second process. The new helper is the direct parent of its NekoEdit child for normal Linux parent-to-child `/proc` access. If CI fails, inspect the helper's captured `text-input-nekoedit.log` before changing editor code. Do not weaken assertions based only on a missing protocol global: take the fallback branch only after checking that all downstream client object/state fields remain zero.
-
-Also corrected `docs/ARCHITECTURE.md` and README to describe the actual hybrid Assembly/freestanding-C implementation. C is permitted; the invariant is no libc/C runtime or third-party runtime shared libraries, direct syscalls, and one freestanding ELF. Host-only tests may link test libraries separately.
-
-Files changed: `tests/mutter_text_input_probe.py`, `tests/mutter_gnome_smoke.sh`, `docs/MUTTER_INTEGRATION_TEST.md`, `docs/TEXT_INPUT_V3.md`, `docs/ARCHITECTURE.md`, `README.md`, `CHANGELOG/README.md`, and this status file.
-
-The eight-file change is on `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034), and has not been merged into `main`. The push should trigger the normal Build and test workflow. The available GitHub status query returned no check records at handoff, so the Actions result remains unconfirmed; do not claim a pass until the run is inspected. This `main` update mirrors the handoff/history only; it does not merge the application or test implementation.
 
 ---
 
