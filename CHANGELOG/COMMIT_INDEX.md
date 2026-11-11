@@ -17,7 +17,7 @@
 | [f2976f53a990](https://github.com/GraderGamer2/NekoEdit/commit/f2976f53a99093c0d1f89b47e14449c2a6db77c5) | docs: record capability-aware Mutter text-input probe |
 | [38d44ff7b372](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034) | docs: update NekoEdit continuity status for Mutter probe |
 
-The test implementation and documentation are recorded on `early-alpha`. The test branches on the actual compositor registry capability and must not be described as a real IBus/Fcitx IME test. Build and test status for the code push is unconfirmed in this handoff.
+The implementation is on `early-alpha`. Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 steps. The log confirms that Mutter 46.2 advertised text-input-v3 and NekoEdit completed manager binding, `enter`, focused-document `enable`, and state commit. This is not a real IBus/Fcitx provider composition test.
 
 ---
 
