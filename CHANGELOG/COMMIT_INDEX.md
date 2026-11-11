@@ -1,3 +1,20 @@
+## 2026-11-12 — capability-aware live text-input-v3 probe
+
+| Commit | Subject |
+|---|---|
+| [c604020c3518](https://github.com/GraderGamer2/NekoEdit/commit/c604020c35187c337d0639a586ef373233973ce1) | test: probe optional text-input-v3 on live Mutter |
+| [14b3debdf994](https://github.com/GraderGamer2/NekoEdit/commit/14b3debdf994599845f66db9d0f8dd78e7410c33) | test: exercise text-input-v3 opt-in during Mutter smoke test |
+| [4f656888a0ee](https://github.com/GraderGamer2/NekoEdit/commit/4f656888a0ee48fd0e64bfe6d7117f73197cd0a7) | docs: describe freestanding Assembly and C boundary |
+| [838c909881c1](https://github.com/GraderGamer2/NekoEdit/commit/838c909881c1fe79f42724ef18cc446efb6e6147) | docs: describe live text-input capability probe |
+| [ca119f21acb7](https://github.com/GraderGamer2/NekoEdit/commit/ca119f21acb71d6f0491142b3a68b55eb09a3889) | docs: define live text-input-v3 verification boundary |
+| [eee0658aae95](https://github.com/GraderGamer2/NekoEdit/commit/eee0658aae9556650825ffb5a0325184a865c49e) | docs: clarify freestanding C boundary and Mutter IME probe |
+| [f2976f53a990](https://github.com/GraderGamer2/NekoEdit/commit/f2976f53a99093c0d1f89b47e14449c2a6db77c5) | docs: record capability-aware Mutter text-input probe |
+| [38d44ff7b372](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034) | docs: update NekoEdit continuity status for Mutter probe |
+
+The test implementation and documentation are recorded on `early-alpha`. The test branches on the actual compositor registry capability and must not be described as a real IBus/Fcitx IME test. Build and test status for the code push is unconfirmed in this handoff.
+
+---
+
 ## 2026-11-11 — Build and test #832: seven-mark optional Compose dead-key chains — passed
 
 | Commit | Subject |
