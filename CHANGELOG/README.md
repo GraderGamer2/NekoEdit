@@ -19,7 +19,7 @@ This is a compositor/client activation test, not a full IME-provider test. It do
 
 Also corrected `docs/ARCHITECTURE.md` and the README's implementation description: NekoEdit is intentionally hybrid Assembly/C. Its dependency boundary is freestanding compilation, direct Linux syscalls, a single static ELF, and no C runtime or third-party runtime shared libraries—not a ban on C itself. The production C modules are rasterization, clipboard, Compose locale handling, history, and preferences.
 
-The eight-file source/test/documentation change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The normal Build and test workflow should run from that push; its check result was not available through the current status query, so CI remains unconfirmed here.
+The eight-file source/test/documentation change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 workflow steps and verified the Mutter 46 live text-input-v3 activation handshake. An external IBus/Fcitx provider exchange remains outside this test.
 
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
