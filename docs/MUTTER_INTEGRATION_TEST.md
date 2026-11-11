@@ -20,6 +20,13 @@ Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/4310
 
 After that Compose test, the first editor process is closed and a second instance is launched with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The Python probe is the direct parent of this second process; using `nm` symbol addresses and read-only `/proc/<pid>/mem`, it observes the client state without adding debug hooks to the application. It also activates the real Mutter window and clicks the document area. If Mutter advertises `zwp_text_input_manager_v3`, the probe requires a successful manager bind, a text-input `enter`, document `enable`, and at least one committed state update. If the compositor does not advertise the global, it requires all text-input objects to remain inactive and verifies that ordinary physical-keyboard/XKB typing and the confirmed save path still work with the opt-in environment variable set. The branch is selected from the actual registry result, not from a compositor-version assumption.
 
+## Live IBus Simple phase
+
+After the text-input-v3 manager/focus handshake, the test changes only the temporary GNOME input-source settings to `('ibus', 'xkb:us:intl:eng')`. This is the IBus Simple keyboard engine for the same `us(intl)` layout; the original physical-XKB/Compose test has already completed and remains unchanged. The harness waits until `ibus engine` reports that exact engine as the active global engine.
+
+Before GNOME Shell starts, the test sets `IBUS_ENABLE_CTRL_SHIFT_U=1` for the private session so IBus Simple exposes its built-in Unicode hex-entry action. The second NekoEdit process receives the explicit `NEKOEDIT_ENABLE_TEXT_INPUT=1` opt-in. Mutter's native virtual keyboard sends Ctrl+Shift+U, releases the modifiers, enters `1F600`, backspaces once, and restores the final zero. The probe reads NekoEdit's existing preedit state through its parent-owned `/proc/<pid>/mem` mapping and requires every expected ASCII preedit update while the document length remains zero. Return must then produce one four-byte UTF-8 commit (U+1F600), clear the preedit, and survive the normal Ctrl+S / Enter save-confirmation flow as exactly `F0 9F 98 80`.
+
+This is a real IBus engine-to-GNOME-Shell-to-Mutter-to-NekoEdit integration test, not a mock IBus signal. The `ibus` command and IBus Simple engine are test-session dependencies only; NekoEdit still links no IBus, D-Bus, GNOME, or other runtime library. The test specifically covers provider preedit and commit. Provider-originated delete-surrounding remains a deterministic Wayland-mock case, and Fcitx/other engines still need separate validation.
 The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. The one pre-launch Ctrl_L press is released before NekoEdit is started and exists only to instantiate the virtual keyboard device. GNOME Shell applies `us(intl)` and `compose:ralt` to Mutter's actual backend keymap before NekoEdit connects, so the tested keysyms correspond to keys that exist in that map. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
 
 ## Run it
@@ -27,7 +34,7 @@ The extension, remote-desktop session, GSettings keyfile, editor preferences, lo
 On Ubuntu 24.04:
 
     sudo apt-get update
-    sudo apt-get install --no-install-recommends gnome-shell dbus-daemon libglib2.0-bin libxkbcommon-dev
+    sudo apt-get install --no-install-recommends gnome-shell ibus dbus-daemon libglib2.0-bin libxkbcommon-dev
     make clean all
     make test-xkb-native
     make test-mutter
@@ -36,6 +43,6 @@ The Make target builds optional locale packs separately and launches the harness
 
 ## Validation boundary
 
-This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland pointer focus, key delivery, shortcuts, `Multi_key`, locale-specific dead-key composition, the default save-confirmation interaction, and the text-input-v3 client activation boundary. When the compositor exports the manager, the probe verifies client-side bind/focus/enable/state-commit; when it does not, the probe verifies graceful opt-in fallback to physical XKB typing. It does not inject preedit/commit/delete events from a real IBus/Fcitx provider, validate physical keyboard hardware, cover other desktop environments, or test complex-script shaping; those remain separate desktop checks.
+This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland pointer focus, key delivery, shortcuts, `Multi_key`, locale-specific dead-key composition, the default save-confirmation interaction, and the text-input-v3 client activation boundary. When the compositor exports the manager, the probe verifies client-side bind/focus/enable/state-commit; when it does not, the probe verifies graceful opt-in fallback to physical XKB typing. It now injects live IBus Simple preedit and commit through GNOME Shell/Mutter. It does not validate provider-originated delete-surrounding, Fcitx, other third-party engines, physical keyboard hardware, other desktop environments, or complex-script shaping; those remain separate checks.
 
 The temporary extension exports only readiness, focus-by-PID, and narrowly scoped remote-keyboard operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all temporary data are removed after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell.
