@@ -1,3 +1,6 @@
+## 2026-11-11 — prime the Mutter virtual keyboard before NekoEdit startup — #817 pending
+
+Run #816 confirmed the save confirmation was handled but the basic file canary remained unchanged. Mutter 46.2 creates a RemoteDesktop virtual keyboard lazily on its first key press and subsequently updates wl_seat capabilities. The integration test now instantiates/releases Ctrl_L before NekoEdit launches, ensuring the editor sees keyboard capability during its initial seat handshake. NekoEdit then starts, is focused, and receives the normal input/Compose sequence. [Build and test #817] will verify this ordering; no success is claimed yet.
 ## 2026-11-11 — accept save confirmation in the Mutter headless test — Build and test #816
 
 | Source change | Description |

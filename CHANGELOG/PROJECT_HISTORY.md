@@ -1,3 +1,8 @@
+## 2026-11-11 — initialize the native Mutter keyboard before application startup
+
+Build and test #816 passed all steps before the native Mutter integration test. The Mutter session and application focus checks succeeded, D-Bus input calls completed, and the canary now accepted the default Ctrl+S confirmation with Enter; the document nevertheless remained unchanged.
+
+Source inspection showed the virtual keyboard is created lazily on the first RemoteDesktop keyboard press. Mutter then notifies Clutter's device-added signal, updates the Wayland seat capabilities, and initializes its wl_keyboard focus from the current seat input-focus surface. The test previously launched and focused NekoEdit before the virtual keyboard existed. The revised harness starts the RemoteDesktop session first, sends and releases Ctrl_L to instantiate the device while no editor window exists, and only then launches and activates NekoEdit. Run #817 will verify whether this removes the startup capability/focus ordering issue.
 ## 2026-11-11 — correct the Mutter canary for default save confirmation
 
 The native headless run #815 did not establish that the RemoteDesktop virtual keyboard failed to deliver keys. It completed the D-Bus key-notification calls, but the file remained unchanged because the harness sent Ctrl+S without accepting NekoEdit's default save-confirmation modal.

@@ -166,6 +166,49 @@ if [ "$HARNESS_READY" -ne 1 ]; then
     exit 1
 fi
 
+# Create the remote-desktop session before NekoEdit is launched. Mutter
+# lazily creates its virtual keyboard on the first key press; priming it now
+# makes wl_seat advertise keyboard capability before NekoEdit binds the seat.
+# Ctrl_L alone has no shortcut effect in the empty test session.
+gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.BeginInput" >/dev/null
+
+INPUT_READY=0
+for attempt in $(seq 1 100); do
+    INPUT_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.InputStatus" 2>/dev/null || true)"
+    if [[ "$INPUT_STATUS" == *"ready:pending=0"* ]]; then
+        INPUT_READY=1
+        break
+    fi
+    if [[ "$INPUT_STATUS" == *"failed:"* ]]; then
+        echo "Mutter native virtual keyboard setup failed: $INPUT_STATUS" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+if [ "$INPUT_READY" -ne 1 ]; then
+    echo "Mutter native virtual keyboard session did not become ready: $INPUT_STATUS" >&2
+    exit 1
+fi
+
+# NotifyKeyboardKeysym creates the native virtual device on its first press.
+# Press/release Ctrl_L before the editor starts so its first wl_seat state
+# already includes a keyboard; no editor window exists to receive this key.
+gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.SendKey" 65507 true >/dev/null
+sleep 0.05
+gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.SendKey" 65507 false >/dev/null
+sleep 0.25
+INPUT_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.InputStatus" 2>/dev/null || true)"
+if [[ "$INPUT_STATUS" != *"ready:pending=0"* ]]; then
+    echo "Mutter virtual-keyboard priming did not complete: $INPUT_STATUS" >&2
+    exit 1
+fi
+echo "Mutter virtual keyboard device created before NekoEdit launch"
+
 sleep 0.5
 NEKOEDIT_LOCALE=pt_BR.UTF-8 "$APP_BINARY" \
     "$TEST_ROOT/document.txt" > "$TEST_ROOT/nekoedit.log" 2>&1 &
@@ -196,33 +239,6 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
     exit 1
 fi
 echo "Mutter native headless focus verified: $FOCUS_RESULT"
-
-# Create the remote-desktop session from inside GNOME Shell. The extension
-# reuses Shell's own D-Bus connection for CreateSession, Start and key events,
-# satisfying Mutter's same-peer permission check. Its native backend creates
-# a physical-mode Clutter virtual keyboard instead of an XTEST device.
-gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-    --method "$DBUS_INTERFACE.BeginInput" >/dev/null
-
-INPUT_READY=0
-for attempt in $(seq 1 100); do
-    INPUT_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$DBUS_INTERFACE.InputStatus" 2>/dev/null || true)"
-    if [[ "$INPUT_STATUS" == *"ready:pending=0"* ]]; then
-        INPUT_READY=1
-        break
-    fi
-    if [[ "$INPUT_STATUS" == *"failed:"* ]]; then
-        echo "Mutter native virtual keyboard setup failed: $INPUT_STATUS" >&2
-        exit 1
-    fi
-    sleep 0.1
-done
-if [ "$INPUT_READY" -ne 1 ]; then
-    echo "Mutter native virtual keyboard did not become ready: $INPUT_STATUS" >&2
-    exit 1
-fi
-echo "Mutter native virtual keyboard session started"
 
 send_key() {
     gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \

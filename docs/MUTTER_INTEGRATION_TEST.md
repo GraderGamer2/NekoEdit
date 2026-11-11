@@ -6,7 +6,7 @@ This test exercises NekoEdit through GNOME Shell 46 / Mutter's native Wayland ba
 
 The test starts GNOME Shell with Mutter's native `--headless` backend and a `1280x720` virtual monitor. This avoids the nested-X11 input path, where XTEST events are not accepted as physical input by Mutter's Wayland seat. It launches the normal NekoEdit executable against the compositor's private Wayland socket with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
 
-A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend. The extension reports the actual focused Mutter `MetaWindow` by process ID and creates a session using Mutter's `org.gnome.Mutter.RemoteDesktop` D-Bus API. It calls `CreateSession`, `Start`, and `NotifyKeyboardKeysym` through the same GNOME Shell D-Bus connection, which is required by Mutter's same-peer session permission check. On the native headless backend, Mutter creates its native virtual keyboard device and injects key events directly through its input seat; no XTEST device or host X window is involved.
+A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend. The extension reports the actual focused Mutter `MetaWindow` by process ID and creates a session using Mutter's `org.gnome.Mutter.RemoteDesktop` D-Bus API. It calls `CreateSession` and `Start` through the same GNOME Shell D-Bus connection, which is required by Mutter's same-peer session permission check. The harness sends and releases Ctrl_L before launching NekoEdit: Mutter creates the native virtual keyboard lazily on the first `NotifyKeyboardKeysym` press, and this primes the `wl_seat` keyboard capability before the editor binds the seat. The extension then activates NekoEdit and sends the actual test sequence through the native input seat; no XTEST device or host X window is involved.
 
 The harness sends Ctrl+A and `x`, then sends Ctrl+S followed by Enter. Save confirmation is enabled by default in NekoEdit, so Enter explicitly accepts the confirmation modal; without it, Ctrl+S intentionally leaves the file unchanged. The harness checks that the saved document contains exactly `x`. Only after that canary succeeds does it test:
 
@@ -14,7 +14,7 @@ The harness sends Ctrl+A and `x`, then sends Ctrl+S followed by Enter. Save conf
 2. `dead_grave`, `dead_circumflex`, `A`, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
 3. Ctrl+S and Enter to accept the default save-confirmation modal, followed by an exact UTF-8 byte comparison against `…Ầ`.
 
-The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
+The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. The one pre-launch Ctrl_L press is released before NekoEdit is started and exists only to instantiate the virtual keyboard device. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
 
 ## Run it
 

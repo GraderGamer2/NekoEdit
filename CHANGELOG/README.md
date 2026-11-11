@@ -1,3 +1,9 @@
+## Latest handoff (2026-11-11)
+
+Continue from `early-alpha` and read `CHANGELOG/CURRENT_STATUS.md`, `CHANGELOG/DEVELOPMENT_LOG.md`, and `CHANGELOG/COMMIT_INDEX.md` for the detailed state. Source/test commit [638d225e](https://github.com/GraderGamer2/NekoEdit/commit/638d225eea36ff08f5b3660048e1f371c5d27f79) corrected the Mutter smoke test to press Enter after Ctrl+S because confirm-before-save is enabled by default. Run #816 still failed the native basic canary, so Enter was not the remaining input issue.
+
+The current correction primes Mutter's lazy RemoteDesktop keyboard before NekoEdit starts. Mutter 46.2 creates the virtual device on the first key press; the native keyboard device then updates `wl_seat` capabilities. The harness now starts the RemoteDesktop session, sends/releases Ctrl_L with no app window open, then launches/focuses NekoEdit and sends the basic and Compose test sequences. Build and test #817 must verify this ordering. Do not claim that live Mutter input or Compose passes until that run is green.
+
 # NekoEdit changelog and continuity notes
 
 This directory is the project's durable development history and handoff source. It exists so work can continue in a new ChatGPT conversation without relying on the context length or availability of an older chat.
