@@ -1,3 +1,10 @@
+## 2026-11-11 — Build and test #811: direct XTest host input, validation in progress
+
+**Source commit:** [3477b605c01b](https://github.com/GraderGamer2/NekoEdit/commit/3477b605c01bba5fb686dc462766a47026f93d9a). The nested Mutter smoke test now sends actual XTest key events from the Xvfb host after explicitly setting and verifying the us(intl) / compose:ralt keymap. NekoEdit's inner Wayland MetaWindow is still activated and verified through the temporary, narrow GNOME Shell extension. The extension no longer creates a Clutter virtual device or exports key-injection methods.
+**Run #810:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42959565212) only at the Mutter basic edit/save canary. The outer X11 and inner Wayland focus checks both reported the expected windows, but the Clutter virtual-device input did not modify the document. Build, host/CLI tests, Wayland mocks, ELF inspection, pinned X.Org regeneration checks, and optional locale packs all passed.
+**Run #811:** [Build and test #811](https://github.com/GraderGamer2/NekoEdit/actions/runs/42960747590) is running on the exact source commit above. Build, command-line tests, Wayland mock, ELF inspection, pinned source checks, and four separate locale-pack builds have passed. The nested GNOME Shell/Mutter test is currently running; no basic-input, Compose, or final artifact success is claimed until it completes.
+**Scope:** test harness, test-only package list, and integration documentation only. The freestanding editor and its runtime dependency boundary are unchanged.
+
 ## 2026-11-11 — Build and test #810: verify both nested Mutter focus layers
 
 **Source commit:** [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). The Mutter harness now focuses GNOME Shell's outer X11 host window and NekoEdit's inner Wayland `MetaWindow`, then verifies both before sending keys. It restores `xdotool` as a test-only dependency; the editor binary and runtime dependencies are unchanged.

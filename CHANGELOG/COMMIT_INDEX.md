@@ -1,3 +1,14 @@
+## 2026-11-11 — nested Mutter input via direct XTest — Build and test #811 in progress
+
+| Commit | Subject |
+|---|---|
+| [30942fea504c](https://github.com/GraderGamer2/NekoEdit/commit/30942fea504c45bfc8f850a5a19b226bf0188d92) | test: inject Wayland input through Mutter virtual keyboard |
+| [88f3e9e248b2](https://github.com/GraderGamer2/NekoEdit/commit/88f3e9e248b26a12430dec6862e262c3bee228c2) | test: isolate Mutter extension settings in keyfile backend |
+| [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b) | test: focus Mutter outer and inner windows before virtual input |
+| [3477b605c01b](https://github.com/GraderGamer2/NekoEdit/commit/3477b605c01bba5fb686dc462766a47026f93d9a) | test: route nested Wayland input through focused XTest host |
+
+Run #810 confirmed that focus checks alone did not make the Clutter virtual-device key sequence reach the editor. Commit 3477b605c01b replaces those extension methods with direct XTest events from Xvfb, explicitly fixes and verifies the host us(intl) keymap, and keeps the PID-based inner Wayland focus check. Build and test [#811](https://github.com/GraderGamer2/NekoEdit/actions/runs/42960747590) has passed build, CLI/host, protocol mock, ELF, pinned locale regeneration, and all four locale packs; the real Mutter input stage is still running.
+
 ## 2026-11-11 — nested Mutter input focus correction — Build and test #810 pending
 
 | Commit | Subject |

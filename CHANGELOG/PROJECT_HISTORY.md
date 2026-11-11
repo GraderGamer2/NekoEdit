@@ -1,3 +1,9 @@
+## 2026-11-11 — nested Mutter input now uses direct XTest from Xvfb
+
+Run #810 passed all non-compositor checks but failed the ordinary edit/save canary even though both the outer X11 host window and inner Wayland MetaWindow were explicitly focused. The next correction removes the intermediate Clutter virtual-device injection and sends keys through XTest directly from the test's Xvfb host. The keymap is set to us(intl) with compose:ralt and checked before Shell starts. The GNOME test extension is reduced to readiness and focus-by-PID only; NekoEdit still has no XTest, xdotool, GNOME, or X11 runtime dependency.
+
+Source commit: [3477b605c01b](https://github.com/GraderGamer2/NekoEdit/commit/3477b605c01bba5fb686dc462766a47026f93d9a). Build and test [#811](https://github.com/GraderGamer2/NekoEdit/actions/runs/42960747590) has passed every pre-Mutter step and is running the final integration test. No Mutter pass is claimed yet.
+
 ## 2026-11-11 — nested Mutter virtual input requires outer and inner focus
 
 Build and test #809 passed every check before the final Mutter integration step. The extension registered, found the NekoEdit PID, called `MetaWindow.activate()`, and confirmed the focused Mutter window PID matched. The document nevertheless remained unchanged after the key/save canary.
