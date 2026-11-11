@@ -6,7 +6,7 @@ This test exercises NekoEdit through an actual GNOME Shell 46 / Mutter Wayland c
 
 The test starts GNOME Shell in nested Wayland mode inside Xvfb and a private D-Bus session. It launches the normal NekoEdit executable against that compositor with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
 
-A small GNOME Shell extension is copied into that temporary HOME and enabled through a private dconf profile. It exports a deliberately narrow D-Bus interface used only by the test to:
+A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend under the temporary XDG config directory. The harness launches Shell in explicit `user` session mode, checks the persisted extension UUID before startup, and does not use a D-Bus-activated dconf service. The extension exports a deliberately narrow D-Bus interface used only by the test to:
 
 1. Find and activate NekoEdit's actual Mutter `MetaWindow` by process ID, then report the focused window PID.
 2. Send individual XKB keysyms and Ctrl-modified keysyms through Mutter's Clutter virtual keyboard.
@@ -17,7 +17,7 @@ The harness first sends Ctrl+A, `x`, and Ctrl+S and checks that the document con
 2. `dead_grave`, `dead_circumflex`, `A`, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
 3. Ctrl+S, followed by an exact UTF-8 byte comparison against `…Ầ`.
 
-The extension, dconf database, editor preferences, locale pack, and runtime directory are all created below the temporary test root. Nothing is installed into the real user's GNOME session or home directory.
+The extension, GSettings keyfile, editor preferences, locale pack, and runtime directory are all created below the temporary test root. Nothing is installed into the real user's GNOME session or home directory.
 
 ## Run it
 

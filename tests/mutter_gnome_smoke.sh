@@ -72,11 +72,11 @@ trap cleanup EXIT
 
 EXTENSION_DIR="$TEST_ROOT/home/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 mkdir -p "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime" \
-    "$TEST_ROOT/config/dconf" "$EXTENSION_DIR"
+    "$TEST_ROOT/config/glib-2.0/settings" "$EXTENSION_DIR"
 chmod 700 "$TEST_ROOT/home" "$TEST_ROOT/home/.nekoedit" \
     "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime" \
-    "$TEST_ROOT/config" "$TEST_ROOT/config/dconf" "$EXTENSION_DIR"
-printf 'user-db:user\n' > "$TEST_ROOT/config/dconf/profile"
+    "$TEST_ROOT/config" "$TEST_ROOT/config/glib-2.0" \
+    "$TEST_ROOT/config/glib-2.0/settings" "$EXTENSION_DIR"
 cp "$SCRIPT_DIR/mutter_extension/metadata.json" "$EXTENSION_DIR/metadata.json"
 cp "$SCRIPT_DIR/mutter_extension/extension.js" "$EXTENSION_DIR/extension.js"
 cp "$LOCALE_PACK" "$TEST_ROOT/home/.nekoedit/locales/pt_BR.UTF-8.nlp"
@@ -92,7 +92,7 @@ export HOME="$TEST_ROOT/home"
 export XDG_RUNTIME_DIR="$TEST_ROOT/runtime"
 export XDG_CONFIG_HOME="$TEST_ROOT/config"
 export XDG_DATA_HOME="$TEST_ROOT/home/.local/share"
-export DCONF_PROFILE="$XDG_CONFIG_HOME/dconf/profile"
+export GSETTINGS_BACKEND="keyfile"
 export WAYLAND_DISPLAY="nekoedit-mutter-${BASHPID}"
 export NEKOEDIT_LOCALE="pt_BR.UTF-8"
 export LC_ALL="C.UTF-8"
@@ -101,18 +101,29 @@ export XKB_DEFAULT_MODEL="pc105"
 export XKB_DEFAULT_LAYOUT="us"
 export XKB_DEFAULT_VARIANT="intl"
 export XKB_DEFAULT_OPTIONS="compose:ralt"
-unset GSETTINGS_BACKEND || true
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
 
-# Enable the isolated, test-scoped extension through a private dconf profile.
-# It exposes a narrow D-Bus API; GNOME Shell's arbitrary Eval interface stays off.
+# Write GNOME settings directly to a temporary GLib keyfile. This avoids a
+# D-Bus-activated dconf daemon inheriting a different environment/profile from
+# the test process. Both the gsettings client and nested Shell use this backend.
 gsettings set org.gnome.shell disable-user-extensions false
+gsettings set org.gnome.shell disabled-extensions "[]"
 gsettings set org.gnome.shell enabled-extensions "['$EXTENSION_UUID']"
+ENABLED_EXTENSIONS="$(gsettings get org.gnome.shell enabled-extensions)"
+if [[ "$ENABLED_EXTENSIONS" != *"$EXTENSION_UUID"* ]]; then
+    echo "test extension was not persisted in the isolated GSettings backend: $ENABLED_EXTENSIONS" >&2
+    exit 1
+fi
+if [ ! -s "$XDG_CONFIG_HOME/glib-2.0/settings/keyfile" ]; then
+    echo "private GSettings keyfile was not created" >&2
+    exit 1
+fi
+echo "Isolated GNOME enabled extensions: $ENABLED_EXTENSIONS"
 
-echo "Starting $(gnome-shell --version) as a nested Wayland compositor"
-gnome-shell --wayland --nested --no-x11 --sm-disable \
+echo "Starting $(gnome-shell --version) as a nested Wayland user session"
+gnome-shell --mode=user --wayland --nested --no-x11 --sm-disable \
     --wayland-display="$WAYLAND_DISPLAY" \
     > "$TEST_ROOT/mutter.log" 2>&1 &
 SHELL_PID=$!
