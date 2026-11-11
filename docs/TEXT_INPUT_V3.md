@@ -21,6 +21,8 @@ The preedit string is drawn as a temporary overlay; it is not committed into the
 
 The Wayland mock verifies enable/disable and enter/leave, set-content-type and serial synchronization, text change cause ordering, editor-originated selection movement (cause 1), IME-originated updates (cause 0), valid and malformed multibyte preedit updates, forward/reversed/hidden cursor ranges, multibyte commit, selection deletion, and UTF-8-boundary-safe surrounding deletion.
 
+Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed the live activation handshake with Ubuntu 24.04's GNOME Shell 46 / Mutter. Its log confirms that this compositor advertised `zwp_text_input_manager_v3`, NekoEdit bound the manager, received `enter`, enabled the focused document, and committed text-input state. The same run retained the ordinary Right Alt Compose and pt_BR dead-key canaries. This is direct compositor/client evidence for the activation path; it is not evidence of an IBus/Fcitx provider exchange.
+
 The live Mutter probe is intentionally narrower than a full IME test:
 - If the compositor advertises `zwp_text_input_manager_v3`, it verifies the manager bind, text-input `enter`, focused-document `enable`, and outbound state commit.
 - If the global is absent, it verifies that the opt-in does not create a partial text-input object and that ordinary XKB key delivery and save remain functional.
