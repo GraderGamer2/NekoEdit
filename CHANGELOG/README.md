@@ -1,3 +1,17 @@
+## 2026-11-12 — capability-aware live text-input-v3 probe
+
+Added a second, isolated NekoEdit process to the GNOME Shell/Mutter integration smoke test. The original `us(intl)`/`compose:ralt` editor run remains unchanged: it still verifies ordinary edit/save, Right Alt `Multi_key`, and the pt_BR two-dead-key result `…Ầ`. After that process exits, a second instance starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`, is activated and clicked through Mutter's native virtual input path, and is inspected by a test-only Python parent process.
+
+The probe resolves the non-PIE ELF symbol addresses with `nm` and reads only the child process's text-input state through `/proc/<pid>/mem`. This avoids adding diagnostic hooks, logging code, or dependencies to the application. It branches on the actual `zwp_text_input_manager_v3` registry result:
+- When the compositor advertises the manager, require manager binding, a text-input focus `enter`, document `enable`, and at least one committed state update.
+- When the manager is absent, require all text-input objects to remain inactive and verify normal Wayland/XKB typing plus the confirmed save path still work with the opt-in variable set.
+
+This is a compositor/client activation test, not a full IME-provider test. It does not synthesize IBus/Fcitx preedit, commit, or delete-surrounding events. The existing Wayland mock remains the deterministic test for those incoming protocol events and UTF-8/serial edge cases. Text-input-v3 remains opt-in; do not enable it by default on the basis of this handshake alone.
+
+Also corrected `docs/ARCHITECTURE.md` and the README's implementation description: NekoEdit is intentionally hybrid Assembly/C. Its dependency boundary is freestanding compilation, direct Linux syscalls, a single static ELF, and no C runtime or third-party runtime shared libraries—not a ban on C itself. The production C modules are rasterization, clipboard, Compose locale handling, history, and preferences.
+
+The source/test/documentation changes are on the temporary work branch pending one fast-forward update to `early-alpha`; the repository's normal Build and test workflow has not yet been run for this change.
+
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
 The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.
