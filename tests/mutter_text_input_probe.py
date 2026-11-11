@@ -198,62 +198,56 @@ def require_ibus_engine(expected: str) -> None:
 def exercise_live_ibus_preedit_commit(
     memory_fd: int, addresses: dict[str, int], document: Path
 ) -> None:
-    # GNOME Shell's IBus Simple engine supports the standard Ctrl+Shift+U
-    # Unicode entry path when IBUS_ENABLE_CTRL_SHIFT_U is enabled for its
-    # daemon. Releasing the modifiers immediately after U uses the engine's
-    # documented modifier-dropped form, so hex digits are sent unmodified.
+    # Use IBus Simple's built-in XKB/Compose engine path. This avoids any
+    # optional Unicode-entry setting and exercises the same compose handling
+    # a regular IBus Simple keyboard source provides to applications.
     require_ibus_engine("xkb:us:intl:eng")
-    send_key(65507, True)  # Control_L
-    send_key(65505, True)  # Shift_L
-    send_keysym(85)        # uppercase U
-    send_key(65505, False)
-    send_key(65507, False)
+
+    # Multi_key alone is shown as a middle-dot preedit. Adding "o" narrows the
+    # Compose prefix; Backspace must restore the Multi_key-only preedit without
+    # inserting anything into the document.
+    send_keysym(0xFF20)  # Multi_key
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "u")
+    wait_preedit(memory_fd, addresses, "·")
 
-    digits = ""
-    for character in "1F600":
-        send_keysym(ord(character))
-        wait_input_idle()
-        digits += character
-        wait_preedit(memory_fd, addresses, "u" + digits)
+    send_keysym(ord("o"))
+    wait_input_idle()
+    wait_preedit(memory_fd, addresses, "o")
 
-    # Backspace is handled inside the IBus composition buffer. It must update
-    # the live preedit rather than deleting bytes from NekoEdit's document.
     send_keysym(65288)  # BackSpace
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "u1F60")
+    wait_preedit(memory_fd, addresses, "·")
 
-    send_keysym(ord("0"))
+    # Multi_key + o + c is the standard X.Org Compose sequence for COPYRIGHT SIGN.
+    send_keysym(ord("o"))
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "u1F600")
+    wait_preedit(memory_fd, addresses, "o")
 
-    # Return terminates the IBus hex sequence and emits commit-text. GNOME
-    # Shell translates that into text-input-v3 commit_string + done.
-    send_keysym(65293)  # Return
+    send_keysym(ord("c"))
     wait_input_idle()
-    wait_document_commit(memory_fd, addresses, 4)
+    wait_document_commit(memory_fd, addresses, 2)
 
     # The editor's default Save confirmation is part of the real input path.
     send_shortcut(65507, 115)  # Ctrl+S
     send_keysym(65293)         # Enter accepts confirmation
     wait_input_idle()
 
-    expected = "\U0001f600".encode("utf-8")
+    expected = "©".encode("utf-8")
     deadline = time.monotonic() + 6.0
     while time.monotonic() < deadline:
         if document.read_bytes() == expected:
             print(
-                "PASS: live IBus Simple engine delivered preedit updates, "
-                "Backspace correction, and U+1F600 commit through Mutter "
+                "PASS: live IBus Simple delivered Compose preedit updates, "
+                "Backspace correction, and U+00A9 commit through Mutter "
                 "text-input-v3; confirmed save preserved exact UTF-8 bytes."
             )
             return
         time.sleep(0.05)
     fail(
-        "live IBus commit/save produced unexpected document bytes: "
+        "live IBus Compose commit/save produced unexpected document bytes: "
         + repr(document.read_bytes())
     )
+
 
 
 def read_log(path: Path) -> str:
