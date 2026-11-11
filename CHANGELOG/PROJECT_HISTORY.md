@@ -1,3 +1,8 @@
+## 2026-11-11 — instrument symbols parser safety counters for the real us(intl) keymap
+
+Run #824 localized the valid keymap rejection to stage 4 at byte offset 66,422, token `}`. That is the symbols-section boundary. The symbols parser then applies two intentional safety thresholds: at least 16 symbol entries and 12 alphabetic keys.
+
+The diagnostic now also captures both counters before the keymap reset. Run #825 will show whether the failure is the overall symbol-population threshold or the alphabetic-key threshold, allowing a targeted fix without weakening validation for sparse/malformed maps.
 ## 2026-11-11 — add bounded failure diagnostics for the real us(intl) parser probe
 
 Run #823 compiled the host test and generated the valid libxkbcommon `us(intl)` / `compose:ralt` map, but NekoEdit's assembly parser returned `-1` and cleared its keymap-ready flag. This confirms a real parser incompatibility but does not yet identify which parser stage rejects the input.

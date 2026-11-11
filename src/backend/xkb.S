@@ -5362,6 +5362,10 @@ xkb_parse_error_offset: .long 0
 xkb_parse_error_token_length: .long 0
 .global xkb_parse_error_token
 xkb_parse_error_token:  .zero 64
+.global xkb_parse_error_symbol_count
+xkb_parse_error_symbol_count: .long 0
+.global xkb_parse_error_alpha_count
+xkb_parse_error_alpha_count: .long 0
 .Lxkb_parse_stage:      .long 0
 
 .section .text
@@ -8956,6 +8960,8 @@ xkb_parse_keymap:
     mov dword ptr [rip + xkb_parse_error_stage], 0
     mov dword ptr [rip + xkb_parse_error_offset], 0
     mov dword ptr [rip + xkb_parse_error_token_length], 0
+    mov dword ptr [rip + xkb_parse_error_symbol_count], 0
+    mov dword ptr [rip + xkb_parse_error_alpha_count], 0
     lea rdi, [rip + xkb_parse_error_token]
     xor eax, eax
     mov ecx, 64
@@ -9007,6 +9013,10 @@ xkb_parse_keymap:
     xor eax, eax
     jmp .Lxkb_parse_keymap_done
 .Lxkb_parse_keymap_fail:
+    mov eax, dword ptr [rip + .Lxkb_symbol_count]
+    mov dword ptr [rip + xkb_parse_error_symbol_count], eax
+    mov eax, dword ptr [rip + .Lxkb_alpha_key_count]
+    mov dword ptr [rip + xkb_parse_error_alpha_count], eax
     mov eax, dword ptr [rip + .Lxkb_parse_stage]
     mov dword ptr [rip + xkb_parse_error_stage], eax
     mov rax, qword ptr [rip + .Lxkb_text_ptr]

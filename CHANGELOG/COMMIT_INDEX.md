@@ -1,3 +1,6 @@
+## 2026-11-11 — report xkb_symbols acceptance counters — Build and test #825
+
+Run #824 passed the build, CLI tests, Wayland mock and ELF checks but the real `us(intl)` parser probe failed at the closing brace of `xkb_symbols` (stage 4, offset 66,422, token `}`). The symbols parser enforces both a minimum symbol count and a minimum alphabetic-key count. The next run adds both counters to failure diagnostics so the exact threshold can be identified. No parser threshold has been relaxed.
 ## 2026-11-11 — XKB parser stage diagnostics — Build and test #824
 
 Run #823 confirmed the native probe compiles and produces a valid 66,429-byte `us(intl)` / `compose:ralt` keymap, but NekoEdit's assembly parser rejects it. The parser now records which top-level pass fails, the byte offset, and the last token. Build and test #824 will identify the exact unsupported construct before the parser is changed.

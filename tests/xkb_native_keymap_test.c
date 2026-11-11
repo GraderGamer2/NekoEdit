@@ -13,6 +13,8 @@ extern uint32_t xkb_parse_error_stage;
 extern uint32_t xkb_parse_error_offset;
 extern uint32_t xkb_parse_error_token_length;
 extern char xkb_parse_error_token[64];
+extern uint32_t xkb_parse_error_symbol_count;
+extern uint32_t xkb_parse_error_alpha_count;
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
 /*
@@ -138,6 +140,8 @@ main(void)
                 parse_result, xkb_keymap_ready, text_size,
                 xkb_parse_error_stage, xkb_parse_error_offset,
                 xkb_parse_error_token_length, xkb_parse_error_token);
+        fprintf(stderr, "symbols=%u alpha=%u\\n",
+                xkb_parse_error_symbol_count, xkb_parse_error_alpha_count);
         free(text);
         xkb_keymap_unref(keymap);
         xkb_context_unref(context);

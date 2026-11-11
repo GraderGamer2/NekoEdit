@@ -1,5 +1,11 @@
 ## Latest handoff (2026-11-11)
 
+Continue from `early-alpha`. Run #824 passed build, CLI, full Wayland mock and ELF checks; the real `us(intl)` parser probe failed at stage 4 (end of `xkb_symbols`, byte 66,422, token `}`). The parser has final safety checks for at least 16 symbols and 12 alphabetic keys.
+
+The current change reports `.Lxkb_symbol_count` and `.Lxkb_alpha_key_count` before reset. Build and test #825 will show which acceptance threshold rejects the valid 66 KB keymap. Do not loosen either threshold until the count data shows why.
+
+## Latest handoff (2026-11-11)
+
 Continue from branch `early-alpha` and inspect `CHANGELOG/CURRENT_STATUS.md`. Run #823 confirmed the host XKB probe compiles, but NekoEdit rejects the valid 66,429-byte libxkbcommon `us(intl)` / `compose:ralt` keymap.
 
 The current commit adds bounded diagnostics to `xkb_parse_keymap`: top-level parser stage, byte offset, and last token. Run #824 will report the exact pass/construct that causes rejection. Do not relax the parser or modify the Mutter key dispatch until the actual failure is identified.

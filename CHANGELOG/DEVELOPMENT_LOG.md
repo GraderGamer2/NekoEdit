@@ -1,3 +1,9 @@
+## 2026-11-11 — report symbol and alphabetic-key totals when the real map fails stage 4
+
+- Build and test [#824](https://github.com/GraderGamer2/NekoEdit/actions/runs/42995879521) passed the freestanding build, CLI tests, complete Wayland mock suite, and ELF inspection. The native parser probe then reported stage 4 (`xkb_symbols`), byte offset 66,422, and final token `}`.
+- Inspected `.Lxkb_parse_symbols`: after reaching the symbols-section closing brace, it rejects maps with fewer than 16 parsed symbols or fewer than 12 alphabetic keys. The failure is therefore at section completion; the previous token/offset alone could not distinguish which threshold fired.
+- Exported two bounded diagnostic values copied before the parser resets its keymap state: `.Lxkb_symbol_count` and `.Lxkb_alpha_key_count`. The native C probe now prints both counters alongside the stage/token diagnostics.
+- Build and test #825 will distinguish whether the parser is not collecting enough symbols at all or whether its alphabetic-key detection is too strict for this valid XKB map. No minimum threshold or parser acceptance rule has been changed.
 ## 2026-11-11 — instrument the XKB parser's top-level failure stage and token
 
 - Build and test [#823](https://github.com/GraderGamer2/NekoEdit/actions/runs/42994629933) passed executable build, CLI tests, Wayland mocks, ELF inspection, and compilation of the native probe. The probe generated a valid 66,429-byte libxkbcommon `us(intl)` / `compose:ralt` text-v1 keymap, then NekoEdit's `xkb_parse_keymap()` returned `-1` and reset `xkb_keymap_ready` to zero.
