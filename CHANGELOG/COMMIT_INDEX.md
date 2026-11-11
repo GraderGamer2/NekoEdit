@@ -1,3 +1,16 @@
+## 2026-11-12 — use IBus Simple Compose sequence for live preedit/commit (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [b9e0933f951f](https://github.com/GraderGamer2/NekoEdit/commit/b9e0933f951f8e343a784dda83b297fe52c4ec68) | test: validate live IBus Compose preedit and commit |
+| [95aeff426224](https://github.com/GraderGamer2/NekoEdit/commit/95aeff426224b8193dd0b9d74d39363c1e6987be) | test: use IBus built-in Compose path in live integration |
+| [c7710533a648](https://github.com/GraderGamer2/NekoEdit/commit/c7710533a6481d05dd64c34b098eedb9ec0540a5) | test: remove IBus Unicode-entry environment override |
+| [03a5a64589e9](https://github.com/GraderGamer2/NekoEdit/commit/03a5a64589e9c13c9428ba2ef1b2ba8f10c164b4) | docs: describe IBus Compose preedit test |
+| [5c569df6bcfb](https://github.com/GraderGamer2/NekoEdit/commit/5c569df6bcfb59d36cc04d0519016d5ce62d175d) | docs: document IBus Compose live preedit sequence |
+
+Build and test #836 confirmed the private IBus daemon inherited the Unicode-entry flag, but the Ctrl+Shift+U sequence still reached the document as literal `u`; the test now avoids that optional mode and uses standard IBus Simple Compose instead. The revised live test must pass before the feature path is claimed as verified.
+
+---
 ## 2026-11-12 — IBus Simple engine environment/bootstrap correction (CI pending)
 
 | Commit | Subject |
