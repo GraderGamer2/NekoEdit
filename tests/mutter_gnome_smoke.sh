@@ -245,7 +245,7 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
     echo "Mutter did not focus NekoEdit's Wayland toplevel: $FOCUS_RESULT" >&2
     exit 1
 fi
-FRAME_RECT="$(printf '%s\\n' "$FOCUS_RESULT" | sed -n 's/.*frame=\\([-0-9,]*\\).*/\\1/p')"
+FRAME_RECT="$(printf '%s\n' "$FOCUS_RESULT" | sed -n 's/.*frame=\([-0-9,]*\).*/\1/p')"
 if [ -z "$FRAME_RECT" ]; then
     echo "Mutter did not report NekoEdit's frame rectangle: $FOCUS_RESULT" >&2
     exit 1
