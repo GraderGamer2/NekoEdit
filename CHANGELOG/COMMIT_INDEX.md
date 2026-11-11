@@ -1,3 +1,15 @@
+## 2026-11-11 — Build and test #832: seven-mark optional Compose dead-key chains — passed
+
+| Commit | Subject |
+|---|---|
+| [bfa833f41448](https://github.com/GraderGamer2/NekoEdit/commit/bfa833f41448d46343f68ad77a045b4e7d3dc949) | feat: extend optional Compose dead-key chains to seven marks |
+| [1b5b7e69f511](https://github.com/GraderGamer2/NekoEdit/commit/1b5b7e69f5117875aab444b3a25131b646ebd31f) | test: compare Compose namespace collision across rule kinds |
+| [2d43183d6736](https://github.com/GraderGamer2/NekoEdit/commit/2d43183d6736cfddf93f5d960780b5eb24f1f0f5) | data: refresh locale importer diagnostics for v2 chain bounds |
+
+Build and test [#832](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505) passed all workflow steps on the final early-alpha data head. The run validated the freestanding build, all command-line/host tests, the complete Wayland mock (including seven-mark resolution and eight-action overflow), ELF inspection, the real libxkbcommon us(intl)/compose:ralt keymap, byte-for-byte regeneration of all four locale JSON datasets, separate locale-pack builds, and the nested GNOME Shell/Mutter integration test. Both artifacts uploaded successfully: editor [13858886635](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505/artifacts/13858886635), 137,017 bytes; locale packs [13859156429](https://github.com/GraderGamer2/NekoEdit/actions/runs/43027835505/artifacts/13859156429), 120,536-byte ZIP. Both expire 2026-11-12 13:19 UTC / 20:19 Jakarta.
+
+NLP1 v2 uses 68-byte records with eight input-scalar slots; v1's 52-byte records remain readable. Multi_key remains limited to four inputs, while v2 dead-key records accept seven combining marks plus the base. The Wayland editor path buffers seven marks, resolves eight-scalar locale records, and flushes/restarts literally on an eighth consecutive dead action. The four JSON rule arrays and record totals remain unchanged; only malformed intermediate-event statistics moved from too_long to unsupported_input. The full validation matrix passed, including the real XKB map and live Mutter integration. The artifacts are distinct; optional locale data remains separate from the executable. These changes remain on early-alpha and are not merged into main.
+
 ## 2026-11-11 — preserve canonical XKB key names alongside aliases
 
 Actions #827 and #828 passed the freestanding build, CLI tests, Wayland mock, and ELF inspection, but the native libxkbcommon `us(intl)` parser test failed at the end of `xkb_symbols`. The #828 diagnostics identified the root cause: XKB keycodes define canonical names first (for example `<AD01> = 24`) and later define aliases (for example `alias <LatQ> = <AD01>`). NekoEdit stored only one name per keycode and overwrote the canonical name with each alias. The symbols section still refers to the canonical name, so those key blocks were skipped; the same happened to `RALT` when `ALGR` was recorded.
