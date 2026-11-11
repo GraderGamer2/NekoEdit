@@ -245,12 +245,31 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
     echo "Mutter did not focus NekoEdit's Wayland toplevel: $FOCUS_RESULT" >&2
     exit 1
 fi
+FRAME_RECT="$(printf '%s\\n' "$FOCUS_RESULT" | sed -n 's/.*frame=\\([-0-9,]*\\).*/\\1/p')"
+if [ -z "$FRAME_RECT" ]; then
+    echo "Mutter did not report NekoEdit's frame rectangle: $FOCUS_RESULT" >&2
+    exit 1
+fi
+IFS=, read -r FRAME_X FRAME_Y FRAME_WIDTH FRAME_HEIGHT <<< "$FRAME_RECT"
+if [ -z "$FRAME_X" ] || [ -z "$FRAME_Y" ] || [ -z "$FRAME_WIDTH" ] || [ -z "$FRAME_HEIGHT" ] || \
+   [ "$FRAME_WIDTH" -lt 320 ] || [ "$FRAME_HEIGHT" -lt 240 ]; then
+    echo "unexpected NekoEdit MetaWindow frame rectangle: $FRAME_RECT" >&2
+    exit 1
+fi
+APP_CENTER_X=$((FRAME_X + FRAME_WIDTH / 2))
+APP_CENTER_Y=$((FRAME_Y + FRAME_HEIGHT / 2))
+xdotool mousemove --sync --window "$SHELL_WINDOW" "$APP_CENTER_X" "$APP_CENTER_Y"
+xdotool click 1
+sleep 0.25
+FOCUS_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.Activate" "$APP_PID")"
 OUTER_FOCUS="$(xdotool getwindowfocus -f)"
 if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
     echo "GNOME Shell lost outer X11 input focus after inner activation: window=$SHELL_WINDOW focus=$OUTER_FOCUS" >&2
     exit 1
 fi
 echo "GNOME focus verified: outer X11=$SHELL_WINDOW; inner Wayland=$FOCUS_RESULT"
+echo "Clicked NekoEdit frame center: $APP_CENTER_X,$APP_CENTER_Y"
 
 # Send a basic key/save canary through XTest after both focus layers have
 # been confirmed. The X server delivers it to GNOME Shell's focused host window,
@@ -274,6 +293,7 @@ if [ "$PROBE_SAVED" -ne 1 ]; then
     echo "XTest keyboard input did not deliver the basic edit/save canary" >&2
     echo "NekoEdit PID: $APP_PID" >&2
     echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
+    echo "GNOME Shell captured key events: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.GetKeyEvents" 2>&1 || true)" >&2
     exit 1
 fi
 
