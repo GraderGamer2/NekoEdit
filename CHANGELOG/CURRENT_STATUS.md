@@ -1,10 +1,10 @@
-## 2026-11-12 — explicit opt-in fallback regression (CI pending)
+## 2026-11-12 — explicit opt-in fallback regression — Build and test #834 passed
 
 The live Mutter text-input-v3 handshake is now verified by Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452). On GNOME Shell 46 / Mutter 46.2, the compositor advertised the protocol and NekoEdit bound the manager, received `enter`, enabled the focused document, and committed state. The same workflow passed all 14 steps, including the unchanged physical Compose canaries; it uploaded a 137,017-byte editor artifact and the separate 120,536-byte locale-pack artifact.
 
 This follow-up adds a complementary Wayland-mock case for the other capability branch: the test compositor deliberately omits `zwp_text_input_manager_v3`, while the child process still starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. It requires every text-input object/state symbol to remain zero and then runs the full real-keymap keyboard editing/save scenario. Thus it checks that opting in cannot disable physical XKB typing when the compositor does not advertise the manager.
 
-The fallback regression was fast-forwarded to `early-alpha` at [cadf39a](https://github.com/GraderGamer2/NekoEdit/commit/cadf39a3a4b03ce890c1bf57a43c6bdb999368c5). Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) was triggered by that push; its result is pending at this handoff.
+The fallback regression was fast-forwarded to `early-alpha` at [cadf39a](https://github.com/GraderGamer2/NekoEdit/commit/cadf39a3a4b03ce890c1bf57a43c6bdb999368c5). Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) passed all 14 workflow steps. The job log confirms the seven text-input fields remained inactive and the complete real-keymap XKB editing/save scenario passed with the opt-in variable set.
 
 ---
 ## 2026-11-12 — capability-aware live text-input-v3 probe — Build and test #833 passed
