@@ -1,8 +1,10 @@
-## 2026-11-12 — test opt-in fallback when text-input-v3 is not advertised (CI pending)
+## 2026-11-12 — test opt-in fallback when text-input-v3 is not advertised — Build and test #834 passed
 
 Added a Wayland-mock scenario that launches NekoEdit with `NEKOEDIT_ENABLE_TEXT_INPUT=1` while deliberately omitting `zwp_text_input_manager_v3` from the compositor registry. The test requires manager/object/enter/enable/serial/state-ready fields to remain zero, then runs the complete real-keymap keyboard-layout editing and confirmed-save sequence. It checks that the opt-in cannot suppress the normal XKB path when the compositor does not provide text-input-v3.
 
-Commits: [799f57a](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) adds the opt-in no-global scenario; [54a0dae](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) corrects its exact expected UTF-8 output bytes. Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) is running; no result is claimed until the Wayland mock and subsequent workflow steps finish.
+Commits: [799f57a](https://github.com/GraderGamer2/NekoEdit/commit/799f57ac2a10e3b4824cedba07f97d06ba3594c3) adds the opt-in no-global scenario; [54a0dae](https://github.com/GraderGamer2/NekoEdit/commit/54a0daea94238e63e988bf2dea08c4a77746ebb5) corrects its exact expected UTF-8 output bytes. Build and test [#834](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760) passed all 14 steps. The Wayland log explicitly records that all seven text-input state fields remained inactive while the real `us(intl)` keymap, XKB translation, editing, and save assertions completed.
+
+Artifact: editor [13893597286](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760/artifacts/13893597286), 137,017 bytes; separate Compose locale packs [13894166119](https://github.com/GraderGamer2/NekoEdit/actions/runs/43105116760/artifacts/13894166119), 120,536 bytes.
 
 ---
 ## 2026-11-12 — live Mutter text-input-v3 activation — Build and test #833 passed
@@ -12,6 +14,21 @@ Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/4310
 The Wayland mock independently verifies incoming preedit UTF-8/cursor-byte-offset, commit, delete-surrounding, and serial handling. This CI result validates the live compositor/client activation handshake, not an external IBus/Fcitx provider's actual preedit/commit exchange. The default remains physical XKB; `NEKOEDIT_ENABLE_TEXT_INPUT=1` remains explicit opt-in.
 
 Artifacts: editor [13892773320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452/artifacts/13892773320), 137,017 bytes; separate Compose locale packs [13892008409](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452/artifacts/13892008409), 120,536 bytes. Both were uploaded successfully.
+
+---
+## 2026-11-12 — capability-aware live text-input-v3 probe
+
+Added a second, isolated NekoEdit process to the GNOME Shell/Mutter integration smoke test. The original `us(intl)`/`compose:ralt` editor run remains unchanged: it still verifies ordinary edit/save, Right Alt `Multi_key`, and the pt_BR two-dead-key result `…Ầ`. After that process exits, a second instance starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`, is activated and clicked through Mutter's native virtual input path, and is inspected by a test-only Python parent process.
+
+The probe resolves the non-PIE ELF symbol addresses with `nm` and reads only the child process's text-input state through `/proc/<pid>/mem`. This avoids adding diagnostic hooks, logging code, or dependencies to the application. It branches on the actual `zwp_text_input_manager_v3` registry result:
+- When the compositor advertises the manager, require manager binding, a text-input focus `enter`, document `enable`, and at least one committed state update.
+- When the manager is absent, require all text-input objects to remain inactive and verify normal Wayland/XKB typing plus the confirmed save path still work with the opt-in variable set.
+
+This is a compositor/client activation test, not a full IME-provider test. It does not synthesize IBus/Fcitx preedit, commit, or delete-surrounding events. The existing Wayland mock remains the deterministic test for those incoming protocol events and UTF-8/serial edge cases. Text-input-v3 remains opt-in; do not enable it by default on the basis of this handshake alone.
+
+Also corrected `docs/ARCHITECTURE.md` and the README's implementation description: NekoEdit is intentionally hybrid Assembly/C. Its dependency boundary is freestanding compilation, direct Linux syscalls, a single static ELF, and no C runtime or third-party runtime shared libraries—not a ban on C itself. The production C modules are rasterization, clipboard, Compose locale handling, history, and preferences.
+
+The eight-file source/test/documentation change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 workflow steps and verified the Mutter 46 live text-input-v3 activation handshake. An external IBus/Fcitx provider exchange remains outside this test.
 
 
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
