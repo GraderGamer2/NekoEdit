@@ -285,7 +285,7 @@ def main() -> int:
     memory_fd: int | None = None
     log_file = None
     try:
-        document.write_bytes(b"seed")
+        document.write_bytes(b"")
         log_file = log_path.open("wb")
         process = subprocess.Popen(
             [binary, str(document)],
