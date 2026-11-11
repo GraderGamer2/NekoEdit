@@ -393,6 +393,18 @@ fi
 
 echo "PASS: native Mutter virtual keyboard delivered Multi_key and a two-mark dead-key chain"
 echo "PASS: Ctrl+S saved the expected UTF-8 bytes (U+2026 U+1EA6)"
+
+# Close the first editor before the independent text-input-v3 opt-in probe.
+# Keep the Mutter virtual-input session alive for the second editor instance.
+kill "$APP_PID" 2>/dev/null || true
+wait "$APP_PID" 2>/dev/null || true
+APP_PID=
+printf 'seed' > "$TEST_ROOT/text-input-document.txt"
+echo "Probing text-input-v3 activation/fallback with a second NekoEdit process"
+python3 "$SCRIPT_DIR/mutter_text_input_probe.py" \
+    "$APP_BINARY" "$TEST_ROOT/text-input-document.txt" \
+    "$TEST_ROOT/text-input-nekoedit.log"
+
 gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
     --method "$DBUS_INTERFACE.EndInput" >/dev/null
 RESULT=passed
