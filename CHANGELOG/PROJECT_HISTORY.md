@@ -1,3 +1,8 @@
+## 2026-11-11 — force the tested XKB map through Mutter's backend API before Compose
+
+Run #819 passed the basic native input test but still saved literal grave/circumflex characters during the Compose phase. The test verified that GNOME GSettings stored `us+intl`, `compose:ralt`, and `pc105`, but this did not guarantee that the active Mutter seat keymap had changed before the key events.
+
+GNOME Shell 46.2's `KeyboardManager` uses `global.backend.set_keymap(layouts, variants, options, model)` and `global.backend.lock_layout_group(idx)` to apply a selected input source. The temporary Shell extension now exposes a narrow method that calls these exact Mutter backend APIs immediately before the Compose test, after the basic canary and app focus steps. Build and test #820 will validate that this resolves Multi_key and both dead keys and produces the expected locale output.
 ## 2026-11-11 — apply us(intl) and Compose options through the actual GNOME input-source settings
 
 Run #818 passed the basic Mutter typing/save canary after the native pointer clicked NekoEdit's document body. It then failed only the Compose phase: the file contained `..A`, and Mutter reported no keycode for Multi_key, dead_grave, and dead_circumflex.

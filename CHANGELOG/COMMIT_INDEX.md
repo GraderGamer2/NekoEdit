@@ -1,3 +1,6 @@
+## 2026-11-11 — Mutter backend keymap application before Compose — #820 pending
+
+Run #819 passed the basic canary but Compose still inserted literal grave/circumflex because the GSettings source values had not reliably activated the native Mutter keymap. The test now calls the same `global.backend.set_keymap('us','intl','compose:ralt','pc105')` and `lock_layout_group(0)` methods that GNOME Shell's own KeyboardManager uses, immediately before sending the Compose sequence. Run #820 will verify actual keyval mappings and exact `…Ầ` output.
 ## 2026-11-11 — Mutter Compose keymap setup via GNOME input-source settings — #819 pending
 
 Run #818 demonstrated real native pointer focus and ordinary key/save delivery. Its Compose sequence failed because Mutter could not map `Multi_key`, `dead_grave`, or `dead_circumflex` in its active plain `us` keymap. The previous `XKB_DEFAULT_*` exports did not configure Mutter's native seat. The harness now configures the temporary GNOME keyfile through `org.gnome.desktop.input-sources` with `us+intl`, `compose:ralt`, and `pc105`, verifies the stored values, then starts GNOME Shell. Run #819 will establish whether these keys resolve and the locale pack produces the expected bytes.

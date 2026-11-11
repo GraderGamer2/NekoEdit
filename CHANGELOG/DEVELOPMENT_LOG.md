@@ -1,3 +1,10 @@
+## 2026-11-11 — call Mutter's backend keymap API directly before the Compose integration sequence
+
+- Build and test [#819](https://github.com/GraderGamer2/NekoEdit/actions/runs/42987693384) passed the build, CLI tests, Wayland protocol mock, ELF inspection, pinned X.Org regeneration, and all four separate locale-pack builds. The headless Mutter integration also passed native pointer focus and the basic typing/save canary.
+- The Compose phase still failed. The temporary GNOME keyfile read back `us+intl`, `compose:ralt`, and `pc105`, but Mutter emitted ordinary grave/circumflex symbols, so the Settings values had not been applied to the active native backend keymap before input.
+- Inspected GNOME Shell 46.2 `js/misc/keyboardManager.js`: its `KeyboardManager._applyLayoutGroup()` calls `global.backend.set_keymap(layouts, variants, options, model)` and locks the selected group through the same backend object.
+- Added a constrained `ApplyKeymap` method to the temporary extension. After the basic canary, the harness calls it to set `us`, `intl`, `compose:ralt`, `pc105`, then locks group 0 before injecting the Compose/dead-key sequence. This avoids a startup ordering dependency while using the same API as GNOME Shell's normal input-source manager.
+- Build and test #820 will verify keyval-to-keycode mapping and exact `…Ầ` output. No application source or runtime dependencies changed; the extension and GNOME settings remain test-scoped.
 ## 2026-11-11 — configure GNOME Shell's actual XKB map before Mutter Compose testing
 
 - Build and test [#818](https://github.com/GraderGamer2/NekoEdit/actions/runs/42986520195) passed the full freestanding build, command-line tests, Wayland protocol mock, ELF inspection, pinned-source importer comparison, and all four locale-pack builds. The native Mutter test now successfully focused the document with a RemoteDesktop pointer click; its basic Ctrl+A / x / Ctrl+S / Enter canary saved exactly `x`.

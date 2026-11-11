@@ -345,6 +345,18 @@ if [ "$PROBE_SAVED" -ne 1 ]; then
     exit 1
 fi
 
+# Apply the real native Mutter keymap now that Shell startup and the basic
+# input canary are complete. GNOME Shell's KeyboardManager uses this same
+# backend API; a direct application here avoids racing its startup activation.
+KEYMAP_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.ApplyKeymap")"
+if [[ "$KEYMAP_RESULT" != *"layout=us variant=intl options=compose:ralt model=pc105"* ]]; then
+    echo "Mutter did not apply the expected us(intl) keymap: $KEYMAP_RESULT" >&2
+    exit 1
+fi
+echo "Mutter native keymap applied: $KEYMAP_RESULT"
+sleep 0.3
+
 # Replace the canary with the Compose and locale-specific two-dead-key chain.
 send_shortcut 65507 97
 send_keysym 65312

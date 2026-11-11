@@ -26,6 +26,9 @@ const DBUS_XML = `
     <method name="PointerStatus">
       <arg type="s" name="status" direction="out"/>
     </method>
+    <method name="ApplyKeymap">
+      <arg type="s" name="status" direction="out"/>
+    </method>
     <method name="BeginInput"/>
     <method name="InputStatus">
       <arg type="s" name="status" direction="out"/>
@@ -212,6 +215,15 @@ export default class NekoEditMutterTestExtension extends Extension {
 
     PointerStatus() {
         return this._pointerStatus;
+    }
+
+    ApplyKeymap() {
+        // Use the same Mutter backend API GNOME Shell's KeyboardManager calls.
+        // This avoids relying on a session-source activation that can be late
+        // in a minimal headless user session.
+        global.backend.set_keymap('us', 'intl', 'compose:ralt', 'pc105');
+        global.backend.lock_layout_group(0);
+        return 'layout=us variant=intl options=compose:ralt model=pc105';
     }
 
     BeginInput() {
