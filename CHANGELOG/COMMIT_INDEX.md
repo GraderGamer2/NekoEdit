@@ -1,3 +1,6 @@
+## 2026-11-11 — real us(intl) parser validation — Build and test #822 pending
+
+Run #821 confirmed the Mutter keymap setup, editor focus, document click, and basic save; the Compose byte comparison still failed. The test suite now has a separate `test-xkb-native` target that compiles real `us(intl)`/`compose:ralt` XKB text via libxkbcommon, feeds it to NekoEdit's assembly parser, and verifies the exact keycode/group/level entries for Multi_key, dead_grave, dead_circumflex, period and A. CI adds `libxkbcommon-dev` for this host test only; the editor remains freestanding. Run #822 will establish whether the parser accepts and preserves the real map.
 ## 2026-11-11 — initial us(intl) keymap before editor startup — #821 pending
 
 Run #820 passed the basic canary but still failed Compose after the backend keymap was changed at runtime. The next test correction calls the same Mutter backend keymap API before launching NekoEdit, after Shell startup and virtual keyboard priming. This ensures the initial `wl_keyboard.keymap` received by NekoEdit is already `us(intl)` with `compose:ralt`; Build and test #821 will validate exact Compose output.

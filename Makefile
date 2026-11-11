@@ -10,6 +10,7 @@ PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
 COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
+XKB_NATIVE_KEYMAP_TEST := $(BUILD_DIR)/xkb_native_keymap_test
 
 PREFIX ?= /usr/local
 USER_PREFIX ?= $(HOME)/.local
@@ -25,7 +26,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-install-user locale-packs check inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user locale-packs check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -82,6 +83,9 @@ $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
 
+test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
+	./$(XKB_NATIVE_KEYMAP_TEST)
+
 test-mutter: $(APP_BINARY) locale-packs
 	dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
 
@@ -130,3 +134,7 @@ $(COMPOSE_LOCALE_MANAGER_TEST): tests/compose_locale_manager_test.c src/backend/
 $(COMPOSE_LOCALE_IMPORT_TEST): tests/compose_locale_import_test.c src/backend/compose_locale.c src/backend/xkb.S
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
+
+$(XKB_NATIVE_KEYMAP_TEST): tests/xkb_native_keymap_test.c src/backend/xkb.S
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^ -lxkbcommon

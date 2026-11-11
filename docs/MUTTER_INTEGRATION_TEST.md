@@ -4,6 +4,8 @@ This test exercises NekoEdit through GNOME Shell 46 / Mutter's native Wayland ba
 
 ## What it covers
 
+Before the live compositor test, CI runs `make test-xkb-native`. That host-side test asks libxkbcommon to compile the same `evdev` / `pc105` / `us(intl)` / `compose:ralt` keymap, passes its generated XKB text through NekoEdit's assembly parser, and verifies that `Multi_key`, `dead_grave`, and `dead_circumflex` survive parsing at the same keycode/group/level positions. `libxkbcommon-dev` is a CI test dependency only; it is not linked into NekoEdit.
+
 The test starts GNOME Shell with Mutter's native `--headless` backend and a `1280x720` virtual monitor. This avoids the nested-X11 input path, where XTEST events are not accepted as physical input by Mutter's Wayland seat. The temporary GNOME keyfile configures `org.gnome.desktop.input-sources` to use `us(intl)`, `compose:ralt`, and `pc105`; the harness reads back and verifies these settings before Shell starts. `XKB_DEFAULT_*` environment variables alone do not configure Mutter's native seat, which starts with a plain `us` map. Only after the keymap is applied does the harness launch the normal NekoEdit executable against the compositor's private Wayland socket with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
 
 A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend. The extension reports the actual focused Mutter `MetaWindow` by process ID, creates a session using Mutter's `org.gnome.Mutter.RemoteDesktop` D-Bus API, and uses its native pointer-notification methods to move into and click the editor's document body before typing. It calls `CreateSession` and `Start` through the same GNOME Shell D-Bus connection, which is required by Mutter's same-peer session permission check. The harness sends and releases Ctrl_L before launching NekoEdit: Mutter creates the native virtual keyboard lazily on the first `NotifyKeyboardKeysym` press, and this primes the `wl_seat` keyboard capability before the editor binds the seat. The extension then activates NekoEdit and sends the actual test sequence through the native input seat; no XTEST device or host X window is involved.
@@ -21,8 +23,9 @@ The extension, remote-desktop session, GSettings keyfile, editor preferences, lo
 On Ubuntu 24.04:
 
     sudo apt-get update
-    sudo apt-get install --no-install-recommends gnome-shell dbus-daemon libglib2.0-bin
+    sudo apt-get install --no-install-recommends gnome-shell dbus-daemon libglib2.0-bin libxkbcommon-dev
     make clean all
+    make test-xkb-native
     make test-mutter
 
 The Make target builds optional locale packs separately and launches the harness under `dbus-run-session`. The headless compositor publishes a private Wayland socket under the test's temporary `XDG_RUNTIME_DIR`; NekoEdit connects to that socket exactly as it would to a normal Wayland compositor.

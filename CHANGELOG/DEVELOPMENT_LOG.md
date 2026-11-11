@@ -1,3 +1,10 @@
+## 2026-11-11 — test the assembly XKB parser against a real us(intl) keymap
+
+- Build and test [#821](https://github.com/GraderGamer2/NekoEdit/actions/runs/42989531248) passed the freestanding build, CLI, full Wayland protocol mock, ELF, pinned X.Org importer, and four separate locale-pack stages. The Mutter test also confirmed the startup `us(intl)` keymap call, editor MetaWindow activation, native document-body click, and ordinary edit/save. Compose still left grave/circumflex as literal characters.
+- The remaining uncertainty is whether the editor's assembly parser accepts the exact keymap text generated for `us(intl)`, and whether its parsed keycode/group/level symbols match libxkbcommon. Mutter setup changes alone cannot establish that.
+- Added `tests/xkb_native_keymap_test.c`. It uses libxkbcommon to compile `evdev` / `pc105` / `us` / `intl` / `compose:ralt`, serializes the actual XKB v1 text, passes it to the existing `xkb_parse_keymap()` function, and checks that NekoEdit retains the keysyms `Multi_key`, `dead_grave`, `dead_circumflex`, `period`, and `A` at the same positions as libxkbcommon.
+- Added a separate `make test-xkb-native` target and CI step. CI installs `libxkbcommon-dev` only to build/run this host diagnostic; neither the application build nor its runtime dependency set links to libxkbcommon. The ordinary `make test` target is unchanged.
+- Build and test #822 will report whether a real `us(intl)` map is rejected or misparsed before the next live Mutter debugging change.
 ## 2026-11-11 — send the configured Mutter keymap before NekoEdit's first wl_keyboard bind
 
 - Build and test [#820](https://github.com/GraderGamer2/NekoEdit/actions/runs/42988594141) passed all pre-Mutter checks, the native pointer click, and the ordinary edit/save canary. The extension's `ApplyKeymap` call also returned the expected `us` / `intl` / `compose:ralt` / `pc105` tuple, but the final file still contained literal grave/circumflex characters.

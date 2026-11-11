@@ -1,3 +1,8 @@
+## 2026-11-11 — isolate real keymap parser acceptance before further Mutter changes
+
+Run #821 passed every check before the final Mutter Compose comparison and demonstrated native app focus, document-body pointer focus, and ordinary keyboard/save. Its final file still contained literal grave/circumflex characters even though Mutter confirmed the startup keymap configuration.
+
+The next change adds a real keymap regression test: libxkbcommon compiles the same `evdev` / `pc105` / `us(intl)` / `compose:ralt` layout and serializes the XKB v1 text. NekoEdit's assembly parser then consumes this exact text, and the test compares parsed symbol cells for Multi_key, dead_grave, dead_circumflex, period, and A against libxkbcommon. This should determine whether the problem is parser acceptance or later event/key-level handling before any application-side correction.
 ## 2026-11-11 — configure Mutter's keymap before launching the Wayland client
 
 Run #820 called Mutter's native `global.backend.set_keymap()` and received the expected result, but the call happened after NekoEdit had connected and consumed the initial plain-US `wl_keyboard.keymap`. The final bytes remained literal grave/circumflex characters. This leaves the dynamic keymap replacement path as a possible confounder in the integration harness.
