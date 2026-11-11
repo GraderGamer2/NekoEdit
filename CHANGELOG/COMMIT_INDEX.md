@@ -1,3 +1,13 @@
+## 2026-11-12 — IBus Simple engine environment/bootstrap correction (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [b3268af32ce6](https://github.com/GraderGamer2/NekoEdit/commit/b3268af32ce62eda43d4c3da6affb3bc35a1c228) | test: start private IBus daemon with Unicode-entry setting |
+| [f28ff314418e](https://github.com/GraderGamer2/NekoEdit/commit/f28ff314418e67e786a1e9463ddf498701d56662) | test: assert IBus daemon inherited Unicode-entry flag |
+
+Build and test #835 passed all steps before the live IBus Simple Unicode-entry phase. That phase reached text-input-v3 activation but observed the first `u` inserted literally (`doc_length=1`, no preedit). The revised harness now starts a private IBus daemon with the setting in its own environment and asserts it before GNOME Shell launch. The next workflow must verify the live preedit path.
+
+---
 ## 2026-11-12 — live IBus Simple preedit/commit integration (CI pending)
 
 | Commit | Subject |
