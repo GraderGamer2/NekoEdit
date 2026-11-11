@@ -100,11 +100,6 @@ export GSETTINGS_BACKEND="keyfile"
 export WAYLAND_DISPLAY="nekoedit-mutter-${BASHPID}"
 export NEKOEDIT_LOCALE="pt_BR.UTF-8"
 export LC_ALL="C.UTF-8"
-export XKB_DEFAULT_RULES="evdev"
-export XKB_DEFAULT_MODEL="pc105"
-export XKB_DEFAULT_LAYOUT="us"
-export XKB_DEFAULT_VARIANT="intl"
-export XKB_DEFAULT_OPTIONS="compose:ralt"
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
@@ -123,7 +118,24 @@ if [ ! -s "$XDG_CONFIG_HOME/glib-2.0/settings/keyfile" ]; then
     echo "private GSettings keyfile was not created" >&2
     exit 1
 fi
+# Mutter's native seat starts with a plain "us" map; XKB_DEFAULT_* variables
+# do not configure it. GNOME Shell's KeyboardManager reads the desktop
+# input-sources settings and applies the layout/options to the Mutter backend.
+gsettings set org.gnome.desktop.input-sources sources "[('xkb', 'us+intl')]"
+gsettings set org.gnome.desktop.input-sources mru-sources "[('xkb', 'us+intl')]"
+gsettings set org.gnome.desktop.input-sources xkb-options "['compose:ralt']"
+gsettings set org.gnome.desktop.input-sources xkb-model "pc105"
+INPUT_SOURCES="$(gsettings get org.gnome.desktop.input-sources sources)"
+INPUT_MRU="$(gsettings get org.gnome.desktop.input-sources mru-sources)"
+INPUT_OPTIONS="$(gsettings get org.gnome.desktop.input-sources xkb-options)"
+INPUT_MODEL="$(gsettings get org.gnome.desktop.input-sources xkb-model)"
+if [[ "$INPUT_SOURCES" != *"us+intl"* || "$INPUT_MRU" != *"us+intl"* || \
+      "$INPUT_OPTIONS" != *"compose:ralt"* || "$INPUT_MODEL" != *"pc105"* ]]; then
+    echo "temporary GNOME XKB settings are incomplete: sources=$INPUT_SOURCES mru=$INPUT_MRU options=$INPUT_OPTIONS model=$INPUT_MODEL" >&2
+    exit 1
+fi
 echo "Isolated GNOME enabled extensions: $ENABLED_EXTENSIONS"
+echo "Isolated GNOME XKB settings: sources=$INPUT_SOURCES options=$INPUT_OPTIONS model=$INPUT_MODEL"
 
 echo "Starting $(gnome-shell --version) with Mutter's native headless backend"
 gnome-shell --mode=user --wayland --no-x11 --headless --virtual-monitor 1280x720 \

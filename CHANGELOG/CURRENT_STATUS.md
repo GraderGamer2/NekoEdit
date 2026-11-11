@@ -1,3 +1,9 @@
+## 2026-11-11 — Build and test #819: configure Mutter's actual XKB keymap for Compose
+
+**Run #818:** [failed only at the Compose output comparison](https://github.com/GraderGamer2/NekoEdit/actions/runs/42986520195). The document-area pointer click succeeded, and the basic Ctrl+A / x / Ctrl+S / Enter canary saved `x` correctly. The Compose phase wrote literal `..A`; Mutter logged `No keycode found` for `Multi_key` (`0xff20`), `dead_grave` (`0xfe50`), and `dead_circumflex` (`0xfe52`).
+**Root cause:** the harness set `XKB_DEFAULT_*` variables, but Mutter 46.2's native backend initializes its seat with a default plain `us` keymap. GNOME Shell's `KeyboardManager` applies the actual layout and options through `org.gnome.desktop.input-sources`; the previous test never configured those settings.
+**Correction:** configure the temporary keyfile with source `us+intl`, MRU source `us+intl`, option `compose:ralt`, and model `pc105` before starting Shell. Read back and assert all four values. Remove the ineffective `XKB_DEFAULT_*` exports. The Compose test now describes the physical sequence mapped by that keymap: Right Alt Multi_key, period-period, grave dead key, Shift+6 circumflex, Shift+A.
+**Build and test #819** will determine whether Mutter's keyval-to-keycode lookup now resolves all Compose/dead-key symbols and the separate `pt_BR.UTF-8` pack produces U+2026 U+1EA6. No Compose pass is claimed until CI finishes.
 ## 2026-11-11 — Build and test #818: add native pointer focus before Mutter keyboard input
 
 **Run #817:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42982720723) in the basic canary. The native headless compositor started, created its virtual monitor, found/focused NekoEdit, and created the RemoteDesktop virtual keyboard before app startup. The test sent Ctrl+A, x, Ctrl+S, and Enter; the file still remained `seed`. Pre-creating the virtual keyboard did not resolve the issue.

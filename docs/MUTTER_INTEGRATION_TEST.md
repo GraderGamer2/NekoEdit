@@ -4,17 +4,17 @@ This test exercises NekoEdit through GNOME Shell 46 / Mutter's native Wayland ba
 
 ## What it covers
 
-The test starts GNOME Shell with Mutter's native `--headless` backend and a `1280x720` virtual monitor. This avoids the nested-X11 input path, where XTEST events are not accepted as physical input by Mutter's Wayland seat. It launches the normal NekoEdit executable against the compositor's private Wayland socket with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
+The test starts GNOME Shell with Mutter's native `--headless` backend and a `1280x720` virtual monitor. This avoids the nested-X11 input path, where XTEST events are not accepted as physical input by Mutter's Wayland seat. The temporary GNOME keyfile configures `org.gnome.desktop.input-sources` to use `us(intl)`, `compose:ralt`, and `pc105`; the harness reads back and verifies these settings before Shell starts. `XKB_DEFAULT_*` environment variables alone do not configure Mutter's native seat, which starts with a plain `us` map. The harness then launches the normal NekoEdit executable against the compositor's private Wayland socket with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
 
 A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend. The extension reports the actual focused Mutter `MetaWindow` by process ID, creates a session using Mutter's `org.gnome.Mutter.RemoteDesktop` D-Bus API, and uses its native pointer-notification methods to move into and click the editor's document body before typing. It calls `CreateSession` and `Start` through the same GNOME Shell D-Bus connection, which is required by Mutter's same-peer session permission check. The harness sends and releases Ctrl_L before launching NekoEdit: Mutter creates the native virtual keyboard lazily on the first `NotifyKeyboardKeysym` press, and this primes the `wl_seat` keyboard capability before the editor binds the seat. The extension then activates NekoEdit and sends the actual test sequence through the native input seat; no XTEST device or host X window is involved.
 
 The harness first activates NekoEdit by PID, then sends a native pointer move and left-button click at the center of the document body. It then sends Ctrl+A and `x`, followed by Ctrl+S and Enter. Save confirmation is enabled by default in NekoEdit, so Enter explicitly accepts the confirmation modal; without it, Ctrl+S intentionally leaves the file unchanged. The harness checks that the saved document contains exactly `x`. Only after that canary succeeds does it test:
 
-1. `Multi_key`, period, period, producing U+2026 (…).
-2. `dead_grave`, `dead_circumflex`, `A`, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
+1. Right Alt (`compose:ralt`) as `Multi_key`, period, period, producing U+2026 (…).
+2. Under the verified `us(intl)` keymap, the grave key (`dead_grave`), Shift+6 (`dead_circumflex`), and Shift+A, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
 3. Ctrl+S and Enter to accept the default save-confirmation modal, followed by an exact UTF-8 byte comparison against `…Ầ`.
 
-The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. The one pre-launch Ctrl_L press is released before NekoEdit is started and exists only to instantiate the virtual keyboard device. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
+The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. The one pre-launch Ctrl_L press is released before NekoEdit is started and exists only to instantiate the virtual keyboard device. GNOME Shell applies `us(intl)` and `compose:ralt` to Mutter's actual backend keymap before NekoEdit connects, so the tested keysyms correspond to keys that exist in that map. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
 
 ## Run it
 

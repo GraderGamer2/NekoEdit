@@ -1,3 +1,8 @@
+## 2026-11-11 — apply us(intl) and Compose options through the actual GNOME input-source settings
+
+Run #818 passed the basic Mutter typing/save canary after the native pointer clicked NekoEdit's document body. It then failed only the Compose phase: the file contained `..A`, and Mutter reported no keycode for Multi_key, dead_grave, and dead_circumflex.
+
+The harness had exported `XKB_DEFAULT_*`, but Mutter 46.2's native seat constructor initializes a plain `us` layout. GNOME Shell's KeyboardManager instead reads `org.gnome.desktop.input-sources` and uses it to update the actual backend keymap. The test now sets and verifies `sources` and `mru-sources` to `us+intl`, `xkb-options` to `compose:ralt`, and `xkb-model` to `pc105` in the isolated keyfile before starting Shell. This should make Right Alt resolve to Multi_key and expose the expected dead-grave/dead-circumflex keys under the intl layout. Run #819 will validate the exact mapping and final locale composition.
 ## 2026-11-11 — exercise the editor's document-area pointer focus in Mutter
 
 Run #817 confirmed that creating Mutter's native RemoteDesktop virtual keyboard before NekoEdit starts does not resolve the unchanged-file canary. Mutter 46.2 source confirms these native virtual keyboard devices use physical input mode and pass the Wayland seat's supported-device filter; MetaWindow activation also updates Wayland seat input focus. The harness had not yet exercised NekoEdit's own document click path.

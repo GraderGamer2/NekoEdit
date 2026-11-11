@@ -1,5 +1,11 @@
 ## Latest handoff (2026-11-11)
 
+Continue on `early-alpha` from the newest branch head. Read `CHANGELOG/CURRENT_STATUS.md` and `CHANGELOG/DEVELOPMENT_LOG.md` for run-by-run validation. Commit [b39eb3c1](https://github.com/GraderGamer2/NekoEdit/commit/b39eb3c186086454eec7ec504cf5319a1d68c4cd) added a native pointer click before the Mutter keyboard canary; run #818 confirmed that this fixed basic pointer/keyboard focus and the default save-confirmation sequence.
+
+Run #818 still failed only the Compose phase because Mutter reported no keycode for Multi_key and the two dead keys. The test had only exported `XKB_DEFAULT_*`, but Mutter's native seat defaults to plain `us`; GNOME Shell applies input layout via `org.gnome.desktop.input-sources`. The latest change configures and verifies the isolated settings to `us+intl`, `compose:ralt`, `pc105` before Shell starts. Run #819 must verify these keysyms and the final `…Ầ` bytes. Do not claim Compose support is live-validated until #819 passes.
+
+## Latest handoff (2026-11-11)
+
 Continue from branch `early-alpha`. Read `CHANGELOG/CURRENT_STATUS.md`, `CHANGELOG/DEVELOPMENT_LOG.md`, and `CHANGELOG/COMMIT_INDEX.md` for exact validation. Commit [11e3f2ed](https://github.com/GraderGamer2/NekoEdit/commit/11e3f2ed9ca4cdf3ae3256945b50c912235e6c75) primed Mutter's native virtual keyboard before NekoEdit startup, but run #817 still failed the basic canary.
 
 The current test correction adds a native RemoteDesktop pointer move/click into the document body after NekoEdit's MetaWindow is activated. This is intended to exercise NekoEdit's own document-area click/caret focus path before typing. Build and test #818 must validate this change; do not claim native input or Compose success until it completes.
