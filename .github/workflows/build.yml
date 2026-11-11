@@ -44,10 +44,10 @@ jobs:
           make --version | head -n 1
           python3 --version
 
-      - name: Install system Compose test corpus
+      - name: Install XKB, GNOME Shell, and IBus test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev gnome-shell dbus-daemon libglib2.0-bin libxkbcommon-dev
+          sudo apt-get install --yes --no-install-recommends libx11-data x11proto-dev gnome-shell ibus dbus-daemon libglib2.0-bin libxkbcommon-dev
 
       - name: Build and verify ELF
         run: make clean all
