@@ -1,3 +1,12 @@
+## 2026-11-12 — live Mutter text-input-v3 activation — Build and test #833 passed
+
+Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 workflow steps on source commit [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). The Mutter 46.2 headless session actually advertised `zwp_text_input_manager_v3`; the second NekoEdit process, started with `NEKOEDIT_ENABLE_TEXT_INPUT=1`, bound the manager, received text-input `enter`, enabled its focused document, and committed text-input state. The original real Mutter input test also passed ordinary edit/save, Right Alt `Multi_key` → U+2026, and the pt_BR two-dead-key chain → U+1EA6.
+
+The Wayland mock independently verifies incoming preedit UTF-8/cursor-byte-offset, commit, delete-surrounding, and serial handling. This CI result validates the live compositor/client activation handshake, not an external IBus/Fcitx provider's actual preedit/commit exchange. The default remains physical XKB; `NEKOEDIT_ENABLE_TEXT_INPUT=1` remains explicit opt-in.
+
+Artifacts: editor [13892773320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452/artifacts/13892773320), 137,017 bytes; separate Compose locale packs [13892008409](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452/artifacts/13892008409), 120,536 bytes. Both were uploaded successfully.
+
+---
 ## 2026-11-12 — capability-aware live text-input-v3 probe
 
 Added a second, isolated NekoEdit process to the GNOME Shell/Mutter integration smoke test. The original `us(intl)`/`compose:ralt` editor run remains unchanged: it still verifies ordinary edit/save, Right Alt `Multi_key`, and the pt_BR two-dead-key result `…Ầ`. After that process exits, a second instance starts with `NEKOEDIT_ENABLE_TEXT_INPUT=1`, is activated and clicked through Mutter's native virtual input path, and is inspected by a test-only Python parent process.
