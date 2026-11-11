@@ -1,3 +1,25 @@
+## 2026-11-12 — capability-aware live text-input-v3 probe (CI pending)
+
+Continue from `early-alpha` after this change is fast-forwarded. The current change extends the existing successful Mutter 46 Compose smoke test with a second editor process launched using `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The first `…Ầ` test is left intact.
+
+New test file: `tests/mutter_text_input_probe.py`. After the original editor exits, the helper starts a second NekoEdit child, activates its Mutter window, clicks the document area, and reads the child's existing non-PIE ELF state symbols through `nm` + read-only `/proc/<pid>/mem`. No application-side diagnostics or runtime dependency were added.
+
+Expected branches:
+- Protocol global present: the probe requires a manager object, text-input object, compositor `enter`, document `enable`, and at least one outbound state commit.
+- Protocol global absent: the probe requires no partial text-input setup and then sends Ctrl+A, `z`, Ctrl+S, Enter through Mutter to verify that explicit opt-in does not suppress the ordinary XKB path.
+
+The probe intentionally does not claim that an actual IBus/Fcitx engine has sent `preedit_string`, `commit_string`, or `delete_surrounding_text`. Those incoming-event paths remain covered by `tests/wayland_mock.py`; live provider integration remains outstanding and text-input-v3 must remain disabled by default.
+
+The original Compose test leaves the RemoteDesktop input session active until after the second process. The new helper is the direct parent of its NekoEdit child for normal Linux parent-to-child `/proc` access. If CI fails, inspect the helper's captured `text-input-nekoedit.log` before changing editor code. Do not weaken assertions based only on a missing protocol global: take the fallback branch only after checking that all downstream client object/state fields remain zero.
+
+Also corrected `docs/ARCHITECTURE.md` and README to describe the actual hybrid Assembly/freestanding-C implementation. C is permitted; the invariant is no libc/C runtime or third-party runtime shared libraries, direct syscalls, and one freestanding ELF. Host-only tests may link test libraries separately.
+
+Files changed: `tests/mutter_text_input_probe.py`, `tests/mutter_gnome_smoke.sh`, `docs/MUTTER_INTEGRATION_TEST.md`, `docs/TEXT_INPUT_V3.md`, `docs/ARCHITECTURE.md`, `README.md`, `CHANGELOG/README.md`, and this status file.
+
+The work is currently committed to the temporary staging branch `work/mutter-text-input-capability` to avoid firing one Actions run per file update. It still needs one fast-forward to `early-alpha`, followed by the repository's single normal Build and test run. No CI result is claimed yet.
+
+---
+
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
 The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.
