@@ -1,5 +1,11 @@
 ## Latest handoff (2026-11-11)
 
+Continue from `early-alpha`. Build and test #822 failed at compilation of the new host-side XKB probe, not in NekoEdit's parser. The compiler requires `struct xkb_context *` and `struct xkb_keymap *`; both were corrected.
+
+The probe now compares NekoEdit's application-facing `xkb_unicode_levels` table, not the modifier-only `xkb_keysym_levels`: Multi_key should be `0x110007`, dead_grave `0x110001`, dead_circumflex `0x110003`, and period/A their Unicode scalars. Build and test #823 will determine whether the assembly parser accepts the real `us(intl)` keymap. Keep the live Mutter failure unclassified until this probe passes.
+
+## Latest handoff (2026-11-11)
+
 Continue on `early-alpha`. Run #821 passed build, CLI, Wayland mock, ELF, pinned importer, locale-pack, native Mutter keymap startup, app focus, document pointer focus, and basic save; it failed only the final Compose comparison because the output remained literal grave/circumflex.
 
 The newest change adds `tests/xkb_native_keymap_test.c` and `make test-xkb-native`. It compiles an actual `us(intl)` / `compose:ralt` keymap using libxkbcommon, feeds the serialized keymap text into NekoEdit's assembly XKB parser, and verifies that Multi_key, dead_grave, dead_circumflex, period, and A survive at matching keycode/group/level positions. CI uses `libxkbcommon-dev` only for this test; the application remains freestanding. Build and test #822 must run this parser check before the Mutter step. Do not claim live Compose success until both pass.

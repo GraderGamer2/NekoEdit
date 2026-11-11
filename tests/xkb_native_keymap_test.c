@@ -9,10 +9,19 @@
 
 extern int xkb_parse_keymap(const char *text, uint32_t size);
 extern uint32_t xkb_keymap_ready;
-extern uint32_t xkb_keysym_levels[256u * 4u * 8u];
+extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
+/*
+ * xkb_unicode_levels is the application-facing lookup table: ordinary
+ * symbols are Unicode scalars, while Multi_key/dead keys use NekoEdit's
+ * reserved 0x110000 action range. xkb_keysym_levels is intentionally only
+ * for raw modifier keysyms and must not be used to verify printable/actions.
+ */
 static int
-check_symbol(xkb_keymap *keymap, const char *label, xkb_keysym_t wanted)
+check_symbol(struct xkb_keymap *keymap,
+             const char *label,
+             xkb_keysym_t wanted,
+             uint32_t expected_value)
 {
     xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
     xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
@@ -51,12 +60,12 @@ check_symbol(xkb_keymap *keymap, const char *label, xkb_keysym_t wanted)
 
                 size_t index = (size_t)keycode * 32u +
                                (size_t)group * 8u + (size_t)level;
-                uint32_t parsed = xkb_keysym_levels[index];
-                if (parsed != wanted) {
+                uint32_t parsed = xkb_unicode_levels[index];
+                if (parsed != expected_value) {
                     fprintf(stderr,
                             "XKB parser mismatch for %s at keycode %u, group %u, level %u: "
                             "expected 0x%08x, got 0x%08x\n",
-                            label, keycode, group, level, wanted, parsed);
+                            label, keycode, group, level, expected_value, parsed);
                     return 1;
                 }
                 ++matches;
@@ -68,7 +77,8 @@ check_symbol(xkb_keymap *keymap, const char *label, xkb_keysym_t wanted)
         fprintf(stderr, "libxkbcommon did not expose %s in us(intl)\n", label);
         return 1;
     }
-    printf("verified %-16s at %u keymap position(s)\n", label, matches);
+    printf("verified %-16s at %u keymap position(s) -> 0x%08x\n",
+           label, matches, expected_value);
     return 0;
 }
 
@@ -83,14 +93,14 @@ main(void)
         .options = "compose:ralt",
     };
 
-    xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (context == NULL) {
         fputs("could not create libxkbcommon context\n", stderr);
         return 1;
     }
     xkb_context_set_log_level(context, XKB_LOG_LEVEL_ERROR);
 
-    xkb_keymap *keymap = xkb_keymap_new_from_names(
+    struct xkb_keymap *keymap = xkb_keymap_new_from_names(
         context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
     if (keymap == NULL) {
         fputs("libxkbcommon could not compile evdev/pc105/us(intl)/compose:ralt\n",
@@ -129,14 +139,14 @@ main(void)
     }
 
     int failed = 0;
-    failed |= check_symbol(keymap, "Multi_key", XKB_KEY_Multi_key);
-    failed |= check_symbol(keymap, "dead_grave", XKB_KEY_dead_grave);
-    failed |= check_symbol(keymap, "dead_circumflex", XKB_KEY_dead_circumflex);
-    failed |= check_symbol(keymap, "period", XKB_KEY_period);
-    failed |= check_symbol(keymap, "A", XKB_KEY_A);
+    failed |= check_symbol(keymap, "Multi_key", XKB_KEY_Multi_key, 0x110007u);
+    failed |= check_symbol(keymap, "dead_grave", XKB_KEY_dead_grave, 0x110001u);
+    failed |= check_symbol(keymap, "dead_circumflex", XKB_KEY_dead_circumflex, 0x110003u);
+    failed |= check_symbol(keymap, "period", XKB_KEY_period, (uint32_t)'.');
+    failed |= check_symbol(keymap, "A", XKB_KEY_A, (uint32_t)'A');
 
     if (failed == 0)
-        puts("PASS: NekoEdit parsed the real us(intl) keymap and retained Compose/dead-key symbols");
+        puts("PASS: NekoEdit parsed the real us(intl) keymap and retained Compose/dead-key actions");
 
     free(text);
     xkb_keymap_unref(keymap);

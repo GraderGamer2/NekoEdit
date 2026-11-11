@@ -1,3 +1,8 @@
+## 2026-11-11 — correct libxkbcommon probe struct types and validate the application Unicode/action table
+
+Build and test #822 failed before its real-keymap parser comparison could run. The host C probe used `xkb_context` and `xkb_keymap` as if they were typedefs, but libxkbcommon declares `struct xkb_context` and `struct xkb_keymap`. The test also originally compared general keysyms against NekoEdit's `xkb_keysym_levels`, which intentionally stores only raw modifier keysyms.
+
+The corrected probe uses the `struct` pointer types and checks `xkb_unicode_levels`, where NekoEdit actually stores the values used by dispatch: Unicode scalars for ordinary symbols and reserved action markers for Multi_key/dead keys. The comparison checks every matching keycode/group/level reported by libxkbcommon. Run #823 will determine whether the real `us(intl)` keymap is parsed and retained correctly.
 ## 2026-11-11 — isolate real keymap parser acceptance before further Mutter changes
 
 Run #821 passed every check before the final Mutter Compose comparison and demonstrated native app focus, document-body pointer focus, and ordinary keyboard/save. Its final file still contained literal grave/circumflex characters even though Mutter confirmed the startup keymap configuration.

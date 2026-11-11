@@ -1,3 +1,6 @@
+## 2026-11-11 — corrected native us(intl) parser probe — Build and test #823 pending
+
+Run #822 stopped at C compilation for the new host keymap probe because libxkbcommon uses `struct xkb_context` / `struct xkb_keymap`, not typedef names. The corrected probe also checks the right internal table: `xkb_unicode_levels` stores Unicode scalars and NekoEdit's Compose/dead-key action markers; `xkb_keysym_levels` is modifier-only. Run #823 will compile the probe, parse the actual libxkbcommon `us(intl)` keymap, and compare each matching keycode/group/level.
 ## 2026-11-11 — real us(intl) parser validation — Build and test #822 pending
 
 Run #821 confirmed the Mutter keymap setup, editor focus, document click, and basic save; the Compose byte comparison still failed. The test suite now has a separate `test-xkb-native` target that compiles real `us(intl)`/`compose:ralt` XKB text via libxkbcommon, feeds it to NekoEdit's assembly parser, and verifies the exact keycode/group/level entries for Multi_key, dead_grave, dead_circumflex, period and A. CI adds `libxkbcommon-dev` for this host test only; the editor remains freestanding. Run #822 will establish whether the parser accepts and preserves the real map.

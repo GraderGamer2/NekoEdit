@@ -1,3 +1,9 @@
+## 2026-11-11 — Build and test #823: correct the native XKB probe's types and expected storage
+
+**Run #822:** [failed before the parser test could execute](https://github.com/GraderGamer2/NekoEdit/actions/runs/42992625113). The freestanding build, command-line smoke tests, full Wayland protocol mock, and ELF inspection passed. The new host-side C probe then failed compilation because it used `xkb_context` and `xkb_keymap` as typedefs; libxkbcommon exposes these as `struct xkb_context` and `struct xkb_keymap`.
+**Test-model correction:** the probe also needs to compare against the application-facing `xkb_unicode_levels` table. NekoEdit intentionally stores ordinary Unicode scalars plus reserved action markers (`Multi_key` = `0x110007`, `dead_grave` = `0x110001`, `dead_circumflex` = `0x110003`) there. `xkb_keysym_levels` is a separate raw table for modifier keysyms only and is not the correct assertion target for these symbols.
+**Correction:** fixed the libxkbcommon struct pointer types and changed the probe to assert the Unicode/action value at each matching keycode/group/level cell. The next run will establish whether the assembly parser accepts the real compiled `us(intl)` text before any further live-input source changes.
+**Build and test #823** will validate the corrected test; no parser-acceptance or Mutter Compose pass is claimed until CI completes.
 ## 2026-11-11 — Build and test #822: real us(intl) keymap parser regression test
 
 **Run #821:** [failed in the native Mutter Compose comparison](https://github.com/GraderGamer2/NekoEdit/actions/runs/42989531248). The pre-Mutter build, CLI tests, full Wayland mock, ELF inspection, pinned X.Org regeneration, and four separate locale packs passed. Mutter reported the startup `us(intl)` keymap application, the native NekoEdit window focus, the document-body pointer click, and the ordinary edit/save canary all succeeded. The final saved bytes still contained literal grave/circumflex characters.

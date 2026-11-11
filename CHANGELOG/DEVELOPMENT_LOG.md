@@ -1,3 +1,10 @@
+## 2026-11-11 — fix native XKB keymap probe compilation and inspect the correct table
+
+- Build and test [#822](https://github.com/GraderGamer2/NekoEdit/actions/runs/42992625113) passed the freestanding executable build, CLI tests, Wayland mock suite, and ELF inspection. It failed at the new host-side `test-xkb-native` step during C compilation.
+- The compiler error was an invalid assumption that libxkbcommon exposes `xkb_context` and `xkb_keymap` typedefs. Its public API uses `struct xkb_context *` and `struct xkb_keymap *`; corrected every declaration and function parameter accordingly.
+- Corrected the probe's assertion model as well. NekoEdit's `xkb_unicode_levels` stores the values consumed by keyboard dispatch: Unicode scalars and reserved internal action markers (`Multi_key` 0x110007, dead_grave 0x110001, dead_circumflex 0x110003). `xkb_keysym_levels` is intentionally only the raw modifier-keysym table, so comparing general symbols against it would be incorrect even after compilation.
+- The test now compares `xkb_unicode_levels[keycode*32 + group*8 + level]` against the corresponding action marker or Unicode scalar for each keymap symbol location returned by libxkbcommon.
+- Build and test #823 will run the corrected probe before pinned importer, locale pack, and Mutter integration stages. No editor source was changed in this correction.
 ## 2026-11-11 — test the assembly XKB parser against a real us(intl) keymap
 
 - Build and test [#821](https://github.com/GraderGamer2/NekoEdit/actions/runs/42989531248) passed the freestanding build, CLI, full Wayland protocol mock, ELF, pinned X.Org importer, and four separate locale-pack stages. The Mutter test also confirmed the startup `us(intl)` keymap call, editor MetaWindow activation, native document-body click, and ordinary edit/save. Compose still left grave/circumflex as literal characters.
