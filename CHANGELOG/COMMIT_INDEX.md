@@ -1,3 +1,13 @@
+## 2026-11-11 — nested Mutter input focus correction — Build and test #810 pending
+
+| Commit | Subject |
+|---|---|
+| [30942fea504c](https://github.com/GraderGamer2/NekoEdit/commit/30942fea504c45bfc8f850a5a19b226bf0188d92) | test: inject Wayland input through Mutter virtual keyboard |
+| [88f3e9e248b2](https://github.com/GraderGamer2/NekoEdit/commit/88f3e9e248b26a12430dec6862e262c3bee228c2) | test: isolate Mutter extension settings in keyfile backend |
+| [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b) | test: focus Mutter outer and inner windows before virtual input |
+
+Build and test #808 stopped in the Mutter step because the extension did not register. The isolated keyfile/user-session correction was exercised in #809: all steps before Mutter passed, the extension loaded and confirmed the focused inner MetaWindow, but key events still did not reach the file. Inspection of GNOME Mutter 46.2 shows the nested X11 virtual-input backend injects XTest events into the outer X display. The #810 correction focuses that outer X11 host window as well as NekoEdit's inner Wayland toplevel before using the same Clutter virtual-keyboard API. [Build and test #810](https://github.com/GraderGamer2/NekoEdit/actions/runs/42959565212) is running on the exact source commit [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). No complete Mutter pass is claimed yet.
+
 ## 2026-11-10 — nested GNOME Shell/Mutter integration harness — validation pending
 
 | Commit | Subject |

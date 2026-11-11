@@ -1,3 +1,15 @@
+## 2026-11-11 — nested Mutter virtual input requires outer and inner focus
+
+Build and test #809 passed every check before the final Mutter integration step. The extension registered, found the NekoEdit PID, called `MetaWindow.activate()`, and confirmed the focused Mutter window PID matched. The document nevertheless remained unchanged after the key/save canary.
+
+The failure was traced to Mutter 46.2's nested X11 backend: `MetaSeatX11` creates `MetaVirtualInputDeviceX11`; the Clutter virtual-device `notify_keyval` implementation maps keysyms and injects them into the outer X display through XTest. The previous correction had focused the inner Wayland toplevel but had not focused the outer GNOME Shell X11 host window. Both focus layers are now explicitly set and checked, and the harness clicks the inner display center before repeating the PID-based activation. `xdotool` is again installed only in CI for this host-window setup; NekoEdit itself still has no GNOME/X11/XTest runtime dependency.
+
+Source correction: [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). Build and test #810 is pending the complete validation result. No compositor-input success is claimed before that run passes.
+
+## 2026-11-11 — isolated GNOME Shell extension settings and session mode
+
+Run #808 confirmed all non-Mutter stages passed but the extension did not load under the isolated dconf profile. The dconf service is D-Bus activated and did not reliably inherit the test process's profile. The test now uses a GLib keyfile GSettings backend under a temporary `XDG_CONFIG_HOME`, checks the extension UUID before launch, and declares the extension's supported Shell 46 `user` session mode. Run #809 confirmed the test extension registered and the editor's Mutter MetaWindow was focusable, but the keyboard canary did not save; the required outer X11 host-window focus was missing and is corrected in the following commit.
+
 ## 2026-11-10 — restore the nested Mutter harness after a shell syntax error
 
 Build and test #806 again passed the core build, host suite, Wayland protocol mock, ELF inspection, pinned locale data checks, and all optional locale packs. The integration step failed before input testing because the harness-edit replacement expanded a dollar-sign token in the X11 window-title search line and left invalid shell syntax. The script has been restored from the clean prior version and the focus/canary change reapplied with a literal-safe replacement. The corrected direct-focus + basic-key canary remains unverified pending CI.

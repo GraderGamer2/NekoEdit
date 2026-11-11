@@ -1,3 +1,17 @@
+## 2026-11-11 — verify the outer X11 host and inner Wayland focus before Mutter virtual input
+
+- Build and test [#809](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946768420) passed its build, CLI/host suite, Wayland mock, ELF inspection, pinned X.Org importer comparison, and all optional locale-pack builds. The nested GNOME Shell extension loaded correctly and reported NekoEdit's PID as the focused Mutter `MetaWindow`; nevertheless the basic Ctrl+A / `x` / Ctrl+S canary left the document unchanged.
+- Inspected the GNOME Mutter 46.2 source rather than changing NekoEdit input code speculatively. `MetaSeatX11.create_virtual_device()` constructs `MetaVirtualInputDeviceX11`; its `notify_keyval` implementation emits `XTestFakeKeyEvent` on the outer X display. In a nested compositor, this requires both the outer GNOME Shell X11 window and the inner NekoEdit Wayland `MetaWindow` to be focused.
+- Updated `tests/mutter_gnome_smoke.sh` to find, raise, and focus GNOME Shell's outer X11 window, verify its X focus, click the nested display center, activate NekoEdit's inner Mutter `MetaWindow` by PID, then verify the outer X focus was retained. The Clutter keyval injection remains the same.
+- Added `xdotool` back to the workflow's test-only packages and updated the integration-test documentation with the two-focus-layer requirement. No editor runtime source, ELF properties, or runtime dependencies changed.
+- Build and test [#810](https://github.com/GraderGamer2/NekoEdit/actions/runs/42959565212) is running on source commit [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). The complete Mutter input path remains unverified until that run passes the integration step.
+
+## 2026-11-11 — isolate the Mutter test extension's GSettings backend
+
+- Build and test [#808](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946147559) passed the freestanding build and command-line/Wayland mock stages but the test extension did not register its D-Bus bridge.
+- The test wrote settings through a D-Bus-activated dconf service whose environment was not reliably tied to the temporary profile. Replaced that setup with the GLib keyfile backend under the isolated `XDG_CONFIG_HOME`, asserted that the extension UUID was persisted, and declared its GNOME Shell 46 `user` session mode explicitly.
+- Build and test [#809](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946768420) confirmed the extension now loads and the actual NekoEdit MetaWindow can be located and activated. Its basic key/save canary still failed; the nested X11 host focus needed a separate correction, documented above.
+
 ## 2026-11-10 — trigger Build and test #807 for the restored Mutter focus harness
 
 - Source/test commit [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a) restores the clean shell script and reapplies explicit GNOME Shell X11 window focus plus a basic printable-key/Save canary with a literal-safe replacement.

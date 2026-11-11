@@ -1,3 +1,16 @@
+## 2026-11-11 — Build and test #810: verify both nested Mutter focus layers
+
+**Source commit:** [78adad34caaa](https://github.com/GraderGamer2/NekoEdit/commit/78adad34caaabfe1fe5699bb0042144fbdab356b). The Mutter harness now focuses GNOME Shell's outer X11 host window and NekoEdit's inner Wayland `MetaWindow`, then verifies both before sending keys. It restores `xdotool` as a test-only dependency; the editor binary and runtime dependencies are unchanged.
+**Root cause from #809:** the extension loaded and Mutter reported NekoEdit as the focused inner `MetaWindow`, but the basic edit/save canary remained unchanged. Inspection of GNOME Mutter 46.2 showed that the nested X11 backend creates `MetaVirtualInputDeviceX11`, whose `notify_keyval` path calls `XTestFakeKeyEvent` on the outer X display. Focusing the inner Wayland window alone did not ensure that the outer GNOME Shell X11 window received those XTest events.
+**CI:** [Build and test #810](https://github.com/GraderGamer2/NekoEdit/actions/runs/42959565212) is running against the exact source commit above. No Mutter input success is claimed yet. The build, host tests, Wayland mock, ELF verification, pinned X.Org comparisons, and separate locale-pack builds passed in #809; #810 must re-run all checks and complete the Mutter step.
+**Changelog-only follow-up:** this entry is recorded without changing application/test sources, and the workflow ignores `CHANGELOG/**`.
+
+## 2026-11-11 — Build and test #809: keyfile settings and explicit user session
+
+**Source commit:** [88f3e9e248b2](https://github.com/GraderGamer2/NekoEdit/commit/88f3e9e248b26a12430dec6862e262c3bee228c2). Replaced the private dconf profile with GLib's isolated keyfile GSettings backend, verified the temporary extension UUID was persisted, and declared the GNOME Shell extension compatible with the `user` session mode.
+**CI:** [Build and test #809](https://github.com/GraderGamer2/NekoEdit/actions/runs/42946768420) passed the build, command-line tests, Wayland protocol mock, ELF inspection, pinned source checks, and separate locale-pack builds. The Mutter test loaded the extension and verified NekoEdit's inner MetaWindow focus, but the ordinary key/save canary remained unchanged. No live key delivery or Compose success is claimed.
+**Diagnosis:** the next correction must set both the nested compositor's outer X11 host-window focus and its inner Wayland client focus.
+
 ## 2026-11-10 — Build and test #807 running against literal-safe Mutter focus harness
 
 **Source commit:** [e57e0233e128](https://github.com/GraderGamer2/NekoEdit/commit/e57e0233e1287b7d3636e2fd4ddecc4193b5735a). The test script was restored from the clean pre-focus version and the explicit outer-window focus + ordinary-key canary was reapplied using a literal-safe replacement; the fallback window-title match no longer contains an anchored dollar sign.
