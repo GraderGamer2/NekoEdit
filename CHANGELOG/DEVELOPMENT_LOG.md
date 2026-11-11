@@ -1,3 +1,11 @@
+## 2026-11-11 — monitor Xvfb raw key events independently in the nested Mutter test
+
+- Build and test [#813](https://github.com/GraderGamer2/NekoEdit/actions/runs/42961793193) passed every pre-Mutter stage but failed the ordinary key/save canary. Mutter found NekoEdit's focused MetaWindow and reported frame rectangle `0,32,800,568`; the test clicked its frame center at `400,316`. The X11 host focus check remained valid, yet the document stayed `seed`.
+- The extension's Clutter stage `captured-event` callback observed no key events. This callback is not a sufficient diagnostic for events forwarded to an independently focused nested Wayland client, so it is not used as the sole indicator of host keyboard delivery.
+- Added an independent `xinput test-xi2 --root` event monitor around the plain Ctrl+A / x / Ctrl+S canary. The harness now captures raw/device key events from the Xvfb root and requires that at least one key press was emitted before evaluating the saved document. This separates XTest/Xvfb generation from nested-Mutter-to-Wayland forwarding.
+- Added `xinput` to the CI-only test tool installation and documented the monitor. No change to NekoEdit's freestanding binary or runtime dependency set.
+- Build and test [#814](https://github.com/GraderGamer2/NekoEdit/actions/runs/42963271284) is running on [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4). The build and command-line checks passed; the Wayland mock suite is in progress.
+
 ## 2026-11-11 — replace Clutter keyval injection with XTest events from the focused Xvfb host
 
 - Build and test #810 passed all stages before the nested Mutter test. The test found NekoEdit, confirmed its inner Wayland MetaWindow was focused, and also verified the outer GNOME Shell X11 window had X input focus. Nevertheless, the Clutter virtual-keyboard sequence did not update the document.

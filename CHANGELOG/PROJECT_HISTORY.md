@@ -1,3 +1,11 @@
+## 2026-11-11 — XI2 raw input monitor added for GNOME nested compositor test
+
+Run #813 reached the live Mutter test and reported the inner NekoEdit MetaWindow as focused at frame rectangle `0,32,800,568`. The harness clicked the calculated frame center and confirmed the outer X11 host remained focused; however, the XTest canary still left the document unchanged. The Shell stage captured-event listener did not record keys, but that alone is not decisive for a separate Wayland client owning keyboard focus.
+
+The next diagnostic starts `xinput test-xi2 --root` around the canary. This records XInput2 key events at the Xvfb root before Mutter's nested forwarding path. It will tell whether the host X server receives the generated events at all. The monitor and `xinput` test dependency are confined to CI; NekoEdit's binary and runtime dependencies remain unchanged.
+
+Source commit: [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4). [Build and test #814](https://github.com/GraderGamer2/NekoEdit/actions/runs/42963271284) is running; build and CLI checks passed, Wayland mock is in progress.
+
 ## 2026-11-11 — nested Mutter input now uses direct XTest from Xvfb
 
 Run #810 passed all non-compositor checks but failed the ordinary edit/save canary even though both the outer X11 host window and inner Wayland MetaWindow were explicitly focused. The next correction removes the intermediate Clutter virtual-device injection and sends keys through XTest directly from the test's Xvfb host. The keymap is set to us(intl) with compose:ralt and checked before Shell starts. The GNOME test extension is reduced to readiness and focus-by-PID only; NekoEdit still has no XTest, xdotool, GNOME, or X11 runtime dependency.

@@ -1,3 +1,13 @@
+## 2026-11-11 — XI2 root event tracing for nested Mutter input — Build and test #814 in progress
+
+| Commit | Subject |
+|---|---|
+| [cd6323f8a0e3](https://github.com/GraderGamer2/NekoEdit/commit/cd6323f8a0e3708a6d9ce7b4e5598337531ea2be) | test: trace Mutter key delivery and focus the actual app frame |
+| [31eac136ab6b](https://github.com/GraderGamer2/NekoEdit/commit/31eac136ab6ba8cf887a2e92d95e2d77aaf021da) | test: fix MetaWindow frame parser in Mutter diagnostics |
+| [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4) | test: trace Xvfb keyboard delivery with XI2 raw events |
+
+Run #813 verified the app frame and both focus layers but the ordinary input canary still failed. The test now monitors the Xvfb root with `xinput test-xi2 --root` so the next run can identify whether XTest generated any raw/device key events before Mutter forwards them to the Wayland client. Build and test [#814](https://github.com/GraderGamer2/NekoEdit/actions/runs/42963271284) has passed build and CLI checks; the Wayland mock is underway.
+
 ## 2026-11-11 — nested Mutter input via direct XTest — Build and test #811 in progress
 
 | Commit | Subject |

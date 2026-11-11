@@ -1,3 +1,10 @@
+## 2026-11-11 — Build and test #814: XI2 raw-key event diagnostics in progress
+
+**Source commit:** [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4). The test now runs `xinput test-xi2 --root` alongside the ordinary-key canary and captures raw/device key events from the Xvfb server. This separates the XTest injection layer from Mutter's forwarding to the nested Wayland surface. `xinput` is a CI-only test package; the editor binary is unchanged.
+**Run #813:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42961793193) in the Mutter canary. GNOME Shell reported NekoEdit's Wayland MetaWindow focused, with frame rectangle `0,32,800,568`; the harness clicked its center at `400,316`, while the X11 host still reported focus. The Clutter-stage captured-event counter remained empty and the document stayed `seed`. The stage callback alone is not a conclusive input-path probe for a nested Wayland client.
+**Run #814:** [Build and test #814](https://github.com/GraderGamer2/NekoEdit/actions/runs/42963271284) is running on the exact source commit above. Build and command-line smoke tests have passed; the Wayland mock suite is running. The XI2 monitor will independently confirm whether host XTest key events exist before the Mutter forwarding path.
+**Scope:** test-only instrumentation, CI test packages, and integration-test documentation; no editor runtime source or dependency changes.
+
 ## 2026-11-11 — Build and test #811: direct XTest host input, validation in progress
 
 **Source commit:** [3477b605c01b](https://github.com/GraderGamer2/NekoEdit/commit/3477b605c01bba5fb686dc462766a47026f93d9a). The nested Mutter smoke test now sends actual XTest key events from the Xvfb host after explicitly setting and verifying the us(intl) / compose:ralt keymap. NekoEdit's inner Wayland MetaWindow is still activated and verified through the temporary, narrow GNOME Shell extension. The extension no longer creates a Clutter virtual device or exports key-injection methods.
