@@ -8213,7 +8213,7 @@ if __name__ == "__main__":
             sys.argv[1],
             initial_file=fallback_path,
             save_roundtrip=True,
-            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\\xe2\\x82\\xac\\xc3\\xa9\\xc3\\xa9NV",
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\xe2\x82\xac\xc3\xa9\xc3\xa9NV",
             keyboard_layout_test=True,
             text_input_opt_in_fallback_test=True,
         )
