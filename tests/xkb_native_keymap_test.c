@@ -9,6 +9,10 @@
 
 extern int xkb_parse_keymap(const char *text, uint32_t size);
 extern uint32_t xkb_keymap_ready;
+extern uint32_t xkb_parse_error_stage;
+extern uint32_t xkb_parse_error_offset;
+extern uint32_t xkb_parse_error_token_length;
+extern char xkb_parse_error_token[64];
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
 /*
@@ -130,8 +134,10 @@ main(void)
     if (parse_result != 0 || xkb_keymap_ready != 1u) {
         fprintf(stderr,
                 "NekoEdit rejected a valid libxkbcommon us(intl) keymap: "
-                "parse_result=%d ready=%u bytes=%zu\n",
-                parse_result, xkb_keymap_ready, text_size);
+                "parse_result=%d ready=%u bytes=%zu stage=%u offset=%u token[%u]=\"%s\"\n",
+                parse_result, xkb_keymap_ready, text_size,
+                xkb_parse_error_stage, xkb_parse_error_offset,
+                xkb_parse_error_token_length, xkb_parse_error_token);
         free(text);
         xkb_keymap_unref(keymap);
         xkb_context_unref(context);

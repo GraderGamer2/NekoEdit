@@ -1,3 +1,6 @@
+## 2026-11-11 — XKB parser stage diagnostics — Build and test #824
+
+Run #823 confirmed the native probe compiles and produces a valid 66,429-byte `us(intl)` / `compose:ralt` keymap, but NekoEdit's assembly parser rejects it. The parser now records which top-level pass fails, the byte offset, and the last token. Build and test #824 will identify the exact unsupported construct before the parser is changed.
 ## 2026-11-11 — corrected native us(intl) parser probe — Build and test #823 pending
 
 Run #822 stopped at C compilation for the new host keymap probe because libxkbcommon uses `struct xkb_context` / `struct xkb_keymap`, not typedef names. The corrected probe also checks the right internal table: `xkb_unicode_levels` stores Unicode scalars and NekoEdit's Compose/dead-key action markers; `xkb_keysym_levels` is modifier-only. Run #823 will compile the probe, parse the actual libxkbcommon `us(intl)` keymap, and compare each matching keycode/group/level.

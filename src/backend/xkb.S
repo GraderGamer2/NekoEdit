@@ -5354,6 +5354,15 @@ xkb_num_lock_mask:     .long 0           # initialized by xkb_reset_keymap
 xkb_type_count:        .long 0
 .global xkb_keymap_ready
 xkb_keymap_ready:       .long 0
+.global xkb_parse_error_stage
+xkb_parse_error_stage:  .long 0
+.global xkb_parse_error_offset
+xkb_parse_error_offset: .long 0
+.global xkb_parse_error_token_length
+xkb_parse_error_token_length: .long 0
+.global xkb_parse_error_token
+xkb_parse_error_token:  .zero 64
+.Lxkb_parse_stage:      .long 0
 
 .section .text
 .global xkb_reset_keymap
@@ -8944,32 +8953,45 @@ xkb_parse_keymap:
     mov r12, rdi
     mov r13d, esi
     call xkb_reset_keymap
+    mov dword ptr [rip + xkb_parse_error_stage], 0
+    mov dword ptr [rip + xkb_parse_error_offset], 0
+    mov dword ptr [rip + xkb_parse_error_token_length], 0
+    lea rdi, [rip + xkb_parse_error_token]
+    xor eax, eax
+    mov ecx, 64
+    rep stosb
     mov qword ptr [rip + .Lxkb_text_ptr], r12
     lea rax, [r12 + r13]
     mov qword ptr [rip + .Lxkb_text_end], rax
+    mov dword ptr [rip + .Lxkb_parse_stage], 1
     call .Lxkb_parse_virtual_modifiers
     test eax, eax
     js .Lxkb_parse_keymap_fail
     call .Lxkb_rebase_builtin_types
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    mov dword ptr [rip + .Lxkb_parse_stage], 2
     call .Lxkb_parse_keycodes
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # xkb_types is optional; when present, actual modifiers/map entries
     # replace conventional defaults before key groups resolve their types.
+    mov dword ptr [rip + .Lxkb_parse_stage], 3
     call .Lxkb_parse_types
     test eax, eax
     js .Lxkb_parse_keymap_fail
+    mov dword ptr [rip + .Lxkb_parse_stage], 4
     call .Lxkb_parse_symbols
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # Compatibility rules are evaluated after all key/group/level keysyms and
     # real modifier maps are available.
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    mov dword ptr [rip + .Lxkb_parse_stage], 5
     call .Lxkb_parse_compat
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # Resolve explicit plus key-bound/compatibility virtual-modifier maps.
+    mov dword ptr [rip + .Lxkb_parse_stage], 6
     call .Lxkb_apply_virtual_modifier_maps
     test eax, eax
     js .Lxkb_parse_keymap_fail
@@ -8977,12 +8999,29 @@ xkb_parse_keymap:
     # Reparse declared types now that implicit virtual-modifier encodings are
     # known, so their effective masks include both explicit and implicit maps.
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    mov dword ptr [rip + .Lxkb_parse_stage], 7
     call .Lxkb_parse_types
     test eax, eax
     js .Lxkb_parse_keymap_fail
+    mov dword ptr [rip + xkb_parse_error_stage], 0
     xor eax, eax
     jmp .Lxkb_parse_keymap_done
 .Lxkb_parse_keymap_fail:
+    mov eax, dword ptr [rip + .Lxkb_parse_stage]
+    mov dword ptr [rip + xkb_parse_error_stage], eax
+    mov rax, qword ptr [rip + .Lxkb_text_ptr]
+    sub rax, r12
+    mov dword ptr [rip + xkb_parse_error_offset], eax
+    mov ecx, dword ptr [rip + .Lxkb_token_length]
+    cmp ecx, 63
+    jbe .Lxkb_parse_error_token_length_ok
+    mov ecx, 63
+.Lxkb_parse_error_token_length_ok:
+    mov dword ptr [rip + xkb_parse_error_token_length], ecx
+    lea rsi, [rip + .Lxkb_token]
+    lea rdi, [rip + xkb_parse_error_token]
+    rep movsb
+    mov byte ptr [rdi], 0
     call xkb_reset_keymap
     mov rax, -1
 .Lxkb_parse_keymap_done:

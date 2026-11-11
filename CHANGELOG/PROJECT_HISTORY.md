@@ -1,3 +1,8 @@
+## 2026-11-11 — add bounded failure diagnostics for the real us(intl) parser probe
+
+Run #823 compiled the host test and generated the valid libxkbcommon `us(intl)` / `compose:ralt` map, but NekoEdit's assembly parser returned `-1` and cleared its keymap-ready flag. This confirms a real parser incompatibility but does not yet identify which parser stage rejects the input.
+
+The parser now records the failed top-level pass (virtual-modifier scan, keycodes, first types pass, symbols, compat, virtual-modifier resolution, or second types pass), the offset from the beginning of the XKB text, and the last bounded token. The C probe prints this record only on failure. The regular parser still rejects invalid maps and preserves its fallback; no acceptance rules were relaxed.
 ## 2026-11-11 — correct libxkbcommon probe struct types and validate the application Unicode/action table
 
 Build and test #822 failed before its real-keymap parser comparison could run. The host C probe used `xkb_context` and `xkb_keymap` as if they were typedefs, but libxkbcommon declares `struct xkb_context` and `struct xkb_keymap`. The test also originally compared general keysyms against NekoEdit's `xkb_keysym_levels`, which intentionally stores only raw modifier keysyms.

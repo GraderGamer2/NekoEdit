@@ -1,3 +1,9 @@
+## 2026-11-11 — instrument the XKB parser's top-level failure stage and token
+
+- Build and test [#823](https://github.com/GraderGamer2/NekoEdit/actions/runs/42994629933) passed executable build, CLI tests, Wayland mocks, ELF inspection, and compilation of the native probe. The probe generated a valid 66,429-byte libxkbcommon `us(intl)` / `compose:ralt` text-v1 keymap, then NekoEdit's `xkb_parse_keymap()` returned `-1` and reset `xkb_keymap_ready` to zero.
+- Added bounded parser diagnostics: the top-level pass, current text byte offset, token length, and last token. The parser records these immediately on failure before it resets its regular map data. Stage values are: 1 virtual-modifier scan, 2 keycodes, 3 first types pass, 4 symbols, 5 compat, 6 virtual-modifier resolution, 7 second types pass.
+- Extended `tests/xkb_native_keymap_test.c` to print the diagnostic fields when the real keymap is rejected. The instrumentation does not relax validation or alter the fallback path.
+- Build and test #824 will identify the exact parser stage and token so the next fix can target the unsupported XKB construct rather than broadly accepting unknown syntax.
 ## 2026-11-11 — fix native XKB keymap probe compilation and inspect the correct table
 
 - Build and test [#822](https://github.com/GraderGamer2/NekoEdit/actions/runs/42992625113) passed the freestanding executable build, CLI tests, Wayland mock suite, and ELF inspection. It failed at the new host-side `test-xkb-native` step during C compilation.
