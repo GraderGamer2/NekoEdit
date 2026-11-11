@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus xdotool; do
+for tool in gnome-shell gsettings gdbus xdotool setxkbmap; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -122,6 +122,14 @@ if [ ! -s "$XDG_CONFIG_HOME/glib-2.0/settings/keyfile" ]; then
 fi
 echo "Isolated GNOME enabled extensions: $ENABLED_EXTENSIONS"
 
+# Set the Xvfb host keymap as well as Mutter's XKB defaults. xdotool resolves
+# named keysyms against this map before sending XTest events to GNOME Shell.
+setxkbmap -layout us -variant intl -option compose:ralt
+setxkbmap -query > "$TEST_ROOT/keymap.txt"
+grep -Eq 'layout:[[:space:]]*us' "$TEST_ROOT/keymap.txt"
+grep -Eq 'variant:[[:space:]]*intl' "$TEST_ROOT/keymap.txt"
+grep -Eq 'options:.*compose:ralt' "$TEST_ROOT/keymap.txt"
+
 echo "Starting $(gnome-shell --version) as a nested Wayland user session"
 gnome-shell --mode=user --wayland --nested --no-x11 --sm-disable \
     --wayland-display="$WAYLAND_DISPLAY" \
@@ -207,8 +215,8 @@ if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
 fi
 
 GEOMETRY="$(xdotool getwindowgeometry --shell "$SHELL_WINDOW")"
-SHELL_WIDTH="$(printf '%s\\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
-SHELL_HEIGHT="$(printf '%s\\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
+SHELL_WIDTH="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "WIDTH" {print $2}')"
+SHELL_HEIGHT="$(printf '%s\n' "$GEOMETRY" | awk -F= '$1 == "HEIGHT" {print $2}')"
 if [ -z "$SHELL_WIDTH" ] || [ -z "$SHELL_HEIGHT" ] || [ "$SHELL_WIDTH" -lt 800 ] || [ "$SHELL_HEIGHT" -lt 480 ]; then
     echo "unexpected nested Mutter window geometry: $GEOMETRY" >&2
     exit 1
@@ -244,23 +252,12 @@ if [ "$OUTER_FOCUS" != "$SHELL_WINDOW" ]; then
 fi
 echo "GNOME focus verified: outer X11=$SHELL_WINDOW; inner Wayland=$FOCUS_RESULT"
 
-send_key() {
-    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$DBUS_INTERFACE.SendKey" "$1" >/dev/null
-    sleep 0.1
-}
-send_shortcut() {
-    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$DBUS_INTERFACE.SendShortcut" 65507 "$1" >/dev/null
-    sleep 0.1
-}
-
-# Use Mutter's Clutter virtual keyboard. These XKB keysyms are delivered by
-# Mutter through the normal Wayland wl_keyboard event path to the focused app.
-# Ctrl+A, x, Ctrl+S is a canary independent of Compose and locale lookup.
-send_shortcut 97
-send_key 120
-send_shortcut 115
+# Send a basic key/save canary through XTest after both focus layers have
+# been confirmed. The X server delivers it to GNOME Shell's focused host window,
+# and the nested compositor forwards it as Wayland wl_keyboard input.
+xdotool key --clearmodifiers --delay 120 ctrl+a
+xdotool key --delay 120 x
+xdotool key --clearmodifiers --delay 120 ctrl+s
 
 PROBE_SAVED=0
 for attempt in $(seq 1 50); do
@@ -274,22 +271,22 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 if [ "$PROBE_SAVED" -ne 1 ]; then
-    echo "Mutter's virtual keyboard did not deliver the basic edit/save canary" >&2
+    echo "XTest keyboard input did not deliver the basic edit/save canary" >&2
     echo "NekoEdit PID: $APP_PID" >&2
     echo "last MetaWindow activation result: $FOCUS_RESULT" >&2
     exit 1
 fi
 
-# Replace the canary with the Compose paths under test, expressed directly as
-# XKB keysyms so the test isolates Compose resolution from host key layout.
-send_shortcut 97
-send_key 65312
-send_key 46
-send_key 46
-send_key 65104
-send_key 65106
-send_key 65
-send_shortcut 115
+# Replace the canary with the Compose and dead-key paths under test.
+# Right Alt is Multi_key under us(intl), and Shift+6 is dead_circumflex.
+xdotool key --clearmodifiers --delay 120 ctrl+a
+xdotool key --delay 120 Multi_key
+xdotool key --delay 120 period
+xdotool key --delay 120 period
+xdotool key --delay 120 dead_grave
+xdotool key --delay 120 shift+6
+xdotool key --delay 120 shift+a
+xdotool key --clearmodifiers --delay 120 ctrl+s
 
 SAVED=0
 for attempt in $(seq 1 100); do

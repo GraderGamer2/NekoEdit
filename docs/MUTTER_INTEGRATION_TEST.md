@@ -6,10 +6,10 @@ This test exercises NekoEdit through an actual GNOME Shell 46 / Mutter Wayland c
 
 The test starts GNOME Shell in nested Wayland mode inside Xvfb and a private D-Bus session. It launches the normal NekoEdit executable against that compositor with a temporary HOME and a separately installed `pt_BR.UTF-8` NLP1 pack.
 
-A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend under the temporary XDG config directory. The harness launches Shell in explicit `user` session mode, checks the persisted extension UUID before startup, and does not use a D-Bus-activated dconf service. The harness verifies both focus layers: it explicitly focuses GNOME Shell's outer X11 host window (Xvfb has no window manager), then activates NekoEdit's inner Wayland `MetaWindow` by PID. This is required because Mutter's nested X11 backend implements Clutter virtual-keyboard injection using XTest against the outer X display. The extension exports a deliberately narrow D-Bus interface used only by the test to:
+A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend under the temporary XDG config directory. The harness launches Shell in explicit `user` session mode, checks the persisted extension UUID before startup, and does not use a D-Bus-activated dconf service. The harness verifies both focus layers: it explicitly focuses GNOME Shell's outer X11 host window (Xvfb has no window manager), then activates NekoEdit's inner Wayland `MetaWindow` by PID. The nested compositor receives XTest events on its outer host window and forwards them to the focused inner Wayland toplevel. The extension exports a deliberately narrow D-Bus interface used only by the test to:
 
 1. Find and activate NekoEdit's actual Mutter `MetaWindow` by process ID, then report the focused window PID.
-2. Send individual XKB keysyms and Ctrl-modified keysyms through Mutter's Clutter virtual keyboard.
+2. Send XTest keyboard events from Xvfb using the explicit `us(intl)` / `compose:ralt` host keymap after confirming both focus layers.
 
 The harness first sends Ctrl+A, `x`, and Ctrl+S and checks that the document contains exactly `x`. Only after that canary succeeds does it test:
 
@@ -24,14 +24,14 @@ The extension, GSettings keyfile, editor preferences, locale pack, and runtime d
 On Ubuntu 24.04, install the test-only tools and run:
 
     sudo apt-get update
-    sudo apt-get install --no-install-recommends gnome-shell xvfb xauth dbus-daemon libglib2.0-bin
+    sudo apt-get install --no-install-recommends gnome-shell xvfb xauth dbus-daemon libglib2.0-bin xdotool x11-xkb-utils
     make clean all
     make test-mutter
 
-The Make target builds the optional locale packs separately and launches the harness under `xvfb-run` and `dbus-run-session`. The CI workflow runs this after its pinned-source locale verification and pack build. The host X server is used only to provide the nested compositor's display and outer-window input focus; keyboard events are submitted through Mutter with `Clutter.Seat.create_virtual_device()` and `Clutter.VirtualInputDevice.notify_keyval()`, which maps keysyms and injects XTest events from the nested X11 backend.
+The Make target builds the optional locale packs separately and launches the harness under `xvfb-run` and `dbus-run-session`. The CI workflow runs this after its pinned-source locale verification and pack build. The host X server provides the nested compositor's display, its outer-window input focus, and XTest keyboard events. GNOME Shell receives the events on its outer X11 window and forwards them through the actual Wayland `wl_keyboard` path to NekoEdit's focused toplevel.
 
 ## Validation boundary
 
-This is compositor-level Wayland event-path coverage, not a physical-keyboard test. The harness confirms that both the X11 host window and NekoEdit's inner Wayland toplevel have focus before input. Mutter's X11 virtual-input backend uses XTest, so checking only the inner Wayland `MetaWindow` is insufficient: the outer GNOME Shell host must also own X input focus for those events to reach the nested compositor. The tested input is synthetic and does not validate physical keyboard hardware, the user's desktop session, other keyboard layouts, input-method-v3 preedit, or complex-script shaping. Those still require manual desktop checks.
+This is compositor-level Wayland event-path coverage, not a physical-keyboard test. The harness confirms that both the X11 host window and NekoEdit's inner Wayland toplevel have focus before input. The host X server's XTest event path and the inner Wayland window focus are checked separately; both are required for the injected events to reach the editor. The tested input is synthetic and does not validate physical keyboard hardware, the user's desktop session, other keyboard layouts, input-method-v3 preedit, or complex-script shaping. Those still require manual desktop checks.
 
-The test extension exposes only focus-by-PID, keyval, shortcut, and readiness operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all test tools are removed with the temporary directory after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell or Xvfb.
+The test extension exposes only focus-by-PID and readiness operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all test tools are removed with the temporary directory after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell or Xvfb.
