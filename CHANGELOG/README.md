@@ -1,3 +1,14 @@
+## 2026-11-12 — live IBus Simple preedit/commit integration (CI pending)
+
+The Mutter test's second phase now switches the isolated GNOME input source to IBus Simple's `xkb:us:intl:eng` engine while preserving the `us(intl)` keyboard layout. The harness enables IBus Simple's documented Ctrl+Shift+U path in its private test environment and verifies the actual active IBus engine before launching NekoEdit with text-input-v3 explicitly enabled.
+
+The probe reads the application's existing preedit and document-length state through its direct parent `/proc/<pid>/mem` access. It expects the real IBus sequence `u`, `u1`, `u1F`, `u1F6`, `u1F60`, `u1F600`; Backspace must return the preedit to `u1F60` without changing document bytes. Return must commit U+1F600 through GNOME Shell/Mutter text-input-v3, clear preedit, and save exactly `F0 9F 98 80` after the existing save-confirmation prompt.
+
+This is test-only integration coverage. It adds no editor runtime dependency and changes no default input behavior. Fcitx and provider-originated delete-surrounding remain outside this live test; delete-surrounding, UTF-8 boundaries, and malformed events remain covered by the Wayland mock. The default physical-XKB path stays unchanged.
+
+Staging commits: [9fb3ce1](https://github.com/GraderGamer2/NekoEdit/commit/9fb3ce1023c70306978e4b662eba5705e1d45c3f) adds live IBus preedit/commit assertions; [f1fcc39](https://github.com/GraderGamer2/NekoEdit/commit/f1fcc39b536a49141af31e2bd08e6e1de3e9773c) adds the preedit buffer to the symbol map; [e24bbda](https://github.com/GraderGamer2/NekoEdit/commit/e24bbda13314dc218cc9a83dd47a001cdce5e1a6) switches the Mutter second phase to IBus Simple. These changes still need one fast-forward to `early-alpha` and one normal Build and test run. CI is not yet claimed.
+
+---
 ## 2026-11-12 — test opt-in fallback when text-input-v3 is not advertised — Build and test #834 passed
 
 Added a Wayland-mock scenario that launches NekoEdit with `NEKOEDIT_ENABLE_TEXT_INPUT=1` while deliberately omitting `zwp_text_input_manager_v3` from the compositor registry. The test requires manager/object/enter/enable/serial/state-ready fields to remain zero, then runs the complete real-keymap keyboard-layout editing and confirmed-save sequence. It checks that the opt-in cannot suppress the normal XKB path when the compositor does not provide text-input-v3.
