@@ -19,6 +19,13 @@ const DBUS_XML = `
       <arg type="u" name="pid" direction="in"/>
       <arg type="s" name="result" direction="out"/>
     </method>
+    <method name="ClickEditor">
+      <arg type="u" name="pid" direction="in"/>
+      <arg type="s" name="status" direction="out"/>
+    </method>
+    <method name="PointerStatus">
+      <arg type="s" name="status" direction="out"/>
+    </method>
     <method name="BeginInput"/>
     <method name="InputStatus">
       <arg type="s" name="status" direction="out"/>
@@ -37,6 +44,7 @@ export default class NekoEditMutterTestExtension extends Extension {
         this._inputState = 'not-started';
         this._inputPending = 0;
         this._inputError = null;
+        this._pointerStatus = 'not-started';
 
         this._dbusObject = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbusObject.export(Gio.DBus.session, OBJECT_PATH);
@@ -136,6 +144,74 @@ export default class NekoEditMutterTestExtension extends Extension {
         const focusedPid = focused ? focused.get_pid() : 0;
         const rect = target.get_frame_rect();
         return `target=${target.get_pid()} focus=${focusedPid} frame=${rect.x},${rect.y},${rect.width},${rect.height}`;
+    }
+
+    ClickEditor(pid) {
+        if (this._inputState !== 'ready' || !this._remoteSessionPath)
+            throw new Error('native Mutter input session is not ready');
+
+        const target = global.get_window_actors()
+            .map(actor => actor.meta_window)
+            .find(window => window && window.get_pid() === pid);
+        if (!target)
+            throw new Error(`NekoEdit MetaWindow not found for PID ${pid}`);
+
+        const [pointerX, pointerY] = global.get_pointer();
+        const rect = target.get_frame_rect();
+        // Click well inside the document body, below the title/menu area.
+        const targetX = rect.x + rect.width * 0.5;
+        const targetY = rect.y + rect.height * 0.65;
+        const dx = targetX - pointerX;
+        const dy = targetY - pointerY;
+
+        this._pointerStatus = `moving:${Math.round(targetX)},${Math.round(targetY)}`;
+        this._callRemoteSession(
+            'NotifyPointerMotionRelative',
+            new GLib.Variant('(dd)', [dx, dy]),
+            new GLib.VariantType('()'),
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (error) {
+                    this._pointerStatus = `failed:motion:${String(error)}`;
+                    return;
+                }
+
+                this._callRemoteSession(
+                    'NotifyPointerButton',
+                    new GLib.Variant('(ib)', [0x110, true]),
+                    new GLib.VariantType('()'),
+                    (pressConnection, pressResult) => {
+                        try {
+                            pressConnection.call_finish(pressResult);
+                        } catch (error) {
+                            this._pointerStatus = `failed:press:${String(error)}`;
+                            return;
+                        }
+
+                        this._callRemoteSession(
+                            'NotifyPointerButton',
+                            new GLib.Variant('(ib)', [0x110, false]),
+                            new GLib.VariantType('()'),
+                            (releaseConnection, releaseResult) => {
+                                try {
+                                    releaseConnection.call_finish(releaseResult);
+                                    this._pointerStatus = `clicked:${Math.round(targetX)},${Math.round(targetY)}`;
+                                } catch (error) {
+                                    this._pointerStatus = `failed:release:${String(error)}`;
+                                }
+                            }
+                        );
+                    }
+                );
+            }
+        );
+
+        return this._pointerStatus;
+    }
+
+    PointerStatus() {
+        return this._pointerStatus;
     }
 
     BeginInput() {

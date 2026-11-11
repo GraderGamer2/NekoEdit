@@ -1,3 +1,8 @@
+## 2026-11-11 — exercise the editor's document-area pointer focus in Mutter
+
+Run #817 confirmed that creating Mutter's native RemoteDesktop virtual keyboard before NekoEdit starts does not resolve the unchanged-file canary. Mutter 46.2 source confirms these native virtual keyboard devices use physical input mode and pass the Wayland seat's supported-device filter; MetaWindow activation also updates Wayland seat input focus. The harness had not yet exercised NekoEdit's own document click path.
+
+The test extension now calculates a point inside the lower-center document body from the actual MetaWindow frame, moves the native RemoteDesktop virtual pointer there relative to the current stage pointer position, and sends a left-button press/release. The shell harness waits for motion/press/release completion before sending keys. Build and test #818 will establish whether this internal focus/caret initialization was the missing step.
 ## 2026-11-11 — initialize the native Mutter keyboard before application startup
 
 Build and test #816 passed all steps before the native Mutter integration test. The Mutter session and application focus checks succeeded, D-Bus input calls completed, and the canary now accepted the default Ctrl+S confirmation with Enter; the document nevertheless remained unchanged.

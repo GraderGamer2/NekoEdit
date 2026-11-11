@@ -1,3 +1,6 @@
+## 2026-11-11 — Mutter native pointer click before input canary — #818 pending
+
+Run #817 passed all pre-Mutter checks but the native basic canary still left the file unchanged even after the keyboard device was instantiated before NekoEdit startup. Mutter 46.2 source shows RemoteDesktop virtual keyboards are physical-mode devices accepted by the Wayland seat, and MetaWindow activation updates the compositor input-focus surface. The latest harness change adds a native RemoteDesktop pointer move plus left-button click in the document body, waiting for both button edges to complete before injecting keys. This tests NekoEdit's app-level document focus/caret path. Build and test #818 is pending; no Mutter pass is claimed.
 ## 2026-11-11 — prime the Mutter virtual keyboard before NekoEdit startup — #817 pending
 
 Run #816 confirmed the save confirmation was handled but the basic file canary remained unchanged. Mutter 46.2 creates a RemoteDesktop virtual keyboard lazily on its first key press and subsequently updates wl_seat capabilities. The integration test now instantiates/releases Ctrl_L before NekoEdit launches, ensuring the editor sees keyboard capability during its initial seat handshake. NekoEdit then starts, is focused, and receives the normal input/Compose sequence. [Build and test #817] will verify this ordering; no success is claimed yet.

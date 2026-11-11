@@ -240,6 +240,31 @@ if [[ "$FOCUS_RESULT" != *"target=$APP_PID focus=$APP_PID"* ]]; then
 fi
 echo "Mutter native headless focus verified: $FOCUS_RESULT"
 
+# A MetaWindow activation is not a substitute for the app's own pointer focus
+# path. Move a native Mutter virtual pointer into the document body and click.
+POINTER_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.ClickEditor" "$APP_PID")"
+POINTER_READY=0
+for attempt in $(seq 1 50); do
+    POINTER_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+        --method "$DBUS_INTERFACE.PointerStatus" 2>/dev/null || true)"
+    if [[ "$POINTER_STATUS" == *"clicked:"* ]]; then
+        POINTER_READY=1
+        break
+    fi
+    if [[ "$POINTER_STATUS" == *"failed:"* ]]; then
+        echo "Mutter virtual pointer could not focus NekoEdit's document area: $POINTER_STATUS" >&2
+        exit 1
+    fi
+    sleep 0.05
+done
+if [ "$POINTER_READY" -ne 1 ]; then
+    echo "Mutter virtual pointer click did not complete: $POINTER_STATUS (initial: $POINTER_RESULT)" >&2
+    exit 1
+fi
+echo "Mutter document-area pointer focus verified: $POINTER_STATUS"
+sleep 0.25
+
 send_key() {
     gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
         --method "$DBUS_INTERFACE.SendKey" "$1" "$2" >/dev/null
