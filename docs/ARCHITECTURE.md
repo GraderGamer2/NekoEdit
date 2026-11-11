@@ -2,7 +2,7 @@
 
 ## Goals
 
-NekoEdit is a Linux x86-64 application written in assembly. Its runtime should have no third-party shared-library dependencies. It talks to the Linux kernel through direct system calls and to the desktop through the native display protocol available in the session.
+NekoEdit is a freestanding Linux x86-64 application implemented in GNU Assembly and freestanding C. Assembly handles process entry, the syscall layer, and the low-level Wayland/XKB protocol paths; bounded rendering and platform-neutral services use C where it improves implementation clarity. Both are linked into one executable without a C runtime or third-party shared-library dependencies. The application talks to the Linux kernel through direct system calls and to the desktop through the native display protocol available in the session.
 
 The first release targets Linux x86-64 only. The application is desktop-environment-independent, not operating-system-independent: Wayland and X11 are the intended display systems. Wayland is the only implemented backend at the current prototype stage.
 
@@ -42,7 +42,7 @@ The first release targets Linux x86-64 only. The application is desktop-environm
 
 The editor core must not know which display backend is active. Backends translate native protocol messages into a small common event model (key, text, pointer, resize, clipboard offer, clipboard completion, and close request).
 
-## Assembly and ABI
+## Assembly, C and ABI
 
 - Source syntax: GNU assembler, .intel_syntax noprefix.
 - Architecture: x86-64.
@@ -50,6 +50,8 @@ The editor core must not know which display backend is active. Backends translat
 - Process entry: _start; no C runtime startup code.
 - System calls: syscall instruction, with Linux x86-64 syscall register conventions.
 - Link: GNU ld, static executable, no interpreter, no DT_NEEDED entries.
+
+C modules are compiled with freestanding/no-builtin options and use the same direct Linux syscall boundary rather than libc APIs. The current production C modules cover TrueType rasterization, clipboard transfers, Compose locale-pack handling, history journals, and preferences. They are not dynamically loaded and do not introduce a C runtime. Host-side test programs may link test-only libraries (for example libxkbcommon); those test links are separate from the editor ELF.
 
 Every assembly module should document input registers, output registers, clobbers, ownership of pointers, and whether a routine can block. Shared structures should be defined in one include/source-of-truth file when the number of modules grows.
 
