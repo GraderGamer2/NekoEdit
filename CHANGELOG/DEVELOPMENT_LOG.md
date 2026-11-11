@@ -1,3 +1,9 @@
+## 2026-11-11 — send the configured Mutter keymap before NekoEdit's first wl_keyboard bind
+
+- Build and test [#820](https://github.com/GraderGamer2/NekoEdit/actions/runs/42988594141) passed all pre-Mutter checks, the native pointer click, and the ordinary edit/save canary. The extension's `ApplyKeymap` call also returned the expected `us` / `intl` / `compose:ralt` / `pc105` tuple, but the final file still contained literal grave/circumflex characters.
+- In #820, `ApplyKeymap` ran after NekoEdit had launched and bound `wl_keyboard` with the default plain-US keymap. NekoEdit's dynamic keymap listener exists, but the integration result did not establish that the new map had been consumed before the synthetic key sequence. The harness no longer uses that ambiguous order.
+- Moved the same direct Mutter backend call to after Shell startup and keyboard-device priming but before launching NekoEdit. The editor's initial `wl_keyboard.keymap` FD should therefore already describe `us(intl)` with `compose:ralt`; the Compose test no longer depends on a runtime keymap change. Session GSettings remains configured and verified.
+- Build and test #821 will validate the initial-map path and exact UTF-8 output. No application source or runtime dependencies were modified.
 ## 2026-11-11 — call Mutter's backend keymap API directly before the Compose integration sequence
 
 - Build and test [#819](https://github.com/GraderGamer2/NekoEdit/actions/runs/42987693384) passed the build, CLI tests, Wayland protocol mock, ELF inspection, pinned X.Org regeneration, and all four separate locale-pack builds. The headless Mutter integration also passed native pointer focus and the basic typing/save canary.

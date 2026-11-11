@@ -221,7 +221,18 @@ if [[ "$INPUT_STATUS" != *"ready:pending=0"* ]]; then
 fi
 echo "Mutter virtual keyboard device created before NekoEdit launch"
 
+# The backend keymap must be active before the editor binds wl_keyboard so the
+# first keymap FD it receives is already us(intl)+compose:ralt. This also avoids
+# depending on NekoEdit's runtime keymap-replacement path in this smoke test.
 sleep 0.5
+KEYMAP_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.ApplyKeymap")"
+if [[ "$KEYMAP_RESULT" != *"layout=us variant=intl options=compose:ralt model=pc105"* ]]; then
+    echo "Mutter did not apply the expected us(intl) keymap before editor startup: $KEYMAP_RESULT" >&2
+    exit 1
+fi
+echo "Mutter startup keymap applied: $KEYMAP_RESULT"
+sleep 0.3
 NEKOEDIT_LOCALE=pt_BR.UTF-8 "$APP_BINARY" \
     "$TEST_ROOT/document.txt" > "$TEST_ROOT/nekoedit.log" 2>&1 &
 APP_PID=$!
@@ -344,18 +355,6 @@ if [ "$PROBE_SAVED" -ne 1 ]; then
     echo "input status: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.InputStatus" 2>&1 || true)" >&2
     exit 1
 fi
-
-# Apply the real native Mutter keymap now that Shell startup and the basic
-# input canary are complete. GNOME Shell's KeyboardManager uses this same
-# backend API; a direct application here avoids racing its startup activation.
-KEYMAP_RESULT="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-    --method "$DBUS_INTERFACE.ApplyKeymap")"
-if [[ "$KEYMAP_RESULT" != *"layout=us variant=intl options=compose:ralt model=pc105"* ]]; then
-    echo "Mutter did not apply the expected us(intl) keymap: $KEYMAP_RESULT" >&2
-    exit 1
-fi
-echo "Mutter native keymap applied: $KEYMAP_RESULT"
-sleep 0.3
 
 # Replace the canary with the Compose and locale-specific two-dead-key chain.
 send_shortcut 65507 97

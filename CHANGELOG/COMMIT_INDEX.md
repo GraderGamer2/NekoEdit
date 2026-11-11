@@ -1,3 +1,6 @@
+## 2026-11-11 — initial us(intl) keymap before editor startup — #821 pending
+
+Run #820 passed the basic canary but still failed Compose after the backend keymap was changed at runtime. The next test correction calls the same Mutter backend keymap API before launching NekoEdit, after Shell startup and virtual keyboard priming. This ensures the initial `wl_keyboard.keymap` received by NekoEdit is already `us(intl)` with `compose:ralt`; Build and test #821 will validate exact Compose output.
 ## 2026-11-11 — Mutter backend keymap application before Compose — #820 pending
 
 Run #819 passed the basic canary but Compose still inserted literal grave/circumflex because the GSettings source values had not reliably activated the native Mutter keymap. The test now calls the same `global.backend.set_keymap('us','intl','compose:ralt','pc105')` and `lock_layout_group(0)` methods that GNOME Shell's own KeyboardManager uses, immediately before sending the Compose sequence. Run #820 will verify actual keyval mappings and exact `…Ầ` output.

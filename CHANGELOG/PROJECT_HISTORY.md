@@ -1,3 +1,8 @@
+## 2026-11-11 — configure Mutter's keymap before launching the Wayland client
+
+Run #820 called Mutter's native `global.backend.set_keymap()` and received the expected result, but the call happened after NekoEdit had connected and consumed the initial plain-US `wl_keyboard.keymap`. The final bytes remained literal grave/circumflex characters. This leaves the dynamic keymap replacement path as a possible confounder in the integration harness.
+
+The test now sets the Mutter backend keymap after Shell startup and virtual keyboard priming but before it launches NekoEdit. The application will receive `us(intl)` / `compose:ralt` as its initial keymap. Run #821 will check whether this ordering allows the existing keymap parser and Compose tables to resolve Multi_key and the two dead marks.
 ## 2026-11-11 — force the tested XKB map through Mutter's backend API before Compose
 
 Run #819 passed the basic native input test but still saved literal grave/circumflex characters during the Compose phase. The test verified that GNOME GSettings stored `us+intl`, `compose:ralt`, and `pc105`, but this did not guarantee that the active Mutter seat keymap had changed before the key events.

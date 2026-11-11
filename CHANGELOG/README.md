@@ -1,5 +1,11 @@
 ## Latest handoff (2026-11-11)
 
+Continue from `early-alpha`. Run #820 passed all pre-Mutter checks and the basic live input/save canary, but its Compose phase still inserted literal grave/circumflex characters. The extension successfully called Mutter's backend `set_keymap` API, but it did so after NekoEdit had received its initial plain-US Wayland keymap.
+
+The latest change moves that backend call before launching NekoEdit. Mutter Shell starts, the keyboard device is primed, the `us(intl)`/`compose:ralt` keymap is applied, and only then is NekoEdit started. Build and test #821 will verify that the initial keymap resolves Multi_key and dead-key composition. Do not claim full Mutter Compose validation until #821 passes.
+
+## Latest handoff (2026-11-11)
+
 Continue from `early-alpha`. The latest test, #819, passed build, CLI, Wayland mock, ELF, pinned importer, locale packs, native pointer focus, and basic input/save. It failed only Compose: GSettings stored `us+intl` and `compose:ralt`, but Mutter still emitted literal grave/circumflex characters.
 
 The newest correction exposes `ApplyKeymap` in the temporary GNOME Shell extension. Immediately before Compose, it calls the same `global.backend.set_keymap('us','intl','compose:ralt','pc105')` and `lock_layout_group(0)` API used by GNOME Shell's `KeyboardManager`. Build and test #820 must verify that the keysyms map and the exact `…Ầ` bytes are saved. Do not claim full Mutter Compose validation until this run passes.
