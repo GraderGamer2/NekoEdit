@@ -1,3 +1,6 @@
+## 2026-11-11 — canonical Unicode-based alphabetic guard — Build and test #826
+
+Run #825 parsed 84 symbol values from the valid `us(intl)` keymap, satisfying the 16-symbol minimum, but counted zero alphabetic key pairs and rejected the map. The guard now uses the canonical `xkb_unicode_levels` table rather than `xkb_ascii_levels` to identify Group1 lowercase/uppercase pairs. The 12-pair minimum is unchanged. Failure diagnostics now include bounded samples for Q/A/Z row letters, comparing Unicode values to the auxiliary ASCII mirror. [Build and test #826] will validate parsing and the specific Multi_key/dead-key positions.
 ## 2026-11-11 — report xkb_symbols acceptance counters — Build and test #825
 
 Run #824 passed the build, CLI tests, Wayland mock and ELF checks but the real `us(intl)` parser probe failed at the closing brace of `xkb_symbols` (stage 4, offset 66,422, token `}`). The symbols parser enforces both a minimum symbol count and a minimum alphabetic-key count. The next run adds both counters to failure diagnostics so the exact threshold can be identified. No parser threshold has been relaxed.

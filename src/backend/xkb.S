@@ -5366,6 +5366,9 @@ xkb_parse_error_token:  .zero 64
 xkb_parse_error_symbol_count: .long 0
 .global xkb_parse_error_alpha_count
 xkb_parse_error_alpha_count: .long 0
+.global xkb_parse_error_alpha_samples
+# AD01, AC01, AB01 first/second Unicode levels, then their ASCII mirrors.
+xkb_parse_error_alpha_samples: .zero 48
 .Lxkb_parse_stage:      .long 0
 
 .section .text
@@ -7808,18 +7811,19 @@ xkb_keysym_name_to_unicode:
     inc r14d
     jmp .Lxkb_key_block_infer_group
 .Lxkb_key_block_infer_done:
-    # Count alphabetic keys from their actual Group1 symbols, not from the
-    # conventional type name/ID. Real layouts commonly assign types such as
-    # FOUR_LEVEL_ALPHABETIC or a user-defined type to letter keys.
+    # Count alphabetic keys from their canonical Group1 Unicode values, not
+    # from the auxiliary byte-oriented ASCII lookup table. This table is also
+    # the source used by live key dispatch, and supports both ASCII keysyms and
+    # XKB Uxxxx aliases without depending on the auxiliary table's indexing.
     mov eax, r15d
     shl eax, 5
-    lea rbx, [rip + xkb_ascii_levels]
-    movzx edx, byte ptr [rbx + rax]
+    lea rbx, [rip + xkb_unicode_levels]
+    mov edx, dword ptr [rbx + rax*4]
     cmp edx, 'a'
     jb .Lxkb_key_block_return
     cmp edx, 'z'
     ja .Lxkb_key_block_return
-    movzx ecx, byte ptr [rbx + rax + 1]
+    mov ecx, dword ptr [rbx + rax*4 + 4]
     cmp ecx, 'A'
     jb .Lxkb_key_block_return
     cmp ecx, 'Z'
@@ -8962,6 +8966,10 @@ xkb_parse_keymap:
     mov dword ptr [rip + xkb_parse_error_token_length], 0
     mov dword ptr [rip + xkb_parse_error_symbol_count], 0
     mov dword ptr [rip + xkb_parse_error_alpha_count], 0
+    lea rdi, [rip + xkb_parse_error_alpha_samples]
+    xor eax, eax
+    mov ecx, 12
+    rep stosd
     lea rdi, [rip + xkb_parse_error_token]
     xor eax, eax
     mov ecx, 64
@@ -9017,6 +9025,38 @@ xkb_parse_keymap:
     mov dword ptr [rip + xkb_parse_error_symbol_count], eax
     mov eax, dword ptr [rip + .Lxkb_alpha_key_count]
     mov dword ptr [rip + xkb_parse_error_alpha_count], eax
+
+    # Preserve a few well-known alphabetic positions before reset. These are
+    # diagnostic only; the canonical Unicode table and its ASCII mirror are
+    # recorded independently so a parser/indexing discrepancy is visible.
+    lea rbx, [rip + xkb_parse_error_alpha_samples]
+    lea rdx, [rip + xkb_unicode_levels]
+    mov eax, dword ptr [rdx + 3072]
+    mov dword ptr [rbx], eax
+    mov eax, dword ptr [rdx + 3076]
+    mov dword ptr [rbx + 4], eax
+    mov eax, dword ptr [rdx + 4864]
+    mov dword ptr [rbx + 8], eax
+    mov eax, dword ptr [rdx + 4868]
+    mov dword ptr [rbx + 12], eax
+    mov eax, dword ptr [rdx + 6656]
+    mov dword ptr [rbx + 16], eax
+    mov eax, dword ptr [rdx + 6660]
+    mov dword ptr [rbx + 20], eax
+    lea rdx, [rip + xkb_ascii_levels]
+    mov eax, dword ptr [rdx + 768]
+    mov dword ptr [rbx + 24], eax
+    mov eax, dword ptr [rdx + 772]
+    mov dword ptr [rbx + 28], eax
+    mov eax, dword ptr [rdx + 1216]
+    mov dword ptr [rbx + 32], eax
+    mov eax, dword ptr [rdx + 1220]
+    mov dword ptr [rbx + 36], eax
+    mov eax, dword ptr [rdx + 1664]
+    mov dword ptr [rbx + 40], eax
+    mov eax, dword ptr [rdx + 1668]
+    mov dword ptr [rbx + 44], eax
+
     mov eax, dword ptr [rip + .Lxkb_parse_stage]
     mov dword ptr [rip + xkb_parse_error_stage], eax
     mov rax, qword ptr [rip + .Lxkb_text_ptr]

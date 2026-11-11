@@ -1,5 +1,11 @@
 ## Latest handoff (2026-11-11)
 
+Continue from `early-alpha`. Run #825 passed build, CLI, full Wayland mock, and ELF checks but failed the native parser's final `xkb_symbols` guard. It parsed 84 symbol values (above the 16-value minimum) but counted zero alphabetic pairs. The rejection is isolated to the alpha guard's use of the auxiliary `xkb_ascii_levels` byte table.
+
+The latest source correction counts Group1 lowercase/uppercase pairs from canonical `xkb_unicode_levels`, which is the table used by live symbol lookup. It keeps the 12-pair safeguard intact. The native probe now preserves and prints a small Unicode-vs-ASCII sample for AD01/AC01/AB01 if the parser still rejects the map. Build and test #826 must verify the real keymap and its Multi_key/dead-key positions before any claim of completion.
+
+## Latest handoff (2026-11-11)
+
 Continue from `early-alpha`. Run #824 passed build, CLI, full Wayland mock and ELF checks; the real `us(intl)` parser probe failed at stage 4 (end of `xkb_symbols`, byte 66,422, token `}`). The parser has final safety checks for at least 16 symbols and 12 alphabetic keys.
 
 The current change reports `.Lxkb_symbol_count` and `.Lxkb_alpha_key_count` before reset. Build and test #825 will show which acceptance threshold rejects the valid 66 KB keymap. Do not loosen either threshold until the count data shows why.

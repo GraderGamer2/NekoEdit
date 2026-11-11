@@ -1,3 +1,8 @@
+## 2026-11-11 — count XKB alphabetic keys from the canonical symbol table
+
+Run #825 showed that the valid libxkbcommon `us(intl)` keymap parses 84 symbol values but fails with zero alphabetic keys. The minimum symbol count was not the issue; the final rejection came from the alphabetic-pair guard.
+
+The guard was reading `xkb_ascii_levels`, an auxiliary byte table, even though `xkb_unicode_levels` is the canonical per-key/group/level table consumed by the editor's actual symbol lookup. It now counts Group1 lowercase/uppercase pairs from that canonical table while retaining the 12-pair minimum. The host probe also preserves bounded Unicode/ASCII samples for AD01, AC01, and AB01 before parser reset, so a remaining mapping discrepancy will be visible in one CI failure report.
 ## 2026-11-11 — instrument symbols parser safety counters for the real us(intl) keymap
 
 Run #824 localized the valid keymap rejection to stage 4 at byte offset 66,422, token `}`. That is the symbols-section boundary. The symbols parser then applies two intentional safety thresholds: at least 16 symbol entries and 12 alphabetic keys.

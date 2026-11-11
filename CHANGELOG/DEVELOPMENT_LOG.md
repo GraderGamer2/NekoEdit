@@ -1,3 +1,10 @@
+## 2026-11-11 — derive the XKB alphabetic-key guard from canonical Unicode levels
+
+- Build and test [#825](https://github.com/GraderGamer2/NekoEdit/actions/runs/42996770082) passed the executable build, command-line tests, complete Wayland mock suite, and ELF inspection. The new native libxkbcommon probe then failed at the final `xkb_symbols` guard: it reported 84 parsed values but zero alphabetic key pairs.
+- The 84 count exceeds the minimum 16-symbol threshold. The rejected condition is the 12-letter-pair guard, which was reading `xkb_ascii_levels`, an auxiliary byte table, rather than the canonical `xkb_unicode_levels` cells that contain the actual symbols used by the editor.
+- Updated `.Lxkb_key_block_done` to count a lowercase Group1 symbol followed by its corresponding uppercase symbol from the Unicode scalar table. The minimum remains 12; this is a data-source correction, not a validation relaxation.
+- Added bounded error samples for AD01, AC01, and AB01 to preserve the first two Unicode levels and ASCII mirrors before `xkb_reset_keymap()` clears the failed map. The C probe prints these only if parsing still fails, and its counter line now emits a normal newline.
+- Build and test #826 will validate the real `us(intl)` map and exact Compose/dead-key positions. No Mutter pass is claimed until that and the later compositor stage complete.
 ## 2026-11-11 — report symbol and alphabetic-key totals when the real map fails stage 4
 
 - Build and test [#824](https://github.com/GraderGamer2/NekoEdit/actions/runs/42995879521) passed the freestanding build, CLI tests, complete Wayland mock suite, and ELF inspection. The native parser probe then reported stage 4 (`xkb_symbols`), byte offset 66,422, and final token `}`.

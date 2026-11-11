@@ -15,6 +15,7 @@ extern uint32_t xkb_parse_error_token_length;
 extern char xkb_parse_error_token[64];
 extern uint32_t xkb_parse_error_symbol_count;
 extern uint32_t xkb_parse_error_alpha_count;
+extern uint32_t xkb_parse_error_alpha_samples[12];
 extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
 
 /*
@@ -140,8 +141,17 @@ main(void)
                 parse_result, xkb_keymap_ready, text_size,
                 xkb_parse_error_stage, xkb_parse_error_offset,
                 xkb_parse_error_token_length, xkb_parse_error_token);
-        fprintf(stderr, "symbols=%u alpha=%u\\n",
+        fprintf(stderr, "symbols=%u alpha=%u\n",
                 xkb_parse_error_symbol_count, xkb_parse_error_alpha_count);
+        fprintf(stderr,
+                "alpha samples (Unicode): AD01=%04x/%04x AC01=%04x/%04x AB01=%04x/%04x; "
+                "(ASCII): AD01=%u/%u AC01=%u/%u AB01=%u/%u\n",
+                xkb_parse_error_alpha_samples[0], xkb_parse_error_alpha_samples[1],
+                xkb_parse_error_alpha_samples[2], xkb_parse_error_alpha_samples[3],
+                xkb_parse_error_alpha_samples[4], xkb_parse_error_alpha_samples[5],
+                xkb_parse_error_alpha_samples[6], xkb_parse_error_alpha_samples[7],
+                xkb_parse_error_alpha_samples[8], xkb_parse_error_alpha_samples[9],
+                xkb_parse_error_alpha_samples[10], xkb_parse_error_alpha_samples[11]);
         free(text);
         xkb_keymap_unref(keymap);
         xkb_context_unref(context);
