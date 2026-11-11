@@ -1,6 +1,6 @@
 # GNOME Shell / Mutter integration smoke test
 
-This test exercises NekoEdit through GNOME Shell 46 / Mutter's native Wayland backend, not the repository's protocol mock. GNOME Shell, Mutter, the native virtual-input session, and the test extension are test-only; the editor remains freestanding and does not link GNOME, GTK, Mutter, libwayland, X11, or an input automation library.
+This test exercises NekoEdit through GNOME Shell 46 / Mutter's native Wayland backend, not only the repository's protocol mock. GNOME Shell, Mutter, the native virtual-input session, and the test extension are test-only; the editor remains freestanding and does not link GNOME, GTK, Mutter, libwayland, X11, or an input automation library.
 
 ## What it covers
 
@@ -15,6 +15,8 @@ The harness first activates NekoEdit by PID, then sends a native pointer move an
 1. Right Alt (`compose:ralt`) as `Multi_key`, period, period, producing U+2026 (…).
 2. Under the verified `us(intl)` keymap, the grave key (`dead_grave`), Shift+6 (`dead_circumflex`), and Shift+A, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
 3. Ctrl+S and Enter to accept the default save-confirmation modal, followed by an exact UTF-8 byte comparison against `…Ầ`.
+
+After that Compose test, the first editor process is closed and a second instance is launched with `NEKOEDIT_ENABLE_TEXT_INPUT=1`. The Python probe is the direct parent of this second process; using `nm` symbol addresses and read-only `/proc/<pid>/mem`, it observes the client state without adding debug hooks to the application. It also activates the real Mutter window and clicks the document area. If Mutter advertises `zwp_text_input_manager_v3`, the probe requires a successful manager bind, a text-input `enter`, document `enable`, and at least one committed state update. If the compositor does not advertise the global, it requires all text-input objects to remain inactive and verifies that ordinary physical-keyboard/XKB typing and the confirmed save path still work with the opt-in environment variable set. The branch is selected from the actual registry result, not from a compositor-version assumption.
 
 The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. The one pre-launch Ctrl_L press is released before NekoEdit is started and exists only to instantiate the virtual keyboard device. GNOME Shell applies `us(intl)` and `compose:ralt` to Mutter's actual backend keymap before NekoEdit connects, so the tested keysyms correspond to keys that exist in that map. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
 
@@ -32,6 +34,6 @@ The Make target builds optional locale packs separately and launches the harness
 
 ## Validation boundary
 
-This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland pointer focus, key delivery, shortcuts, `Multi_key`, locale-specific dead-key composition, and the default save-confirmation interaction without depending on Xvfb, nested-X11 focus, physical keyboard hardware, or the user's desktop session. It does not validate physical hardware, other desktop environments, input-method-v3 preedit, or complex-script shaping; those still require separate desktop checks.
+This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland pointer focus, key delivery, shortcuts, `Multi_key`, locale-specific dead-key composition, the default save-confirmation interaction, and the text-input-v3 client activation boundary. When the compositor exports the manager, the probe verifies client-side bind/focus/enable/state-commit; when it does not, the probe verifies graceful opt-in fallback to physical XKB typing. It does not inject preedit/commit/delete events from a real IBus/Fcitx provider, validate physical keyboard hardware, cover other desktop environments, or test complex-script shaping; those remain separate desktop checks.
 
 The temporary extension exports only readiness, focus-by-PID, and narrowly scoped remote-keyboard operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all temporary data are removed after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell.
