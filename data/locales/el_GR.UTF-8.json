@@ -29,11 +29,11 @@
     "base_dead_key_rules": 1576,
     "locale_dead_key_rules": 970,
     "dead_key_overrides": 234,
-    "unsupported_input": 940,
+    "unsupported_input": 1072,
     "invalid_output": 0,
     "invalid_string": 0,
     "short_sequence": 0,
-    "too_long": 132,
+    "too_long": 0,
     "unsupported_lead": 127
   },
   "sequences": [
