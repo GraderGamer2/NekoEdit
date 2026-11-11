@@ -224,6 +224,7 @@ def run(
     unicode_keyboard_test: bool = False,
     text_input_test: bool = False,
     text_input_advertised: bool = False,
+    text_input_opt_in_fallback_test: bool = False,
     omit_compat_repeat_default: bool = False,
     punctuation_render_test: bool = False,
     utf8_edit_test: bool = False,
@@ -1332,6 +1333,9 @@ xkb_symbols "nekoedit-sparse" {
                         "text_input_manager_object",
                         "text_input_object",
                         "text_input_enabled",
+                        "text_input_entered",
+                        "text_input_commit_serial",
+                        "text_input_state_ready",
                     }
                     for line in nm_text.splitlines():
                         fields = line.split()
@@ -1372,6 +1376,27 @@ xkb_symbols "nekoedit-sparse" {
                                 )
                             observations.append(
                                 "text-input-v3 advertisement leaves the default physical XKB typing path active"
+                            )
+                        if text_input_opt_in_fallback_test:
+                            ime_state = {
+                                name: struct.unpack("<I", child_memory(name, 0, 4))[0]
+                                for name in (
+                                    "text_input_manager_global",
+                                    "text_input_manager_object",
+                                    "text_input_object",
+                                    "text_input_entered",
+                                    "text_input_enabled",
+                                    "text_input_commit_serial",
+                                    "text_input_state_ready",
+                                )
+                            }
+                            if any(ime_state.values()):
+                                raise AssertionError(
+                                    "text-input-v3 opt-in without an advertised manager "
+                                    f"created protocol state instead of falling back to XKB: {ime_state}"
+                                )
+                            observations.append(
+                                "text-input-v3 opt-in without a manager global leaves every protocol state field inactive"
                             )
                         ready = struct.unpack("<I", child_memory("xkb_keymap_ready", 0, 4))[0]
                         key_name = child_memory("xkb_key_names", 24 * 4, 4)
@@ -8031,7 +8056,7 @@ xkb_symbols "nekoedit-sparse" {
         environment["LANG"] = "pt_BR.UTF-8"
     # Never let a caller's shell opt-in leak into the default-path regression.
     environment.pop("NEKOEDIT_ENABLE_TEXT_INPUT", None)
-    if text_input_test:
+    if text_input_test or text_input_opt_in_fallback_test:
         environment["NEKOEDIT_ENABLE_TEXT_INPUT"] = "1"
     # Each mock receives an isolated HOME so preferences and journals never
     # enter the CI runner account. Only this test enables preferences to exercise
@@ -8177,6 +8202,26 @@ if __name__ == "__main__":
     # Exercise the optional text-input-v3/IME path independently of the
     # physical-keyboard fallback and without cursor-shape/clipboard globals.
     run(sys.argv[1], text_input_test=True, cursor_shape_supported=False)
+    # An explicit text-input-v3 opt-in must remain harmless when the
+    # compositor does not advertise the manager: no text-input object may be
+    # created, and the full real-keymap typing/save scenario must still pass.
+    fallback_fd, fallback_path = tempfile.mkstemp(prefix="nekoedit-text-input-fallback-")
+    try:
+        with os.fdopen(fallback_fd, "wb") as fallback_document:
+            fallback_document.write(b"I")
+        run(
+            sys.argv[1],
+            initial_file=fallback_path,
+            save_roundtrip=True,
+            expected_saved_bytes=b"IaAq@@wertyuiopasdfghjklzxcvbnm\"y@\"@@!@#$%^&*()_+~{}:\"<>?,77xWmM@\"qQ\\xe2\\x82\\xac\\xc3\\xa9\\xc3\\xa9NV",
+            keyboard_layout_test=True,
+            text_input_opt_in_fallback_test=True,
+        )
+    finally:
+        try:
+            os.unlink(fallback_path)
+        except FileNotFoundError:
+            pass
     # A compositor disconnect immediately after xdg_surface.configure must
     # return a controlled protocol error rather than terminate via SIGPIPE.
     disconnect_fd, disconnect_path = tempfile.mkstemp(prefix="nekoedit-disconnect-")
