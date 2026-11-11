@@ -87,7 +87,7 @@ test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
 	./$(XKB_NATIVE_KEYMAP_TEST)
 
 test-mutter: $(APP_BINARY) locale-packs
-	IBUS_ENABLE_CTRL_SHIFT_U=1 dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
+	dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
 
 install: $(APP_BINARY)
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/applications" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps"
