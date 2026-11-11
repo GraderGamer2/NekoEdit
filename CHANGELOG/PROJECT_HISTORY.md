@@ -1,3 +1,8 @@
+## 2026-11-11 — correct the Mutter canary for default save confirmation
+
+The native headless run #815 did not establish that the RemoteDesktop virtual keyboard failed to deliver keys. It completed the D-Bus key-notification calls, but the file remained unchanged because the harness sent Ctrl+S without accepting NekoEdit's default save-confirmation modal.
+
+The existing Wayland mock explicitly asserts that confirm-before-save is enabled by default, Ctrl+S opens a modal without writing, Escape cancels it, and Enter accepts it and commits the file. The native Mutter harness omitted that Enter key in both file comparisons. It now sends Return (keysym 65293) after Ctrl+S for both the basic edit canary and the final Compose output. Build and test #816 will establish whether native key delivery and composition work with the correct save interaction.
 ## 2026-11-11 — XI2 raw input monitor added for GNOME nested compositor test
 
 Run #813 reached the live Mutter test and reported the inner NekoEdit MetaWindow as focused at frame rectangle `0,32,800,568`. The harness clicked the calculated frame center and confirmed the outer X11 host remained focused; however, the XTest canary still left the document unchanged. The Shell stage captured-event listener did not record keys, but that alone is not decisive for a separate Wayland client owning keyboard focus.

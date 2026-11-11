@@ -1,3 +1,9 @@
+## 2026-11-11 — Build and test #816: correct save-confirmation handling in Mutter canary
+
+**Previous run #815:** [failed](https://github.com/GraderGamer2/NekoEdit/actions/runs/42965658728) at the basic edit/save file comparison. It successfully started Mutter's native headless backend, found and activated NekoEdit's MetaWindow, started the RemoteDesktop session, and completed all D-Bus key-notification calls. However, the harness sent Ctrl+S without Enter. NekoEdit's default confirm-before-save setting intentionally opens a modal and leaves the target file unchanged until Enter accepts it. The unchanged seed file therefore did not prove that key delivery had failed; the earlier interpretation was too strong.
+**Correction:** the basic canary and the final Compose save now both send Enter after Ctrl+S and before the exact on-disk byte comparison. This follows the existing Wayland mock assertion that Enter accepts the default save confirmation. Failure messages now describe the incomplete save canary rather than claiming that key delivery was absent.
+**Source/test commit:** this entry is linked to the exact commit in the development log. **Build and test #816** will validate the corrected harness from a fresh build; no Mutter input or Compose pass is claimed yet.
+**Scope:** only the integration test and its documentation/changelog were changed. NekoEdit editor source, runtime dependencies, and CI package list are unchanged.
 ## 2026-11-11 — Build and test #814: XI2 raw-key event diagnostics in progress
 
 **Source commit:** [1e34ec6fe546](https://github.com/GraderGamer2/NekoEdit/commit/1e34ec6fe54661e447713e73c90d2020a0744fb4). The test now runs `xinput test-xi2 --root` alongside the ordinary-key canary and captures raw/device key events from the Xvfb server. This separates the XTest injection layer from Mutter's forwarding to the nested Wayland surface. `xinput` is a CI-only test package; the editor binary is unchanged.

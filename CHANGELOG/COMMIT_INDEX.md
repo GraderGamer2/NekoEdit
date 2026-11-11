@@ -1,3 +1,11 @@
+## 2026-11-11 — accept save confirmation in the Mutter headless test — Build and test #816
+
+| Source change | Description |
+|---|---|
+| tests/mutter_gnome_smoke.sh | Send Enter after Ctrl+S in the basic canary and after the final Compose sequence, matching NekoEdit's default confirmation behavior |
+| docs/MUTTER_INTEGRATION_TEST.md | Document that saving requires accepting the default confirmation modal |
+
+Run #815 successfully started native headless Mutter and its RemoteDesktop input session, and completed the D-Bus key-notification calls. Its file remained unchanged because the harness did not send Enter to accept the default Ctrl+S confirmation modal. The unchanged file was therefore not proof of absent keyboard delivery. Both canaries now explicitly accept the modal before comparing the saved bytes. Build and test #816 will validate this corrected sequence.
 ## 2026-11-11 — XI2 root event tracing for nested Mutter input — Build and test #814 in progress
 
 | Commit | Subject |

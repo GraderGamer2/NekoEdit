@@ -1,3 +1,10 @@
+## 2026-11-11 — accept NekoEdit's default save confirmation in the native Mutter smoke test
+
+- Build and test [#815](https://github.com/GraderGamer2/NekoEdit/actions/runs/42965658728) passed all build, CLI, Wayland mock, ELF, pinned locale-data, and optional locale-pack stages. The native headless Mutter backend started, found and activated NekoEdit's MetaWindow, created the RemoteDesktop input session, and reported all queued key-notification D-Bus calls complete. The saved document nevertheless remained unchanged.
+- Rechecked the actual save-confirmation behavior in tests/wayland_mock.py: confirm-before-save defaults to enabled; Ctrl+S opens a modal without writing; Escape cancels it; Enter accepts and commits the save. The Mutter canary had sent Ctrl+S but omitted Enter. Its unchanged-file assertion therefore could not distinguish absent keyboard input from the expected pending confirmation dialog.
+- Updated both basic and Compose save paths in tests/mutter_gnome_smoke.sh to send Return (keysym 65293) after Ctrl+S. The file comparison happens only after the confirmation key and after the input queue drains. Failure text no longer mislabels a failed file comparison as proof that keys were not delivered.
+- Updated docs/MUTTER_INTEGRATION_TEST.md to document the confirmation requirement and exact canary.
+- Build and test #816 is triggered by this source/test commit. It must validate both the basic edit/save canary and the Multi_key / two-dead-key output; no success is assumed before the run completes.
 ## 2026-11-11 — monitor Xvfb raw key events independently in the nested Mutter test
 
 - Build and test [#813](https://github.com/GraderGamer2/NekoEdit/actions/runs/42961793193) passed every pre-Mutter stage but failed the ordinary key/save canary. Mutter found NekoEdit's focused MetaWindow and reported frame rectangle `0,32,800,568`; the test clicked its frame center at `400,316`. The X11 host focus check remained valid, yet the document stayed `seed`.

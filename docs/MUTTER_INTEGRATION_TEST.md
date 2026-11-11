@@ -8,11 +8,11 @@ The test starts GNOME Shell with Mutter's native `--headless` backend and a `128
 
 A small GNOME Shell extension is copied into that temporary HOME and enabled through an isolated GLib keyfile GSettings backend. The extension reports the actual focused Mutter `MetaWindow` by process ID and creates a session using Mutter's `org.gnome.Mutter.RemoteDesktop` D-Bus API. It calls `CreateSession`, `Start`, and `NotifyKeyboardKeysym` through the same GNOME Shell D-Bus connection, which is required by Mutter's same-peer session permission check. On the native headless backend, Mutter creates its native virtual keyboard device and injects key events directly through its input seat; no XTEST device or host X window is involved.
 
-The harness sends Ctrl+A, `x`, and Ctrl+S and checks that the document contains exactly `x`. Only after that canary succeeds does it test:
+The harness sends Ctrl+A and `x`, then sends Ctrl+S followed by Enter. Save confirmation is enabled by default in NekoEdit, so Enter explicitly accepts the confirmation modal; without it, Ctrl+S intentionally leaves the file unchanged. The harness checks that the saved document contains exactly `x`. Only after that canary succeeds does it test:
 
 1. `Multi_key`, period, period, producing U+2026 (…).
 2. `dead_grave`, `dead_circumflex`, `A`, which must resolve through the separate `pt_BR.UTF-8` locale pack to U+1EA6 (Ầ).
-3. Ctrl+S, followed by an exact UTF-8 byte comparison against `…Ầ`.
+3. Ctrl+S and Enter to accept the default save-confirmation modal, followed by an exact UTF-8 byte comparison against `…Ầ`.
 
 The extension, remote-desktop session, GSettings keyfile, editor preferences, locale pack, Wayland runtime directory, and temporary monitor are all limited to the test process and its temporary HOME. No remote-desktop daemon, network listener, RDP port, or user desktop session is configured.
 
@@ -29,6 +29,6 @@ The Make target builds optional locale packs separately and launches the harness
 
 ## Validation boundary
 
-This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland key delivery, shortcuts, `Multi_key`, and locale-specific dead-key composition without depending on Xvfb, nested-X11 focus, physical keyboard hardware, or the user's desktop session. It does not validate physical hardware, other desktop environments, input-method-v3 preedit, or complex-script shaping; those still require separate desktop checks.
+This is real GNOME Shell/Mutter native Wayland seat coverage with a native virtual input device. It validates Wayland key delivery, shortcuts, `Multi_key`, locale-specific dead-key composition, and the default save-confirmation interaction without depending on Xvfb, nested-X11 focus, physical keyboard hardware, or the user's desktop session. It does not validate physical hardware, other desktop environments, input-method-v3 preedit, or complex-script shaping; those still require separate desktop checks.
 
 The temporary extension exports only readiness, focus-by-PID, and narrowly scoped remote-keyboard operations on the private CI D-Bus session. It does not enable GNOME Shell's arbitrary Eval interface. The extension and all temporary data are removed after success; none becomes an editor runtime dependency. Ordinary `make test` and `make test-wayland` remain usable without GNOME Shell.

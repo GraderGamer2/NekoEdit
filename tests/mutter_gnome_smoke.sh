@@ -266,9 +266,12 @@ wait_for_input_idle() {
 }
 
 # Basic typing and Save shortcut are a canary independent of Compose handling.
+# Save confirmation is enabled by default: Enter accepts the modal opened by
+# Ctrl+S. The file is not written until this explicit confirmation is sent.
 send_shortcut 65507 97
 send_keysym 120
 send_shortcut 65507 115
+send_keysym 65293
 wait_for_input_idle
 
 PROBE_SAVED=0
@@ -283,7 +286,7 @@ for attempt in $(seq 1 50); do
     sleep 0.1
 done
 if [ "$PROBE_SAVED" -ne 1 ]; then
-    echo "native Mutter virtual keyboard did not deliver the basic edit/save canary" >&2
+    echo "native Mutter virtual keyboard did not complete the basic edit/save canary after Enter confirmed Ctrl+S" >&2
     echo "NekoEdit PID: $APP_PID" >&2
     echo "input status: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.InputStatus" 2>&1 || true)" >&2
     exit 1
@@ -298,6 +301,7 @@ send_keysym 65104
 send_keysym 65106
 send_keysym 65
 send_shortcut 65507 115
+send_keysym 65293
 wait_for_input_idle
 
 SAVED=0
@@ -313,7 +317,7 @@ for attempt in $(seq 1 100); do
 done
 
 if [ "$SAVED" -ne 1 ]; then
-    echo "ordinary keyboard canary passed, but expected Compose output U+2026 U+1EA6 (…Ầ) was not saved" >&2
+    echo "ordinary keyboard canary passed, but expected Compose output U+2026 U+1EA6 (…Ầ) was not saved after Enter confirmed Ctrl+S" >&2
     echo "NekoEdit PID: $APP_PID" >&2
     echo "input status: $(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" --method "$DBUS_INTERFACE.InputStatus" 2>&1 || true)" >&2
     exit 1
