@@ -1,3 +1,14 @@
+## 2026-11-12 — publish IBus address to D-Bus activation and verify the portal (CI pending)
+
+| Commit | Subject |
+|---|---|
+| pending | test: propagate IBus address to D-Bus activation |
+| pending | docs: record IBus portal readiness check |
+
+Actions #841 passed all backend and Wayland checks, plus native XKB and locale validation. The Mutter stage still failed because the separately activated IBus portal could not discover the private IBus socket. The harness now publishes HOME/XDG and `IBUS_ADDRESS` to D-Bus activation and requires `org.freedesktop.portal.IBus` to own its name before GNOME Shell starts. CI is pending.
+
+---
+
 ## 2026-11-12 — start and verify IBus before headless GNOME Shell (CI pending)
 
 | Commit | Subject |

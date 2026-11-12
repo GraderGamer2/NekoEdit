@@ -1,3 +1,15 @@
+## 2026-11-12 — propagate the IBus socket address to D-Bus-activated portal services (CI pending)
+
+Actions [Build and test #841](https://github.com/GraderGamer2/NekoEdit/actions/runs/43138760681) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, real `us(intl)` parser validation, X.Org importer verification, and locale-pack build. Mutter again passed native Right Alt Compose, the pt_BR dead-key sequence and save, plus text-input-v3 manager/focus/enable/state-commit. The only failure remained live IBus Simple preedit.
+
+The #841 trace narrows the problem: `ibus-daemon` successfully owns `org.freedesktop.IBus` and `ibus engine` reports `xkb:us:intl:eng`, but the separately D-Bus-activated `org.freedesktop.portal.IBus` process exits with “Not connected to the ibus bus”. The portal is launched by `dbus-daemon`, which uses its own activation environment. The harness was changing `HOME` and XDG variables only in its own process after `dbus-run-session` had already created the bus.
+
+The next test correction uses `dbus-update-activation-environment` to publish the isolated HOME/XDG/Wayland variables to D-Bus, obtains the real IBus socket address through `ibus address`, publishes it as `IBUS_ADDRESS`, then explicitly starts `org.freedesktop.portal.IBus` and verifies its name owner before launching GNOME Shell. This validates the portal's IBus connection, not merely the daemon's session-bus name. The IBus address lookup follows IBus's documented preference for the `IBUS_ADDRESS` environment variable before the per-user socket file; D-Bus activation services inherit the activation environment maintained by the bus daemon. This remains a test-harness-only change; the editor keeps no IBus or D-Bus runtime dependency.
+
+The strict real IBus Compose preedit/backspace-correction/commit/save assertion is unchanged. CI is pending; no live IBus pass is claimed.
+
+---
+
 ## 2026-11-12 — make IBus available before headless GNOME Shell startup (CI pending)
 
 Actions [Build and test #840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136666325) passed the freestanding build, command-line tests, complete Wayland protocol mock, ELF inspection, native `us(intl)` XKB parser verification, X.Org source importer verification, and optional locale-pack build. Its Mutter phase passed the physical-XKB Right Alt Compose and pt_BR dead-key sequence, confirmed save, and text-input-v3 manager/focus/enable/state-commit handshake. IBus Simple still failed to deliver preedit. The log showed the portal's “Not connected to the ibus bus” failure occurring during GNOME Shell startup, before the harness switched the second phase to IBus Simple.

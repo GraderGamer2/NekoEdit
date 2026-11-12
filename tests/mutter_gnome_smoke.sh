@@ -18,7 +18,7 @@ BUS_NAME="org.nekoedit.TestHarness"
 OBJECT_PATH="/org/nekoedit/TestHarness"
 DBUS_INTERFACE="org.nekoedit.TestHarness"
 
-for tool in gnome-shell gsettings gdbus ibus; do
+for tool in gnome-shell gsettings gdbus ibus dbus-update-activation-environment; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing integration-test tool: $tool" >&2
         exit 2
@@ -79,13 +79,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-ibus_bus_has_owner() {
+ibus_name_has_owner() {
     local owner
     owner="$(gdbus call --session --dest org.freedesktop.DBus \
         --object-path /org/freedesktop/DBus \
-        --method org.freedesktop.DBus.NameHasOwner org.freedesktop.IBus \
+        --method org.freedesktop.DBus.NameHasOwner "$1" \
         2>/dev/null || true)"
     [[ "$owner" == *"true"* ]]
+}
+
+ibus_bus_has_owner() {
+    ibus_name_has_owner org.freedesktop.IBus
+}
+
+ibus_portal_has_owner() {
+    ibus_name_has_owner org.freedesktop.portal.IBus
 }
 
 EXTENSION_DIR="$TEST_ROOT/home/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
@@ -120,6 +128,14 @@ export NO_AT_BRIDGE="1"
 export XDG_SESSION_TYPE="wayland"
 unset DISPLAY IBUS_ADDRESS IBUS_DAEMON_PID || true
 
+# dbus-run-session inherited the runner's environment before this script
+# created the isolated HOME/XDG tree. Services activated by the session bus
+# therefore need an explicit environment refresh or ibus-portal will look for
+# the IBus socket under the runner's original config directory.
+dbus-update-activation-environment \
+    HOME XDG_RUNTIME_DIR XDG_CONFIG_HOME XDG_DATA_HOME \
+    XDG_SESSION_TYPE WAYLAND_DISPLAY
+
 # The headless harness does not launch gnome-session or a systemd user manager.
 # Start IBus's normal GNOME-mode service command after the private HOME, XDG
 # paths and Wayland session variables are set, but before GNOME Shell starts.
@@ -148,6 +164,43 @@ if [ "$IBUS_READY" -ne 1 ]; then
     tail -n 160 "$TEST_ROOT/ibus-daemon.log" >&2 || true
     exit 1
 fi
+
+# ibus-portal is a separate D-Bus-activated process. Its IBus client resolves
+# the private socket from IBUS_ADDRESS first, then from the user's IBus config
+# socket file. Publish the daemon's actual address to future D-Bus activations.
+IBUS_ADDRESS="$(ibus address 2>/dev/null || true)"
+if [ -z "$IBUS_ADDRESS" ] || [ "$IBUS_ADDRESS" = "(null)" ]; then
+    echo "IBus daemon owns its session name but has not published a usable IBus address" >&2
+    tail -n 160 "$TEST_ROOT/ibus-daemon.log" >&2 || true
+    exit 1
+fi
+export IBUS_ADDRESS
+dbus-update-activation-environment IBUS_ADDRESS
+
+# Force a fresh activation after the address and isolated HOME/XDG paths have
+# been published. Merely seeing org.freedesktop.IBus on the session bus does
+# not prove the separately activated portal can connect to the IBus socket.
+if ! ibus_portal_has_owner; then
+    gdbus call --session --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.StartServiceByName \
+        org.freedesktop.portal.IBus 0 >/dev/null
+fi
+PORTAL_READY=0
+for attempt in $(seq 1 100); do
+    if ibus_portal_has_owner; then
+        PORTAL_READY=1
+        break
+    fi
+    sleep 0.1
+done
+if [ "$PORTAL_READY" -ne 1 ]; then
+    echo "IBus portal did not acquire org.freedesktop.portal.IBus after its activation environment was refreshed" >&2
+    tail -n 160 "$TEST_ROOT/ibus-daemon.log" >&2 || true
+    exit 1
+fi
+echo "IBus daemon address and IBus portal activation verified"
+
 if ! ibus list-engine --name-only | grep -Fxq 'xkb:us:intl:eng'; then
     echo "IBus Simple does not provide the required xkb:us:intl:eng test engine" >&2
     ibus list-engine --name-only >&2 || true

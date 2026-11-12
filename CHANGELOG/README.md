@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-12 — IBus D-Bus activation environment correction pending CI)
+
+Continue from branch `early-alpha`. The frame-pacing implementation and complete Wayland mock remain green. Actions #841 passed build, command-line, Wayland, ELF, native `us(intl)` parsing, X.Org importer, and locale-pack stages. Mutter physical XKB Compose/dead-key save and the text-input-v3 handshake passed. The live IBus Simple preedit assertion still failed.
+
+The latest failure is not that the daemon is absent: it owns `org.freedesktop.IBus`, and `ibus engine` returns `xkb:us:intl:eng`. The separately D-Bus-activated `org.freedesktop.portal.IBus` process prints “Not connected to the ibus bus”. The test updates HOME/XDG variables after `dbus-run-session` has already launched its bus, so the activated portal inherits the bus's old environment. IBus clients resolve their socket using `IBUS_ADDRESS` or a config-directory socket file; D-Bus-activated services use the bus daemon's activation environment.
+
+The newest correction (pending Actions) updates D-Bus activation with isolated HOME/XDG/Wayland paths, obtains the actual IBus address using `ibus address`, exports and publishes `IBUS_ADDRESS` through `dbus-update-activation-environment`, explicitly starts `org.freedesktop.portal.IBus`, and requires that portal name to be owned before GNOME Shell starts. It does not relax the real provider preedit/commit/save canary or modify the editor's runtime dependencies. Check Actions #842 (or newer) before claiming IBus coverage is complete.
+
+---
+
 ## Latest handoff (2026-11-12 — IBus startup ordering correction pending CI)
 
 Continue from branch `early-alpha`. The frame-pacing feature is implemented and the full Wayland mock is green. Actions #840 passed build/CLI, Wayland mock, ELF checks, native XKB validation, X.Org importer, and locale-pack build. The first Mutter leg passed real native virtual keyboard input, Right Alt Compose, two-mark dead-key composition, and save. The text-input-v3 activation handshake passed. The only remaining failed assertion is real IBus Simple preedit/commit.
