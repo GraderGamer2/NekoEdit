@@ -2231,6 +2231,32 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_length") != 0:
                         raise AssertionError("preedit text was incorrectly committed to the document")
 
+                    # Mutter 46.0-46.2 sent cursor_end as a character index
+                    # while cursor_begin was already a byte offset. Accept only
+                    # the collapsed-caret legacy pattern (2, 1) for a two-byte
+                    # character, and normalize it to the protocol byte pair (2, 2).
+                    legacy_anchor_text = "é".encode("utf-8")
+                    legacy_anchor = legacy_anchor_text + bytes((0,))
+                    client.sendall(preedit_event(legacy_anchor, 2, 1))
+                    legacy_deadline = time.monotonic() + 2.0
+                    while (
+                        child_u32("text_input_pending_preedit_length") != len(legacy_anchor_text)
+                        and time.monotonic() < legacy_deadline
+                    ):
+                        time.sleep(0.005)
+                    legacy_pending = {
+                        "length": child_u32("text_input_pending_preedit_length"),
+                        "cursor_begin": child_u32("text_input_pending_preedit_cursor_begin"),
+                        "cursor_end": child_u32("text_input_pending_preedit_cursor_end"),
+                    }
+                    if legacy_pending != {
+                        "length": len(legacy_anchor_text), "cursor_begin": 2, "cursor_end": 2
+                    }:
+                        raise AssertionError(
+                            "legacy Mutter character-index anchor was not repaired narrowly: "
+                            + repr(legacy_pending)
+                        )
+
                     # A valid multibyte preedit followed by an invalid replacement in
                     # the same done batch must retain the last valid candidate. Cursor
                     # indices are UTF-8 byte offsets, and the range may be reversed.

@@ -13642,7 +13642,35 @@ text_input_handle_event:
     movzx eax, byte ptr [rax + rdx]
     and eax, 0xc0
     cmp eax, 0x80
-    je .Lti_ignored
+    jne .Lti_preedit_commit_candidate
+    # Mutter 46.0-46.2 converted cursor_begin to UTF-8 bytes but sent
+    # cursor_end/anchor as a Unicode-character index. Repair only the
+    # collapsed-caret case: the end offset is inside a continuation byte,
+    # and interpreting it as a character index lands exactly on the already
+    # validated byte cursor. Other malformed ranges remain rejected.
+    mov r11d, ecx
+    mov r10d, edx
+    xor r9d, r9d
+    xor r8d, r8d
+.Lti_preedit_anchor_legacy_convert:
+    cmp r8d, r10d
+    jae .Lti_preedit_anchor_legacy_check
+    cmp r9d, dword ptr [rip + text_input_request_buffer + 4096]
+    jae .Lti_ignored
+    lea rdi, [rip + text_input_request_buffer]
+    mov esi, r9d
+    mov edx, dword ptr [rip + text_input_request_buffer + 4096]
+    call text_input_decode_scalar
+    test edx, edx
+    jz .Lti_ignored
+    add r9d, edx
+    inc r8d
+    jmp .Lti_preedit_anchor_legacy_convert
+.Lti_preedit_anchor_legacy_check:
+    cmp r9d, r11d
+    jne .Lti_ignored
+    mov edx, r9d
+    jmp .Lti_preedit_commit_candidate
 .Lti_preedit_commit_candidate:
     mov eax, dword ptr [rip + text_input_request_buffer + 4096]
     mov dword ptr [rip + text_input_pending_preedit_length], eax

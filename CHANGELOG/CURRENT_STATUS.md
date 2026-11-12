@@ -1,12 +1,13 @@
-## 2026-11-12 — capture the raw Mutter text-input-v3 preedit cursor offsets (CI pending)
+## 2026-11-12 — handle Mutter 46.0-46.2's malformed text-input preedit anchor (CI pending)
 
-Actions [Build and test #849](https://github.com/GraderGamer2/NekoEdit/actions/runs/43175992157) passed the full build/ELF, CLI, Wayland mock, XKB parser, X.Org importer, locale-pack, native Mutter Compose/dead-key/save, and the IBus keymap/engine checks. In the final IBus phase, GNOME Shell received `dead_acute` (`0xfe51`) and its own IBus state showed visible preedit text `´`, but NekoEdit's text-input-v3 buffer remained empty.
+Actions [Build and test #850](https://github.com/GraderGamer2/NekoEdit/actions/runs/43177165984) passed build/ELF verification, CLI tests, the complete Wayland mock, executable inspection, real `us(intl)` XKB validation, X.Org importer verification, and locale-pack build. The native Mutter Compose/dead-key/save canary and IBus provider preedit also passed through GNOME Shell and Mutter up to the final Wayland client event.
 
-Mutter 46's `meta_wayland_text_input_focus_set_preedit_text()` converts the preedit cursor from a Unicode-character index to a UTF-8 byte offset, but the source passes the anchor index through unchanged. NekoEdit correctly validates both text-input-v3 offsets as UTF-8 byte boundaries, so a multibyte preedit can be rejected when the anchor still points at a continuation byte. Newer Mutter source converts both cursor and anchor to byte offsets; this looks like a Mutter 46 interoperability bug, but the exact on-wire values must be confirmed.
+The raw-payload diagnostic proved the cause exactly. Mutter 46.2 supplied the two-byte preedit `C2 B4` (`´`) with `cursor_begin=2` and `cursor_end=1`. Its `cursor_begin` was a UTF-8 byte offset, while `cursor_end` was still a Unicode-character index. NekoEdit correctly rejected the latter because byte offset 1 is inside the UTF-8 scalar. Upstream fixed this in [Mutter commit f214eb5](https://github.com/GNOME/mutter/commit/f214eb513429b9434d88dd4fce115aef8ab977bc), but the CI runner's Mutter 46.2 predates that fix; the conversion is present in 46.3.
 
-The live probe now reads NekoEdit's existing 4,112-byte staging buffer through its already-open parent-to-child `/proc/<pid>/mem` descriptor when this failure occurs. It reports the candidate UTF-8 bytes and `cursor_begin`/`cursor_end` values without changing the parser or its strict rejection behavior. This diagnostic-only change leaves application behavior and runtime dependencies unchanged. CI is pending.
+NekoEdit now has a narrowly gated compatibility path: when `cursor_end` lands inside a continuation byte, it interprets that offset as a legacy character index and converts it only if the resulting byte offset exactly matches the already validated `cursor_begin` (a collapsed caret). It does not weaken validation of malformed `cursor_begin` values or unrelated selection ranges. The Wayland mock adds a regression for the legacy `(2, 1)` event becoming `(2, 2)`, while retaining the existing malformed-offset rejection test. CI is pending; no full Mutter pass is claimed yet.
 
 ---
+
 
 
 
