@@ -1,3 +1,7 @@
+## 2026-11-12 — CI #866 stopped on a duplicated test assertion line
+
+Actions [Build and test #866](https://github.com/GraderGamer2/NekoEdit/actions/runs/43226811420) passed the freestanding assembly/C build, ELF inspection, and command-line test set. The Wayland suite did not start because a scripted block move duplicated the `memfd+SCM_RIGHTS buffer verified` observation on one Python source line, producing a SyntaxError. Remove the duplicate line; no application source changes are needed for this harness correction. The reordered startup and output tests remain unverified until the next workflow completes.
+
 ## 2026-11-12 — enforce contiguous client IDs before Wayland output binding (CI pending)
 
 Reorder startup so output proxies are bound only after fixed objects 8–14 and any optional input-service objects have been allocated. Defer the first shared-buffer attach/damage/commit until after those output bindings; the no-seat path uses the next free ID after the initial window/shm objects. Registry announcements are still captured in both startup roundtrips, but object creation is deferred until the allocator can issue contiguous new IDs. This directly addresses Mutter's `wl_registry.bind` rejection from #865.

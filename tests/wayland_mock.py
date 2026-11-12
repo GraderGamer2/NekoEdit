@@ -592,7 +592,7 @@ def run(
                     (11, 0, struct.pack("<6I", 12, 0, 800, initial_height, 3200, 1)),
                     "create wl_buffer",
                 )
-                observations.append("memfd+SCM_RIGHTS buffer verified")                observations.append("memfd+SCM_RIGHTS buffer verified")
+                observations.append("memfd+SCM_RIGHTS buffer verified")
 
                 # The seat is bound after the existing window objects to keep
                 # the client-side object ID sequence dense.
