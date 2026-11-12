@@ -6768,15 +6768,16 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1236)), "ack restored configure"
                     )
+                    restore_buffer_id = child_u32("next_client_object_id")
                     client.sendall(wire_message(resize_buffer_base, 0))
                     expect_message(client, (resize_buffer_base, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", resize_buffer_base + 1, 0, 800, 480, 3200, 1)),
+                        (11, 0, struct.pack("<6I", restore_buffer_id, 0, 800, 480, 3200, 1)),
                         "create restored buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", resize_buffer_base + 1, 0, 0)),
+                        client, (8, 1, struct.pack("<III", restore_buffer_id, 0, 0)),
                         "attach restored buffer",
                     )
                     expect_message(
@@ -6788,7 +6789,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         restored_state.get("window_width") != 800
                         or restored_state.get("window_height") != 480
-                        or restored_state.get("window_buffer_id") != resize_buffer_base + 1
+                        or restored_state.get("window_buffer_id") != restore_buffer_id
                         or restored_state.get("window_is_maximized") != 0
                         or restored_state.get("window_status_top") != 460
                         or restored_state.get("window_status_bytes_x") != 480
@@ -6853,14 +6854,15 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (9, 4, struct.pack("<I", 1237)), "ack interactive-resize configure"
                     )
-                    client.sendall(wire_message(resize_buffer_base + 1, 0))
-                    expect_message(client, (resize_buffer_base + 1, 0, b""), "destroy old buffer after edge resize")
+                    edge_buffer_id = child_u32("next_client_object_id")
+                    client.sendall(wire_message(restore_buffer_id, 0))
+                    expect_message(client, (restore_buffer_id, 0, b""), "destroy old buffer after edge resize")
                     expect_message(
-                        client, (11, 0, struct.pack("<6I", resize_buffer_base + 2, 0, 720, 480, 2880, 1)),
+                        client, (11, 0, struct.pack("<6I", edge_buffer_id, 0, 720, 480, 2880, 1)),
                         "create edge-resized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", resize_buffer_base + 2, 0, 0)), "attach edge-resized buffer"
+                        client, (8, 1, struct.pack("<III", edge_buffer_id, 0, 0)), "attach edge-resized buffer"
                     )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 720, 480)), "damage edge-resized surface"
@@ -6884,7 +6886,7 @@ xkb_symbols "nekoedit-sparse" {
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
                         or edge_state.get("window_stride") != 2880
-                        or edge_state.get("window_buffer_id") != resize_buffer_base + 2
+                        or edge_state.get("window_buffer_id") != edge_buffer_id
                         or edge_state.get("window_is_maximized") != 0
                         or edge_state.get("window_status_top") != 460
                         or edge_state.get("window_status_bytes_x") != 430
@@ -6901,7 +6903,7 @@ xkb_symbols "nekoedit-sparse" {
                         or edge_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
-                    client.sendall(wire_message(resize_buffer_base + 2, 0))
+                    client.sendall(wire_message(edge_buffer_id, 0))
                     if not rendered_color_present(430, 466, 48, 7, 2880, 0xFFD8DEE9):
                         raise AssertionError("the byte-count footer label did not follow the 720px resized width")
                     if not rendered_color_present(664, 466, 40, 7, 2880, 0xFFD8DEE9):
@@ -6973,10 +6975,10 @@ xkb_symbols "nekoedit-sparse" {
                     cursor_feedback_state["shape"] = 1
 
                     resized_ui_click(
-                        120, 12, serial + 160, "open File menu at 720px", resize_buffer_base + 2, 720, 480
+                        120, 12, serial + 160, "open File menu at 720px", edge_buffer_id, 720, 480
                     )
                     resized_ui_click(
-                        120, 48, serial + 170, "open picker at 720px", resize_buffer_base + 2, 720, 480
+                        120, 48, serial + 170, "open picker at 720px", edge_buffer_id, 720, 480
                     )
                     picker_720 = picker_state()
                     if (
@@ -6995,7 +6997,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("resized picker Cancel button background was not drawn at its fitted location")
                     resized_ui_click(
                         cancel_x_720, cancel_y_720, serial + 180,
-                        "cancel fitted picker at 720px", resize_buffer_base + 2, 720, 480,
+                        "cancel fitted picker at 720px", edge_buffer_id, 720, 480,
                     )
                     if picker_state().get("picker_mode") != 0:
                         raise AssertionError("the fitted 720px picker Cancel hit target did not close the picker")
@@ -7005,6 +7007,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Exercise the smallest compositor geometry NekoEdit advertises.
                     # The picker and path prompt must both fit within its 16px margins.
+                    small_buffer_id = child_u32("next_client_object_id")
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiIII", 480, 360, 8, 3, 4))
                         + wire_message(9, 0, struct.pack("<I", 1238))
@@ -7013,15 +7016,15 @@ xkb_symbols "nekoedit-sparse" {
                         client, (9, 4, struct.pack("<I", 1238)), "ack minimum-size configure"
                     )
                     expect_message(
-                        client, (resize_buffer_base + 2, 0, b""), "destroy released 720px buffer"
+                        client, (edge_buffer_id, 0, b""), "destroy released 720px buffer"
                     )
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", resize_buffer_base + 3, 0, 480, 360, 1920, 1)),
+                        (11, 0, struct.pack("<6I", small_buffer_id, 0, 480, 360, 1920, 1)),
                         "create minimum-size buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", resize_buffer_base + 3, 0, 0)),
+                        client, (8, 1, struct.pack("<III", small_buffer_id, 0, 0)),
                         "attach minimum-size buffer",
                     )
                     expect_message(
@@ -7046,14 +7049,14 @@ xkb_symbols "nekoedit-sparse" {
                         or small_state.get("path_prompt_y") != 88
                         or small_state.get("path_prompt_width") != 448
                         or small_state.get("path_prompt_height") != 176
-                        or small_state.get("window_buffer_id") != resize_buffer_base + 3
+                        or small_state.get("window_buffer_id") != small_buffer_id
                     ):
                         raise AssertionError(f"minimum-size layout geometry is inconsistent: {small_state!r}")
                     if not rendered_color_present(280, 346, 48, 7, 1920, 0xFFD8DEE9):
                         raise AssertionError("the byte-count footer label did not fit the minimum width")
                     if not rendered_color_present(424, 346, 40, 7, 1920, 0xFFD8DEE9):
                         raise AssertionError("the mode footer label did not fit the minimum width")
-                    client.sendall(wire_message(resize_buffer_base + 3, 0))
+                    client.sendall(wire_message(small_buffer_id, 0))
 
                     small_enter = serial + 190
                     client.sendall(
@@ -7071,10 +7074,10 @@ xkb_symbols "nekoedit-sparse" {
                     cursor_feedback_state["enter_serial"] = small_enter
                     cursor_feedback_state["shape"] = 1
                     resized_ui_click(
-                        120, 12, serial + 200, "open File menu at minimum size", resize_buffer_base + 3, 480, 360
+                        120, 12, serial + 200, "open File menu at minimum size", small_buffer_id, 480, 360
                     )
                     resized_ui_click(
-                        120, 48, serial + 210, "open picker at minimum size", resize_buffer_base + 3, 480, 360
+                        120, 48, serial + 210, "open picker at minimum size", small_buffer_id, 480, 360
                     )
                     picker_small = picker_state()
                     if picker_small.get("picker_mode") != 1:
@@ -7087,7 +7090,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("minimum-size picker Cancel background was not drawn at its fitted location")
                     resized_ui_click(
                         cancel_x_small, cancel_y_small, serial + 220,
-                        "cancel fitted picker at minimum size", resize_buffer_base + 3, 480, 360,
+                        "cancel fitted picker at minimum size", small_buffer_id, 480, 360,
                     )
                     if picker_state().get("picker_mode") != 0:
                         raise AssertionError("the minimum-size picker Cancel hit target did not close the picker")
