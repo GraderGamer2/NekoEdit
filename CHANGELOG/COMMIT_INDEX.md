@@ -1,3 +1,15 @@
+## 2026-11-12 — capture the XKB keyval delivered to the IBus preedit probe (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [ddbc7aa71987](https://github.com/GraderGamer2/NekoEdit/commit/ddbc7aa719870ff28d3ca242598e101077f9d7c6) | test: capture Mutter's translated key event for IBus probe |
+| [618b92a1b99e](https://github.com/GraderGamer2/NekoEdit/commit/618b92a1b99eb3a115e10becd2ebd443e7ec284e) | test: fix captured key event counter parsing |
+| pending | docs: record Mutter key event observation |
+
+Actions #845 passed build, CLI, full Wayland mock, ELF, native XKB, X.Org importer, and locale-pack stages. IBus and its D-Bus-activated portal start successfully; physical XKB Compose and text-input-v3 activation pass. Live provider preedit is still empty after evdev apostrophe. The test-only Clutter capture observer now records the actual translated keyval/keycode/Unicode and waits for press+release, so the next run can separate keymap/delivery errors from provider behavior. CI is pending.
+
+---
+
 ## 2026-11-12 — inject physical evdev keycodes for IBus dead-key validation (CI pending)
 
 | Commit | Subject |

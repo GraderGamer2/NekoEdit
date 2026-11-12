@@ -1,3 +1,13 @@
+## 2026-11-12 — expose the Mutter-translated key event in the IBus live probe (CI pending)
+
+Actions [Build and test #845](https://github.com/GraderGamer2/NekoEdit/actions/runs/43152106813) passed the freestanding build/ELF check, CLI tests, complete Wayland mock, executable inspection, native `us(intl)` parser, X.Org importer, and locale-pack build. The isolated IBus daemon and separately D-Bus-activated portal both acquired their bus names. Mutter's native physical-XKB Compose/dead-key/save canary passed, and the second process completed the text-input-v3 manager bind/focus/enable/state-commit handshake. The only failing assertion remains live IBus Simple preedit: sending evdev `KEY_APOSTROPHE=40` leaves NekoEdit's preedit empty.
+
+The latest change adds a **test-only, non-consuming Clutter capture observer** to the temporary GNOME Shell extension. It records the last key press and release seen at `global.stage` capture phase, with the translated keysym, XKB keycode, Unicode value, and modifier state. The probe waits until both apostrophe press and release have been observed, then includes those values in the failure report. The observer always returns `Clutter.EVENT_PROPAGATE` and is disconnected when the extension is disabled; it does not replace, suppress, or synthesize the application's key events. This will establish whether Mutter maps evdev 40 to XKB keycode 48 / `dead_acute` (keysym `0xfe51`) before the IBus provider is expected to send preedit. A follow-up review corrected the Python event-counter regex before the patch was published.
+
+No application source or runtime dependency is changed. This test/diagnostic update awaits Actions; no live IBus preedit/commit pass is claimed.
+
+---
+
 ## 2026-11-12 — inject physical evdev keycodes for the live IBus preedit probe (CI pending)
 
 Actions [Build and test #844](https://github.com/GraderGamer2/NekoEdit/actions/runs/43151433375) passed the freestanding build/ELF check, CLI tests, complete Wayland mock (including both frame-callback/release orders), ELF inspection, native `us(intl)` parser, X.Org importer, and locale-pack build. The headless IBus daemon and D-Bus-activated portal also started successfully; Mutter's original physical-XKB Compose/dead-key sequence and the text-input-v3 manager/focus/enable/state-commit handshake passed. The live IBus Simple preedit assertion still failed: the apostrophe keysym produced no provider preedit, even though the earlier `dead_acute` keysym had been rejected by Mutter's reverse mapping.

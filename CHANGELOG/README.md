@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-12 — Mutter key-event observation pending CI)
+
+Continue from branch `early-alpha`. Wayland single-buffer frame pacing is implemented and its full protocol mock is green. Actions #845 passed build, command-line tests, complete Wayland mock, ELF inspection, real `us(intl)` parser, X.Org importer, and locale-pack build. The isolated IBus daemon and its D-Bus-activated portal now start successfully. Mutter's native physical-XKB Compose/dead-key/save canary and the text-input-v3 manager/focus/enable/state-commit handshake pass.
+
+The only failed check is live IBus Simple preedit. The latest probe sends evdev `KEY_APOSTROPHE=40`, waits for Mutter's virtual-input calls to drain, then sees an empty NekoEdit preedit. The engine `xkb:us:intl:eng` is active and the portal is connected. Commits [ddbc7aa](https://github.com/GraderGamer2/NekoEdit/commit/ddbc7aa719870ff28d3ca242598e101077f9d7c6) and [618b92a](https://github.com/GraderGamer2/NekoEdit/commit/618b92a1b99eb3a115e10becd2ebd443e7ec284e) add a test-only Clutter capture observer and fix its event-counter parser. It records the actual keysym, XKB keycode, Unicode value, and modifiers as Mutter delivers the press/release, returns `Clutter.EVENT_PROPAGATE`, and never changes the input event. The probe requires both key press and release to be observed. Expected for the physical apostrophe key under `us(intl)`: XKB keycode 48 and `dead_acute` keysym `0xfe51`. Do not change the IBus preedit expectation until this event evidence is available.
+
+No NekoEdit app source, ELF, backend, or runtime dependency is changed. Inspect the next Actions run and use the captured key event to decide whether to fix the test keymap/delivery path or investigate IBus provider/context signaling. Do not claim live IBus compatibility until the real preedit/cancellation/commit/save sequence passes.
+
+---
+
 ## Latest handoff (2026-11-12 — evdev-based IBus preedit probe, CI pending)
 
 Continue from `early-alpha`. Wayland single-buffer frame pacing is implemented, and the complete protocol mock is green. Actions #844 passed build/CLI, full Wayland mock, ELF inspection, real `us(intl)` parsing, X.Org importer verification, locale-pack build, IBus daemon/portal startup, physical Mutter XKB Compose/dead-key input, and text-input-v3 manager/focus/enable/state-commit. The only failing check is real IBus provider preedit/commit.
