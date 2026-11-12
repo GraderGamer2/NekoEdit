@@ -2803,7 +2803,6 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
                 cursor_feedback_state = {"shape": 1, "enter_serial": 777}
-                resize_buffer_base = child_u32("next_client_object_id")
 
                 def workflow_window_click(
                     x: int, serial: int, request_opcode: int, label: str,
@@ -6697,6 +6696,10 @@ xkb_symbols "nekoedit-sparse" {
                     # a correctly sized buffer from the retained shm pool, and
                     # repaint it using the new stride.
                     workflow_window_click(740, serial + 20, 9, "maximize")
+                    # The new buffer is allocated only when the release/configure
+                    # sequence reaches window_apply_pending_resize. Earlier file
+                    # workflow frames have already consumed many dense client IDs.
+                    maximized_buffer_id = child_u32("next_client_object_id")
                     # Mutter may emit multiple toplevel configures before the
                     # surface configure; the final width/height/state apply.
                     client.sendall(
@@ -6711,11 +6714,11 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (12, 0, b""), "destroy released pre-maximize buffer")
                     expect_message(
                         client,
-                        (11, 0, struct.pack("<6I", resize_buffer_base, 0, 1920, 1080, 7680, 1)),
+                        (11, 0, struct.pack("<6I", maximized_buffer_id, 0, 1920, 1080, 7680, 1)),
                         "create maximized buffer",
                     )
                     expect_message(
-                        client, (8, 1, struct.pack("<III", resize_buffer_base, 0, 0)),
+                        client, (8, 1, struct.pack("<III", maximized_buffer_id, 0, 0)),
                         "attach maximized buffer",
                     )
                     expect_message(
@@ -6728,7 +6731,7 @@ xkb_symbols "nekoedit-sparse" {
                         max_state.get("window_width") != 1920
                         or max_state.get("window_height") != 1080
                         or max_state.get("window_stride") != 7680
-                        or max_state.get("window_buffer_id") != resize_buffer_base
+                        or max_state.get("window_buffer_id") != maximized_buffer_id
                         or max_state.get("window_is_maximized") != 1
                         or max_state.get("window_status_top") != 1060
                         or max_state.get("window_status_bytes_x") != 1180
@@ -6758,7 +6761,7 @@ xkb_symbols "nekoedit-sparse" {
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
                     )
 
-                    # Restore: deliver the configure while buffer {resize_buffer_base} is still
+                    # Restore: deliver the configure while buffer {maximized_buffer_id} is still
                     # compositor-owned. The client must ack but defer replacement.
                     workflow_window_click(1860, serial + 30, 10, "restore")
                     client.sendall(
@@ -6769,8 +6772,8 @@ xkb_symbols "nekoedit-sparse" {
                         client, (9, 4, struct.pack("<I", 1236)), "ack restored configure"
                     )
                     restore_buffer_id = child_u32("next_client_object_id")
-                    client.sendall(wire_message(resize_buffer_base, 0))
-                    expect_message(client, (resize_buffer_base, 0, b""), "destroy released maximized buffer")
+                    client.sendall(wire_message(maximized_buffer_id, 0))
+                    expect_message(client, (maximized_buffer_id, 0, b""), "destroy released maximized buffer")
                     expect_message(
                         client,
                         (11, 0, struct.pack("<6I", restore_buffer_id, 0, 800, 480, 3200, 1)),
