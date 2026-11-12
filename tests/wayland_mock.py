@@ -660,13 +660,17 @@ def run(
                 if text_input_test or seat_hotplug_ime_test:
                     manager_name = b"zwp_text_input_manager_v3\0"
                     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
+                    # Cursor-shape setup allocates manager/device objects 17/18
+                    # before text-input setup when that optional global exists.
+                    test_text_input_manager_id = 19 if cursor_shape_supported else 17
+                    test_text_input_id = test_text_input_manager_id + 1
                     expect_message(
                         client,
-                        (2, 0, struct.pack("<II", 7, len(manager_name)) + manager_padded + struct.pack("<II", 1, 17)),
+                        (2, 0, struct.pack("<II", 7, len(manager_name)) + manager_padded + struct.pack("<II", 1, test_text_input_manager_id)),
                         "bind zwp_text_input_manager_v3",
                     )
                     expect_message(
-                        client, (17, 1, struct.pack("<II", 18, 13)),
+                        client, (test_text_input_manager_id, 1, struct.pack("<II", test_text_input_id, 13)),
                         "get text-input object for the application seat",
                     )
                     observations.append("optional text-input-v3 manager bound and object created for seat 13")
@@ -2289,38 +2293,38 @@ xkb_symbols "nekoedit-sparse" {
 
                     def expect_ime_state_update(label: str) -> None:
                         expect_message(
-                            client, (20, 4, struct.pack("<I", 0)),
+                            client, (test_text_input_id, 4, struct.pack("<I", 0)),
                             f"{label} text-change cause",
                         )
                         surrounding = recv_wayland_message(client)
-                        if surrounding[0:2] != (20, 3) or surrounding[3]:
+                        if surrounding[0:2] != (test_text_input_id, 3) or surrounding[3]:
                             raise AssertionError(
                                 f"{label}: expected set_surrounding_text, got {surrounding!r}"
                             )
                         rectangle = recv_wayland_message(client)
-                        if rectangle[0:2] != (20, 6) or len(rectangle[2]) != 16 or rectangle[3]:
+                        if rectangle[0:2] != (test_text_input_id, 6) or len(rectangle[2]) != 16 or rectangle[3]:
                             raise AssertionError(
                                 f"{label}: expected set_cursor_rectangle, got {rectangle!r}"
                             )
-                        expect_message(client, (20, 7, b""), f"{label} state commit")
+                        expect_message(client, (test_text_input_id, 7, b""), f"{label} state commit")
 
                     def preedit_event(value: bytes, cursor_begin: int, cursor_end: int) -> bytes:
                         encoded = value + b"\0"
                         payload = struct.pack("<I", len(encoded)) + encoded
                         payload += b"\0" * (-len(encoded) % 4)
                         payload += struct.pack("<ii", cursor_begin, cursor_end)
-                        return wire_message(20, 2, payload)
+                        return wire_message(test_text_input_id, 2, payload)
 
                     # The keyboard enter has already caused a queued redraw.
                     client.sendall(wire_message(12, 0))
                     expect_hotplug_frame("keyboard-focus redraw")
                     client.sendall(
                         wire_message(12, 0)
-                        + wire_message(20, 0, struct.pack("<I", 8))
+                        + wire_message(test_text_input_id, 0, struct.pack("<I", 8))
                     )
-                    expect_message(client, (20, 1, b""), "enable text input for the editor")
+                    expect_message(client, (test_text_input_id, 1, b""), "enable text input for the editor")
                     expect_message(
-                        client, (20, 5, struct.pack("<II", 0, 0)),
+                        client, (test_text_input_id, 5, struct.pack("<II", 0, 0)),
                         "set normal content type",
                     )
                     expect_ime_state_update("initial IME focus")
@@ -2328,7 +2332,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     # A matching done acknowledges the first committed state.
                     serial = child_u32("text_input_commit_serial")
-                    client.sendall(wire_message(20, 5, struct.pack("<I", serial)))
+                    client.sendall(wire_message(test_text_input_id, 5, struct.pack("<I", serial)))
                     client.sendall(wire_message(12, 0))
                     expect_hotplug_frame("initial text-input done redraw")
 
@@ -2336,7 +2340,7 @@ xkb_symbols "nekoedit-sparse" {
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(
                         preedit_event(preedit_text, 1, 2)
-                        + wire_message(20, 5, struct.pack("<I", serial))
+                        + wire_message(test_text_input_id, 5, struct.pack("<I", serial))
                     )
                     expect_ime_state_update("active preedit")
                     client.sendall(wire_message(12, 0))
@@ -2365,10 +2369,10 @@ xkb_symbols "nekoedit-sparse" {
                         client, (16, 0, b""), "release keyboard with active IME preedit"
                     )
                     expect_message(
-                        client, (20, 2, b""), "disable text input after keyboard removal"
+                        client, (test_text_input_id, 2, b""), "disable text input after keyboard removal"
                     )
                     expect_message(
-                        client, (20, 7, b""), "commit text-input disable after keyboard removal"
+                        client, (test_text_input_id, 7, b""), "commit text-input disable after keyboard removal"
                     )
                     expect_hotplug_frame("keyboard-removal preedit clear")
 
@@ -2384,7 +2388,7 @@ xkb_symbols "nekoedit-sparse" {
                         frame_callback_stats["requested"] != previous_frame_requests + 1
                         or frame_callback_stats["completed"] != frame_callback_stats["requested"]
                         or not frame_callback_stats["ids"]
-                        or not rendered_color_present(24, 92, 8, 12, 3200, 0xff252a33)
+                        or rendered_color_present(24, 92, 8, 12, 3200, 0xff5e81ac)
                     ):
                         raise AssertionError(
                             "keyboard removal did not complete exactly one frame with the IME preedit cleared: "

@@ -1,3 +1,7 @@
+## 2026-11-12 — correct combined cursor-shape/text-input test object IDs (CI pending)
+
+Build and test [#862](https://github.com/GraderGamer2/NekoEdit/actions/runs/43216141990) passed the freestanding build and CLI tests, then reached the new active-IME hotplug scenario. The mock expected the text-input manager to use object 17, which is valid when cursor-shape support is absent, but the combined scenario advertises cursor-shape support and therefore allocates manager/device IDs 17/18 first. Text-input setup correctly uses 19/20. The mock now derives the text-input IDs from the advertised optional globals, and the preedit-clear pixel assertion now checks that the IME highlight color is absent after keyboard removal rather than merely checking for background-colored pixels. No backend runtime code changed.
+
 ## 2026-11-12 — test keyboard removal while text-input-v3 preedit is active (CI pending)
 
 Add a dedicated opt-in mock scenario in which the compositor focuses the editor, enables text-input-v3, sends a visible preedit string, and then removes the keyboard capability. The mock requires the text-input disable request and its state commit, verifies the transient preedit/cursor state clears without inserting those bytes into the document, and checks the immediate redraw when the shared buffer and frame callback are idle. Existing tests continue to verify that text-input-v3 remains default-off and that ordinary XKB typing works when the manager is advertised but not opted in.
