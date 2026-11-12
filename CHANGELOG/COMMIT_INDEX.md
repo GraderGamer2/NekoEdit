@@ -1,3 +1,13 @@
+## 2026-11-12 — adjust mock object-ID expectations for frame callback allocation (CI pending)
+
+| Commit | Subject |
+|---|---|
+| pending | test: derive clipboard and resize object IDs from live allocator |
+
+Actions #838 confirmed the new callback lifecycle cases, then exposed hard-coded IDs in clipboard tests. The follow-up reads the live dense client object-ID counter instead of assuming the old fixed sequence. The correction awaits CI.
+
+---
+
 ## 2026-11-12 — pace Wayland redraws with frame callbacks (CI pending)
 
 | Commit | Subject |

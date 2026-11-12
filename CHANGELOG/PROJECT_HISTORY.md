@@ -1,3 +1,13 @@
+## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
+
+Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run reported 217 frame callbacks completed, and the dedicated release-before-callback scenario passed: the buffer was released first, the second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.
+
+The complete Wayland mock then failed later in the clipboard scenario. The first Ctrl+C expected data-source ID 19 but received 21. The backend correctly allocated the intervening frame callbacks from the same dense client object-ID counter; several older test fixtures still assumed no additional client-created objects. The implementation must retain Wayland's dense ID allocation rather than moving callbacks into a sparse/high-numbered range. The test fixtures now read `next_client_object_id` before clipboard source creation and derive resize buffer IDs from the live counter. The corrected mock is awaiting a new run; no full Wayland or workflow pass is claimed.
+
+Source/test feature commit: [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d). The branch currently also contains the frame-pacing documentation commit [c391b99](https://github.com/GraderGamer2/NekoEdit/commit/c391b9975f0577a9698acfd8b928f5aa8e0fe949).
+
+---
+
 ## 2026-11-12 — pace Wayland redraws with frame callbacks — CI pending
 
 The native renderer now requests `wl_surface.frame` for normal redraw commits. Its callback ID and the active `wl_buffer` ownership flag are independent. A follow-up surface commit is permitted only after both `wl_callback.done` and `wl_buffer.release` are received, whichever arrives second. Redraws accumulated in the meantime are coalesced so the next commit paints the newest document/UI state. Resizing still waits for buffer release before destroying or replacing the old buffer.

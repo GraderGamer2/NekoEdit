@@ -2803,7 +2803,7 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
                 cursor_feedback_state = {"shape": 1, "enter_serial": 777}
-                resize_buffer_base = 17 + (2 if cursor_shape_supported else 0)
+                resize_buffer_base = child_u32("next_client_object_id")
 
                 def workflow_window_click(
                     x: int, serial: int, request_opcode: int, label: str,
@@ -3533,8 +3533,12 @@ xkb_symbols "nekoedit-sparse" {
                             )
 
                     def context_menu_item(
-                        x: int, y: int, serial: int, source_id: int, label: str
-                    ) -> None:
+                        x: int, y: int, serial: int, label: str
+                    ) -> int:
+                        # wl_data_source is a client-created object: capture
+                        # the dense allocator before the menu click. Frame
+                        # callbacks use that same protocol object namespace.
+                        source_id = child_u32("next_client_object_id")
                         client.sendall(
                             wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                             + wire_message(
@@ -3550,6 +3554,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         if child_u32("context_menu_open") != 0:
                             raise AssertionError(f"{label}: selected menu item did not dismiss the menu")
+                        return source_id
 
                     if context_menu_test:
                         # Escape dismisses without changing document state.
@@ -3562,21 +3567,28 @@ xkb_symbols "nekoedit-sparse" {
                         context_right_click(220, 120, 2460, "reopen context menu for Copy")
                         if child_u32("doc_selection_active") != 1:
                             raise AssertionError("opening the context menu discarded the active selection")
-                        context_menu_item(235, 133, 2480, 19, "context-menu Copy")
+                        copy_source_id = context_menu_item(
+                            235, 133, 2480, "context-menu Copy"
+                        )
                         if read_document_state()["doc_contents"] != original_clipboard:
                             raise AssertionError("context-menu Copy modified document bytes")
                         if child_u32("doc_selection_active") != 1:
                             raise AssertionError("context-menu Copy cleared the selection")
-                        receive_source_bytes(19, "context-menu Copy")
+                        receive_source_bytes(copy_source_id, "context-menu Copy")
                         observations.append(
                             "right-click opens a positioned menu, Escape closes it, and Copy preserves selection/document bytes"
                         )
 
                         # Cut publishes an immutable clipboard snapshot before deletion.
                         context_right_click(220, 120, 2500, "reopen context menu for Cut")
-                        context_menu_item(235, 185, 2520, 20, "context-menu Cut")
-                        client.sendall(wire_message(19, 2))
-                        expect_message(client, (19, 1, b""), "retire copied context-menu source")
+                        cut_source_id = context_menu_item(
+                            235, 185, 2520, "context-menu Cut"
+                        )
+                        client.sendall(wire_message(copy_source_id, 2))
+                        expect_message(
+                            client, (copy_source_id, 1, b""),
+                            "retire copied context-menu source",
+                        )
                         cut_state = read_document_state()
                         if cut_state["doc_contents"] != b"":
                             raise AssertionError(
@@ -3585,14 +3597,17 @@ xkb_symbols "nekoedit-sparse" {
                             )
                         if child_u32("doc_selection_active") != 0:
                             raise AssertionError("context-menu Cut left a stale selection active")
-                        receive_source_bytes(20, "context-menu Cut after deletion")
+                        receive_source_bytes(cut_source_id, "context-menu Cut after deletion")
                         observations.append(
                             "context-menu Cut publishes an independent clipboard snapshot and deletes the selected bytes"
                         )
 
                         # A new external owner replaces Cut's source; then Paste receives asynchronously.
-                        client.sendall(wire_message(20, 2))
-                        expect_message(client, (20, 1, b""), "retire cut context-menu source")
+                        client.sendall(wire_message(cut_source_id, 2))
+                        expect_message(
+                            client, (cut_source_id, 1, b""),
+                            "retire cut context-menu source",
+                        )
                         external_offer = 0xFF000020
                         client.sendall(
                             wire_message(18, 0, struct.pack("<I", external_offer))
@@ -3670,14 +3685,19 @@ xkb_symbols "nekoedit-sparse" {
                     # Select all, then test Ctrl+C through the actual Wayland
                     # data-source protocol and an SCM_RIGHTS transfer pipe.
                     workflow_shortcut(1900, 30, "Ctrl+A before clipboard copy")
+                    first_source_id = child_u32("next_client_object_id")
                     clipboard_combo(1910, 46, "Ctrl+C", redraw=False)
-                    expect_source_creation(19, 1911, "Ctrl+C")
-                    receive_source_bytes(19, "Ctrl+C")
+                    expect_source_creation(first_source_id, 1911, "Ctrl+C")
+                    receive_source_bytes(first_source_id, "Ctrl+C")
+                    second_source_id = child_u32("next_client_object_id")
                     clipboard_combo(1915, 46, "Ctrl+C repeated", redraw=False)
-                    expect_source_creation(20, 1916, "repeated Ctrl+C")
-                    client.sendall(wire_message(19, 2))
-                    expect_message(client, (19, 1, b""), "destroy the replaced first Ctrl+C source")
-                    receive_source_bytes(20, "repeated Ctrl+C")
+                    expect_source_creation(second_source_id, 1916, "repeated Ctrl+C")
+                    client.sendall(wire_message(first_source_id, 2))
+                    expect_message(
+                        client, (first_source_id, 1, b""),
+                        "destroy the replaced first Ctrl+C source",
+                    )
+                    receive_source_bytes(second_source_id, "repeated Ctrl+C")
                     history_directory = os.path.join(runtime_dir, ".nekoedit")
                     history_files = [
                         name for name in os.listdir(history_directory)
@@ -3694,8 +3714,9 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Ctrl+X must publish its own snapshot before deleting the
                     # selection, and that snapshot must survive the deletion.
+                    cut_source_id = child_u32("next_client_object_id")
                     client.sendall(ctrl_event(1930, 29, True) + ctrl_event(1931, 45, True))
-                    expect_source_creation(21, 1931, "Ctrl+X")
+                    expect_source_creation(cut_source_id, 1931, "Ctrl+X")
                     workflow_redraw("Ctrl+X removes the selected document bytes")
                     client.sendall(
                         ctrl_event(1933, 45, False) + ctrl_event(1934, 29, False)
@@ -3707,15 +3728,20 @@ xkb_symbols "nekoedit-sparse" {
                             "Ctrl+X did not delete the active selection: "
                             + repr(cut_state["doc_contents"])
                         )
-                    client.sendall(wire_message(20, 2))
-                    expect_message(client, (20, 1, b""), "destroy the replaced repeated Ctrl+C source")
-                    receive_source_bytes(21, "Ctrl+X after document deletion")
+                    client.sendall(wire_message(second_source_id, 2))
+                    expect_message(
+                        client, (second_source_id, 1, b""),
+                        "destroy the replaced repeated Ctrl+C source",
+                    )
+                    receive_source_bytes(cut_source_id, "Ctrl+X after document deletion")
                     observations.append("Ctrl+X deleted the selection only after publishing an independent snapshot")
 
                     # Replacing the selection retires both old source objects;
                     # the client must destroy them rather than retaining them.
-                    client.sendall(wire_message(21, 2))
-                    expect_message(client, (21, 1, b""), "destroy retired Ctrl+X source")
+                    client.sendall(wire_message(cut_source_id, 2))
+                    expect_message(
+                        client, (cut_source_id, 1, b""), "destroy retired Ctrl+X source"
+                    )
 
                     external_offer = 0xFF000020
                     client.sendall(
@@ -3808,13 +3834,14 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                     workflow_shortcut(2190, 30, "Ctrl+A before persistent clipboard copy")
+                    clipboard_source_id = child_u32("next_client_object_id")
                     client.sendall(
                         ctrl_event(2200, 29, True)
                         + ctrl_event(2201, 46, True)
                         + ctrl_event(2202, 46, False)
                         + ctrl_event(2203, 29, False)
                     )
-                    expect_source_creation(19, 2201)
+                    expect_source_creation(clipboard_source_id, 2201)
 
                     # Close the editor window. The helper keeps only the
                     # clipboard data-device objects; it must destroy the
@@ -3828,7 +3855,8 @@ xkb_symbols "nekoedit-sparse" {
                     read_fd, write_fd = os.pipe()
                     try:
                         transfer = wire_message(
-                            19, 1, clipboard_string("text/plain;charset=utf-8")
+                            clipboard_source_id, 1,
+                            clipboard_string("text/plain;charset=utf-8")
                         )
                         client.sendmsg(
                             [transfer],

@@ -1,3 +1,11 @@
+## Latest handoff (2026-11-12 — frame pacing test fixture correction)
+
+Continue from branch `early-alpha`. The new backend feature and changelog are committed in [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) and [c391b99](https://github.com/GraderGamer2/NekoEdit/commit/c391b9975f0577a9698acfd8b928f5aa8e0fe949). Actions #838 built the ELF and passed all command-line tests. Its Wayland mock verified 217 normal frame callbacks and passed the reverse-order release-before-callback coalescing regression. It then failed in clipboard tests because the fixtures assumed fixed source IDs and did not account for callback objects consuming client IDs.
+
+The pending test correction reads the current `next_client_object_id` for clipboard source IDs and resize buffer IDs. Backend allocation remains dense as required by Wayland. Recheck branch HEAD and Actions before further code changes. Do not claim the full mock or overall workflow green until a subsequent run passes.
+
+---
+
 ## Latest handoff (2026-11-12 — Wayland frame pacing, CI pending)
 
 Continue from branch `early-alpha`. The current source commit is [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d), adding `wl_surface.frame` callback pacing to the existing single-buffer Wayland renderer. Normal redraw commits request one callback; redraws arriving before both callback completion and `wl_buffer.release` are coalesced into one later frame. The mock now covers callback-before-release and release-before-callback ordering, including a second edit while the callback is outstanding.
