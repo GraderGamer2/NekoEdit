@@ -2363,6 +2363,29 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("text_input_preedit_cursor_begin") != 0xffffffff:
                         raise AssertionError("preedit cursor (-1,-1) was not preserved as hidden")
 
+                    # Mutter 46.0-46.2 calls set_preedit_text(NULL, 1, 1)
+                    # for the hidden preedit. It sends a nullable string with
+                    # byte offsets (0, 1), so normalize this exact empty range
+                    # to (0, 0) and ensure it actually clears the prior text.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        preedit_event(b"", 0, 1)
+                        + wire_message(18, 5, struct.pack("<I", serial))
+                    )
+                    expect_state(
+                        b"", 0, "legacy Mutter null preedit reset",
+                        expected_rectangle=(16, 92, 1, 12),
+                    )
+                    release_frame("legacy Mutter null preedit redraw")
+                    if (
+                        child_u32("text_input_preedit_length") != 0
+                        or child_u32("text_input_preedit_cursor_begin") != 0
+                        or child_u32("text_input_preedit_cursor_end") != 0
+                    ):
+                        raise AssertionError(
+                            "legacy Mutter null-preedit anchor did not clear the active composition"
+                        )
+
                     # An empty preedit with hidden cursor clears the previous composition.
                     empty_preedit = bytes((0,))
                     serial = child_u32("text_input_commit_serial")

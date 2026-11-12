@@ -1,10 +1,13 @@
-## 2026-11-12 — correct the test extension's independent preedit API wrapper (CI pending)
+## 2026-11-12 — accept Mutter 46's malformed nullable preedit-clear anchor (CI pending)
 
-The previous test-only instrumentation commit exposed a malformed nested catch boundary in the GNOME Shell extension. This commit replaces the probe method as one complete unit: the IBus key-event wrapper and the Clutter preedit API wrapper now have separate guarded installation paths. Both wrappers preserve the original receiver, arguments, return value, and callback behavior. Failure to install the additional preedit probe is reported as a diagnostic status rather than changing IBus event routing.
+Actions [Build and test #855](https://github.com/GraderGamer2/NekoEdit/actions/runs/43181382339) passed the full build, CLI tests, complete Wayland mock, XKB parser, X.Org importer, locale-pack build, and the native Mutter Compose/dead-key/save canary. The test extension's Clutter API wrapper confirmed GNOME Shell calls `set_preedit_text(NULL, cursor=1, anchor=1, resetMode=0)` when Backspace clears the dead-key accent.
 
-Actions [Build and test #854](https://github.com/GraderGamer2/NekoEdit/actions/runs/43181083656) is running against the prior instrumentation commit; the corrected source is committed separately for a clean verification run. No NekoEdit application code or runtime dependency changes are included.
+The staging buffer revealed the exact Wayland clear event: nullable preedit string (length 0), `cursor_begin=0`, `cursor_end=1`. Mutter 46.2 leaves the character-index anchor unchanged even though the text is NULL. NekoEdit staged the event but rejected it because offset 1 exceeds the only valid byte boundary of an empty string, leaving the previous accent visible.
+
+The client now normalizes only this exact legacy form—NULL string, empty payload, cursor 0, anchor 1—to byte offsets `(0, 0)`. Non-NULL strings, other empty-range values, negative offsets, and ordinary malformed selections remain subject to existing validation. The Wayland mock adds a regression that starts with an active multibyte composition, sends the legacy clear event, and verifies the active preedit is actually removed. The live Mutter probe also requires that Shell called the expected API. CI is pending.
 
 ---
+
 
 
 

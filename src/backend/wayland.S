@@ -13636,7 +13636,24 @@ text_input_handle_event:
     test edx, edx
     js .Lti_ignored
     cmp edx, dword ptr [rip + text_input_request_buffer + 4096]
-    ja .Lti_ignored
+    jbe .Lti_preedit_validate_end_in_range
+    # Mutter 46.0-46.2 also forwards a character-index anchor when the
+    # preedit is NULL: Shell calls set_preedit_text(NULL, 1, 1), producing
+    # the invalid empty-string byte range (0, 1). Empty preedit has only
+    # one valid byte boundary, so repair this exact nullable (0, 1) form.
+    cmp dword ptr [rip + event_payload], 0
+    jne .Lti_ignored
+    cmp dword ptr [rip + text_input_request_buffer + 4096], 0
+    jne .Lti_ignored
+    test ecx, ecx
+    jnz .Lti_ignored
+    cmp edx, 1
+    jne .Lti_ignored
+    xor edx, edx
+    mov dword ptr [rip + text_input_request_buffer + 4104], edx
+    jmp .Lti_preedit_commit_candidate
+.Lti_preedit_validate_end_in_range:
+    cmp edx, dword ptr [rip + text_input_request_buffer + 4096]
     je .Lti_preedit_commit_candidate
     lea rax, [rip + text_input_request_buffer]
     movzx eax, byte ptr [rax + rdx]

@@ -385,6 +385,15 @@ def exercise_live_ibus_preedit_commit(
     tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
     wait_input_idle()
     shell_cleared_status = wait_shell_ibus_preedit(visible=False)
+    if (
+        "preedit-api=installed" not in shell_cleared_status
+        or 'last-preedit-api=[{"text":null,"cursor":1,"anchor":1,"resetMode":0}]'
+        not in shell_cleared_status
+    ):
+        fail(
+            "GNOME Shell did not call set_preedit_text(NULL, 1, 1) for the "
+            f"Backspace clear: {shell_cleared_status}"
+        )
     try:
         wait_preedit_empty(memory_fd, addresses)
     except Exception as error:
