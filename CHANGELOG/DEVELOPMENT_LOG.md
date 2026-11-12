@@ -1,10 +1,13 @@
-## 2026-11-12 — trace the IBus Backspace preedit-clear event through text-input-v3 (CI pending)
+## 2026-11-12 — instrument GNOME Shell's Clutter preedit-clear API (CI pending)
 
-Actions [Build and test #852](https://github.com/GraderGamer2/NekoEdit/actions/runs/43178757280) passed the freestanding build/ELF, CLI, full Wayland protocol mock (including the Mutter 46 legacy-anchor regression), XKB parser, X.Org importer, and locale-pack checks. The native Mutter Compose/dead-key/save canary passed. The live IBus dead-key accent also now reaches NekoEdit as a visible preedit, confirming the narrowly gated Mutter 46 anchor compatibility path works.
+Actions [Build and test #853](https://github.com/GraderGamer2/NekoEdit/actions/runs/43180119098) passed build/ELF, CLI, the complete Wayland protocol mock, XKB parser validation, X.Org importer verification, locale-pack build, and the native Mutter Compose/dead-key/save canary. The live IBus dead key was also delivered to NekoEdit as a visible preedit.
 
-The next live assertion exposed a distinct issue: Backspace clears GNOME Shell's IBus preedit, but NekoEdit still reports the previous accent. The probe is being extended to capture the post-Backspace Shell state, last Wayland event object/opcode/size and payload, staged preedit offsets, pending flags, and committed client preedit offsets. This will identify whether Mutter failed to send a clear event, whether NekoEdit rejected its payload, or whether the text-input done batch did not apply the clear. No speculative change to the IME state machine is made until that boundary is known. CI is pending.
+The Backspace trace proves that IBus's own Shell context reports `preedit-visible=false` and `has-preedit=false`, while NekoEdit receives no subsequent text-input-v3 preedit-clear event: its last incoming Wayland event is still a keyboard key event, and the pending protocol flags are zero. The remaining unknown boundary is whether GNOME Shell calls Clutter's `set_preedit_text(NULL, ...)` when IBus hides the preedit.
+
+The test extension now wraps the active `Clutter.InputMethod.set_preedit_text` call, records each call's text/cursor/anchor/reset-mode, and forwards the original receiver and arguments unchanged. The next run can distinguish an IBus-to-Shell notification gap from a Shell-to-Mutter forwarding gap. This remains test-only instrumentation; no NekoEdit runtime behavior is changed. CI is pending.
 
 ---
+
 
 
 

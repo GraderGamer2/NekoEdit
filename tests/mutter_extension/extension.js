@@ -60,6 +60,10 @@ export default class NekoEditMutterTestExtension extends Extension {
         this._ibusProbeStatus = 'not-installed';
         this._ibusKeyEventCount = 0;
         this._lastIbusKeyEvent = 'none';
+        this._preeditProbeInputMethod = null;
+        this._preeditApiProbeStatus = 'not-installed';
+        this._preeditApiCallCount = 0;
+        this._lastPreeditApiCall = 'none';
 
         this._dbusObject = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbusObject.export(Gio.DBus.session, OBJECT_PATH);
@@ -323,6 +327,45 @@ export default class NekoEditMutterTestExtension extends Extension {
         } catch (error) {
             this._ibusProbeStatus = `install-failed:${String(error)}`;
         }
+
+        if (this._preeditProbeInputMethod === inputMethod)
+            return;
+
+        const originalSetPreeditText = inputMethod.set_preedit_text;
+        if (typeof originalSetPreeditText !== 'function') {
+            this._preeditApiProbeStatus = 'method-missing';
+            this._preeditProbeInputMethod = inputMethod;
+            return;
+        }
+
+        const wrappedSetPreeditText = function (...args) {
+            extension._preeditApiCallCount++;
+            const value = args[0];
+            extension._lastPreeditApiCall = JSON.stringify({
+                text: value === null ? null : String(value),
+                cursor: Number(args[1]),
+                anchor: Number(args[2]),
+                resetMode: Number(args[3]),
+            });
+            return originalSetPreeditText.apply(this, args);
+        };
+
+        try {
+            inputMethod.set_preedit_text = wrappedSetPreeditText;
+            if (inputMethod.set_preedit_text !== wrappedSetPreeditText) {
+                this._preeditApiProbeStatus = 'method-replacement-rejected';
+                this._preeditProbeInputMethod = inputMethod;
+                return;
+            }
+            this._preeditProbeInputMethod = inputMethod;
+            this._preeditApiProbeStatus = 'installed';
+        } catch (error) {
+            this._preeditProbeInputMethod = inputMethod;
+            this._preeditApiProbeStatus = `install-failed:${String(error)}`;
+        }
+        } catch (error) {
+            this._ibusProbeStatus = `install-failed:${String(error)}`;
+        }
     }
 
     InputMethodStatus() {
@@ -343,6 +386,8 @@ export default class NekoEditMutterTestExtension extends Extension {
         return `source=${sourceName};context=${context};focus=${focus};` +
             `probe=${this._ibusProbeStatus};ibus-key-events=${this._ibusKeyEventCount};` +
             `last-ibus-key=[${this._lastIbusKeyEvent}];` +
+            `preedit-api=${this._preeditApiProbeStatus};preedit-api-calls=${this._preeditApiCallCount};` +
+            `last-preedit-api=[${this._lastPreeditApiCall}];` +
             `preedit-visible=${preeditVisible};has-preedit=${hasPreedit};` +
             `preedit=${JSON.stringify(preedit)}`;
     }
