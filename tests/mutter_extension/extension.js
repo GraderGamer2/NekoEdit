@@ -37,6 +37,10 @@ const DBUS_XML = `
       <arg type="u" name="keysym" direction="in"/>
       <arg type="b" name="pressed" direction="in"/>
     </method>
+    <method name="SendKeycode">
+      <arg type="u" name="keycode" direction="in"/>
+      <arg type="b" name="pressed" direction="in"/>
+    </method>
     <method name="EndInput"/>
   </interface>
 </node>`;
@@ -279,6 +283,29 @@ export default class NekoEditMutterTestExtension extends Extension {
         this._callRemoteSession(
             'NotifyKeyboardKeysym',
             new GLib.Variant('(ub)', [keysym, pressed]),
+            new GLib.VariantType('()'),
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (error) {
+                    this._inputError = String(error);
+                    this._inputState = 'failed';
+                }
+                this._inputPending--;
+            }
+        );
+    }
+
+    // This variant bypasses Mutter's keysym-to-keycode lookup and injects the
+    // Linux evdev keycode, which is required for physical-layout IME testing.
+    SendKeycode(keycode, pressed) {
+        if (this._inputState !== 'ready' || !this._remoteSessionPath)
+            throw new Error(`native Mutter keyboard is not ready (${this._inputState})`);
+
+        this._inputPending++;
+        this._callRemoteSession(
+            'NotifyKeyboardKeycode',
+            new GLib.Variant('(ub)', [keycode, pressed]),
             new GLib.VariantType('()'),
             (connection, result) => {
                 try {

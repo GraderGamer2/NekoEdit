@@ -35,6 +35,11 @@ SYMBOLS = (
 
 BUFFER_SYMBOLS = ("text_input_preedit_buffer",)
 
+# Linux input-event-codes.h evdev values used by Mutter NotifyKeyboardKeycode.
+EVDEV_KEY_BACKSPACE = 14
+EVDEV_KEY_E = 18
+EVDEV_KEY_APOSTROPHE = 40
+
 
 def fail(message: str) -> None:
     raise RuntimeError(message)
@@ -94,6 +99,17 @@ def send_keysym(keysym: int) -> None:
     send_key(keysym, True)
     time.sleep(0.05)
     send_key(keysym, False)
+    time.sleep(0.05)
+
+
+def send_evdev_keycode(keycode: int, pressed: bool) -> None:
+    call_gdbus("SendKeycode", keycode, "true" if pressed else "false")
+
+
+def tap_evdev_keycode(keycode: int) -> None:
+    send_evdev_keycode(keycode, True)
+    time.sleep(0.05)
+    send_evdev_keycode(keycode, False)
     time.sleep(0.05)
 
 
@@ -222,24 +238,24 @@ def exercise_live_ibus_preedit_commit(
     # engine's independent dead-key path instead of relying on Multi_key.
     require_ibus_engine("xkb:us:intl:eng")
 
-    # Send the physical apostrophe keysym, which has a keycode in Mutter's
-    # active map. The selected xkb:us:intl:eng IBus Simple engine translates it
-    # to its internal dead_acute sequence and owns the resulting preedit.
-    send_keysym(ord("'"))
+    # Inject actual Linux evdev keycodes. NotifyKeyboardKeycode bypasses
+    # Mutter's reverse lookup from keysym to hardware keycode, so the selected
+    # xkb:us:intl:eng IBus Simple engine receives the physical apostrophe key
+    # and can translate it to its internal dead_acute sequence.
+    tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
     _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
 
-    # Backspace cancels the pending IBus accent without inserting document text.
-    send_keysym(65288)  # BackSpace
+    # Physical Backspace cancels the pending IBus accent without committing.
+    tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
     wait_input_idle()
     wait_preedit_empty(memory_fd, addresses)
 
-    # A fresh apostrophe followed by e must commit U+00E9 LATIN SMALL LETTER E
-    # WITH ACUTE (é) through the real IBus -> GNOME Shell -> Mutter path.
-    send_keysym(ord("'"))
+    # A fresh apostrophe followed by the physical E key must commit U+00E9.
+    tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
     _, second_preedit = wait_preedit_nonempty(memory_fd, addresses)
-    send_keysym(ord("e"))
+    tap_evdev_keycode(EVDEV_KEY_E)
     wait_input_idle()
     wait_document_commit(memory_fd, addresses, 2)
 
