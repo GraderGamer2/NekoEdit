@@ -1,3 +1,4 @@
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -41,6 +42,9 @@ const DBUS_XML = `
       <arg type="u" name="keycode" direction="in"/>
       <arg type="b" name="pressed" direction="in"/>
     </method>
+    <method name="KeyStatus">
+      <arg type="s" name="status" direction="out"/>
+    </method>
     <method name="EndInput"/>
   </interface>
 </node>`;
@@ -52,6 +56,13 @@ export default class NekoEditMutterTestExtension extends Extension {
         this._inputPending = 0;
         this._inputError = null;
         this._pointerStatus = 'not-started';
+        this._keyEventCount = 0;
+        this._lastKeyPress = 'none';
+        this._lastKeyRelease = 'none';
+        this._capturedEventId = global.stage.connect(
+            'captured-event',
+            (_actor, event) => this._captureKeyEvent(event)
+        );
 
         this._dbusObject = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbusObject.export(Gio.DBus.session, OBJECT_PATH);
@@ -68,6 +79,10 @@ export default class NekoEditMutterTestExtension extends Extension {
 
     disable() {
         this._stopRemoteSession();
+        if (this._capturedEventId) {
+            global.stage.disconnect(this._capturedEventId);
+            this._capturedEventId = 0;
+        }
         if (this._nameOwnerId) {
             Gio.bus_unown_name(this._nameOwnerId);
             this._nameOwnerId = 0;
@@ -273,6 +288,36 @@ export default class NekoEditMutterTestExtension extends Extension {
         if (this._inputState === 'failed')
             return `failed:${this._inputError ?? 'unknown error'}`;
         return `${this._inputState}:pending=${this._inputPending}`;
+    }
+
+    _captureKeyEvent(event) {
+        const type = event.type();
+        if (type !== Clutter.EventType.KEY_PRESS &&
+            type !== Clutter.EventType.KEY_RELEASE)
+            return Clutter.EVENT_PROPAGATE;
+
+        const keysym = event.get_key_symbol();
+        const keycode = event.get_key_code();
+        const unicode = type === Clutter.EventType.KEY_PRESS
+            ? event.get_key_unicode()
+            : 0;
+        const modifiers = event.get_state();
+        const detail = `keysym=0x${keysym.toString(16)} keycode=${keycode} ` +
+            `unicode=U+${unicode.toString(16).toUpperCase()} ` +
+            `modifiers=0x${modifiers.toString(16)}`;
+
+        this._keyEventCount++;
+        if (type === Clutter.EventType.KEY_PRESS)
+            this._lastKeyPress = detail;
+        else
+            this._lastKeyRelease = detail;
+
+        return Clutter.EVENT_PROPAGATE;
+    }
+
+    KeyStatus() {
+        return `count=${this._keyEventCount}; press=[${this._lastKeyPress}]; ` +
+            `release=[${this._lastKeyRelease}]`;
     }
 
     SendKey(keysym, pressed) {

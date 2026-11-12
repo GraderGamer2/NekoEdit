@@ -239,12 +239,37 @@ def exercise_live_ibus_preedit_commit(
     require_ibus_engine("xkb:us:intl:eng")
 
     # Inject actual Linux evdev keycodes. NotifyKeyboardKeycode bypasses
-    # Mutter's reverse lookup from keysym to hardware keycode, so the selected
-    # xkb:us:intl:eng IBus Simple engine receives the physical apostrophe key
-    # and can translate it to its internal dead_acute sequence.
+    # Mutter's reverse lookup from keysym to hardware keycode. Capture the
+    # translated Clutter event to verify the actual XKB keyval/keycode that
+    # GNOME Shell subsequently forwards to IBus.
+    initial_key_status = call_gdbus("KeyStatus")
+    initial_match = re.search(r"count=(\\d+)", initial_key_status)
+    if not initial_match:
+        fail("Mutter key-event observer returned an invalid status: " + initial_key_status)
+    initial_key_count = int(initial_match.group(1))
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
-    _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
+    key_status = ""
+    captured_count = initial_key_count
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        key_status = call_gdbus("KeyStatus")
+        match = re.search(r"count=(\\d+)", key_status)
+        if match:
+            captured_count = int(match.group(1))
+            if captured_count >= initial_key_count + 2:
+                break
+        time.sleep(0.025)
+    if captured_count < initial_key_count + 2:
+        fail(
+            "Mutter did not expose both apostrophe key events to the Clutter "
+            f"capture observer; baseline={initial_key_count}, status={key_status}"
+        )
+    print(f"Mutter translated evdev apostrophe: {key_status}")
+    try:
+        _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
+    except Exception as error:
+        fail(f"{error}; captured Mutter key event: {key_status}")
 
     # Physical Backspace cancels the pending IBus accent without committing.
     tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
