@@ -675,7 +675,8 @@ def run(
                     wanted_state = (
                         "keyboard_focused", "xkb_modifiers", "ctrl_down",
                         "shift_down", "keyboard_group", "pointer_inside",
-                        "pointer_enter_serial",
+                        "pointer_enter_serial", "buffer_busy",
+                        "frame_callback_id", "redraw_pending",
                     )
                     for symbol_line in subprocess.check_output(
                         ["nm", "-n", binary], text=True
@@ -708,6 +709,19 @@ def run(
                                 f"hotplug did not update {name}: expected {expected}, got {actual}"
                             )
 
+                    # Put the one shared buffer and frame callback into the
+                    # idle state first. The keyboard removal below must submit
+                    # its state-clear redraw immediately, not wait for a future
+                    # pointer/key event to wake the renderer.
+                    client.sendall(wire_message(12, 0))
+                    wait_state("buffer_busy", 0)
+                    initial_callback = child_state("frame_callback_id")
+                    if initial_callback:
+                        client.sendall(
+                            wire_message(initial_callback, 0, struct.pack("<I", 1))
+                        )
+                        wait_state("frame_callback_id", 0)
+
                     # Establish real keyboard focus and non-zero modifier state,
                     # then prove capability removal clears it before a new
                     # keyboard object is created.
@@ -726,22 +740,37 @@ def run(
                     client.sendall(wire_message(13, 0, struct.pack("<I", 1)))
                     if advertised_seat_version >= 3:
                         expect_message(client, (16, 0, b""), "release removed wl_keyboard")
-                    else:
-                        # A version-2 seat must not receive a v3 keyboard.release.
-                        if select.select([client], [], [], 0.05)[0]:
-                            unexpected = recv_wayland_message(client)
-                            raise AssertionError(
-                                f"seat-v2 keyboard removal sent an unsupported request: {unexpected!r}"
-                            )
+                    # For v1/v2 the next expected frame request below also
+                    # proves that no unsupported keyboard.release was sent.
                     wait_state("keyboard_focused", 0)
                     wait_state("xkb_modifiers", 0)
                     wait_state("ctrl_down", 0)
                     wait_state("shift_down", 0)
                     wait_state("keyboard_group", 0)
 
+                    # Keyboard removal marked the surface dirty. Because the
+                    # initial buffer/frame gates were idle, the seat handler
+                    # must present a replacement frame immediately.
+                    expect_message(
+                        client, (8, 3, struct.pack("<I", 19)),
+                        "request an immediate seat-state redraw frame callback",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)),
+                        "attach immediate seat-state redraw buffer",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "damage immediate seat-state redraw buffer",
+                    )
+                    expect_message(client, (8, 6, b""), "commit immediate seat-state redraw")
+                    wait_state("frame_callback_id", 19)
+                    wait_state("buffer_busy", 1)
+                    wait_state("redraw_pending", 0)
+
                     client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
                     expect_message(
-                        client, (13, 1, struct.pack("<I", 19)),
+                        client, (13, 1, struct.pack("<I", 20)),
                         "create a fresh wl_keyboard after capability return",
                     )
 
@@ -754,20 +783,20 @@ def run(
 
                     client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
                     expect_message(
-                        client, (13, 0, struct.pack("<I", 20)),
+                        client, (13, 0, struct.pack("<I", 21)),
                         "create a fresh wl_pointer after capability return",
                     )
                     expect_message(
                         client,
-                        (17, 1, struct.pack("<II", 21, 20)),
+                        (17, 1, struct.pack("<II", 22, 21)),
                         "recreate cursor-shape device for replacement pointer",
                     )
                     client.sendall(
-                        wire_message(20, 0, struct.pack("<IIii", 888, 8, 100 * 256, 110 * 256))
-                        + wire_message(19, 1, struct.pack("<III", 888, 8, 0))
+                        wire_message(21, 0, struct.pack("<IIii", 888, 8, 100 * 256, 110 * 256))
+                        + wire_message(20, 1, struct.pack("<III", 888, 8, 0))
                     )
                     expect_message(
-                        client, (21, 1, struct.pack("<II", 888, 1)),
+                        client, (22, 1, struct.pack("<II", 888, 1)),
                         "set cursor using replacement pointer enter serial",
                     )
                     wait_state("keyboard_focused", 1)

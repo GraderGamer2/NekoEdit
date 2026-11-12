@@ -1,3 +1,11 @@
+## 2026-11-12 — flush idle-buffer redraws after seat hotplug (CI pending)
+
+Follow-up to [hotplug implementation](https://github.com/GraderGamer2/NekoEdit/commit/bbb9ce3627b48773659711e4a1af8cf3f128ddb3): the seat-event path now submits a pending redraw immediately when the single shared buffer is released and no frame callback is outstanding. When either gate remains busy, the existing buffer-release/frame-done sequencing still performs the deferred presentation. This prevents an IME-preedit clear or other keyboard-removal state reset from remaining visually stale until an unrelated later event.
+
+The hotplug mock now drains the initial buffer, confirms the frame gate is idle, removes the keyboard, and asserts the immediate `wl_surface.frame` / attach / damage / commit sequence plus the resulting busy/callback/redraw state. Because that presentation consumes the next client object ID, the subsequent keyboard, pointer, and cursor-shape re-add assertions are updated. CI is pending.
+
+---
+
 ## 2026-11-12 — Wayland seat capability hotplug lifecycle (implementation; CI pending)
 
 The Wayland backend now treats each `wl_seat.capabilities` event as a complete state transition instead of only creating input objects once. Removing pointer capability clears focus/serial and active pointer/scroll drag state, stops selection auto-scroll, destroys the cursor-shape device tied to that pointer, and abandons the old pointer proxy. Removing keyboard capability cancels key repeat, clears held modifier/lock state and pending dead-key/Compose prefixes, abandons the old keyboard proxy, and disables optional text-input-v3 so stale preedit cannot survive unplug.

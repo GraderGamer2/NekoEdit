@@ -5886,6 +5886,19 @@ wayland_main:
     call text_input_setup
     test rax, rax
     js .protocol_error
+    # A seat transition can clear a preedit overlay or other transient input
+    # state. Flush that redraw now when both buffer and frame gates are idle;
+    # otherwise the existing release/callback path will submit it later.
+    cmp dword ptr [rip + redraw_pending], 0
+    je .Lseat_event_redraw_done
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .Lseat_event_redraw_done
+    cmp dword ptr [rip + frame_callback_id], 0
+    jne .Lseat_event_redraw_done
+    call present_buffer
+    test rax, rax
+    js .protocol_error
+.Lseat_event_redraw_done:
     jmp .event_loop
 .check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
