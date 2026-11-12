@@ -484,21 +484,6 @@ def run(
 
             expect_message(client, (1, 0, struct.pack("<I", 7)), "bind sync")
             client.sendall(wire_message(7, 0, struct.pack("<I", 2)))
-            if output_tracking_test:
-                output_name = b"wl_output\0"
-                output_padded = output_name + (b"\0" * (-len(output_name) % 4))
-                for global_name, version, object_id in ((8, 3, 15), (9, 2, 16)):
-                    expect_message(
-                        client,
-                        (
-                            2, 0,
-                            struct.pack("<II", global_name, len(output_name))
-                            + output_padded
-                            + struct.pack("<II", version, object_id),
-                        ),
-                        f"bind wl_output global {global_name}",
-                    )
-
             expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
             expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
             expect_message(client, (9, 1, struct.pack("<I", 10)), "get_toplevel")
@@ -607,19 +592,7 @@ def run(
                     (11, 0, struct.pack("<6I", 12, 0, 800, initial_height, 3200, 1)),
                     "create wl_buffer",
                 )
-                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
-                expect_message(client, (8, 6, b""), "initial map surface")
-                if output_tracking_test:
-                    client.sendall(
-                        wire_message(15, 3, struct.pack("<I", 2))
-                        + wire_message(15, 2)
-                        + wire_message(16, 3, struct.pack("<I", 3))
-                        + wire_message(16, 2)
-                        + wire_message(8, 0, struct.pack("<I", 15))
-                        + wire_message(8, 0, struct.pack("<I", 16))
-                    )
-                observations.append("memfd+SCM_RIGHTS buffer verified")
+                observations.append("memfd+SCM_RIGHTS buffer verified")                observations.append("memfd+SCM_RIGHTS buffer verified")
 
                 # The seat is bound after the existing window objects to keep
                 # the client-side object ID sequence dense.
@@ -635,8 +608,9 @@ def run(
                     "bind wl_seat",
                 )
                 expect_message(client, (1, 0, struct.pack("<I", 14)), "seat sync")
-                pointer_object_id = 17 if output_tracking_test else 15
+                pointer_object_id = 15
                 keyboard_object_id = pointer_object_id + 1
+                next_test_object_id = keyboard_object_id + 1
                 client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
                 expect_message(
                     client,
@@ -655,8 +629,9 @@ def run(
                     + wire_message(14, 0, struct.pack("<I", 2))
                 )
                 if cursor_shape_supported:
-                    cursor_shape_manager_id = keyboard_object_id + 1
+                    cursor_shape_manager_id = next_test_object_id
                     cursor_shape_device_id = cursor_shape_manager_id + 1
+                    next_test_object_id += 2
                     expect_message(
                         client,
                         (
@@ -681,22 +656,23 @@ def run(
                 if clipboard_test or clipboard_persistence_test:
                     manager_name = b"wl_data_device_manager\0"
                     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
+                    clipboard_manager_id = next_test_object_id
+                    clipboard_device_id = clipboard_manager_id + 1
                     expect_message(
                         client,
-                        (2, 0, struct.pack("<II", 6, len(manager_name)) + manager_padded + struct.pack("<II", 1, 17)),
+                        (2, 0, struct.pack("<II", 6, len(manager_name)) + manager_padded + struct.pack("<II", 1, clipboard_manager_id)),
                         "bind wl_data_device_manager",
                     )
                     expect_message(
-                        client, (17, 1, struct.pack("<II", 18, 13)),
+                        client, (clipboard_manager_id, 1, struct.pack("<II", clipboard_device_id, 13)),
                         "get wl_data_device for the application seat",
                     )
+                    next_test_object_id += 2
                     observations.append("wl_data_device_manager bound; wl_data_device created for seat 13")
                 if text_input_test or seat_hotplug_ime_test:
                     manager_name = b"zwp_text_input_manager_v3\0"
                     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
-                    # Cursor-shape setup allocates manager/device objects 17/18
-                    # before text-input setup when that optional global exists.
-                    test_text_input_manager_id = 19 if cursor_shape_supported else 17
+                    test_text_input_manager_id = next_test_object_id
                     test_text_input_id = test_text_input_manager_id + 1
                     expect_message(
                         client,
@@ -707,14 +683,40 @@ def run(
                         client, (test_text_input_manager_id, 1, struct.pack("<II", test_text_input_id, 13)),
                         "get text-input object for the application seat",
                     )
+                    next_test_object_id += 2
                     observations.append("optional text-input-v3 manager bound and object created for seat 13")
+                if output_tracking_test:
+                    # Outputs are created after every fixed bootstrap and optional
+                    # input-service proxy, preserving Wayland's contiguous new_id map.
+                    output_name = b"wl_output\0"
+                    output_padded = output_name + (b"\0" * (-len(output_name) % 4))
+                    output_v3_id = next_test_object_id
+                    output_v2_id = output_v3_id + 1
+                    for global_name, version, object_id in (
+                        (8, 3, output_v3_id), (9, 2, output_v2_id)
+                    ):
+                        expect_message(
+                            client,
+                            (
+                                2, 0,
+                                struct.pack("<II", global_name, len(output_name))
+                                + output_padded
+                                + struct.pack("<II", version, object_id),
+                            ),
+                            f"bind wl_output global {global_name}",
+                        )
+                    next_test_object_id += 2
+                # Map only after all initial client objects have been allocated.
+                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
+                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
+                expect_message(client, (8, 6, b""), "initial map surface")
                 if output_tracking_test:
                     # Inspect the live output cache and surface membership.
                     output_symbols = {}
                     wanted_outputs = (
                         "output_global_names", "output_object_ids", "output_versions",
-                        "output_scales", "output_surface_entered",
-                        "surface_output_count", "surface_output_max_scale",
+                        "output_scales", "output_pending_scales", "output_pending_valid",
+                        "output_surface_entered", "surface_output_count", "surface_output_max_scale",
                     )
                     for symbol_line in subprocess.check_output(
                         ["nm", "-n", binary], text=True
@@ -749,26 +751,46 @@ def run(
                                 f"output state {name}[{index}]: expected {expected}, got {actual}"
                             )
 
+                    # Stage the two scale properties and enter the surface.
+                    # The committed cache must remain at scale 1 until done.
+                    client.sendall(
+                        wire_message(output_v3_id, 3, struct.pack("<I", 2))
+                        + wire_message(output_v2_id, 3, struct.pack("<I", 3))
+                        + wire_message(8, 0, struct.pack("<I", output_v3_id))
+                        + wire_message(8, 0, struct.pack("<I", output_v2_id))
+                    )
                     wait_output("output_global_names", 8, 0)
                     wait_output("output_global_names", 9, 1)
-                    wait_output("output_object_ids", 15, 0)
-                    wait_output("output_object_ids", 16, 1)
+                    wait_output("output_object_ids", output_v3_id, 0)
+                    wait_output("output_object_ids", output_v2_id, 1)
                     wait_output("output_versions", 3, 0)
                     wait_output("output_versions", 2, 1)
-                    wait_output("output_scales", 2, 0)
-                    wait_output("output_scales", 3, 1)
+                    wait_output("output_pending_valid", 1, 0)
+                    wait_output("output_pending_valid", 1, 1)
+                    wait_output("output_pending_scales", 2, 0)
+                    wait_output("output_pending_scales", 3, 1)
+                    wait_output("output_scales", 1, 0)
+                    wait_output("output_scales", 1, 1)
                     wait_output("output_surface_entered", 1, 0)
                     wait_output("output_surface_entered", 1, 1)
                     wait_output("surface_output_count", 2)
+                    wait_output("surface_output_max_scale", 1)
+                    client.sendall(
+                        wire_message(output_v3_id, 2) + wire_message(output_v2_id, 2)
+                    )
+                    wait_output("output_pending_valid", 0, 0)
+                    wait_output("output_pending_valid", 0, 1)
+                    wait_output("output_scales", 2, 0)
+                    wait_output("output_scales", 3, 1)
                     wait_output("surface_output_max_scale", 3)
                     observations.append(
-                        "wl_output v3/v2 discovery, scale events and multi-output surface.enter membership verified"
+                        "wl_output v3/v2 discovery, atomic scale+done updates and multi-output surface.enter membership verified"
                     )
 
                     # Remove an entered v3 output: the client must send its
                     # release request and recalculate the surface's scale cache.
                     client.sendall(wire_message(2, 1, struct.pack("<I", 8)))
-                    expect_message(client, (15, 0, b""), "release removed wl_output v3")
+                    expect_message(client, (output_v3_id, 0, b""), "release removed wl_output v3")
                     wait_output("output_global_names", 0, 0)
                     wait_output("output_object_ids", 0, 0)
                     wait_output("surface_output_count", 1)
@@ -791,14 +813,19 @@ def run(
                     )
                     client.sendall(
                         wire_message(21, 3, struct.pack("<I", 4))
-                        + wire_message(21, 2)
                         + wire_message(8, 0, struct.pack("<I", 21))
                     )
                     wait_output("output_global_names", 10, 0)
                     wait_output("output_object_ids", 21, 0)
-                    wait_output("output_scales", 4, 0)
+                    wait_output("output_pending_valid", 1, 0)
+                    wait_output("output_pending_scales", 4, 0)
+                    wait_output("output_scales", 1, 0)
                     wait_output("output_surface_entered", 1, 0)
                     wait_output("surface_output_count", 2)
+                    wait_output("surface_output_max_scale", 3)
+                    client.sendall(wire_message(21, 2))
+                    wait_output("output_pending_valid", 0, 0)
+                    wait_output("output_scales", 4, 0)
                     wait_output("surface_output_max_scale", 4)
 
                     # Remove the v2 output. It has no release request; the next

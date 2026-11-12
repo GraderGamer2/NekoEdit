@@ -1,3 +1,15 @@
+## 2026-11-12 — enforce contiguous client IDs before Wayland output binding (CI pending)
+
+Reorder startup so output proxies are bound only after fixed objects 8–14 and any optional input-service objects have been allocated. Defer the first shared-buffer attach/damage/commit until after those output bindings; the no-seat path uses the next free ID after the initial window/shm objects. Registry announcements are still captured in both startup roundtrips, but object creation is deferred until the allocator can issue contiguous new IDs. This directly addresses Mutter's `wl_registry.bind` rejection from #865.
+
+The output cache now stages each positive v2+ `wl_output.scale` value and publishes it only when that output's `wl_output.done` arrives. The mock checks independent pending/committed values for a v3 and v2 output, then repeats the transaction for a hot-added output. It still verifies version-gated release, surface membership, and scale-summary recomputation. Output scale remains metadata only; the active framebuffer is still scale 1. CI is pending.
+
+## 2026-11-12 — CI #865 output mock passed; Mutter exposed non-contiguous new_id startup ordering
+
+Actions [Build and test #865](https://github.com/GraderGamer2/NekoEdit/actions/runs/43224109434) passed build, command-line checks, the full Wayland protocol mock, ELF/XKB verification, Compose importer and locale-pack checks. The new output mock verified two output versions/scales, per-surface enter/leave membership, v2/v3 removal semantics, and hot-added output binding. The final nested GNOME Shell/Mutter test then rejected `wl_registry.bind(new_id=15)`: the client had not yet created its hard-coded surface/toplevel/shared-memory objects 8–12 and seat/sync objects 13–14. The previous mock accepted this invalid object-ID gap, so it missed the real libwayland object-map constraint.
+
+The correction reserves output client IDs only after the fixed surface/toplevel/shm and seat bootstrap IDs, pointer/keyboard objects, and optional cursor/clipboard/text-input objects have been allocated. The initial buffer attach/map is delayed until these output bindings complete. This preserves the monotonic allocator and keeps surface.enter events associated with already-bound output objects.
+
 ## 2026-11-12 — route startup and steady-state Wayland output events (CI pending)
 
 Actions [Build and test #864](https://github.com/GraderGamer2/NekoEdit/actions/runs/43223717648) passed the freestanding build and all existing Wayland scenarios, then the new output mock reported that `wl_output.scale` remained at its default value. The output handlers were present, but three pre-existing conditional branches still jumped past them: the initial display event path, the initial seat roundtrip, and the steady-state seat-event path. Update those branch targets so registry events and output/surface events actually reach their handlers. The failure was in event routing, not output parsing or object binding. CI is pending.

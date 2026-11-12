@@ -99,7 +99,7 @@ The current prototype implements a deliberately small part of the stable core pr
 - Read WAYLAND_DISPLAY (default wayland-0) and XDG_RUNTIME_DIR; absolute WAYLAND_DISPLAY paths are supported.
 - Connect to the Wayland Unix-domain stream socket with socket/connect syscalls.
 - Request wl_registry and bind wl_compositor, wl_shm, and xdg_wm_base at protocol version 1.
-- Discover up to eight wl_output globals, bind at no more than v3, track v2+ integer scale and wl_surface.enter/leave membership, and handle global removal with version-gated release requests. This cache is metadata only; the surface still renders at scale 1.
+- Discover up to eight wl_output globals, bind at no more than v3 after the fixed bootstrap IDs and optional input-service objects are allocated, track v2+ integer scale transactionally through wl_output.done, and track wl_surface.enter/leave membership. Handle global removal with version-gated release requests. This cache is metadata only; the surface still renders at scale 1.
 - Create wl_surface, xdg_surface, and xdg_toplevel objects.
 - Set the window title and perform the initial empty surface commit.
 - Receive xdg_surface.configure and acknowledge its serial before attaching a buffer.

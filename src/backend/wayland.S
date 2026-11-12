@@ -4854,12 +4854,14 @@ cursor_shape_version:  .long 0
 cursor_shape_manager:  .long 0
 cursor_shape_device:   .long 0
 .global output_global_names, output_object_ids, output_versions
-.global output_scales, output_surface_entered
-.global surface_output_count, surface_output_max_scale
+.global output_scales, output_pending_scales, output_pending_valid
+.global output_surface_entered, surface_output_count, surface_output_max_scale
 output_global_names:      .zero 32
 output_object_ids:        .zero 32
 output_versions:          .zero 32
 output_scales:            .zero 32
+output_pending_scales:    .zero 32
+output_pending_valid:     .zero 32
 output_surface_entered:   .zero 32
 surface_output_count:     .long 0
 surface_output_max_scale: .long 0
@@ -5432,6 +5434,22 @@ wayland_main:
     call wl_read_event
     test rax, rax
     js .protocol_error
+    cmp dword ptr [rip + last_object], 2
+    jne .bind_check_xdg_ping
+    cmp dword ptr [rip + last_opcode], 0
+    je .bind_registry_global
+    cmp dword ptr [rip + last_opcode], 1
+    je .bind_registry_global_remove
+    jmp .bind_check_done
+.bind_registry_global:
+    call registry_capture_global
+    jmp .bind_check_done
+.bind_registry_global_remove:
+    call handle_output_global_remove
+    test eax, eax
+    js .protocol_error
+    jmp .bind_check_done
+.bind_check_xdg_ping:
     cmp dword ptr [rip + last_object], 6
     jne .bind_check_done
     cmp dword ptr [rip + last_opcode], 0
@@ -5444,9 +5462,6 @@ wayland_main:
     jne .bind_roundtrip
 
     mov dword ptr [rip + next_client_object_id], 15
-    call output_bind_pending
-    test rax, rax
-    js .protocol_error
 
     lea rax, [rip + stage_xdg_create]
     mov qword ptr [rip + failure_stage], rax
@@ -5636,51 +5651,19 @@ wayland_main:
     # Keep wl_shm_pool 11 alive so future configure events can allocate
     # size-specific wl_buffer objects from the same bounded mapping.
 
-    lea rax, [rip + stage_attach]
-    mov qword ptr [rip + failure_stage], rax
-    # wl_surface.attach(current buffer, x=0, y=0)
-    mov eax, dword ptr [rip + window_buffer_id]
-    mov dword ptr [rip + payload_buffer], eax
-    mov dword ptr [rip + payload_buffer + 4], 0
-    mov dword ptr [rip + payload_buffer + 8], 0
-    mov edi, 8
-    mov esi, 1
-    lea rdx, [rip + payload_buffer]
-    mov ecx, 12
-    call wl_send_request
-    test rax, rax
-    js .protocol_error
-
-    # wl_surface.damage(0,0,WIDTH,HEIGHT)
-    mov dword ptr [rip + payload_buffer], 0
-    mov dword ptr [rip + payload_buffer + 4], 0
-    mov eax, dword ptr [rip + window_width]
-    mov dword ptr [rip + payload_buffer + 8], eax
-    mov eax, dword ptr [rip + window_height]
-    mov dword ptr [rip + payload_buffer + 12], eax
-    mov edi, 8
-    mov esi, 2
-    lea rdx, [rip + payload_buffer]
-    mov ecx, 16
-    call wl_send_request
-    test rax, rax
-    js .protocol_error
-
-    # wl_surface.commit()
-    mov edi, 8
-    mov esi, 6
-    xor edx, edx
-    xor ecx, ecx
-    call wl_send_request
-    test rax, rax
-    js .protocol_error
-    mov dword ptr [rip + buffer_busy], 1
-
-    # Bind the optional wl_seat after the window objects so IDs 13-15 remain
-    # dense: seat=13, roundtrip callback=14, pointer=15.
+    # Bind the optional wl_seat after surface/toplevel/shm objects; the first
+    # seat roundtrip uses ID 14 and pointer/keyboard continue at ID 15.
     cmp dword ptr [rip + seat_global], 0
     jne .seat_global_available
-    # Output proxies already consumed IDs from the shared allocator.
+    # No seat=13 or roundtrip callback=14 exists in this session. Continue
+    # the client ID sequence at 13, bind outputs, then map the surface.
+    mov dword ptr [rip + next_client_object_id], 13
+    call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call window_attach_initial_buffer
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .seat_global_available:
     lea rax, [rip + stage_bind_roundtrip]
@@ -5715,21 +5698,39 @@ wayland_main:
     call handle_xdg_ping
 .seat_check_capabilities:
     cmp dword ptr [rip + last_object], 13
-    jne .seat_check_output_event
+    jne .seat_check_registry_event
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_buffer_release
     call handle_seat_capabilities
     test rax, rax
     js .protocol_error
     jmp .seat_check_sync
+.seat_check_registry_event:
+    cmp dword ptr [rip + last_object], 2
+    jne .seat_check_output_event
+    cmp dword ptr [rip + last_opcode], 0
+    je .seat_registry_global
+    cmp dword ptr [rip + last_opcode], 1
+    je .seat_registry_global_remove
+    jmp .seat_check_sync
+.seat_registry_global:
+    call registry_capture_global
+    jmp .seat_check_sync
+.seat_registry_global_remove:
+    call handle_output_global_remove
+    test eax, eax
+    js .protocol_error
+    jmp .seat_check_sync
 .seat_check_output_event:
-    # Output events can arrive in the initial seat roundtrip after their
-    # proxies are bound but before the steady-state event loop begins.
+    # Output objects are bound after this roundtrip, so only process any
+    # output events that refer to an already-bound proxy.
     call handle_output_event
     test eax, eax
+    js .protocol_error
     jnz .seat_check_sync
     call handle_surface_output_event
     test eax, eax
+    js .protocol_error
     jnz .seat_check_sync
 .seat_check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
@@ -5776,6 +5777,12 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call text_input_setup
+    test rax, rax
+    js .protocol_error
+    call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call window_attach_initial_buffer
     test rax, rax
     js .protocol_error
 
@@ -5946,9 +5953,11 @@ wayland_main:
 .check_output_event:
     call handle_output_event
     test eax, eax
+    js .protocol_error
     jnz .event_loop
     call handle_surface_output_event
     test eax, eax
+    js .protocol_error
     jnz .event_loop
 .check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
@@ -12564,6 +12573,10 @@ registry_capture_global:
     mov dword ptr [rdi + r12*4], eax
     lea rdi, [rip + output_scales]
     mov dword ptr [rdi + r12*4], 1
+    lea rdi, [rip + output_pending_scales]
+    mov dword ptr [rdi + r12*4], 1
+    lea rdi, [rip + output_pending_valid]
+    mov dword ptr [rdi + r12*4], 0
     lea rdi, [rip + output_surface_entered]
     mov dword ptr [rdi + r12*4], 0
     mov eax, dword ptr [rip + event_payload + 4]
@@ -23074,6 +23087,53 @@ render_document:
     ret
 .size render_document, . - render_document
 
+# Attach the first wl_buffer and map the surface after bootstrap IDs and
+# optional input/output proxies have been allocated in monotonic ID order.
+.type window_attach_initial_buffer, @function
+window_attach_initial_buffer:
+    push rbp
+    lea rax, [rip + stage_attach]
+    mov qword ptr [rip + failure_stage], rax
+    mov eax, dword ptr [rip + window_buffer_id]
+    mov dword ptr [rip + payload_buffer], eax
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov dword ptr [rip + payload_buffer + 8], 0
+    mov edi, 8
+    mov esi, 1                  # wl_surface.attach
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 12
+    call wl_send_request
+    test rax, rax
+    js .initial_buffer_done
+
+    mov dword ptr [rip + payload_buffer], 0
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov edi, 8
+    mov esi, 2                  # wl_surface.damage
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .initial_buffer_done
+
+    mov edi, 8
+    mov esi, 6                  # wl_surface.commit
+    xor edx, edx
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .initial_buffer_done
+    mov dword ptr [rip + buffer_busy], 1
+    xor eax, eax
+.initial_buffer_done:
+    pop rbp
+    ret
+.size window_attach_initial_buffer, . - window_attach_initial_buffer
+
 # Bind pending wl_output globals at at most protocol version 3.
 # The registry name and bound client object ID occupy separate namespaces.
 .type output_bind_pending, @function
@@ -23194,6 +23254,10 @@ handle_output_global_remove:
     mov dword ptr [rax + r13*4], 0
     lea rax, [rip + output_scales]
     mov dword ptr [rax + r13*4], 1
+    lea rax, [rip + output_pending_scales]
+    mov dword ptr [rax + r13*4], 1
+    lea rax, [rip + output_pending_valid]
+    mov dword ptr [rax + r13*4], 0
     lea rax, [rip + output_surface_entered]
     mov dword ptr [rax + r13*4], 0
     call output_recompute_surface_scale
@@ -23225,18 +23289,49 @@ handle_output_event:
     inc r12d
     jmp .output_event_find
 .output_event_found:
-    cmp dword ptr [rip + last_opcode], 3
-    jne .output_event_handled
+    mov eax, dword ptr [rip + last_opcode]
+    cmp eax, 3
+    je .output_event_scale
+    cmp eax, 2
+    je .output_event_done
+    jmp .output_event_handled
+
+.output_event_scale:
+    # wl_output.scale is a positive integer, available since version 2.
     cmp dword ptr [rip + last_size], 4
-    jb .output_event_handled
+    jb .output_event_protocol_error
+    lea rdx, [rip + output_versions]
+    cmp dword ptr [rdx + r12*4], 2
+    jb .output_event_protocol_error
     mov eax, dword ptr [rip + event_payload]
     test eax, eax
-    jle .output_event_handled
+    jle .output_event_protocol_error
+    lea rdx, [rip + output_pending_scales]
+    mov dword ptr [rdx + r12*4], eax
+    lea rdx, [rip + output_pending_valid]
+    mov dword ptr [rdx + r12*4], 1
+    jmp .output_event_handled
+
+.output_event_done:
+    # The compositor groups output-property changes into an atomic update.
+    lea rdx, [rip + output_versions]
+    cmp dword ptr [rdx + r12*4], 2
+    jb .output_event_protocol_error
+    lea rdx, [rip + output_pending_valid]
+    cmp dword ptr [rdx + r12*4], 0
+    je .output_event_handled
+    mov dword ptr [rdx + r12*4], 0
+    lea rdx, [rip + output_pending_scales]
+    mov eax, dword ptr [rdx + r12*4]
     lea rdx, [rip + output_scales]
     mov dword ptr [rdx + r12*4], eax
     call output_recompute_surface_scale
+
 .output_event_handled:
     mov eax, 1
+    jmp .output_event_return
+.output_event_protocol_error:
+    mov rax, -71                 # EPROTO
     jmp .output_event_return
 .output_event_not_found:
     xor eax, eax
