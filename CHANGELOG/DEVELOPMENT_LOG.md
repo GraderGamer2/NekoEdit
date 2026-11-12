@@ -1,10 +1,25 @@
-## 2026-11-12 — expose the Mutter-translated key event in the IBus live probe (CI pending)
+## 2026-11-12 — inspect GNOME Shell's IBus InputMethod during live preedit validation (CI pending)
+
+Actions [Build and test #846](https://github.com/GraderGamer2/NekoEdit/actions/runs/43161435296) passed the freestanding build/ELF checks, CLI tests, complete Wayland mock, executable inspection, native `us(intl)` XKB parser, X.Org importer, and locale-pack build. The isolated IBus daemon and D-Bus-activated portal acquired their bus names. The native Mutter physical-XKB Compose/dead-key/save canary and the independent text-input-v3 manager/focus/enable/state-commit handshake also passed.
+
+The remaining failure is the live IBus Simple preedit assertion. The previous test-only observer watched `global.stage`, but that is not a reliable observation point for keys handled by GNOME Shell's input method on behalf of a separate Wayland client. Its absence of apostrophe events did not prove that Mutter failed to receive the key.
+
+The new test-only D-Bus method queries the actual `Clutter.InputMethod` instance installed on GNOME Shell's backend and exposes its input source, IBus context availability, focus state, and preedit visibility/string. The Python probe first requires the expected `ibus:xkb:us:intl:eng` source, a ready context, and input-method focus. It then requires Shell-side preedit and independently checks the preedit received by NekoEdit through `zwp_text_input_v3`. Backspace must clear both states; a second apostrophe followed by `e` must commit U+00E9; Ctrl+S and Enter must persist the exact UTF-8 bytes.
+
+This correction changes only the temporary GNOME Shell test extension, Python probe, integration documentation, and changelog. The invalid stage observer and counter assertion are removed. The NekoEdit backend, ELF, and runtime dependency set remain unchanged. CI is pending; no live IBus preedit/commit pass is claimed.
+
+---
+
+## 2026-11-12 — attempted Mutter stage-level key observation (superseded)
 
 Actions [Build and test #845](https://github.com/GraderGamer2/NekoEdit/actions/runs/43152106813) passed the freestanding build/ELF check, CLI tests, complete Wayland mock, executable inspection, native `us(intl)` parser, X.Org importer, and locale-pack build. The isolated IBus daemon and separately D-Bus-activated portal both acquired their bus names. Mutter's native physical-XKB Compose/dead-key/save canary passed, and the second process completed the text-input-v3 manager bind/focus/enable/state-commit handshake. The only failing assertion remains live IBus Simple preedit: sending evdev `KEY_APOSTROPHE=40` leaves NekoEdit's preedit empty.
 
 The latest change adds a **test-only, non-consuming Clutter capture observer** to the temporary GNOME Shell extension. It records the last key press and release seen at `global.stage` capture phase, with the translated keysym, XKB keycode, Unicode value, and modifier state. The probe waits until both apostrophe press and release have been observed, then includes those values in the failure report. The observer always returns `Clutter.EVENT_PROPAGATE` and is disconnected when the extension is disabled; it does not replace, suppress, or synthesize the application's key events. This will establish whether Mutter maps evdev 40 to XKB keycode 48 / `dead_acute` (keysym `0xfe51`) before the IBus provider is expected to send preedit. A follow-up review corrected the Python event-counter regex before the patch was published.
 
 No application source or runtime dependency is changed. This test/diagnostic update awaits Actions; no live IBus preedit/commit pass is claimed.
+
+
+This diagnostic attempt was superseded after Actions #846 showed that the observer saw only the earlier Ctrl events and not the apostrophe sent to the focused NekoEdit Wayland client. A global-stage capture callback is not authoritative for events consumed by GNOME Shell's Clutter input method. The observer was removed; the live probe now inspects the actual backend `Clutter.InputMethod` state and independently checks the client's text-input-v3 events.
 
 ---
 

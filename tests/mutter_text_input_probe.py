@@ -217,6 +217,41 @@ def wait_document_commit(
     )
 
 
+def wait_shell_ibus_context(*, timeout: float = 6.0) -> str:
+    deadline = time.monotonic() + timeout
+    status = ""
+    expected_source = "source=ibus:xkb:us:intl:eng"
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        if (
+            expected_source in status
+            and "context=ready" in status
+            and "focus=yes" in status
+        ):
+            return status
+        time.sleep(0.025)
+    fail(
+        "GNOME Shell's IBus input-method context/source did not become ready "
+        f"for the focused editor; expected {expected_source}, context=ready, "
+        f"focus=yes; last status={status}"
+    )
+
+
+def wait_shell_ibus_preedit(*, visible: bool, timeout: float = 6.0) -> str:
+    deadline = time.monotonic() + timeout
+    expected = f"has-preedit={str(visible).lower()}"
+    status = ""
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        if expected in status:
+            return status
+        time.sleep(0.025)
+    fail(
+        "GNOME Shell IBus input-method preedit state did not reach "
+        f"{expected}; last status={status}"
+    )
+
+
 def require_ibus_engine(expected: str) -> None:
     result = subprocess.run(
         ["ibus", "engine"],
@@ -238,50 +273,40 @@ def exercise_live_ibus_preedit_commit(
     # engine's independent dead-key path instead of relying on Multi_key.
     require_ibus_engine("xkb:us:intl:eng")
 
+    # Inspect GNOME Shell's actual IBus-backed Clutter.InputMethod. Events
+    # consumed by the input method are not reliably visible at global.stage,
+    # which was the previous (invalid) observation point.
+    initial_ime_status = wait_shell_ibus_context()
+    print(f"GNOME Shell IBus input-method context: {initial_ime_status}")
+
     # Inject actual Linux evdev keycodes. NotifyKeyboardKeycode bypasses
-    # Mutter's reverse lookup from keysym to hardware keycode. Capture the
-    # translated Clutter event to verify the actual XKB keyval/keycode that
-    # GNOME Shell subsequently forwards to IBus.
-    initial_key_status = call_gdbus("KeyStatus")
-    initial_match = re.search(r"count=(\d+)", initial_key_status)
-    if not initial_match:
-        fail("Mutter key-event observer returned an invalid status: " + initial_key_status)
-    initial_key_count = int(initial_match.group(1))
+    # Mutter's reverse lookup from keysym to hardware keycode.
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
-    key_status = ""
-    captured_count = initial_key_count
-    deadline = time.monotonic() + 2.0
-    while time.monotonic() < deadline:
-        key_status = call_gdbus("KeyStatus")
-        match = re.search(r"count=(\d+)", key_status)
-        if match:
-            captured_count = int(match.group(1))
-            if captured_count >= initial_key_count + 2:
-                break
-        time.sleep(0.025)
-    if captured_count < initial_key_count + 2:
-        fail(
-            "Mutter did not expose both apostrophe key events to the Clutter "
-            f"capture observer; baseline={initial_key_count}, status={key_status}"
-        )
-    print(f"Mutter translated evdev apostrophe: {key_status}")
     try:
+        first_ime_status = wait_shell_ibus_preedit(visible=True)
         _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
     except Exception as error:
-        fail(f"{error}; captured Mutter key event: {key_status}")
+        fail(
+            f"{error}; GNOME Shell input-method state: "
+            f"{call_gdbus('InputMethodStatus')}"
+        )
+    print(f"GNOME Shell IBus preedit: {first_ime_status}")
 
     # Physical Backspace cancels the pending IBus accent without committing.
     tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
     wait_input_idle()
+    wait_shell_ibus_preedit(visible=False)
     wait_preedit_empty(memory_fd, addresses)
 
     # A fresh apostrophe followed by the physical E key must commit U+00E9.
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
+    second_ime_status = wait_shell_ibus_preedit(visible=True)
     _, second_preedit = wait_preedit_nonempty(memory_fd, addresses)
     tap_evdev_keycode(EVDEV_KEY_E)
     wait_input_idle()
+    wait_shell_ibus_preedit(visible=False)
     wait_document_commit(memory_fd, addresses, 2)
 
     # The editor's default Save confirmation is part of the real input path.
@@ -297,7 +322,8 @@ def exercise_live_ibus_preedit_commit(
                 "PASS: live IBus Simple delivered dead_acute preedit, "
                 "Backspace cancellation, and U+00E9 commit through Mutter "
                 "text-input-v3; confirmed save preserved exact UTF-8 bytes. "
-                f"Observed preedit samples: {first_preedit!r}, {second_preedit!r}."
+                f"Observed preedit samples: {first_preedit!r}, {second_preedit!r}; "
+                f"Shell states: {first_ime_status}, {second_ime_status}."
             )
             return
         time.sleep(0.05)
