@@ -136,12 +136,31 @@ def read_preedit(
         fail(f"NekoEdit exposed invalid UTF-8 in its committed preedit state: {error}")
 
 
-def wait_preedit(
-    memory_fd: int,
-    addresses: dict[str, int],
-    expected: str,
-    *,
-    timeout: float = 6.0,
+def wait_preedit_nonempty(
+    memory_fd: int, addresses: dict[str, int], *, timeout: float = 6.0
+) -> tuple[dict[str, int], str]:
+    deadline = time.monotonic() + timeout
+    state: dict[str, int] = {}
+    actual = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] != 0:
+            fail(
+                "IBus committed document bytes before the dead-key sequence "
+                f"was completed; state={state}, preedit={actual!r}"
+            )
+        if actual:
+            return state, actual
+        time.sleep(0.025)
+    fail(
+        "live IBus dead-key input did not produce a non-empty preedit; "
+        f"observed {actual!r}, state={state}"
+    )
+
+
+def wait_preedit_empty(
+    memory_fd: int, addresses: dict[str, int], *, timeout: float = 6.0
 ) -> dict[str, int]:
     deadline = time.monotonic() + timeout
     state: dict[str, int] = {}
@@ -151,14 +170,14 @@ def wait_preedit(
         actual = read_preedit(memory_fd, addresses, state)
         if state["doc_length"] != 0:
             fail(
-                "IBus committed document bytes before the explicit hex-sequence "
-                f"terminator; state={state}, preedit={actual!r}"
+                "Backspace committed bytes instead of cancelling the pending "
+                f"dead key; state={state}, preedit={actual!r}"
             )
-        if actual == expected:
+        if not actual:
             return state
         time.sleep(0.025)
     fail(
-        f"live IBus preedit did not reach {expected!r}; "
+        "IBus did not clear its preedit after Backspace cancellation; "
         f"observed {actual!r}, state={state}"
     )
 
@@ -198,32 +217,27 @@ def require_ibus_engine(expected: str) -> None:
 def exercise_live_ibus_preedit_commit(
     memory_fd: int, addresses: dict[str, int], document: Path
 ) -> None:
-    # Use IBus Simple's built-in XKB/Compose engine path. This avoids any
-    # optional Unicode-entry setting and exercises the same compose handling
-    # a regular IBus Simple keyboard source provides to applications.
+    # IBus 1.5.29's Wayland input-method path does not reliably inherit the
+    # compositor's XKB Compose-key option. Exercise the XKB-backed Simple
+    # engine's independent dead-key path instead of relying on Multi_key.
     require_ibus_engine("xkb:us:intl:eng")
 
-    # Multi_key alone is shown as a middle-dot preedit. Adding "o" narrows the
-    # Compose prefix; Backspace must restore the Multi_key-only preedit without
-    # inserting anything into the document.
-    send_keysym(0xFF20)  # Multi_key
+    # dead_acute must produce a provider-owned preedit without changing the
+    # document. Backspace then cancels that pending accent without committing.
+    send_keysym(0xFE51)  # XK_dead_acute
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "·")
-
-    send_keysym(ord("o"))
-    wait_input_idle()
-    wait_preedit(memory_fd, addresses, "o")
+    _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
 
     send_keysym(65288)  # BackSpace
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "·")
+    wait_preedit_empty(memory_fd, addresses)
 
-    # Multi_key + o + c is the standard X.Org Compose sequence for COPYRIGHT SIGN.
-    send_keysym(ord("o"))
+    # A fresh dead_acute followed by e must commit U+00E9 LATIN SMALL LETTER E
+    # WITH ACUTE (é) through the real IBus -> GNOME Shell -> Mutter path.
+    send_keysym(0xFE51)  # XK_dead_acute
     wait_input_idle()
-    wait_preedit(memory_fd, addresses, "o")
-
-    send_keysym(ord("c"))
+    _, second_preedit = wait_preedit_nonempty(memory_fd, addresses)
+    send_keysym(ord("e"))
     wait_input_idle()
     wait_document_commit(memory_fd, addresses, 2)
 
@@ -232,19 +246,20 @@ def exercise_live_ibus_preedit_commit(
     send_keysym(65293)         # Enter accepts confirmation
     wait_input_idle()
 
-    expected = "©".encode("utf-8")
+    expected = "é".encode("utf-8")
     deadline = time.monotonic() + 6.0
     while time.monotonic() < deadline:
         if document.read_bytes() == expected:
             print(
-                "PASS: live IBus Simple delivered Compose preedit updates, "
-                "Backspace correction, and U+00A9 commit through Mutter "
-                "text-input-v3; confirmed save preserved exact UTF-8 bytes."
+                "PASS: live IBus Simple delivered dead_acute preedit, "
+                "Backspace cancellation, and U+00E9 commit through Mutter "
+                "text-input-v3; confirmed save preserved exact UTF-8 bytes. "
+                f"Observed preedit samples: {first_preedit!r}, {second_preedit!r}."
             )
             return
         time.sleep(0.05)
     fail(
-        "live IBus Compose commit/save produced unexpected document bytes: "
+        "live IBus dead_acute commit/save produced unexpected document bytes: "
         + repr(document.read_bytes())
     )
 

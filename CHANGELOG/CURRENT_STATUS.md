@@ -1,3 +1,13 @@
+## 2026-11-12 — use the IBus Simple dead-key path for live text-input-v3 validation (CI pending)
+
+Actions [Build and test #842](https://github.com/GraderGamer2/NekoEdit/actions/runs/43149228354) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, native `us(intl)` parser, X.Org importer verification, and locale-pack build. The Mutter test also verified that the isolated IBus daemon owns its bus name and that the separately activated `org.freedesktop.portal.IBus` service starts successfully before GNOME Shell. Physical-XKB Right Alt Compose, the pt_BR dead-key chain, save, and the text-input-v3 manager/focus/enable/state-commit handshake all pass. The remaining failure is provider preedit for an IBus Simple `Multi_key` sequence.
+
+The IBus 1.5.29 Wayland input-method path does not reliably inherit the compositor's XKB Compose-key option; upstream tracks this as [ibus/ibus#2579](https://github.com/ibus/ibus/issues/2579). The IBus phase was incorrectly using `Multi_key` as though it inherited the physical `compose:ralt` setup. The revised probe tests the XKB-backed IBus Simple dead-key path instead: `dead_acute`, Backspace cancellation, then `dead_acute` + `e` to commit U+00E9 (`C3 A9`). It requires provider preedit with no document change, cancellation without commit, exact UTF-8 commit, and the normal save-confirmation path. The earlier native Mutter phase still exercises physical `Multi_key` Compose and the two-mark locale-specific dead-key sequence independently. This is a test-only distinction; NekoEdit's backend and runtime dependencies are unchanged.
+
+The updated probe and documentation are committed next; a new Actions run is pending. No live IBus dead-key pass is claimed yet.
+
+---
+
 ## 2026-11-12 — propagate the IBus socket address to D-Bus-activated portal services (CI pending)
 
 Actions [Build and test #841](https://github.com/GraderGamer2/NekoEdit/actions/runs/43138760681) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, real `us(intl)` parser validation, X.Org importer verification, and locale-pack build. Mutter again passed native Right Alt Compose, the pt_BR dead-key sequence and save, plus text-input-v3 manager/focus/enable/state-commit. The only failure remained live IBus Simple preedit.

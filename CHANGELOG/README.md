@@ -1,3 +1,11 @@
+## Latest handoff (2026-11-12 — IBus dead-key probe revision, CI pending)
+
+Continue from branch `early-alpha`. Wayland frame pacing is implemented and the full Wayland mock is green. Actions #842 passed build/CLI, full Wayland mock, ELF, native XKB, X.Org importer, and locale-pack stages. Mutter physical-XKB Right Alt Compose, two-mark dead-key save, and the text-input-v3 manager/focus/enable/state-commit handshake pass. The headless IBus startup issue is now resolved too: the daemon owns `org.freedesktop.IBus`, D-Bus activation receives the isolated XDG paths and actual `IBUS_ADDRESS`, and `org.freedesktop.portal.IBus` starts and owns its name.
+
+The remaining #842 failure was specifically no IBus Simple preedit for the test's `Multi_key` Compose sequence. IBus 1.5.29 Wayland input-method mode does not reliably inherit the compositor's XKB Compose option (upstream [ibus/ibus#2579](https://github.com/ibus/ibus/issues/2579)). The next probe/documentation commit replaces only the IBus-specific sequence with `dead_acute`, Backspace cancellation, and `dead_acute` + `e` → `é` (`C3 A9`). It still requires real provider preedit, no document mutation before commit, Backspace cancellation, exact committed UTF-8 bytes, and confirmed save. The first physical-XKB test continues to exercise `Multi_key` and locale-specific dead-key composition independently. Check the next Actions run before claiming live provider success.
+
+---
+
 ## Latest handoff (2026-11-12 — IBus D-Bus activation environment correction pending CI)
 
 Continue from branch `early-alpha`. The frame-pacing implementation and complete Wayland mock remain green. Actions #841 passed build, command-line, Wayland, ELF, native `us(intl)` parsing, X.Org importer, and locale-pack stages. Mutter physical XKB Compose/dead-key save and the text-input-v3 handshake passed. The live IBus Simple preedit assertion still failed.

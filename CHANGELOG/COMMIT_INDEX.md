@@ -1,3 +1,14 @@
+## 2026-11-12 — test IBus Simple's XKB dead-key path rather than inherited Compose options (CI pending)
+
+| Commit | Subject |
+|---|---|
+| pending | test: validate IBus dead_acute preedit and commit |
+| pending | docs: separate physical Compose from IBus dead-key coverage |
+
+Actions #842 confirmed that the daemon and D-Bus-activated IBus portal are both available, while the IBus Simple `Multi_key` preedit still did not arrive. IBus 1.5.29's Wayland input-method path does not reliably inherit the compositor's Compose-key XKB option (upstream issue #2579). The revised live provider test uses dead_acute + e to validate preedit/cancel/commit independently. CI is pending.
+
+---
+
 ## 2026-11-12 — publish IBus address to D-Bus activation and verify the portal (CI pending)
 
 | Commit | Subject |
