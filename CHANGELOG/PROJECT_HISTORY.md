@@ -1,3 +1,7 @@
+## 2026-11-12 — test keyboard removal while text-input-v3 preedit is active (CI pending)
+
+Add a dedicated opt-in mock scenario in which the compositor focuses the editor, enables text-input-v3, sends a visible preedit string, and then removes the keyboard capability. The mock requires the text-input disable request and its state commit, verifies the transient preedit/cursor state clears without inserting those bytes into the document, and checks the immediate redraw when the shared buffer and frame callback are idle. Existing tests continue to verify that text-input-v3 remains default-off and that ordinary XKB typing works when the manager is advertised but not opted in.
+
 ## 2026-11-12 — assert seat redraw through the mock callback interceptor (CI pending)
 
 Build and test [#860](https://github.com/GraderGamer2/NekoEdit/actions/runs/43211045584) passed the complete set of existing Wayland cases and reached the new seat-hotplug case. Its failure was in the new test expectation: the mock's `recv_wayland_message()` intentionally consumes `wl_surface.frame` requests, tracks callback IDs/counters, and acknowledges them after the matching surface commit. Therefore `expect_message()` cannot observe opcode 3; it sees the following buffer attach instead.

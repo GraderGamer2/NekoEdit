@@ -114,6 +114,9 @@ See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
 ### Wayland: next steps
 
+Seat hotplug lifecycle is mock-tested for seat versions 1–4, including protocol release compatibility, input-state reset, pointer-bound cursor-shape recreation, immediate redraw, and keyboard removal during an active text-input-v3 preedit.
+
+
 Seat capability hotplug now releases/abandons removed pointer and keyboard proxies according to the bound seat version, clears stale input state, stops pointer-drag auto-scroll, and recreates pointer-bound cursor-shape state on re-addition. The mock covers seat versions 1–4.
 
 

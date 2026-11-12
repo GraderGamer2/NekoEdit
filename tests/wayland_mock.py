@@ -296,6 +296,7 @@ def run(
     frame_callback_order_test: bool = False,
     verify_frame_callbacks: bool = False,
     seat_hotplug_test: bool = False,
+    seat_hotplug_ime_test: bool = False,
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
@@ -447,7 +448,7 @@ def run(
                 globals_payload += registry_global(5, "wp_cursor_shape_manager_v1", version=1)
             if clipboard_test or clipboard_persistence_test:
                 globals_payload += registry_global(6, "wl_data_device_manager", version=1)
-            if text_input_test or text_input_advertised:
+            if text_input_test or text_input_advertised or seat_hotplug_ime_test:
                 globals_payload += registry_global(7, "zwp_text_input_manager_v3", version=1)
             client.sendall(globals_payload + wire_message(3, 0, struct.pack("<I", 1)))
 
@@ -656,7 +657,7 @@ def run(
                         "get wl_data_device for the application seat",
                     )
                     observations.append("wl_data_device_manager bound; wl_data_device created for seat 13")
-                if text_input_test:
+                if text_input_test or seat_hotplug_ime_test:
                     manager_name = b"zwp_text_input_manager_v3\0"
                     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
                     expect_message(
@@ -2259,6 +2260,145 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     return struct.unpack("<I", raw)[0]
 
+
+                if seat_hotplug_ime_test:
+                    # This scenario combines the real opt-in text-input-v3
+                    # lifecycle with seat removal. The IME owns a visible
+                    # preedit when the physical keyboard disappears.
+                    def wait_hotplug_state(name: str, expected: int, timeout: float = 3.0) -> None:
+                        deadline = time.monotonic() + timeout
+                        actual = child_u32(name)
+                        while actual != expected and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                            actual = child_u32(name)
+                        if actual != expected:
+                            raise AssertionError(
+                                f"IME hotplug state {name}: expected {expected}, got {actual}"
+                            )
+
+                    def expect_hotplug_frame(label: str) -> None:
+                        expect_message(
+                            client, (8, 1, struct.pack("<III", 12, 0, 0)),
+                            f"{label} attach",
+                        )
+                        expect_message(
+                            client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                            f"{label} damage",
+                        )
+                        expect_message(client, (8, 6, b""), f"{label} commit")
+
+                    def expect_ime_state_update(label: str) -> None:
+                        expect_message(
+                            client, (20, 4, struct.pack("<I", 0)),
+                            f"{label} text-change cause",
+                        )
+                        surrounding = recv_wayland_message(client)
+                        if surrounding[0:2] != (20, 3) or surrounding[3]:
+                            raise AssertionError(
+                                f"{label}: expected set_surrounding_text, got {surrounding!r}"
+                            )
+                        rectangle = recv_wayland_message(client)
+                        if rectangle[0:2] != (20, 6) or len(rectangle[2]) != 16 or rectangle[3]:
+                            raise AssertionError(
+                                f"{label}: expected set_cursor_rectangle, got {rectangle!r}"
+                            )
+                        expect_message(client, (20, 7, b""), f"{label} state commit")
+
+                    def preedit_event(value: bytes, cursor_begin: int, cursor_end: int) -> bytes:
+                        encoded = value + b"\0"
+                        payload = struct.pack("<I", len(encoded)) + encoded
+                        payload += b"\0" * (-len(encoded) % 4)
+                        payload += struct.pack("<ii", cursor_begin, cursor_end)
+                        return wire_message(20, 2, payload)
+
+                    # The keyboard enter has already caused a queued redraw.
+                    client.sendall(wire_message(12, 0))
+                    expect_hotplug_frame("keyboard-focus redraw")
+                    client.sendall(
+                        wire_message(12, 0)
+                        + wire_message(20, 0, struct.pack("<I", 8))
+                    )
+                    expect_message(client, (20, 1, b""), "enable text input for the editor")
+                    expect_message(
+                        client, (20, 5, struct.pack("<II", 0, 0)),
+                        "set normal content type",
+                    )
+                    expect_ime_state_update("initial IME focus")
+                    expect_hotplug_frame("text-input enable redraw")
+
+                    # A matching done acknowledges the first committed state.
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(wire_message(20, 5, struct.pack("<I", serial)))
+                    client.sendall(wire_message(12, 0))
+                    expect_hotplug_frame("initial text-input done redraw")
+
+                    preedit_text = b"abc"
+                    serial = child_u32("text_input_commit_serial")
+                    client.sendall(
+                        preedit_event(preedit_text, 1, 2)
+                        + wire_message(20, 5, struct.pack("<I", serial))
+                    )
+                    expect_ime_state_update("active preedit")
+                    client.sendall(wire_message(12, 0))
+                    expect_hotplug_frame("active preedit redraw")
+
+                    if (
+                        child_u32("text_input_enabled") != 1
+                        or child_u32("text_input_preedit_length") != len(preedit_text)
+                        or child_u32("doc_length") != 0
+                        or not rendered_color_present(24, 92, 8, 12, 3200, 0xff5e81ac)
+                    ):
+                        raise AssertionError(
+                            "IME hotplug fixture did not establish a visible, uncommitted preedit"
+                        )
+
+                    # Drain the shared buffer and frame callback before
+                    # removing the keyboard so the disable-triggered clear
+                    # must be presented immediately by the seat event handler.
+                    client.sendall(wire_message(12, 0))
+                    wait_hotplug_state("buffer_busy", 0)
+                    wait_hotplug_state("frame_callback_id", 0)
+                    previous_frame_requests = frame_callback_stats["requested"]
+
+                    client.sendall(wire_message(13, 0, struct.pack("<I", 1)))
+                    expect_message(
+                        client, (16, 0, b""), "release keyboard with active IME preedit"
+                    )
+                    expect_message(
+                        client, (20, 2, b""), "disable text input after keyboard removal"
+                    )
+                    expect_message(
+                        client, (20, 7, b""), "commit text-input disable after keyboard removal"
+                    )
+                    expect_hotplug_frame("keyboard-removal preedit clear")
+
+                    wait_hotplug_state("keyboard_focused", 0)
+                    wait_hotplug_state("text_input_enabled", 0)
+                    wait_hotplug_state("text_input_preedit_length", 0)
+                    wait_hotplug_state("text_input_preedit_cursor_begin", 0xffffffff)
+                    wait_hotplug_state("text_input_preedit_cursor_end", 0xffffffff)
+                    wait_hotplug_state("frame_callback_id", 0)
+                    wait_hotplug_state("buffer_busy", 1)
+                    wait_hotplug_state("redraw_pending", 0)
+                    if (
+                        frame_callback_stats["requested"] != previous_frame_requests + 1
+                        or frame_callback_stats["completed"] != frame_callback_stats["requested"]
+                        or not frame_callback_stats["ids"]
+                        or not rendered_color_present(24, 92, 8, 12, 3200, 0xff252a33)
+                    ):
+                        raise AssertionError(
+                            "keyboard removal did not complete exactly one frame with the IME preedit cleared: "
+                            + repr(frame_callback_stats)
+                        )
+                    if child_u32("doc_length") != 0:
+                        raise AssertionError("uncommitted IME preedit leaked into the document on keyboard removal")
+
+                    observations.append(
+                        "keyboard hotplug while IME preedit was active sent text-input disable+commit, "
+                        "cleared transient preedit without committing it, and immediately redrew the surface"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if text_input_test:
                     def expect_frame(label: str) -> None:
@@ -8412,7 +8552,7 @@ xkb_symbols "nekoedit-sparse" {
         environment["LANG"] = "pt_BR.UTF-8"
     # Never let a caller's shell opt-in leak into the default-path regression.
     environment.pop("NEKOEDIT_ENABLE_TEXT_INPUT", None)
-    if text_input_test or text_input_opt_in_fallback_test:
+    if text_input_test or text_input_opt_in_fallback_test or seat_hotplug_ime_test:
         environment["NEKOEDIT_ENABLE_TEXT_INPUT"] = "1"
     # Each mock receives an isolated HOME so preferences and journals never
     # enter the CI runner account. Only this test enables preferences to exercise
@@ -9206,3 +9346,5 @@ if __name__ == "__main__":
     # verifies the client abandons proxies without unsupported release opcodes.
     run(sys.argv[1], seat_hotplug_test=True, advertised_seat_version=4)
     run(sys.argv[1], seat_hotplug_test=True, advertised_seat_version=2)
+    # Remove the keyboard while an opted-in text-input-v3 IME has visible preedit.
+    run(sys.argv[1], seat_hotplug_ime_test=True, advertised_seat_version=4)

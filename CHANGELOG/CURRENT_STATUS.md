@@ -1,28 +1,32 @@
-## 2026-11-12 — assert seat redraw through the mock callback interceptor (CI pending)
+## 2026-11-12 — test keyboard removal while text-input-v3 preedit is active (CI pending)
+
+Add a dedicated opt-in mock scenario in which the compositor focuses the editor, enables text-input-v3, sends a visible preedit string, and then removes the keyboard capability. The mock requires the text-input disable request and its state commit, verifies the transient preedit/cursor state clears without inserting those bytes into the document, and checks the immediate redraw when the shared buffer and frame callback are idle. Existing tests continue to verify that text-input-v3 remains default-off and that ordinary XKB typing works when the manager is advertised but not opted in.
+
+## 2026-11-12 — assert seat redraw through the mock callback interceptor (CI PASS #861)
 
 Build and test [#860](https://github.com/GraderGamer2/NekoEdit/actions/runs/43211045584) passed the complete set of existing Wayland cases and reached the new seat-hotplug case. Its failure was in the new test expectation: the mock's `recv_wayland_message()` intentionally consumes `wl_surface.frame` requests, tracks callback IDs/counters, and acknowledges them after the matching surface commit. Therefore `expect_message()` cannot observe opcode 3; it sees the following buffer attach instead.
 
-Correct the hotplug assertion to verify the attach/damage/commit sequence and independently assert that the callback interceptor recorded exactly one new callback ID (19), then delivered its completion. The application-side immediate-redraw implementation is unchanged in this correction. CI is pending.
+Correct the hotplug assertion to verify the attach/damage/commit sequence and independently assert that the callback interceptor recorded exactly one new callback ID (19), then delivered its completion. Actions [Build and test #861](https://github.com/GraderGamer2/NekoEdit/actions/runs/43213761614) passed all 15 workflow steps, including both seat-v2 and seat-v4 removal/re-addition scenarios, the complete Wayland mock, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
 ---
 
-## 2026-11-12 — widen bounded Wayland mock process timeout (CI pending)
+## 2026-11-12 — widen bounded Wayland mock process timeout (verified in CI #861)
 
 Build and test [#859](https://github.com/GraderGamer2/NekoEdit/actions/runs/43210190052) passed the freestanding build, ELF check, and command-line tests but timed out in the very first general Wayland mock scenario, before the hotplug-specific cases ran. It emitted no application error or fake-compositor assertion. The same initial smoke scenario took 19.1 seconds in the prior passing run #858, while the harness allowed only 20 seconds for ordinary child processes.
 
-Raise the ordinary per-child `communicate()` deadline to 30 seconds, retaining 90 seconds for the longer picker/settings workflows. The mock compositor still uses its shorter socket read deadlines, so a protocol mismatch does not inherit the larger process timeout. No application runtime behavior changes in this test-harness correction. CI is pending.
+Raise the ordinary per-child `communicate()` deadline to 30 seconds, retaining 90 seconds for the longer picker/settings workflows. The mock compositor still uses its shorter socket read deadlines, so a protocol mismatch does not inherit the larger process timeout. No application runtime behavior changes in this test-harness correction. The 30-second ordinary child deadline completed the full test set successfully in #861.
 
 ---
 
-## 2026-11-12 — flush idle-buffer redraws after seat hotplug (CI pending)
+## 2026-11-12 — flush idle-buffer redraws after seat hotplug (CI PASS #861)
 
 Follow-up to [hotplug implementation](https://github.com/GraderGamer2/NekoEdit/commit/bbb9ce3627b48773659711e4a1af8cf3f128ddb3): the seat-event path now submits a pending redraw immediately when the single shared buffer is released and no frame callback is outstanding. When either gate remains busy, the existing buffer-release/frame-done sequencing still performs the deferred presentation. This prevents an IME-preedit clear or other keyboard-removal state reset from remaining visually stale until an unrelated later event.
 
-The hotplug mock now drains the initial buffer, confirms the frame gate is idle, removes the keyboard, and asserts the immediate `wl_surface.frame` / attach / damage / commit sequence plus the resulting busy/callback/redraw state. Because that presentation consumes the next client object ID, the subsequent keyboard, pointer, and cursor-shape re-add assertions are updated. CI is pending.
+The hotplug mock now drains the initial buffer, confirms the frame gate is idle, removes the keyboard, and asserts the immediate `wl_surface.frame` / attach / damage / commit sequence plus the resulting busy/callback/redraw state. Because that presentation consumes the next client object ID, the subsequent keyboard, pointer, and cursor-shape re-add assertions are updated. This behavior passed both hotplug cases in #861.
 
 ---
 
-## 2026-11-12 — Wayland seat capability hotplug lifecycle (implementation; CI pending)
+## 2026-11-12 — Wayland seat capability hotplug lifecycle (CI PASS #861)
 
 The Wayland backend now treats each `wl_seat.capabilities` event as a complete state transition instead of only creating input objects once. Removing pointer capability clears focus/serial and active pointer/scroll drag state, stops selection auto-scroll, destroys the cursor-shape device tied to that pointer, and abandons the old pointer proxy. Removing keyboard capability cancels key repeat, clears held modifier/lock state and pending dead-key/Compose prefixes, abandons the old keyboard proxy, and disables optional text-input-v3 so stale preedit cannot survive unplug.
 
