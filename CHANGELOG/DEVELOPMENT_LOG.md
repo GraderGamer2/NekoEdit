@@ -1,10 +1,11 @@
-## 2026-11-12 — persist the corrected legacy anchor into the staged preedit payload (CI pending)
+## 2026-11-12 — trace the IBus Backspace preedit-clear event through text-input-v3 (CI pending)
 
-Actions [Build and test #851](https://github.com/GraderGamer2/NekoEdit/actions/runs/43178340532) passed the freestanding build/ELF checks and CLI tests, but the full Wayland protocol mock caught a defect in the new Mutter 46 compatibility path. The code computed the corrected anchor byte offset in a register, while the existing candidate-acceptance path subsequently copied that field from the staged request buffer. The mock therefore still observed the uncorrected `(cursor_begin=2, cursor_end=1)` pair.
+Actions [Build and test #852](https://github.com/GraderGamer2/NekoEdit/actions/runs/43178757280) passed the freestanding build/ELF, CLI, full Wayland protocol mock (including the Mutter 46 legacy-anchor regression), XKB parser, X.Org importer, and locale-pack checks. The native Mutter Compose/dead-key/save canary passed. The live IBus dead-key accent also now reaches NekoEdit as a visible preedit, confirming the narrowly gated Mutter 46 anchor compatibility path works.
 
-The correction now writes the normalized `cursor_end` back into `text_input_request_buffer + 4104` before following the existing acceptance path. The existing regression requires the legacy `(2, 1)` event to be staged as `(2, 2)`; the separate malformed `cursor_begin` rejection test remains unchanged. No workflow or runtime dependency change is involved. CI is pending.
+The next live assertion exposed a distinct issue: Backspace clears GNOME Shell's IBus preedit, but NekoEdit still reports the previous accent. The probe is being extended to capture the post-Backspace Shell state, last Wayland event object/opcode/size and payload, staged preedit offsets, pending flags, and committed client preedit offsets. This will identify whether Mutter failed to send a clear event, whether NekoEdit rejected its payload, or whether the text-input done batch did not apply the clear. No speculative change to the IME state machine is made until that boundary is known. CI is pending.
 
 ---
+
 
 
 

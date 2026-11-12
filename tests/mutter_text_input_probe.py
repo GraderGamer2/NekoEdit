@@ -29,11 +29,20 @@ SYMBOLS = (
     "text_input_enabled",
     "text_input_commit_serial",
     "text_input_state_ready",
+    "text_input_pending_flags",
+    "text_input_pending_preedit_length",
+    "text_input_pending_preedit_cursor_begin",
+    "text_input_pending_preedit_cursor_end",
     "text_input_preedit_length",
+    "text_input_preedit_cursor_begin",
+    "text_input_preedit_cursor_end",
+    "last_object",
+    "last_opcode",
+    "last_size",
     "doc_length",
 )
 
-BUFFER_SYMBOLS = ("text_input_preedit_buffer", "text_input_request_buffer")
+BUFFER_SYMBOLS = ("text_input_preedit_buffer", "text_input_request_buffer", "event_payload")
 
 # Linux input-event-codes.h evdev values used by Mutter NotifyKeyboardKeycode.
 EVDEV_KEY_BACKSPACE = 14
@@ -166,12 +175,14 @@ def read_preedit_candidate(
     cursor_end = int.from_bytes(raw[4104:4108], "little", signed=True)
     if length > 4095:
         fail(f"Wayland preedit candidate length is out of bounds: {length}")
+    event_payload = os.pread(memory_fd, 32, addresses["event_payload"])
     return {
         "length": length,
         "text": raw[:length].decode("utf-8", errors="replace"),
         "cursor_begin": cursor_begin,
         "cursor_end": cursor_end,
         "buffer_prefix_hex": raw[:min(length, 16)].hex(),
+        "last_event_payload_hex": event_payload.hex(),
     }
 
 
@@ -373,8 +384,16 @@ def exercise_live_ibus_preedit_commit(
     # Physical Backspace cancels the pending IBus accent without committing.
     tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
     wait_input_idle()
-    wait_shell_ibus_preedit(visible=False)
-    wait_preedit_empty(memory_fd, addresses)
+    shell_cleared_status = wait_shell_ibus_preedit(visible=False)
+    try:
+        wait_preedit_empty(memory_fd, addresses)
+    except Exception as error:
+        state = read_state(memory_fd, addresses)
+        fail(
+            f"{error}; GNOME Shell after Backspace: {shell_cleared_status}; "
+            f"NekoEdit Wayland event state: {state}; "
+            f"last staged preedit/payload: {read_preedit_candidate(memory_fd, addresses)}"
+        )
 
     # A fresh apostrophe followed by the physical E key must commit U+00E9.
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
