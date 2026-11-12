@@ -296,36 +296,37 @@ export default class NekoEditMutterTestExtension extends Extension {
             this._ibusProbeStatus = 'context-missing';
             return;
         }
-        if (this._ibusProbeContext === context)
-            return;
-
-        const original = context.process_key_event_async;
-        if (typeof original !== 'function') {
-            this._ibusProbeStatus = 'process-key-event-method-missing';
-            return;
-        }
 
         const extension = this;
-        const wrapped = function (...args) {
-            const keyval = Number(args[0]) >>> 0;
-            const keycode = Number(args[1]) >>> 0;
-            const state = Number(args[2]) >>> 0;
-            extension._ibusKeyEventCount++;
-            extension._lastIbusKeyEvent =
-                `keyval=0x${keyval.toString(16)} keycode=${keycode} state=0x${state.toString(16)}`;
-            return original.apply(this, args);
-        };
-
-        try {
-            context.process_key_event_async = wrapped;
-            if (context.process_key_event_async !== wrapped) {
-                this._ibusProbeStatus = 'method-replacement-rejected';
+        if (this._ibusProbeContext !== context) {
+            const original = context.process_key_event_async;
+            if (typeof original !== 'function') {
+                this._ibusProbeStatus = 'process-key-event-method-missing';
                 return;
             }
-            this._ibusProbeContext = context;
-            this._ibusProbeStatus = 'installed';
-        } catch (error) {
-            this._ibusProbeStatus = `install-failed:${String(error)}`;
+
+            const wrapped = function (...args) {
+                const keyval = Number(args[0]) >>> 0;
+                const keycode = Number(args[1]) >>> 0;
+                const state = Number(args[2]) >>> 0;
+                extension._ibusKeyEventCount++;
+                extension._lastIbusKeyEvent =
+                    `keyval=0x${keyval.toString(16)} keycode=${keycode} state=0x${state.toString(16)}`;
+                return original.apply(this, args);
+            };
+
+            try {
+                context.process_key_event_async = wrapped;
+                if (context.process_key_event_async !== wrapped) {
+                    this._ibusProbeStatus = 'method-replacement-rejected';
+                    return;
+                }
+                this._ibusProbeContext = context;
+                this._ibusProbeStatus = 'installed';
+            } catch (error) {
+                this._ibusProbeStatus = `install-failed:${String(error)}`;
+                return;
+            }
         }
 
         if (this._preeditProbeInputMethod === inputMethod)
@@ -362,9 +363,6 @@ export default class NekoEditMutterTestExtension extends Extension {
         } catch (error) {
             this._preeditProbeInputMethod = inputMethod;
             this._preeditApiProbeStatus = `install-failed:${String(error)}`;
-        }
-        } catch (error) {
-            this._ibusProbeStatus = `install-failed:${String(error)}`;
         }
     }
 

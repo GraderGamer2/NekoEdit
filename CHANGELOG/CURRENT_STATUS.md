@@ -1,12 +1,11 @@
-## 2026-11-12 — instrument GNOME Shell's Clutter preedit-clear API (CI pending)
+## 2026-11-12 — correct the test extension's independent preedit API wrapper (CI pending)
 
-Actions [Build and test #853](https://github.com/GraderGamer2/NekoEdit/actions/runs/43180119098) passed build/ELF, CLI, the complete Wayland protocol mock, XKB parser validation, X.Org importer verification, locale-pack build, and the native Mutter Compose/dead-key/save canary. The live IBus dead key was also delivered to NekoEdit as a visible preedit.
+The previous test-only instrumentation commit exposed a malformed nested catch boundary in the GNOME Shell extension. This commit replaces the probe method as one complete unit: the IBus key-event wrapper and the Clutter preedit API wrapper now have separate guarded installation paths. Both wrappers preserve the original receiver, arguments, return value, and callback behavior. Failure to install the additional preedit probe is reported as a diagnostic status rather than changing IBus event routing.
 
-The Backspace trace proves that IBus's own Shell context reports `preedit-visible=false` and `has-preedit=false`, while NekoEdit receives no subsequent text-input-v3 preedit-clear event: its last incoming Wayland event is still a keyboard key event, and the pending protocol flags are zero. The remaining unknown boundary is whether GNOME Shell calls Clutter's `set_preedit_text(NULL, ...)` when IBus hides the preedit.
-
-The test extension now wraps the active `Clutter.InputMethod.set_preedit_text` call, records each call's text/cursor/anchor/reset-mode, and forwards the original receiver and arguments unchanged. The next run can distinguish an IBus-to-Shell notification gap from a Shell-to-Mutter forwarding gap. This remains test-only instrumentation; no NekoEdit runtime behavior is changed. CI is pending.
+Actions [Build and test #854](https://github.com/GraderGamer2/NekoEdit/actions/runs/43181083656) is running against the prior instrumentation commit; the corrected source is committed separately for a clean verification run. No NekoEdit application code or runtime dependency changes are included.
 
 ---
+
 
 
 
