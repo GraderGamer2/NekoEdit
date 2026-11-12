@@ -34,6 +34,6 @@ The live Mutter probe is intentionally narrower than a full IME test:
 - If the compositor advertises `zwp_text_input_manager_v3`, it verifies the manager bind, text-input `enter`, focused-document `enable`, and outbound state commit.
 - If the global is absent, it verifies that the opt-in does not create a partial text-input object and that ordinary XKB key delivery and save remain functional.
 
-The pending live IBus Simple test is intended to confirm real `preedit_string` and `commit_string` delivery through GNOME Shell/Mutter. It does not verify a provider-originated `delete_surrounding_text` request, Fcitx, or all third-party engines. The existing Wayland mock remains responsible for deterministic incoming-event, UTF-8, cursor-offset, delete, and serial regression tests. Broader desktop/engine checks are still required before enabling text-input-v3 by default.
+The pending live IBus Simple dead-key test is intended to confirm real `preedit_string` and `commit_string` delivery through GNOME Shell/Mutter. It does not verify a provider-originated `delete_surrounding_text` request, Fcitx, or all third-party engines. The existing Wayland mock remains responsible for deterministic incoming-event, UTF-8, cursor-offset, delete, and serial regression tests. Broader desktop/engine checks are still required before enabling text-input-v3 by default.
 
 The mock does not replace a live compositor/input-method test. GNOME/Mutter behavior with a physical keyboard and installed IME still requires desktop validation.
