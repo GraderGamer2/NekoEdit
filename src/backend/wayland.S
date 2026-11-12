@@ -242,6 +242,7 @@ iface_compositor:      .asciz "wl_compositor"
 iface_shm:             .asciz "wl_shm"
 iface_xdg_wm_base:     .asciz "xdg_wm_base"
 iface_seat:            .asciz "wl_seat"
+iface_output:          .asciz "wl_output"
 iface_cursor_shape:   .asciz "wp_cursor_shape_manager_v1"
 iface_text_input_manager_v3: .asciz "zwp_text_input_manager_v3"
 keymap_base:
@@ -4852,6 +4853,16 @@ cursor_shape_global:   .long 0
 cursor_shape_version:  .long 0
 cursor_shape_manager:  .long 0
 cursor_shape_device:   .long 0
+.global output_global_names, output_object_ids, output_versions
+.global output_scales, output_surface_entered
+.global surface_output_count, surface_output_max_scale
+output_global_names:      .zero 32
+output_object_ids:        .zero 32
+output_versions:          .zero 32
+output_scales:            .zero 32
+output_surface_entered:   .zero 32
+surface_output_count:     .long 0
+surface_output_max_scale: .long 0
 .global text_input_manager_global, text_input_manager_object, text_input_object
 .global text_input_entered, text_input_enabled, text_input_commit_serial
 .global text_input_preedit_length, text_input_preedit_cursor_begin, text_input_preedit_cursor_end
@@ -5226,6 +5237,7 @@ wayland_main:
     mov dword ptr [rip + save_confirm_action], 0
     mov dword ptr [rip + pointer_inside], 0
     mov dword ptr [rip + pointer_enter_serial], 0
+    mov dword ptr [rip + surface_output_max_scale], 1
     mov dword ptr [rip + cursor_shape_current], 0
     call window_update_geometry
     call doc_storage_init
@@ -5430,6 +5442,11 @@ wayland_main:
     jne .bind_roundtrip
     cmp dword ptr [rip + last_opcode], 0
     jne .bind_roundtrip
+
+    mov dword ptr [rip + next_client_object_id], 15
+    call output_bind_pending
+    test rax, rax
+    js .protocol_error
 
     lea rax, [rip + stage_xdg_create]
     mov qword ptr [rip + failure_stage], rax
@@ -5663,8 +5680,7 @@ wayland_main:
     # dense: seat=13, roundtrip callback=14, pointer=15.
     cmp dword ptr [rip + seat_global], 0
     jne .seat_global_available
-    # Keep callback IDs valid even when no wl_seat is advertised.
-    mov dword ptr [rip + next_client_object_id], 15
+    # Output proxies already consumed IDs from the shared allocator.
     jmp .event_loop
 .seat_global_available:
     lea rax, [rip + stage_bind_roundtrip]
@@ -5678,8 +5694,7 @@ wayland_main:
     test rax, rax
     js .protocol_error
 
-    # IDs 2–14 are already allocated; all later client objects share this dense counter.
-    mov dword ptr [rip + next_client_object_id], 15
+    # Output proxies have already advanced the shared monotonic allocator.
     # Roundtrip so the compositor can announce seat capabilities.
     mov dword ptr [rip + payload_buffer], 14
     mov edi, 1
@@ -5707,6 +5722,15 @@ wayland_main:
     test rax, rax
     js .protocol_error
     jmp .seat_check_sync
+.seat_check_output_event:
+    # Output events can arrive in the initial seat roundtrip after their
+    # proxies are bound but before the steady-state event loop begins.
+    call handle_output_event
+    test eax, eax
+    jnz .seat_check_sync
+    call handle_surface_output_event
+    test eax, eax
+    jnz .seat_check_sync
 .seat_check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
     cmp dword ptr [rip + last_object], eax
@@ -5830,6 +5854,25 @@ wayland_main:
     jne .check_frame_callback
     call handle_xdg_ping
     jmp .event_loop
+.check_registry_event:
+    cmp dword ptr [rip + last_object], 2
+    jne .check_frame_callback
+    cmp dword ptr [rip + last_opcode], 0
+    je .registry_event_global
+    cmp dword ptr [rip + last_opcode], 1
+    je .registry_event_global_remove
+    jmp .event_loop
+.registry_event_global:
+    call registry_capture_global
+    call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.registry_event_global_remove:
+    call handle_output_global_remove
+    test eax, eax
+    js .protocol_error
+    jmp .event_loop
 .check_frame_callback:
     mov eax, dword ptr [rip + frame_callback_id]
     test eax, eax
@@ -5900,6 +5943,13 @@ wayland_main:
     js .protocol_error
 .Lseat_event_redraw_done:
     jmp .event_loop
+.check_output_event:
+    call handle_output_event
+    test eax, eax
+    jnz .event_loop
+    call handle_surface_output_event
+    test eax, eax
+    jnz .event_loop
 .check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
     test eax, eax
@@ -12407,6 +12457,8 @@ wl_read_event:
 .type registry_capture_global, @function
 registry_capture_global:
     push rbp
+    push r12
+    sub rsp, 8
     lea r8, [rip + event_payload + 8]
     mov rdi, r8
     lea rsi, [rip + iface_compositor]
@@ -12488,10 +12540,47 @@ registry_capture_global:
     lea rsi, [rip + iface_text_input_manager_v3]
     call string_equal
     test eax, eax
-    jz .registry_done
+    jz .registry_try_output
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + text_input_manager_global], eax
+    jmp .registry_done
+.registry_try_output:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_output]
+    call string_equal
+    test eax, eax
+    jz .registry_done
+    xor r12d, r12d
+    lea rdi, [rip + output_global_names]
+.registry_output_find_slot:
+    cmp r12d, 8
+    jae .registry_done
+    cmp dword ptr [rdi + r12*4], 0
+    je .registry_output_slot_found
+    inc r12d
+    jmp .registry_output_find_slot
+.registry_output_slot_found:
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rdi + r12*4], eax
+    lea rdi, [rip + output_scales]
+    mov dword ptr [rdi + r12*4], 1
+    lea rdi, [rip + output_surface_entered]
+    mov dword ptr [rdi + r12*4], 0
+    mov eax, dword ptr [rip + event_payload + 4]
+    add eax, 3
+    and eax, -4
+    lea rdi, [rip + event_payload + 8]
+    add rdi, rax
+    mov edx, dword ptr [rdi]
+    cmp edx, 3
+    jbe .registry_output_version_ready
+    mov edx, 3
+.registry_output_version_ready:
+    lea rdi, [rip + output_versions]
+    mov dword ptr [rdi + r12*4], edx
 .registry_done:
+    add rsp, 8
+    pop r12
     pop rbp
     ret
 .size registry_capture_global, . - registry_capture_global
@@ -22984,6 +23073,227 @@ render_document:
     pop rbx
     ret
 .size render_document, . - render_document
+
+# Bind pending wl_output globals at at most protocol version 3.
+# The registry name and bound client object ID occupy separate namespaces.
+.type output_bind_pending, @function
+output_bind_pending:
+    push rbp
+    push r12
+    push r13
+    xor r12d, r12d
+.output_bind_loop:
+    cmp r12d, 8
+    jae .output_bind_done
+    lea rax, [rip + output_global_names]
+    mov eax, dword ptr [rax + r12*4]
+    test eax, eax
+    jz .output_bind_next
+    lea rax, [rip + output_object_ids]
+    cmp dword ptr [rax + r12*4], 0
+    jne .output_bind_next
+    mov r13d, dword ptr [rip + next_client_object_id]
+    lea eax, [r13d + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    lea rax, [rip + output_global_names]
+    mov edi, dword ptr [rax + r12*4]
+    lea rsi, [rip + iface_output]
+    mov edx, 10                 # strlen("wl_output") + NUL
+    lea rax, [rip + output_versions]
+    mov ecx, dword ptr [rax + r12*4]
+    mov r8d, r13d
+    call wl_registry_bind
+    test rax, rax
+    js .output_bind_return
+    lea rax, [rip + output_object_ids]
+    mov dword ptr [rax + r12*4], r13d
+.output_bind_next:
+    inc r12d
+    jmp .output_bind_loop
+.output_bind_done:
+    xor eax, eax
+.output_bind_return:
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size output_bind_pending, . - output_bind_pending
+
+# Recompute entered-output count and the maximum integer scale.
+# This metadata is not yet applied to buffer dimensions or pointer coordinates.
+.type output_recompute_surface_scale, @function
+output_recompute_surface_scale:
+    push rbp
+    push r12
+    push r13
+    xor r12d, r12d
+    xor r13d, r13d             # entered-output count
+    mov r11d, 1                # no-output/default scale
+    lea rdi, [rip + output_surface_entered]
+    lea rsi, [rip + output_scales]
+.output_recompute_loop:
+    cmp r12d, 8
+    jae .output_recompute_done
+    cmp dword ptr [rdi + r12*4], 1
+    jne .output_recompute_next
+    inc r13d
+    mov edx, dword ptr [rsi + r12*4]
+    cmp edx, r11d
+    jbe .output_recompute_next
+    mov r11d, edx
+.output_recompute_next:
+    inc r12d
+    jmp .output_recompute_loop
+.output_recompute_done:
+    mov dword ptr [rip + surface_output_count], r13d
+    mov dword ptr [rip + surface_output_max_scale], r11d
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size output_recompute_surface_scale, . - output_recompute_surface_scale
+
+# Handle wl_registry.global_remove. wl_output.release exists since v3 only.
+.type handle_output_global_remove, @function
+handle_output_global_remove:
+    push rbp
+    push r12
+    push r13
+    cmp dword ptr [rip + last_size], 4
+    jb .output_remove_not_found
+    mov r12d, dword ptr [rip + event_payload]
+    xor r13d, r13d
+.output_remove_find:
+    cmp r13d, 8
+    jae .output_remove_not_found
+    lea rax, [rip + output_global_names]
+    cmp dword ptr [rax + r13*4], r12d
+    je .output_remove_found
+    inc r13d
+    jmp .output_remove_find
+.output_remove_found:
+    lea rax, [rip + output_object_ids]
+    mov edi, dword ptr [rax + r13*4]
+    test edi, edi
+    jz .output_remove_clear
+    lea rax, [rip + output_versions]
+    cmp dword ptr [rax + r13*4], 3
+    jb .output_remove_clear
+    xor esi, esi                 # wl_output.release
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .output_remove_return
+.output_remove_clear:
+    lea rax, [rip + output_global_names]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_object_ids]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_versions]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_scales]
+    mov dword ptr [rax + r13*4], 1
+    lea rax, [rip + output_surface_entered]
+    mov dword ptr [rax + r13*4], 0
+    call output_recompute_surface_scale
+    mov eax, 1
+    jmp .output_remove_return
+.output_remove_not_found:
+    xor eax, eax
+.output_remove_return:
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size handle_output_global_remove, . - handle_output_global_remove
+
+# wl_output.scale (opcode 3, introduced in version 2).
+.type handle_output_event, @function
+handle_output_event:
+    push rbp
+    push r12
+    push r13
+    xor r12d, r12d
+    mov r13d, dword ptr [rip + last_object]
+.output_event_find:
+    cmp r12d, 8
+    jae .output_event_not_found
+    lea rax, [rip + output_object_ids]
+    cmp dword ptr [rax + r12*4], r13d
+    je .output_event_found
+    inc r12d
+    jmp .output_event_find
+.output_event_found:
+    cmp dword ptr [rip + last_opcode], 3
+    jne .output_event_handled
+    cmp dword ptr [rip + last_size], 4
+    jb .output_event_handled
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jle .output_event_handled
+    lea rdx, [rip + output_scales]
+    mov dword ptr [rdx + r12*4], eax
+    call output_recompute_surface_scale
+.output_event_handled:
+    mov eax, 1
+    jmp .output_event_return
+.output_event_not_found:
+    xor eax, eax
+.output_event_return:
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size handle_output_event, . - handle_output_event
+
+# wl_surface.enter/leave (opcodes 0/1) maintain output membership.
+.type handle_surface_output_event, @function
+handle_surface_output_event:
+    push rbp
+    push r12
+    push r13
+    cmp dword ptr [rip + last_object], 8
+    jne .surface_output_not_found
+    mov eax, dword ptr [rip + last_opcode]
+    cmp eax, 0
+    je .surface_output_enter
+    cmp eax, 1
+    je .surface_output_leave
+    jmp .surface_output_not_found
+.surface_output_enter:
+    mov r13d, 1
+    jmp .surface_output_find
+.surface_output_leave:
+    xor r13d, r13d
+.surface_output_find:
+    cmp dword ptr [rip + last_size], 4
+    jb .surface_output_handled
+    mov eax, dword ptr [rip + event_payload]
+    xor r12d, r12d
+.surface_output_loop:
+    cmp r12d, 8
+    jae .surface_output_handled
+    lea rdx, [rip + output_object_ids]
+    cmp dword ptr [rdx + r12*4], eax
+    je .surface_output_match
+    inc r12d
+    jmp .surface_output_loop
+.surface_output_match:
+    lea rdx, [rip + output_surface_entered]
+    mov dword ptr [rdx + r12*4], r13d
+    call output_recompute_surface_scale
+.surface_output_handled:
+    mov eax, 1
+    jmp .surface_output_return
+.surface_output_not_found:
+    xor eax, eax
+.surface_output_return:
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size handle_surface_output_event, . - handle_surface_output_event
 
 # Create input objects after wl_seat advertises their capabilities.
 # Pointer is allocated before keyboard when both appear in the same event.

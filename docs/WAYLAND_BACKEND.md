@@ -54,6 +54,12 @@ The seat is bound at no more than version 4. For versions 3–4, pointer and key
 
 The Wayland mock also covers an opted-in text-input-v3 session with a visible, uncommitted preedit string when wl_seat.capabilities removes the keyboard. The client must send the text-input disable request followed by commit, clear the transient preedit cursor/text, keep the document bytes unchanged, and repaint immediately when the shared-buffer and frame-callback gates are idle. This is a protocol-level regression test; the regular default-off behavior and live Mutter/IBus probe remain separate checks.
 
+## Output discovery and integer-scale metadata
+
+The client discovers up to eight `wl_output` globals and binds each at no more than protocol version 3. Each cache entry retains the registry global name, bound client object ID, negotiated version, integer scale (default 1), and whether the application surface has entered that output. The client consumes `wl_output.scale` events from v2+, `wl_surface.enter/leave`, and `wl_registry.global_remove`. It sends `wl_output.release` only for v3 resources, which define that request; v1/v2 resources are abandoned locally without an unsupported opcode. Newly announced outputs use a free cache slot and a fresh client object ID from the shared monotonic allocator.
+
+For diagnostics and the next rendering milestone, the backend maintains the number of outputs currently containing the surface and the maximum reported integer scale among them (returning to 1 when none are entered). **This is metadata tracking only.** The current renderer still uses one scale-1 shared buffer and logical coordinates; it does not call `wl_surface.set_buffer_scale`, convert logical dimensions to physical pixels, use `wp_fractional_scale_v1` or `wp_viewporter`, or re-layout when the output scale changes. Correct high-DPI rendering requires those dimensions and hit-testing coordinates to become separate concepts, plus release-safe buffer replacement. No claim of HiDPI readiness is made by this milestone.
+
 ## XKB compatibility modifier-map scope
 
 The bounded `xkb_compat` reader supports both `useModMapMods = level1` and `useModMapMods = any`. When the attribute is omitted, XKB's default is `any`. The `level1` scope considers the keysym at Group 1 / Level 1; `any` considers occurrences in any group and level. When multiple matching interpretations have equal specificity, the first declaration wins.

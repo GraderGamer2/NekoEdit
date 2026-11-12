@@ -1,3 +1,11 @@
+## 2026-11-12 — Wayland output discovery and integer-scale metadata (implementation; CI pending)
+
+Add a bounded cache for up to eight `wl_output` globals. The client binds outputs at no more than protocol version 3, records each output's negotiated version and integer scale (default 1), tracks which outputs the Wayland surface enters/leaves, and handles registry global removal. It sends `wl_output.release` only for v3 resources; v1/v2 outputs are dropped locally. New output announcements reuse free cache slots but receive fresh IDs from the monotonic client-object allocator. The cache reports the entered-output count and maximum scale as metadata.
+
+The client still renders into the existing scale-1 shared buffer. It does not yet apply `wl_surface.set_buffer_scale`, use preferred/fractional scale or viewporter protocols, or translate logical dimensions to physical buffer dimensions. Those require separating logical layout/hit-testing from pixel geometry and keeping buffer replacement release-safe. The mock adds two outputs at different scales, surface enter/leave, v2/v3 removal semantics, and a hot-added output. CI is pending.
+
+---
+
 ## 2026-11-12 — correct combined cursor-shape/text-input test object IDs (verified in CI #863)
 
 Build and test [#862](https://github.com/GraderGamer2/NekoEdit/actions/runs/43216141990) passed the freestanding build and CLI tests, then reached the new active-IME hotplug scenario. The mock expected the text-input manager to use object 17, which is valid when cursor-shape support is absent, but the combined scenario advertises cursor-shape support and therefore allocates manager/device IDs 17/18 first. Text-input setup correctly uses 19/20. The mock now derives the text-input IDs from the advertised optional globals, and the preedit-clear pixel assertion now checks that the IME highlight color is absent after keyboard removal rather than merely checking for background-colored pixels. No backend runtime code changed.
