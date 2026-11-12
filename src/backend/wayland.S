@@ -12945,10 +12945,14 @@ cursor_shape_setup:
     je .cursor_shape_setup_done
     cmp dword ptr [rip + pointer_created], 1
     jne .cursor_shape_setup_done
-    cmp dword ptr [rip + cursor_shape_manager], 0
-    jne .cursor_shape_setup_done
+
+    # Keep the manager bound across pointer hotplug events. Its device object
+    # is tied to exactly one wl_pointer and must be recreated after removal.
+    mov r12d, dword ptr [rip + cursor_shape_manager]
+    test r12d, r12d
+    jnz .cursor_shape_manager_ready
     mov r12d, dword ptr [rip + next_client_object_id]
-    lea eax, [r12 + 1]
+    lea eax, [r12d + 1]
     mov dword ptr [rip + next_client_object_id], eax
     mov dword ptr [rip + cursor_shape_manager], r12d
     mov edi, dword ptr [rip + cursor_shape_global]
@@ -12959,6 +12963,10 @@ cursor_shape_setup:
     call wl_registry_bind
     test rax, rax
     js .cursor_shape_setup_return
+
+.cursor_shape_manager_ready:
+    cmp dword ptr [rip + cursor_shape_device], 0
+    jne .cursor_shape_setup_done
     mov eax, dword ptr [rip + next_client_object_id]
     lea edx, [rax + 1]
     mov dword ptr [rip + next_client_object_id], edx
@@ -12974,6 +12982,10 @@ cursor_shape_setup:
     call wl_send_request
     test rax, rax
     js .cursor_shape_setup_return
+    # The new pointer has no focus until its next enter event supplies a
+    # valid serial. Do not reuse the previous pointer's serial here.
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .cursor_shape_setup_done
     call window_update_cursor_shape
 .cursor_shape_setup_return:
     pop r12
@@ -22964,16 +22976,128 @@ render_document:
 # Pointer is allocated before keyboard when both appear in the same event.
 .type handle_seat_capabilities, @function
 handle_seat_capabilities:
+    # Keep the prior and new complete capability masks separately while
+    # release requests and object constructors call the wire helpers.
     push rbp
+    push r12
+    push r13
     cmp dword ptr [rip + last_size], 4
     jb .seat_caps_success
-    mov eax, dword ptr [rip + event_payload]
-    mov dword ptr [rip + seat_capabilities], eax
+    mov r12d, dword ptr [rip + seat_capabilities]
+    mov r13d, dword ptr [rip + event_payload]
+    mov dword ptr [rip + seat_capabilities], r13d
 
-    test eax, 1
-    jz .seat_caps_keyboard
+    # A removed pointer invalidates pointer focus, implicit-button state,
+    # resize/scroll drags, its cursor-shape device, and the wl_pointer proxy.
+    test r12d, 1
+    jz .seat_caps_remove_keyboard
+    test r13d, 1
+    jnz .seat_caps_remove_keyboard
+    mov dword ptr [rip + pointer_inside], 0
+    mov dword ptr [rip + pointer_button_down], 0
+    mov dword ptr [rip + pointer_enter_serial], 0
+    mov dword ptr [rip + pointer_serial], 0
+    mov dword ptr [rip + cursor_shape_current], 0
+    mov dword ptr [rip + doc_scroll_drag], 0
+    mov dword ptr [rip + doc_hscroll_drag], 0
+    mov dword ptr [rip + picker_scroll_drag], 0
+    mov dword ptr [rip + doc_word_drag_active], 0
+    call doc_drag_timer_stop
+
+    mov edi, dword ptr [rip + cursor_shape_device]
+    test edi, edi
+    jz .seat_caps_pointer_device_destroyed
+    # wp_cursor_shape_device_v1.destroy
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+    mov dword ptr [rip + cursor_shape_device], 0
+
+.seat_caps_pointer_device_destroyed:
+    mov edi, dword ptr [rip + pointer_object]
+    test edi, edi
+    jz .seat_caps_pointer_proxy_cleared
+    cmp dword ptr [rip + seat_version], 3
+    jb .seat_caps_pointer_proxy_cleared
+    # wl_pointer.release was added in wl_seat version 3.
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+
+.seat_caps_pointer_proxy_cleared:
+    # For seat versions 1-2 there is no protocol release request. Forget the
+    # local proxy and use a fresh object ID if the capability returns.
+    mov dword ptr [rip + pointer_object], 0
+    mov dword ptr [rip + pointer_created], 0
+
+.seat_caps_remove_keyboard:
+    # Do not leave a held key, dead-key/Compose prefix, or stale modifier
+    # state active across a physical keyboard unplug/replacement.
+    test r12d, 2
+    jz .seat_caps_add_pointer
+    test r13d, 2
+    jnz .seat_caps_add_pointer
+    mov dword ptr [rip + keyboard_focused], 0
+    mov dword ptr [rip + doc_pending_dead_mark], 0
+    mov dword ptr [rip + doc_compose_active], 0
+    mov dword ptr [rip + doc_compose_first], 0
+    mov dword ptr [rip + doc_compose_second], 0
+    mov dword ptr [rip + doc_compose_third], 0
+    mov dword ptr [rip + doc_compose_fourth], 0
+    mov dword ptr [rip + doc_compose_fifth], 0
+    mov dword ptr [rip + doc_compose_sixth], 0
+    mov dword ptr [rip + doc_compose_seventh], 0
+    mov dword ptr [rip + doc_compose_eighth], 0
+    mov dword ptr [rip + ctrl_down], 0
+    mov dword ptr [rip + ctrl_physical_down], 0
+    mov dword ptr [rip + shift_down], 0
+    mov dword ptr [rip + shift_physical_down], 0
+    mov dword ptr [rip + level3_down], 0
+    mov dword ptr [rip + level3_physical_down], 0
+    mov dword ptr [rip + level3_mod5_down], 0
+    mov dword ptr [rip + xkb_modifiers], 0
+    mov dword ptr [rip + keyboard_group], 0
+    mov dword ptr [rip + caps_lock], 0
+    mov dword ptr [rip + num_lock], 0
+    call repeat_cancel
+
+    mov edi, dword ptr [rip + keyboard_object]
+    test edi, edi
+    jz .seat_caps_keyboard_proxy_cleared
+    cmp dword ptr [rip + seat_version], 3
+    jb .seat_caps_keyboard_proxy_cleared
+    # wl_keyboard.release was added in wl_seat version 3.
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .seat_caps_done
+
+.seat_caps_keyboard_proxy_cleared:
+    mov dword ptr [rip + keyboard_object], 0
+    mov dword ptr [rip + keyboard_created], 0
+    # Disabling text-input-v3 clears transient preedit and hands subsequent
+    # printable input back to XKB until a replacement keyboard enters.
+    cmp dword ptr [rip + text_input_object], 0
+    je .seat_caps_keyboard_redraw
+    call text_input_update_state
+    test rax, rax
+    js .seat_caps_done
+.seat_caps_keyboard_redraw:
+    mov dword ptr [rip + redraw_pending], 1
+
+.seat_caps_add_pointer:
+    test r13d, 1
+    jz .seat_caps_add_keyboard
     cmp dword ptr [rip + pointer_created], 0
-    jne .seat_caps_keyboard
+    jne .seat_caps_add_keyboard
     mov eax, dword ptr [rip + next_client_object_id]
     mov dword ptr [rip + pointer_object], eax
     mov dword ptr [rip + payload_buffer], eax
@@ -22987,8 +23111,8 @@ handle_seat_capabilities:
     mov dword ptr [rip + pointer_created], 1
     inc dword ptr [rip + next_client_object_id]
 
-.seat_caps_keyboard:
-    test dword ptr [rip + seat_capabilities], 2
+.seat_caps_add_keyboard:
+    test r13d, 2
     jz .seat_caps_success
     cmp dword ptr [rip + keyboard_created], 0
     jne .seat_caps_success
@@ -23008,6 +23132,8 @@ handle_seat_capabilities:
 .seat_caps_success:
     xor eax, eax
 .seat_caps_done:
+    pop r13
+    pop r12
     pop rbp
     ret
 .size handle_seat_capabilities, . - handle_seat_capabilities

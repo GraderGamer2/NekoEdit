@@ -44,6 +44,12 @@ The implementation sends and receives the Wayland protocol directly over an AF_U
 
 The initial surface commit is required to receive the first configure. The buffer is attached only after acknowledging that configure.
 
+## Seat capability hotplug
+
+The backend treats each `wl_seat.capabilities` event as the complete current capability mask. When pointer capability disappears, it clears pointer focus/serial and button/scroll drag state, stops pointer-selection auto-scroll, destroys the pointer-bound cursor-shape device, and drops the old `wl_pointer` proxy. When keyboard capability disappears, it cancels repeat, clears held modifier/lock state and pending dead-key/Compose sequences, drops the old `wl_keyboard` proxy, and disables text-input-v3 so transient preedit is cleared. Reappearing capabilities receive fresh client object IDs; the cursor-shape manager remains bound, while its device is recreated for the replacement pointer.
+
+The seat is bound at no more than version 4. For versions 3–4, pointer and keyboard removal sends their protocol `release` requests before dropping the proxies. Versions 1–2 do not define those release requests, so the client only abandons the local proxies and never sends unsupported opcodes. It still creates fresh object IDs on re-addition. The mock covers both paths and verifies that the replacement cursor-shape device refers to the new pointer and uses its new enter serial, and that keyboard focus/modifiers are cleared on removal.
+
 ## XKB compatibility modifier-map scope
 
 The bounded `xkb_compat` reader supports both `useModMapMods = level1` and `useModMapMods = any`. When the attribute is omitted, XKB's default is `any`. The `level1` scope considers the keysym at Group 1 / Level 1; `any` considers occurrences in any group and level. When multiple matching interpretations have equal specificity, the first declaration wins.

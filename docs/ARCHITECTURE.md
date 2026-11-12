@@ -114,6 +114,9 @@ See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
 ### Wayland: next steps
 
+Seat capability hotplug now releases/abandons removed pointer and keyboard proxies according to the bound seat version, clears stale input state, stops pointer-drag auto-scroll, and recreates pointer-bound cursor-shape state on re-addition. The mock covers seat versions 1–4.
+
+
 Further work: complete output-scale/fractional-scale handling, replace the single active buffer with a small release-tracked buffer set, add frame scheduling, and continue protocol interoperability testing. The app-drawn window controls and configure-driven resizing are implemented. Clipboard data-device support will be added as a separate service with immutable snapshot ownership.
 
 ### X11

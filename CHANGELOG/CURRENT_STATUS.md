@@ -1,3 +1,13 @@
+## 2026-11-12 — Wayland seat capability hotplug lifecycle (implementation; CI pending)
+
+The Wayland backend now treats each `wl_seat.capabilities` event as a complete state transition instead of only creating input objects once. Removing pointer capability clears focus/serial and active pointer/scroll drag state, stops selection auto-scroll, destroys the cursor-shape device tied to that pointer, and abandons the old pointer proxy. Removing keyboard capability cancels key repeat, clears held modifier/lock state and pending dead-key/Compose prefixes, abandons the old keyboard proxy, and disables optional text-input-v3 so stale preedit cannot survive unplug.
+
+For `wl_seat` versions 3–4, the backend sends `wl_pointer.release` / `wl_keyboard.release` before forgetting the proxies. Versions 1–2 do not define those requests; the client drops the local proxies without sending unsupported opcodes and uses new monotonically allocated object IDs if the capability returns. The cursor-shape manager remains bound while its device is destroyed and recreated against each replacement pointer.
+
+The Wayland mock adds dedicated hotplug scenarios for both version families. It verifies remove/re-add of keyboard and pointer, expected release/no-release behavior, fresh object IDs, cursor-shape device recreation, use of the replacement pointer's enter serial, and clearing of keyboard focus/modifier masks. The source and test changes are committed to `early-alpha`; CI is pending and no passing run is claimed yet.
+
+---
+
 ## 2026-11-12 — live IBus preedit, cancellation, commit, and save verified (CI PASS)
 
 Actions [Build and test #856](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544) completed successfully. All 15 workflow steps passed: freestanding x86-64 build and ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, real `us(intl)` keymap validation, X.Org importer verification, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.

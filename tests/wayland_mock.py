@@ -295,6 +295,7 @@ def run(
     expected_saved_bytes: bytes = b"z",
     frame_callback_order_test: bool = False,
     verify_frame_callbacks: bool = False,
+    seat_hotplug_test: bool = False,
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
@@ -668,6 +669,115 @@ def run(
                         "get text-input object for the application seat",
                     )
                     observations.append("optional text-input-v3 manager bound and object created for seat 13")
+                if seat_hotplug_test:
+                    # Inspect existing process state, not a test-only app hook.
+                    state_symbols = {}
+                    wanted_state = (
+                        "keyboard_focused", "xkb_modifiers", "ctrl_down",
+                        "shift_down", "keyboard_group", "pointer_inside",
+                        "pointer_enter_serial",
+                    )
+                    for symbol_line in subprocess.check_output(
+                        ["nm", "-n", binary], text=True
+                    ).splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in wanted_state:
+                            state_symbols[fields[2]] = int(fields[0], 16)
+                    if set(state_symbols) != set(wanted_state):
+                        raise AssertionError(
+                            f"hotplug state symbols are incomplete: {state_symbols!r}"
+                        )
+
+                    def child_state(name: str) -> int:
+                        with open(
+                            f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0
+                        ) as memory:
+                            raw = os.pread(memory.fileno(), 4, state_symbols[name])
+                        if len(raw) != 4:
+                            raise AssertionError(f"short process-state read for {name}")
+                        return struct.unpack("<I", raw)[0]
+
+                    def wait_state(name: str, expected: int) -> None:
+                        deadline = time.monotonic() + 3.0
+                        actual = child_state(name)
+                        while actual != expected and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                            actual = child_state(name)
+                        if actual != expected:
+                            raise AssertionError(
+                                f"hotplug did not update {name}: expected {expected}, got {actual}"
+                            )
+
+                    # Establish real keyboard focus and non-zero modifier state,
+                    # then prove capability removal clears it before a new
+                    # keyboard object is created.
+                    client.sendall(wire_message(16, 1, struct.pack("<III", 880, 8, 0)))
+                    wait_state("keyboard_focused", 1)
+                    client.sendall(
+                        wire_message(16, 4, struct.pack("<IIIII", 881, 5, 0, 0, 2))
+                    )
+                    wait_state("xkb_modifiers", 5)
+                    wait_state("ctrl_down", 1)
+                    wait_state("shift_down", 1)
+                    wait_state("keyboard_group", 2)
+
+                    # Drop/re-add the keyboard, then pointer. Versions 3+ have
+                    # explicit release requests; older seat versions do not.
+                    client.sendall(wire_message(13, 0, struct.pack("<I", 1)))
+                    if advertised_seat_version >= 3:
+                        expect_message(client, (16, 0, b""), "release removed wl_keyboard")
+                    else:
+                        # A version-2 seat must not receive a v3 keyboard.release.
+                        if select.select([client], [], [], 0.05)[0]:
+                            unexpected = recv_wayland_message(client)
+                            raise AssertionError(
+                                f"seat-v2 keyboard removal sent an unsupported request: {unexpected!r}"
+                            )
+                    wait_state("keyboard_focused", 0)
+                    wait_state("xkb_modifiers", 0)
+                    wait_state("ctrl_down", 0)
+                    wait_state("shift_down", 0)
+                    wait_state("keyboard_group", 0)
+
+                    client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
+                    expect_message(
+                        client, (13, 1, struct.pack("<I", 19)),
+                        "create a fresh wl_keyboard after capability return",
+                    )
+
+                    client.sendall(wire_message(13, 0, struct.pack("<I", 2)))
+                    expect_message(client, (18, 0, b""), "destroy cursor-shape device for removed pointer")
+                    if advertised_seat_version >= 3:
+                        expect_message(client, (15, 1, b""), "release removed wl_pointer")
+                    wait_state("pointer_inside", 0)
+                    wait_state("pointer_enter_serial", 0)
+
+                    client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
+                    expect_message(
+                        client, (13, 0, struct.pack("<I", 20)),
+                        "create a fresh wl_pointer after capability return",
+                    )
+                    expect_message(
+                        client,
+                        (17, 1, struct.pack("<II", 21, 20)),
+                        "recreate cursor-shape device for replacement pointer",
+                    )
+                    client.sendall(
+                        wire_message(20, 0, struct.pack("<IIii", 888, 8, 100 * 256, 110 * 256))
+                        + wire_message(19, 1, struct.pack("<III", 888, 8, 0))
+                    )
+                    expect_message(
+                        client, (21, 1, struct.pack("<II", 888, 1)),
+                        "set cursor using replacement pointer enter serial",
+                    )
+                    wait_state("keyboard_focused", 1)
+                    observations.append(
+                        "seat capability removal/re-addition releases v3 proxies, abandons v1/v2 proxies safely, "
+                        "clears held modifiers and focus state, resets pointer serial/focus, and recreates cursor-shape device"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 observations.append("seat pointer and keyboard capability/object creation verified")
 
                 # Release the initial buffer before sending a click. The client
@@ -9048,3 +9158,8 @@ if __name__ == "__main__":
             os.unlink(word_path)
         except FileNotFoundError:
             pass
+
+    # Seat capability hotplug: v4 exercises protocol release, while v2
+    # verifies the client abandons proxies without unsupported release opcodes.
+    run(sys.argv[1], seat_hotplug_test=True, advertised_seat_version=4)
+    run(sys.argv[1], seat_hotplug_test=True, advertised_seat_version=2)
