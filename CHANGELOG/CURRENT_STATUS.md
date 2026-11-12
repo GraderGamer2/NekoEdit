@@ -1,12 +1,13 @@
-## 2026-11-12 — reapply and assert Mutter's us(intl) dead-key translation for the IBus phase (CI pending)
+## 2026-11-12 — capture the raw Mutter text-input-v3 preedit cursor offsets (CI pending)
 
-Actions [Build and test #848](https://github.com/GraderGamer2/NekoEdit/actions/runs/43174987068) passed the freestanding build and ELF verification, command-line tests, complete Wayland protocol mock, executable inspection, native `us(intl)` parser validation, X.Org importer verification, and locale-pack build. The native Mutter Compose/dead-key/save canary and the separate text-input-v3 manager/focus/enable/state-commit handshake also passed.
+Actions [Build and test #849](https://github.com/GraderGamer2/NekoEdit/actions/runs/43175992157) passed the full build/ELF, CLI, Wayland mock, XKB parser, X.Org importer, locale-pack, native Mutter Compose/dead-key/save, and the IBus keymap/engine checks. In the final IBus phase, GNOME Shell received `dead_acute` (`0xfe51`) and its own IBus state showed visible preedit text `´`, but NekoEdit's text-input-v3 buffer remained empty.
 
-The new IBus call-boundary trace proved that both apostrophe press and release were submitted to GNOME Shell's active IBus context. The recorded event was `keyval=0x27 keycode=40 state=0x40000000`: Mutter delivered an ordinary apostrophe, not XKB `dead_acute` (`0xfe51`). The source and context were correct; the active keymap translation was not.
+Mutter 46's `meta_wayland_text_input_focus_set_preedit_text()` converts the preedit cursor from a Unicode-character index to a UTF-8 byte offset, but the source passes the anchor index through unchanged. NekoEdit correctly validates both text-input-v3 offsets as UTF-8 byte boundaries, so a multibyte preedit can be rejected when the anchor still points at a continuation byte. Newer Mutter source converts both cursor and anchor to byte offsets; this looks like a Mutter 46 interoperability bug, but the exact on-wire values must be confirmed.
 
-GNOME Shell 46's `InputSourceManager.activateInputSource()` applies the IBus engine descriptor's XKB layout before selecting the engine. Its source comment notes that `xkb:` IBus engines echo symbols, so the compositor's XKB translation must generate the dead-key keysym. The test now reapplies its required `us(intl)` keymap after the IBus source switch and asserts that the apostrophe reaches IBus as `dead_acute` before testing provider preedit. This is confined to the Mutter harness; NekoEdit's backend and runtime dependencies remain unchanged. CI is pending; no live IBus preedit/commit pass is claimed.
+The live probe now reads NekoEdit's existing 4,112-byte staging buffer through its already-open parent-to-child `/proc/<pid>/mem` descriptor when this failure occurs. It reports the candidate UTF-8 bytes and `cursor_begin`/`cursor_end` values without changing the parser or its strict rejection behavior. This diagnostic-only change leaves application behavior and runtime dependencies unchanged. CI is pending.
 
 ---
+
 
 
 ## 2026-11-12 — inject physical evdev keycodes for the live IBus preedit probe (CI pending)

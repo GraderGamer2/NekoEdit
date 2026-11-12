@@ -33,7 +33,7 @@ SYMBOLS = (
     "doc_length",
 )
 
-BUFFER_SYMBOLS = ("text_input_preedit_buffer",)
+BUFFER_SYMBOLS = ("text_input_preedit_buffer", "text_input_request_buffer")
 
 # Linux input-event-codes.h evdev values used by Mutter NotifyKeyboardKeycode.
 EVDEV_KEY_BACKSPACE = 14
@@ -150,6 +150,29 @@ def read_preedit(
         return raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
         fail(f"NekoEdit exposed invalid UTF-8 in its committed preedit state: {error}")
+
+
+def read_preedit_candidate(
+    memory_fd: int, addresses: dict[str, int]
+) -> dict[str, object]:
+    # The Wayland event parser stages the most recent preedit event here before
+    # validating cursor_begin/cursor_end. Reading this scratch area lets the
+    # integration test distinguish a missing event from a rejected bad offset.
+    raw = os.pread(memory_fd, 4112, addresses["text_input_request_buffer"])
+    if len(raw) != 4112:
+        fail(f"could not read complete text-input request buffer: {len(raw)} bytes")
+    length = int.from_bytes(raw[4096:4100], "little")
+    cursor_begin = int.from_bytes(raw[4100:4104], "little", signed=True)
+    cursor_end = int.from_bytes(raw[4104:4108], "little", signed=True)
+    if length > 4095:
+        fail(f"Wayland preedit candidate length is out of bounds: {length}")
+    return {
+        "length": length,
+        "text": raw[:length].decode("utf-8", errors="replace"),
+        "cursor_begin": cursor_begin,
+        "cursor_end": cursor_end,
+        "buffer_prefix_hex": raw[:min(length, 16)].hex(),
+    }
 
 
 def wait_preedit_nonempty(
@@ -341,7 +364,9 @@ def exercise_live_ibus_preedit_commit(
         fail(
             f"{error}; GNOME Shell input-method state: "
             f"{call_gdbus('InputMethodStatus')}; "
-            f"key submission: {key_event_status}"
+            f"key submission: {key_event_status}; "
+            f"NekoEdit's last staged Wayland preedit candidate: "
+            f"{read_preedit_candidate(memory_fd, addresses)}"
         )
     print(f"GNOME Shell IBus preedit: {first_ime_status}")
 
