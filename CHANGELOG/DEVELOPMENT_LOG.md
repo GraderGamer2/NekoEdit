@@ -1,3 +1,13 @@
+## 2026-11-12 — trace physical key submission into GNOME Shell's IBus context (CI pending)
+
+Actions [Build and test #847](https://github.com/GraderGamer2/NekoEdit/actions/runs/43174083793) passed the freestanding build and ELF checks, CLI tests, complete Wayland protocol mock, executable inspection, native `us(intl)` XKB parser, X.Org importer, and locale-pack build. The native Mutter Compose/dead-key/save canary and the optional text-input-v3 manager/focus/enable/state-commit handshake also passed.
+
+The actual Shell-side input-method inspection verified `source=ibus:xkb:us:intl:eng`, `context=ready`, and `focus=yes`, yet GNOME Shell reported `preedit-visible=false` after the injected apostrophe. This proves the IBus source and context exist and have editor focus; it does not yet show whether Mutter forwards the physical key to that context.
+
+The new test-only probe wraps the existing `process_key_event_async` method on that single IBus context object, increments a counter, records keyval/keycode/modifier arguments, and invokes the original method with its original receiver and every original argument. The test now checks for both apostrophe press and release submissions before requiring the IBus preedit and NekoEdit's independently observed text-input-v3 preedit. This should distinguish missing key routing from provider behavior without changing the editor backend. CI is pending; no live IBus preedit/commit pass is claimed.
+
+---
+
 ## 2026-11-12 — inspect GNOME Shell's IBus InputMethod during live preedit validation (CI pending)
 
 Actions [Build and test #846](https://github.com/GraderGamer2/NekoEdit/actions/runs/43161435296) passed the freestanding build/ELF checks, CLI tests, complete Wayland mock, executable inspection, native `us(intl)` XKB parser, X.Org importer, and locale-pack build. The isolated IBus daemon and D-Bus-activated portal acquired their bus names. The native Mutter physical-XKB Compose/dead-key/save canary and the independent text-input-v3 manager/focus/enable/state-commit handshake also passed.

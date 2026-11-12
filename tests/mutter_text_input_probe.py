@@ -237,6 +237,34 @@ def wait_shell_ibus_context(*, timeout: float = 6.0) -> str:
     )
 
 
+def shell_ibus_key_event_count(status: str) -> int:
+    match = re.search(r"ibus-key-events=(\d+)", status)
+    if not match:
+        fail("GNOME Shell IBus probe did not report a key-event counter: " + status)
+    if "probe=installed" not in status:
+        fail("GNOME Shell could not instrument its IBus context: " + status)
+    return int(match.group(1))
+
+
+def wait_shell_ibus_key_events(
+    baseline: int, *, expected_delta: int = 2, timeout: float = 3.0
+) -> str:
+    deadline = time.monotonic() + timeout
+    status = ""
+    expected_count = baseline + expected_delta
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        count = shell_ibus_key_event_count(status)
+        if count >= expected_count:
+            return status
+        time.sleep(0.025)
+    fail(
+        "Mutter/Clutter did not submit the apostrophe press and release to "
+        f"GNOME Shell's IBus context; baseline={baseline}, "
+        f"expected_at_least={expected_count}, last status={status}"
+    )
+
+
 def wait_shell_ibus_preedit(*, visible: bool, timeout: float = 6.0) -> str:
     deadline = time.monotonic() + timeout
     expected = f"has-preedit={str(visible).lower()}"
@@ -277,19 +305,24 @@ def exercise_live_ibus_preedit_commit(
     # consumed by the input method are not reliably visible at global.stage,
     # which was the previous (invalid) observation point.
     initial_ime_status = wait_shell_ibus_context()
+    initial_ibus_event_count = shell_ibus_key_event_count(initial_ime_status)
     print(f"GNOME Shell IBus input-method context: {initial_ime_status}")
 
     # Inject actual Linux evdev keycodes. NotifyKeyboardKeycode bypasses
-    # Mutter's reverse lookup from keysym to hardware keycode.
+    # Mutter's reverse lookup from keysym to hardware keycode. The Shell
+    # extension counts the calls it actually submits to its IBus context.
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
+    key_event_status = wait_shell_ibus_key_events(initial_ibus_event_count)
+    print(f"GNOME Shell submitted physical apostrophe to IBus: {key_event_status}")
     try:
         first_ime_status = wait_shell_ibus_preedit(visible=True)
         _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
     except Exception as error:
         fail(
             f"{error}; GNOME Shell input-method state: "
-            f"{call_gdbus('InputMethodStatus')}"
+            f"{call_gdbus('InputMethodStatus')}; "
+            f"key submission: {key_event_status}"
         )
     print(f"GNOME Shell IBus preedit: {first_ime_status}")
 

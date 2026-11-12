@@ -56,6 +56,10 @@ export default class NekoEditMutterTestExtension extends Extension {
         this._inputPending = 0;
         this._inputError = null;
         this._pointerStatus = 'not-started';
+        this._ibusProbeContext = null;
+        this._ibusProbeStatus = 'not-installed';
+        this._ibusKeyEventCount = 0;
+        this._lastIbusKeyEvent = 'none';
 
         this._dbusObject = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbusObject.export(Gio.DBus.session, OBJECT_PATH);
@@ -279,13 +283,54 @@ export default class NekoEditMutterTestExtension extends Extension {
         return `${this._inputState}:pending=${this._inputPending}`;
     }
 
-    // Inspect GNOME Shell's actual IBus-backed Clutter input method. A
-    // global.stage capture callback is not a reliable observer for keys
-    // consumed while another Wayland client owns text-input focus.
+    // Inspect GNOME Shell's actual IBus-backed Clutter input method and
+    // instrument the IBus async call boundary without changing its arguments,
+    // callback, result handling, or event filtering.
+    _installInputContextProbe(inputMethod) {
+        const context = inputMethod._context;
+        if (!context) {
+            this._ibusProbeStatus = 'context-missing';
+            return;
+        }
+        if (this._ibusProbeContext === context)
+            return;
+
+        const original = context.process_key_event_async;
+        if (typeof original !== 'function') {
+            this._ibusProbeStatus = 'process-key-event-method-missing';
+            return;
+        }
+
+        const extension = this;
+        const wrapped = function (...args) {
+            const keyval = Number(args[0]) >>> 0;
+            const keycode = Number(args[1]) >>> 0;
+            const state = Number(args[2]) >>> 0;
+            extension._ibusKeyEventCount++;
+            extension._lastIbusKeyEvent =
+                `keyval=0x${keyval.toString(16)} keycode=${keycode} state=0x${state.toString(16)}`;
+            return original.apply(this, args);
+        };
+
+        try {
+            context.process_key_event_async = wrapped;
+            if (context.process_key_event_async !== wrapped) {
+                this._ibusProbeStatus = 'method-replacement-rejected';
+                return;
+            }
+            this._ibusProbeContext = context;
+            this._ibusProbeStatus = 'installed';
+        } catch (error) {
+            this._ibusProbeStatus = `install-failed:${String(error)}`;
+        }
+    }
+
     InputMethodStatus() {
         const inputMethod = Clutter.get_default_backend().get_input_method();
         if (!inputMethod)
             return 'input-method=missing';
+
+        this._installInputContextProbe(inputMethod);
 
         const source = inputMethod._currentSource;
         const sourceName = source ? `${source.type}:${source.id}` : 'none';
@@ -296,6 +341,8 @@ export default class NekoEditMutterTestExtension extends Extension {
         const hasPreedit = inputMethod.hasPreedit();
 
         return `source=${sourceName};context=${context};focus=${focus};` +
+            `probe=${this._ibusProbeStatus};ibus-key-events=${this._ibusKeyEventCount};` +
+            `last-ibus-key=[${this._lastIbusKeyEvent}];` +
             `preedit-visible=${preeditVisible};has-preedit=${hasPreedit};` +
             `preedit=${JSON.stringify(preedit)}`;
     }

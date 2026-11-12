@@ -1,12 +1,10 @@
-## 2026-11-12 — inspect GNOME Shell's IBus InputMethod during live preedit validation (CI pending)
+## 2026-11-12 — trace physical key submission into GNOME Shell's IBus context (CI pending)
 
-Actions [Build and test #846](https://github.com/GraderGamer2/NekoEdit/actions/runs/43161435296) passed the freestanding x86-64 build and ELF checks, CLI tests, the complete Wayland mock, executable inspection, native `us(intl)` XKB parser validation, X.Org importer checks, and locale-pack build. The isolated IBus daemon and D-Bus-activated portal acquired their bus names. Mutter's physical-XKB Compose/dead-key/save canary and the separate text-input-v3 manager/focus/enable/state-commit handshake also passed.
+Actions [Build and test #847](https://github.com/GraderGamer2/NekoEdit/actions/runs/43174083793) passed build/ELF verification, CLI tests, the complete Wayland protocol mock, executable inspection, native `us(intl)` XKB parser validation, X.Org importer verification, and locale-pack build. The native Mutter Compose/dead-key/save canary and the optional text-input-v3 manager/focus/enable/state-commit handshake also passed.
 
-The only failure was the live IBus Simple preedit diagnostic. The previous test observer was attached to `global.stage`, where the probe saw only the earlier Ctrl key events and no apostrophe events. That is not a valid observation point for an input method handling keys on behalf of another Wayland client; it does not establish that the physical key failed to reach GNOME Shell's input method.
+The revised GNOME Shell status query confirmed the expected `ibus:xkb:us:intl:eng` source, a ready IBus context, and input-method focus on NekoEdit. The IBus preedit nevertheless remained empty after a physical apostrophe key. This rules out a missing selected source or missing context/focus, but does not establish whether Shell submitted the key to the IBus provider.
 
-The replacement test-only D-Bus method reads the actual `Clutter.InputMethod` instance installed on GNOME Shell's Clutter backend. It reports the active source, IBus context availability, current input-method focus, and provider preedit visibility/text. The Python probe requires `ibus:xkb:us:intl:eng`, a live context, and focused editor, then checks Shell-side preedit and NekoEdit's received text-input-v3 preedit independently. Backspace must clear both; apostrophe plus `e` must commit U+00E9; the normal save-confirmation path must persist exact UTF-8 bytes.
-
-This is a test-harness correction only. The stage observer and its invalid event-count assertion have been removed. No NekoEdit application source, ELF, protocol behavior, or runtime dependency is changed. CI is pending; no live IBus preedit/commit pass is claimed.
+The next diagnostic wraps the exact `process_key_event_async` function on Shell's active IBus context instance, counts submissions, and records the raw keyval, keycode, and modifier state before forwarding every original argument unchanged to the original method. The probe now requires both apostrophe press and release to reach that boundary before it evaluates provider preedit and NekoEdit's text-input-v3 state. This is test-only instrumentation; it does not modify NekoEdit application code or runtime dependencies. CI is pending; no IBus preedit/commit pass is claimed.
 
 ---
 
