@@ -1,5 +1,15 @@
 ## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
 
+Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run completed 217 frame callbacks, and the dedicated release-before-callback regression passed: the buffer was released first, a second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.
+
+The full mock then failed in the clipboard scenario because its first Ctrl+C fixture expected object ID 19 while the client correctly allocated 21. Frame callbacks share Wayland's dense client object-ID namespace with clipboard data sources and newly created buffers. The backend allocator must remain dense; the correction is entirely in the mock. The clipboard, context-menu, and clipboard-persistence fixtures now read `next_client_object_id` before creating data sources, and the resize fixture captures each replacement buffer ID before the released buffer is destroyed. The mock no longer assumes callback-free consecutive IDs across resizes.
+
+Commits: [8b966b2](https://github.com/GraderGamer2/NekoEdit/commit/8b966b20753dd33fa26cbaf1986ef874493c115b) derives clipboard/context-menu source IDs from the live allocator; [00c6847](https://github.com/GraderGamer2/NekoEdit/commit/00c684780a763a6a789e27fb74ff90589afd9ff8) completes dynamic resize-buffer ID expectations. The corrected mock awaits Actions; no full Wayland or workflow pass is claimed yet. Live IBus Simple preedit/commit remains a separate unresolved integration test.
+
+---
+
+## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
+
 Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run reported 217 frame callbacks completed, and the dedicated release-before-callback scenario passed: the buffer was released first, the second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.
 
 The complete Wayland mock then failed later in the clipboard scenario. The first Ctrl+C expected data-source ID 19 but received 21. The backend correctly allocated the intervening frame callbacks from the same dense client object-ID counter; several older test fixtures still assumed no additional client-created objects. The implementation must retain Wayland's dense ID allocation rather than moving callbacks into a sparse/high-numbered range. The test fixtures now read `next_client_object_id` before clipboard source creation and derive resize buffer IDs from the live counter. The corrected mock is awaiting a new run; no full Wayland or workflow pass is claimed.

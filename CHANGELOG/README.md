@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-12 — frame pacing mock correction pending CI)
+
+Continue from branch `early-alpha`. Feature commit [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) implements `wl_surface.frame` pacing on the existing single SHM buffer. Another redraw requires both callback completion and `wl_buffer.release`; redraws in between are coalesced. The mock passed the callback-before-release path (217 completed callbacks in the standard run) and the focused release-before-callback scenario in Actions #838.
+
+Actions #838 failed later because older clipboard/resize fixtures assumed fixed client object IDs. Wayland client IDs are dense, and each new frame callback consumes one. The backend's allocator is unchanged. Commits [8b966b2](https://github.com/GraderGamer2/NekoEdit/commit/8b966b20753dd33fa26cbaf1986ef874493c115b) and [00c6847](https://github.com/GraderGamer2/NekoEdit/commit/00c684780a763a6a789e27fb74ff90589afd9ff8) update clipboard/context-menu/persistence and resize fixtures to read `next_client_object_id`. The complete corrected mock has not run yet. Check the newest Actions run before making further changes or claiming success.
+
+The live GNOME Shell/Mutter + IBus Simple preedit/commit test also remains unresolved: manager binding/focus/enable passed, but provider-originated preedit/commit did not. Physical XKB remains the default.
+
+---
+
 ## Latest handoff (2026-11-12 — frame pacing test fixture correction)
 
 Continue from branch `early-alpha`. The new backend feature and changelog are committed in [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) and [c391b99](https://github.com/GraderGamer2/NekoEdit/commit/c391b9975f0577a9698acfd8b928f5aa8e0fe949). Actions #838 built the ELF and passed all command-line tests. Its Wayland mock verified 217 normal frame callbacks and passed the reverse-order release-before-callback coalescing regression. It then failed in clipboard tests because the fixtures assumed fixed source IDs and did not account for callback objects consuming client IDs.

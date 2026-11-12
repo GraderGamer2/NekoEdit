@@ -2,9 +2,10 @@
 
 | Commit | Subject |
 |---|---|
-| pending | test: derive clipboard and resize object IDs from live allocator |
+| [8b966b20753d](https://github.com/GraderGamer2/NekoEdit/commit/8b966b20753dd33fa26cbaf1986ef874493c115b) | test: derive clipboard object IDs from the live allocator |
+| [00c684780a76](https://github.com/GraderGamer2/NekoEdit/commit/00c684780a763a6a789e27fb74ff90589afd9ff8) | test: derive resize buffer IDs from the live allocator |
 
-Actions #838 confirmed the new callback lifecycle cases, then exposed hard-coded IDs in clipboard tests. The follow-up reads the live dense client object-ID counter instead of assuming the old fixed sequence. The correction awaits CI.
+Actions #838 passed the freestanding build and command-line tests, and verified 217 completed callbacks plus the reverse-order coalescing scenario. It then exposed fixed object IDs in clipboard fixtures. Both clipboard and resize tests now obtain IDs from the live dense allocator. A new full Wayland mock run is pending.
 
 ---
 
@@ -13,6 +14,7 @@ Actions #838 confirmed the new callback lifecycle cases, then exposed hard-coded
 | Commit | Subject |
 |---|---|
 | [091737442842](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) | feat: pace Wayland redraws with frame callbacks |
+| [c391b9975f05](https://github.com/GraderGamer2/NekoEdit/commit/c391b9975f0577a9698acfd8b928f5aa8e0fe949) | docs: record Wayland frame pacing milestone |
 
 The implementation keeps the active single buffer release-safe and gates normal redraws on both buffer release and frame callback completion. The mock covers both completion orders and redraw coalescing. Build and test validation will be recorded after the branch Actions run.
 
