@@ -1,12 +1,15 @@
-## 2026-11-12 — accept Mutter 46's malformed nullable preedit-clear anchor (CI pending)
+## 2026-11-12 — live IBus preedit, cancellation, commit, and save verified (CI PASS)
 
-Actions [Build and test #855](https://github.com/GraderGamer2/NekoEdit/actions/runs/43181382339) passed the full build, CLI tests, complete Wayland mock, XKB parser, X.Org importer, locale-pack build, and the native Mutter Compose/dead-key/save canary. The test extension's Clutter API wrapper confirmed GNOME Shell calls `set_preedit_text(NULL, cursor=1, anchor=1, resetMode=0)` when Backspace clears the dead-key accent.
+Actions [Build and test #856](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544) completed successfully. All 15 workflow steps passed: freestanding x86-64 build and ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, real `us(intl)` keymap validation, X.Org importer verification, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-The staging buffer revealed the exact Wayland clear event: nullable preedit string (length 0), `cursor_begin=0`, `cursor_end=1`. Mutter 46.2 leaves the character-index anchor unchanged even though the text is NULL. NekoEdit staged the event but rejected it because offset 1 exceeds the only valid byte boundary of an empty string, leaving the previous accent visible.
+The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`.
 
-The client now normalizes only this exact legacy form—NULL string, empty payload, cursor 0, anchor 1—to byte offsets `(0, 0)`. Non-NULL strings, other empty-range values, negative offsets, and ordinary malformed selections remain subject to existing validation. The Wayland mock adds a regression that starts with an active multibyte composition, sends the legacy clear event, and verifies the active preedit is actually removed. The live Mutter probe also requires that Shell called the expected API. CI is pending.
+This validates the narrowly gated Mutter 46.0–46.2 compatibility cases: a multibyte preedit's legacy character-index anchor is converted only when it resolves to the same validated cursor byte offset, and the nullable empty-preedit `(0, 1)` anchor is normalized to `(0, 0)`. The mock tests both cases while keeping unrelated malformed UTF-8 boundaries rejected. No IBus, D-Bus, GNOME, or other runtime dependency was added to NekoEdit.
+
+Artifacts from #856: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544/artifacts/13927605875) and [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544/artifacts/13927775229). Both are configured with one-day retention.
 
 ---
+
 
 
 
