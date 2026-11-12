@@ -1,3 +1,11 @@
+## 2026-11-12 — assert seat redraw through the mock callback interceptor (CI pending)
+
+Build and test [#860](https://github.com/GraderGamer2/NekoEdit/actions/runs/43211045584) passed the complete set of existing Wayland cases and reached the new seat-hotplug case. Its failure was in the new test expectation: the mock's `recv_wayland_message()` intentionally consumes `wl_surface.frame` requests, tracks callback IDs/counters, and acknowledges them after the matching surface commit. Therefore `expect_message()` cannot observe opcode 3; it sees the following buffer attach instead.
+
+Correct the hotplug assertion to verify the attach/damage/commit sequence and independently assert that the callback interceptor recorded exactly one new callback ID (19), then delivered its completion. The application-side immediate-redraw implementation is unchanged in this correction. CI is pending.
+
+---
+
 ## 2026-11-12 — widen bounded Wayland mock process timeout (CI pending)
 
 Build and test [#859](https://github.com/GraderGamer2/NekoEdit/actions/runs/43210190052) passed the freestanding build, ELF check, and command-line tests but timed out in the very first general Wayland mock scenario, before the hotplug-specific cases ran. It emitted no application error or fake-compositor assertion. The same initial smoke scenario took 19.1 seconds in the prior passing run #858, while the harness allowed only 20 seconds for ordinary child processes.

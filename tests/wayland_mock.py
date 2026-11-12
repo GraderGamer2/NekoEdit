@@ -750,11 +750,12 @@ def run(
 
                     # Keyboard removal marked the surface dirty. Because the
                     # initial buffer/frame gates were idle, the seat handler
-                    # must present a replacement frame immediately.
-                    expect_message(
-                        client, (8, 3, struct.pack("<I", 19)),
-                        "request an immediate seat-state redraw frame callback",
-                    )
+                    # must present a replacement frame immediately. The
+                    # recv_wayland_message helper intentionally consumes
+                    # wl_surface.frame requests and records them in
+                    # frame_callback_stats, so the first visible request here
+                    # is the following buffer attach.
+                    previous_frame_requests = frame_callback_stats["requested"]
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)),
                         "attach immediate seat-state redraw buffer",
@@ -764,9 +765,19 @@ def run(
                         "damage immediate seat-state redraw buffer",
                     )
                     expect_message(client, (8, 6, b""), "commit immediate seat-state redraw")
-                    wait_state("frame_callback_id", 19)
+                    wait_state("frame_callback_id", 0)
                     wait_state("buffer_busy", 1)
                     wait_state("redraw_pending", 0)
+                    if (
+                        frame_callback_stats["requested"] != previous_frame_requests + 1
+                        or not frame_callback_stats["ids"]
+                        or frame_callback_stats["ids"][-1] != 19
+                        or frame_callback_stats["completed"] != frame_callback_stats["requested"]
+                    ):
+                        raise AssertionError(
+                            "seat-state redraw did not register and complete exactly one frame callback: "
+                            + repr(frame_callback_stats)
+                        )
 
                     client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
                     expect_message(
