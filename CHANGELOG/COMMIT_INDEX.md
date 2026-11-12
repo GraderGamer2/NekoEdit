@@ -4,8 +4,9 @@
 |---|---|
 | [8b966b20753d](https://github.com/GraderGamer2/NekoEdit/commit/8b966b20753dd33fa26cbaf1986ef874493c115b) | test: derive clipboard object IDs from the live allocator |
 | [00c684780a76](https://github.com/GraderGamer2/NekoEdit/commit/00c684780a763a6a789e27fb74ff90589afd9ff8) | test: derive resize buffer IDs from the live allocator |
+| [0f89da36c2eb](https://github.com/GraderGamer2/NekoEdit/commit/0f89da36c2ebc6b647d1a1ae2bbcb9c72b34a379) | test: sample maximized buffer ID at resize allocation |
 
-Actions #838 passed the freestanding build and command-line tests, and verified 217 completed callbacks plus the reverse-order coalescing scenario. It then exposed fixed object IDs in clipboard fixtures. Both clipboard and resize tests now obtain IDs from the live dense allocator. A new full Wayland mock run is pending.
+Actions #838 passed the freestanding build and command-line tests, and verified 217 completed callbacks plus the reverse-order coalescing scenario. It then exposed fixed clipboard IDs. Actions #839 passed build/command-line tests and the clipboard, context-menu, and persistence scenarios, but the resize test showed that the first buffer ID was sampled too early. The latest fix moves that sample to immediately before maximize configure/release; CI is pending.
 
 ---
 

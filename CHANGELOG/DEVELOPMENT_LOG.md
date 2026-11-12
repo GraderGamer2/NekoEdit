@@ -1,3 +1,13 @@
+## 2026-11-12 — sample maximized-buffer ID at the actual resize allocation (CI pending)
+
+Actions [Build and test #839](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136062548) passed the freestanding build/ELF check and command-line tests. The full Wayland mock then passed the clipboard scenarios that failed in #838: keyboard Copy/Cut/Paste, context-menu Copy/Cut/Paste, asynchronous transfers, Undo/Redo, and the post-exit Clipboard Service. The standard smoke run also completed 217 frame callbacks, and the focused callback/release ordering regression was included.
+
+The resize suite then exposed one more stale sample: the test captured the first maximized-buffer ID at the start of the file-workflow block, before hundreds of redraw callbacks from earlier interactions consumed IDs. The compositor's next buffer was therefore ID 384, not the stale expected ID 18. The test now samples `next_client_object_id` immediately before the maximize configure/release sequence, matching the point where `window_apply_pending_resize` allocates the replacement. Restore, edge-resize, and minimum-size buffer IDs are also sampled immediately before their respective allocation events.
+
+Test correction commit: [0f89da3](https://github.com/GraderGamer2/NekoEdit/commit/0f89da36c2ebc6b647d1a1ae2bbcb9c72b34a379). This is a mock-only correction; the backend's dense object-ID allocator remains unchanged. A new Actions run is pending. No complete Wayland mock or full workflow pass is claimed yet. The live IBus Simple provider preedit/commit issue remains separate.
+
+---
+
 ## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
 
 Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run completed 217 frame callbacks, and the dedicated release-before-callback regression passed: the buffer was released first, a second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.

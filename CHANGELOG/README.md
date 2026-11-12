@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-12 — maximize resize ID test correction pending CI)
+
+Continue from branch `early-alpha`. Frame pacing is implemented in [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d): normal redraws request `wl_surface.frame`, and another commit is gated on both callback completion and `wl_buffer.release`. The standard Wayland mock has repeatedly shown 217 callbacks completing, and the dedicated release-before-callback coalescing scenario passed.
+
+Actions #839 passed the freestanding build and command-line tests. It also passed the clipboard shortcut, context-menu, clipboard-persistence, and other prior mock scenarios. It failed only when the resize fixture expected buffer ID 18 but the application correctly allocated ID 384: the test had captured the counter before earlier interactions generated callback IDs. Commit [0f89da3](https://github.com/GraderGamer2/NekoEdit/commit/0f89da36c2ebc6b647d1a1ae2bbcb9c72b34a379) now samples the maximized buffer ID immediately before the configure/release sequence. Restore/edge/minimum-size IDs are sampled at their individual allocation points.
+
+A new run is required before marking the Wayland mock green. Do not change the backend allocator to sparse IDs; Wayland requires dense client object IDs. The live GNOME Shell/Mutter + IBus Simple provider preedit/commit issue is still separate and unresolved; physical XKB remains the default.
+
+---
+
 ## Latest handoff (2026-11-12 — frame pacing mock correction pending CI)
 
 Continue from branch `early-alpha`. Feature commit [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) implements `wl_surface.frame` pacing on the existing single SHM buffer. Another redraw requires both callback completion and `wl_buffer.release`; redraws in between are coalesced. The mock passed the callback-before-release path (217 completed callbacks in the standard run) and the focused release-before-callback scenario in Actions #838.
