@@ -1,12 +1,13 @@
-## 2026-11-12 — trace physical key submission into GNOME Shell's IBus context (CI pending)
+## 2026-11-12 — reapply and assert Mutter's us(intl) dead-key translation for the IBus phase (CI pending)
 
-Actions [Build and test #847](https://github.com/GraderGamer2/NekoEdit/actions/runs/43174083793) passed build/ELF verification, CLI tests, the complete Wayland protocol mock, executable inspection, native `us(intl)` XKB parser validation, X.Org importer verification, and locale-pack build. The native Mutter Compose/dead-key/save canary and the optional text-input-v3 manager/focus/enable/state-commit handshake also passed.
+Actions [Build and test #848](https://github.com/GraderGamer2/NekoEdit/actions/runs/43174987068) passed the freestanding build and ELF verification, command-line tests, complete Wayland protocol mock, executable inspection, native `us(intl)` parser validation, X.Org importer verification, and locale-pack build. The native Mutter Compose/dead-key/save canary and the separate text-input-v3 manager/focus/enable/state-commit handshake also passed.
 
-The revised GNOME Shell status query confirmed the expected `ibus:xkb:us:intl:eng` source, a ready IBus context, and input-method focus on NekoEdit. The IBus preedit nevertheless remained empty after a physical apostrophe key. This rules out a missing selected source or missing context/focus, but does not establish whether Shell submitted the key to the IBus provider.
+The new IBus call-boundary trace proved that both apostrophe press and release were submitted to GNOME Shell's active IBus context. The recorded event was `keyval=0x27 keycode=40 state=0x40000000`: Mutter delivered an ordinary apostrophe, not XKB `dead_acute` (`0xfe51`). The source and context were correct; the active keymap translation was not.
 
-The next diagnostic wraps the exact `process_key_event_async` function on Shell's active IBus context instance, counts submissions, and records the raw keyval, keycode, and modifier state before forwarding every original argument unchanged to the original method. The probe now requires both apostrophe press and release to reach that boundary before it evaluates provider preedit and NekoEdit's text-input-v3 state. This is test-only instrumentation; it does not modify NekoEdit application code or runtime dependencies. CI is pending; no IBus preedit/commit pass is claimed.
+GNOME Shell 46's `InputSourceManager.activateInputSource()` applies the IBus engine descriptor's XKB layout before selecting the engine. Its source comment notes that `xkb:` IBus engines echo symbols, so the compositor's XKB translation must generate the dead-key keysym. The test now reapplies its required `us(intl)` keymap after the IBus source switch and asserts that the apostrophe reaches IBus as `dead_acute` before testing provider preedit. This is confined to the Mutter harness; NekoEdit's backend and runtime dependencies remain unchanged. CI is pending; no live IBus preedit/commit pass is claimed.
 
 ---
+
 
 ## 2026-11-12 — inject physical evdev keycodes for the live IBus preedit probe (CI pending)
 

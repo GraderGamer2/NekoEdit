@@ -529,6 +529,18 @@ if [ "$IBUS_ENGINE" != "xkb:us:intl:eng" ]; then
 fi
 echo "GNOME Shell IBus engine verified: $IBUS_ENGINE"
 
+# Reapply the physical us(intl) map after GNOME Shell switches from the
+# ordinary XKB source to the matching IBus xkb:us:intl:eng source. The IBus
+# xkb engines echo keysyms, so Mutter must translate the apostrophe key to
+# dead_acute before the event is submitted to IBus.
+IBUS_KEYMAP_STATUS="$(gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
+    --method "$DBUS_INTERFACE.ApplyKeymap")"
+if [[ "$IBUS_KEYMAP_STATUS" != *"layout=us variant=intl options=compose:ralt model=pc105"* ]]; then
+    echo "could not reapply the required us(intl) keymap for the IBus phase: $IBUS_KEYMAP_STATUS" >&2
+    exit 1
+fi
+echo "Mutter IBus-phase keymap reapplied: $IBUS_KEYMAP_STATUS"
+
 : > "$TEST_ROOT/text-input-document.txt"
 echo "Probing live IBus preedit/commit through text-input-v3 with a second NekoEdit process"
 python3 "$SCRIPT_DIR/mutter_text_input_probe.py" \

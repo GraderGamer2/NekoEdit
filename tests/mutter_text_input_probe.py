@@ -265,6 +265,24 @@ def wait_shell_ibus_key_events(
     )
 
 
+def require_shell_ibus_keysym(status: str, expected: int) -> None:
+    match = re.search(
+        r"last-ibus-key=\[keyval=0x([0-9a-fA-F]+) keycode=(\d+) state=0x([0-9a-fA-F]+)\]",
+        status,
+    )
+    if not match:
+        fail("GNOME Shell IBus probe did not report the last submitted key: " + status)
+    actual = int(match.group(1), 16)
+    keycode = int(match.group(2))
+    if actual != expected or keycode != EVDEV_KEY_APOSTROPHE:
+        fail(
+            "Mutter's us(intl) map did not translate the physical apostrophe "
+            f"to the IBus dead_acute keysym; expected keysym=0x{expected:x} "
+            f"keycode={EVDEV_KEY_APOSTROPHE}, got keysym=0x{actual:x} "
+            f"keycode={keycode}; status={status}"
+        )
+
+
 def wait_shell_ibus_preedit(*, visible: bool, timeout: float = 6.0) -> str:
     deadline = time.monotonic() + timeout
     expected = f"has-preedit={str(visible).lower()}"
@@ -314,7 +332,8 @@ def exercise_live_ibus_preedit_commit(
     tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
     wait_input_idle()
     key_event_status = wait_shell_ibus_key_events(initial_ibus_event_count)
-    print(f"GNOME Shell submitted physical apostrophe to IBus: {key_event_status}")
+    require_shell_ibus_keysym(key_event_status, 0xFE51)  # XKB dead_acute
+    print(f"GNOME Shell submitted us(intl) dead_acute to IBus: {key_event_status}")
     try:
         first_ime_status = wait_shell_ibus_preedit(visible=True)
         _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
