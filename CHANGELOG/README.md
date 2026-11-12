@@ -1,3 +1,11 @@
+## Latest handoff (2026-11-12 — IBus startup ordering correction pending CI)
+
+Continue from branch `early-alpha`. The frame-pacing feature is implemented and the full Wayland mock is green. Actions #840 passed build/CLI, Wayland mock, ELF checks, native XKB validation, X.Org importer, and locale-pack build. The first Mutter leg passed real native virtual keyboard input, Right Alt Compose, two-mark dead-key composition, and save. The text-input-v3 activation handshake passed. The only remaining failed assertion is real IBus Simple preedit/commit.
+
+Diagnosis: the test launches GNOME Shell directly under `dbus-run-session`, not a full `gnome-session` plus systemd user manager. IBus's GNOME service is normally started after `gnome-session-initialized.target` and wanted by `gnome-session.target`; neither is created in this stripped headless test. The IBus portal logs “Not connected to the ibus bus” during Shell startup. The newest test correction starts `ibus-daemon --panel disable` before GNOME Shell, after setting the isolated HOME/XDG/Wayland environment, clears inherited `IBUS_ADDRESS`/daemon PID overrides, verifies the `org.freedesktop.IBus` bus owner and `xkb:us:intl:eng` engine, then proceeds with the same live provider sequence. The daemon stays test-only and is cleaned up; no IBus dependency is added to NekoEdit. Check CI before claiming the IBus provider path is fixed.
+
+---
+
 ## Latest handoff (2026-11-12 — maximize resize ID test correction pending CI)
 
 Continue from branch `early-alpha`. Frame pacing is implemented in [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d): normal redraws request `wl_surface.frame`, and another commit is gated on both callback completion and `wl_buffer.release`. The standard Wayland mock has repeatedly shown 217 callbacks completing, and the dedicated release-before-callback coalescing scenario passed.

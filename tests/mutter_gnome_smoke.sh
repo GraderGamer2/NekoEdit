@@ -44,6 +44,7 @@ fi
 TEST_ROOT="$(mktemp -d /tmp/nekoedit-mutter.XXXXXX)"
 APP_PID=
 SHELL_PID=
+IBUS_PID=
 RESULT=failed
 
 cleanup() {
@@ -56,11 +57,15 @@ cleanup() {
         kill "$SHELL_PID" 2>/dev/null
         wait "$SHELL_PID" 2>/dev/null
     fi
+    if [ -n "$IBUS_PID" ]; then
+        kill "$IBUS_PID" 2>/dev/null
+        wait "$IBUS_PID" 2>/dev/null
+    fi
     if [ "$RESULT" = passed ]; then
         rm -rf "$TEST_ROOT"
     else
         echo "Mutter integration diagnostics (temporary directory: $TEST_ROOT)" >&2
-        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log"; do
+        for log in "$TEST_ROOT/mutter.log" "$TEST_ROOT/nekoedit.log" "$TEST_ROOT/ibus-daemon.log"; do
             if [ -f "$log" ]; then
                 echo "--- $log ---" >&2
                 tail -n 160 "$log" >&2
@@ -73,6 +78,15 @@ cleanup() {
     fi
 }
 trap cleanup EXIT
+
+ibus_bus_has_owner() {
+    local owner
+    owner="$(gdbus call --session --dest org.freedesktop.DBus \
+        --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.NameHasOwner org.freedesktop.IBus \
+        2>/dev/null || true)"
+    [[ "$owner" == *"true"* ]]
+}
 
 EXTENSION_DIR="$TEST_ROOT/home/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 mkdir -p "$TEST_ROOT/home/.nekoedit/locales" "$TEST_ROOT/runtime" \
@@ -103,7 +117,43 @@ export LC_ALL="C.UTF-8"
 export LIBGL_ALWAYS_SOFTWARE="1"
 export MUTTER_DEBUG_DISABLE_HW_CURSORS="1"
 export NO_AT_BRIDGE="1"
-unset DISPLAY || true
+export XDG_SESSION_TYPE="wayland"
+unset DISPLAY IBUS_ADDRESS IBUS_DAEMON_PID || true
+
+# The headless harness does not launch gnome-session or a systemd user manager.
+# Start IBus's normal GNOME-mode service command after the private HOME, XDG
+# paths and Wayland session variables are set, but before GNOME Shell starts.
+# This prevents Shell's startup IBus portal/input-context requests from racing
+# an IBus daemon that would normally be started by gnome-session.target.
+if ! ibus_bus_has_owner; then
+    echo "Starting the isolated GNOME-mode IBus daemon before headless GNOME Shell"
+    ibus-daemon --panel disable --verbose > "$TEST_ROOT/ibus-daemon.log" 2>&1 &
+    IBUS_PID=$!
+fi
+IBUS_READY=0
+for attempt in $(seq 1 100); do
+    if ibus_bus_has_owner; then
+        IBUS_READY=1
+        break
+    fi
+    if [ -n "$IBUS_PID" ] && ! kill -0 "$IBUS_PID" 2>/dev/null; then
+        echo "IBus daemon exited before owning org.freedesktop.IBus" >&2
+        tail -n 160 "$TEST_ROOT/ibus-daemon.log" >&2 || true
+        exit 1
+    fi
+    sleep 0.1
+done
+if [ "$IBUS_READY" -ne 1 ]; then
+    echo "IBus daemon did not acquire org.freedesktop.IBus on the private session bus" >&2
+    tail -n 160 "$TEST_ROOT/ibus-daemon.log" >&2 || true
+    exit 1
+fi
+if ! ibus list-engine --name-only | grep -Fxq 'xkb:us:intl:eng'; then
+    echo "IBus Simple does not provide the required xkb:us:intl:eng test engine" >&2
+    ibus list-engine --name-only >&2 || true
+    exit 1
+fi
+echo "Isolated IBus bus and xkb:us:intl:eng engine verified before GNOME Shell startup"
 
 # GNOME Shell writes its extension selection into this temporary GLib keyfile.
 gsettings set org.gnome.shell disable-user-extensions false
@@ -402,16 +452,17 @@ APP_PID=
 
 # Switch only the second phase to GNOME Shell's real IBus Simple engine. Its
 # xkb:us:intl:eng descriptor applies the same us(intl) layout while routing
-# keys through IBus and GNOME Shell's Clutter.InputMethod bridge.
-if ! ibus list-engine --name-only | grep -Fxq 'xkb:us:intl:eng'; then
-    echo "IBus Simple does not provide the required xkb:us:intl:eng test engine" >&2
-    exit 1
-fi
+# keys through IBus and GNOME Shell's Clutter.InputMethod bridge. IBus is
+# already running and its bus owner was verified before GNOME Shell startup.
 gsettings set org.gnome.desktop.input-sources sources "[('ibus', 'xkb:us:intl:eng')]"
 gsettings set org.gnome.desktop.input-sources mru-sources "[('ibus', 'xkb:us:intl:eng')]"
 IBUS_ENGINE=""
 for attempt in $(seq 1 100); do
-    IBUS_ENGINE="$(ibus engine 2>/dev/null || true)"
+    if IBUS_ENGINE="$(ibus engine 2>/dev/null)"; then
+        :
+    else
+        IBUS_ENGINE=""
+    fi
     if [ "$IBUS_ENGINE" = "xkb:us:intl:eng" ]; then
         break
     fi

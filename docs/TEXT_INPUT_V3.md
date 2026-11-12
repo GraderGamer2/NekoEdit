@@ -19,7 +19,7 @@ The preedit string is drawn as a temporary overlay; it is not committed into the
 
 ## Live GNOME Shell / IBus coverage
 
-The Mutter integration test keeps its original `us(intl)` physical-XKB/Compose session intact. For the second editor process, the isolated GNOME input-source settings switch to IBus engine `xkb:us:intl:eng`, which is IBus Simple's XKB-backed engine for the same US International layout. The test confirms that IBus reports that engine as active before starting the text-input-v3 client.
+The Mutter integration test keeps its original `us(intl)` physical-XKB/Compose session intact. Because its headless GNOME Shell runs without a full GNOME systemd user session, the harness starts a supervised IBus daemon before GNOME Shell launches and verifies its session-bus name owner. It clears inherited IBus bus-address overrides, then switches the isolated GNOME input-source settings to IBus engine `xkb:us:intl:eng`, which is IBus Simple's XKB-backed engine for the same US International layout. The test confirms that IBus reports that engine as active before starting the text-input-v3 client.
 
 The live integration scenario is being extended using IBus Simple's built-in XKB/Compose path: it sends `Multi_key`, `o`, Backspace, `o`, `c` through Mutter's native virtual keyboard. The intended assertions are U+00B7 MIDDLE DOT → `o` → U+00B7 after Backspace → `o` again, while the document remains empty. The final `c` should commit U+00A9 COPYRIGHT SIGN; the editor should then save exactly the two UTF-8 bytes `C2 A9` after the normal confirmation prompt. This live sequence is not marked verified until a complete Build and test run passes it.
 

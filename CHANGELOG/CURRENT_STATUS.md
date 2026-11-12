@@ -1,3 +1,13 @@
+## 2026-11-12 — make IBus available before headless GNOME Shell startup (CI pending)
+
+Actions [Build and test #840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136666325) passed the freestanding build, command-line tests, complete Wayland protocol mock, ELF inspection, native `us(intl)` XKB parser verification, X.Org source importer verification, and optional locale-pack build. Its Mutter phase passed the physical-XKB Right Alt Compose and pt_BR dead-key sequence, confirmed save, and text-input-v3 manager/focus/enable/state-commit handshake. IBus Simple still failed to deliver preedit. The log showed the portal's “Not connected to the ibus bus” failure occurring during GNOME Shell startup, before the harness switched the second phase to IBus Simple.
+
+The harness starts GNOME Shell directly under `dbus-run-session`, without the full `gnome-session`/systemd user manager. IBus's GNOME unit is normally ordered after `gnome-session-initialized.target` and wanted by `gnome-session.target`; those targets are absent in this stripped test. The latest correction starts the same GNOME-mode `ibus-daemon --panel disable` command after the temporary HOME/XDG/Wayland environment is set but **before GNOME Shell launches**, verifies the `org.freedesktop.IBus` session-bus owner and required IBus Simple engine, and clears any inherited `IBUS_ADDRESS`/daemon-PID overrides so both Shell and the portal discover the isolated test daemon. The daemon remains a supervised child and is terminated during cleanup. The second phase now only changes the input-source settings and confirms the active engine.
+
+This is still a test-harness-only change; NekoEdit gains no IBus runtime dependency or daemon-startup behavior. The real provider preedit/backspace-correction/commit/save assertion is unchanged. CI is pending; no live IBus success is claimed.
+
+---
+
 ## 2026-11-12 — sample maximized-buffer ID at the actual resize allocation (CI pending)
 
 Actions [Build and test #839](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136062548) passed the freestanding build/ELF check and command-line tests. The full Wayland mock then passed the clipboard scenarios that failed in #838: keyboard Copy/Cut/Paste, context-menu Copy/Cut/Paste, asynchronous transfers, Undo/Redo, and the post-exit Clipboard Service. The standard smoke run also completed 217 frame callbacks, and the focused callback/release ordering regression was included.

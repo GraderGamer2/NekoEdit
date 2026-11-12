@@ -1,3 +1,14 @@
+## 2026-11-12 — start and verify IBus before headless GNOME Shell (CI pending)
+
+| Commit | Subject |
+|---|---|
+| pending | test: start IBus before headless GNOME Shell |
+| pending | docs: describe isolated IBus session startup |
+
+Actions #840 passed all backend/Wayland checks but failed live IBus preedit. The portal reported that it could not connect to the IBus bus during Shell startup. The harness now starts the same GNOME-mode IBus daemon before GNOME Shell, clears inherited IBus address overrides, and checks bus ownership plus engine availability. CI is pending.
+
+---
+
 ## 2026-11-12 — adjust mock object-ID expectations for frame callback allocation (CI pending)
 
 | Commit | Subject |
