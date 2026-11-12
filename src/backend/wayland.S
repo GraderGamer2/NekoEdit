@@ -13670,6 +13670,9 @@ text_input_handle_event:
     cmp r9d, r11d
     jne .Lti_ignored
     mov edx, r9d
+    # The normal acceptance path copies cursor_end from the staged payload,
+    # so persist the corrected byte offset before entering that path.
+    mov dword ptr [rip + text_input_request_buffer + 4104], edx
     jmp .Lti_preedit_commit_candidate
 .Lti_preedit_commit_candidate:
     mov eax, dword ptr [rip + text_input_request_buffer + 4096]
