@@ -1,3 +1,13 @@
+## 2026-11-12 — inject physical evdev keycodes for the live IBus preedit probe (CI pending)
+
+Actions [Build and test #844](https://github.com/GraderGamer2/NekoEdit/actions/runs/43151433375) passed the freestanding build/ELF check, CLI tests, complete Wayland mock (including both frame-callback/release orders), ELF inspection, native `us(intl)` parser, X.Org importer, and locale-pack build. The headless IBus daemon and D-Bus-activated portal also started successfully; Mutter's original physical-XKB Compose/dead-key sequence and the text-input-v3 manager/focus/enable/state-commit handshake passed. The live IBus Simple preedit assertion still failed: the apostrophe keysym produced no provider preedit, even though the earlier `dead_acute` keysym had been rejected by Mutter's reverse mapping.
+
+The keysym route is still not a reliable way to test a physical-layout engine: Mutter's `NotifyKeyboardKeysym` resolves a keysym back to a hardware keycode using the compositor's current group. The revised test bridge exposes Mutter's separate `NotifyKeyboardKeycode` method, documented as taking an evdev keycode, and the IBus probe now sends actual Linux keycodes: `KEY_APOSTROPHE=40`, `KEY_BACKSPACE=14`, and `KEY_E=18`. This bypasses the reverse keysym lookup and makes the test sequence correspond to physical key events delivered to the selected `xkb:us:intl:eng` engine. The original keysym route remains for Ctrl+S and Enter, which already work in the first Mutter canary.
+
+Feature/test commit: [be5dfef](https://github.com/GraderGamer2/NekoEdit/commit/be5dfefe684a6778d41b34f927abc7352aee325f). This changes only the Mutter integration extension, Python test probe, and test documentation; the editor's ELF, backend, and runtime dependencies are unchanged. A new Actions run is required. No live IBus preedit/commit pass is claimed yet.
+
+---
+
 ## 2026-11-12 — send a mapped apostrophe key into the IBus dead-key engine (CI pending)
 
 Actions [Build and test #843](https://github.com/GraderGamer2/NekoEdit/actions/runs/43150721562) passed the freestanding build/ELF check, command-line tests, the full Wayland mock (including frame callback ordering), executable inspection, native `us(intl)` parsing, X.Org importer verification, and locale-pack build. The daemon/portal startup also succeeded in Mutter, and the original physical-XKB `Multi_key` + pt_BR dead-key save canary passed. The text-input-v3 handshake passed.

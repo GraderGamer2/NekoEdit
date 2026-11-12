@@ -1,3 +1,14 @@
+## 2026-11-12 — inject physical evdev keycodes for IBus dead-key validation (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [be5dfefe684a](https://github.com/GraderGamer2/NekoEdit/commit/be5dfefe684a6778d41b34f927abc7352aee325f) | test: inject physical evdev keys for IBus preedit probe |
+| pending | docs: record evdev IBus test path |
+
+Actions #844 passed every build, command-line, Wayland mock, ELF, native XKB, X.Org importer, and locale-pack stage. Its Mutter phase passed physical XKB Compose/dead-key save, the IBus daemon/portal setup, and text-input-v3 activation; provider preedit remained empty. The test now uses Mutter's documented evdev-keycode injection path instead of the keysym-to-keycode reverse mapping. CI is pending.
+
+---
+
 ## 2026-11-12 — send the mapped apostrophe key for IBus dead-key validation (CI pending)
 
 | Commit | Subject |

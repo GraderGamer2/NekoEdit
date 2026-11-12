@@ -1,3 +1,11 @@
+## Latest handoff (2026-11-12 — evdev-based IBus preedit probe, CI pending)
+
+Continue from `early-alpha`. Wayland single-buffer frame pacing is implemented, and the complete protocol mock is green. Actions #844 passed build/CLI, full Wayland mock, ELF inspection, real `us(intl)` parsing, X.Org importer verification, locale-pack build, IBus daemon/portal startup, physical Mutter XKB Compose/dead-key input, and text-input-v3 manager/focus/enable/state-commit. The only failing check is real IBus provider preedit/commit.
+
+The IBus dead-key probe has tried direct `dead_acute` keysym and then apostrophe keysym; neither produced preedit. The direct dead-acute route logged `No keycode found for keyval fe51`; the apostrophe keysym avoided that warning but still produced no preedit. Commit [be5dfef](https://github.com/GraderGamer2/NekoEdit/commit/be5dfefe684a6778d41b34f927abc7352aee325f) adds a second test-bridge operation using Mutter RemoteDesktop's `NotifyKeyboardKeycode` and drives the IBus probe using Linux evdev codes `KEY_APOSTROPHE=40`, `KEY_BACKSPACE=14`, and `KEY_E=18`. This bypasses Mutter's keysym-to-keycode lookup. Ctrl+S and Enter remain on the existing keysym API. The app itself is not modified. Await and inspect the next Actions run before claiming live IBus support is verified.
+
+---
+
 ## Latest handoff (2026-11-12 — mapped apostrophe IBus dead-key probe, CI pending)
 
 Continue from `early-alpha`. The frame-pacing feature and complete Wayland mock remain green. Actions #843 passed build/CLI, Wayland, ELF, XKB, X.Org importer, and locale-pack stages. The headless Mutter harness now starts IBus and its D-Bus-activated portal successfully. Physical-XKB `Multi_key`, the pt_BR two-dead-key sequence, save, and text-input-v3 manager/focus/enable/state-commit all pass.
