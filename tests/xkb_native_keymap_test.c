@@ -1,0 +1,220 @@
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <xkbcommon/xkbcommon.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
+
+extern int xkb_parse_keymap(const char *text, uint32_t size);
+extern uint32_t xkb_keymap_ready;
+extern char xkb_key_names[256u * 4u];
+extern uint32_t xkb_key_alias_count;
+extern uint32_t xkb_parse_error_stage;
+extern uint32_t xkb_parse_error_offset;
+extern uint32_t xkb_parse_error_token_length;
+extern char xkb_parse_error_token[64];
+extern uint32_t xkb_parse_error_symbol_count;
+extern uint32_t xkb_parse_error_alpha_count;
+extern uint32_t xkb_parse_error_table_nonzero_count;
+extern uint32_t xkb_parse_error_table_sample_count;
+extern uint32_t xkb_parse_error_table_samples[16];
+extern int xkb_key_is_level_three_modifier(uint32_t evdev_keycode);
+extern uint32_t xkb_unicode_levels[256u * 4u * 8u];
+
+/*
+ * xkb_unicode_levels is the application-facing lookup table: ordinary
+ * symbols are Unicode scalars, while Multi_key/dead keys use NekoEdit's
+ * reserved 0x110000 action range. xkb_keysym_levels is intentionally only
+ * for raw modifier keysyms and must not be used to verify printable/actions.
+ */
+static int
+check_symbol(struct xkb_keymap *keymap,
+             const char *label,
+             xkb_keysym_t wanted,
+             uint32_t expected_value)
+{
+    xkb_keycode_t min_keycode = xkb_keymap_min_keycode(keymap);
+    xkb_keycode_t max_keycode = xkb_keymap_max_keycode(keymap);
+    unsigned matches = 0;
+
+    for (xkb_keycode_t keycode = min_keycode; keycode <= max_keycode; ++keycode) {
+        if (keycode >= 256u)
+            continue;
+
+        xkb_layout_index_t layouts = xkb_keymap_num_layouts_for_key(keymap, keycode);
+        if (layouts > 4u)
+            layouts = 4u;
+
+        for (xkb_layout_index_t group = 0; group < layouts; ++group) {
+            xkb_level_index_t levels =
+                xkb_keymap_num_levels_for_key(keymap, keycode, group);
+            if (levels > 8u)
+                levels = 8u;
+
+            for (xkb_level_index_t level = 0; level < levels; ++level) {
+                const xkb_keysym_t *symbols = NULL;
+                int count = xkb_keymap_key_get_syms_by_level(
+                    keymap, keycode, group, level, &symbols);
+                if (count <= 0 || symbols == NULL)
+                    continue;
+
+                bool found = false;
+                for (int i = 0; i < count; ++i) {
+                    if (symbols[i] == wanted) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    continue;
+
+                size_t index = (size_t)keycode * 32u +
+                               (size_t)group * 8u + (size_t)level;
+                uint32_t parsed = xkb_unicode_levels[index];
+                if (parsed != expected_value) {
+                    fprintf(stderr,
+                            "XKB parser mismatch for %s at keycode %u, group %u, level %u: "
+                            "expected 0x%08x, got 0x%08x\n",
+                            label, keycode, group, level, expected_value, parsed);
+                    return 1;
+                }
+                ++matches;
+            }
+        }
+    }
+
+    if (matches == 0u) {
+        fprintf(stderr, "libxkbcommon did not expose %s in us(intl)\n", label);
+        return 1;
+    }
+    printf("verified %-16s at %u keymap position(s) -> 0x%08x\n",
+           label, matches, expected_value);
+    return 0;
+}
+
+int
+main(void)
+{
+    const struct xkb_rule_names names = {
+        .rules = "evdev",
+        .model = "pc105",
+        .layout = "us",
+        .variant = "intl",
+        .options = "compose:ralt",
+    };
+
+    struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (context == NULL) {
+        fputs("could not create libxkbcommon context\n", stderr);
+        return 1;
+    }
+    xkb_context_set_log_level(context, XKB_LOG_LEVEL_ERROR);
+
+    struct xkb_keymap *keymap = xkb_keymap_new_from_names(
+        context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (keymap == NULL) {
+        fputs("libxkbcommon could not compile evdev/pc105/us(intl)/compose:ralt\n",
+              stderr);
+        xkb_context_unref(context);
+        return 1;
+    }
+
+    char *text = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
+    if (text == NULL) {
+        fputs("libxkbcommon did not serialize its compiled keymap\n", stderr);
+        xkb_keymap_unref(keymap);
+        xkb_context_unref(context);
+        return 1;
+    }
+
+    size_t text_size = strlen(text) + 1u;
+    if (text_size > UINT32_MAX) {
+        fputs("compiled keymap is too large for NekoEdit's parser API\n", stderr);
+        free(text);
+        xkb_keymap_unref(keymap);
+        xkb_context_unref(context);
+        return 1;
+    }
+
+    int parse_result = xkb_parse_keymap(text, (uint32_t)text_size);
+    if (parse_result != 0 || xkb_keymap_ready != 1u) {
+        fprintf(stderr,
+                "NekoEdit rejected a valid libxkbcommon us(intl) keymap: "
+                "parse_result=%d ready=%u bytes=%zu stage=%u offset=%u token[%u]=\"%s\"\n",
+                parse_result, xkb_keymap_ready, text_size,
+                xkb_parse_error_stage, xkb_parse_error_offset,
+                xkb_parse_error_token_length, xkb_parse_error_token);
+        fprintf(stderr, "symbols=%u alpha=%u\n",
+                xkb_parse_error_symbol_count, xkb_parse_error_alpha_count);
+        fprintf(stderr, "canonical Unicode cells=%u; bounded samples=%u\n",
+                xkb_parse_error_table_nonzero_count,
+                xkb_parse_error_table_sample_count);
+        for (uint32_t i = 0; i < xkb_parse_error_table_sample_count; ++i) {
+            uint32_t cell = xkb_parse_error_table_samples[i * 2u];
+            uint32_t value = xkb_parse_error_table_samples[i * 2u + 1u];
+            fprintf(stderr,
+                    "  cell=%u keycode=%u group=%u level=%u value=0x%08x\n",
+                    cell, cell >> 5, (cell >> 3) & 3u, cell & 7u,
+                    (unsigned)value);
+        }
+        free(text);
+        xkb_keymap_unref(keymap);
+        xkb_context_unref(context);
+        return 1;
+    }
+
+    int failed = 0;
+    if (memcmp(&xkb_key_names[24u * 4u], "AD01", 4u) != 0 ||
+        memcmp(&xkb_key_names[38u * 4u], "AC01", 4u) != 0 ||
+        memcmp(&xkb_key_names[52u * 4u], "AB01", 4u) != 0 ||
+        memcmp(&xkb_key_names[108u * 4u], "RALT", 4u) != 0 ||
+        xkb_key_alias_count < 4u) {
+        fprintf(stderr,
+                "XKB canonical/alias names mismatch: AD01=%.*s AC01=%.*s AB01=%.*s "
+                "RALT=%.*s aliases=%u\n",
+                4, &xkb_key_names[24u * 4u],
+                4, &xkb_key_names[38u * 4u],
+                4, &xkb_key_names[52u * 4u],
+                4, &xkb_key_names[108u * 4u],
+                xkb_key_alias_count);
+        failed = 1;
+    } else {
+        printf("verified canonical XKB names and %u retained aliases\n",
+               xkb_key_alias_count);
+    }
+    failed |= check_symbol(keymap, "Multi_key", XKB_KEY_Multi_key, 0x110007u);
+    failed |= check_symbol(keymap, "dead_grave", XKB_KEY_dead_grave, 0x110001u);
+    failed |= check_symbol(keymap, "dead_circumflex", XKB_KEY_dead_circumflex, 0x110003u);
+    failed |= check_symbol(keymap, "period", XKB_KEY_period, (uint32_t)'.');
+    failed |= check_symbol(keymap, "A", XKB_KEY_A, (uint32_t)'A');
+
+    const xkb_keycode_t ralt_keycode = 108u;
+    const xkb_keysym_t *ralt_symbols = NULL;
+    const int ralt_symbol_count =
+        xkb_keymap_key_get_syms_by_level(keymap, ralt_keycode, 0, 0, &ralt_symbols);
+    if (ralt_symbol_count != 1 || ralt_symbols == NULL ||
+        ralt_symbols[0] != XKB_KEY_Multi_key ||
+        xkb_unicode_levels[(size_t)ralt_keycode * 32u] != 0x110007u ||
+        xkb_key_is_level_three_modifier(100u) != 0) {
+        fprintf(stderr,
+                "compose:ralt mapping mismatch: symbols=%d first=0x%08x parsed=0x%08x level3=%d\n",
+                ralt_symbol_count,
+                (ralt_symbol_count > 0 && ralt_symbols != NULL)
+                    ? (unsigned)ralt_symbols[0] : 0u,
+                (unsigned)xkb_unicode_levels[(size_t)ralt_keycode * 32u],
+                xkb_key_is_level_three_modifier(100u));
+        failed = 1;
+    } else {
+        puts("verified Right Alt resolves as Multi_key, not LevelThree");
+    }
+
+    if (failed == 0)
+        puts("PASS: NekoEdit parsed the real us(intl) keymap and retained Compose/dead-key actions");
+
+    free(text);
+    xkb_keymap_unref(keymap);
+    xkb_context_unref(context);
+    return failed;
+}

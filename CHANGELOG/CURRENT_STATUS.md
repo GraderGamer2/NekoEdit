@@ -1,3 +1,154 @@
+## 2026-11-12 — live IBus preedit, cancellation, commit, and save verified (CI PASS)
+
+Actions [Build and test #856](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544) completed successfully. All 15 workflow steps passed: freestanding x86-64 build and ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, real `us(intl)` keymap validation, X.Org importer verification, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`.
+
+This validates the narrowly gated Mutter 46.0–46.2 compatibility cases: a multibyte preedit's legacy character-index anchor is converted only when it resolves to the same validated cursor byte offset, and the nullable empty-preedit `(0, 1)` anchor is normalized to `(0, 0)`. The mock tests both cases while keeping unrelated malformed UTF-8 boundaries rejected. No IBus, D-Bus, GNOME, or other runtime dependency was added to NekoEdit.
+
+Artifacts from #856: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544/artifacts/13927605875) and [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544/artifacts/13927775229). Both are configured with one-day retention.
+
+---
+
+
+
+
+
+
+
+
+
+
+## 2026-11-12 — inject physical evdev keycodes for the live IBus preedit probe (CI pending)
+
+Actions [Build and test #844](https://github.com/GraderGamer2/NekoEdit/actions/runs/43151433375) passed the freestanding build/ELF check, CLI tests, complete Wayland mock (including both frame-callback/release orders), ELF inspection, native `us(intl)` parser, X.Org importer, and locale-pack build. The headless IBus daemon and D-Bus-activated portal also started successfully; Mutter's original physical-XKB Compose/dead-key sequence and the text-input-v3 manager/focus/enable/state-commit handshake passed. The live IBus Simple preedit assertion still failed: the apostrophe keysym produced no provider preedit, even though the earlier `dead_acute` keysym had been rejected by Mutter's reverse mapping.
+
+The keysym route is still not a reliable way to test a physical-layout engine: Mutter's `NotifyKeyboardKeysym` resolves a keysym back to a hardware keycode using the compositor's current group. The revised test bridge exposes Mutter's separate `NotifyKeyboardKeycode` method, documented as taking an evdev keycode, and the IBus probe now sends actual Linux keycodes: `KEY_APOSTROPHE=40`, `KEY_BACKSPACE=14`, and `KEY_E=18`. This bypasses the reverse keysym lookup and makes the test sequence correspond to physical key events delivered to the selected `xkb:us:intl:eng` engine. The original keysym route remains for Ctrl+S and Enter, which already work in the first Mutter canary.
+
+Feature/test commit: [be5dfef](https://github.com/GraderGamer2/NekoEdit/commit/be5dfefe684a6778d41b34f927abc7352aee325f). This changes only the Mutter integration extension, Python test probe, and test documentation; the editor's ELF, backend, and runtime dependencies are unchanged. A new Actions run is required. No live IBus preedit/commit pass is claimed yet.
+
+---
+
+## 2026-11-12 — send a mapped apostrophe key into the IBus dead-key engine (CI pending)
+
+Actions [Build and test #843](https://github.com/GraderGamer2/NekoEdit/actions/runs/43150721562) passed the freestanding build/ELF check, command-line tests, the full Wayland mock (including frame callback ordering), executable inspection, native `us(intl)` parsing, X.Org importer verification, and locale-pack build. The daemon/portal startup also succeeded in Mutter, and the original physical-XKB `Multi_key` + pt_BR dead-key save canary passed. The text-input-v3 handshake passed.
+
+The IBus dead-key probe then reported no preedit. Mutter's log supplied the decisive clue: `No keycode found for keyval fe51 in current group` (twice). The native RemoteDesktop virtual-keyboard API resolves an injected keysym against the active Mutter keymap; `dead_acute` is not a directly mappable keyval in that map, so Mutter discarded it before IBus saw it. The updated probe sends the ordinary apostrophe keysym instead. This key exists in the active map, and the selected `xkb:us:intl:eng` IBus Simple engine translates it to its internal `dead_acute` sequence. The revised scenario still requires provider-owned preedit, Backspace cancellation without document mutation, apostrophe + `e` committing U+00E9 (`C3 A9`), and an exact confirmed save.
+
+This keeps physical-XKB Compose and IBus dead-key coverage distinct. The D-Bus/IBus portal setup from [f2ee759](https://github.com/GraderGamer2/NekoEdit/commit/f2ee7595da3c32c3d690d7af998080d323451737) remains in place; application code and runtime dependencies are unchanged. The revised live test is pending CI; no IBus provider pass is claimed yet.
+
+---
+
+## 2026-11-12 — use the IBus Simple dead-key path for live text-input-v3 validation (CI pending)
+
+Actions [Build and test #842](https://github.com/GraderGamer2/NekoEdit/actions/runs/43149228354) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, native `us(intl)` parser, X.Org importer verification, and locale-pack build. The Mutter test also verified that the isolated IBus daemon owns its bus name and that the separately activated `org.freedesktop.portal.IBus` service starts successfully before GNOME Shell. Physical-XKB Right Alt Compose, the pt_BR dead-key chain, save, and the text-input-v3 manager/focus/enable/state-commit handshake all pass. The remaining failure is provider preedit for an IBus Simple `Multi_key` sequence.
+
+The IBus 1.5.29 Wayland input-method path does not reliably inherit the compositor's XKB Compose-key option; upstream tracks this as [ibus/ibus#2579](https://github.com/ibus/ibus/issues/2579). The IBus phase was incorrectly using `Multi_key` as though it inherited the physical `compose:ralt` setup. The revised probe tests the XKB-backed IBus Simple dead-key path instead: `dead_acute`, Backspace cancellation, then `dead_acute` + `e` to commit U+00E9 (`C3 A9`). It requires provider preedit with no document change, cancellation without commit, exact UTF-8 commit, and the normal save-confirmation path. The earlier native Mutter phase still exercises physical `Multi_key` Compose and the two-mark locale-specific dead-key sequence independently. This is a test-only distinction; NekoEdit's backend and runtime dependencies are unchanged.
+
+The updated probe and documentation are committed next; a new Actions run is pending. No live IBus dead-key pass is claimed yet.
+
+---
+
+## 2026-11-12 — propagate the IBus socket address to D-Bus-activated portal services (CI pending)
+
+Actions [Build and test #841](https://github.com/GraderGamer2/NekoEdit/actions/runs/43138760681) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, real `us(intl)` parser validation, X.Org importer verification, and locale-pack build. Mutter again passed native Right Alt Compose, the pt_BR dead-key sequence and save, plus text-input-v3 manager/focus/enable/state-commit. The only failure remained live IBus Simple preedit.
+
+The #841 trace narrows the problem: `ibus-daemon` successfully owns `org.freedesktop.IBus` and `ibus engine` reports `xkb:us:intl:eng`, but the separately D-Bus-activated `org.freedesktop.portal.IBus` process exits with “Not connected to the ibus bus”. The portal is launched by `dbus-daemon`, which uses its own activation environment. The harness was changing `HOME` and XDG variables only in its own process after `dbus-run-session` had already created the bus.
+
+The next test correction uses `dbus-update-activation-environment` to publish the isolated HOME/XDG/Wayland variables to D-Bus, obtains the real IBus socket address through `ibus address`, publishes it as `IBUS_ADDRESS`, then explicitly starts `org.freedesktop.portal.IBus` and verifies its name owner before launching GNOME Shell. This validates the portal's IBus connection, not merely the daemon's session-bus name. The IBus address lookup follows IBus's documented preference for the `IBUS_ADDRESS` environment variable before the per-user socket file; D-Bus activation services inherit the activation environment maintained by the bus daemon. This remains a test-harness-only change; the editor keeps no IBus or D-Bus runtime dependency.
+
+The strict real IBus Compose preedit/backspace-correction/commit/save assertion is unchanged. CI is pending; no live IBus pass is claimed.
+
+---
+
+## 2026-11-12 — make IBus available before headless GNOME Shell startup (CI pending)
+
+Actions [Build and test #840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136666325) passed the freestanding build, command-line tests, complete Wayland protocol mock, ELF inspection, native `us(intl)` XKB parser verification, X.Org source importer verification, and optional locale-pack build. Its Mutter phase passed the physical-XKB Right Alt Compose and pt_BR dead-key sequence, confirmed save, and text-input-v3 manager/focus/enable/state-commit handshake. IBus Simple still failed to deliver preedit. The log showed the portal's “Not connected to the ibus bus” failure occurring during GNOME Shell startup, before the harness switched the second phase to IBus Simple.
+
+The harness starts GNOME Shell directly under `dbus-run-session`, without the full `gnome-session`/systemd user manager. IBus's GNOME unit is normally ordered after `gnome-session-initialized.target` and wanted by `gnome-session.target`; those targets are absent in this stripped test. The latest correction starts the same GNOME-mode `ibus-daemon --panel disable` command after the temporary HOME/XDG/Wayland environment is set but **before GNOME Shell launches**, verifies the `org.freedesktop.IBus` session-bus owner and required IBus Simple engine, and clears any inherited `IBUS_ADDRESS`/daemon-PID overrides so both Shell and the portal discover the isolated test daemon. The daemon remains a supervised child and is terminated during cleanup. The second phase now only changes the input-source settings and confirms the active engine.
+
+This is still a test-harness-only change; NekoEdit gains no IBus runtime dependency or daemon-startup behavior. The real provider preedit/backspace-correction/commit/save assertion is unchanged. CI is pending; no live IBus success is claimed.
+
+---
+
+## 2026-11-12 — sample maximized-buffer ID at the actual resize allocation (CI pending)
+
+Actions [Build and test #839](https://github.com/GraderGamer2/NekoEdit/actions/runs/43136062548) passed the freestanding build/ELF check and command-line tests. The full Wayland mock then passed the clipboard scenarios that failed in #838: keyboard Copy/Cut/Paste, context-menu Copy/Cut/Paste, asynchronous transfers, Undo/Redo, and the post-exit Clipboard Service. The standard smoke run also completed 217 frame callbacks, and the focused callback/release ordering regression was included.
+
+The resize suite then exposed one more stale sample: the test captured the first maximized-buffer ID at the start of the file-workflow block, before hundreds of redraw callbacks from earlier interactions consumed IDs. The compositor's next buffer was therefore ID 384, not the stale expected ID 18. The test now samples `next_client_object_id` immediately before the maximize configure/release sequence, matching the point where `window_apply_pending_resize` allocates the replacement. Restore, edge-resize, and minimum-size buffer IDs are also sampled immediately before their respective allocation events.
+
+Test correction commit: [0f89da3](https://github.com/GraderGamer2/NekoEdit/commit/0f89da36c2ebc6b647d1a1ae2bbcb9c72b34a379). This is a mock-only correction; the backend's dense object-ID allocator remains unchanged. A new Actions run is pending. No complete Wayland mock or full workflow pass is claimed yet. The live IBus Simple provider preedit/commit issue remains separate.
+
+---
+
+## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
+
+Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run completed 217 frame callbacks, and the dedicated release-before-callback regression passed: the buffer was released first, a second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.
+
+The full mock then failed in the clipboard scenario because its first Ctrl+C fixture expected object ID 19 while the client correctly allocated 21. Frame callbacks share Wayland's dense client object-ID namespace with clipboard data sources and newly created buffers. The backend allocator must remain dense; the correction is entirely in the mock. The clipboard, context-menu, and clipboard-persistence fixtures now read `next_client_object_id` before creating data sources, and the resize fixture captures each replacement buffer ID before the released buffer is destroyed. The mock no longer assumes callback-free consecutive IDs across resizes.
+
+Commits: [8b966b2](https://github.com/GraderGamer2/NekoEdit/commit/8b966b20753dd33fa26cbaf1986ef874493c115b) derives clipboard/context-menu source IDs from the live allocator; [00c6847](https://github.com/GraderGamer2/NekoEdit/commit/00c684780a763a6a789e27fb74ff90589afd9ff8) completes dynamic resize-buffer ID expectations. The corrected mock awaits Actions; no full Wayland or workflow pass is claimed yet. Live IBus Simple preedit/commit remains a separate unresolved integration test.
+
+---
+
+## 2026-11-12 — correct Wayland mock object-ID assumptions after frame callbacks (CI pending)
+
+Actions [Build and test #838](https://github.com/GraderGamer2/NekoEdit/actions/runs/43134380215) passed the freestanding build/ELF check and command-line/host tests. The standard Wayland mock run reported 217 frame callbacks completed, and the dedicated release-before-callback scenario passed: the buffer was released first, the second edit stayed queued, and exactly one follow-up frame was submitted after callback.done.
+
+The complete Wayland mock then failed later in the clipboard scenario. The first Ctrl+C expected data-source ID 19 but received 21. The backend correctly allocated the intervening frame callbacks from the same dense client object-ID counter; several older test fixtures still assumed no additional client-created objects. The implementation must retain Wayland's dense ID allocation rather than moving callbacks into a sparse/high-numbered range. The test fixtures now read `next_client_object_id` before clipboard source creation and derive resize buffer IDs from the live counter. The corrected mock is awaiting a new run; no full Wayland or workflow pass is claimed.
+
+Source/test feature commit: [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d). The branch currently also contains the frame-pacing documentation commit [c391b99](https://github.com/GraderGamer2/NekoEdit/commit/c391b9975f0577a9698acfd8b928f5aa8e0fe949).
+
+---
+
+## 2026-11-12 — single-buffer Wayland frame pacing (CI pending)
+
+Commit [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) adds one outstanding `wl_surface.frame` callback to normal redraw commits. Visual changes are coalesced in `redraw_pending`; another commit is permitted only when both `wl_buffer.release` and `wl_callback.done` have arrived, regardless of event order. The original single-buffer memory ownership rule and release-gated resize replacement are retained.
+
+The mock now accounts for every callback request/completion and deliberately tests release-before-callback ordering: it withholds `done`, releases the SHM buffer first, injects another edit, verifies that no early surface request is emitted, then releases the callback and checks for one coalesced follow-up frame. The normal path also covers callback-before-release ordering.
+
+This remains a single-buffer pacing improvement, not a multi-buffer ring. A new Actions run is pending; no build or test pass is claimed yet.
+
+---
+
+## 2026-11-12 — live IBus Simple Compose preedit/commit validation (CI pending)
+
+Build and test [#836](https://github.com/GraderGamer2/NekoEdit/actions/runs/43115461168) passed the build, all command-line/Wayland mock tests, ELF inspection, native XKB parser, X.Org source-data verification, and locale-pack build. The live Mutter phase reached IBus Simple and text-input-v3 activation, but Ctrl+Shift+U was passed through as a literal `u` even after the private IBus daemon's environment was verified. This test-specific Unicode-entry mode is being dropped.
+
+The replacement uses IBus Simple's standard built-in Compose table: `Multi_key`, `o`, Backspace, `o`, `c` should deliver preedit U+00B7 MIDDLE DOT → `o` → U+00B7 → `o`, keep the document empty during composition, then commit U+00A9 COPYRIGHT SIGN and save the exact UTF-8 bytes `C2 A9`. It uses no environment overrides or manually managed IBus daemon; the normal GNOME Shell session service starts IBus. This keeps the test closer to ordinary desktop input and still exercises real preedit, cancellation/correction, commit, and save through the full IBus → GNOME Shell → Mutter → NekoEdit path.
+
+Staging commits: [b9e0933](https://github.com/GraderGamer2/NekoEdit/commit/b9e0933f951f8e343a784dda83b297fe52c4ec68) changes the probe to the Compose sequence; [95aeff4](https://github.com/GraderGamer2/NekoEdit/commit/95aeff426224b8193dd0b9d74d39363c1e6987be) removes explicit daemon startup; [c771053](https://github.com/GraderGamer2/NekoEdit/commit/c7710533a6481d05dd64c34b098eedb9ec0540a5) removes the Unicode-entry environment override; [03a5a64](https://github.com/GraderGamer2/NekoEdit/commit/03a5a64589e9c13c9428ba2ef1b2ba8f10c164b4) and [5c569df](https://github.com/GraderGamer2/NekoEdit/commit/5c569df6bcfb59d36cc04d0519016d5ce62d175d) update the detailed validation documentation. Build and test for this Compose path is pending; no live IBus preedit/commit pass is claimed yet.
+
+---
+## 2026-11-12 — switch live IBus probe to native Compose preedit (CI pending)
+
+Build and test [#836](https://github.com/GraderGamer2/NekoEdit/actions/runs/43115461168) again passed the full freestanding build, command-line tests, Wayland mock, ELF inspection, native XKB parse, and locale-data checks. The Mutter stage still completed text-input-v3 activation, selected the real IBus Simple engine, and verified the private IBus daemon inherited `IBUS_ENABLE_CTRL_SHIFT_U=1`; nevertheless the first Ctrl+Shift+U event was forwarded as an ordinary `u`, with no preedit. The optional hex-entry path is therefore not a reliable live canary in this headless session, and I am removing that environment manipulation rather than adding more test-specific startup complexity.
+
+The live test now uses IBus Simple's standard built-in Compose table instead: `Multi_key`, `o`, Backspace, `o`, `c` should show preedit as U+00B7, `o`, U+00B7, `o`, then commit U+00A9 COPYRIGHT SIGN. This still covers real preedit, cancellation/correction, commit, and exact save through GNOME Shell/Mutter text-input-v3, without a special IBus setting or private-daemon bootstrap. The original physical-XKB Compose/dead-key canaries remain unchanged. CI for this revised Compose sequence is pending; no live IBus pass is claimed yet.
+
+Staging commits: [b9e0933](https://github.com/GraderGamer2/NekoEdit/commit/b9e0933f951f8e343a784dda83b297fe52c4ec68) switches the live probe to the IBus Compose sequence; [95aeff4](https://github.com/GraderGamer2/NekoEdit/commit/95aeff426224b8193dd0b9d74d39363c1e6987be) removes explicit IBus daemon/bootstrap configuration; [c771053](https://github.com/GraderGamer2/NekoEdit/commit/c7710533a6481d05dd64c34b098eedb9ec0540a5) removes the Unicode-entry environment override; [03a5a64](https://github.com/GraderGamer2/NekoEdit/commit/03a5a64589e9c13c9428ba2ef1b2ba8f10c164b4) and [5c569df](https://github.com/GraderGamer2/NekoEdit/commit/5c569df6bcfb59d36cc04d0519016d5ce62d175d) update the validation documentation.
+
+---
+## 2026-11-12 — IBus Simple live-engine bootstrap correction (CI pending)
+
+Build and test [#835](https://github.com/GraderGamer2/NekoEdit/actions/runs/43114137743) passed every stage through the full Wayland mock, ELF inspection, native XKB parser, X.Org import verification, and locale-pack build. The GNOME Shell/Mutter integration stage still passed the physical `us(intl)` Compose and pt_BR dead-key canaries, confirmed `xkb:us:intl:eng` as the active IBus engine, and completed the text-input-v3 manager/focus/enable handshake. It then observed `doc_length=1` and empty preedit after Ctrl+Shift+U, meaning the initial `u` was forwarded as ordinary text rather than starting IBus Simple's Unicode preedit. No production application code failed or was changed by this run.
+
+The likely test-harness issue is the environment of the IBus engine process. The follow-up now exports `IBUS_ENABLE_CTRL_SHIFT_U=1`, updates the private D-Bus activation environment, starts `ibus-daemon --panel disable` directly from that environment before GNOME Shell, and verifies the daemon inherited the flag through `/proc/<pid>/environ`. It also records the daemon log on integration failure. This keeps the setting in the ephemeral test session and does not touch application runtime behavior.
+
+Staging commits: [b3268af](https://github.com/GraderGamer2/NekoEdit/commit/b3268af32ce62eda43d4c3da6affb3bc35a1c228) starts the private IBus daemon and updates the activation environment; [f28ff31](https://github.com/GraderGamer2/NekoEdit/commit/f28ff314418e67e786a1e9463ddf498701d56662) asserts the daemon environment. The corrected follow-up requires one Build and test run; no pass is claimed yet.
+
+---
+## 2026-11-12 — live IBus Simple preedit/commit integration (CI pending)
+
+The Mutter test's second phase now switches the isolated GNOME input source to IBus Simple's `xkb:us:intl:eng` engine while preserving the `us(intl)` keyboard layout. The harness enables IBus Simple's documented Ctrl+Shift+U path in its private test environment and verifies the actual active IBus engine before launching NekoEdit with text-input-v3 explicitly enabled.
+
+The probe reads the application's existing preedit and document-length state through its direct parent `/proc/<pid>/mem` access. It expects the real IBus sequence `u`, `u1`, `u1F`, `u1F6`, `u1F60`, `u1F600`; Backspace must return the preedit to `u1F60` without changing document bytes. Return must commit U+1F600 through GNOME Shell/Mutter text-input-v3, clear preedit, and save exactly `F0 9F 98 80` after the existing save-confirmation prompt.
+
+This is test-only integration coverage. It adds no editor runtime dependency and changes no default input behavior. Fcitx and provider-originated delete-surrounding remain outside this live test; delete-surrounding, UTF-8 boundaries, and malformed events remain covered by the Wayland mock. The default physical-XKB path stays unchanged.
+
+Staging commits: [9fb3ce1](https://github.com/GraderGamer2/NekoEdit/commit/9fb3ce1023c70306978e4b662eba5705e1d45c3f) adds live IBus preedit/commit assertions; [f1fcc39](https://github.com/GraderGamer2/NekoEdit/commit/f1fcc39b536a49141af31e2bd08e6e1de3e9773c) adds the preedit buffer to the symbol map; [e24bbda](https://github.com/GraderGamer2/NekoEdit/commit/e24bbda13314dc218cc9a83dd47a001cdce5e1a6) switches the Mutter second phase to IBus Simple. These changes still need one fast-forward to `early-alpha` and one normal Build and test run. CI is not yet claimed.
+
+---
 ## 2026-11-12 — explicit opt-in fallback regression — Build and test #834 passed
 
 The live Mutter text-input-v3 handshake is now verified by Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452). On GNOME Shell 46 / Mutter 46.2, the compositor advertised the protocol and NekoEdit bound the manager, received `enter`, enabled the focused document, and committed state. The same workflow passed all 14 steps, including the unchanged physical Compose canaries; it uploaded a 137,017-byte editor artifact and the separate 120,536-byte locale-pack artifact.
@@ -28,7 +179,6 @@ Files changed: `tests/mutter_text_input_probe.py`, `tests/mutter_gnome_smoke.sh`
 The eight-file change was fast-forwarded to `early-alpha` at [38d44ff](https://github.com/GraderGamer2/NekoEdit/commit/38d44ff7b3729b449ee784c7d32713dd3efb7034). Build and test [#833](https://github.com/GraderGamer2/NekoEdit/actions/runs/43103083452) passed all 14 steps, including the live Mutter manager/enter/enable/state-commit handshake. The test did not exercise an external IBus/Fcitx provider, so that remains a separate validation task.
 
 ---
-
 
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 

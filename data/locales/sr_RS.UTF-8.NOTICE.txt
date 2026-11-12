@@ -1,0 +1,20 @@
+NekoEdit sr_RS.UTF-8 Compose locale pack — source notice
+
+This data pack is derived from the following X.Org sources:
+
+1. X.Org libX11:
+   - nls/en_US.UTF-8/Compose.pre
+   - nls/sr_RS.UTF-8/Compose.pre
+   Repository: https://github.com/mirror/libX11
+   Commit: ff8706a5eae25b8bafce300527079f68a201d27f
+   Applicable source-file notices are governed by libX11's COPYING and the relevant source-file headers:
+   https://github.com/mirror/libX11/blob/ff8706a5eae25b8bafce300527079f68a201d27f/COPYING
+
+2. X.Org xorgproto keysym Unicode annotations:
+   - include/X11/keysymdef.h
+   Repository: https://github.com/X11Libre/mirror.fdo.xorgproto
+   Commit: 6d3907b6d5dc4aa7d7ee6ee5d7d8714e7466630b
+   The header's Open Group and Digital Equipment notices are reproduced in NekoEdit's docs/KEYSYM_UNICODE.md. This generated pack contains resolved Unicode scalar values, not header code.
+
+Only scalar-key Multi_key rules are included. The upstream file contains dead-key sequences; they are excluded from NLP1 v1 and are not represented as supported by this pack.
+The pack contains data only, no executable code, native library, or runtime service. Keep this notice and the applicable upstream notices alongside redistributed copies.

@@ -1,73 +1,38 @@
 # Clipboard behavior
 
-Clipboard copy and paste are first-release requirements. They must interoperate with ordinary desktop applications and must not depend on a clipboard library or daemon.
+## Wayland integration
 
-## Ownership rule: copy is a snapshot
+The Wayland backend uses the core wl_data_device_manager, wl_data_device, wl_data_source, and wl_data_offer interfaces. It has no clipboard-library dependency.
 
-When the user invokes Copy, NekoEdit copies the selected UTF-8 byte range into a dedicated immutable clipboard allocation. The clipboard must never point into the live document buffer or the gap buffer.
+- Ctrl+C copies the selected bytes into a dedicated immutable mmap-backed snapshot and offers text/plain;charset=utf-8 and text/plain.
+- Ctrl+X publishes the independent snapshot before deleting the selection. If the source cannot be established, the selected document bytes are retained.
+- Ctrl+V prefers UTF-8 plain text, falls back to text/plain, and receives the data asynchronously through a nonblocking pipe.
 
-Consequences:
+The snapshot is independent of the document gap buffer and stays valid after the source text is deleted, edited, reallocated, or its document is closed. The active implementation currently has eight reusable source records, four concurrent outgoing-send slots, and a 64 MiB payload/receive ceiling. These are bounded resource/concurrency limits, not a lifetime count of sequential clipboard operations. Completed and retired slots can be reused.
 
-- Deleting or replacing the original selection does not change the copied text.
-- Closing the source document does not invalidate the copied text.
-- Editing or reallocating the document buffer does not invalidate the copied text.
-- A pending transfer holds a reference to the immutable snapshot until that transfer completes, even if a later copy replaces the current clipboard snapshot.
+Paste targets the document editor, not file-picker or path fields. Clipboard history is not accumulated: the service retains the current clipboard selection only. Both local paste and asynchronous external paste are committed as one Undo/Redo transaction.
 
-Cut must first establish clipboard ownership using the snapshot, then remove the selected range. If ownership cannot be established, do not delete the selected text.
+## Persistence after editor exit
 
-The current snapshot remains available while NekoEdit owns the system clipboard. If another application replaces the clipboard, mark the snapshot as no longer current; free it only after all in-flight sends finish. This needs explicit reference counting or an equivalent lifetime mechanism.
+The Clipboard Service setting is in Settings and is enabled by default. It is persisted in ~/.nekoedit/preferences as clipboard_persistence=1 (or 0 when disabled). The toggle is evaluated when the editor closes; it does not leave a helper running while the editor is open.
 
-NekoEdit does not promise to preserve clipboard contents after its process exits. A desktop clipboard manager may preserve the selection, but that is external behavior. NekoEdit will not install or require a resident clipboard daemon, nor maintain a clipboard-history database.
+When enabled and NekoEdit owns a clipboard source at window close, NekoEdit forks a very small helper from the same executable. The child inherits the original Wayland connection, clipboard source object, and immutable snapshot. This is important: it does not connect as a second Wayland client and attempt to steal selection ownership, which the core data-device protocol does not authorize without a new valid input serial.
 
-## Common editor interface
+The child calls `setsid()` to detach from the launching terminal, changes its Linux process `comm` name to `nekoedit-clip`, drops the editor's pending event FD, and closes stdin/stdout/stderr. It releases the editor's history journal state and destroys the inherited `xdg_toplevel`, `xdg_surface`, `wl_surface`, and `wl_buffer` objects while deliberately retaining the `wl_data_device`, source object, Wayland socket, immutable snapshot, and any clipboard transfers already in flight. It then runs only the small Wayland/clipboard polling loop needed to answer later `wl_data_source.send` requests. The main editor process closes its own Wayland connection and exits normally. A separate PID exists only after the editor closes; it is not expected to appear as a second process while the editor window is open. Because it is the same executable, a process viewer that displays the executable basename or command line may still label it `nekoedit` rather than `nekoedit-clip`. No second executable, daemon manager, D-Bus service, or runtime library is installed.
 
-The editor core uses a small backend-neutral API:
+The helper exits when another client replaces the clipboard selection (after any already-started transfers drain), when the compositor cancels the source, or when the Wayland connection closes. It keeps the most recently copied or cut text available after NekoEdit exits, but not after logout, compositor shutdown, or reboot. It is intentionally not a general-purpose clipboard manager and does not keep old clipboard entries.
 
-```text
-clipboard_copy(selection_start, selection_end)
-clipboard_cut(selection_start, selection_end)
-clipboard_paste()
-clipboard_backend_selection_changed()
-clipboard_transfer_finished(transfer_id)
-```
+Turn Clipboard Service OFF in Settings to skip the handoff on subsequent editor exits. Setting NEKOEDIT_DISABLE_PREFERENCES=1 disables preferences and clipboard persistence, which is useful for isolated tests.
 
-The backend owns protocol objects and descriptors. The core owns the immutable snapshot and defines the text insertion behavior. Clipboard transfers are asynchronous and must not block the UI event loop.
+## Limits and interoperability
 
-## MIME types and text targets
+The text source offers standard UTF-8 plain-text MIME types. As with any Wayland data source, the compositor and receiving clients control when they request the bytes. A compositor that disconnects the client or ends the session terminates the helper. The service does not provide X11 clipboard interoperability; X11 support belongs to the future X11 backend.
 
-### Wayland
+See the implementation in src/backend/clipboard.c.
 
-Advertise UTF-8 plain text using:
 
-- `text/plain;charset=utf-8`
-- `text/plain`
+## Regression coverage
 
-When pasting, prefer the UTF-8-specific type, then `text/plain`. The data source writes the snapshot to the file descriptor supplied by the receiving client. The data offer receives data through a file descriptor supplied by NekoEdit. Handle short reads/writes, `EINTR`, `EAGAIN`, EOF, and peer closure.
+The Wayland mock compositor verifies repeated Ctrl+C source replacement without creating a document-history file, Ctrl+C/X snapshot independence, asynchronous external Ctrl+V, Undo/Redo of the completed asynchronous paste, and the post-exit helper lifecycle: it requests the data only after the editor closes, then replaces the selection and verifies the helper disconnects. GitHub Actions [Build and test #600](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445630695) passed the helper lifecycle test; [#601](https://github.com/GraderGamer2/NekoEdit/actions/runs/42445779246) also passed asynchronous-paste Undo/Redo. The helper is mock-compositor tested; a live GNOME/Mutter clipboard-manager interoperability check remains a separate manual desktop test.
 
-Use the core `wl_data_device_manager`, `wl_data_device`, `wl_data_source`, and `wl_data_offer` interfaces when available. Clipboard selection is tied to a seat and requires a valid input serial for setting the selection.
-
-### X11
-
-Use the `CLIPBOARD` selection for explicit Ctrl+C/Ctrl+V. Implement the normal selection conversion flow and support at least:
-
-- `TARGETS`
-- `UTF8_STRING`
-- `TEXT` where practical
-- `STRING` as a legacy fallback with explicit Latin-1 conversion rules
-- `TIMESTAMP` where required by the ICCCM conventions
-- `INCR` for transfers too large for a single property
-
-The X11 `PRIMARY` selection (mouse-selection / middle-click convention) can be added as a separate compatibility feature. It must not replace or corrupt the explicit `CLIPBOARD` selection. Wayland primary-selection support is an optional protocol extension and is not a requirement for baseline clipboard support.
-
-## Paste validation
-
-- The document model is UTF-8.
-- Validate incoming text incrementally, without assuming a transfer arrives in one read.
-- Preserve valid UTF-8 sequences exactly.
-- For invalid byte sequences, use a documented replacement policy; do not overread or write past the destination buffer.
-- Treat a clipboard payload as plain text, never as commands or markup.
-- Support empty clipboard contents as a no-op.
-
-## Event-loop requirements
-
-Clipboard sending and receiving are nonblocking state machines. Large transfers must make progress in bounded chunks and must not freeze key handling, redraw, or window-close processing. Each transfer tracks its descriptor, offset, remaining bytes, and snapshot reference. Close descriptors on success, cancellation, peer failure, and shutdown.
+The post-exit mock test now also expects the helper to destroy the four inherited editor window objects before serving the clipboard transfer. It verifies that the data source remains usable after the window objects are gone, and that the helper disconnects once another client owns the selection. Live GNOME/Mutter behavior still requires desktop verification.

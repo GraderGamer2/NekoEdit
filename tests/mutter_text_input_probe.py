@@ -1,0 +1,604 @@
+#!/usr/bin/env python3
+"""Live Mutter/IBus probe for NekoEdit's optional text-input-v3 client.
+
+The Python process is the direct parent of NekoEdit so Linux's normal
+parent-to-child /proc access rules permit inspection of the child's protocol
+and preedit state without ptrace attach or a debugger. This is test-only
+instrumentation; it does not add a diagnostic interface or dependency to the
+editor.
+"""
+from __future__ import annotations
+
+import os
+import re
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+BUS_NAME = "org.nekoedit.TestHarness"
+OBJECT_PATH = "/org/nekoedit/TestHarness"
+DBUS_INTERFACE = "org.nekoedit.TestHarness"
+
+SYMBOLS = (
+    "text_input_manager_global",
+    "text_input_manager_object",
+    "text_input_object",
+    "text_input_entered",
+    "text_input_enabled",
+    "text_input_commit_serial",
+    "text_input_state_ready",
+    "text_input_pending_flags",
+    "text_input_pending_preedit_length",
+    "text_input_pending_preedit_cursor_begin",
+    "text_input_pending_preedit_cursor_end",
+    "text_input_preedit_length",
+    "text_input_preedit_cursor_begin",
+    "text_input_preedit_cursor_end",
+    "last_object",
+    "last_opcode",
+    "last_size",
+    "doc_length",
+)
+
+BUFFER_SYMBOLS = ("text_input_preedit_buffer", "text_input_request_buffer", "event_payload")
+
+# Linux input-event-codes.h evdev values used by Mutter NotifyKeyboardKeycode.
+EVDEV_KEY_BACKSPACE = 14
+EVDEV_KEY_E = 18
+EVDEV_KEY_APOSTROPHE = 40
+
+
+def fail(message: str) -> None:
+    raise RuntimeError(message)
+
+
+def run_nm(binary: str) -> dict[str, int]:
+    result = subprocess.run(
+        ["nm", "-n", "--defined-only", binary],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    addresses: dict[str, int] = {}
+    for line in result.stdout.splitlines():
+        match = re.match(r"^([0-9a-fA-F]+)\s+\w\s+(.+)$", line)
+        if match:
+            name = match.group(2).strip()
+            if name in (*SYMBOLS, *BUFFER_SYMBOLS):
+                addresses[name] = int(match.group(1), 16)
+    missing = [name for name in (*SYMBOLS, *BUFFER_SYMBOLS) if name not in addresses]
+    if missing:
+        fail("unavailable NekoEdit probe symbols from nm: " + ", ".join(missing))
+    return addresses
+
+
+def call_gdbus(method: str, *arguments: object) -> str:
+    command = [
+        "gdbus", "call", "--session",
+        "--dest", BUS_NAME,
+        "--object-path", OBJECT_PATH,
+        "--method", f"{DBUS_INTERFACE}.{method}",
+        *(str(argument) for argument in arguments),
+    ]
+    result = subprocess.run(
+        command, check=True, capture_output=True, text=True, timeout=8
+    )
+    return result.stdout.strip()
+
+
+def read_state(memory_fd: int, addresses: dict[str, int]) -> dict[str, int]:
+    values: dict[str, int] = {}
+    for name, address in addresses.items():
+        if name in BUFFER_SYMBOLS:
+            continue
+        raw = os.pread(memory_fd, 4, address)
+        if len(raw) != 4:
+            fail(f"could not read 4-byte probe symbol {name}")
+        values[name] = int.from_bytes(raw, "little", signed=False)
+    return values
+
+
+def send_key(keysym: int, pressed: bool) -> None:
+    call_gdbus("SendKey", keysym, "true" if pressed else "false")
+
+
+def send_keysym(keysym: int) -> None:
+    send_key(keysym, True)
+    time.sleep(0.05)
+    send_key(keysym, False)
+    time.sleep(0.05)
+
+
+def send_evdev_keycode(keycode: int, pressed: bool) -> None:
+    call_gdbus("SendKeycode", keycode, "true" if pressed else "false")
+
+
+def tap_evdev_keycode(keycode: int) -> None:
+    send_evdev_keycode(keycode, True)
+    time.sleep(0.05)
+    send_evdev_keycode(keycode, False)
+    time.sleep(0.05)
+
+
+def send_shortcut(modifier: int, keysym: int) -> None:
+    send_key(modifier, True)
+    time.sleep(0.05)
+    send_key(keysym, True)
+    time.sleep(0.05)
+    send_key(keysym, False)
+    time.sleep(0.05)
+    send_key(modifier, False)
+    time.sleep(0.05)
+
+
+def wait_input_idle() -> None:
+    deadline = time.monotonic() + 5.0
+    last = ""
+    while time.monotonic() < deadline:
+        last = call_gdbus("InputStatus")
+        if "ready:pending=0" in last:
+            return
+        if "failed:" in last:
+            fail("Mutter virtual input failed: " + last)
+        time.sleep(0.05)
+    fail("Mutter virtual input queue did not drain: " + last)
+
+
+def read_preedit(
+    memory_fd: int, addresses: dict[str, int], state: dict[str, int]
+) -> str:
+    length = state["text_input_preedit_length"]
+    if length > 4095:
+        fail(f"NekoEdit reported an out-of-bounds preedit length: {length}")
+    raw = os.pread(memory_fd, length, addresses["text_input_preedit_buffer"])
+    if len(raw) != length:
+        fail(f"could not read complete preedit buffer: expected {length}, got {len(raw)}")
+    try:
+        return raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        fail(f"NekoEdit exposed invalid UTF-8 in its committed preedit state: {error}")
+
+
+def read_preedit_candidate(
+    memory_fd: int, addresses: dict[str, int]
+) -> dict[str, object]:
+    # The Wayland event parser stages the most recent preedit event here before
+    # validating cursor_begin/cursor_end. Reading this scratch area lets the
+    # integration test distinguish a missing event from a rejected bad offset.
+    raw = os.pread(memory_fd, 4112, addresses["text_input_request_buffer"])
+    if len(raw) != 4112:
+        fail(f"could not read complete text-input request buffer: {len(raw)} bytes")
+    length = int.from_bytes(raw[4096:4100], "little")
+    cursor_begin = int.from_bytes(raw[4100:4104], "little", signed=True)
+    cursor_end = int.from_bytes(raw[4104:4108], "little", signed=True)
+    if length > 4095:
+        fail(f"Wayland preedit candidate length is out of bounds: {length}")
+    event_payload = os.pread(memory_fd, 32, addresses["event_payload"])
+    return {
+        "length": length,
+        "text": raw[:length].decode("utf-8", errors="replace"),
+        "cursor_begin": cursor_begin,
+        "cursor_end": cursor_end,
+        "buffer_prefix_hex": raw[:min(length, 16)].hex(),
+        "last_event_payload_hex": event_payload.hex(),
+    }
+
+
+def wait_preedit_nonempty(
+    memory_fd: int, addresses: dict[str, int], *, timeout: float = 6.0
+) -> tuple[dict[str, int], str]:
+    deadline = time.monotonic() + timeout
+    state: dict[str, int] = {}
+    actual = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] != 0:
+            fail(
+                "IBus committed document bytes before the dead-key sequence "
+                f"was completed; state={state}, preedit={actual!r}"
+            )
+        if actual:
+            return state, actual
+        time.sleep(0.025)
+    fail(
+        "live IBus dead-key input did not produce a non-empty preedit; "
+        f"observed {actual!r}, state={state}"
+    )
+
+
+def wait_preedit_empty(
+    memory_fd: int, addresses: dict[str, int], *, timeout: float = 6.0
+) -> dict[str, int]:
+    deadline = time.monotonic() + timeout
+    state: dict[str, int] = {}
+    actual = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] != 0:
+            fail(
+                "Backspace committed bytes instead of cancelling the pending "
+                f"dead key; state={state}, preedit={actual!r}"
+            )
+        if not actual:
+            return state
+        time.sleep(0.025)
+    fail(
+        "IBus did not clear its preedit after Backspace cancellation; "
+        f"observed {actual!r}, state={state}"
+    )
+
+
+def wait_document_commit(
+    memory_fd: int, addresses: dict[str, int], expected_length: int
+) -> dict[str, int]:
+    deadline = time.monotonic() + 6.0
+    state: dict[str, int] = {}
+    actual_preedit = ""
+    while time.monotonic() < deadline:
+        state = read_state(memory_fd, addresses)
+        actual_preedit = read_preedit(memory_fd, addresses, state)
+        if state["doc_length"] == expected_length and actual_preedit == "":
+            return state
+        time.sleep(0.025)
+    fail(
+        "live IBus commit was not applied to the document buffer; "
+        f"expected_length={expected_length}, state={state}, "
+        f"preedit={actual_preedit!r}"
+    )
+
+
+def wait_shell_ibus_context(*, timeout: float = 6.0) -> str:
+    deadline = time.monotonic() + timeout
+    status = ""
+    expected_source = "source=ibus:xkb:us:intl:eng"
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        if (
+            expected_source in status
+            and "context=ready" in status
+            and "focus=yes" in status
+        ):
+            return status
+        time.sleep(0.025)
+    fail(
+        "GNOME Shell's IBus input-method context/source did not become ready "
+        f"for the focused editor; expected {expected_source}, context=ready, "
+        f"focus=yes; last status={status}"
+    )
+
+
+def shell_ibus_key_event_count(status: str) -> int:
+    match = re.search(r"ibus-key-events=(\d+)", status)
+    if not match:
+        fail("GNOME Shell IBus probe did not report a key-event counter: " + status)
+    if "probe=installed" not in status:
+        fail("GNOME Shell could not instrument its IBus context: " + status)
+    return int(match.group(1))
+
+
+def wait_shell_ibus_key_events(
+    baseline: int, *, expected_delta: int = 2, timeout: float = 3.0
+) -> str:
+    deadline = time.monotonic() + timeout
+    status = ""
+    expected_count = baseline + expected_delta
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        count = shell_ibus_key_event_count(status)
+        if count >= expected_count:
+            return status
+        time.sleep(0.025)
+    fail(
+        "Mutter/Clutter did not submit the apostrophe press and release to "
+        f"GNOME Shell's IBus context; baseline={baseline}, "
+        f"expected_at_least={expected_count}, last status={status}"
+    )
+
+
+def require_shell_ibus_keysym(status: str, expected: int) -> None:
+    match = re.search(
+        r"last-ibus-key=\[keyval=0x([0-9a-fA-F]+) keycode=(\d+) state=0x([0-9a-fA-F]+)\]",
+        status,
+    )
+    if not match:
+        fail("GNOME Shell IBus probe did not report the last submitted key: " + status)
+    actual = int(match.group(1), 16)
+    keycode = int(match.group(2))
+    if actual != expected or keycode != EVDEV_KEY_APOSTROPHE:
+        fail(
+            "Mutter's us(intl) map did not translate the physical apostrophe "
+            f"to the IBus dead_acute keysym; expected keysym=0x{expected:x} "
+            f"keycode={EVDEV_KEY_APOSTROPHE}, got keysym=0x{actual:x} "
+            f"keycode={keycode}; status={status}"
+        )
+
+
+def wait_shell_ibus_preedit(*, visible: bool, timeout: float = 6.0) -> str:
+    deadline = time.monotonic() + timeout
+    expected = f"has-preedit={str(visible).lower()}"
+    status = ""
+    while time.monotonic() < deadline:
+        status = call_gdbus("InputMethodStatus")
+        if expected in status:
+            return status
+        time.sleep(0.025)
+    fail(
+        "GNOME Shell IBus input-method preedit state did not reach "
+        f"{expected}; last status={status}"
+    )
+
+
+def require_ibus_engine(expected: str) -> None:
+    result = subprocess.run(
+        ["ibus", "engine"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    actual = result.stdout.strip()
+    if actual != expected:
+        fail(f"GNOME Shell selected IBus engine {actual!r}, expected {expected!r}")
+
+
+def exercise_live_ibus_preedit_commit(
+    memory_fd: int, addresses: dict[str, int], document: Path
+) -> None:
+    # IBus 1.5.29's Wayland input-method path does not reliably inherit the
+    # compositor's XKB Compose-key option. Exercise the XKB-backed Simple
+    # engine's independent dead-key path instead of relying on Multi_key.
+    require_ibus_engine("xkb:us:intl:eng")
+
+    # Inspect GNOME Shell's actual IBus-backed Clutter.InputMethod. Events
+    # consumed by the input method are not reliably visible at global.stage,
+    # which was the previous (invalid) observation point.
+    initial_ime_status = wait_shell_ibus_context()
+    initial_ibus_event_count = shell_ibus_key_event_count(initial_ime_status)
+    print(f"GNOME Shell IBus input-method context: {initial_ime_status}")
+
+    # Inject actual Linux evdev keycodes. NotifyKeyboardKeycode bypasses
+    # Mutter's reverse lookup from keysym to hardware keycode. The Shell
+    # extension counts the calls it actually submits to its IBus context.
+    tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
+    wait_input_idle()
+    key_event_status = wait_shell_ibus_key_events(initial_ibus_event_count)
+    require_shell_ibus_keysym(key_event_status, 0xFE51)  # XKB dead_acute
+    print(f"GNOME Shell submitted us(intl) dead_acute to IBus: {key_event_status}")
+    try:
+        first_ime_status = wait_shell_ibus_preedit(visible=True)
+        _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
+    except Exception as error:
+        fail(
+            f"{error}; GNOME Shell input-method state: "
+            f"{call_gdbus('InputMethodStatus')}; "
+            f"key submission: {key_event_status}; "
+            f"NekoEdit's last staged Wayland preedit candidate: "
+            f"{read_preedit_candidate(memory_fd, addresses)}"
+        )
+    print(f"GNOME Shell IBus preedit: {first_ime_status}")
+
+    # Physical Backspace cancels the pending IBus accent without committing.
+    tap_evdev_keycode(EVDEV_KEY_BACKSPACE)
+    wait_input_idle()
+    shell_cleared_status = wait_shell_ibus_preedit(visible=False)
+    if (
+        "preedit-api=installed" not in shell_cleared_status
+        or 'last-preedit-api=[{"text":null,"cursor":1,"anchor":1,"resetMode":0}]'
+        not in shell_cleared_status
+    ):
+        fail(
+            "GNOME Shell did not call set_preedit_text(NULL, 1, 1) for the "
+            f"Backspace clear: {shell_cleared_status}"
+        )
+    try:
+        wait_preedit_empty(memory_fd, addresses)
+    except Exception as error:
+        state = read_state(memory_fd, addresses)
+        fail(
+            f"{error}; GNOME Shell after Backspace: {shell_cleared_status}; "
+            f"NekoEdit Wayland event state: {state}; "
+            f"last staged preedit/payload: {read_preedit_candidate(memory_fd, addresses)}"
+        )
+
+    # A fresh apostrophe followed by the physical E key must commit U+00E9.
+    tap_evdev_keycode(EVDEV_KEY_APOSTROPHE)
+    wait_input_idle()
+    second_ime_status = wait_shell_ibus_preedit(visible=True)
+    _, second_preedit = wait_preedit_nonempty(memory_fd, addresses)
+    tap_evdev_keycode(EVDEV_KEY_E)
+    wait_input_idle()
+    wait_shell_ibus_preedit(visible=False)
+    wait_document_commit(memory_fd, addresses, 2)
+
+    # The editor's default Save confirmation is part of the real input path.
+    send_shortcut(65507, 115)  # Ctrl+S
+    send_keysym(65293)         # Enter accepts confirmation
+    wait_input_idle()
+
+    expected = "é".encode("utf-8")
+    deadline = time.monotonic() + 6.0
+    while time.monotonic() < deadline:
+        if document.read_bytes() == expected:
+            print(
+                "PASS: live IBus Simple delivered dead_acute preedit, "
+                "Backspace cancellation, and U+00E9 commit through Mutter "
+                "text-input-v3; confirmed save preserved exact UTF-8 bytes. "
+                f"Observed preedit samples: {first_preedit!r}, {second_preedit!r}; "
+                f"Shell states: {first_ime_status}, {second_ime_status}."
+            )
+            return
+        time.sleep(0.05)
+    fail(
+        "live IBus dead_acute commit/save produced unexpected document bytes: "
+        + repr(document.read_bytes())
+    )
+
+
+
+def read_log(path: Path) -> str:
+    try:
+        return path.read_text(errors="replace")[-6000:]
+    except OSError:
+        return "(NekoEdit log unavailable)"
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        print(
+            "usage: mutter_text_input_probe.py PATH/TO/nekoedit "
+            "PATH/TO/document.txt PATH/TO/nekoedit.log",
+            file=sys.stderr,
+        )
+        return 2
+
+    binary = str(Path(sys.argv[1]).resolve())
+    document = Path(sys.argv[2])
+    log_path = Path(sys.argv[3])
+    addresses = run_nm(binary)
+
+    environment = os.environ.copy()
+    environment["NEKOEDIT_ENABLE_TEXT_INPUT"] = "1"
+    environment["NEKOEDIT_LOCALE"] = "pt_BR.UTF-8"
+
+    process: subprocess.Popen[bytes] | None = None
+    memory_fd: int | None = None
+    log_file = None
+    try:
+        document.write_bytes(b"")
+        log_file = log_path.open("wb")
+        process = subprocess.Popen(
+            [binary, str(document)],
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=environment,
+        )
+
+        if process.poll() is not None:
+            fail(f"NekoEdit exited during startup with status {process.returncode}")
+
+        memory_fd = os.open(f"/proc/{process.pid}/mem", os.O_RDONLY)
+
+        # Activate the actual NekoEdit MetaWindow rather than assuming that
+        # successful process launch implies keyboard focus.
+        focus = ""
+        deadline = time.monotonic() + 10.0
+        while time.monotonic() < deadline and process.poll() is None:
+            focus = call_gdbus("Activate", process.pid)
+            if f"target={process.pid} focus={process.pid}" in focus:
+                break
+            time.sleep(0.1)
+        else:
+            fail("Mutter did not focus the text-input probe window: " + focus)
+
+        call_gdbus("ClickEditor", process.pid)
+        pointer = ""
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and process.poll() is None:
+            pointer = call_gdbus("PointerStatus")
+            if "clicked:" in pointer:
+                break
+            if "failed:" in pointer:
+                fail("Mutter document click failed: " + pointer)
+            time.sleep(0.05)
+        else:
+            fail("Mutter document click did not complete: " + pointer)
+
+        # Let registry dispatch and the text-input focus transition settle
+        # before deciding whether the compositor advertises protocol v3.
+        state: dict[str, int] = {}
+        deadline = time.monotonic() + 4.0
+        while time.monotonic() < deadline and process.poll() is None:
+            state = read_state(memory_fd, addresses)
+            if state["text_input_manager_global"]:
+                break
+            time.sleep(0.1)
+
+        if process.poll() is not None:
+            fail(f"NekoEdit exited during focus probe with status {process.returncode}")
+
+        if state["text_input_manager_global"]:
+            # A provider need not generate preedit for this client-side
+            # manager-bind, focus-enter, enable, and state-commit handshake.
+            deadline = time.monotonic() + 6.0
+            while time.monotonic() < deadline and process.poll() is None:
+                state = read_state(memory_fd, addresses)
+                if (
+                    state["text_input_manager_object"]
+                    and state["text_input_object"]
+                    and state["text_input_entered"] == 1
+                    and state["text_input_enabled"] == 1
+                    and state["text_input_commit_serial"] >= 1
+                    and state["text_input_state_ready"] == 1
+                ):
+                    print(
+                        "PASS: compositor advertised text-input-v3; NekoEdit "
+                        "bound the manager, received text-input enter, enabled "
+                        "the focused document, and committed state."
+                    )
+                    exercise_live_ibus_preedit_commit(
+                        memory_fd, addresses, document
+                    )
+                    return 0
+                time.sleep(0.1)
+            fail(
+                "compositor advertised text-input-v3 but the focused-document "
+                f"handshake did not complete; observed state={state}"
+            )
+
+        # On compositors without the protocol global, opting in must not
+        # create a text-input object or suppress the normal XKB keyboard path.
+        unexpected = {
+            name: value for name, value in state.items()
+            if name != "text_input_manager_global" and value != 0
+        }
+        if unexpected:
+            fail(
+                "text-input-v3 manager was not advertised but client state "
+                f"was partially initialized: {unexpected}"
+            )
+
+        send_shortcut(65507, 97)  # Ctrl+A
+        send_keysym(122)          # z
+        send_shortcut(65507, 115) # Ctrl+S
+        send_keysym(65293)        # Enter confirms the default save prompt
+        wait_input_idle()
+
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline and process.poll() is None:
+            if document.read_bytes() == b"z":
+                print(
+                    "PASS: compositor omitted text-input-v3; explicit opt-in "
+                    "left the protocol client inactive and ordinary Wayland/"
+                    "XKB typing plus confirmed save still worked."
+                )
+                return 0
+            time.sleep(0.1)
+        fail(
+            "text-input-v3 fallback branch did not preserve physical XKB "
+            "typing/save; document bytes=" + repr(document.read_bytes())
+        )
+    except Exception as error:
+        print(f"text-input-v3 Mutter probe failed: {error}", file=sys.stderr)
+        print(read_log(log_path), file=sys.stderr)
+        return 1
+    finally:
+        if memory_fd is not None:
+            os.close(memory_fd)
+        if process is not None and process.poll() is None:
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        if log_file is not None:
+            log_file.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

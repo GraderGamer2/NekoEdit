@@ -9,10 +9,10 @@ arg_backend_x11:      .asciz "--backend=x11"
 help_text:
     .ascii "NekoEdit - a tiny native Linux text editor\n"
     .ascii "\n"
-    .ascii "Usage: nekoedit [--help|--version|--backend=wayland|--backend=x11]\n"
+    .ascii "Usage: nekoedit [FILE|--help|--version|--backend=wayland|--backend=x11]\n"
     .ascii "\n"
-    .ascii "The current development build opens a minimal Wayland test window.\n"
-    .ascii "The X11 backend and text editor UI are still under development.\n"
+    .ascii "Open FILE in the Wayland editor; a missing FILE starts a new document.\n"
+    .ascii "The X11 backend is not implemented yet.\n"
 help_text_end:
 
 version_text:
@@ -27,6 +27,11 @@ x11_todo_text_end:
 unknown_text:
     .ascii "NekoEdit: unknown argument. Try 'nekoedit --help'.\n"
 unknown_text_end:
+
+.section .bss
+.balign 8
+.global initial_file_path
+initial_file_path: .quad 0
 
 .section .text
 .extern process_envp
@@ -70,7 +75,13 @@ _start:
     test eax, eax
     jnz .x11_not_ready
 
-    jmp .unknown_argument
+    # A single non-option argument is the document path. A missing path is
+    # treated as a new document and is created by Ctrl+S.
+    mov rsi, qword ptr [rsp + 16]
+    cmp byte ptr [rsi], '-'
+    je .unknown_argument
+    mov qword ptr [rip + initial_file_path], rsi
+    jmp .start_wayland
 
 .start_wayland:
     call wayland_main

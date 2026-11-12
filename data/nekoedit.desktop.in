@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NekoEdit
+GenericName=Text Editor
+Comment=Lightweight native Linux plain-text editor
+Exec="@NEKOEDIT_EXEC@" %f
+TryExec="@NEKOEDIT_EXEC@"
+Icon=nekoedit
+Terminal=false
+Categories=Utility;TextEditor;
+MimeType=text/plain;
+StartupNotify=true
