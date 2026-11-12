@@ -59,7 +59,7 @@ Every assembly module should document input registers, output registers, clobber
 
 The active Wayland backend uses a nonblocking `poll()` event loop. It services the display socket, the keyboard-repeat timerfd, a separate pointer-selection auto-scroll timerfd, and the bounded clipboard send/receive descriptors. The auto-scroll timer is armed only during an active document selection drag and is disarmed on button release; keyboard repeat and selection scrolling therefore progress independently while the compositor socket is otherwise idle.
 
-Clipboard and document I/O use nonblocking descriptors and bounded chunks rather than waiting for a transfer or a large file read to complete. Redraw requests are coalesced, and a shared-memory buffer is not rewritten while the compositor owns it.
+Clipboard and document I/O use nonblocking descriptors and bounded chunks rather than waiting for a transfer or a large file read to complete. A normal redraw requests one `wl_surface.frame` callback; intervening edits are coalesced until both `wl_callback.done` and `wl_buffer.release` have arrived. This keeps the single shared-memory buffer out of use while the compositor owns it and avoids submitting multiple frames within one callback interval.
 
 ## Memory
 
@@ -108,7 +108,7 @@ The current prototype implements a deliberately small part of the stable core pr
 - Draw Minimize, Maximize/Restore, and Close controls in the application title bar and serialize the corresponding xdg_toplevel requests or clean client shutdown.
 - Answer xdg_wm_base.ping and exit on xdg_toplevel.close.
 
-The Wayland prototype now has a single active release-tracked buffer rather than a static-size buffer set; configure-driven resizing is implemented but output-scale changes and multi-buffer/frame scheduling are not. The event loop waits in poll for socket, keyboard-repeat timer, pointer-selection auto-scroll timer, or clipboard activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
+The Wayland prototype has one active release-tracked buffer rather than a static-size buffer set. Configure-driven resizing and single-buffer `wl_surface.frame` pacing are implemented; output-scale changes and a release-tracked multi-buffer set are not. The event loop waits in poll for socket, keyboard-repeat timer, pointer-selection auto-scroll timer, or clipboard activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
 
 See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 

@@ -4967,6 +4967,8 @@ repeat_timer_read:      .quad 0
 doc_drag_timer_spec:    .zero 32
 doc_drag_timer_read:    .quad 0
 buffer_busy:            .long 0
+.global frame_callback_id
+frame_callback_id:      .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
 shift_physical_down:    .long 0
@@ -5660,7 +5662,11 @@ wayland_main:
     # Bind the optional wl_seat after the window objects so IDs 13-15 remain
     # dense: seat=13, roundtrip callback=14, pointer=15.
     cmp dword ptr [rip + seat_global], 0
-    je .event_loop
+    jne .seat_global_available
+    # Keep callback IDs valid even when no wl_seat is advertised.
+    mov dword ptr [rip + next_client_object_id], 15
+    jmp .event_loop
+.seat_global_available:
     lea rax, [rip + stage_bind_roundtrip]
     mov qword ptr [rip + failure_stage], rax
     mov edi, dword ptr [rip + seat_global]
@@ -5819,10 +5825,30 @@ wayland_main:
     test rax, rax
     js .protocol_error
     cmp dword ptr [rip + last_object], 6
+    jne .check_frame_callback
+    cmp dword ptr [rip + last_opcode], 0
+    jne .check_frame_callback
+    call handle_xdg_ping
+    jmp .event_loop
+.check_frame_callback:
+    mov eax, dword ptr [rip + frame_callback_id]
+    test eax, eax
+    jz .check_buffer_release
+    cmp dword ptr [rip + last_object], eax
     jne .check_buffer_release
     cmp dword ptr [rip + last_opcode], 0
-    jne .check_buffer_release
-    call handle_xdg_ping
+    jne .protocol_error
+    # wl_callback.done is one-shot; the compositor destroys the callback.
+    mov dword ptr [rip + frame_callback_id], 0
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    cmp dword ptr [rip + window_resize_pending], 0
+    jne .event_apply_window_resize
+    cmp dword ptr [rip + redraw_pending], 0
+    je .event_loop
+    call present_buffer
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
@@ -5833,6 +5859,8 @@ wayland_main:
     mov dword ptr [rip + buffer_busy], 0
     cmp dword ptr [rip + window_resize_pending], 0
     jne .event_apply_window_resize
+    cmp dword ptr [rip + frame_callback_id], 0
+    jne .event_loop
     cmp dword ptr [rip + redraw_pending], 0
     je .event_loop
     call present_buffer
@@ -14591,7 +14619,23 @@ present_buffer:
     sub rsp, 8                  # maintain 16-byte alignment for nested calls
     cmp dword ptr [rip + buffer_busy], 0
     jne .present_buffer_busy
+    cmp dword ptr [rip + frame_callback_id], 0
+    jne .present_buffer_frame_pending
     call render_surface
+    # One frame callback gates this surface commit. Changes while it is
+    # outstanding are coalesced in redraw_pending.
+    mov eax, dword ptr [rip + next_client_object_id]
+    lea edx, [rax + 1]
+    mov dword ptr [rip + next_client_object_id], edx
+    mov dword ptr [rip + frame_callback_id], eax
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 8
+    mov esi, 3                  # wl_surface.frame(new wl_callback)
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
     mov eax, dword ptr [rip + window_buffer_id]
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -14628,6 +14672,10 @@ present_buffer:
     xor eax, eax
     add rsp, 8
     ret
+.present_buffer_frame_pending:
+    # The buffer may be free, but the previous frame has not completed yet.
+    xor eax, eax
+    jmp .present_buffer_done
 .present_buffer_busy:
     mov rax, -16
 .present_buffer_done:

@@ -23,6 +23,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from compose_pack import encode_pack as encode_compose_pack
 
 
+# Frame callbacks are intercepted and acknowledged only after the commit that
+# carries each wl_surface.frame request.
+_FRAME_CALLBACK_STATES: dict[socket.socket, dict[str, object]] = {}
+
+
 def wire_message(object_id: int, opcode: int, payload: bytes = b"") -> bytes:
     size = 8 + len(payload)
     if size % 4:
@@ -48,20 +53,46 @@ def recv_exact(connection: socket.socket, count: int) -> bytes:
 
 
 def recv_wayland_message(connection: socket.socket):
-    header, ancillary, _flags, _address = connection.recvmsg(8, socket.CMSG_SPACE(4))
-    if len(header) != 8:
-        raise EOFError(f"short Wayland header: {header!r}")
-    object_id, word = struct.unpack("<II", header)
-    size, opcode = word >> 16, word & 0xFFFF
-    if size < 8:
-        raise AssertionError(f"invalid Wayland message size: {size}")
-    payload = recv_exact(connection, size - 8)
-    received_fds = []
-    for level, kind, data in ancillary:
-        if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
-            fd_count = len(data) // struct.calcsize("i")
-            received_fds.extend(struct.unpack("<" + "i" * fd_count, data[: fd_count * 4]))
-    return object_id, opcode, payload, received_fds
+    while True:
+        header, ancillary, _flags, _address = connection.recvmsg(8, socket.CMSG_SPACE(4))
+        if len(header) != 8:
+            raise EOFError(f"short Wayland header: {header!r}")
+        object_id, word = struct.unpack("<II", header)
+        size, opcode = word >> 16, word & 0xFFFF
+        if size < 8:
+            raise AssertionError(f"invalid Wayland message size: {size}")
+        payload = recv_exact(connection, size - 8)
+        received_fds = []
+        for level, kind, data in ancillary:
+            if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                fd_count = len(data) // struct.calcsize("i")
+                received_fds.extend(struct.unpack("<" + "i" * fd_count, data[: fd_count * 4]))
+        state = _FRAME_CALLBACK_STATES.get(connection)
+        if state is not None and object_id == 8 and opcode == 3:
+            if len(payload) != 4 or received_fds:
+                raise AssertionError(f"malformed wl_surface.frame request: {payload!r}")
+            callback_id, = struct.unpack("<I", payload)
+            pending = state["pending"]
+            if callback_id == 0 or callback_id in pending:
+                raise AssertionError(f"invalid or duplicate frame callback ID: {callback_id}")
+            pending.append(callback_id)
+            state["ids"].append(callback_id)
+            state["requested"] += 1
+            continue
+        if (
+            state is not None
+            and object_id == 8
+            and opcode == 6
+            and state["pending"]
+            and not state.get("defer", False)
+        ):
+            for callback_id in state["pending"]:
+                connection.sendall(
+                    wire_message(callback_id, 0, struct.pack("<I", state["completed"] + 1))
+                )
+                state["completed"] += 1
+            state["pending"].clear()
+        return object_id, opcode, payload, received_fds
 
 
 def synthetic_true_type_font(*, a_advance: int = 650, a_peak_y: int = 700) -> bytes:
@@ -262,6 +293,8 @@ def run(
     right_alt_compose_test: bool = False,
     right_alt_level3_test: bool = False,
     expected_saved_bytes: bytes = b"z",
+    frame_callback_order_test: bool = False,
+    verify_frame_callbacks: bool = False,
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
@@ -344,6 +377,7 @@ def run(
         server.listen(1)
         server.settimeout(8)
     observations = []
+    frame_callback_stats = {"pending": [], "ids": [], "requested": 0, "completed": 0}
     errors = []
     process_holder = []
     absolute_file_path = (
@@ -397,6 +431,7 @@ def run(
                 client = compositor_endpoint
             else:
                 client, _ = server.accept()
+            _FRAME_CALLBACK_STATES[client] = frame_callback_stats
             client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
@@ -2422,17 +2457,16 @@ xkb_symbols "nekoedit-sparse" {
                     return actual
 
                 def wait_buffer_idle(label: str, timeout: float = 3.0) -> None:
-                    # A release may immediately flush a redraw that was queued
-                    # while the single buffer was busy. Consume and release
-                    # those frames instead of polling buffer_busy forever.
+                    # A queued redraw waits for both SHM release and frame done.
                     original_timeout = client.gettimeout()
                     deadline = time.monotonic() + timeout
                     try:
                         while True:
                             if child_u32("buffer_busy") == 0:
-                                time.sleep(0.005)
-                                if child_u32("buffer_busy") == 0:
+                                if child_u32("frame_callback_id") == 0:
                                     return
+                                time.sleep(0.005)
+                                continue
                             remaining = deadline - time.monotonic()
                             if remaining <= 0:
                                 raise AssertionError(
@@ -2491,6 +2525,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(wire_message(12, 0))
+                    wait_child_u32("frame_callback_id", 0, f"{label} frame callback completion")
                     wait_child_u32("repeat_keycode", 0, f"{label} key release")
                     if auto_confirm and child_u32("save_confirm_open") == 1:
                         key_step(
@@ -2577,6 +2612,93 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     workflow_redraw(f"{label}: release")
                     client.sendall(wire_message(12, 0))
+
+                if frame_callback_order_test:
+                    wait_buffer_idle("startup idle before frame-order test")
+                    baseline_requested = frame_callback_stats["requested"]
+                    baseline_completed = frame_callback_stats["completed"]
+                    if frame_callback_stats["pending"]:
+                        raise AssertionError(
+                            f"startup left frame callbacks pending: {frame_callback_stats!r}"
+                        )
+                    frame_callback_stats["defer"] = True
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1400, 1400, 30, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1401, 1401, 30, 0))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)),
+                        "first paced frame attach",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "first paced frame damage",
+                    )
+                    expect_message(client, (8, 6, b""), "first paced frame commit")
+                    if len(frame_callback_stats["pending"]) != 1:
+                        raise AssertionError(
+                            f"first edit did not create exactly one callback: {frame_callback_stats!r}"
+                        )
+                    callback_id = frame_callback_stats["pending"][0]
+                    wait_child_u32("frame_callback_id", callback_id, "first frame callback ID")
+                    wait_child_u32("buffer_busy", 1, "first frame buffer ownership")
+
+                    # Deliver release before callback.done, then edit again.
+                    # The client must coalesce the edit without submitting early.
+                    client.sendall(wire_message(12, 0))
+                    wait_child_u32("buffer_busy", 0, "release before callback")
+                    wait_child_u32("frame_callback_id", callback_id, "callback retained after release")
+                    client.sendall(
+                        wire_message(16, 3, struct.pack("<IIII", 1402, 1402, 48, 1))
+                        + wire_message(16, 3, struct.pack("<IIII", 1403, 1403, 48, 0))
+                    )
+                    wait_child_u32("doc_length", 2, "second edit during outstanding callback")
+                    wait_child_u32("redraw_pending", 1, "redraw queued behind callback")
+                    if child_u32("frame_callback_id") != callback_id:
+                        raise AssertionError("second edit replaced the outstanding frame callback")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            "surface request was sent before wl_callback.done: "
+                            f"{unexpected!r}"
+                        )
+
+                    frame_callback_stats["defer"] = False
+                    frame_callback_stats["pending"].remove(callback_id)
+                    frame_callback_stats["completed"] += 1
+                    client.sendall(wire_message(callback_id, 0, struct.pack("<I", 1)))
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", 12, 0, 0)),
+                        "coalesced frame attach after callback",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "coalesced frame damage after callback",
+                    )
+                    expect_message(client, (8, 6, b""), "coalesced frame commit after callback")
+                    if len(frame_callback_stats["ids"]) != baseline_requested + 2:
+                        raise AssertionError(
+                            f"coalesced redraw did not request one follow-up callback: {frame_callback_stats!r}"
+                        )
+                    second_callback_id = frame_callback_stats["ids"][baseline_requested + 1]
+                    if second_callback_id == callback_id:
+                        raise AssertionError("frame callback object ID was reused")
+                    client.sendall(wire_message(12, 0))
+                    wait_child_u32("frame_callback_id", 0, "follow-up frame callback")
+                    wait_child_u32("buffer_busy", 0, "follow-up buffer release")
+                    wait_child_u32("redraw_pending", 0, "coalesced redraw consumed")
+                    if (
+                        frame_callback_stats["requested"] != baseline_requested + 2
+                        or frame_callback_stats["completed"] != baseline_completed + 2
+                        or frame_callback_stats["pending"]
+                    ):
+                        raise AssertionError(
+                            f"frame callback lifecycle was inconsistent: {frame_callback_stats!r}"
+                        )
+                    observations.append("release-before-frame-done ordering and redraw coalescing verified")
+                    client.sendall(wire_message(10, 1))
+                    return
 
                 if horizontal_scroll_test:
                     state = read_document_state()
@@ -8007,6 +8129,7 @@ xkb_symbols "nekoedit-sparse" {
                     child.terminate()
         finally:
             if client is not None:
+                _FRAME_CALLBACK_STATES.pop(client, None)
                 client.close()
 
     thread = threading.Thread(target=fake_compositor, daemon=True)
@@ -8183,6 +8306,19 @@ xkb_symbols "nekoedit-sparse" {
         return
     if result.returncode != 0:
         raise AssertionError(f"NekoEdit exited {result.returncode}: {stderr}")
+    if verify_frame_callbacks:
+        if (
+            frame_callback_stats["requested"] < 1
+            or frame_callback_stats["completed"] != frame_callback_stats["requested"]
+            or frame_callback_stats["pending"]
+        ):
+            raise AssertionError(
+                "frame callback lifecycle was incomplete: "
+                f"{frame_callback_stats!r}"
+            )
+        observations.append(
+            f"{frame_callback_stats['requested']} wl_surface.frame callbacks completed"
+        )
     if save_roundtrip:
         with open(initial_file, "rb") as saved_file:
             saved_bytes = saved_file.read()
@@ -8198,7 +8334,8 @@ xkb_symbols "nekoedit-sparse" {
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
-    run(sys.argv[1])
+    run(sys.argv[1], verify_frame_callbacks=True)
+    run(sys.argv[1], frame_callback_order_test=True)
     # Exercise the optional text-input-v3/IME path independently of the
     # physical-keyboard fallback and without cursor-shape/clipboard globals.
     run(sys.argv[1], text_input_test=True, cursor_shape_supported=False)
