@@ -222,19 +222,21 @@ def exercise_live_ibus_preedit_commit(
     # engine's independent dead-key path instead of relying on Multi_key.
     require_ibus_engine("xkb:us:intl:eng")
 
-    # dead_acute must produce a provider-owned preedit without changing the
-    # document. Backspace then cancels that pending accent without committing.
-    send_keysym(0xFE51)  # XK_dead_acute
+    # Send the physical apostrophe keysym, which has a keycode in Mutter's
+    # active map. The selected xkb:us:intl:eng IBus Simple engine translates it
+    # to its internal dead_acute sequence and owns the resulting preedit.
+    send_keysym(ord("'"))
     wait_input_idle()
     _, first_preedit = wait_preedit_nonempty(memory_fd, addresses)
 
+    # Backspace cancels the pending IBus accent without inserting document text.
     send_keysym(65288)  # BackSpace
     wait_input_idle()
     wait_preedit_empty(memory_fd, addresses)
 
-    # A fresh dead_acute followed by e must commit U+00E9 LATIN SMALL LETTER E
+    # A fresh apostrophe followed by e must commit U+00E9 LATIN SMALL LETTER E
     # WITH ACUTE (é) through the real IBus -> GNOME Shell -> Mutter path.
-    send_keysym(0xFE51)  # XK_dead_acute
+    send_keysym(ord("'"))
     wait_input_idle()
     _, second_preedit = wait_preedit_nonempty(memory_fd, addresses)
     send_keysym(ord("e"))

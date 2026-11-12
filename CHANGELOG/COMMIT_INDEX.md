@@ -1,3 +1,14 @@
+## 2026-11-12 — send the mapped apostrophe key for IBus dead-key validation (CI pending)
+
+| Commit | Subject |
+|---|---|
+| pending | test: use mapped apostrophe for IBus dead-key path |
+| pending | docs: explain Mutter keysym mapping requirement |
+
+Actions #843 passed all backend/Wayland and XKB/importer stages. Portal activation succeeded, but Mutter logged `No keycode found for keyval fe51` for the direct dead_acute injection. The probe now sends the mapped apostrophe key; IBus Simple's `xkb:us:intl:eng` engine should translate it to dead_acute internally. CI is pending.
+
+---
+
 ## 2026-11-12 — test IBus Simple's XKB dead-key path rather than inherited Compose options (CI pending)
 
 | Commit | Subject |

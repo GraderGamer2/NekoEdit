@@ -1,3 +1,11 @@
+## Latest handoff (2026-11-12 — mapped apostrophe IBus dead-key probe, CI pending)
+
+Continue from `early-alpha`. The frame-pacing feature and complete Wayland mock remain green. Actions #843 passed build/CLI, Wayland, ELF, XKB, X.Org importer, and locale-pack stages. The headless Mutter harness now starts IBus and its D-Bus-activated portal successfully. Physical-XKB `Multi_key`, the pt_BR two-dead-key sequence, save, and text-input-v3 manager/focus/enable/state-commit all pass.
+
+The new IBus dead-key probe still did not produce preedit because the first attempt injected keysym `0xFE51` directly. Mutter's RemoteDesktop virtual-keyboard API resolves keysyms against the active XKB map and logged `No keycode found for keyval fe51`; IBus never received the dead_acute. The latest test correction sends the ordinary apostrophe keysym (`'`), which maps to a real keycode. IBus Simple's selected `xkb:us:intl:eng` engine should convert that key to its internal dead_acute variant. It then tests Backspace cancellation and apostrophe + `e` → `é` (`C3 A9`) through real provider preedit/commit and confirmed save. Check the next Actions run before claiming the IBus path is validated. No application/backend change in this iteration.
+
+---
+
 ## Latest handoff (2026-11-12 — IBus dead-key probe revision, CI pending)
 
 Continue from branch `early-alpha`. Wayland frame pacing is implemented and the full Wayland mock is green. Actions #842 passed build/CLI, full Wayland mock, ELF, native XKB, X.Org importer, and locale-pack stages. Mutter physical-XKB Right Alt Compose, two-mark dead-key save, and the text-input-v3 manager/focus/enable/state-commit handshake pass. The headless IBus startup issue is now resolved too: the daemon owns `org.freedesktop.IBus`, D-Bus activation receives the isolated XDG paths and actual `IBUS_ADDRESS`, and `org.freedesktop.portal.IBus` starts and owns its name.

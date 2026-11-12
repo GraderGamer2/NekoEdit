@@ -1,3 +1,13 @@
+## 2026-11-12 — send a mapped apostrophe key into the IBus dead-key engine (CI pending)
+
+Actions [Build and test #843](https://github.com/GraderGamer2/NekoEdit/actions/runs/43150721562) passed the freestanding build/ELF check, command-line tests, the full Wayland mock (including frame callback ordering), executable inspection, native `us(intl)` parsing, X.Org importer verification, and locale-pack build. The daemon/portal startup also succeeded in Mutter, and the original physical-XKB `Multi_key` + pt_BR dead-key save canary passed. The text-input-v3 handshake passed.
+
+The IBus dead-key probe then reported no preedit. Mutter's log supplied the decisive clue: `No keycode found for keyval fe51 in current group` (twice). The native RemoteDesktop virtual-keyboard API resolves an injected keysym against the active Mutter keymap; `dead_acute` is not a directly mappable keyval in that map, so Mutter discarded it before IBus saw it. The updated probe sends the ordinary apostrophe keysym instead. This key exists in the active map, and the selected `xkb:us:intl:eng` IBus Simple engine translates it to its internal `dead_acute` sequence. The revised scenario still requires provider-owned preedit, Backspace cancellation without document mutation, apostrophe + `e` committing U+00E9 (`C3 A9`), and an exact confirmed save.
+
+This keeps physical-XKB Compose and IBus dead-key coverage distinct. The D-Bus/IBus portal setup from [f2ee759](https://github.com/GraderGamer2/NekoEdit/commit/f2ee7595da3c32c3d690d7af998080d323451737) remains in place; application code and runtime dependencies are unchanged. The revised live test is pending CI; no IBus provider pass is claimed yet.
+
+---
+
 ## 2026-11-12 — use the IBus Simple dead-key path for live text-input-v3 validation (CI pending)
 
 Actions [Build and test #842](https://github.com/GraderGamer2/NekoEdit/actions/runs/43149228354) passed the freestanding build, command-line tests, full Wayland protocol mock, ELF inspection, native `us(intl)` parser, X.Org importer verification, and locale-pack build. The Mutter test also verified that the isolated IBus daemon owns its bus name and that the separately activated `org.freedesktop.portal.IBus` service starts successfully before GNOME Shell. Physical-XKB Right Alt Compose, the pt_BR dead-key chain, save, and the text-input-v3 manager/focus/enable/state-commit handshake all pass. The remaining failure is provider preedit for an IBus Simple `Multi_key` sequence.
