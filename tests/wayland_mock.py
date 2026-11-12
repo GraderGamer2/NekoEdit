@@ -8446,7 +8446,10 @@ xkb_symbols "nekoedit-sparse" {
         # picker/menu/install/import interactions. Keep a finite but generous
         # bound for slower hosted runners; regular keyboard/XKB cases retain
         # the shorter timeout.
-        timeout_seconds = 90 if (file_workflow or compose_locale_settings_test) else 20
+        # The full default Wayland smoke scenario took 19.1s on the
+        # preceding passing runner. Keep a bounded margin for runner variance;
+        # fake-compositor socket deadlines still catch protocol stalls early.
+        timeout_seconds = 90 if (file_workflow or compose_locale_settings_test) else 30
         try:
             stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:

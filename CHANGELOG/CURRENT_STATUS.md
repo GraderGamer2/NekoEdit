@@ -1,3 +1,11 @@
+## 2026-11-12 — widen bounded Wayland mock process timeout (CI pending)
+
+Build and test [#859](https://github.com/GraderGamer2/NekoEdit/actions/runs/43210190052) passed the freestanding build, ELF check, and command-line tests but timed out in the very first general Wayland mock scenario, before the hotplug-specific cases ran. It emitted no application error or fake-compositor assertion. The same initial smoke scenario took 19.1 seconds in the prior passing run #858, while the harness allowed only 20 seconds for ordinary child processes.
+
+Raise the ordinary per-child `communicate()` deadline to 30 seconds, retaining 90 seconds for the longer picker/settings workflows. The mock compositor still uses its shorter socket read deadlines, so a protocol mismatch does not inherit the larger process timeout. No application runtime behavior changes in this test-harness correction. CI is pending.
+
+---
+
 ## 2026-11-12 — flush idle-buffer redraws after seat hotplug (CI pending)
 
 Follow-up to [hotplug implementation](https://github.com/GraderGamer2/NekoEdit/commit/bbb9ce3627b48773659711e4a1af8cf3f128ddb3): the seat-event path now submits a pending redraw immediately when the single shared buffer is released and no frame callback is outstanding. When either gate remains busy, the existing buffer-release/frame-done sequencing still performs the deferred presentation. This prevents an IME-preedit clear or other keyboard-removal state reset from remaining visually stale until an unrelated later event.
