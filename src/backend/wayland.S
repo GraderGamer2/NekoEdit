@@ -5715,7 +5715,7 @@ wayland_main:
     call handle_xdg_ping
 .seat_check_capabilities:
     cmp dword ptr [rip + last_object], 13
-    jne .seat_check_buffer_release
+    jne .seat_check_output_event
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_buffer_release
     call handle_seat_capabilities
@@ -5849,7 +5849,7 @@ wayland_main:
     test rax, rax
     js .protocol_error
     cmp dword ptr [rip + last_object], 6
-    jne .check_frame_callback
+    jne .check_registry_event
     cmp dword ptr [rip + last_opcode], 0
     jne .check_frame_callback
     call handle_xdg_ping
@@ -5917,7 +5917,7 @@ wayland_main:
     jmp .event_loop
 .check_seat_event:
     cmp dword ptr [rip + last_object], 13
-    jne .check_pointer_event
+    jne .check_output_event
     cmp dword ptr [rip + last_opcode], 0
     jne .check_pointer_event
     call handle_seat_capabilities

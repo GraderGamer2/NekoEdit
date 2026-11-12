@@ -1,3 +1,9 @@
+## 2026-11-12 — route startup and steady-state Wayland output events (CI pending)
+
+Actions [Build and test #864](https://github.com/GraderGamer2/NekoEdit/actions/runs/43223717648) passed the freestanding build and all existing Wayland scenarios, then the new output mock reported that `wl_output.scale` remained at its default value. The output handlers were present, but three pre-existing conditional branches still jumped past them: the initial display event path, the initial seat roundtrip, and the steady-state seat-event path. Update those branch targets so registry events and output/surface events actually reach their handlers. The failure was in event routing, not output parsing or object binding. CI is pending.
+
+---
+
 ## 2026-11-12 — Wayland output discovery and integer-scale metadata (implementation; CI pending)
 
 Add a bounded cache for up to eight `wl_output` globals. The client binds outputs at no more than protocol version 3, records each output's negotiated version and integer scale (default 1), tracks which outputs the Wayland surface enters/leaves, and handles registry global removal. It sends `wl_output.release` only for v3 resources; v1/v2 outputs are dropped locally. New output announcements reuse free cache slots but receive fresh IDs from the monotonic client-object allocator. The cache reports the entered-output count and maximum scale as metadata.
