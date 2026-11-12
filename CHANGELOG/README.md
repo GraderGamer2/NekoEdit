@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-12 — Wayland frame pacing, CI pending)
+
+Continue from branch `early-alpha`. The current source commit is [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d), adding `wl_surface.frame` callback pacing to the existing single-buffer Wayland renderer. Normal redraw commits request one callback; redraws arriving before both callback completion and `wl_buffer.release` are coalesced into one later frame. The mock now covers callback-before-release and release-before-callback ordering, including a second edit while the callback is outstanding.
+
+The source/test commit is staged in the branch history but must be fast-forwarded to `early-alpha` together with the changelog commit before validation. Build and test has not yet been run for this change. Do not report a pass until the new Actions run completes. The previous live IBus Simple test remains separately unresolved: text-input-v3 activation passed, but an actual provider-originated preedit/commit has not.
+
+Read `CURRENT_STATUS.md`, `DEVELOPMENT_LOG.md`, `PROJECT_HISTORY.md`, and `COMMIT_INDEX.md` first, then inspect the current code/Actions run rather than relying on this handoff alone.
+
+---
+
 ## 2026-11-12 — live IBus Simple Compose preedit/commit validation (CI pending)
 
 Build and test [#836](https://github.com/GraderGamer2/NekoEdit/actions/runs/43115461168) passed the build, all command-line/Wayland mock tests, ELF inspection, native XKB parser, X.Org source-data verification, and locale-pack build. The live Mutter phase reached IBus Simple and text-input-v3 activation, but Ctrl+Shift+U was passed through as a literal `u` even after the private IBus daemon's environment was verified. This test-specific Unicode-entry mode is being dropped.

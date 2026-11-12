@@ -1,3 +1,13 @@
+## 2026-11-12 — pace Wayland redraws with frame callbacks — CI pending
+
+The native renderer now requests `wl_surface.frame` for normal redraw commits. Its callback ID and the active `wl_buffer` ownership flag are independent. A follow-up surface commit is permitted only after both `wl_callback.done` and `wl_buffer.release` are received, whichever arrives second. Redraws accumulated in the meantime are coalesced so the next commit paints the newest document/UI state. Resizing still waits for buffer release before destroying or replacing the old buffer.
+
+The compositor mock intercepts callback creation and emits completion after the commit carrying that request. The new reverse-order scenario deliberately withholds the callback, sends buffer release first, performs another text edit, confirms that no premature surface request occurs, then releases the callback and checks exactly one follow-up frame. The ordinary mock run checks callback-before-release handling and balances callback request/completion counts.
+
+Commit: [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d). This is single-buffer frame pacing only; a multi-buffer ring, output/fractional scaling, and X11 remain future work. CI is pending. The separate live IBus Simple preedit/commit validation is still unresolved.
+
+---
+
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
 The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.

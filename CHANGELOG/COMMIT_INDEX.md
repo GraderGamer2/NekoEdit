@@ -1,3 +1,13 @@
+## 2026-11-12 — pace Wayland redraws with frame callbacks (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [091737442842](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) | feat: pace Wayland redraws with frame callbacks |
+
+The implementation keeps the active single buffer release-safe and gates normal redraws on both buffer release and frame callback completion. The mock covers both completion orders and redraw coalescing. Build and test validation will be recorded after the branch Actions run.
+
+---
+
 ## 2026-11-12 — IBus Simple built-in Compose live test (CI pending)
 
 | Commit | Subject |

@@ -1,3 +1,13 @@
+## 2026-11-12 — single-buffer Wayland frame pacing (CI pending)
+
+Commit [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d) adds one outstanding `wl_surface.frame` callback to normal redraw commits. Visual changes are coalesced in `redraw_pending`; another commit is permitted only when both `wl_buffer.release` and `wl_callback.done` have arrived, regardless of event order. The original single-buffer memory ownership rule and release-gated resize replacement are retained.
+
+The mock now accounts for every callback request/completion and deliberately tests release-before-callback ordering: it withholds `done`, releases the SHM buffer first, injects another edit, verifies that no early surface request is emitted, then releases the callback and checks for one coalesced follow-up frame. The normal path also covers callback-before-release ordering.
+
+This remains a single-buffer pacing improvement, not a multi-buffer ring. A new Actions run is pending; no build or test pass is claimed yet.
+
+---
+
 ## 2026-11-12 — live IBus Simple Compose preedit/commit validation (CI pending)
 
 Build and test [#836](https://github.com/GraderGamer2/NekoEdit/actions/runs/43115461168) passed the build, all command-line/Wayland mock tests, ELF inspection, native XKB parser, X.Org source-data verification, and locale-pack build. The live Mutter phase reached IBus Simple and text-input-v3 activation, but Ctrl+Shift+U was passed through as a literal `u` even after the private IBus daemon's environment was verified. This test-specific Unicode-entry mode is being dropped.

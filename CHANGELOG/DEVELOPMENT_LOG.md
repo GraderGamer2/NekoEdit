@@ -1,3 +1,13 @@
+## 2026-11-12 — pace Wayland redraws with frame callbacks (CI pending)
+
+The native Wayland backend now requests one `wl_surface.frame` callback before each normal redraw commit and tracks its client object ID separately from `buffer_busy`. A further repaint is admitted only after the frame callback and the current shared-memory buffer have both completed their independent lifecycles. If callback.done arrives first, the still-busy buffer remains protected; if wl_buffer.release arrives first, the callback remains outstanding. When both have arrived, the latest visual state is rendered once. Intermediate edits stay represented by `redraw_pending`.
+
+The mock compositor intercepts `wl_surface.frame`, tracks callback IDs, and emits the one-shot `wl_callback.done` after the carrying commit. Its reverse-order regression withholds the callback, sends buffer release, types another character, asserts no surface request was sent early, then releases the callback and verifies one coalesced follow-up frame. A separate normal run asserts that all requested callbacks complete.
+
+The existing one-active-buffer design remains unchanged. The patch does not add a buffer ring, output/fractional scaling, a callback timeout, or X11. Code and test are in [0917374](https://github.com/GraderGamer2/NekoEdit/commit/09173744284281ce8363555f1aef1bea5161650d). A new Actions run is pending; this entry makes no local-build or CI-success claim. The outstanding live GNOME Shell/Mutter + IBus Simple preedit test remains a separate issue.
+
+---
+
 ## 2026-11-11 — extend optional Compose dead-key chains to seven marks — Build and test #832 passed
 
 The optional locale-pack format is advancing to NLP1 version 2: records grow from 52 to 68 bytes and carry eight input scalars. The runtime retains version-1 compatibility, including typed v1 dead-key records. Multi_key remains capped at four input scalars; v2 dead-key rules accept seven combining marks followed by the final base scalar.
