@@ -243,7 +243,7 @@ def exercise_live_ibus_preedit_commit(
     # translated Clutter event to verify the actual XKB keyval/keycode that
     # GNOME Shell subsequently forwards to IBus.
     initial_key_status = call_gdbus("KeyStatus")
-    initial_match = re.search(r"count=(\\d+)", initial_key_status)
+    initial_match = re.search(r"count=(\d+)", initial_key_status)
     if not initial_match:
         fail("Mutter key-event observer returned an invalid status: " + initial_key_status)
     initial_key_count = int(initial_match.group(1))
@@ -254,7 +254,7 @@ def exercise_live_ibus_preedit_commit(
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         key_status = call_gdbus("KeyStatus")
-        match = re.search(r"count=(\\d+)", key_status)
+        match = re.search(r"count=(\d+)", key_status)
         if match:
             captured_count = int(match.group(1))
             if captured_count >= initial_key_count + 2:
