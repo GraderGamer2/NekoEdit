@@ -1,3 +1,13 @@
+## 2026-11-13 — defer preferred-scale scheduling until first buffer geometry (CI pending)
+
+The first integer HiDPI implementation is commit [27376a6](https://github.com/GraderGamer2/NekoEdit/commit/27376a6c2b709fe4fd97dc28332877d5d2432f70). Actions [Build and test #873](https://github.com/GraderGamer2/NekoEdit/actions/runs/43364269945) passed the freestanding build/ELF check and command-line smoke tests. The existing Wayland mock scenarios through output-scale/hotplug tracking also passed, but the new pre-configure 2× first-frame scenario exposed a startup crash before shared-memory pool creation.
+
+The compositor's preferred scale is delivered before the initial xdg_surface.configure in that regression. There is no backing-buffer descriptor to replace yet, and the normal initial-configure path calls window_update_geometry after acknowledging the configure. Skip the scale scheduler while window_buffer_created_scale is still zero; that initial geometry pass consumes the stored effective scale and creates the first buffer at the correct physical extent. Once a buffer exists, runtime and seat-roundtrip scale changes continue through the existing deferred/release-gated scheduling path.
+
+Correction: commit [99da6e7](https://github.com/GraderGamer2/NekoEdit/commit/99da6e774dd8642b204e4d62c20eacd0422144f0). Actions [Build and test #874](https://github.com/GraderGamer2/NekoEdit/actions/runs/43364708259) is pending. Do not treat the 2× path as validated until this full run completes.
+
+---
+
 ## 2026-11-13 — add bounded integer HiDPI rasterization (CI pending)
 
 Apply compositor/output integer scale to NekoEdit's software renderer while preserving surface-local logical coordinates. The backend now selects 1× or 2× based on the v6 per-surface preference or the older-compositor entered-output fallback. The 2× path is enabled only when the logical width and height are at most 1920×1080, so physical dimensions never exceed the existing 3840×2160 shared-memory pool; compositors before wl_surface.set_buffer_scale remain at 1×.
