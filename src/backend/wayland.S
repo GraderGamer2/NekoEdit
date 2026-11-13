@@ -247,6 +247,8 @@ iface_seat:            .asciz "wl_seat"
 iface_output:          .asciz "wl_output"
 iface_cursor_shape:   .asciz "wp_cursor_shape_manager_v1"
 iface_text_input_manager_v3: .asciz "zwp_text_input_manager_v3"
+iface_fractional_scale_manager: .asciz "wp_fractional_scale_manager_v1"
+iface_viewporter: .asciz "wp_viewporter"
 keymap_base:
     .byte 0, 0, 49, 50, 51, 52, 53, 54, 55, 56, 57, 48, 45, 61, 0, 0
     .byte 113, 119, 101, 114, 116, 121, 117, 105, 111, 112, 91, 93, 0, 0, 97, 115
@@ -4889,6 +4891,20 @@ surface_preferred_buffer_scale:     .long 0
 surface_preferred_scale_seen:       .long 0
 surface_preferred_buffer_transform: .long 0
 surface_preferred_transform_seen:   .long 0
+.global fractional_scale_manager_global, viewporter_global
+.global fractional_scale_manager_object, viewporter_object
+.global fractional_scale_object, viewport_object, fractional_scale_enabled
+.global surface_preferred_fractional_scale, viewport_destination_width, viewport_destination_height
+fractional_scale_manager_global: .long 0
+viewporter_global: .long 0
+fractional_scale_manager_object: .long 0
+viewporter_object: .long 0
+fractional_scale_object: .long 0
+viewport_object: .long 0
+fractional_scale_enabled: .long 0
+surface_preferred_fractional_scale: .long 0
+viewport_destination_width: .long 0
+viewport_destination_height: .long 0
 .global text_input_manager_global, text_input_manager_object, text_input_object
 .global text_input_entered, text_input_enabled, text_input_commit_serial
 .global text_input_preedit_length, text_input_preedit_cursor_begin, text_input_preedit_cursor_end
@@ -5280,6 +5296,10 @@ wayland_main:
     mov dword ptr [rip + surface_preferred_scale_seen], 0
     mov dword ptr [rip + surface_preferred_buffer_transform], 0
     mov dword ptr [rip + surface_preferred_transform_seen], 0
+    mov dword ptr [rip + surface_preferred_fractional_scale], 120
+    mov dword ptr [rip + fractional_scale_enabled], 0
+    mov dword ptr [rip + viewport_destination_width], 0
+    mov dword ptr [rip + viewport_destination_height], 0
     mov dword ptr [rip + cursor_shape_current], 0
     call window_update_geometry
     call doc_storage_init
@@ -5502,6 +5522,9 @@ wayland_main:
     jne .bind_roundtrip
 
     mov dword ptr [rip + next_client_object_id], 15
+    call fractional_scale_bind_managers
+    test rax, rax
+    js .protocol_error
 
     lea rax, [rip + stage_xdg_create]
     mov qword ptr [rip + failure_stage], rax
@@ -5512,6 +5535,9 @@ wayland_main:
     lea rdx, [rip + payload_buffer]
     mov ecx, 4
     call wl_send_request
+    test rax, rax
+    js .protocol_error
+    call fractional_scale_create_surface_objects
     test rax, rax
     js .protocol_error
 
@@ -5605,8 +5631,18 @@ wayland_main:
     jmp .wait_configure
 .configure_check_surface:
     cmp dword ptr [rip + last_object], 8
-    jne .configure_check_xdg_surface
+    jne .configure_check_fractional_scale
     call handle_surface_output_event
+    test eax, eax
+    js .protocol_error
+    jmp .wait_configure
+.configure_check_fractional_scale:
+    mov eax, dword ptr [rip + fractional_scale_object]
+    test eax, eax
+    jz .configure_check_xdg_surface
+    cmp dword ptr [rip + last_object], eax
+    jne .configure_check_xdg_surface
+    call handle_fractional_scale_event
     test eax, eax
     js .protocol_error
     jmp .wait_configure
@@ -5709,8 +5745,13 @@ wayland_main:
     cmp dword ptr [rip + seat_global], 0
     jne .seat_global_available
     # No seat=13 or roundtrip callback=14 exists in this session. Continue
-    # the client ID sequence at 13, bind outputs, then map the surface.
-    mov dword ptr [rip + next_client_object_id], 13
+    # after the optional fractional-scale proxies if they were allocated.
+    mov eax, 13
+    cmp dword ptr [rip + viewport_object], 0
+    je .no_seat_next_client_id_ready
+    mov eax, dword ptr [rip + next_client_object_id]
+.no_seat_next_client_id_ready:
+    mov dword ptr [rip + next_client_object_id], eax
     call output_bind_pending
     test rax, rax
     js .protocol_error
@@ -5785,6 +5826,10 @@ wayland_main:
     js .protocol_error
     jnz .seat_check_sync
     call handle_surface_output_event
+    test eax, eax
+    js .protocol_error
+    jnz .seat_check_sync
+    call handle_fractional_scale_event
     test eax, eax
     js .protocol_error
     jnz .seat_check_sync
@@ -6015,6 +6060,10 @@ wayland_main:
     js .protocol_error
     jnz .event_loop
     call handle_surface_output_event
+    test eax, eax
+    js .protocol_error
+    jnz .event_loop
+    call handle_fractional_scale_event
     test eax, eax
     js .protocol_error
     jnz .event_loop
@@ -12663,9 +12712,27 @@ registry_capture_global:
     lea rsi, [rip + iface_text_input_manager_v3]
     call string_equal
     test eax, eax
-    jz .registry_try_output
+    jz .registry_try_fractional_manager
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + text_input_manager_global], eax
+    jmp .registry_done
+.registry_try_fractional_manager:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_fractional_scale_manager]
+    call string_equal
+    test eax, eax
+    jz .registry_try_viewporter
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + fractional_scale_manager_global], eax
+    jmp .registry_done
+.registry_try_viewporter:
+    lea rdi, [rip + event_payload + 8]
+    lea rsi, [rip + iface_viewporter]
+    call string_equal
+    test eax, eax
+    jz .registry_try_output
+    mov eax, dword ptr [rip + event_payload]
+    mov dword ptr [rip + viewporter_global], eax
     jmp .registry_done
 .registry_try_output:
     lea rdi, [rip + event_payload + 8]
@@ -14459,12 +14526,15 @@ render_text_input_preedit:
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
 window_update_geometry:
-    # Preserve surface-local layout coordinates. Use integer 2x only when
-    # set_buffer_scale exists and the physical extent stays inside the bounded
-    # wl_shm pool envelope (3840x2160 pixels).
+    # Preserve surface-local layout coordinates. Use a bounded 2x backing
+    # raster when integer buffer scaling or the fractional viewport path is
+    # available; the latter keeps protocol buffer_scale at 1.
     mov eax, 1
+    cmp dword ptr [rip + fractional_scale_enabled], 1
+    je .window_geometry_scale_protocol_ready
     cmp dword ptr [rip + compositor_version], 3
     jb .window_geometry_buffer_scale_ready
+.window_geometry_scale_protocol_ready:
     mov edx, dword ptr [rip + surface_effective_buffer_scale]
     cmp edx, 2
     jb .window_geometry_buffer_scale_ready
@@ -15070,6 +15140,10 @@ present_buffer:
     cmp dword ptr [rip + compositor_version], 3
     jb .present_buffer_scale_done
     mov eax, dword ptr [rip + window_buffer_scale]
+    cmp dword ptr [rip + viewport_object], 0
+    je  .present_buffer_scale_target_ready
+    mov eax, 1
+.present_buffer_scale_target_ready:
     cmp eax, dword ptr [rip + surface_applied_buffer_scale]
     je .present_buffer_scale_done
     mov dword ptr [rip + payload_buffer], eax
@@ -15080,7 +15154,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
-    mov eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + payload_buffer]
     mov dword ptr [rip + surface_applied_buffer_scale], eax
 .present_buffer_scale_done:
     cmp dword ptr [rip + compositor_version], 2
@@ -15099,6 +15173,9 @@ present_buffer:
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + surface_applied_buffer_transform], eax
 .present_buffer_transform_done:
+    call window_apply_viewport_destination
+    test rax, rax
+    js .present_buffer_done
     mov eax, dword ptr [rip + window_buffer_id]
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -23504,6 +23581,162 @@ render_document:
     ret
 .size render_document, . - render_document
 
+# Bind the optional fractional-scale manager and viewporter as a pair.
+.type fractional_scale_bind_managers, @function
+fractional_scale_bind_managers:
+    push r12
+    push r13
+    sub rsp, 8                  # align nested calls to the System V ABI
+    cmp dword ptr [rip + fractional_scale_manager_global], 0
+    je .fractional_bind_done
+    cmp dword ptr [rip + viewporter_global], 0
+    je .fractional_bind_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    mov dword ptr [rip + fractional_scale_manager_object], r12d
+    mov edi, dword ptr [rip + fractional_scale_manager_global]
+    lea rsi, [rip + iface_fractional_scale_manager]
+    mov edx, 31
+    mov ecx, 1
+    mov r8d, r12d
+    call wl_registry_bind
+    test rax, rax
+    js .fractional_bind_return
+    lea r13d, [r12 + 1]
+    mov dword ptr [rip + viewporter_object], r13d
+    mov edi, dword ptr [rip + viewporter_global]
+    lea rsi, [rip + iface_viewporter]
+    mov edx, 14
+    mov ecx, 1
+    mov r8d, r13d
+    call wl_registry_bind
+    test rax, rax
+    js .fractional_bind_return
+    lea eax, [r13 + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+.fractional_bind_done:
+    xor eax, eax
+.fractional_bind_return:
+    add rsp, 8
+    pop r13
+    pop r12
+    ret
+.size fractional_scale_bind_managers, . - fractional_scale_bind_managers
+
+# Create one wp_viewport and one wp_fractional_scale_v1 for wl_surface 8.
+.type fractional_scale_create_surface_objects, @function
+fractional_scale_create_surface_objects:
+    push r12
+    push r13
+    sub rsp, 8                  # align nested calls to the System V ABI
+    cmp dword ptr [rip + fractional_scale_manager_object], 0
+    je .fractional_surface_done
+    cmp dword ptr [rip + viewporter_object], 0
+    je .fractional_surface_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    mov dword ptr [rip + viewport_object], r12d
+    mov dword ptr [rip + payload_buffer], r12d
+    mov dword ptr [rip + payload_buffer + 4], 8
+    mov edi, dword ptr [rip + viewporter_object]
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .fractional_surface_return
+    lea r13d, [r12 + 1]
+    mov dword ptr [rip + fractional_scale_object], r13d
+    mov dword ptr [rip + payload_buffer], r13d
+    mov dword ptr [rip + payload_buffer + 4], 8
+    mov edi, dword ptr [rip + fractional_scale_manager_object]
+    mov esi, 1
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .fractional_surface_return
+    lea eax, [r13 + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    mov dword ptr [rip + fractional_scale_enabled], 1
+.fractional_surface_done:
+    xor eax, eax
+.fractional_surface_return:
+    add rsp, 8
+    pop r13
+    pop r12
+    ret
+.size fractional_scale_create_surface_objects, . - fractional_scale_create_surface_objects
+
+# wp_fractional_scale_v1.preferred_scale (event opcode 0), in 120ths.
+# RAX=1 when consumed, 0 for another object, negative on malformed input.
+.type handle_fractional_scale_event, @function
+handle_fractional_scale_event:
+    sub rsp, 8                  # align output_recompute_surface_scale call
+    mov eax, dword ptr [rip + fractional_scale_object]
+    test eax, eax
+    jz .fractional_event_not_found
+    cmp dword ptr [rip + last_object], eax
+    jne .fractional_event_not_found
+    cmp dword ptr [rip + last_opcode], 0
+    jne .fractional_event_protocol_error
+    cmp dword ptr [rip + last_size], 4
+    jb .fractional_event_protocol_error
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jz .fractional_event_protocol_error
+    cmp eax, dword ptr [rip + surface_preferred_fractional_scale]
+    je .fractional_event_handled
+    mov dword ptr [rip + surface_preferred_fractional_scale], eax
+    call output_recompute_surface_scale
+.fractional_event_handled:
+    mov eax, 1
+    add rsp, 8
+    ret
+.fractional_event_protocol_error:
+    mov rax, -71
+    add rsp, 8
+    ret
+.fractional_event_not_found:
+    xor eax, eax
+    add rsp, 8
+    ret
+.size handle_fractional_scale_event, . - handle_fractional_scale_event
+
+# Apply a logical viewport destination only when the toplevel size changes.
+.type window_apply_viewport_destination, @function
+window_apply_viewport_destination:
+    sub rsp, 8                  # align wl_send_request call
+    mov edi, dword ptr [rip + viewport_object]
+    test edi, edi
+    jz .viewport_destination_done
+    mov eax, dword ptr [rip + window_width]
+    cmp eax, dword ptr [rip + viewport_destination_width]
+    jne .viewport_destination_send
+    mov eax, dword ptr [rip + window_height]
+    cmp eax, dword ptr [rip + viewport_destination_height]
+    je .viewport_destination_done
+.viewport_destination_send:
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + payload_buffer], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov edi, dword ptr [rip + viewport_object]
+    mov esi, 2
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 8
+    call wl_send_request
+    test rax, rax
+    js .viewport_destination_return
+    mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + viewport_destination_width], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + viewport_destination_height], eax
+.viewport_destination_done:
+    xor eax, eax
+.viewport_destination_return:
+    add rsp, 8
+    ret
+.size window_apply_viewport_destination, . - window_apply_viewport_destination
+
 # Attach the first wl_buffer and map the surface after bootstrap IDs and
 # optional input/output proxies have been allocated in monotonic ID order.
 .type window_attach_initial_buffer, @function
@@ -23512,6 +23745,10 @@ window_attach_initial_buffer:
     cmp dword ptr [rip + compositor_version], 3
     jb .initial_buffer_scale_done
     mov eax, dword ptr [rip + window_buffer_scale]
+    cmp dword ptr [rip + viewport_object], 0
+    je  .initial_buffer_scale_target_ready
+    mov eax, 1
+.initial_buffer_scale_target_ready:
     cmp eax, dword ptr [rip + surface_applied_buffer_scale]
     je .initial_buffer_scale_done
     mov dword ptr [rip + payload_buffer], eax
@@ -23522,7 +23759,7 @@ window_attach_initial_buffer:
     call wl_send_request
     test rax, rax
     js .initial_buffer_done
-    mov eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + payload_buffer]
     mov dword ptr [rip + surface_applied_buffer_scale], eax
 .initial_buffer_scale_done:
     cmp dword ptr [rip + compositor_version], 2
@@ -23541,6 +23778,9 @@ window_attach_initial_buffer:
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + surface_applied_buffer_transform], eax
 .initial_buffer_transform_done:
+    call window_apply_viewport_destination
+    test rax, rax
+    js .initial_buffer_done
     lea rax, [rip + stage_attach]
     mov qword ptr [rip + failure_stage], rax
     mov eax, dword ptr [rip + window_buffer_id]
@@ -23742,6 +23982,21 @@ output_recompute_surface_scale:
     mov dword ptr [rip + surface_output_count], r13d
     mov dword ptr [rip + surface_output_max_scale], r11d
 
+    # fractional-scale-v1 reports a numerator over 120. The current software
+    # rasterizer chooses a 1x or bounded 2x source and lets wp_viewport map it
+    # to the exact logical destination. Integer-only compositors retain their
+    # preferred-buffer-scale/output-scale path.
+    cmp dword ptr [rip + fractional_scale_enabled], 1
+    jne .output_recompute_integer_scale
+    mov eax, dword ptr [rip + surface_preferred_fractional_scale]
+    cmp eax, 120
+    jbe .output_recompute_fractional_1x
+    mov eax, 2
+    jmp .output_recompute_store_scale
+.output_recompute_fractional_1x:
+    mov eax, 1
+    jmp .output_recompute_store_scale
+.output_recompute_integer_scale:
     # Version 6 exposes authoritative per-surface scale and transform hints.
     # Their protocol defaults are scale 1 and the normal transform.
     cmp dword ptr [rip + compositor_version], 6
@@ -23774,6 +24029,13 @@ handle_output_global_remove:
     cmp dword ptr [rip + last_size], 4
     jb .output_remove_not_found
     mov r12d, dword ptr [rip + event_payload]
+    # A global can disappear between registry discovery and the initial
+    # binding pass. Clear either optional extension name before attempting
+    # wp_fractional_scale_manager_v1/wp_viewporter as a pair.
+    cmp r12d, dword ptr [rip + fractional_scale_manager_global]
+    je .output_remove_fractional_manager
+    cmp r12d, dword ptr [rip + viewporter_global]
+    je .output_remove_viewporter
     xor r13d, r13d
 .output_remove_find:
     cmp r13d, 8
@@ -23783,6 +24045,14 @@ handle_output_global_remove:
     je .output_remove_found
     inc r13d
     jmp .output_remove_find
+.output_remove_fractional_manager:
+    mov dword ptr [rip + fractional_scale_manager_global], 0
+    mov eax, 1
+    jmp .output_remove_return
+.output_remove_viewporter:
+    mov dword ptr [rip + viewporter_global], 0
+    mov eax, 1
+    jmp .output_remove_return
 .output_remove_found:
     lea rax, [rip + output_object_ids]
     mov edi, dword ptr [rax + r13*4]
