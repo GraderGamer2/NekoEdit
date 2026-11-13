@@ -1,3 +1,37 @@
+## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
+
+| Commit | Subject |
+|---|---|
+| [b44172dcf4c8489d4941d442eb69344537b76ee1](https://github.com/GraderGamer2/NekoEdit/commit/b44172dcf4c8489d4941d442eb69344537b76ee1) | feat: apply preferred Wayland buffer transforms |
+| [96b80cf2876c2d39cca8197d1d6b15c98e59b4f7](https://github.com/GraderGamer2/NekoEdit/commit/96b80cf2876c2d39cca8197d1d6b15c98e59b4f7) | test: isolate transformed TrueType raster check |
+| [fc5ad543ce5dc68bb5f60d66690ecbfef3a31e2d](https://github.com/GraderGamer2/NekoEdit/commit/fc5ad543ce5dc68bb5f60d66690ecbfef3a31e2d) | test: share pixel probes across buffer transforms |
+| [5fd1719ea1c22100dda3e7e65544e56dfe40cdc7](https://github.com/GraderGamer2/NekoEdit/commit/5fd1719ea1c22100dda3e7e65544e56dfe40cdc7) | test: sample glyph through preferred transforms |
+
+The feature applies every preferred transform to rectangles, TrueType glyph pixels, and embedded fallback glyph pixels. Runtime transform replacement is gated on buffer release. Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 workflow steps, including the full Wayland protocol mock and nested GNOME Shell/Mutter integration.
+
+---
+
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
+
+| Commit | Subject |
+|---|---|
+| [8d893c867e96917c1501ee77188a2ec23a65b640](https://github.com/GraderGamer2/NekoEdit/commit/8d893c867e96917c1501ee77188a2ec23a65b640) | feat: separate Wayland surface and buffer geometry |
+
+The implementation keeps surface-local dimensions for layout/input and independent backing-buffer pixel extents for buffer creation, clipping and glyph targets. Scale remains 1:1 for now. The mock verifies initial, maximize, restore and edge-resize geometry. Actions [Build and test #872](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532) passed all 15 workflow steps on the geometry-split commit, including freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532/artifacts/14001449465) (139,381 bytes) until 2026-11-14 01:46:53 UTC (08:46:53 WIB).
+
+---
+
+
+## 2026-11-13 — initialize effective Wayland scale in BSS (CI PASS #871)
+
+| Commit | Subject |
+|---|---|
+| [50aaaf44d17c](https://github.com/GraderGamer2/NekoEdit/commit/50aaaf44d17cd18c05608af875a1b275b83c9d18) | fix: initialize effective Wayland scale in BSS |
+
+Actions [Build and test #871](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954) passed all 15 workflow steps, including the complete Wayland mock, Mutter integration, and both artifact uploads. The corrected `.bss` storage uses zero-fill and receives its protocol default of 1 during startup.
+
+---
+
 ## 2026-11-12 — capture the XKB keyval delivered to the IBus preedit probe (CI pending)
 
 | Commit | Subject |

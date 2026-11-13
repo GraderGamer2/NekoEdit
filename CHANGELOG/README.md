@@ -1,3 +1,33 @@
+## Latest handoff (2026-11-13 — preferred Wayland buffer transforms, CI PASS #882)
+
+Continue development on `early-alpha`; keep `main` at its merged stable checkpoint. Validated branch commit: [5fd1719](https://github.com/GraderGamer2/NekoEdit/commit/5fd1719ea1c22100dda3e7e65544e56dfe40cdc7). The implementation is in [b44172d](https://github.com/GraderGamer2/NekoEdit/commit/b44172dcf4c8489d4941d442eb69344537b76ee1); follow-up commits corrected the transformed TrueType and framebuffer test probes.
+
+Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 steps: freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, executable inspection, native `us(intl)` XKB validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell 46 / Mutter integration, and both artifact uploads.
+
+The implementation applies all eight compositor-preferred buffer transforms. Surface-local physical raster pixels are mapped into the transformed backing buffer; 90°/270° and reflected quarter-turn modes swap backing axes. Filled rectangles, TrueType glyph masks, and the embedded 5×7 fallback use the same transform convention. The client commits `wl_surface.set_buffer_transform` with the matching attached buffer, and runtime 0°→90°→0° changes remain pending until the current `wl_buffer.release`. Application layout, input, pointer hit-testing, and `wl_surface.damage` remain surface-local. Startup tests cover all seven non-normal enum values; the TrueType transform path has a dedicated test; runtime replacement is checked in both directions.
+
+The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016147986) (141,265 bytes) until 2026-11-14 06:38:24 UTC (13:38:24 WIB). The Compose locale artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016546306) (120,536 bytes) until the same time.
+
+Remaining Wayland work: fractional scaling via `wp_fractional_scale_v1`/`wp_viewporter`, a small release-tracked multi-buffer set, and physical GNOME/Mutter validation on rotated and mixed-DPI displays. For optimization, first collect reproducible startup, typing, scrolling, large-document, and cold/warm glyph-cache timings; tune only measured bottlenecks.
+
+---
+
+## Previous handoff (2026-11-13 — logical/backing geometry split, CI PASS #872)
+
+Continue development on `early-alpha`; keep `main` at its merged stable checkpoint. Validated branch commit: [08c1dca](https://github.com/GraderGamer2/NekoEdit/commit/08c1dca0404ad33e9e004aba2128ee83aa33e467), containing implementation [8d893c8](https://github.com/GraderGamer2/NekoEdit/commit/8d893c867e96917c1501ee77188a2ec23a65b640) and its test/doc record.
+
+Actions [Build and test #872](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532) passed all 15 workflow steps on the geometry-split commit, including freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532/artifacts/14001449465) (139,381 bytes) until 2026-11-14 01:46:53 UTC (08:46:53 WIB).
+
+The preceding BSS correction also passed in Actions #871; its older artifact is superseded by #872.
+
+The new implementation makes `window_width` / `window_height` the surface-local logical dimensions, with explicit `window_buffer_width` / `window_buffer_height` pixel extents and `window_stride` byte pitch for the backing store. Initial and resize-created `wl_buffer` requests, rectangle bounds, and glyph target bounds now use the backing fields. At this stage, geometry setup intentionally keeps buffer pixels 1:1 with logical dimensions; it does **not** apply the tracked effective scale or transform. The mock asserts initial 800×480, maximize 1920×1080, restore 800×480, and 720×480 edge-resize geometry.
+
+Next backend slice: make the backing dimensions scale-aware, rasterize UI and glyphs in physical pixels while retaining logical layout and pointer coordinates, handle buffer transforms and 90°/270° axis swaps, then send `wl_surface.set_buffer_scale` only once buffer geometry, transform, damage, and buffer lifetime are consistent. The Wayland core protocol distinguishes surface-local coordinates from buffer pixels and requires attached buffer dimensions to account for both scale and transform ([protocol specification](https://wayland.freedesktop.org/docs/html/apa.html)).
+
+Optimization is approaching, but do not optimize by intuition. After this geometry work is validated, add reproducible timings for startup, typing, scrolling, large-document edits, and cold/warm glyph-cache redraws; then target measured hotspots (especially full-frame repaint and glyph/raster work) while preserving the no-third-party-runtime constraint.
+
+---
+
 ## Latest handoff (2026-11-12 — Mutter key-event observation pending CI)
 
 Continue from branch `early-alpha`. Wayland single-buffer frame pacing is implemented and its full protocol mock is green. Actions #845 passed build, command-line tests, complete Wayland mock, ELF inspection, real `us(intl)` parser, X.Org importer, and locale-pack build. The isolated IBus daemon and its D-Bus-activated portal now start successfully. Mutter's native physical-XKB Compose/dead-key/save canary and the text-input-v3 manager/focus/enable/state-commit handshake pass.

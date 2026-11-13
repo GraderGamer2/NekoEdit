@@ -1,8 +1,142 @@
+## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
+
+Implement all eight `wl_surface.preferred_buffer_transform` enum values in the software-rendered backing store. Odd transform values swap physical buffer width/height; 90°/270° rotations and reflected rotations map logical-surface pixels into the correct pre-transformed buffer coordinates. Filled rectangles, TrueType glyph masks, and the embedded 5×7 fallback share the same transform convention. The backend sends `wl_surface.set_buffer_transform` in the same commit as the corresponding buffer attachment. A runtime transform change marks the backing generation dirty and waits for `wl_buffer.release` before destroying/replacing the active buffer.
+
+The Wayland mock exercises all seven non-normal startup transform values, checks key UI/background/glyph pixels through a surface-to-buffer accessor, includes a transformed TrueType rasterizer case, and checks runtime 0°→90°→0° buffer replacement, swapped dimensions/stride, logical damage, and release ordering. Independent 7×5 and 11×7 geometry checks confirmed the pixel mappings and transformed rectangle bounds are in-bounds and bijective.
+
+Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 workflow steps, including the complete Wayland mock, native XKB/importer/Compose checks, GNOME Shell 46 / Mutter integration, and both artifact uploads. The executable artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016147986) (141,265 bytes) until 2026-11-14 06:38:24 UTC (13:38:24 WIB). This validates protocol/mock behavior; physical rotated-monitor testing remains outstanding.
+
+Next: implement fractional scaling and a release-tracked buffer set, then gather reproducible performance baselines before making optimizations.
+
+---
+
+## 2026-11-13 — limit the startup 2× scenario to scale-aware interaction checks (CI PASS #878)
+
+Actions [#877](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365760100) passed the 2× initial buffer geometry and first-frame pixel tests, the embedded fallback glyph coverage, the document-area click, and the newly scale-aware caret-position assertion. It then reached the common keyboard workflow and failed at the first typed “A” sample, which still read the shared buffer using the original 800px pitch.
+
+The startup 2× scenario is a focused scale-boundary test, not a duplicate execution of every 1× GUI assertion. Read the first glyph sample through the logical-to-physical pixel helper, assert that it renders, then close that special scenario after recording the scale-2 input/caret result. The normal 1× runs continue to execute the extensive keyboard, clipboard, picker, and editor workflows unchanged. The independent runtime scale scenario continues into its 1×→2×→1× release-gated buffer test.
+
+This is a test-harness scope correction; the renderer is unchanged. Actions [#878](https://github.com/GraderGamer2/NekoEdit/actions/runs/43366101489) passed the corrected startup 2× scale/input scenario.
+
+---
+
+## 2026-11-13 — add bounded integer HiDPI rasterization (CI PASS #878)
+
+Apply compositor/output integer scale to NekoEdit's software renderer while preserving surface-local logical coordinates. The backend now selects 1× or 2× based on the v6 per-surface preference or the older-compositor entered-output fallback. The 2× path is enabled only when the logical width and height are at most 1920×1080, so physical dimensions never exceed the existing 3840×2160 shared-memory pool; compositors before wl_surface.set_buffer_scale remain at 1×.
+
+Raster scale is applied after logical/UI transforms in draw_rect and draw_glyph; TrueType masks accept a physical em up to 64px with a 128×128 mask bound, and the embedded 5×7 fallback fills scale-sized pixel blocks. Text metrics, editor layout/indexing, pointer hit-testing, caret/IME rectangles, and wl_surface.damage stay in logical coordinates. The client sends wl_surface.set_buffer_scale only when the applied value changes and includes it in the matching buffer commit. Scale-only changes use the existing single-buffer release gate and rebuild the descriptor even when logical dimensions are unchanged; an initial unattached buffer can also be replaced if a preference arrives during startup.
+
+The Wayland mock adds a pre-configure 2× first-frame case with physical pixel checks and a runtime 1×→2×→1× transition that checks buffer geometry, byte stride, logical damage, and release-gated replacement. At that stage, preferred-transform metadata was tracked but not yet applied; the follow-on implementation and its complete mock validation are recorded in the newer CI PASS #882 entry above. Fractional scaling / viewporter and a release-tracked multi-buffer ring remain future work.
+
+---
+
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
+
+Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.
+
+Extend the Wayland mock's ELF-symbol state reader and assert logical/backing dimensions for the initial 800×480 window, 1920×1080 maximize, 800×480 restore, and 720×480 edge resize. This is an architectural boundary-setting step, not a HiDPI implementation. The next change must scale raster positions and glyphs, handle transformed buffer-axis dimensions, and preserve surface-local pointer/layout semantics before sending `wl_surface.set_buffer_scale`.
+
+Actions [Build and test #872](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532) passed all 15 workflow steps on the geometry-split commit, including freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532/artifacts/14001449465) (139,381 bytes) until 2026-11-14 01:46:53 UTC (08:46:53 WIB).
+
+---
+
+## 2026-11-13 — fix effective Wayland scale initialization (CI PASS #871)
+
+The first attempt, Actions [#870](https://github.com/GraderGamer2/NekoEdit/actions/runs/43344591753), failed during assembly because GNU as rejected a non-zero `.long 1` in `.bss`. Storage was changed to zero-filled `.zero 4`; Wayland startup initializes the effective scale to 1 before processing events. No runtime behavior or expected values changed.
+
+Actions [Build and test #871](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954) passed all 15 steps, including freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954/artifacts/14001132220) until 2026-11-14 01:33:26 UTC (08:33:26 WIB).
+
+---
+
+## 2026-11-13 — track compositor-preferred surface scale and transform (CI PASS #868)
+
+Bind `wl_compositor` at up to v6 instead of unconditionally at v1. This gives the created `wl_surface` the version-6 `preferred_buffer_scale` and `preferred_buffer_transform` events while preserving v1 behavior on older compositors. Track both preferences on the surface, defaulting to scale 1 and normal transform; validate positive scale values and the transform enum. The output integration mock exercises the compositor preference independently of per-output scale transactions.
+
+Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) passed all 15 workflow steps: freestanding build/ELF verification, CLI and complete Wayland mock, native `us(intl)` parser, X.Org importer, Compose locale pack, nested GNOME Shell 46 / Mutter integration, and both artifact uploads. The mock verified compositor-v6 preferred scale/transform transitions alongside per-output v2/v3 scale transactions and hotplug. Mutter also verified live IBus Simple preedit, Backspace cancellation, U+00E9 commit, and exact UTF-8 save.
+
+This remains selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`.
+
+## 2026-11-13 — Wayland output discovery, atomic scale cache and hotplug (CI PASS #867)
+
+Actions [Build and test #867](https://github.com/GraderGamer2/NekoEdit/actions/runs/43227267710) passed all 15 steps. The Wayland mock verified v3/v2 output discovery, per-output scale changes committed only on `wl_output.done`, multi-output surface membership, v3 release vs v2 local proxy discard, hot-add with a fresh contiguous client ID, surface leave, and scale-cache recomputation. The nested GNOME Shell 46 / Mutter 46 integration job also completed successfully. No high-DPI rendering claim is made: the output cache remains metadata-only and the buffer is still scale 1.
+
+## 2026-11-12 — CI #866 stopped on a duplicated test assertion line (fixed; CI PASS #867)
+
+Actions [Build and test #866](https://github.com/GraderGamer2/NekoEdit/actions/runs/43226811420) passed the freestanding assembly/C build, ELF inspection, and command-line test set. The Wayland suite did not start because a scripted block move duplicated the `memfd+SCM_RIGHTS buffer verified` observation on one Python source line, producing a SyntaxError. The duplicate line was removed in commit [8365b7d](https://github.com/GraderGamer2/NekoEdit/commit/8365b7d9abc6e654efb38c0a0fad741016feacc1). Actions [Build and test #867](https://github.com/GraderGamer2/NekoEdit/actions/runs/43227267710) then passed the corrected Wayland mock and the complete GNOME Shell/Mutter integration job.
+
+## 2026-11-12 — enforce contiguous client IDs before Wayland output binding (CI PASS #867)
+
+Reorder startup so output proxies are bound only after fixed objects 8–14 and any optional input-service objects have been allocated. Defer the first shared-buffer attach/damage/commit until after those output bindings; the no-seat path uses the next free ID after the initial window/shm objects. Registry announcements are still captured in both startup roundtrips, but object creation is deferred until the allocator can issue contiguous new IDs. This directly addresses Mutter's `wl_registry.bind` rejection from #865.
+
+The output cache now stages each positive v2+ `wl_output.scale` value and publishes it only when that output's `wl_output.done` arrives. The mock checks independent pending/committed values for a v3 and v2 output, then repeats the transaction for a hot-added output. It still verifies version-gated release, surface membership, and scale-summary recomputation. Output scale remains metadata only; the active framebuffer is still scale 1. This startup reorder and the complete output suite passed in Actions #867.
+
+## 2026-11-12 — CI #865 output mock passed; Mutter exposed non-contiguous new_id startup ordering
+
+Actions [Build and test #865](https://github.com/GraderGamer2/NekoEdit/actions/runs/43224109434) passed build, command-line checks, the full Wayland protocol mock, ELF/XKB verification, Compose importer and locale-pack checks. The new output mock verified two output versions/scales, per-surface enter/leave membership, v2/v3 removal semantics, and hot-added output binding. The final nested GNOME Shell/Mutter test then rejected `wl_registry.bind(new_id=15)`: the client had not yet created its hard-coded surface/toplevel/shared-memory objects 8–12 and seat/sync objects 13–14. The previous mock accepted this invalid object-ID gap, so it missed the real libwayland object-map constraint.
+
+The correction reserves output client IDs only after the fixed surface/toplevel/shm and seat bootstrap IDs, pointer/keyboard objects, and optional cursor/clipboard/text-input objects have been allocated. The initial buffer attach/map is delayed until these output bindings complete. This preserves the monotonic allocator and keeps surface.enter events associated with already-bound output objects.
+
+## 2026-11-12 — route startup and steady-state Wayland output events (CI PASS #867)
+
+Actions [Build and test #864](https://github.com/GraderGamer2/NekoEdit/actions/runs/43223717648) passed the freestanding build and all existing Wayland scenarios, then the new output mock reported that `wl_output.scale` remained at its default value. The output handlers were present, but three pre-existing conditional branches still jumped past them: the initial display event path, the initial seat roundtrip, and the steady-state seat-event path. Update those branch targets so registry events and output/surface events actually reach their handlers. The failure was in event routing, not output parsing or object binding. The corrected dispatch routes the initial registry events, initial seat roundtrip and steady-state output/surface events; the complete regression passed in #867.
+
+---
+
+## 2026-11-12 — Wayland output discovery and integer-scale metadata (CI PASS #867)
+
+Add a bounded cache for up to eight `wl_output` globals. The client binds outputs at no more than protocol version 3, records each output's negotiated version and integer scale (default 1), tracks which outputs the Wayland surface enters/leaves, and handles registry global removal. It sends `wl_output.release` only for v3 resources; v1/v2 outputs are dropped locally. New output announcements reuse free cache slots but receive fresh IDs from the monotonic client-object allocator. The cache reports the entered-output count and maximum scale as metadata.
+
+The client still renders into the existing scale-1 shared buffer. It does not yet apply `wl_surface.set_buffer_scale`, use preferred/fractional scale or viewporter protocols, or translate logical dimensions to physical buffer dimensions. Those require separating logical layout/hit-testing from pixel geometry and keeping buffer replacement release-safe. The mock adds two outputs at different scales, surface enter/leave, v2/v3 removal semantics, atomic `scale`/`done` updates, and a hot-added output. Actions #867 passed the mock plus nested GNOME Shell 46 / Mutter 46 integration.
+
+---
+
+## 2026-11-12 — correct combined cursor-shape/text-input test object IDs (verified in CI #863)
+
+Build and test [#862](https://github.com/GraderGamer2/NekoEdit/actions/runs/43216141990) passed the freestanding build and CLI tests, then reached the new active-IME hotplug scenario. The mock expected the text-input manager to use object 17, which is valid when cursor-shape support is absent, but the combined scenario advertises cursor-shape support and therefore allocates manager/device IDs 17/18 first. Text-input setup correctly uses 19/20. The mock now derives the text-input IDs from the advertised optional globals, and the preedit-clear pixel assertion now checks that the IME highlight color is absent after keyboard removal rather than merely checking for background-colored pixels. No backend runtime code changed.
+
+## 2026-11-12 — test keyboard removal while text-input-v3 preedit is active (CI PASS #863)
+
+Add a dedicated opt-in mock scenario in which the compositor focuses the editor, enables text-input-v3, sends a visible preedit string, and then removes the keyboard capability. The mock requires the text-input disable request and its state commit, verifies the transient preedit/cursor state clears without inserting those bytes into the document, and checks the immediate redraw when the shared buffer and frame callback are idle. Existing tests continue to verify that text-input-v3 remains default-off and that ordinary XKB typing works when the manager is advertised but not opted in. Actions [Build and test #863](https://github.com/GraderGamer2/NekoEdit/actions/runs/43216928301) passed all 15 steps. Its Wayland mock explicitly verified that keyboard removal sends text-input disable+commit, clears the visible preedit without modifying document bytes, and submits the immediate repaint.
+
+## 2026-11-12 — assert seat redraw through the mock callback interceptor (CI PASS #861)
+
+Build and test [#860](https://github.com/GraderGamer2/NekoEdit/actions/runs/43211045584) passed the complete set of existing Wayland cases and reached the new seat-hotplug case. Its failure was in the new test expectation: the mock's `recv_wayland_message()` intentionally consumes `wl_surface.frame` requests, tracks callback IDs/counters, and acknowledges them after the matching surface commit. Therefore `expect_message()` cannot observe opcode 3; it sees the following buffer attach instead.
+
+Correct the hotplug assertion to verify the attach/damage/commit sequence and independently assert that the callback interceptor recorded exactly one new callback ID (19), then delivered its completion. Actions [Build and test #861](https://github.com/GraderGamer2/NekoEdit/actions/runs/43213761614) passed all 15 workflow steps, including both seat-v2 and seat-v4 removal/re-addition scenarios, the complete Wayland mock, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+---
+
+## 2026-11-12 — widen bounded Wayland mock process timeout (verified in CI #861)
+
+Build and test [#859](https://github.com/GraderGamer2/NekoEdit/actions/runs/43210190052) passed the freestanding build, ELF check, and command-line tests but timed out in the very first general Wayland mock scenario, before the hotplug-specific cases ran. It emitted no application error or fake-compositor assertion. The same initial smoke scenario took 19.1 seconds in the prior passing run #858, while the harness allowed only 20 seconds for ordinary child processes.
+
+Raise the ordinary per-child `communicate()` deadline to 30 seconds, retaining 90 seconds for the longer picker/settings workflows. The mock compositor still uses its shorter socket read deadlines, so a protocol mismatch does not inherit the larger process timeout. No application runtime behavior changes in this test-harness correction. The 30-second ordinary child deadline completed the full test set successfully in #861.
+
+---
+
+## 2026-11-12 — flush idle-buffer redraws after seat hotplug (CI PASS #861)
+
+Follow-up to [hotplug implementation](https://github.com/GraderGamer2/NekoEdit/commit/bbb9ce3627b48773659711e4a1af8cf3f128ddb3): the seat-event path now submits a pending redraw immediately when the single shared buffer is released and no frame callback is outstanding. When either gate remains busy, the existing buffer-release/frame-done sequencing still performs the deferred presentation. This prevents an IME-preedit clear or other keyboard-removal state reset from remaining visually stale until an unrelated later event.
+
+The hotplug mock now drains the initial buffer, confirms the frame gate is idle, removes the keyboard, and asserts the immediate `wl_surface.frame` / attach / damage / commit sequence plus the resulting busy/callback/redraw state. Because that presentation consumes the next client object ID, the subsequent keyboard, pointer, and cursor-shape re-add assertions are updated. This behavior passed both hotplug cases in #861.
+
+---
+
+## 2026-11-12 — Wayland seat capability hotplug lifecycle (CI PASS #861)
+
+The Wayland backend now treats each `wl_seat.capabilities` event as a complete state transition instead of only creating input objects once. Removing pointer capability clears focus/serial and active pointer/scroll drag state, stops selection auto-scroll, destroys the cursor-shape device tied to that pointer, and abandons the old pointer proxy. Removing keyboard capability cancels key repeat, clears held modifier/lock state and pending dead-key/Compose prefixes, abandons the old keyboard proxy, and disables optional text-input-v3 so stale preedit cannot survive unplug.
+
+For `wl_seat` versions 3–4, the backend sends `wl_pointer.release` / `wl_keyboard.release` before forgetting the proxies. Versions 1–2 do not define those requests; the client drops the local proxies without sending unsupported opcodes and uses new monotonically allocated object IDs if the capability returns. The cursor-shape manager remains bound while its device is destroyed and recreated against each replacement pointer.
+
+The Wayland mock adds dedicated hotplug scenarios for both version families. It verifies remove/re-add of keyboard and pointer, expected release/no-release behavior, fresh object IDs, cursor-shape device recreation, use of the replacement pointer's enter serial, and clearing of keyboard focus/modifier masks. The source and test changes are committed to `early-alpha`; CI is pending and no passing run is claimed yet.
+
+---
+
 ## 2026-11-12 — live IBus preedit, cancellation, commit, and save verified (CI PASS)
 
 Actions [Build and test #856](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544) completed successfully. All 15 workflow steps passed: freestanding x86-64 build and ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, real `us(intl)` keymap validation, X.Org importer verification, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`.
+The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`. Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) independently re-ran this canary successfully in the complete 15-step workflow.
 
 This validates the narrowly gated Mutter 46.0–46.2 compatibility cases: a multibyte preedit's legacy character-index anchor is converted only when it resolves to the same validated cursor byte offset, and the nullable empty-preedit `(0, 1)` anchor is normalized to `(0, 0)`. The mock tests both cases while keeping unrelated malformed UTF-8 boundaries rejected. No IBus, D-Bus, GNOME, or other runtime dependency was added to NekoEdit.
 
