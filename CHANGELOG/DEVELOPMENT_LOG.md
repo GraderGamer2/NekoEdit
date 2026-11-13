@@ -1,10 +1,8 @@
-## 2026-11-13 — fix 2× fallback glyph subpixel row addressing (CI pending)
+## 2026-11-13 — sample clear document background in the 2× raster check (CI pending)
 
-The initial integer HiDPI implementation is commit [27376a6](https://github.com/GraderGamer2/NekoEdit/commit/27376a6c2b709fe4fd97dc28332877d5d2432f70). Actions [#873](https://github.com/GraderGamer2/NekoEdit/actions/runs/43364269945) passed the freestanding build/ELF check and CLI smoke tests; all pre-existing Wayland mock scenarios also passed. The newly added pre-configure 2× test exposed a startup crash. Actions [#874](https://github.com/GraderGamer2/NekoEdit/actions/runs/43364708259) reproduced the same SIGSEGV in that 2× scenario after the initial scheduling guard was added.
+The embedded 5×7 fallback now passes the 2× glyph-coverage check in Actions [#875](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365046377). That run stopped on a test-coordinate mistake: logical x=10, y=40 lies inside the active document-tab rectangle (x=8..160, y=40..76), not in the unobstructed main editor background. The renderer correctly painted that foreground tab. Move the background sample to x=400, y=40, inside the empty document workspace and away from the tab/sidebar controls; no production renderer change is needed for this assertion.
 
-Instruction-level review identified the actual fault in the embedded 5×7 glyph fallback. The subcolumn loop used EAX for the physical row coordinate, then multiplied EAX by the stride to form the byte offset. On the next subcolumn iteration, it reused that byte offset as the row coordinate; at 2× each lit glyph pixel has a second horizontal subpixel, so the address calculation escaped the mapped buffer. At 1× there is only one subcolumn, hiding the defect. Preserve the physical row in ESI and reload EAX before every subcolumn's stride multiplication. The startup guard remains: before any backing buffer has been created, the preferred scale is recorded and the initial configure geometry path applies it; scale changes after buffer creation use the existing scheduler/release gate.
-
-The scale-2 mock checks rectangle and fallback-glyph pixel coverage, physical 1600×960/stride-6400 geometry for the 800×480 test surface, logical damage coordinates, and release-gated 1×→2×→1× replacement. Actions [Build and test #875](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336XXXXXXX) is pending; no HiDPI pass is claimed until the run completes.
+The full Wayland mock still needs to complete the runtime 1×→2×→1× replacement case. The current test-only correction is pending in Actions [#876](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336YYYYYYY).
 
 ---
 

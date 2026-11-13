@@ -618,8 +618,8 @@ def run(
                         raise AssertionError("2x accent rail spilled beyond its logical width")
                     if physical_pixel(10, 10) != 0xFF343D4B:
                         raise AssertionError("2x title-bar rectangle did not cover its logical extent")
-                    if physical_pixel(10, 40) != 0xFF252A33:
-                        raise AssertionError("2x main background did not begin below the logical title bar")
+                    if physical_pixel(400, 40) != 0xFF252A33:
+                        raise AssertionError("2x document background was not rendered at the selected scale")
                     if physical_pixel(4, initial_height - 20) != 0xFF78A9D4:
                         raise AssertionError("2x status separator was not rendered at physical pixel scale")
                     # Font loading is disabled in this test by default, so this
