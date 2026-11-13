@@ -1,3 +1,22 @@
+## 2026-11-13 — preserve live XKB keymaps across startup syncs (CI PASS #901)
+
+Actions [Build and test #901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) completed successfully on Ubuntu 24.04 with all 16 workflow steps green. The run validates the freestanding build and ELF, command-line smoke tests, complete Wayland protocol mock, executable inspection, native libxkbcommon-generated `us(intl)` map through NekoEdit's own XKB parser, pinned X.Org importer, Compose locale-pack build, and the real GNOME Shell 46 / Mutter 46.2 native Wayland integration. Both the Compose-locale and Linux x86-64 executable artifacts uploaded successfully.
+
+The startup keymap dispatch is now covered at both blocking points. The initial seat roundtrip and `fractional_scale_startup()` route matching `wl_keyboard.keymap` events through the common FD-validating dispatcher, so a sync callback cannot cause an early keymap/SCM_RIGHTS descriptor to be discarded. The focused `fractional_sync_keymap_test` sends FD-backed `NO_KEYMAP` events during both syncs and confirms that exactly two events are dispatched and processed, the parser finishes in fallback state, and no mapping remains open. The independent full XKB suite remains intact; splitting the fixture avoids coupling its custom XKB shortcut assertions to an intentionally keymap-less test case.
+
+This resolves the test-fixture interaction seen in #900 without weakening the `preserve[Control]` / Ctrl+A assertion. Actions #901 passed both the dedicated fractional-sync test and the full XKB shortcut suite, then passed the live Mutter Compose/dead-key canary. The previous missing-keymap issue from #899 is therefore considered fixed by the startup dispatch change.
+
+Source change: [9af696716b57dc6089b5b08d80c3ae0ce1f1b003](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). Focused fixture split: [79e814a30163944fa5cabfd12f682c7aa4de5fd3](https://github.com/GraderGamer2/NekoEdit/commit/79e814a30163944fa5cabfd12f682c7aa4de5fd3). Verified branch head: [c98c56e51370405551c481e70e0c59e212d431e9](https://github.com/GraderGamer2/NekoEdit/commit/c98c56e51370405551c481e70e0c59e212d431e9).
+
+Artifacts from #901:
+- `nekoedit-linux-x86_64`: 143,151 bytes, [artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14027630978).
+- `nekoedit-compose-locales`: 120,536 bytes, [artifact](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14026798133).
+Both expire on 2026-11-14 at 10:03:12 UTC (17:03:12 WIB).
+
+Next engineering target returns to renderer maturity: review the single-buffer SHM lifecycle and introduce release-tracked storage without conflating `wl_buffer.release` with frame-callback completion. Keep resize/scale/transform replacement deferred until all buffers from the previous generation are released. Measure redraw latency and memory impact before calling the pool an optimization.
+
+---
+
 ## 2026-11-13 — retain keyboard keymaps through fractional-scale startup sync (CI pending)
 
 Actions #900 passed dependency installation, the freestanding build/ELF verification, and CLI smoke tests, but the new Wayland mock scenario failed before the GNOME/Mutter stage. The test had combined fractional-scale startup with the full XKB shortcut suite; the combined run reached the later `XKB preserve[Control]` assertion, where Ctrl+A selection was not active. This was a fixture interaction, not a compiler or protocol-mock startup failure, and it prevented live compositor validation for #900.
