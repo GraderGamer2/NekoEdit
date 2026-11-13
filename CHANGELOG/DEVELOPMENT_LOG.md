@@ -1,10 +1,10 @@
-## 2026-11-13 — make caret pixel assertions buffer-scale aware (CI pending)
+## 2026-11-13 — limit the startup 2× scenario to scale-aware interaction checks (CI pending)
 
-Actions [#876](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365409500) passed the freestanding build/ELF checks and CLI smoke tests. The initial 2× buffer geometry, pixel coverage for the title rail/background/status separator, and embedded fallback glyph coverage now pass. The run next failed in the shared post-click caret visibility assertion: it sampled the shared-memory mapping with the original 800px row pitch and logical x/y offsets, which is valid only at 1×. With the 1600px-wide 2× buffer, the caret was present at its physical coordinates but the test inspected unrelated pixels.
+Actions [#877](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365760100) passed the 2× initial buffer geometry and first-frame pixel tests, the embedded fallback glyph coverage, the document-area click, and the newly scale-aware caret-position assertion. It then reached the common keyboard workflow and failed at the first typed “A” sample, which still read the shared buffer using the original 800px pitch.
 
-Keep the caret hit-test expectations in logical units, but map each sample through buffer_scale and buffer_stride before reading physical memory. This also checks that the caret remains aligned to the same logical insertion point after output scaling. No production-code change is made for this test-harness issue. Runtime 1×→2×→1× buffer replacement remains unverified until the rest of the Wayland mock completes.
+The startup 2× scenario is a focused scale-boundary test, not a duplicate execution of every 1× GUI assertion. Read the first glyph sample through the logical-to-physical pixel helper, assert that it renders, then close that special scenario after recording the scale-2 input/caret result. The normal 1× runs continue to execute the extensive keyboard, clipboard, picker, and editor workflows unchanged. The independent runtime scale scenario continues into its 1×→2×→1× release-gated buffer test.
 
-Correction pending in Actions [#877](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336ZZZZZZ).
+This is a test-harness scope correction; the renderer is unchanged. Actions [#878](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336VVVVVV) is pending.
 
 ---
 

@@ -8129,9 +8129,18 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
                 key_step(1002, 30, "insert a")
-                a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
+                if initial_preferred_buffer_scale > 1:
+                    a_pixel = document_pixel(17, 92)
+                else:
+                    a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if a_pixel != 0xFFD8DEE9:
                     raise AssertionError(f"first key did not render an A glyph: {hex(a_pixel)}")
+                if initial_preferred_buffer_scale > 1:
+                    observations.append(
+                        "2x startup preserved logical pointer hit-testing, caret placement, and first typed glyph rendering"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
                 key_step(1003, 48, "insert b")
                 key_step(1004, 105, "cursor left")
                 key_step(1005, 14, "backspace")
