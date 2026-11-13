@@ -20,7 +20,7 @@ Run `make bench-renderer` to build and execute the standalone hosted diagnostic.
 The benchmark reports two separate measurements:
 
 - **Cold rasterization:** direct `font_rasterize_glyph()` calls, covering outline flattening, 4×4 coverage sampling, and mask generation without the glyph cache.
-- **Warm cache draw:** `font_draw_codepoint_size()` calls over a fully populated 128-glyph working set, covering cmap lookup, cache lookup, and pixel alpha blending.
+- **Warm cache draw:** `font_draw_codepoint_size()` calls over a fully populated 128-glyph working set, covering cmap lookup, hash-indexed cache lookup, and pixel alpha blending. The same executable also exercises bucket collisions, full LRU eviction, cache hits after replacement, and `font_cache_clear()`; those correctness checks are outside the timed warm loop.
 
 Timing uses Linux `CLOCK_MONOTONIC_RAW`. Results are diagnostic, not pass/fail thresholds: compare repeated runs on the same machine, compiler, power profile, and build settings. The synthetic outline is intentionally deterministic and does not model every real font's contour complexity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-rasterizer changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
 

@@ -8,6 +8,7 @@
 #define TEST_POINT_CAPACITY 4096u
 #define TEST_CONTOUR_CAPACITY 256u
 #define GLYPH_COUNT 128u
+#define TOTAL_TEST_GLYPHS (GLYPH_COUNT * 2u)
 #define COLD_RASTER_ITERATIONS 256u
 #define WARM_DRAW_ITERATIONS 50000u
 #define SURFACE_WIDTH 128
@@ -16,7 +17,8 @@
 
 int32_t font_loaded = 1;
 int32_t font_units_per_em = 1000;
-int32_t font_num_glyphs = 256;
+int32_t font_num_glyphs = 512;
+uint32_t outline_load_count;
 int32_t font_ascent = 800;
 int32_t doc_font_size = 12;
 int32_t font_glyph_contour_count;
@@ -38,7 +40,7 @@ extern int font_draw_codepoint_size(
 );
 
 uint32_t font_cmap_lookup(uint32_t codepoint) {
-    return codepoint >= 33u && codepoint < 33u + GLYPH_COUNT
+    return codepoint >= 33u && codepoint < 33u + TOTAL_TEST_GLYPHS
         ? codepoint : 0u;
 }
 
@@ -57,7 +59,8 @@ int font_glyph_load_outline(uint32_t glyph_id) {
     static const int32_t outline_y[8] = {
         80, 80, 180, 580, 680, 680, 580, 180
     };
-    if (glyph_id == 0u || glyph_id >= 256u) return -1;
+    if (glyph_id == 0u || glyph_id >= 512u) return -1;
+    ++outline_load_count;
     font_glyph_contour_count = 1;
     font_glyph_point_count = 8;
     font_glyph_contour_ends[0] = 7;
@@ -107,6 +110,7 @@ int main(void) {
     /* Prime every entry, then draw a deterministic pseudorandom sequence over
      * the full cache working set. This measures lookup plus alpha blending. */
     font_cache_clear();
+    outline_load_count = 0;
     for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
         uint32_t codepoint = 33u + i;
         if (font_draw_codepoint_size(
@@ -116,6 +120,9 @@ int main(void) {
                 SURFACE_STRIDE, 12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
             fail("failed to populate the complete glyph cache");
     }
+
+    if (outline_load_count != GLYPH_COUNT)
+        fail("warm-cache priming did not rasterize exactly 128 unique glyphs");
 
     uint32_t random_state = 0x4e454b4fu;
     start = monotonic_raw_ns();
@@ -131,8 +138,48 @@ int main(void) {
             fail("warm glyph-cache draw returned an error");
     }
     warm_elapsed = monotonic_raw_ns() - start;
+    if (outline_load_count != GLYPH_COUNT)
+        fail("warm working-set draws unexpectedly rerasterized a cached glyph");
     for (uint32_t i = 0; i < SURFACE_WIDTH * SURFACE_HEIGHT; ++i)
         checksum += framebuffer[i];
+
+    /* Force every LRU slot to be replaced with a disjoint 128-glyph set. The
+     * second pass must hit those entries, and clearing the cache must make the
+     * next pass reload them. This exercises hash-chain unlink and reset paths. */
+    for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
+        uint32_t codepoint = 33u + GLYPH_COUNT + i;
+        if (font_draw_codepoint_size(
+                codepoint, (int32_t)((i & 7u) * 14u),
+                (int32_t)(((i >> 3) & 3u) * 14u),
+                (uint8_t *)framebuffer, SURFACE_WIDTH, SURFACE_HEIGHT,
+                SURFACE_STRIDE, 12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
+            fail("cache replacement pass failed");
+    }
+    if (outline_load_count != TOTAL_TEST_GLYPHS)
+        fail("replacing the full cache did not rasterize the second glyph set");
+    for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
+        uint32_t codepoint = 33u + GLYPH_COUNT + i;
+        if (font_draw_codepoint_size(
+                codepoint, (int32_t)((i & 7u) * 14u),
+                (int32_t)(((i >> 3) & 3u) * 14u),
+                (uint8_t *)framebuffer, SURFACE_WIDTH, SURFACE_HEIGHT,
+                SURFACE_STRIDE, 12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
+            fail("replacement working set did not produce cache hits");
+    }
+    if (outline_load_count != TOTAL_TEST_GLYPHS)
+        fail("replacement working set was rerasterized unexpectedly");
+    font_cache_clear();
+    for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
+        uint32_t codepoint = 33u + GLYPH_COUNT + i;
+        if (font_draw_codepoint_size(
+                codepoint, (int32_t)((i & 7u) * 14u),
+                (int32_t)(((i >> 3) & 3u) * 14u),
+                (uint8_t *)framebuffer, SURFACE_WIDTH, SURFACE_HEIGHT,
+                SURFACE_STRIDE, 12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
+            fail("drawing after cache clear failed");
+    }
+    if (outline_load_count != TOTAL_TEST_GLYPHS + GLYPH_COUNT)
+        fail("font_cache_clear left stale hash entries behind");
 
     printf("NekoEdit rasterizer microbenchmark (synthetic 8-point outline)\n");
     printf("CLOCK_MONOTONIC_RAW resolution: %ld ns\n",
@@ -144,5 +191,7 @@ int main(void) {
            WARM_DRAW_ITERATIONS,
            (double)warm_elapsed / (double)WARM_DRAW_ITERATIONS,
            checksum);
+    printf("cache correctness: hit reuse, collision chains, full eviction, and clear passed (%u outline loads)\n",
+           outline_load_count);
     return 0;
 }

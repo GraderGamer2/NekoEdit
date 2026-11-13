@@ -8,6 +8,7 @@
 #define BITMAP_SIDE 128u
 #define BITMAP_BYTES (BITMAP_SIDE * BITMAP_SIDE)
 #define CACHE_SLOTS 128u
+#define CACHE_HASH_BUCKETS 64u
 #define SAMPLES 4u
 
 extern int32_t font_loaded, font_units_per_em, font_num_glyphs, font_ascent;
@@ -35,17 +36,60 @@ struct cache_entry {
     uint32_t glyph_id, stamp;
     int16_t left, top;
     uint8_t width, height, size, valid;
+    uint16_t hash_next; /* one-based cache slot index; zero terminates a chain */
     uint8_t pixels[BITMAP_BYTES];
 };
 static struct cache_entry cache[CACHE_SLOTS];
+static uint16_t cache_buckets[CACHE_HASH_BUCKETS];
 static uint32_t cache_clock;
+
+_Static_assert((CACHE_HASH_BUCKETS & (CACHE_HASH_BUCKETS - 1u)) == 0u,
+               "glyph cache bucket count must be a power of two");
+
+/* Mix the glyph ID and raster size so equal IDs at different sizes remain
+ * separate keys and adjacent glyph IDs distribute across the compact buckets. */
+static uint32_t cache_bucket(uint32_t glyph_id, uint32_t size) {
+    uint32_t key = glyph_id * 0x9e3779b1u;
+    key ^= size * 0x85ebca6bu;
+    key ^= key >> 16;
+    key ^= key >> 8;
+    return key & (CACHE_HASH_BUCKETS - 1u);
+}
+
+/* Keep recency ordering valid even after the 32-bit stamp wraps. */
+static uint32_t cache_next_stamp(void) {
+    if (++cache_clock == 0u) {
+        cache_clock = 1u;
+        for (uint32_t i=0;i<CACHE_SLOTS;++i) cache[i].stamp=0;
+    }
+    return cache_clock;
+}
+
+/* Unlink one valid slot from its key's chain before reusing that slot. */
+static void cache_unlink_slot(uint32_t slot_index) {
+    struct cache_entry *entry=&cache[slot_index];
+    uint32_t bucket=cache_bucket(entry->glyph_id,entry->size);
+    uint16_t *link=&cache_buckets[bucket];
+    while (*link) {
+        uint32_t current=(uint32_t)(*link)-1u;
+        if (current>=CACHE_SLOTS) return;
+        if (current==slot_index) {
+            *link=cache[current].hash_next;
+            entry->hash_next=0;
+            return;
+        }
+        link=&cache[current].hash_next;
+    }
+}
 
 /* Discard all face-local masks after a validated font replacement. */
 void font_cache_clear(void) {
     for (uint32_t i=0;i<CACHE_SLOTS;++i) {
         cache[i].valid=0;
         cache[i].stamp=0;
+        cache[i].hash_next=0;
     }
+    for (uint32_t i=0;i<CACHE_HASH_BUCKETS;++i) cache_buckets[i]=0;
     cache_clock=0;
 }
 
@@ -220,26 +264,51 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
 }
 
 static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
-    struct cache_entry *slot=&cache[0];
-    for (uint32_t i=0;i<CACHE_SLOTS;++i) {
-        struct cache_entry *e=&cache[i];
-        if (e->valid && e->glyph_id==glyph_id && e->size==size) {
-            e->stamp=++cache_clock;
-            return e;
+    uint32_t bucket=cache_bucket(glyph_id,size);
+    uint16_t link=cache_buckets[bucket];
+
+    /* Warm lookups visit only the short chain for this (glyph,size) key. */
+    while (link) {
+        uint32_t slot_index=(uint32_t)link-1u;
+        if (slot_index>=CACHE_SLOTS) return (struct cache_entry *)0;
+        struct cache_entry *entry=&cache[slot_index];
+        if (entry->valid && entry->glyph_id==glyph_id && entry->size==size) {
+            entry->stamp=cache_next_stamp();
+            return entry;
         }
-        if (!e->valid) slot=e;
-        else if (slot->valid && e->stamp<slot->stamp) slot=e;
+        link=entry->hash_next;
     }
-    if (++cache_clock==0) {
-        cache_clock=1;
-        for (uint32_t i=0;i<CACHE_SLOTS;++i) cache[i].stamp=0;
+
+    /* A miss still performs the bounded 128-entry LRU victim selection. This
+     * keeps exact eviction behavior while moving the common hit path off the
+     * large, pixel-bearing cache records. */
+    struct cache_entry *slot=(struct cache_entry *)0;
+    uint32_t slot_index=0;
+    for (uint32_t i=0;i<CACHE_SLOTS;++i) {
+        struct cache_entry *entry=&cache[i];
+        if (!entry->valid) {
+            slot=entry;
+            slot_index=i;
+            break;
+        }
+        if (!slot || entry->stamp<slot->stamp) {
+            slot=entry;
+            slot_index=i;
+        }
     }
-    if (font_rasterize_glyph(glyph_id,size)<0) return (struct cache_entry *)0;
-    slot->glyph_id=glyph_id; slot->stamp=cache_clock;
+    if (!slot || font_rasterize_glyph(glyph_id,size)<0)
+        return (struct cache_entry *)0;
+
+    if (slot->valid) cache_unlink_slot(slot_index);
+    slot->glyph_id=glyph_id;
+    slot->stamp=cache_next_stamp();
     slot->left=(int16_t)font_bitmap_left; slot->top=(int16_t)font_bitmap_top;
     slot->width=(uint8_t)font_bitmap_width; slot->height=(uint8_t)font_bitmap_height;
     slot->size=(uint8_t)size; slot->valid=1;
     for (uint32_t i=0;i<BITMAP_BYTES;++i) slot->pixels[i]=font_bitmap_pixels[i];
+
+    slot->hash_next=cache_buckets[bucket];
+    cache_buckets[bucket]=(uint16_t)(slot_index+1u);
     return slot;
 }
 
