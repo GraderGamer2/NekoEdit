@@ -5828,8 +5828,8 @@ wayland_main:
     js .protocol_error
     jmp .seat_check_sync
 .seat_check_output_event:
-    # Output objects are bound after this roundtrip, so only process any
-    # output events that refer to an already-bound proxy.
+    # Output proxies are already bound at this point; unknown objects fall
+    # through to the remaining startup-event handlers.
     call handle_output_event
     test eax, eax
     js .protocol_error
@@ -5842,34 +5842,18 @@ wayland_main:
     test eax, eax
     js .protocol_error
     jnz .seat_check_sync
-.seat_check_keyboard_event:
-    # wl_keyboard.keymap may arrive before the initial seat sync callback.
-    # Consume it here instead of dropping it while the bootstrap roundtrip
-    # waits for wl_display.sync.done.
-    mov eax, dword ptr [rip + keyboard_object]
-    test eax, eax
-    jz .seat_check_buffer_release
-    cmp dword ptr [rip + last_object], eax
-    jne .seat_check_buffer_release
-    inc dword ptr [rip + keyboard_dispatch_count]
-    mov eax, dword ptr [rip + last_opcode]
-    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
-    mov eax, dword ptr [rip + last_size]
-    mov dword ptr [rip + keyboard_dispatch_last_size], eax
-    cmp dword ptr [rip + last_opcode], 0
-    jne .seat_check_buffer_release
-    call keyboard_keymap_dispatch
-    test rax, rax
-    js .protocol_error
-    jmp .seat_check_sync
+
 .seat_check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
+    test eax, eax
+    jz .seat_check_pointer_event
     cmp dword ptr [rip + last_object], eax
     jne .seat_check_pointer_event
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_pointer_event
     mov dword ptr [rip + buffer_busy], 0
     jmp .seat_check_sync
+
 .seat_check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
     test eax, eax
@@ -5883,6 +5867,7 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 2
     je .seat_pointer_motion
     jmp .seat_check_sync
+
 .seat_pointer_enter:
     call pointer_capture_enter
     jmp .seat_check_sync
@@ -5892,6 +5877,28 @@ wayland_main:
     jmp .seat_check_sync
 .seat_pointer_motion:
     call pointer_capture_motion
+
+.seat_check_keyboard_event:
+    # wl_keyboard.keymap can arrive before the initial seat sync callback.
+    # Process it after buffer/pointer routing and before testing sync.done.
+    # Unmatched events advance to sync handling and cannot cycle between
+    # object checks.
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .seat_check_sync
+    cmp dword ptr [rip + last_object], eax
+    jne .seat_check_sync
+    inc dword ptr [rip + keyboard_dispatch_count]
+    mov eax, dword ptr [rip + last_opcode]
+    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
+    mov eax, dword ptr [rip + last_size]
+    mov dword ptr [rip + keyboard_dispatch_last_size], eax
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_sync
+    call keyboard_keymap_dispatch
+    test rax, rax
+    js .protocol_error
+    jmp .seat_check_sync
 .seat_check_sync:
     cmp dword ptr [rip + last_object], 14
     jne .seat_roundtrip
