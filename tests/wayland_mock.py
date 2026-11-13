@@ -536,7 +536,7 @@ def run(
         os.makedirs(os.path.join(runtime_dir, "nested-dir"))
         with open(os.path.join(runtime_dir, "relative-open.txt"), "wb") as document:
             document.write(b"I")
-        large_line = (b"0123456789abcdef" * 8) + b"\\n"
+        large_line = (b"0123456789abcdef" * 8) + b"\n"
         large_size = 11 * 1024 * 1024
         large_expected = (large_line * ((large_size + len(large_line) - 1) // len(large_line)))[:large_size]
         with open(os.path.join(runtime_dir, "oversized.txt"), "wb") as document:
@@ -7980,7 +7980,7 @@ xkb_symbols "nekoedit-sparse" {
                     large_open_elapsed_ms = (time.perf_counter() - large_open_started) * 1000.0
                     large_open_state = picker_state()
                     large_path = os.path.join(runtime_dir, "oversized.txt").encode()
-                    expected_line_count = large_expected.count(b"\\n") + 1
+                    expected_line_count = large_expected.count(b"\n") + 1
                     if (
                         large_open_state.get("active_path") != large_path
                         or large_open_state.get("doc_length") != len(large_expected)

@@ -16612,6 +16612,8 @@ doc_line_index_rebuild:
     mov ecx, r15d
     sub ecx, r12d
     mov al, 10
+    test ecx, ecx
+    jz .Ldoc_index_fill_contiguous_last
     repne scasb
     jnz .Ldoc_index_fill_contiguous_last
 
