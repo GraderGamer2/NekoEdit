@@ -60,6 +60,7 @@
 .equ MAX_WINDOW_HEIGHT, 2160
 .equ MAX_BUFFER_SCALE, 2
 .equ SHM_BUFFER_CAPACITY, (MAX_WINDOW_WIDTH * MAX_WINDOW_HEIGHT * 4)
+.equ SHM_POOL_CAPACITY, (SHM_BUFFER_CAPACITY * 2)
 .equ WINDOW_MIN_WIDTH, 480
 .equ WINDOW_MIN_HEIGHT, 360
 .equ WINDOW_RESIZE_BORDER, 16
@@ -4846,6 +4847,11 @@ window_doc_visible_rows: .long 0
 picker_ui_font_size: .long 0
 path_prompt_font_size: .long 0
 ui_transform_font_size: .long 0
+.global window_buffer_slot_ids, window_buffer_slot_busy, window_buffer_last_slot, buffer_busy
+window_buffer_slot_ids: .zero 8
+window_buffer_slot_busy: .zero 8
+window_buffer_last_slot: .long 0
+buffer_slot_new_id:     .long 0
 window_buffer_id:       .long 0
 window_pending_width:   .long 0
 window_pending_height:  .long 0
@@ -4859,6 +4865,7 @@ wayland_name_ptr:      .quad 0
 socket_fd:             .quad 0
 shm_fd:                .quad 0
 shm_mapping:           .quad 0
+shm_mapping_base:      .quad 0
 compositor_global:     .long 0
 compositor_version:    .long 0
 shm_global:            .long 0
@@ -5294,6 +5301,12 @@ wayland_main:
     mov rdi, qword ptr [rip + preferences_locale_ptr]
     call compose_locale_load
     mov dword ptr [rip + window_buffer_id], 12
+    mov dword ptr [rip + window_buffer_slot_ids], 12
+    mov dword ptr [rip + window_buffer_slot_ids + 4], 0
+    mov dword ptr [rip + window_buffer_slot_busy], 0
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    mov dword ptr [rip + window_buffer_last_slot], 1
+    mov dword ptr [rip + buffer_busy], 0
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
@@ -5687,14 +5700,14 @@ wayland_main:
 
     mov eax, SYS_ftruncate
     mov rdi, qword ptr [rip + shm_fd]
-    mov esi, SHM_BUFFER_CAPACITY
+    mov esi, SHM_POOL_CAPACITY
     syscall
     test rax, rax
     js .protocol_error
 
     mov eax, SYS_mmap
     xor edi, edi
-    mov esi, SHM_BUFFER_CAPACITY
+    mov esi, SHM_POOL_CAPACITY
     mov edx, PROT_READ | PROT_WRITE
     mov r10d, MAP_SHARED
     mov r8, qword ptr [rip + shm_fd]
@@ -5704,6 +5717,7 @@ wayland_main:
     js .protocol_error
     mov qword ptr [rip + mmap_result], rax
     mov qword ptr [rip + shm_mapping], rax
+    mov qword ptr [rip + shm_mapping_base], rax
 
     # Draw the initial software-rendered palette surface.
     call render_surface
@@ -5712,7 +5726,7 @@ wayland_main:
     mov qword ptr [rip + failure_stage], rax
     # wl_shm.create_pool(new_id=11, fd, size=BUFFER_SIZE)
     mov dword ptr [rip + payload_buffer], 11
-    mov dword ptr [rip + payload_buffer + 4], SHM_BUFFER_CAPACITY
+    mov dword ptr [rip + payload_buffer + 4], SHM_POOL_CAPACITY
     mov edi, 5
     xor esi, esi
     lea rdx, [rip + payload_buffer]
@@ -5844,15 +5858,9 @@ wayland_main:
     jnz .seat_check_sync
 
 .seat_check_buffer_release:
-    mov eax, dword ptr [rip + window_buffer_id]
+    call window_handle_buffer_release
     test eax, eax
-    jz .seat_check_pointer_event
-    cmp dword ptr [rip + last_object], eax
-    jne .seat_check_pointer_event
-    cmp dword ptr [rip + last_opcode], 0
-    jne .seat_check_pointer_event
-    mov dword ptr [rip + buffer_busy], 0
-    jmp .seat_check_sync
+    jnz .seat_check_sync
 
 .seat_check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
@@ -6034,12 +6042,14 @@ wayland_main:
     jne .check_buffer_release
     cmp dword ptr [rip + last_opcode], 0
     jne .protocol_error
-    # wl_callback.done is one-shot; the compositor destroys the callback.
+    # Frame pacing is independent of wl_buffer storage ownership.
     mov dword ptr [rip + frame_callback_id], 0
+    cmp dword ptr [rip + window_resize_pending], 0
+    je .check_frame_callback_redraw
     cmp dword ptr [rip + buffer_busy], 0
     jne .event_loop
-    cmp dword ptr [rip + window_resize_pending], 0
-    jne .event_apply_window_resize
+    jmp .event_apply_window_resize
+.check_frame_callback_redraw:
     cmp dword ptr [rip + redraw_pending], 0
     je .event_loop
     call present_buffer
@@ -6047,14 +6057,15 @@ wayland_main:
     js .protocol_error
     jmp .event_loop
 .check_buffer_release:
-    mov eax, dword ptr [rip + window_buffer_id]
-    cmp dword ptr [rip + last_object], eax
-    jne .check_seat_event
-    cmp dword ptr [rip + last_opcode], 0
-    jne .check_seat_event
-    mov dword ptr [rip + buffer_busy], 0
+    call window_handle_buffer_release
+    test eax, eax
+    jz .check_seat_event
     cmp dword ptr [rip + window_resize_pending], 0
-    jne .event_apply_window_resize
+    je .check_buffer_release_redraw
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .event_loop
+    jmp .event_apply_window_resize
+.check_buffer_release_redraw:
     cmp dword ptr [rip + frame_callback_id], 0
     jne .event_loop
     cmp dword ptr [rip + redraw_pending], 0
@@ -8377,8 +8388,6 @@ wayland_main:
     js .protocol_error
 .Lkeyboard_changed_without_ime:
     mov dword ptr [rip + redraw_pending], 1
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
@@ -8393,8 +8402,6 @@ wayland_main:
     js .protocol_error
 .Ldocument_scroll_without_ime:
     mov dword ptr [rip + redraw_pending], 1
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
@@ -8415,8 +8422,6 @@ wayland_main:
     jmp .event_loop
 .text_input_redraw_only:
     mov dword ptr [rip + redraw_pending], 1
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .event_loop
     call present_buffer
     test rax, rax
     js .protocol_error
@@ -15046,6 +15051,39 @@ window_commit_initial_size:
     ret
 .size window_commit_initial_size, . - window_commit_initial_size
 
+# Match either retained wl_buffer object and clear only its own ownership bit.
+# RAX = 1 when a release was consumed, otherwise 0.
+.type window_handle_buffer_release, @function
+window_handle_buffer_release:
+    cmp dword ptr [rip + last_opcode], 0
+    jne .window_buffer_release_unmatched
+    mov eax, dword ptr [rip + last_object]
+    lea rdx, [rip + window_buffer_slot_ids]
+    cmp dword ptr [rdx], eax
+    je .window_buffer_release_slot0
+    cmp dword ptr [rdx + 4], eax
+    je .window_buffer_release_slot1
+.window_buffer_release_unmatched:
+    xor eax, eax
+    ret
+.window_buffer_release_slot0:
+    cmp dword ptr [rip + window_buffer_slot_busy], 0
+    je .window_buffer_release_matched
+    mov dword ptr [rip + window_buffer_slot_busy], 0
+    jmp .window_buffer_release_count
+.window_buffer_release_slot1:
+    cmp dword ptr [rip + window_buffer_slot_busy + 4], 0
+    je .window_buffer_release_matched
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+.window_buffer_release_count:
+    cmp dword ptr [rip + buffer_busy], 0
+    je .window_buffer_release_matched
+    dec dword ptr [rip + buffer_busy]
+.window_buffer_release_matched:
+    mov eax, 1
+    ret
+.size window_handle_buffer_release, . - window_handle_buffer_release
+
 .type window_handle_surface_configure, @function
 window_handle_surface_configure:
     push r12
@@ -15089,8 +15127,11 @@ window_apply_pending_resize:
     push r12
     push r13
     push r14
+    sub rsp, 8                  # align nested calls after four callee-saved pushes
     cmp dword ptr [rip + window_resize_pending], 0
     je .window_resize_present
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .window_resize_done
     mov r12d, dword ptr [rip + window_pending_width]
     test r12d, r12d
     jnz .window_resize_width_ready
@@ -15119,14 +15160,29 @@ window_apply_pending_resize:
     mov dword ptr [rip + window_width], r12d
     mov dword ptr [rip + window_height], r13d
     call window_update_geometry
-    mov ebx, dword ptr [rip + window_buffer_id]
-    mov edi, ebx
+    # Every old-generation buffer is idle here. Destroy each object before
+    # reusing either offset for the new geometry.
+    xor ebx, ebx
+.window_resize_destroy_slot:
+    lea rax, [rip + window_buffer_slot_ids]
+    mov edi, dword ptr [rax + rbx*4]
+    test edi, edi
+    jz .window_resize_destroy_next
     xor esi, esi
     xor edx, edx
     xor ecx, ecx
     call wl_send_request
     test rax, rax
     js .window_resize_done
+    lea rax, [rip + window_buffer_slot_ids]
+    mov dword ptr [rax + rbx*4], 0
+.window_resize_destroy_next:
+    lea rax, [rip + window_buffer_slot_busy]
+    mov dword ptr [rax + rbx*4], 0
+    inc ebx
+    cmp ebx, 2
+    jb .window_resize_destroy_slot
+    mov dword ptr [rip + buffer_busy], 0
     mov r14d, dword ptr [rip + next_client_object_id]
     lea eax, [r14 + 1]
     mov dword ptr [rip + next_client_object_id], eax
@@ -15146,7 +15202,15 @@ window_apply_pending_resize:
     call wl_send_request
     test rax, rax
     js .window_resize_done
+    mov dword ptr [rip + window_buffer_slot_ids], r14d
+    mov dword ptr [rip + window_buffer_slot_ids + 4], 0
+    mov dword ptr [rip + window_buffer_slot_busy], 0
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    mov dword ptr [rip + window_buffer_last_slot], 1
+    mov dword ptr [rip + buffer_busy], 0
     mov dword ptr [rip + window_buffer_id], r14d
+    mov rax, qword ptr [rip + shm_mapping_base]
+    mov qword ptr [rip + shm_mapping], rax
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
     mov eax, dword ptr [rip + window_buffer_transform]
@@ -15157,6 +15221,7 @@ window_apply_pending_resize:
     jne .window_resize_done
     call present_buffer
 .window_resize_done:
+    add rsp, 8
     pop r14
     pop r13
     pop r12
@@ -15183,16 +15248,97 @@ application_exit:
     jmp linux_exit
 .size application_exit, . - application_exit
 
+# Allocate the lazily used second buffer at the second half of the SHM pool.
+.type window_create_second_buffer, @function
+window_create_second_buffer:
+    sub rsp, 8
+    mov eax, dword ptr [rip + next_client_object_id]
+    mov dword ptr [rip + buffer_slot_new_id], eax
+    lea edx, [rax + 1]
+    mov dword ptr [rip + next_client_object_id], edx
+    mov dword ptr [rip + payload_buffer], eax
+    mov dword ptr [rip + payload_buffer + 4], SHM_BUFFER_CAPACITY
+    mov eax, dword ptr [rip + window_buffer_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_buffer_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov eax, dword ptr [rip + window_stride]
+    mov dword ptr [rip + payload_buffer + 16], eax
+    mov dword ptr [rip + payload_buffer + 20], 1
+    mov edi, 11
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 24
+    call wl_send_request
+    test rax, rax
+    js .window_create_second_buffer_done
+    mov eax, dword ptr [rip + buffer_slot_new_id]
+    mov dword ptr [rip + window_buffer_slot_ids + 4], eax
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    xor eax, eax
+.window_create_second_buffer_done:
+    add rsp, 8
+    ret
+.size window_create_second_buffer, . - window_create_second_buffer
+
 .type present_buffer, @function
 present_buffer:
-    sub rsp, 8                  # maintain 16-byte alignment for nested calls
-    cmp dword ptr [rip + buffer_busy], 0
-    jne .present_buffer_busy
+    # r12d retains the selected slot across the renderer and protocol calls.
+    push r12
     cmp dword ptr [rip + frame_callback_id], 0
-    jne .present_buffer_frame_pending
+    jne .present_buffer_blocked
+    cmp dword ptr [rip + window_resize_pending], 0
+    jne .present_buffer_blocked
+    # Prefer the opposite slot only when it already exists and is free.
+    # Otherwise reuse slot zero unless it is still compositor-owned.
+    mov eax, dword ptr [rip + window_buffer_last_slot]
+    xor eax, 1
+    test eax, eax
+    jz .present_buffer_prefer_slot0
+    cmp dword ptr [rip + window_buffer_slot_ids + 4], 0
+    je .present_buffer_try_slot0
+    cmp dword ptr [rip + window_buffer_slot_busy + 4], 0
+    je .present_buffer_select_slot1
+    jmp .present_buffer_try_slot0
+.present_buffer_prefer_slot0:
+    cmp dword ptr [rip + window_buffer_slot_busy], 0
+    je .present_buffer_select_slot0
+    jmp .present_buffer_try_slot1
+.present_buffer_try_slot0:
+    cmp dword ptr [rip + window_buffer_slot_busy], 0
+    jne .present_buffer_try_slot1
+.present_buffer_select_slot0:
+    xor r12d, r12d
+    mov eax, dword ptr [rip + window_buffer_slot_ids]
+    test eax, eax
+    jz .present_buffer_no_slot
+    jmp .present_buffer_slot_ready
+.present_buffer_try_slot1:
+    cmp dword ptr [rip + window_buffer_slot_busy + 4], 0
+    jne .present_buffer_no_slot
+    mov r12d, 1
+    mov eax, dword ptr [rip + window_buffer_slot_ids + 4]
+    test eax, eax
+    jnz .present_buffer_slot_ready
+    call window_create_second_buffer
+    test rax, rax
+    js .present_buffer_done
+    mov eax, dword ptr [rip + window_buffer_slot_ids + 4]
+    jmp .present_buffer_slot_ready
+.present_buffer_select_slot1:
+    mov r12d, 1
+    mov eax, dword ptr [rip + window_buffer_slot_ids + 4]
+.present_buffer_slot_ready:
+    mov dword ptr [rip + window_buffer_id], eax
+    mov rdx, qword ptr [rip + shm_mapping_base]
+    test r12d, r12d
+    jz .present_buffer_mapping_ready
+    add rdx, SHM_BUFFER_CAPACITY
+.present_buffer_mapping_ready:
+    mov qword ptr [rip + shm_mapping], rdx
     call render_surface
-    # One frame callback gates this surface commit. Changes while it is
-    # outstanding are coalesced in redraw_pending.
+    # A frame callback throttles commits; wl_buffer.release independently
+    # controls which backing slot may be mutated.
     mov eax, dword ptr [rip + next_client_object_id]
     lea edx, [rax + 1]
     mov dword ptr [rip + next_client_object_id], edx
@@ -15275,19 +15421,19 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
-    mov dword ptr [rip + buffer_busy], 1
+    lea rdx, [rip + window_buffer_slot_busy]
+    mov dword ptr [rdx + r12*4], 1
+    inc dword ptr [rip + buffer_busy]
+    mov dword ptr [rip + window_buffer_last_slot], r12d
     mov dword ptr [rip + redraw_pending], 0
     xor eax, eax
-    add rsp, 8
-    ret
-.present_buffer_frame_pending:
-    # The buffer may be free, but the previous frame has not completed yet.
-    xor eax, eax
     jmp .present_buffer_done
-.present_buffer_busy:
-    mov rax, -16
+.present_buffer_blocked:
+.present_buffer_no_slot:
+    mov dword ptr [rip + redraw_pending], 1
+    xor eax, eax
 .present_buffer_done:
-    add rsp, 8
+    pop r12
     ret
 .size present_buffer, . - present_buffer
 
@@ -23987,6 +24133,9 @@ window_attach_initial_buffer:
     call wl_send_request
     test rax, rax
     js .initial_buffer_done
+    mov dword ptr [rip + window_buffer_slot_busy], 1
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    mov dword ptr [rip + window_buffer_last_slot], 0
     mov dword ptr [rip + buffer_busy], 1
     mov dword ptr [rip + window_surface_mapped], 1
     xor eax, eax
@@ -24115,6 +24264,14 @@ window_prepare_initial_buffer_scale:
     test rax, rax
     js .window_prepare_initial_scale_done
     mov dword ptr [rip + window_buffer_id], r12d
+    mov dword ptr [rip + window_buffer_slot_ids], r12d
+    mov dword ptr [rip + window_buffer_slot_ids + 4], 0
+    mov dword ptr [rip + window_buffer_slot_busy], 0
+    mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    mov dword ptr [rip + window_buffer_last_slot], 1
+    mov dword ptr [rip + buffer_busy], 0
+    mov rax, qword ptr [rip + shm_mapping_base]
+    mov qword ptr [rip + shm_mapping], rax
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
     mov eax, dword ptr [rip + window_buffer_transform]

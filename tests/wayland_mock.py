@@ -351,6 +351,7 @@ def run(
     right_alt_level3_test: bool = False,
     expected_saved_bytes: bytes = b"z",
     frame_callback_order_test: bool = False,
+    buffer_pool_test: bool = False,
     verify_frame_callbacks: bool = False,
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
@@ -517,7 +518,7 @@ def run(
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
             compositor_advertised_version = 6 if (
-                output_tracking_test or initial_preferred_buffer_scale > 1
+                buffer_pool_test or output_tracking_test or initial_preferred_buffer_scale > 1
                 or initial_preferred_buffer_transform != 0 or dpi_runtime_test
                 or fractional_scale_test
             ) else 1
@@ -617,14 +618,15 @@ def run(
                 raise AssertionError(f"wl_shm.create_pool did not transfer exactly one fd: {pool!r}")
             pool_id, buffer_size = struct.unpack("<II", pool[2])
             expected_size = 3840 * 2160 * 4
-            if (pool_id, buffer_size) != (11, expected_size):
+            expected_pool_size = expected_size * 2
+            if (pool_id, buffer_size) != (11, expected_pool_size):
                 raise AssertionError(f"unexpected shm pool args: {(pool_id, buffer_size)!r}")
             shm_fd = pool[3][0]
             pixels = None
             try:
-                if os.fstat(shm_fd).st_size != expected_size:
-                    raise AssertionError("memfd size does not match requested shared buffer size")
-                pixels = mmap.mmap(shm_fd, expected_size, access=mmap.ACCESS_READ)
+                if os.fstat(shm_fd).st_size != expected_pool_size:
+                    raise AssertionError("memfd size does not match the two-slot shared buffer pool")
+                pixels = mmap.mmap(shm_fd, expected_pool_size, access=mmap.ACCESS_READ)
 
                 def rendered_color_present(
                     x: int, y: int, width: int, height: int, stride: int, color: int
@@ -3810,6 +3812,176 @@ xkb_symbols "nekoedit-sparse" {
                             f"frame callback lifecycle was inconsistent: {frame_callback_stats!r}"
                         )
                     observations.append("release-before-frame-done ordering and redraw coalescing verified")
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if buffer_pool_test:
+                    wait_buffer_idle("startup idle before two-slot buffer test")
+                    baseline_requested = frame_callback_stats["requested"]
+                    baseline_completed = frame_callback_stats["completed"]
+                    if frame_callback_stats["pending"]:
+                        raise AssertionError(
+                            f"startup left frame callbacks pending: {frame_callback_stats!r}"
+                        )
+                    if child_u32("window_buffer_slot_ids") != client_buffer_id:
+                        raise AssertionError("initial buffer is not registered in slot zero")
+                    if child_u32_at("window_buffer_slot_ids", 4) != 0:
+                        raise AssertionError("second slot was allocated before it was needed")
+
+                    # Hold the first buffer after its frame callback completes.
+                    # A later edit must allocate slot one instead of modifying
+                    # storage that the compositor still owns.
+                    frame_callback_stats["defer"] = True
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1600, 1600, 30, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1601, 1601, 30, 0))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)),
+                        "first slot attach while slot zero is idle",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "first slot damage",
+                    )
+                    expect_message(client, (8, 6, b""), "first slot commit")
+                    first_callback_id = frame_callback_stats["pending"][-1]
+                    wait_child_u32("frame_callback_id", first_callback_id, "first pool callback")
+                    wait_child_u32("buffer_busy", 1, "first pool slot ownership")
+                    frame_callback_stats["pending"].remove(first_callback_id)
+                    frame_callback_stats["completed"] += 1
+                    client.sendall(wire_message(first_callback_id, 0, struct.pack("<I", 1)))
+                    wait_child_u32("frame_callback_id", 0, "first pool callback completion")
+                    wait_child_u32("buffer_busy", 1, "first slot remains compositor-owned after frame done")
+
+                    # The callback is complete but slot zero is not released.
+                    # The next edit must create an independent second offset.
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1602, 1602, 48, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1603, 1603, 48, 0))
+                    )
+                    create_slot1 = recv_wayland_message(client)
+                    if create_slot1[:2] != (11, 0) or len(create_slot1[2]) != 24 or create_slot1[3]:
+                        raise AssertionError(f"second slot creation request is malformed: {create_slot1!r}")
+                    slot1_id, slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format = struct.unpack("<6I", create_slot1[2])
+                    if (slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format) != (
+                        expected_size, 800, initial_height, 3200, 1
+                    ):
+                        raise AssertionError(
+                            "second slot has incorrect pool offset or geometry: "
+                            f"{(slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format)!r}"
+                        )
+                    if slot1_id in (0, client_buffer_id):
+                        raise AssertionError(f"second slot received a reused object ID: {slot1_id}")
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", slot1_id, 0, 0)),
+                        "second slot attach while slot zero is still busy",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "second slot damage",
+                    )
+                    expect_message(client, (8, 6, b""), "second slot commit")
+                    second_callback_id = frame_callback_stats["pending"][-1]
+                    wait_child_u32("frame_callback_id", second_callback_id, "second pool callback")
+                    wait_child_u32("buffer_busy", 2, "both pool slots owned")
+                    if child_u32_at("window_buffer_slot_ids", 4) != slot1_id:
+                        raise AssertionError("the second slot object ID was not retained")
+                    if (
+                        child_u32_at("window_buffer_slot_busy", 0) != 1
+                        or child_u32_at("window_buffer_slot_busy", 4) != 1
+                    ):
+                        raise AssertionError("both independently attached slots must be marked busy")
+                    if struct.unpack_from("<I", pixels, expected_size)[0] != 0xFF78A9D4:
+                        raise AssertionError("second-slot rendering did not use its own SHM offset")
+
+                    # A preferred-scale change starts a new buffer generation.
+                    # Neither old slot may be destroyed/reused until both
+                    # release, even when frame.done arrives between them.
+                    client.sendall(wire_message(8, 2, struct.pack("<I", 2)))
+                    wait_child_u32("window_buffer_scale", 2, "preferred 2x scale event")
+                    wait_child_u32("window_resize_pending", 1, "2x generation waits for releases")
+                    client.sendall(wire_message(client_buffer_id, 0))
+                    wait_child_u32("buffer_busy", 1, "first release leaves slot one owned")
+                    wait_child_u32("window_buffer_slot_busy", 0, "slot zero release state")
+                    if child_u32_at("window_buffer_slot_busy", 4) != 1:
+                        raise AssertionError("slot one release state changed before its release event")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            "old generation was replaced before every buffer release: "
+                            f"{unexpected!r}"
+                        )
+
+                    frame_callback_stats["pending"].remove(second_callback_id)
+                    frame_callback_stats["completed"] += 1
+                    client.sendall(wire_message(second_callback_id, 0, struct.pack("<I", 2)))
+                    wait_child_u32("frame_callback_id", 0, "second pool callback completion")
+                    wait_child_u32("buffer_busy", 1, "scale replacement remains gated by slot one")
+                    if child_u32("window_resize_pending") != 1:
+                        raise AssertionError("frame.done incorrectly cleared the pending buffer generation")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            "frame completion incorrectly substituted for wl_buffer.release: "
+                            f"{unexpected!r}"
+                        )
+
+                    frame_callback_stats["defer"] = False
+                    client.sendall(wire_message(slot1_id, 0))
+                    expect_message(client, (client_buffer_id, 0, b""), "destroy released slot zero")
+                    expect_message(client, (slot1_id, 0, b""), "destroy released slot one")
+                    create_scaled = recv_wayland_message(client)
+                    if create_scaled[:2] != (11, 0) or len(create_scaled[2]) != 24 or create_scaled[3]:
+                        raise AssertionError(f"scaled buffer creation request is malformed: {create_scaled!r}")
+                    scaled_id, scaled_offset, scaled_width, scaled_height, scaled_stride, scaled_format = struct.unpack("<6I", create_scaled[2])
+                    if (scaled_offset, scaled_width, scaled_height, scaled_stride, scaled_format) != (0, 1600, 960, 6400, 1):
+                        raise AssertionError(
+                            "new generation buffer has incorrect offset or geometry: "
+                            f"{(scaled_offset, scaled_width, scaled_height, scaled_stride, scaled_format)!r}"
+                        )
+                    if scaled_id in (0, client_buffer_id, slot1_id):
+                        raise AssertionError(f"new generation reused a live buffer object ID: {scaled_id}")
+                    expect_message(
+                        client, (8, 8, struct.pack("<i", 2)), "apply new generation surface scale"
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", scaled_id, 0, 0)),
+                        "attach new generation slot zero",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "damage new generation in logical coordinates",
+                    )
+                    expect_message(client, (8, 6, b""), "commit new 2x generation")
+                    wait_child_u32("window_buffer_id", scaled_id, "new generation buffer ID")
+                    wait_child_u32("window_buffer_created_scale", 2, "new generation scale")
+                    wait_child_u32("buffer_busy", 1, "new generation slot ownership")
+                    wait_child_u32("frame_callback_id", 0, "new generation callback completion")
+                    client.sendall(wire_message(scaled_id, 0))
+                    wait_child_u32("buffer_busy", 0, "new generation release")
+                    if child_u32_at("window_buffer_slot_ids", 4) != 0:
+                        raise AssertionError("the retired second slot survived the generation swap")
+                    if (
+                        child_u32_at("window_buffer_slot_busy", 0) != 0
+                        or child_u32_at("window_buffer_slot_busy", 4) != 0
+                    ):
+                        raise AssertionError("new generation slot ownership did not return to idle")
+                    wait_child_u32("redraw_pending", 0, "no stale redraw after generation swap")
+                    if (
+                        frame_callback_stats["requested"] != baseline_requested + 3
+                        or frame_callback_stats["completed"] != baseline_completed + 3
+                        or frame_callback_stats["pending"]
+                    ):
+                        raise AssertionError(
+                            f"two-slot frame callback accounting is inconsistent: {frame_callback_stats!r}"
+                        )
+                    observations.append(
+                        "lazy two-slot SHM allocation, independent release tracking, separate frame pacing, "
+                        "and all-slot scale-generation replacement verified"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
@@ -9482,6 +9654,7 @@ if __name__ == "__main__":
         raise SystemExit(f"usage: {sys.argv[0]} PATH_TO_NEKOEDIT")
     run(sys.argv[1], verify_frame_callbacks=True)
     run(sys.argv[1], frame_callback_order_test=True)
+    run(sys.argv[1], buffer_pool_test=True)
     # Exercise the optional text-input-v3/IME path independently of the
     # physical-keyboard fallback and without cursor-shape/clipboard globals.
     run(sys.argv[1], text_input_test=True, cursor_shape_supported=False)

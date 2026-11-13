@@ -1,3 +1,13 @@
+## 2026-11-13 — add lazily allocated release-tracked SHM buffer slot (CI pending)
+
+The software renderer now reserves two maximum-size regions in one memfd-backed `wl_shm_pool`, while creating only the first `wl_buffer` at startup. If a frame callback completes while that buffer is still compositor-owned, the next redraw lazily creates a second buffer at the second region's offset and renders into its own mapping. Each slot has an independent busy flag; the aggregate count is flow-control state, not a boolean.
+
+The event loop now handles `wl_buffer.release` and `wl_surface.frame.done` as separate events. A release frees only the matching slot; a frame callback only opens the next frame-pacing gate. Resize, integer-scale, and transform replacement is held until every old-generation slot has been released, after which all old buffer objects are destroyed and a fresh slot-zero buffer is created. No storage is reused based solely on frame completion.
+
+The new protocol-mock scenario covers lazy second-slot creation and offset, writing into the second mapped region, independent slot release tracking, frame completion while a slot remains busy, and scale-generation replacement only after both releases. The pool capacity is 66,355,200 bytes (about 63.3 MiB); the second buffer object remains lazy. This is not described as a performance optimization until redraw latency and memory residency are measured. Build and compositor integration validation are pending.
+
+---
+
 ## 2026-11-13 — preserve live XKB keymaps across startup syncs (CI PASS #901)
 
 Actions [Build and test #901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) completed successfully on Ubuntu 24.04 with all 16 workflow steps green. The run validates the freestanding build and ELF, command-line smoke tests, complete Wayland protocol mock, executable inspection, native libxkbcommon-generated `us(intl)` map through NekoEdit's own XKB parser, pinned X.Org importer, Compose locale-pack build, and the real GNOME Shell 46 / Mutter 46.2 native Wayland integration. Both the Compose-locale and Linux x86-64 executable artifacts uploaded successfully.
