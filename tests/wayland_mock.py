@@ -240,6 +240,46 @@ def expect_message(connection, expected, label: str):
     return actual
 
 
+def expect_fractional_scale_startup(
+    connection, manager_id: int, viewporter_id: int,
+    viewport_id: int, fractional_id: int, sync_callback_id: int,
+    preferred_scale: int,
+) -> None:
+    """Verify consecutive extension IDs and deliver the initial preferred scale."""
+    manager_name = b"wp_fractional_scale_manager_v1\0"
+    manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
+    expect_message(
+        connection,
+        (2, 0, struct.pack("<II", 10, len(manager_name)) + manager_padded
+         + struct.pack("<II", 1, manager_id)),
+        "bind fractional-scale manager after bootstrap proxies",
+    )
+    viewporter_name = b"wp_viewporter\0"
+    viewporter_padded = viewporter_name + (b"\0" * (-len(viewporter_name) % 4))
+    expect_message(
+        connection,
+        (2, 0, struct.pack("<II", 11, len(viewporter_name)) + viewporter_padded
+         + struct.pack("<II", 1, viewporter_id)),
+        "bind viewporter after bootstrap proxies",
+    )
+    expect_message(
+        connection, (viewporter_id, 1, struct.pack("<II", viewport_id, 8)),
+        "create viewport for main surface",
+    )
+    expect_message(
+        connection, (manager_id, 1, struct.pack("<II", fractional_id, 8)),
+        "create fractional-scale object for main surface",
+    )
+    expect_message(
+        connection, (1, 0, struct.pack("<I", sync_callback_id)),
+        "sync initial fractional-scale preference",
+    )
+    connection.sendall(
+        wire_message(fractional_id, 0, struct.pack("<I", preferred_scale))
+        + wire_message(sync_callback_id, 0)
+    )
+
+
 def run(
     binary: str,
     *,
@@ -514,34 +554,8 @@ def run(
 
             expect_message(client, (1, 0, struct.pack("<I", 7)), "bind sync")
             client.sendall(wire_message(7, 0, struct.pack("<I", 2)))
-            if fractional_scale_test:
-                fractional_name = b"wp_fractional_scale_manager_v1\0"
-                fractional_padded = fractional_name + (b"\0" * (-len(fractional_name) % 4))
-                expect_message(
-                    client,
-                    (2, 0, struct.pack("<II", 10, len(fractional_name))
-                     + fractional_padded + struct.pack("<II", 1, 15)),
-                    "bind fractional-scale manager",
-                )
-                viewporter_name = b"wp_viewporter\0"
-                viewporter_padded = viewporter_name + (b"\0" * (-len(viewporter_name) % 4))
-                expect_message(
-                    client,
-                    (2, 0, struct.pack("<II", 11, len(viewporter_name))
-                     + viewporter_padded + struct.pack("<II", 1, 16)),
-                    "bind viewporter",
-                )
-            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
-            if fractional_scale_test:
-                expect_message(
-                    client, (16, 1, struct.pack("<II", 17, 8)),
-                    "create viewport for main surface",
-                )
-                expect_message(
-                    client, (15, 1, struct.pack("<II", 18, 8)),
-                    "create fractional scale object for main surface",
-                )
-            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
+            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
+            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
             expect_message(client, (9, 1, struct.pack("<I", 10)), "get_toplevel")
             expect_message(
                 client, (10, 8, struct.pack("<ii", 480, 360)),
@@ -567,14 +581,9 @@ def run(
                 wire_message(8, 3, struct.pack("<I", initial_preferred_buffer_transform))
                 if initial_preferred_buffer_transform != 0 else b""
             )
-            fractional_scale_event = (
-                wire_message(18, 0, struct.pack("<I", initial_preferred_fractional_scale))
-                if fractional_scale_test else b""
-            )
             client.sendall(
                 preferred_scale_event
                 + preferred_transform_event
-                + fractional_scale_event
                 + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
@@ -608,11 +617,11 @@ def run(
                         for column in range(x, x + width)
                     )
 
-                buffer_scale = (
-                    2 if fractional_scale_test and initial_preferred_fractional_scale > 120
-                    else 1 if fractional_scale_test
-                    else initial_preferred_buffer_scale
-                )
+                # The first wl_buffer is allocated before optional seat and
+                # fractional-scale proxies can be appended to the dense ID map.
+                # It therefore starts at 1x and may be replaced before attach
+                # once the initial preferred_scale event is received.
+                buffer_scale = 1 if fractional_scale_test else initial_preferred_buffer_scale
                 surface_pixel_width = 800 * buffer_scale
                 surface_pixel_height = initial_height * buffer_scale
                 buffer_width, buffer_height = (
@@ -749,30 +758,59 @@ def run(
                 if not seat_supported:
                     if not fractional_scale_test:
                         raise AssertionError("seat-less fixture is reserved for fractional viewport coverage")
+                    viewport_object_id = 15
+                    expect_fractional_scale_startup(
+                        client, 13, 14, viewport_object_id, 16, 17,
+                        initial_preferred_fractional_scale,
+                    )
+                    client_buffer_id = 12
+                    target_buffer_scale = 2 if initial_preferred_fractional_scale > 120 else 1
+                    if target_buffer_scale != buffer_scale:
+                        expect_message(client, (client_buffer_id, 0, b""), "destroy unattached 1x buffer")
+                        client_buffer_id = 18
+                        buffer_scale = target_buffer_scale
+                        surface_pixel_width = 800 * buffer_scale
+                        surface_pixel_height = initial_height * buffer_scale
+                        buffer_width, buffer_height = (
+                            (surface_pixel_height, surface_pixel_width)
+                            if initial_preferred_buffer_transform % 2
+                            else (surface_pixel_width, surface_pixel_height)
+                        )
+                        buffer_stride = buffer_width * 4
+                        expect_message(
+                            client,
+                            (11, 0, struct.pack("<6I", client_buffer_id, 0, buffer_width, buffer_height, buffer_stride, 1)),
+                            "create fractional-scale replacement buffer",
+                        )
+                        if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(3, 10) != 0xFF343D4B:
+                            raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at 2x")
+                        if logical_buffer_pixel(400, 40) != 0xFF252A33:
+                            raise AssertionError("fractional-scale replacement lost logical document background")
+                        observations.append("fractional preference replaced the unattached 1x buffer with a 2x source raster")
                     expect_message(
-                        client, (17, 2, struct.pack("<ii", 800, initial_height)),
+                        client, (viewport_object_id, 2, struct.pack("<ii", 800, initial_height)),
                         "set logical viewport destination without a seat",
                     )
-                    expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach seat-less buffer")
+                    expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "attach seat-less buffer")
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
                         "damage seat-less surface in logical coordinates",
                     )
                     expect_message(client, (8, 6, b""), "map seat-less fractional surface")
                     observations.append("fractional viewport mapped correctly without wl_seat; client object IDs remained valid")
-                    # Force a same-size configure after release. The first
-                    # redraw callback must start after extension proxy IDs
-                    # 15..18 rather than reusing 13 or 14. recv_wayland_message
-                    # consumes frame requests while looking for the attach, so
+                    # Force a same-size configure after release. The display
+                    # sync used ID 17 and the replacement buffer used ID 18,
+                    # so the next frame callback must use ID 19. The mock drains
+                    # frame requests while looking for the following attach;
                     # verify the callback ID through the recorded request list.
                     previous_frame_requests = frame_callback_stats["requested"]
                     client.sendall(
-                        wire_message(12, 0)
+                        wire_message(client_buffer_id, 0)
                         + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                         + wire_message(9, 0, struct.pack("<I", 1235))
                     )
                     expect_message(client, (9, 4, struct.pack("<I", 1235)), "acknowledge seat-less configure")
-                    expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "reattach seat-less buffer")
+                    expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "reattach seat-less buffer")
                     if (
                         frame_callback_stats["requested"] != previous_frame_requests + 1
                         or not frame_callback_stats["ids"]
@@ -804,7 +842,7 @@ def run(
                     "bind wl_seat",
                 )
                 expect_message(client, (1, 0, struct.pack("<I", 14)), "seat sync")
-                pointer_object_id = 19 if fractional_scale_test else 15
+                pointer_object_id = 15
                 keyboard_object_id = pointer_object_id + 1
                 next_test_object_id = keyboard_object_id + 1
                 client.sendall(wire_message(13, 0, struct.pack("<I", 3)))
@@ -881,6 +919,17 @@ def run(
                     )
                     next_test_object_id += 2
                     observations.append("optional text-input-v3 manager bound and object created for seat 13")
+                viewport_object_id = 0
+                if fractional_scale_test:
+                    viewport_object_id = next_test_object_id + 2
+                    fractional_id = next_test_object_id + 3
+                    fractional_sync_id = next_test_object_id + 4
+                    expect_fractional_scale_startup(
+                        client, next_test_object_id, next_test_object_id + 1,
+                        viewport_object_id, fractional_id, fractional_sync_id,
+                        initial_preferred_fractional_scale,
+                    )
+                    next_test_object_id += 5
                 if output_tracking_enabled:
                     # Outputs are created after every fixed bootstrap and optional
                     # input-service proxy, preserving Wayland's contiguous new_id map.
@@ -902,6 +951,31 @@ def run(
                             f"bind wl_output global {global_name}",
                         )
                     next_test_object_id += 2
+                client_buffer_id = 12
+                target_buffer_scale = 2 if fractional_scale_test and initial_preferred_fractional_scale > 120 else buffer_scale
+                if fractional_scale_test and target_buffer_scale != buffer_scale:
+                    expect_message(client, (client_buffer_id, 0, b""), "destroy unattached 1x buffer")
+                    client_buffer_id = next_test_object_id
+                    next_test_object_id += 1
+                    buffer_scale = target_buffer_scale
+                    surface_pixel_width = 800 * buffer_scale
+                    surface_pixel_height = initial_height * buffer_scale
+                    buffer_width, buffer_height = (
+                        (surface_pixel_height, surface_pixel_width)
+                        if initial_preferred_buffer_transform % 2
+                        else (surface_pixel_width, surface_pixel_height)
+                    )
+                    buffer_stride = buffer_width * 4
+                    expect_message(
+                        client,
+                        (11, 0, struct.pack("<6I", client_buffer_id, 0, buffer_width, buffer_height, buffer_stride, 1)),
+                        "create fractional-scale replacement buffer",
+                    )
+                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(3, 10) != 0xFF343D4B:
+                        raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at 2x")
+                    if logical_buffer_pixel(400, 40) != 0xFF252A33:
+                        raise AssertionError("fractional-scale replacement lost logical document background")
+                    observations.append("fractional preference replaced the unattached 1x buffer with a 2x source raster")
                 # Map only after all initial client objects have been allocated.
                 # A new wl_surface already defaults to buffer_scale=1;
                 # fractional viewport mode must not send a redundant scale
@@ -919,10 +993,10 @@ def run(
                     )
                 if fractional_scale_test:
                     expect_message(
-                        client, (17, 2, struct.pack("<ii", 800, initial_height)),
+                        client, (viewport_object_id, 2, struct.pack("<ii", 800, initial_height)),
                         "set logical viewport destination before mapping",
                     )
-                expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
+                expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "attach buffer")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
                 if dpi_runtime_test:

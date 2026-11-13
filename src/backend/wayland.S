@@ -5521,10 +5521,10 @@ wayland_main:
     cmp dword ptr [rip + last_opcode], 0
     jne .bind_roundtrip
 
+    # Reserve IDs 8..14 for the core surface, shm buffer, and optional seat
+    # bootstrap. Extension proxies are allocated later from the shared ID
+    # allocator, after every earlier new_id has been created.
     mov dword ptr [rip + next_client_object_id], 15
-    call fractional_scale_bind_managers
-    test rax, rax
-    js .protocol_error
 
     lea rax, [rip + stage_xdg_create]
     mov qword ptr [rip + failure_stage], rax
@@ -5535,9 +5535,6 @@ wayland_main:
     lea rdx, [rip + payload_buffer]
     mov ecx, 4
     call wl_send_request
-    test rax, rax
-    js .protocol_error
-    call fractional_scale_create_surface_objects
     test rax, rax
     js .protocol_error
 
@@ -5744,14 +5741,12 @@ wayland_main:
     # seat roundtrip uses ID 14 and pointer/keyboard continue at ID 15.
     cmp dword ptr [rip + seat_global], 0
     jne .seat_global_available
-    # No seat=13 or roundtrip callback=14 exists in this session. Continue
-    # after the optional fractional-scale proxies if they were allocated.
-    mov eax, 13
-    cmp dword ptr [rip + viewport_object], 0
-    je .no_seat_next_client_id_ready
-    mov eax, dword ptr [rip + next_client_object_id]
-.no_seat_next_client_id_ready:
-    mov dword ptr [rip + next_client_object_id], eax
+    # No seat=13 or roundtrip callback=14 exists in this session. The
+    # allocator starts at 13; optional fractional proxies are appended now.
+    mov dword ptr [rip + next_client_object_id], 13
+    call fractional_scale_startup
+    test rax, rax
+    js .protocol_error
     call output_bind_pending
     test rax, rax
     js .protocol_error
@@ -5878,6 +5873,12 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call text_input_setup
+    test rax, rax
+    js .protocol_error
+    # Input and cursor proxies now own their monotonically allocated IDs.
+    # Add fractional-scale/viewport proxies and wait for the initial preferred
+    # scale before sizing or attaching the first shared-memory buffer.
+    call fractional_scale_startup
     test rax, rax
     js .protocol_error
     call output_bind_pending
@@ -23580,6 +23581,95 @@ render_document:
     pop rbx
     ret
 .size render_document, . - render_document
+
+# Create the optional fractional-scale/viewport objects after the fixed
+# surface, shm, seat and input proxies have consumed their lower object IDs.
+# A display sync ensures the initial preferred_scale event is received before
+# the first buffer dimensions and viewport destination are finalized.
+.type fractional_scale_startup, @function
+fractional_scale_startup:
+    push r12
+    push r13
+    sub rsp, 8                  # align nested System V calls
+    cmp dword ptr [rip + fractional_scale_manager_global], 0
+    je .fractional_startup_done
+    cmp dword ptr [rip + viewporter_global], 0
+    je .fractional_startup_done
+    call fractional_scale_bind_managers
+    test rax, rax
+    js .fractional_startup_return
+    call fractional_scale_create_surface_objects
+    test rax, rax
+    js .fractional_startup_return
+    cmp dword ptr [rip + fractional_scale_enabled], 1
+    jne .fractional_startup_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    inc dword ptr [rip + next_client_object_id]
+    mov dword ptr [rip + payload_buffer], r12d
+    mov edi, 1
+    xor esi, esi                # wl_display.sync(new callback)
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .fractional_startup_return
+.fractional_startup_read:
+    call wl_read_event
+    test rax, rax
+    js .fractional_startup_return
+    mov eax, dword ptr [rip + fractional_scale_object]
+    cmp dword ptr [rip + last_object], eax
+    jne .fractional_startup_check_ping
+    call handle_fractional_scale_event
+    test rax, rax
+    js .fractional_startup_return
+    jmp .fractional_startup_check_sync
+.fractional_startup_check_ping:
+    cmp dword ptr [rip + last_object], 6
+    jne .fractional_startup_registry
+    cmp dword ptr [rip + last_opcode], 0
+    jne .fractional_startup_check_sync
+    call handle_xdg_ping
+    test rax, rax
+    js .fractional_startup_return
+    jmp .fractional_startup_check_sync
+.fractional_startup_registry:
+    cmp dword ptr [rip + last_object], 2
+    jne .fractional_startup_check_sync
+    cmp dword ptr [rip + last_opcode], 0
+    je .fractional_startup_global
+    cmp dword ptr [rip + last_opcode], 1
+    je .fractional_startup_global_remove
+    jmp .fractional_startup_check_sync
+.fractional_startup_global:
+    call registry_capture_global
+    jmp .fractional_startup_check_sync
+.fractional_startup_global_remove:
+    call handle_output_global_remove
+    test eax, eax
+    js .fractional_startup_return
+.fractional_startup_check_sync:
+    cmp dword ptr [rip + last_object], 1
+    jne .fractional_startup_check_sync_callback
+    cmp dword ptr [rip + last_opcode], 0
+    jne .fractional_startup_check_sync_callback
+    mov rax, -71
+    jmp .fractional_startup_return
+.fractional_startup_check_sync_callback:
+    cmp dword ptr [rip + last_object], r12d
+    jne .fractional_startup_read
+    cmp dword ptr [rip + last_opcode], 0
+    jne .fractional_startup_read
+    xor eax, eax
+    jmp .fractional_startup_return
+.fractional_startup_done:
+    xor eax, eax
+.fractional_startup_return:
+    add rsp, 8
+    pop r13
+    pop r12
+    ret
+.size fractional_scale_startup, . - fractional_scale_startup
 
 # Bind the optional fractional-scale manager and viewporter as a pair.
 .type fractional_scale_bind_managers, @function
