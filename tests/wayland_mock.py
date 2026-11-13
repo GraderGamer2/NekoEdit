@@ -595,6 +595,19 @@ def run(
                         "<I", pixels, by * buffer_stride + bx * 4
                     )[0]
 
+                def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
+                    for row in range(y, y + height):
+                        for column in range(x, x + width):
+                            pixel = logical_buffer_pixel(column, row)
+                            red, green, blue = (
+                                (pixel >> 16) & 0xFF,
+                                (pixel >> 8) & 0xFF,
+                                pixel & 0xFF,
+                            )
+                            if red >= 128 and green >= 138 and blue >= 148:
+                                return True
+                    return False
+
                 if initial_preferred_buffer_transform != 0:
                     if logical_buffer_pixel(2, 10) != 0xFF78A9D4:
                         raise AssertionError("transformed buffer did not preserve the accent rail")
@@ -638,20 +651,6 @@ def run(
                         raise AssertionError("status bar accent separator was not rendered")
                     if struct.unpack_from("<I", pixels, (status_top + 1) * 800 * 4)[0] != 0xFF343D4B:
                         raise AssertionError("status bar background was not rendered")
-                    def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
-                        for row in range(y, y + height):
-                            for column in range(x, x + width):
-                                pixel = struct.unpack_from(
-                                    "<I", pixels, row * 800 * 4 + column * 4
-                                )[0]
-                                red, green, blue = (
-                                    (pixel >> 16) & 0xFF,
-                                    (pixel >> 8) & 0xFF,
-                                    pixel & 0xFF,
-                                )
-                                if red >= 128 and green >= 138 and blue >= 148:
-                                    return True
-                        return False
     
                     if not font_parser_test and not antialiased_ink_present(16, initial_height - 16, 88, 14):
                         raise AssertionError("logical line status label was not rendered")
