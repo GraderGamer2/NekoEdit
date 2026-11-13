@@ -1,10 +1,20 @@
+## 2026-11-13 — inspect Mutter-delivered XKB map and Compose dispatch (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [1ad43b229a538c8256fb2fe9bdfb1c976a698800](https://github.com/GraderGamer2/NekoEdit/commit/1ad43b229a538c8256fb2fe9bdfb1c976a698800) | test: inspect compositor-delivered XKB state |
+
+The live test now reads NekoEdit's actual parsed XKB table and current Compose state through an inherited, read-only process-memory descriptor. It verifies map parsing and required actions, then waits for the Compose and dead-key state transitions. This is diagnostic instrumentation only; the next CI run has not yet validated it.
+
+---
+
 ## 2026-11-13 — isolate Mutter Compose delivery from physical Right Alt mapping (CI pending)
 
 | Commit | Subject |
 |---|---|
 | [dfb14ca32fa6e21a1b6a997ac3403a5d35196dee](https://github.com/GraderGamer2/NekoEdit/commit/dfb14ca32fa6e21a1b6a997ac3403a5d35196dee) | test: separate physical XKB mapping from Compose injection |
 
-The Mutter smoke test uses an explicit Multi_key keysym for deterministic Compose coverage. The native XKB test independently asserts evdev Right Alt 100 → XKB keycode 108 → Multi_key with compose:ralt. The preceding Actions #895 run failed only after switching the compositor canary to raw evdev Right Alt injection; this correction is awaiting CI verification.
+The Mutter smoke test uses an explicit Multi_key keysym for deterministic Compose coverage, while the native XKB test independently asserts evdev Right Alt 100 → XKB keycode 108 → Multi_key with compose:ralt. The subsequent Actions #896 run also failed with this explicit keysym path, despite historical success in #885. The initial assumption that this would restore a passing live canary was incorrect; see the newer runtime XKB probe entry above.
 
 ---
 
