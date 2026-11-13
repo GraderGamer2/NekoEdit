@@ -1207,25 +1207,24 @@ def run(
                     or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or word_navigation_test or pointer_drag_test
                     or line_navigation_test or find_replace_test
                 ):
+                    def document_pixel(logical_x: int, logical_y: int) -> int:
+                        # Hit testing stays logical; sample its physical pixel.
+                        return struct.unpack_from(
+                            "<I", pixels,
+                            (logical_y * buffer_scale) * buffer_stride
+                            + (logical_x * buffer_scale) * 4,
+                        )[0]
+
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
                         clicked_caret_x = 16 + clicked_caret_column * 8
-                        caret_visible = (
-                            struct.unpack_from(
-                                "<I", pixels, 92 * 800 * 4 + clicked_caret_x * 4
-                            )[0] == 0xFFFFFFFF
-                        )
+                        caret_visible = document_pixel(clicked_caret_x, 92) == 0xFFFFFFFF
                     else:
-                        # For a longer launch-time document, verify that pointer
-                        # hit testing leaves a visible caret near the clicked cell.
-                        # This deliberately tolerates either side of a cell
-                        # midpoint while keeping the original short-file assertion
-                        # exact.
+                        # The caret is a scale-sized vertical rectangle. Sample
+                        # one physical pixel at the start of each logical row.
                         caret_visible = any(
                             all(
-                                struct.unpack_from(
-                                    "<I", pixels, (92 + row) * 800 * 4 + x * 4
-                                )[0] == 0xFFFFFFFF
+                                document_pixel(x, 92 + row) == 0xFFFFFFFF
                                 for row in range(9)
                             )
                             for column in range(9, 12)

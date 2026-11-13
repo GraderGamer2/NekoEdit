@@ -1,8 +1,10 @@
-## 2026-11-13 — sample clear document background in the 2× raster check (CI pending)
+## 2026-11-13 — make caret pixel assertions buffer-scale aware (CI pending)
 
-The embedded 5×7 fallback now passes the 2× glyph-coverage check in Actions [#875](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365046377). That run stopped on a test-coordinate mistake: logical x=10, y=40 lies inside the active document-tab rectangle (x=8..160, y=40..76), not in the unobstructed main editor background. The renderer correctly painted that foreground tab. Move the background sample to x=400, y=40, inside the empty document workspace and away from the tab/sidebar controls; no production renderer change is needed for this assertion.
+Actions [#876](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365409500) passed the freestanding build/ELF checks and CLI smoke tests. The initial 2× buffer geometry, pixel coverage for the title rail/background/status separator, and embedded fallback glyph coverage now pass. The run next failed in the shared post-click caret visibility assertion: it sampled the shared-memory mapping with the original 800px row pitch and logical x/y offsets, which is valid only at 1×. With the 1600px-wide 2× buffer, the caret was present at its physical coordinates but the test inspected unrelated pixels.
 
-The full Wayland mock still needs to complete the runtime 1×→2×→1× replacement case. The current test-only correction is pending in Actions [#876](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336YYYYYYY).
+Keep the caret hit-test expectations in logical units, but map each sample through buffer_scale and buffer_stride before reading physical memory. This also checks that the caret remains aligned to the same logical insertion point after output scaling. No production-code change is made for this test-harness issue. Runtime 1×→2×→1× buffer replacement remains unverified until the rest of the Wayland mock completes.
+
+Correction pending in Actions [#877](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336ZZZZZZ).
 
 ---
 
