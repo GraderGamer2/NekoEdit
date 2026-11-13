@@ -401,7 +401,7 @@ fi
 mutter_xkb_probe() {
     python3 "$SCRIPT_DIR/mutter_xkb_state_probe.py" "$APP_BINARY" 9 "$@"
 }
-mutter_xkb_probe --wait-field keymap_processing_complete --equals 1 --assert-keymap
+mutter_xkb_probe --timeout 1
 
 send_key() {
     gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \

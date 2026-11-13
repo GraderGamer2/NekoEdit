@@ -33,6 +33,21 @@ WORD_SYMBOLS = (
     "doc_compose_second",
     "doc_compose_third",
     "doc_compose_fourth",
+    "pointer_created",
+    "pointer_object",
+    "keyboard_created",
+    "keyboard_object",
+    "seat_capabilities",
+    "next_client_object_id",
+    "fractional_scale_object",
+    "viewport_object",
+    "keymap_event_count",
+    "keymap_event_last_object",
+    "keymap_event_last_size",
+    "keymap_event_last_fd",
+    "keyboard_dispatch_count",
+    "keyboard_dispatch_last_opcode",
+    "keyboard_dispatch_last_size",
 )
 POINTER_SYMBOLS = ("keymap_mapping",)
 BUFFER_SYMBOLS = ("event_payload", "xkb_unicode_levels")
@@ -128,6 +143,25 @@ def snapshot(memory_fd: int, addresses: dict[str, int]) -> dict[str, Any]:
             for name in ("Multi_key", "dead_grave", "dead_circumflex")
         },
         "action_positions": action_positions,
+        "proxy_state": {
+            "pointer_created": values["pointer_created"],
+            "pointer_object": values["pointer_object"],
+            "keyboard_created": values["keyboard_created"],
+            "keyboard_object": values["keyboard_object"],
+            "seat_capabilities": values["seat_capabilities"],
+            "next_client_object_id": values["next_client_object_id"],
+            "fractional_scale_object": values["fractional_scale_object"],
+            "viewport_object": values["viewport_object"],
+            "keyboard_dispatch_count": values["keyboard_dispatch_count"],
+            "keyboard_dispatch_last_opcode": values["keyboard_dispatch_last_opcode"],
+            "keyboard_dispatch_last_size": values["keyboard_dispatch_last_size"],
+            "keymap_event_count": values["keymap_event_count"],
+            "keymap_event_last_object": values["keymap_event_last_object"],
+            "keymap_event_last_size": values["keymap_event_last_size"],
+            "keymap_event_last_fd": struct.unpack(
+                "<i", read_exact(memory_fd, 4, addresses["keymap_event_last_fd"], "keymap_event_last_fd")
+            )[0],
+        },
         "last_event": {
             "object": values["last_object"],
             "opcode": values["last_opcode"],

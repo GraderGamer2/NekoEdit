@@ -4899,6 +4899,7 @@ fractional_scale_manager_global: .long 0
 viewporter_global: .long 0
 fractional_scale_manager_object: .long 0
 viewporter_object: .long 0
+.global fractional_scale_object, viewport_object
 fractional_scale_object: .long 0
 viewport_object: .long 0
 fractional_scale_enabled: .long 0
@@ -4937,6 +4938,7 @@ pointer_x:             .long 0
 pointer_y:             .long 0
 pointer_serial:        .long 0
 pointer_inside:         .long 0
+.global pointer_created, pointer_object, keyboard_created, keyboard_object
 pointer_created:        .long 0
 pointer_object:         .long 0
 keyboard_created:       .long 0
@@ -4960,8 +4962,17 @@ keymap_size:            .long 0
 keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
-.global next_client_object_id
 next_client_object_id:  .long 0
+.global keymap_event_count, keymap_event_last_object, keymap_event_last_size, keymap_event_last_fd
+.global keyboard_dispatch_count, keyboard_dispatch_last_opcode, keyboard_dispatch_last_size
+keymap_event_count:        .long 0
+keymap_event_last_object:  .long 0
+keymap_event_last_size:    .long 0
+keymap_event_last_fd:      .long -1
+keyboard_dispatch_count:  .long 0
+keyboard_dispatch_last_opcode: .long 0
+keyboard_dispatch_last_size: .long 0
+.global seat_capabilities, next_client_object_id
 seat_capabilities:      .long 0
 pointer_button_down:    .long 0
 .global doc_selection_active, doc_view_top_row, doc_view_left_px
@@ -7051,6 +7062,11 @@ wayland_main:
     jz .check_text_input_event
     cmp dword ptr [rip + last_object], eax
     jne .check_text_input_event
+    inc dword ptr [rip + keyboard_dispatch_count]
+    mov eax, dword ptr [rip + last_opcode]
+    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
+    mov eax, dword ptr [rip + last_size]
+    mov dword ptr [rip + keyboard_dispatch_last_size], eax
     cmp dword ptr [rip + last_opcode], 0
     je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
@@ -7065,6 +7081,13 @@ wayland_main:
     je .keyboard_repeat_info
     jmp .event_loop
 .keyboard_keymap:
+    inc dword ptr [rip + keymap_event_count]
+    mov eax, dword ptr [rip + last_object]
+    mov dword ptr [rip + keymap_event_last_object], eax
+    mov eax, dword ptr [rip + last_size]
+    mov dword ptr [rip + keymap_event_last_size], eax
+    mov eax, dword ptr [rip + event_fd]
+    mov dword ptr [rip + keymap_event_last_fd], eax
     cmp dword ptr [rip + last_size], 8
     jne .protocol_error
     cmp dword ptr [rip + event_fd], -1
