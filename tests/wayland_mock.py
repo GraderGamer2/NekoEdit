@@ -8011,11 +8011,16 @@ xkb_symbols "nekoedit-sparse" {
                         f"{expected_line_count:,}-line document "
                         f"({large_open_elapsed_ms:.1f} ms through first presented redraw)"
                     )
+                    print(
+                        f"Large-document Open/index/first-frame: "
+                        f"{len(large_expected):,} bytes, {expected_line_count:,} lines, "
+                        f"{large_open_elapsed_ms:.1f} ms"
+                    )
                     serial = large_open_serial + 42
 
-                    # The 65,537-byte single-line fixture wraps into hundreds of
-                    # visual rows. Verify editor scrolling is independent of the
-                    # directory picker's separate scroll model.
+                    # The 11 MiB multi-line document wraps into roughly twice
+                    # as many visual rows as logical lines. Verify editor
+                    # scrolling is independent of the picker's scroll model.
                     editor_scroll_state = picker_state()
                     if (
                         editor_scroll_state.get("doc_total_visual_rows", 0)
@@ -8053,9 +8058,30 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"editor wheel did not advance the visual viewport by three rows: {editor_scroll_state!r}"
                         )
-                    if editor_scroll_state.get("doc_scroll_thumb_top", 92) <= 92:
+                    max_scroll_rows = (
+                        editor_scroll_state["doc_total_visual_rows"]
+                        - editor_scroll_state["window_doc_visible_rows"]
+                    )
+                    thumb_travel = (
+                        editor_scroll_state["window_doc_bottom"]
+                        - 92
+                        - editor_scroll_state["doc_scroll_thumb_height"]
+                    )
+                    expected_thumb_top = 92 + (
+                        editor_scroll_state["doc_view_top_row"] * thumb_travel
+                        // max_scroll_rows
+                    )
+                    if editor_scroll_state.get("doc_scroll_thumb_top") != expected_thumb_top:
                         raise AssertionError(
-                            f"editor wheel did not move the thumb downward: {editor_scroll_state!r}"
+                            "editor wheel placed the thumb outside its proportional integer geometry: "
+                            + repr({
+                                "view_top_row": editor_scroll_state.get("doc_view_top_row"),
+                                "total_visual_rows": editor_scroll_state.get("doc_total_visual_rows"),
+                                "thumb_top": editor_scroll_state.get("doc_scroll_thumb_top"),
+                                "expected_thumb_top": expected_thumb_top,
+                                "thumb_travel": thumb_travel,
+                                "max_scroll_rows": max_scroll_rows,
+                            })
                         )
                     thumb_top = editor_scroll_state["doc_scroll_thumb_top"]
                     thumb_height = editor_scroll_state["doc_scroll_thumb_height"]
