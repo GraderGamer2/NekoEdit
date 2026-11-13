@@ -3,6 +3,7 @@
 .equ SYS_read,          0
 .equ SYS_write,         1
 .equ SYS_close,         3
+.equ SYS_fchmod,        91
 .equ SYS_lseek,          8
 .equ SYS_getcwd,        79
 .equ SYS_getdents64,   217
@@ -5074,6 +5075,10 @@ path_prompt_length:     .long 0
 file_probe_byte:        .byte 0
 .balign 8
 save_target_path:       .quad 0
+save_target_mode:       .long 0
+save_target_mode_valid: .long 0
+.balign 8
+save_stat_buffer:       .zero 144
 .balign 16
 path_prompt_buffer:     .zero PATH_CAPACITY
 current_path_buffer:    .zero PATH_CAPACITY
@@ -11401,6 +11406,36 @@ save_document_to_path:
     cmp byte ptr [r12], 0
     je .save_atomic_error
 
+    # Inspect the current target before creating the replacement. For a
+    # regular file, retain its permission/special bits instead of replacing a
+    # private 0600 file with the temporary's default 0644 mode. ENOENT means
+    # Save As is creating a new file, which continues to use 0644 & umask.
+    mov dword ptr [rip + save_target_mode_valid], 0
+.save_atomic_stat_retry:
+    mov eax, SYS_newfstatat
+    mov edi, AT_FDCWD
+    mov rsi, r12
+    lea rdx, [rip + save_stat_buffer]
+    xor r10d, r10d             # follow symlinks, matching normal stat()
+    syscall
+    cmp rax, -4
+    je .save_atomic_stat_retry
+    test rax, rax
+    jz .save_atomic_have_target
+    cmp rax, -2                # ENOENT: new file (or dangling symlink)
+    jne .save_atomic_error
+    jmp .save_atomic_target_mode_ready
+.save_atomic_have_target:
+    mov eax, dword ptr [rip + save_stat_buffer + 24]
+    mov edx, eax
+    and edx, STAT_S_IFMT
+    cmp edx, STAT_S_IFREG
+    jne .save_atomic_error     # never atomically replace a device, FIFO, or directory
+    and eax, 0x0fff            # rwx plus setuid/setgid/sticky permission bits
+    mov dword ptr [rip + save_target_mode], eax
+    mov dword ptr [rip + save_target_mode_valid], 1
+.save_atomic_target_mode_ready:
+
     # Keep the temporary beside the destination so renameat stays on one FS.
     xor r14d, r14d
     mov rsi, r12
@@ -11496,6 +11531,20 @@ save_document_to_path:
     sub ebp, eax
     jmp .save_atomic_write
 .save_atomic_fsync:
+    # Apply the old target mode after the final write (writes can clear
+    # setuid/setgid bits) but before fsync and the atomic rename.
+    cmp dword ptr [rip + save_target_mode_valid], 0
+    je .save_atomic_file_fsync
+.save_atomic_fchmod_retry:
+    mov eax, SYS_fchmod
+    mov edi, ebx
+    mov esi, dword ptr [rip + save_target_mode]
+    syscall
+    cmp rax, -4
+    je .save_atomic_fchmod_retry
+    test rax, rax
+    js .save_atomic_close_error
+.save_atomic_file_fsync:
     mov eax, SYS_fsync
     mov edi, ebx
     syscall

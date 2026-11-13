@@ -305,6 +305,11 @@ def run(
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
+    initial_file_mode = (
+        os.stat(initial_file).st_mode & 0o7777
+        if initial_file is not None and os.path.isfile(initial_file)
+        else None
+    )
     if initial_preferred_buffer_scale not in (1, 2):
         raise ValueError("the current Wayland scale tests support only 1x and 2x")
     if initial_preferred_buffer_transform not in range(8):
@@ -6967,6 +6972,7 @@ xkb_symbols "nekoedit-sparse" {
                     with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zab":
                             raise AssertionError("Ctrl+S did not use the path selected by Save As")
+                    os.chmod(menu_saveas, 0o640)
 
                     # Ctrl+Shift+S accepts an absolute filename.
                     absolute_path = absolute_file_path
@@ -7002,7 +7008,12 @@ xkb_symbols "nekoedit-sparse" {
                     with open(menu_saveas, "rb") as saved:
                         if saved.read() != b"zabc":
                             raise AssertionError("confirmed overwrite did not replace the existing file")
-                    observations.append("Save As overwrite confirmation and cancellation verified")
+                    overwritten_mode = os.stat(menu_saveas).st_mode & 0o7777
+                    if overwritten_mode != 0o640:
+                        raise AssertionError(
+                            f"Save As overwrite changed existing target mode: expected 0o640, got {overwritten_mode:#06o}"
+                        )
+                    observations.append("Save As overwrite confirmation, cancellation, and mode preservation verified")
 
                     # A failed Save As must preserve the previously active path.
                     workflow_shortcut(serial + 4, 31, "Ctrl+Shift+S before failed Save As", shift=True)
@@ -9192,6 +9203,12 @@ xkb_symbols "nekoedit-sparse" {
             raise AssertionError(
                 f"Ctrl+S saved incorrect document bytes: expected {expected_saved_bytes!r}, got {saved_bytes!r}"
             )
+        if initial_file_mode is not None:
+            saved_mode = os.stat(initial_file).st_mode & 0o7777
+            if saved_mode != initial_file_mode:
+                raise AssertionError(
+                    f"atomic save changed existing file mode: expected {initial_file_mode:#06o}, got {saved_mode:#06o}"
+                )
     transport = "WAYLAND_SOCKET" if use_wayland_socket else "WAYLAND_DISPLAY"
     print(f"Wayland mock integration test passed using {transport} (registry, xdg-shell, memfd, pixels, close).")
     print("Verified: " + ", ".join(observations))
@@ -9246,6 +9263,7 @@ if __name__ == "__main__":
     try:
         with os.fdopen(file_descriptor, "wb") as initial_document:
             initial_document.write(b"I")
+        os.chmod(file_path, 0o640)
         run(sys.argv[1], initial_file=file_path, save_roundtrip=True, expected_saved_bytes=b"za")
     finally:
         try:
