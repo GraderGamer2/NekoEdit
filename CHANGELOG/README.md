@@ -1,13 +1,12 @@
-## Latest handoff (2026-11-13 — inspect live Mutter XKB and Compose state, CI pending)
+## Latest handoff (2026-11-13 — trace wl_keyboard keymap event dispatch, CI pending)
 
-Continue development on `early-alpha`; keep `main` at its stable merged source checkpoint with the changelog mirrored. Latest source/test/documentation commit: [1ad43b2](https://github.com/GraderGamer2/NekoEdit/commit/1ad43b229a538c8256fb2fe9bdfb1c976a698800). CI is pending.
+Continue development on early-alpha; keep main at its stable merged source checkpoint with the changelog mirrored. Latest source/test commit: [2fbd4a2](https://github.com/GraderGamer2/NekoEdit/commit/2fbd4a2bd341dac3147a53236956d987b96f42bb). CI is pending.
 
-The previous diagnosis was incomplete. Actions #895 failed after raw evdev Right Alt injection; #896 failed again after restoring the explicit `Multi_key` keysym. Both pass the build, Wayland protocol mock, native XKB parser and Compose-pack tests, then fail the real Mutter Compose/save canary. Historical #885 passed the same explicit keysym sequence, and the backend's keyboard event handler has not changed between those checkpoints. Do not treat this as a confirmed NekoEdit Compose regression or a fixed test-harness issue yet.
+Actions #897 passes every pre-Mutter stage, including the freestanding build/ELF, CLI, full Wayland protocol mock, native XKB, pinned X.Org importer, and Compose locale pack. The live Mutter smoke test fails before typing: keyboard focus is entered, but no processed keymap or parsed XKB map is present. This does not yet prove whether the compositor omitted the keymap, the event missed the local keyboard-object ID, or another handler consumed it.
 
-The new test helper `tests/mutter_xkb_state_probe.py` reads the actual keymap and editor state from the live first NekoEdit process. The parent Bash smoke test opens `/proc/<pid>/mem` and passes that already-authorized read-only descriptor to Python. It checks keymap receipt and parser status, confirms the in-memory action table contains `Multi_key`, `dead_grave`, and `dead_circumflex`, records the latest Wayland keyboard event and its evdev/XKB keycodes, and observes Compose/dead-key state transitions. The smoke test now fails at the exact boundary where the state is missing, with a state snapshot, instead of reporting only incorrect final file bytes. This adds no application debug protocol or runtime dependency; assembly exports are limited to symbol visibility for the test.
+The new test-only diagnostics expose the seat's pointer/keyboard object IDs, capability mask, extension proxy IDs, keyboard event dispatch counters, and keymap handler entry count plus captured object/size/SCM_RIGHTS descriptor. The next run should identify where the keymap event disappears. No NekoEdit input behavior has been changed; runtime symbol exports and state counters are only for /proc process-memory inspection from the smoke-test parent.
 
-Next: inspect the single replacement Actions run and use the runtime probe output to isolate whether Mutter supplied an unexpected keymap, the key event maps to an unexpected symbol, or Compose dispatch is not entered. Keep the fractional-scale renderer and multi-buffer work queued until this input-path regression is understood. Once restored, return to the release-tracked buffer set and measurement-led optimization.
-
+Next: inspect the single replacement Actions run before changing keyboard behavior. Once the live XKB path is restored, resume the queued fractional-scaling and release-tracked multi-buffer work, then collect reproducible performance measurements before optimization.
 ---
 
 ## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
