@@ -1,3 +1,16 @@
+## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
+
+| Commit | Subject |
+|---|---|
+| [b44172dcf4c8489d4941d442eb69344537b76ee1](https://github.com/GraderGamer2/NekoEdit/commit/b44172dcf4c8489d4941d442eb69344537b76ee1) | feat: apply preferred Wayland buffer transforms |
+| [96b80cf2876c2d39cca8197d1d6b15c98e59b4f7](https://github.com/GraderGamer2/NekoEdit/commit/96b80cf2876c2d39cca8197d1d6b15c98e59b4f7) | test: isolate transformed TrueType raster check |
+| [fc5ad543ce5dc68bb5f60d66690ecbfef3a31e2d](https://github.com/GraderGamer2/NekoEdit/commit/fc5ad543ce5dc68bb5f60d66690ecbfef3a31e2d) | test: share pixel probes across buffer transforms |
+| [5fd1719ea1c22100dda3e7e65544e56dfe40cdc7](https://github.com/GraderGamer2/NekoEdit/commit/5fd1719ea1c22100dda3e7e65544e56dfe40cdc7) | test: sample glyph through preferred transforms |
+
+The feature applies every preferred transform to rectangles, TrueType glyph pixels, and embedded fallback glyph pixels. Runtime transform replacement is gated on buffer release. Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 workflow steps, including the full Wayland protocol mock and nested GNOME Shell/Mutter integration.
+
+---
+
 ## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
 
 | Commit | Subject |

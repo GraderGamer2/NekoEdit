@@ -1,4 +1,18 @@
-## Latest handoff (2026-11-13 — logical/backing geometry split, CI PASS #872)
+## Latest handoff (2026-11-13 — preferred Wayland buffer transforms, CI PASS #882)
+
+Continue development on `early-alpha`; keep `main` at its merged stable checkpoint. Validated branch commit: [5fd1719](https://github.com/GraderGamer2/NekoEdit/commit/5fd1719ea1c22100dda3e7e65544e56dfe40cdc7). The implementation is in [b44172d](https://github.com/GraderGamer2/NekoEdit/commit/b44172dcf4c8489d4941d442eb69344537b76ee1); follow-up commits corrected the transformed TrueType and framebuffer test probes.
+
+Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 steps: freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, executable inspection, native `us(intl)` XKB validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell 46 / Mutter integration, and both artifact uploads.
+
+The implementation applies all eight compositor-preferred buffer transforms. Surface-local physical raster pixels are mapped into the transformed backing buffer; 90°/270° and reflected quarter-turn modes swap backing axes. Filled rectangles, TrueType glyph masks, and the embedded 5×7 fallback use the same transform convention. The client commits `wl_surface.set_buffer_transform` with the matching attached buffer, and runtime 0°→90°→0° changes remain pending until the current `wl_buffer.release`. Application layout, input, pointer hit-testing, and `wl_surface.damage` remain surface-local. Startup tests cover all seven non-normal enum values; the TrueType transform path has a dedicated test; runtime replacement is checked in both directions.
+
+The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016147986) (141,265 bytes) until 2026-11-14 06:38:24 UTC (13:38:24 WIB). The Compose locale artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016546306) (120,536 bytes) until the same time.
+
+Remaining Wayland work: fractional scaling via `wp_fractional_scale_v1`/`wp_viewporter`, a small release-tracked multi-buffer set, and physical GNOME/Mutter validation on rotated and mixed-DPI displays. For optimization, first collect reproducible startup, typing, scrolling, large-document, and cold/warm glyph-cache timings; tune only measured bottlenecks.
+
+---
+
+## Previous handoff (2026-11-13 — logical/backing geometry split, CI PASS #872)
 
 Continue development on `early-alpha`; keep `main` at its merged stable checkpoint. Validated branch commit: [08c1dca](https://github.com/GraderGamer2/NekoEdit/commit/08c1dca0404ad33e9e004aba2128ee83aa33e467), containing implementation [8d893c8](https://github.com/GraderGamer2/NekoEdit/commit/8d893c867e96917c1501ee77188a2ec23a65b640) and its test/doc record.
 

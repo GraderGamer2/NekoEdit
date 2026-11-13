@@ -1,20 +1,32 @@
-## 2026-11-13 — limit the startup 2× scenario to scale-aware interaction checks (CI pending)
+## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
+
+Implement all eight `wl_surface.preferred_buffer_transform` enum values in the software-rendered backing store. Odd transform values swap physical buffer width/height; 90°/270° rotations and reflected rotations map logical-surface pixels into the correct pre-transformed buffer coordinates. Filled rectangles, TrueType glyph masks, and the embedded 5×7 fallback share the same transform convention. The backend sends `wl_surface.set_buffer_transform` in the same commit as the corresponding buffer attachment. A runtime transform change marks the backing generation dirty and waits for `wl_buffer.release` before destroying/replacing the active buffer.
+
+The Wayland mock exercises all seven non-normal startup transform values, checks key UI/background/glyph pixels through a surface-to-buffer accessor, includes a transformed TrueType rasterizer case, and checks runtime 0°→90°→0° buffer replacement, swapped dimensions/stride, logical damage, and release ordering. Independent 7×5 and 11×7 geometry checks confirmed the pixel mappings and transformed rectangle bounds are in-bounds and bijective.
+
+Actions [Build and test #882](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394) passed all 16 workflow steps, including the complete Wayland mock, native XKB/importer/Compose checks, GNOME Shell 46 / Mutter integration, and both artifact uploads. The executable artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43379912394/artifacts/14016147986) (141,265 bytes) until 2026-11-14 06:38:24 UTC (13:38:24 WIB). This validates protocol/mock behavior; physical rotated-monitor testing remains outstanding.
+
+Next: implement fractional scaling and a release-tracked buffer set, then gather reproducible performance baselines before making optimizations.
+
+---
+
+## 2026-11-13 — limit the startup 2× scenario to scale-aware interaction checks (CI PASS #878)
 
 Actions [#877](https://github.com/GraderGamer2/NekoEdit/actions/runs/43365760100) passed the 2× initial buffer geometry and first-frame pixel tests, the embedded fallback glyph coverage, the document-area click, and the newly scale-aware caret-position assertion. It then reached the common keyboard workflow and failed at the first typed “A” sample, which still read the shared buffer using the original 800px pitch.
 
 The startup 2× scenario is a focused scale-boundary test, not a duplicate execution of every 1× GUI assertion. Read the first glyph sample through the logical-to-physical pixel helper, assert that it renders, then close that special scenario after recording the scale-2 input/caret result. The normal 1× runs continue to execute the extensive keyboard, clipboard, picker, and editor workflows unchanged. The independent runtime scale scenario continues into its 1×→2×→1× release-gated buffer test.
 
-This is a test-harness scope correction; the renderer is unchanged. Actions [#878](https://github.com/GraderGamer2/NekoEdit/actions/runs/4336VVVVVV) is pending.
+This is a test-harness scope correction; the renderer is unchanged. Actions [#878](https://github.com/GraderGamer2/NekoEdit/actions/runs/43366101489) passed the corrected startup 2× scale/input scenario.
 
 ---
 
-## 2026-11-13 — add bounded integer HiDPI rasterization (CI pending)
+## 2026-11-13 — add bounded integer HiDPI rasterization (CI PASS #878)
 
 Apply compositor/output integer scale to NekoEdit's software renderer while preserving surface-local logical coordinates. The backend now selects 1× or 2× based on the v6 per-surface preference or the older-compositor entered-output fallback. The 2× path is enabled only when the logical width and height are at most 1920×1080, so physical dimensions never exceed the existing 3840×2160 shared-memory pool; compositors before wl_surface.set_buffer_scale remain at 1×.
 
 Raster scale is applied after logical/UI transforms in draw_rect and draw_glyph; TrueType masks accept a physical em up to 64px with a 128×128 mask bound, and the embedded 5×7 fallback fills scale-sized pixel blocks. Text metrics, editor layout/indexing, pointer hit-testing, caret/IME rectangles, and wl_surface.damage stay in logical coordinates. The client sends wl_surface.set_buffer_scale only when the applied value changes and includes it in the matching buffer commit. Scale-only changes use the existing single-buffer release gate and rebuild the descriptor even when logical dimensions are unchanged; an initial unattached buffer can also be replaced if a preference arrives during startup.
 
-The Wayland mock adds a pre-configure 2× first-frame case with physical pixel checks and a runtime 1×→2×→1× transition that checks buffer geometry, byte stride, logical damage, and release-gated replacement. Preferred transform metadata is still not applied; fractional scaling / viewporter, 90°/270° rotation/reflection, and a multi-buffer ring remain future work. Actions validation is pending; no CI result is claimed yet.
+The Wayland mock adds a pre-configure 2× first-frame case with physical pixel checks and a runtime 1×→2×→1× transition that checks buffer geometry, byte stride, logical damage, and release-gated replacement. At that stage, preferred-transform metadata was tracked but not yet applied; the follow-on implementation and its complete mock validation are recorded in the newer CI PASS #882 entry above. Fractional scaling / viewporter and a release-tracked multi-buffer ring remain future work.
 
 ---
 
