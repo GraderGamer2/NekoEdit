@@ -6731,6 +6731,13 @@ xkb_symbols "nekoedit-sparse" {
                         "XKB consumed Shift is filtered from shortcuts while preserve[Shift] keeps it"
                     )
 
+                    # Give the initial insertion a generous deterministic window.
+                    # Repeat-enabled cases shorten this delay again while the key
+                    # is held, verifying wl_keyboard.repeat_info reconfiguration.
+                    client.sendall(
+                        wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 1200))
+                    )
+
                     def check_key_repeat_policy(
                         keycode: int, serial: int, should_repeat: bool, label: str
                     ) -> None:
@@ -6749,6 +6756,11 @@ xkb_symbols "nekoedit-sparse" {
                             wait_child_u32(
                                 "repeat_keycode", keycode,
                                 label + " starts the XKB-permitted repeat timer",
+                            )
+                            # Reconfigure an already-held repeat key. The client
+                            # must restart its timer with the compositor's new delay.
+                            client.sendall(
+                                wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 180))
                             )
                             repeat_deadline = time.monotonic() + 1.5
                             while (
