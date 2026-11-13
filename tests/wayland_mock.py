@@ -5221,7 +5221,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         large_paste_state["doc_line_index_valid"] != 1
                         or large_paste_state["doc_line_count"] != expected_large_lines
-                        or sum(record[2] for record in large_paste_state["doc_line_index_records"])
+                        or sum(record[0] for record in large_paste_state["doc_line_index_records"])
                         != len(large_pasted)
                     ):
                         raise AssertionError(
