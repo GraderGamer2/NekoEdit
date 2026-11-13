@@ -1,16 +1,46 @@
-## 2026-11-13 — make IME protocol tests slot-aware (CI pending)
+## 2026-11-13 — compare linear and hash-indexed glyph-cache hits (CI PASS #912)
 
-The Wayland mock now tracks each `wl_buffer.create_buffer` object ID and its SHM offset, accepts either slot in `wl_surface.attach`, releases the buffer most recently attached, and checks rendered pixels in that slot's mapped region. This updates the text-input-v3 and keyboard-hotplug IME scenarios for the renderer's new, valid second-slot behavior; it does not weaken the compositor ownership assertions. The first CI run had passed the freestanding build and new buffer-pool scenario but exposed a stale fixed-ID assumption in the IME fixture. Revalidation is pending.
+Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the complete build and validation workflow on Ubuntu 24.04, including both benchmark variants, the freestanding ELF and CLI checks, the full multi-buffer Wayland protocol matrix, executable inspection, native `us(intl)` XKB parser validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+The renderer now has a 64-bucket hash index for warm `(glyph_id, size)` cache hits while preserving the existing 128-slot LRU replacement policy on misses. The benchmark compiles the exact pre-hash linear-LRU reference and the hash-indexed implementation from the same `src/font/rasterizer.c`, using identical compiler flags. Each variant runs seven samples of 50,000 warm draws across the complete 128-glyph working set and reports the median; cold outline-to-mask rasterization is measured separately.
+
+| Synthetic rasterizer measurement | Linear LRU reference | Hash-indexed cache |
+|---|---:|---:|
+| Cold rasterization median | 19,221.5 ns/glyph | 19,057.2 ns/glyph |
+| Warm 128-glyph draw median | 385.9 ns/draw | 299.9 ns/draw |
+| Warm draw reduction | — | 22.3% |
+
+Both variants produced the same framebuffer checksum (`35084948275808`). Warm-cache reuse, collision chains, complete LRU replacement, and `font_cache_clear()` all passed their correctness checks. The cold rasterization figures are effectively unchanged; the improvement is isolated to warm cache lookup. These timings use a deterministic synthetic eight-point outline and do not measure document layout, whole-frame `render_surface()`, Wayland/compositor scheduling, real-font contour diversity, application startup, or memory residency. This is a measured microbenchmark improvement, not a claim that the whole application is 22.3% faster.
+
+Implementation and validation sequence:
+- [5f09a562a72d0ca94564a4c3bb0220bc38d67b3e](https://github.com/GraderGamer2/NekoEdit/commit/5f09a562a72d0ca94564a4c3bb0220bc38d67b3e) — add deterministic rasterizer baseline.
+- [d8328a62c8cb7ad44b5d6ffa4a4682c25c188368](https://github.com/GraderGamer2/NekoEdit/commit/d8328a62c8cb7ad44b5d6ffa4a4682c25c188368) — hash-index warm cache hits and add LRU/collision/clear checks.
+- [b788ac50657ff9fa3c34eed56a5975226b00afe3](https://github.com/GraderGamer2/NekoEdit/commit/b788ac50657ff9fa3c34eed56a5975226b00afe3) — make repeat-policy timing deterministic and verify live repeat-info changes.
+- [21828a6cee96a3be4eff95515a790d08b53a2683](https://github.com/GraderGamer2/NekoEdit/commit/21828a6cee96a3be4eff95515a790d08b53a2683) — pair the linear reference and hash-indexed benchmark with repeated medians.
+- [733623ecb61fe4e27c953554025febb9cf688817](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817) — fix shared cache-clock declaration order for both build variants.
+
+Artifacts from #912:
+- `nekoedit-linux-x86_64`: 144,104 bytes, [artifact 14044857971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14044857971).
+- `nekoedit-compose-locales`: 120,536 bytes, [artifact 14045672618](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14045672618).
+Both expire on 2026-11-14 at 14:10:20 UTC (21:10:20 WIB).
+
+Next: extend the benchmark to real installed-font contours and representative whole-frame/document workloads before making further optimization claims. Profile the assembly rectangle path, line-layout/index path, and renderer separately so cache improvements are not confused with compositor or frame-assembly time.
 
 ---
 
-## 2026-11-13 — add lazily allocated release-tracked SHM buffer slot (CI pending)
+## 2026-11-13 — make IME protocol tests slot-aware (CI PASS #907)
+
+The Wayland mock now tracks each `wl_buffer.create_buffer` object ID and its SHM offset, accepts either slot in `wl_surface.attach`, releases the buffer most recently attached, and checks rendered pixels in that slot's mapped region. This updates the text-input-v3 and keyboard-hotplug IME scenarios for the renderer's new, valid second-slot behavior; it does not weaken compositor ownership assertions. The fixture's stale fixed-ID assumption was corrected, and Actions [#907](https://github.com/GraderGamer2/NekoEdit/actions/runs/43436391715) passed the complete protocol matrix and nested Mutter integration.
+
+---
+
+## 2026-11-13 — add lazily allocated release-tracked SHM buffer slot (CI PASS #907)
 
 The software renderer now reserves two maximum-size regions in one memfd-backed `wl_shm_pool`, while creating only the first `wl_buffer` at startup. If a frame callback completes while that buffer is still compositor-owned, the next redraw lazily creates a second buffer at the second region's offset and renders into its own mapping. Each slot has an independent busy flag; the aggregate count is flow-control state, not a boolean.
 
 The event loop now handles `wl_buffer.release` and `wl_surface.frame.done` as separate events. A release frees only the matching slot; a frame callback only opens the next frame-pacing gate. Resize, integer-scale, and transform replacement is held until every old-generation slot has been released, after which all old buffer objects are destroyed and a fresh slot-zero buffer is created. No storage is reused based solely on frame completion.
 
-The new protocol-mock scenario covers lazy second-slot creation and offset, writing into the second mapped region, independent slot release tracking, frame completion while a slot remains busy, and scale-generation replacement only after both releases. The pool capacity is 66,355,200 bytes (about 63.3 MiB); the second buffer object remains lazy. This is not described as a performance optimization until redraw latency and memory residency are measured. Build and compositor integration validation are pending.
+The new protocol-mock scenario covers lazy second-slot creation and offset, writing into the second mapped region, independent slot release tracking, frame completion while a slot remains busy, and scale-generation replacement only after both releases. The pool capacity is 66,355,200 bytes (about 63.3 MiB); the second buffer object remains lazy. This was validated by Actions [#907](https://github.com/GraderGamer2/NekoEdit/actions/runs/43436391715), including the complete Wayland mock matrix and nested GNOME Shell/Mutter integration. The second buffer remains lazily created; the two-slot pool is a correctness and scheduling capability, not a measured whole-frame speedup.
 
 ---
 

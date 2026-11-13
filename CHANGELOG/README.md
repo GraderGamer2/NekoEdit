@@ -1,15 +1,26 @@
-## Latest handoff (2026-11-13 — startup XKB/Compose path validated, CI PASS #901)
+## Latest handoff (2026-11-13 — hash-indexed glyph cache measured, CI PASS #912)
 
-Continue development on `early-alpha`; keep `main` at its stable source checkpoint with the full `CHANGELOG/` mirrored. Verified branch head: [0d1a394](https://github.com/GraderGamer2/NekoEdit/commit/0d1a3947a5dddf123637ba7f411b60a2deaa0529). The live keyboard keymap issue is fixed and validated.
+Continue development on `early-alpha`; the validated branch head is [733623e](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817). Keep `main` at its stable source checkpoint [468960c](https://github.com/GraderGamer2/NekoEdit/commit/468960c776e1bada968fd92468fee368f1e64308); this handoff mirrors only the `CHANGELOG/` documentation and does not merge application source.
 
-Actions [#901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) passed all 16 steps: freestanding assembly build/ELF verification, CLI tests, full Wayland protocol mock, executable inspection, native `us(intl)` XKB parser test, pinned X.Org importer, Compose locale pack, and GNOME Shell 46 / Mutter 46.2 integration. The workflow uploaded:
-- Linux binary (143,151 bytes): [artifact 14027630978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14027630978).
-- Compose locales (120,536 bytes): [artifact 14026798133](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14026798133).
-Both expire 2026-11-14 17:03:12 WIB.
+Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the full build and validation workflow, including both benchmark variants, CLI tests, the full Wayland protocol mock, executable inspection, native `us(intl)` XKB parser, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-Startup keymap events are now handled during both the initial seat sync and `fractional_scale_startup()` sync. The focused `fractional_sync_keymap_test` injects descriptor-bearing `NO_KEYMAP` events into both barriers and verifies that both are processed, parser state is clean, and no descriptor mapping leaks. The complete XKB layout/shortcut suite remains a separate, unchanged test; its Ctrl+A/`preserve[Control]` assertions pass. The live Mutter probe now passes the explicit `Multi_key` Compose and two-dead-key `pt_BR` sequence as well as the default save-confirmation flow. The live IBus Simple phase also passes `dead_acute` preedit, Backspace cancellation, apostrophe+`e` commit to U+00E9 (`é`), and the confirmed save through text-input-v3. The earlier #900 Ctrl+A failure was a fixture interaction, not an application shortcut regression.
+The font cache now uses a compact 64-bucket chained hash index for warm `(glyph_id, size)` hits while retaining the existing 128-slot LRU eviction policy on misses. A paired benchmark compiles the pre-hash linear-LRU reference and optimized implementation from the same source and flags, runs seven samples, and reports medians:
 
-Next engineering target: mature the SHM renderer's storage lifecycle. Review and then implement a release-tracked buffer set, keeping buffer release separate from frame callback completion. Old buffer generations must remain alive through resize/scale/transform transitions until every attached buffer is released. Establish correctness tests first; measure redraw latency and memory before describing it as an optimization.
+| Synthetic measurement | Linear reference | Hash-indexed |
+|---|---:|---:|
+| Cold rasterization | 19,221.5 ns/glyph | 19,057.2 ns/glyph |
+| Warm 128-glyph draw | 385.9 ns/draw | 299.9 ns/draw |
+
+This is a 22.3% reduction in the measured warm cache-draw median. Both modes generated the same framebuffer checksum, and hit reuse, collisions, full LRU replacement, cache clearing, and the full app regression suite passed. These results measure a synthetic eight-point outline workload, not total application or full-frame performance.
+
+Artifacts from #912:
+- Linux x86-64: 144,104 bytes, [artifact 14044857971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14044857971).
+- Compose locales: 120,536 bytes, [artifact 14045672618](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14045672618).
+Both expire on 2026-11-14 at 21:10 WIB.
+
+Next engineering target: add reproducible measurements using real installed-font contours and representative whole-frame/document workloads. Profile the assembly rectangle path, layout/index path, and full `render_surface()` separately before optimizing another hot path.
+
+---
 
 
 ---

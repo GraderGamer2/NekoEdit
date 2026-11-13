@@ -1,3 +1,31 @@
+## 2026-11-13 — measure and optimize warm glyph-cache lookup (CI PASS #912)
+
+Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed all functional workflow stages: freestanding x86-64 build/ELF inspection, CLI smoke tests, paired rasterizer benchmark, full Wayland protocol mock including two-slot SHM ownership and XKB repeat-policy coverage, native `us(intl)` parser test, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter Wayland integration, and artifact uploads.
+
+The first deterministic renderer baseline used a synthetic eight-point outline and reported a single warm draw measurement. To remove cross-run variance, the benchmark now builds a pre-hash linear-LRU reference variant and the hash-indexed implementation from the same source with identical flags. It runs seven independent samples per measurement, reports medians and individual sample values, and separately times cold rasterization and warm draws.
+
+| CI #912 metric | Linear LRU | Hash-indexed |
+|---|---:|---:|
+| Cold rasterization median | 19,221.5 ns/glyph | 19,057.2 ns/glyph |
+| Warm 128-glyph draw median | 385.9 ns/draw | 299.9 ns/draw |
+
+The hash-indexed implementation reduced the synthetic warm-draw median by 22.3%, with identical framebuffer checksum `35084948275808`. The cold path remained effectively unchanged. Correctness checks passed for hash hits, collision chains, LRU eviction of all 128 slots, re-hits after replacement, and cache clearing. The pre-hash reference passed its corresponding LRU reuse/replacement/clear checks. This result applies only to the measured warm glyph-cache workload; it is not a whole-application, full-frame, or compositor performance figure.
+
+The optimized cache uses a 64-bucket chained index keyed by glyph ID and raster size. Warm hits follow only their bucket chain. Cache misses preserve the existing bounded 128-entry LRU victim scan; a selected victim is unlinked from its hash chain only after the new glyph has rasterized successfully. Font replacement clears all buckets and slot metadata. The production build omits the linear reference path; the reference macro is used only by the standalone benchmark target.
+
+Related commits:
+- Baseline benchmark: [5f09a562a72d0ca94564a4c3bb0220bc38d67b3e](https://github.com/GraderGamer2/NekoEdit/commit/5f09a562a72d0ca94564a4c3bb0220bc38d67b3e).
+- Hash-indexed cache: [d8328a62c8cb7ad44b5d6ffa4a4682c25c188368](https://github.com/GraderGamer2/NekoEdit/commit/d8328a62c8cb7ad44b5d6ffa4a4682c25c188368).
+- Repeat-policy timing fixture: [b788ac50657ff9fa3c34eed56a5975226b00afe3](https://github.com/GraderGamer2/NekoEdit/commit/b788ac50657ff9fa3c34eed56a5975226b00afe3).
+- Paired median benchmark: [21828a6cee96a3be4eff95515a790d08b53a2683](https://github.com/GraderGamer2/NekoEdit/commit/21828a6cee96a3be4eff95515a790d08b53a2683).
+- Shared cache-clock declaration fix: [733623ecb61fe4e27c953554025febb9cf688817](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817).
+
+Actions #910 also passed after the XKB repeat-policy fixture was made deterministic: a long initial delay isolates the first symbol insertion, then a 180 ms `wl_keyboard.repeat_info` update is sent while the key is held to verify live timer reconfiguration. This avoids a CI scheduling race without relaxing the expected single initial insertion.
+
+The #912 artifacts are recorded in `CURRENT_STATUS.md`. Next work is to benchmark real fonts and representative whole-frame/document workloads, including cold/warm glyph-cache transitions, before optimizing other renderer paths.
+
+---
+
 ## 2026-11-13 — preserve live XKB keymaps across startup syncs (CI PASS #901)
 
 Actions [Build and test #901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) completed successfully on Ubuntu 24.04 with all 16 workflow steps green. The run validates the freestanding build and ELF, command-line smoke tests, complete Wayland protocol mock, executable inspection, native libxkbcommon-generated `us(intl)` map through NekoEdit's own XKB parser, pinned X.Org importer, Compose locale-pack build, and the real GNOME Shell 46 / Mutter 46.2 native Wayland integration. Both the Compose-locale and Linux x86-64 executable artifacts uploaded successfully.

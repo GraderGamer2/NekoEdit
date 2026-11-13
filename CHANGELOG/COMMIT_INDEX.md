@@ -1,3 +1,17 @@
+## 2026-11-13 — compare linear and hash-indexed glyph-cache rendering (CI PASS #912)
+
+| Commit | Subject |
+|---|---|
+| [5f09a562a72d0ca94564a4c3bb0220bc38d67b3e](https://github.com/GraderGamer2/NekoEdit/commit/5f09a562a72d0ca94564a4c3bb0220bc38d67b3e) | perf: add deterministic rasterizer baseline benchmark |
+| [d8328a62c8cb7ad44b5d6ffa4a4682c25c188368](https://github.com/GraderGamer2/NekoEdit/commit/d8328a62c8cb7ad44b5d6ffa4a4682c25c188368) | perf: hash-index warm glyph cache lookups |
+| [b788ac50657ff9fa3c34eed56a5975226b00afe3](https://github.com/GraderGamer2/NekoEdit/commit/b788ac50657ff9fa3c34eed56a5975226b00afe3) | test: make XKB repeat timing deterministic |
+| [21828a6cee96a3be4eff95515a790d08b53a2683](https://github.com/GraderGamer2/NekoEdit/commit/21828a6cee96a3be4eff95515a790d08b53a2683) | perf: compare linear and hash glyph cache benchmarks |
+| [733623ecb61fe4e27c953554025febb9cf688817](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817) | fix: declare shared glyph cache clock before hash helpers |
+
+Actions [#912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the full build, paired benchmark, Wayland mock, XKB/importer, Compose, GNOME Shell/Mutter, and artifact-upload workflow. Seven-sample warm-draw medians were 385.9 ns/draw for the pre-hash linear LRU and 299.9 ns/draw for the hash-indexed cache (22.3% lower), with identical framebuffer checksum. The synthetic microbenchmark does not establish whole-application speedup.
+
+---
+
 ## 2026-11-13 — preserve live XKB keymaps across startup syncs (CI PASS #901)
 
 | Commit | Subject |
