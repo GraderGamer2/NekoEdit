@@ -1,3 +1,25 @@
+## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
+
+The previous large-paste optimization left `doc_cursor` immediately after the final inserted byte. The common `doc_ensure_cursor_visible` path therefore treated the end of a multi-megabyte paste as the desired viewport location, even when the paste had begun at the top of an empty document. That produced an unwanted jump away from the start of the newly pasted text.
+
+`clipboard.c::insert_text` now remembers the effective paste offset after deleting any active selection. It still performs the same bulk `doc_insert_bytes` operation, but restores `doc_cursor` to the remembered offset before clearing the selection and committing the history transaction. The insertion point is the start of the pasted range; when that point is offset 0, the viewport and scrollbar remain at the document top. When the user pastes elsewhere, the original insertion point is preserved rather than forcing the caret to absolute byte zero.
+
+The Wayland mock now verifies, for an exact 10,485,760-byte transfer:
+- Byte-for-byte document equality and a valid line index covering all 70,375 logical lines.
+- Caret offset 0 and viewport row 0 after paste into an empty document.
+- Scrollbar thumb anchored at row-top coordinate 92 with a valid nonzero thumb height.
+- Full-range Undo and Redo, with Redo restoring the same caret/viewport placement.
+
+The mock-compositor interval from the start of the pipe write through the first presented redraw was 560.7 ms on the Ubuntu 24.04 GitHub runner. It is not local desktop latency and does not include the separate Undo/Redo checks.
+
+Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps, including ELF/CLI validation, renderer benchmark, complete Wayland protocol suite, native XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifacts. The Linux executable is artifact [14053309424](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534).
+
+Implementation commits:
+- [fa5d7e661ca9](https://github.com/GraderGamer2/NekoEdit/commit/fa5d7e661ca998fa7ad7951074dfe16433208e9f).
+- [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7).
+
+---
+
 ## 2026-11-13 — optimize large clipboard paste with bulk insertion (CI PASS #923)
 
 Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps. The change addresses the synchronous part of the external clipboard path after the nonblocking receive pipe reaches EOF.

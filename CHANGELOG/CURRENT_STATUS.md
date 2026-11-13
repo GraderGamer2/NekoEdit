@@ -1,3 +1,21 @@
+## 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
+
+Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps on final head [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7). The real Wayland mock transferred 10 MiB through the nonblocking clipboard pipe, verified every byte and all line-index records, confirmed that the caret and viewport remained at the paste's original insertion point, checked that the scrollbar thumb stayed correctly anchored at the top for a paste at offset 0, and passed full Undo/Redo. Redo restored the same caret/viewport state. The end-to-first-redraw interval was 560.7 ms on the Ubuntu 24.04 GitHub runner; Undo/Redo were checked separately and are not included in that timing.
+
+The clipboard insertion routine now saves the effective insertion offset after removing any selected range, performs the existing bulk insertion, restores the caret to that offset, clears the selection, and only then commits history. The existing cursor-visibility logic therefore keeps the paste origin in view rather than moving the viewport to the last line of a large pasted block. When the paste begins at the document start, the caret and viewport remain at the top; pastes made elsewhere preserve their own insertion point. The bulk gap-buffer operation, 64 MiB receive ceiling, and journal format are unchanged.
+
+The regression asserts caret offset 0, viewport row 0, scrollbar thumb top at DOC_TOP (92), and a nonzero thumb height after a large paste into an empty document. It repeats the caret/viewport assertion after Redo. The first attempt exposed a test-only omission (the document-state snapshot did not include scrollbar globals); the test now reads those globals directly from the child process. A separate pre-clipboard frame-callback timing failure prevented the first test attempt from reaching the clipboard case; the final #925 run passed the entire matrix.
+
+Implementation/test commits:
+- [fa5d7e661ca9](https://github.com/GraderGamer2/NekoEdit/commit/fa5d7e661ca998fa7ad7951074dfe16433208e9f) — retain the clipboard insertion point as the post-paste caret.
+- [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7) — assert scrollbar geometry using direct process-symbol reads.
+
+The user has also confirmed on the Debian/Wayland desktop that very large clipboard pastes now work. No local latency measurement was collected. The next performance task is to extend repeatable measurements to real installed-font contours and representative whole-document rendering, scrolling, and editing workloads; keep those measurements separate from Open and clipboard-transfer timings.
+
+Artifacts: Linux x86-64 [14053309424](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534/artifacts/14053309424) (144,798 bytes); Compose packs [14053399329](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534/artifacts/14053399329) (120,536 bytes). Both expire 2026-11-14 at 15:48 UTC (22:48 WIB).
+
+---
+
 ## 2026-11-13 — bulk clipboard paste and range-based history (CI PASS #923)
 
 Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps on final head [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f). Validation covered the freestanding build/ELF, CLI smoke tests, renderer checksum benchmark, full Wayland protocol matrix, native XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads.

@@ -1,3 +1,16 @@
+## 2026-11-13 — preserve clipboard paste origin and top-of-document viewport (CI PASS #925)
+
+| Commit | Subject |
+|---|---|
+| [fa5d7e661ca998fa7ad7951074dfe16433208e9f](https://github.com/GraderGamer2/NekoEdit/commit/fa5d7e661ca998fa7ad7951074dfe16433208e9f) | fix: keep clipboard paste caret at insertion point |
+| [de83027bc9377d28eab2318d625e5532827576a7](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7) | test: read paste scrollbar geometry from process symbols |
+
+Actions [#925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps. The 10 MiB clipboard test checked complete byte equality, line-index validity and byte coverage for 70,375 logical lines, caret offset 0, viewport row 0, scrollbar thumb top 92 with a nonzero height, and Undo/Redo. Redo restored the same caret and viewport state. The write-through-first-redraw measurement was 560.7 ms on the GitHub runner and excludes Undo/Redo.
+
+Linux x86-64 artifact [14053309424](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534/artifacts/14053309424) (144,798 bytes); Compose packs artifact [14053399329](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534/artifacts/14053399329) (120,536 bytes). Both expire 2026-11-14 at 15:48 UTC (22:48 WIB).
+
+---
+
 ## 2026-11-13 — bulk insertion for large clipboard payloads (CI PASS #923)
 
 | Commit | Subject |
