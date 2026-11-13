@@ -1,8 +1,10 @@
-## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI pending)
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
 
 Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.
 
-Extend the Wayland mock's ELF-symbol state reader and assert logical/backing dimensions for the initial 800×480 window, 1920×1080 maximize, 800×480 restore, and 720×480 edge resize. This is an architectural boundary-setting step, not a HiDPI implementation. The next change must scale raster positions and glyphs, handle transformed buffer-axis dimensions, and preserve surface-local pointer/layout semantics before sending `wl_surface.set_buffer_scale`. CI pending.
+Extend the Wayland mock's ELF-symbol state reader and assert logical/backing dimensions for the initial 800×480 window, 1920×1080 maximize, 800×480 restore, and 720×480 edge resize. This is an architectural boundary-setting step, not a HiDPI implementation. The next change must scale raster positions and glyphs, handle transformed buffer-axis dimensions, and preserve surface-local pointer/layout semantics before sending `wl_surface.set_buffer_scale`.
+
+Actions [Build and test #872](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532) passed all 15 workflow steps on the geometry-split commit, including freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532/artifacts/14001449465) (139,381 bytes) until 2026-11-14 01:46:53 UTC (08:46:53 WIB).
 
 ---
 

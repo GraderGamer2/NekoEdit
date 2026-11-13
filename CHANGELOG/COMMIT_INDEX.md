@@ -1,12 +1,13 @@
-## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI pending)
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
 
 | Commit | Subject |
 |---|---|
 | [8d893c867e96917c1501ee77188a2ec23a65b640](https://github.com/GraderGamer2/NekoEdit/commit/8d893c867e96917c1501ee77188a2ec23a65b640) | feat: separate Wayland surface and buffer geometry |
 
-The implementation keeps the existing surface-local width/height for layout and input, while introducing backing-buffer pixel dimensions and routing buffer creation and raster target bounds through those fields. The scale-1 invariant is covered at initial size, maximize, restore, and interactive edge resize. No preferred scale/transform is applied yet. Actions validation is pending.
+The implementation keeps surface-local dimensions for layout/input and independent backing-buffer pixel extents for buffer creation, clipping and glyph targets. Scale remains 1:1 for now. The mock verifies initial, maximize, restore and edge-resize geometry. Actions [Build and test #872](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532) passed all 15 workflow steps on the geometry-split commit, including freestanding build/ELF verification, CLI smoke tests, the full Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43347192532/artifacts/14001449465) (139,381 bytes) until 2026-11-14 01:46:53 UTC (08:46:53 WIB).
 
 ---
+
 
 ## 2026-11-13 — initialize effective Wayland scale in BSS (CI PASS #871)
 
