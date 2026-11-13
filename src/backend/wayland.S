@@ -23444,7 +23444,13 @@ output_recompute_surface_scale:
     mov eax, r11d
 .output_recompute_store_scale:
     mov dword ptr [rip + surface_effective_buffer_scale], eax
+    # Before the first xdg_surface.configure there is no backing geometry or
+    # wl_buffer to replace. Let window_commit_initial_size consume the stored
+    # preference; after the first pool buffer exists, scale changes are scheduled.
+    cmp dword ptr [rip + window_buffer_created_scale], 0
+    je .output_recompute_schedule_done
     call window_scale_schedule
+.output_recompute_schedule_done:
     pop r13
     pop r12
     pop rbp
