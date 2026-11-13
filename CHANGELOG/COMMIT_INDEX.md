@@ -1,3 +1,23 @@
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [8d893c867e96917c1501ee77188a2ec23a65b640](https://github.com/GraderGamer2/NekoEdit/commit/8d893c867e96917c1501ee77188a2ec23a65b640) | feat: separate Wayland surface and buffer geometry |
+
+The implementation keeps the existing surface-local width/height for layout and input, while introducing backing-buffer pixel dimensions and routing buffer creation and raster target bounds through those fields. The scale-1 invariant is covered at initial size, maximize, restore, and interactive edge resize. No preferred scale/transform is applied yet. Actions validation is pending.
+
+---
+
+## 2026-11-13 — initialize effective Wayland scale in BSS (CI PASS #871)
+
+| Commit | Subject |
+|---|---|
+| [50aaaf44d17c](https://github.com/GraderGamer2/NekoEdit/commit/50aaaf44d17cd18c05608af875a1b275b83c9d18) | fix: initialize effective Wayland scale in BSS |
+
+Actions [Build and test #871](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954) passed all 15 workflow steps, including the complete Wayland mock, Mutter integration, and both artifact uploads. The corrected `.bss` storage uses zero-fill and receives its protocol default of 1 during startup.
+
+---
+
 ## 2026-11-12 — capture the XKB keyval delivered to the IBus preedit probe (CI pending)
 
 | Commit | Subject |
