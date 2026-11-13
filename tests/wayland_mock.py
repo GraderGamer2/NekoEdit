@@ -609,6 +609,11 @@ def run(
                         for y in range(8, 24) for x in range(16, 112)
                     ):
                         raise AssertionError("transformed buffer did not rasterize visible title text")
+                    if font_parser_test and not any(
+                        logical_buffer_pixel(x, y) != 0xFF252A33
+                        for y in range(88, 124) for x in range(12, 120)
+                    ):
+                        raise AssertionError("TrueType glyph mask was not rendered through the preferred buffer transform")
                 elif buffer_scale == 1:
                     if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
                         raise AssertionError("expected title-bar background was not rendered")
@@ -1308,7 +1313,7 @@ def run(
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                if initial_preferred_buffer_transform != 0 or not (
+                if (initial_preferred_buffer_transform != 0 and not font_parser_test) or not (
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
