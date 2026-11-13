@@ -298,9 +298,11 @@ def run(
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
     output_tracking_test: bool = False,
+    output_tracking_legacy_test: bool = False,
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
+    output_tracking_enabled = output_tracking_test or output_tracking_legacy_test
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     locale_scenarios = (
         compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test,
@@ -452,7 +454,7 @@ def run(
                 globals_payload += registry_global(6, "wl_data_device_manager", version=1)
             if text_input_test or text_input_advertised or seat_hotplug_ime_test:
                 globals_payload += registry_global(7, "zwp_text_input_manager_v3", version=1)
-            if output_tracking_test:
+            if output_tracking_enabled:
                 globals_payload += (
                     registry_global(8, "wl_output", version=3)
                     + registry_global(9, "wl_output", version=2)
@@ -686,7 +688,7 @@ def run(
                     )
                     next_test_object_id += 2
                     observations.append("optional text-input-v3 manager bound and object created for seat 13")
-                if output_tracking_test:
+                if output_tracking_enabled:
                     # Outputs are created after every fixed bootstrap and optional
                     # input-service proxy, preserving Wayland's contiguous new_id map.
                     output_name = b"wl_output\0"
@@ -711,7 +713,7 @@ def run(
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
-                if output_tracking_test:
+                if output_tracking_enabled:
                     # Inspect the live output cache and surface membership.
                     output_symbols = {}
                     wanted_outputs = (
@@ -720,7 +722,7 @@ def run(
                         "output_surface_entered", "surface_output_count", "surface_output_max_scale",
                         "compositor_version", "surface_preferred_buffer_scale",
                         "surface_preferred_scale_seen", "surface_preferred_buffer_transform",
-                        "surface_preferred_transform_seen",
+                        "surface_preferred_transform_seen", "surface_effective_buffer_scale",
                     )
                     for symbol_line in subprocess.check_output(
                         ["nm", "-n", binary], text=True
@@ -755,33 +757,18 @@ def run(
                                 f"output state {name}[{index}]: expected {expected}, got {actual}"
                             )
 
-                    # Stage the two scale properties and enter the surface.
-                    # The committed cache must remain at scale 1 until done.
+                    # Stage two output scales and enter the surface. Neither
+                    # committed output metadata nor the selected scale may move
+                    # until each output's done event is received.
                     client.sendall(
                         wire_message(output_v3_id, 3, struct.pack("<I", 2))
                         + wire_message(output_v2_id, 3, struct.pack("<I", 3))
                         + wire_message(8, 0, struct.pack("<I", output_v3_id))
                         + wire_message(8, 0, struct.pack("<I", output_v2_id))
                     )
-                    wait_output("compositor_version", 6)
+                    wait_output("compositor_version", 6 if output_tracking_test else 1)
                     wait_output("output_global_names", 8, 0)
                     wait_output("output_global_names", 9, 1)
-
-                    # wl_surface v6 carries compositor-preferred scale/transform.
-                    client.sendall(
-                        wire_message(8, 2, struct.pack("<I", 2))
-                        + wire_message(8, 3, struct.pack("<I", 1))
-                    )
-                    wait_output("surface_preferred_buffer_scale", 2)
-                    wait_output("surface_preferred_scale_seen", 1)
-                    wait_output("surface_preferred_buffer_transform", 1)
-                    wait_output("surface_preferred_transform_seen", 1)
-                    client.sendall(
-                        wire_message(8, 2, struct.pack("<I", 1))
-                        + wire_message(8, 3, struct.pack("<I", 0))
-                    )
-                    wait_output("surface_preferred_buffer_scale", 1)
-                    wait_output("surface_preferred_buffer_transform", 0)
                     wait_output("output_object_ids", output_v3_id, 0)
                     wait_output("output_object_ids", output_v2_id, 1)
                     wait_output("output_versions", 3, 0)
@@ -796,6 +783,35 @@ def run(
                     wait_output("output_surface_entered", 1, 1)
                     wait_output("surface_output_count", 2)
                     wait_output("surface_output_max_scale", 1)
+                    wait_output("surface_effective_buffer_scale", 1)
+
+                    if output_tracking_test:
+                        # wl_surface v6's preference is authoritative even when
+                        # overlapping outputs advertise different scale factors.
+                        client.sendall(
+                            wire_message(8, 2, struct.pack("<I", 2))
+                            + wire_message(8, 3, struct.pack("<I", 1))
+                        )
+                        wait_output("surface_preferred_buffer_scale", 2)
+                        wait_output("surface_preferred_scale_seen", 1)
+                        wait_output("surface_preferred_buffer_transform", 1)
+                        wait_output("surface_preferred_transform_seen", 1)
+                        wait_output("surface_effective_buffer_scale", 2)
+                        client.sendall(
+                            wire_message(8, 2, struct.pack("<I", 1))
+                            + wire_message(8, 3, struct.pack("<I", 0))
+                        )
+                        wait_output("surface_preferred_buffer_scale", 1)
+                        wait_output("surface_preferred_buffer_transform", 0)
+                        wait_output("surface_effective_buffer_scale", 1)
+                    else:
+                        # Pre-v6 compositors cannot send a per-surface preference;
+                        # defaults remain untouched and output scales are fallback.
+                        wait_output("surface_preferred_buffer_scale", 1)
+                        wait_output("surface_preferred_scale_seen", 0)
+                        wait_output("surface_preferred_buffer_transform", 0)
+                        wait_output("surface_preferred_transform_seen", 0)
+
                     client.sendall(
                         wire_message(output_v3_id, 2) + wire_message(output_v2_id, 2)
                     )
@@ -804,10 +820,15 @@ def run(
                     wait_output("output_scales", 2, 0)
                     wait_output("output_scales", 3, 1)
                     wait_output("surface_output_max_scale", 3)
-                    observations.append(
-                        "wl_compositor v6 preferred surface scale/transform and wl_output v3/v2 atomic scale+done, "
-                        "multi-output membership and hotplug lifecycle verified"
-                    )
+                    wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 3)
+                    if output_tracking_test:
+                        observations.append(
+                            "wl_compositor v6 preferred surface scale overrides multi-output wl_output scale fallback"
+                        )
+                    else:
+                        observations.append(
+                            "pre-v6 compositor selects maximum committed scale among entered wl_output objects"
+                        )
 
                     # Remove an entered v3 output: the client must send its
                     # release request and recalculate the surface's scale cache.
@@ -817,6 +838,7 @@ def run(
                     wait_output("output_object_ids", 0, 0)
                     wait_output("surface_output_count", 1)
                     wait_output("surface_output_max_scale", 3)
+                    wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 3)
 
                     # A hot-added output reuses the free table slot but must
                     # receive a fresh client object ID from the monotonic allocator.
@@ -845,10 +867,12 @@ def run(
                     wait_output("output_surface_entered", 1, 0)
                     wait_output("surface_output_count", 2)
                     wait_output("surface_output_max_scale", 3)
+                    wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 3)
                     client.sendall(wire_message(21, 2))
                     wait_output("output_pending_valid", 0, 0)
                     wait_output("output_scales", 4, 0)
                     wait_output("surface_output_max_scale", 4)
+                    wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 4)
 
                     # Remove the v2 output. It has no release request; the next
                     # expected client request is therefore only the v3 output release.
@@ -860,11 +884,13 @@ def run(
                     wait_output("output_object_ids", 0, 1)
                     wait_output("surface_output_count", 1)
                     wait_output("surface_output_max_scale", 4)
+                    wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 4)
 
                     client.sendall(wire_message(8, 1, struct.pack("<I", 21)))
                     wait_output("output_surface_entered", 0, 0)
                     wait_output("surface_output_count", 0)
                     wait_output("surface_output_max_scale", 1)
+                    wait_output("surface_effective_buffer_scale", 1)
 
                     client.sendall(wire_message(2, 1, struct.pack("<I", 10)))
                     expect_message(client, (21, 0, b""), "release removed hot-added wl_output v3")
@@ -9556,5 +9582,6 @@ if __name__ == "__main__":
     # Output discovery, per-output scale cache, surface membership, hotplug,
     # and version-gated wl_output.release.
     run(sys.argv[1], output_tracking_test=True)
+    run(sys.argv[1], output_tracking_legacy_test=True)
     # Remove the keyboard while an opted-in text-input-v3 IME has visible preedit.
     run(sys.argv[1], seat_hotplug_ime_test=True, advertised_seat_version=4)

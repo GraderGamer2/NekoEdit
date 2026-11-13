@@ -1,3 +1,9 @@
+## 2026-11-13 — select compositor-preferred Wayland surface scale with legacy fallback (CI pending)
+
+Derive a dedicated effective scale hint without changing rendering. When wl_compositor is v6 or newer, the compositor's per-surface preferred_buffer_scale is authoritative and starts at the protocol default of 1; on older compositors, use the maximum committed wl_output.scale among outputs entered by the surface. Recompute this value whenever the surface preference, output membership, output scale transaction, or output lifecycle changes.
+
+Extend the output mock to run the complete output discovery/membership/hotplug sequence against both a v6 compositor and a legacy v1 compositor. The v6 case proves the per-surface preference overrides higher intersecting-output scales; the legacy case proves the fallback follows committed scale changes and returns to 1 when the surface leaves all outputs. The renderer still uses a scale-1 buffer: no set_buffer_scale request, physical buffer resize, transform application, or pointer-coordinate conversion is included. CI is pending.
+
 ## 2026-11-13 — track compositor-preferred surface scale and transform (CI PASS #868)
 
 Bind `wl_compositor` at up to v6 instead of unconditionally at v1. This gives the created `wl_surface` the version-6 `preferred_buffer_scale` and `preferred_buffer_transform` events while preserving v1 behavior on older compositors. Track both preferences on the surface, defaulting to scale 1 and normal transform; validate positive scale values and the transform enum. The output integration mock exercises the compositor preference independently of per-output scale transactions.

@@ -4857,6 +4857,7 @@ cursor_shape_device:   .long 0
 .global output_global_names, output_object_ids, output_versions
 .global output_scales, output_pending_scales, output_pending_valid
 .global output_surface_entered, surface_output_count, surface_output_max_scale
+.global surface_effective_buffer_scale
 output_global_names:      .zero 32
 output_object_ids:        .zero 32
 output_versions:          .zero 32
@@ -4866,6 +4867,7 @@ output_pending_valid:     .zero 32
 output_surface_entered:   .zero 32
 surface_output_count:     .long 0
 surface_output_max_scale: .long 0
+surface_effective_buffer_scale: .long 1
 .global surface_preferred_buffer_scale, surface_preferred_scale_seen
 .global surface_preferred_buffer_transform, surface_preferred_transform_seen
 surface_preferred_buffer_scale:     .long 0
@@ -5247,6 +5249,7 @@ wayland_main:
     mov dword ptr [rip + pointer_inside], 0
     mov dword ptr [rip + pointer_enter_serial], 0
     mov dword ptr [rip + surface_output_max_scale], 1
+    mov dword ptr [rip + surface_effective_buffer_scale], 1
     mov dword ptr [rip + surface_preferred_buffer_scale], 1
     mov dword ptr [rip + surface_preferred_scale_seen], 0
     mov dword ptr [rip + surface_preferred_buffer_transform], 0
@@ -23201,8 +23204,9 @@ output_bind_pending:
     ret
 .size output_bind_pending, . - output_bind_pending
 
-# Recompute entered-output count and the maximum integer scale.
-# This metadata is not yet applied to buffer dimensions or pointer coordinates.
+# Recompute entered-output count, max integer scale, and the selected scale hint.
+# wl_compositor v6+ uses the per-surface preference; older versions fall back
+# to the maximum committed scale among entered outputs. Rendering is unchanged.
 .type output_recompute_surface_scale, @function
 output_recompute_surface_scale:
     push rbp
@@ -23229,6 +23233,17 @@ output_recompute_surface_scale:
 .output_recompute_done:
     mov dword ptr [rip + surface_output_count], r13d
     mov dword ptr [rip + surface_output_max_scale], r11d
+
+    # Version 6 exposes the compositor's authoritative per-surface preference.
+    # Its protocol default is 1 until preferred_buffer_scale is received.
+    cmp dword ptr [rip + compositor_version], 6
+    jb .output_recompute_legacy_scale
+    mov eax, dword ptr [rip + surface_preferred_buffer_scale]
+    jmp .output_recompute_store_scale
+.output_recompute_legacy_scale:
+    mov eax, r11d
+.output_recompute_store_scale:
+    mov dword ptr [rip + surface_effective_buffer_scale], eax
     pop r13
     pop r12
     pop rbp
@@ -23392,6 +23407,7 @@ handle_surface_output_event:
     jle .surface_output_protocol_error
     mov dword ptr [rip + surface_preferred_buffer_scale], eax
     mov dword ptr [rip + surface_preferred_scale_seen], 1
+    call output_recompute_surface_scale
     jmp .surface_output_handled
 .surface_output_preferred_transform:
     cmp dword ptr [rip + compositor_version], 6
