@@ -19735,6 +19735,9 @@ draw_glyph:
     add eax, r11d
     cmp eax, dword ptr [rip + window_buffer_height]
     jae .glyph_fallback_next_subrow
+    # Keep the physical row coordinate intact across every horizontal subpixel.
+    # The address calculation below repurposes EAX for the byte offset.
+    mov esi, eax
     xor r9d, r9d
 .glyph_fallback_subcolumn:
     cmp r9d, r10d
@@ -19745,6 +19748,7 @@ draw_glyph:
     add edx, r9d
     cmp edx, dword ptr [rip + window_buffer_width]
     jae .glyph_fallback_next_subcolumn
+    mov eax, esi
     mov ecx, dword ptr [rip + window_stride]
     imul eax, ecx
     shl edx, 2
