@@ -1,12 +1,14 @@
-## Latest handoff (2026-11-13 — trace wl_keyboard keymap event dispatch, CI pending)
+## Latest handoff (2026-11-13 — retain keymaps during startup seat sync, CI pending)
 
-Continue development on early-alpha; keep main at its stable merged source checkpoint with the changelog mirrored. Latest source/test commit: [2fbd4a2](https://github.com/GraderGamer2/NekoEdit/commit/2fbd4a2bd341dac3147a53236956d987b96f42bb). CI is pending.
+Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. The current source fix is [789f29b](https://github.com/GraderGamer2/NekoEdit/commit/789f29b7a889fc0d306e1a815617b6b12b576bc0). The supporting startup-event fixture and processed-keymap counter are in [5de2933](https://github.com/GraderGamer2/NekoEdit/commit/5de293344f6fe8d2c451667c87e9c1e4aa2f7fc8); the original test/dispatch instrumentation is in [c262311](https://github.com/GraderGamer2/NekoEdit/commit/c2623115584980a90d1ff18430d90ccca1accaeb).
 
-Actions #897 passes every pre-Mutter stage, including the freestanding build/ELF, CLI, full Wayland protocol mock, native XKB, pinned X.Org importer, and Compose locale pack. The live Mutter smoke test fails before typing: keyboard focus is entered, but no processed keymap or parsed XKB map is present. This does not yet prove whether the compositor omitted the keymap, the event missed the local keyboard-object ID, or another handler consumed it.
+Actions #898 failed during assembly because a test-only .bss sentinel was initialized to -1. It has been corrected to zero-initialized storage. No app artifact was produced by that run. Actions #897 passed all pre-Mutter stages but the live GNOME Shell test observed keyboard focus with no completed XKB keymap parse. The exact live cause remains unconfirmed.
 
-The new test-only diagnostics expose the seat's pointer/keyboard object IDs, capability mask, extension proxy IDs, keyboard event dispatch counters, and keymap handler entry count plus captured object/size/SCM_RIGHTS descriptor. The next run should identify where the keymap event disappears. No NekoEdit input behavior has been changed; runtime symbol exports and state counters are only for /proc process-memory inspection from the smoke-test parent.
+The startup seat loop now checks buffer release, pointer, then keyboard keymap events in a one-way chain before it tests the sync callback. It uses the same shared FD-validating keymap updater as the main event loop, and unmatched events proceed to sync handling rather than cycling between object checks. The Wayland mock injects a NO_KEYMAP event with its descriptor after get_keyboard but before sync.done, followed later by the full XKB map; the test waits for both updates to finish. This specifically covers the ordering window and FD cleanup. It does not yet establish that this was Mutter's live failure.
 
-Next: inspect the single replacement Actions run before changing keyboard behavior. Once the live XKB path is restored, resume the queued fractional-scaling and release-tracked multi-buffer work, then collect reproducible performance measurements before optimization.
+Next: inspect the single CI run from this assembled head. The real compositor probe must show the keymap parsed and Compose/dead-key states entering before we call the input regression resolved. Keep fractional-scaling refinements and the release-tracked multi-buffer work queued until the keyboard path is stable.
+
+
 ---
 
 ## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)

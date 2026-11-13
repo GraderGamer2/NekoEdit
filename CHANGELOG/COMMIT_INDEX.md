@@ -1,3 +1,15 @@
+## 2026-11-13 — retain keyboard keymaps through the startup seat roundtrip (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [789f29b7a889fc0d306e1a815617b6b12b576bc0](https://github.com/GraderGamer2/NekoEdit/commit/789f29b7a889fc0d306e1a815617b6b12b576bc0) | fix: dispatch startup keyboard keymap events safely |
+| [5de293344f6fe8d2c451667c87e9c1e4aa2f7fc8](https://github.com/GraderGamer2/NekoEdit/commit/5de293344f6fe8d2c451667c87e9c1e4aa2f7fc8) | fix: retain wl_keyboard keymap during startup sync |
+| [c2623115584980a90d1ff18430d90ccca1accaeb](https://github.com/GraderGamer2/NekoEdit/commit/c2623115584980a90d1ff18430d90ccca1accaeb) | test: add early keyboard keymap delivery coverage |
+
+A deterministic mock now sends NO_KEYMAP during the startup seat roundtrip, before sync.done, then verifies that both the no-map event and the later full XKB map are processed. The live Mutter result is still pending.
+
+---
+
 ## 2026-11-13 — trace wl_keyboard keymap event dispatch (CI pending)
 
 | Commit | Subject |
