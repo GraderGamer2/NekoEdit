@@ -1,3 +1,48 @@
+## 2026-11-13 — bulk insertion for large clipboard payloads (CI PASS #923)
+
+| Commit | Subject |
+|---|---|
+| [3c4213d50d5744e14709ef833aba71f340e8e537](https://github.com/GraderGamer2/NekoEdit/commit/3c4213d50d5744e14709ef833aba71f340e8e537) | perf: bulk insert large clipboard pastes |
+| [1ea16b11534ec7159630deb89ee8b8cecac0b2df](https://github.com/GraderGamer2/NekoEdit/commit/1ea16b11534ec7159630deb89ee8b8cecac0b2df) | test: handle nonblocking clipboard stress writes |
+| [c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f) | test: verify line-byte lengths in clipboard stress case |
+
+Actions [#923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps. The real Wayland mock transferred an exact 10,485,760-byte clipboard payload, compared all document bytes, verified 70,375 line records and complete line-byte coverage, then passed Undo/Redo. The write-to-first-redraw interval was 621.2 ms on the Ubuntu 24.04 GitHub runner; this is a CI mock-compositor measurement, not local desktop timing.
+
+Artifacts: Linux x86-64 [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401) (144,791 bytes); Compose packs [14053185608](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053185608) (120,536 bytes). Both expire 2026-11-14 at 15:28 UTC (22:28 WIB).
+
+---
+
+## 2026-11-13 — large-document Open/index optimization (CI PASS #920)
+
+| Commit | Subject |
+|---|---|
+| [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d) | perf: streamline large document loading and indexing |
+| [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446) | fix: handle trailing empty line in contiguous index scan |
+| [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18) | test: account for subpixel scrollbar movement on huge documents |
+
+Actions [#920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps. The mock opened and saved 11,534,336 bytes with exact byte equality, indexed 89,414 lines / 178,827 visual rows, and retained the gap at EOF. First-redraw timings across three mock scenarios: 443.4 ms, 417.2 ms and 423.1 ms (423.1 ms median) on the CI runner. The scrollbar check now verifies proportional integer-rounded geometry rather than demanding a visible pixel shift after only three rows in a very large document.
+
+The current renderer also retained checksum `35084948275808`; the warm glyph-draw microbenchmark measured 33.1% lower than the original linear-cache/generic-transform reference. It is not a whole-application speedup claim.
+
+Artifacts: Linux x86-64 [14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320) (144,547 bytes); Compose packs [14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095) (120,536 bytes). Both expire 2026-11-14 at 14:52 UTC (21:52 WIB).
+
+---
+
+
+## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
+
+| Commit | Subject |
+|---|---|
+| [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388) | perf: add identity-transform glyph blit fast path |
+
+Actions [#913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps, including the three-way benchmark with exact framebuffer-checksum equality, complete Wayland protocol matrix, and nested GNOME Shell/Mutter integration.
+
+Seven-sample warm glyph-draw medians: 258.1 ns/draw (linear LRU + generic transform), 186.5 ns/draw (hash cache + generic transform), and 166.7 ns/draw (hash cache + identity fast path). The identity fast path is 10.6% lower than the hash-cache/generic-mapper variant; the combined change is 35.4% lower than the pre-hash reference. All outputs share checksum `35084948275808`. This is a synthetic glyph-level benchmark, not a whole-application speedup claim.
+
+Artifacts: Linux executable [14044564725](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044564725) (144,327 bytes); Compose packs [14044674657](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044674657) (120,536 bytes). Both expire 2026-11-14 14:23 UTC (21:23 WIB).
+
+---
+
 ## 2026-11-13 — compare linear and hash-indexed glyph-cache rendering (CI PASS #912)
 
 | Commit | Subject |

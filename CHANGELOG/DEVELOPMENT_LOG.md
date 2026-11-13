@@ -1,3 +1,74 @@
+## 2026-11-13 — optimize large clipboard paste with bulk insertion (CI PASS #923)
+
+Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps. The change addresses the synchronous part of the external clipboard path after the nonblocking receive pipe reaches EOF.
+
+Previously, clipboard.c::insert_text iterated over the received buffer and called doc_insert_byte for every byte. The normal single-byte path records one history operation and updates the line index for each insertion. A 10 MiB paste therefore caused millions of point operations even though the clipboard payload had already been received into a contiguous mapping.
+
+The new assembly doc_insert_bytes routine performs the document mutation as one range:
+- Checks final-length overflow and reserves the required capacity once.
+- Moves the document gap to the insertion cursor once and verifies the resulting gap size.
+- Calls the new history_note_insert_bytes hook once, preserving the existing journal format and transaction boundaries.
+- Copies the full payload with one rep movsb and updates document length, cursor and revision once.
+- Invalidates the derived line index once, leaving its rebuild to the next render instead of applying one point update per byte.
+
+history.c now uses this bulk range helper when applying inserted bytes during Undo/Redo as well. The C history test shim provides the corresponding range-insert implementation so the history test binary remains independently linkable. No clipboard-library dependency, thread, helper process, or larger receive ceiling was introduced; the existing 64 MiB limit remains unchanged.
+
+The Wayland mock writes an exact 10,485,760-byte payload through the actual nonblocking clipboard FD, waiting for writability when the pipe fills. It checks complete byte equality, index validity, 70,375 logical lines and total line-byte coverage, then performs Undo and Redo and checks exact document equality after each direction. The clipboard-write-to-first-redraw interval measured 621.2 ms on the Ubuntu 24.04 CI runner. That interval includes the transfer and initial index rebuild; it excludes Undo/Redo, which are verified separately.
+
+The full workflow passed on head [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f), including freestanding ELF validation, CLI tests, renderer benchmark, Wayland protocol mock matrix, XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads. The Linux executable artifact is [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401).
+
+---
+
+## 2026-11-13 — optimize and stress-test large-document Open (CI PASS #920)
+
+Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps, including the new 11 MiB Open/index/Save stress case and nested GNOME Shell/Mutter integration.
+
+Three avoidable costs in the initial Open path were removed or reduced:
+
+1. **Full-file commit copy removed.** Once the staging read reaches EOF and close succeeds, the staging and live mmap pointers/capacities are exchanged. The old document remains untouched until that point. The former live mapping becomes the next staging buffer. This eliminates the old `rep movsb` of the entire file into separately reserved live storage.
+2. **Contiguous index scans accelerated.** When the freshly loaded document has its gap at EOF, `repne scasb` finds LF delimiters directly in the contiguous mapping in both the line-count and line-record passes. Interior-gap documents continue through the previous logical-byte accessor. The scanner handles an empty final line following a trailing LF.
+3. **ASCII advance calculation cached.** Common ASCII font advances are cached by code point and document em size, avoiding repeated cmap/hmtx scaling during visual-row measurement. Font replacement clears the per-face advance cache with the glyph cache.
+
+The test harness now opens and saves an exact 11,534,336-byte, 89,414-line ASCII file via the native picker. It asserts every input byte, the 89,414 line-index records, EOF gap invariant, sufficient mapped capacity, and every saved output byte. The three mock compositor scenarios measured 443.4 ms, 417.2 ms and 423.1 ms from Open confirmation through the first presented redraw (423.1 ms median) on Ubuntu 24.04 GitHub Actions. These are repeatable CI baseline measurements, not local desktop timings or an end-to-end typing/scrolling result.
+
+The first stress run passed the Open, index and Save checks but exposed a test assumption about scrollbar pixel motion. With 178,827 visual rows, a three-row scroll can correctly leave the thumb at the same integer pixel. The test now verifies the exact proportional integer-rounded thumb position and still exercises a drag to the bottom. Actions #920 passed the complete matrix after this correction.
+
+The renderer microbenchmark also passed its framebuffer checksum comparison; the current glyph draw measured 33.1% lower warm-draw time than the linear-cache/generic-transform reference in this CI run. That result is separate from the 11 MiB Open baseline.
+
+Implementation/test commits:
+- [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d).
+- [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446).
+- [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18).
+
+---
+
+
+## 2026-11-13 — add identity-transform glyph blit fast path (CI PASS #913)
+
+Actions [Build and test #913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps. The new fast path was built into the freestanding executable and validated by the complete Wayland protocol mock and nested GNOME Shell/Mutter integration, alongside the native XKB, importer, Compose, CLI, ELF, and artifact checks.
+
+Inspection of `font_draw_codepoint_size()` found that every non-transparent pixel in a glyph mask passed through `map_surface_pixel_to_buffer()`, even when `transform == 0` and the usual surface-to-buffer mapping was the identity. The renderer now takes a dedicated branch for transform zero:
+- Computes the effective clipping width and height once from the backing-buffer and logical-surface dimensions.
+- Computes the destination row pointer once per glyph row.
+- Clips each source row and column directly, then applies the existing coverage blend without per-pixel transform dispatch.
+- Returns after the identity draw; all nonzero transforms retain the previous generic mapping loop.
+
+The generic implementation is also retained as a benchmark-only build variant through `FONT_DRAW_GENERIC_REFERENCE`. `make bench-renderer` now builds a three-way comparison: pre-hash linear LRU + generic mapper, hash cache + generic mapper, and hash cache + identity fast path. The comparison script runs each benchmark, parses the seven-sample medians, and rejects the result if the framebuffer checksums differ.
+
+| CI #913 warm-draw variant | Median |
+|---|---:|
+| Linear LRU + generic transform | 258.1 ns/draw |
+| Hash cache + generic transform | 186.5 ns/draw |
+| Hash cache + identity fast path | 166.7 ns/draw |
+
+The identity path reduced the measured warm glyph-draw median by 10.6% versus the hash-cache/generic-mapper variant. The combined reduction relative to the original linear-cache reference was 35.4%. All three checksums matched at `35084948275808`. Cold rasterization medians differed slightly between runs, but rasterization was not modified and that difference is treated as run variance rather than an optimization claim.
+
+Scope remains important: the timed loop uses deterministic synthetic eight-point outlines and measures glyph-level cache lookup plus pixel blending. It does not measure real-font contour diversity, text-layout/index work, complete `render_surface()`, or compositor scheduling. The next milestone should add reproducible document/frame workloads and profile the assembly rectangle and indexed-layout paths before further changes.
+
+Implementation commit: [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388).
+
+---
+
 ## 2026-11-13 — measure and optimize warm glyph-cache lookup (CI PASS #912)
 
 Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed all functional workflow stages: freestanding x86-64 build/ELF inspection, CLI smoke tests, paired rasterizer benchmark, full Wayland protocol mock including two-slot SHM ownership and XKB repeat-policy coverage, native `us(intl)` parser test, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter Wayland integration, and artifact uploads.

@@ -1,3 +1,83 @@
+## 2026-11-13 — bulk clipboard paste and range-based history (CI PASS #923)
+
+Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps on final head [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f). Validation covered the freestanding build/ELF, CLI smoke tests, renderer checksum benchmark, full Wayland protocol matrix, native XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads.
+
+The asynchronous Wayland clipboard receive path previously handed the completed buffer to a loop that called the normal single-byte insertion routine once per byte. That made a large paste perform millions of history and line-index updates on the UI thread. The new range insertion path reserves capacity once, moves the gap once, records the inserted bytes as one operation in the existing history format, copies the range in one bulk operation, and invalidates the derived line index once for rebuilding on the next redraw. History replay uses the same range insertion path for Redo; normal character input remains unchanged.
+
+The real Wayland mock transferred exactly 10,485,760 bytes through the nonblocking clipboard pipe. It verified byte-for-byte document equality, a valid rebuilt index with 70,375 logical lines, the sum of per-line byte lengths, and full Undo/Redo. The measured interval from the start of the clipboard write through the first completed redraw was 621.2 ms on the Ubuntu 24.04 GitHub runner. This is a mock-compositor CI measurement, not a prediction of local desktop latency; Undo/Redo were verified separately and were not part of that timed interval.
+
+Implementation and test commits:
+- [3c4213d50d57](https://github.com/GraderGamer2/NekoEdit/commit/3c4213d50d5744e14709ef833aba71f340e8e537) — bulk gap-buffer insertion and single-range history recording.
+- [1ea16b11534e](https://github.com/GraderGamer2/NekoEdit/commit/1ea16b11534ec7159630deb89ee8b8cecac0b2df) — stress-test nonblocking clipboard pipe writes.
+- [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f) — validate line byte lengths using the line-record field.
+
+Artifacts: Linux x86-64 [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401) (144,791 bytes); Compose packs [14053185608](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053185608) (120,536 bytes). Both expire 2026-11-14 at 15:28 UTC (22:28 WIB).
+
+---
+
+## 2026-11-13 — streamline large-document Open and line-index construction (CI PASS #920)
+
+Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 workflow steps on implementation/test head [341862ba22b5](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). The run includes the freestanding build/ELF and CLI tests, renderer checksum comparison, full Wayland protocol matrix with an 11 MiB multi-line Open/Save case, executable inspection, native `us(intl)` XKB parsing, pinned X.Org importer, Compose pack generation, live GNOME Shell/Mutter integration, and both artifact uploads.
+
+The Open path now swaps the fully read and successfully closed staging mapping into the active document instead of copying all file bytes into a second mapping. This keeps the previous document intact until the replacement is ready while avoiding one full-file memory copy and duplicate live capacity during commit. The former active mapping becomes the next Open staging area.
+
+For documents loaded contiguously with the gap at EOF, initial index construction scans LF bytes directly with `repne scasb` during line counting and line-boundary discovery. The existing gap-aware scan remains active for documents whose gap is inside the text. Common ASCII glyph advances are also cached by code point and document em size; the cache is invalidated whenever a successful font replacement clears the glyph cache.
+
+The Wayland mock opened an exact 11 MiB (11,534,336-byte) ASCII text document with 89,414 logical lines and 178,827 visual rows. It verified the active path, complete document bytes, mapping capacity, EOF gap position, line count and every line-index record, then saved the document and compared the entire saved file byte-for-byte. The measured interval from confirming Open to the first presented redraw was:
+
+| CI scenario | Open → first presented redraw |
+|---|---:|
+| Wayland scenario 1 | 443.4 ms |
+| Wayland scenario 2 | 417.2 ms |
+| Wayland scenario 3 | 423.1 ms |
+| Median | 423.1 ms |
+
+These are Ubuntu GitHub-runner mock-compositor timings, not a prediction for a user's local desktop or a production benchmark. They provide a repeatable baseline. The test initially exposed an overly strict scrollbar assertion: a three-row viewport move in a 178,827-row document can round to no visible thumb-pixel movement. The application correctly advanced `doc_view_top_row`; the test now checks the exact integer-rounded proportional thumb geometry instead of requiring an immediate one-pixel change.
+
+Renderer benchmark on the same CI run retained identical framebuffer checksums (`35084948275808`) and reported 26.0% lower warm-draw time for the hash cache versus the linear reference, a further 9.6% for the identity path versus the generic mapper, and 33.1% combined. This synthetic glyph benchmark is independent of the large-document timing.
+
+Artifacts from #920:
+- Linux x86-64 executable: [artifact 14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320), 144,547 bytes.
+- Compose locale packs: [artifact 14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095), 120,536 bytes.
+Both expire 2026-11-14 at 14:52:23 UTC (21:52:23 WIB).
+
+Implementation and test changes:
+- [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d) — zero-copy Open commit, contiguous line-index scan and ASCII advance cache.
+- [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446) — guard trailing-empty-line scanning and build the 11 MiB fixture.
+- [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18) — verify subpixel scrollbar movement using the actual integer geometry and print the large-file timing.
+
+Next: compare this CI baseline with a real 10+ MiB text file on the user's Debian/Wayland desktop. Keep profiling full-frame redraw, scrolling, and editing latency separate from Open/index time; do not infer an application-wide speedup from the load test alone.
+
+---
+
+
+## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
+
+Actions [Build and test #913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps on implementation commit [210bd7dcab51](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388). Validation included the freestanding x86-64 build and ELF checks, CLI/install tests, three-way renderer benchmark, complete Wayland protocol mock, native `us(intl)` XKB parser, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+The normal Wayland identity-transform path in `font_draw_codepoint_size()` now clips the glyph against the effective surface bounds once and writes mask rows directly. This removes the general eight-way coordinate-transform dispatch from each covered pixel on the common unrotated path. Rotated and reflected buffers continue to use the unchanged generic coordinate mapper. The glyph cache and alpha-blend formula are unchanged.
+
+The benchmark now builds three variants from the same source and flags, executes seven samples of 50,000 warm draws per variant, and requires identical framebuffer checksums before reporting timing:
+
+| Synthetic warm glyph-draw median | Median |
+|---|---:|
+| Linear LRU + generic transform (pre-hash reference) | 258.1 ns/draw |
+| Hash-indexed cache + generic transform | 186.5 ns/draw |
+| Hash-indexed cache + identity fast path (current renderer) | 166.7 ns/draw |
+
+The identity blit path measured 10.6% lower warm-draw time than the hash-cache build using the old generic mapper. Across both optimizations, the current path measured 35.4% lower warm-draw time than the pre-hash linear reference. All variants produced the same framebuffer checksum (`35084948275808`). Cold rasterization medians were 13,639.1, 13,641.9, and 13,124.1 ns/glyph respectively; the rasterization algorithm was not changed, so this small spread is not treated as a measured cold-path gain.
+
+These figures are a deterministic synthetic eight-point-outline microbenchmark, not a whole-application speedup. They exclude document layout, full-frame `render_surface()`, Wayland/compositor scheduling, and real installed-font contour diversity. The next performance step is to measure representative document redraw and typing workloads, plus the assembly rectangle and layout/index paths, before selecting another hot-path optimization.
+
+Artifact links from #913:
+- Linux x86-64 executable: [artifact 14044564725](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044564725), 144,327 bytes.
+- Compose locale packs: [artifact 14044674657](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044674657), 120,536 bytes.
+Both artifacts expire on 2026-11-14 at 14:23:13 UTC (21:23:13 WIB).
+
+Implementation: [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388).
+
+---
+
 ## 2026-11-13 — compare linear and hash-indexed glyph-cache hits (CI PASS #912)
 
 Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the complete build and validation workflow on Ubuntu 24.04, including both benchmark variants, the freestanding ELF and CLI checks, the full multi-buffer Wayland protocol matrix, executable inspection, native `us(intl)` XKB parser validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
