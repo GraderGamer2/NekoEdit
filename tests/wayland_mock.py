@@ -360,6 +360,7 @@ def run(
     output_tracking_test: bool = False,
     output_tracking_legacy_test: bool = False,
     fractional_scale_test: bool = False,
+    fractional_sync_keymap_test: bool = False,
     initial_preferred_fractional_scale: int = 120,
     seat_supported: bool = True,
 ) -> None:
@@ -877,7 +878,7 @@ def run(
                 # ends the initial seat roundtrip. The no-keymap format carries
                 # an FD too; the client must consume it rather than lose the
                 # first keyboard event while waiting for sync.done.
-                if keyboard_layout_test:
+                if keyboard_layout_test or fractional_sync_keymap_test:
                     early_keymap_fd = os.memfd_create("nekoedit-early-no-keymap", 0)
                     try:
                         early_keymap_event = wire_message(
@@ -961,7 +962,7 @@ def run(
                         client, next_test_object_id, next_test_object_id + 1,
                         viewport_object_id, fractional_id, fractional_sync_id,
                         initial_preferred_fractional_scale,
-                        keyboard_object_id if keyboard_layout_test else None,
+                        keyboard_object_id if (keyboard_layout_test or fractional_sync_keymap_test) else None,
                     )
                     next_test_object_id += 5
                 if output_tracking_enabled:
@@ -1591,6 +1592,78 @@ def run(
                     wire_message(pointer_object_id, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(client_buffer_id, 0)
                 )  # release the initial document click and its buffer
+
+                if fractional_sync_keymap_test:
+                    # Keep this regression independent of the much larger XKB
+                    # shortcut suite: both NO_KEYMAP events must be dispatched,
+                    # but this scenario deliberately does not install an XKB map.
+                    nm_text = subprocess.check_output(["nm", "-n", binary], text=True)
+                    wanted = {
+                        "keymap_event_count",
+                        "keymap_event_processed_count",
+                        "keymap_processing_complete",
+                        "keymap_format",
+                        "keymap_size",
+                        "keymap_mapping",
+                    }
+                    addresses = {}
+                    for symbol_line in nm_text.splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in wanted:
+                            addresses[fields[2]] = int(fields[0], 16)
+                    if set(addresses) != wanted:
+                        raise AssertionError(
+                            "fractional startup keymap probe symbols are incomplete: "
+                            + repr(sorted(wanted - addresses.keys()))
+                        )
+                    if not process_holder:
+                        raise AssertionError("child process handle was not published to the mock")
+                    with open(
+                        f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0
+                    ) as memory:
+                        def read_u32(name: str) -> int:
+                            raw = os.pread(memory.fileno(), 4, addresses[name])
+                            if len(raw) != 4:
+                                raise AssertionError(f"short process-memory read for {name}")
+                            return struct.unpack("<I", raw)[0]
+
+                        def read_u64(name: str) -> int:
+                            raw = os.pread(memory.fileno(), 8, addresses[name])
+                            if len(raw) != 8:
+                                raise AssertionError(f"short process-memory read for {name}")
+                            return struct.unpack("<Q", raw)[0]
+
+                        deadline = time.monotonic() + 3.0
+                        processed = read_u32("keymap_event_processed_count")
+                        while processed < 2 and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                            processed = read_u32("keymap_event_processed_count")
+                        state = {
+                            "dispatch_count": read_u32("keymap_event_count"),
+                            "processed_count": processed,
+                            "processing_complete": read_u32("keymap_processing_complete"),
+                            "keymap_format": read_u32("keymap_format"),
+                            "keymap_size": read_u32("keymap_size"),
+                            "keymap_mapping": read_u64("keymap_mapping"),
+                        }
+                    if (
+                        state["dispatch_count"] != 2
+                        or state["processed_count"] != 2
+                        or state["processing_complete"] != 1
+                        or state["keymap_format"] != 0
+                        or state["keymap_size"] != 0
+                        or state["keymap_mapping"] != 0
+                    ):
+                        raise AssertionError(
+                            "startup seat/fractional keymap events were not both consumed as NO_KEYMAP: "
+                            + repr(state)
+                        )
+                    observations.append(
+                        "FD-backed NO_KEYMAP events were processed during both the initial seat sync and fractional-scale sync"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test or right_alt_compose_test or right_alt_level3_test:
                     keymap_data = b"""xkb_keymap {
 xkb_keycodes "nekoedit-test" {
@@ -10063,9 +10136,9 @@ if __name__ == "__main__":
     # viewport destination remains in logical surface units.
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=150)
     # The second startup sync must not consume a wl_keyboard.keymap event.
-    # Combine it with the complete XKB parser/input test and inject an FD-backed
-    # NO_KEYMAP event while fractional_scale_startup is waiting for sync.done.
-    run(sys.argv[1], keyboard_layout_test=True, fractional_scale_test=True,
+    # Keep this focused on descriptor/event dispatch; the full XKB layout test
+    # remains a separate scenario so its shortcut assertions stay independent.
+    run(sys.argv[1], fractional_scale_test=True, fractional_sync_keymap_test=True,
         initial_preferred_fractional_scale=150)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=180,
         initial_preferred_buffer_transform=1)
