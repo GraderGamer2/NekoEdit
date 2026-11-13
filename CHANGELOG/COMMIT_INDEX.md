@@ -1,3 +1,17 @@
+## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
+
+| Commit | Subject |
+|---|---|
+| [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388) | perf: add identity-transform glyph blit fast path |
+
+Actions [#913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps, including the three-way benchmark with exact framebuffer-checksum equality, complete Wayland protocol matrix, and nested GNOME Shell/Mutter integration.
+
+Seven-sample warm glyph-draw medians: 258.1 ns/draw (linear LRU + generic transform), 186.5 ns/draw (hash cache + generic transform), and 166.7 ns/draw (hash cache + identity fast path). The identity fast path is 10.6% lower than the hash-cache/generic-mapper variant; the combined change is 35.4% lower than the pre-hash reference. All outputs share checksum `35084948275808`. This is a synthetic glyph-level benchmark, not a whole-application speedup claim.
+
+Artifacts: Linux executable [14044564725](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044564725) (144,327 bytes); Compose packs [14044674657](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044674657) (120,536 bytes). Both expire 2026-11-14 14:23 UTC (21:23 WIB).
+
+---
+
 ## 2026-11-13 — compare linear and hash-indexed glyph-cache rendering (CI PASS #912)
 
 | Commit | Subject |
