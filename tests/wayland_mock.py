@@ -5190,9 +5190,19 @@ xkb_symbols "nekoedit-sparse" {
                     written = 0
                     try:
                         while written < len(large_pasted):
-                            amount = os.write(
-                                large_paste_fd, large_pasted[written:written + 65536]
-                            )
+                            try:
+                                amount = os.write(
+                                    large_paste_fd, large_pasted[written:written + 65536]
+                                )
+                            except BlockingIOError:
+                                _readable, writable, _exceptional = select.select(
+                                    [], [large_paste_fd], [], 5
+                                )
+                                if not writable:
+                                    raise AssertionError(
+                                        "large clipboard pipe remained non-writable"
+                                    )
+                                continue
                             if amount <= 0:
                                 raise AssertionError("large clipboard pipe stopped accepting data")
                             written += amount
