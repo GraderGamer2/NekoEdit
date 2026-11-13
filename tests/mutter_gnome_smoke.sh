@@ -391,6 +391,18 @@ fi
 echo "Mutter document-area pointer focus verified: $POINTER_STATUS"
 sleep 0.25
 
+# Bash is the direct parent of NekoEdit, so it can open /proc/<pid>/mem under
+# the normal ptrace ancestry policy and pass the already-authorized descriptor
+# to the read-only diagnostic helper without adding an application debug API.
+if ! exec 9<"/proc/${APP_PID}/mem"; then
+    echo "could not open NekoEdit process memory for the test-only XKB probe" >&2
+    exit 1
+fi
+mutter_xkb_probe() {
+    python3 "$SCRIPT_DIR/mutter_xkb_state_probe.py" "$APP_BINARY" 9 "$@"
+}
+mutter_xkb_probe --wait-field keymap_processing_complete --equals 1 --assert-keymap
+
 send_key() {
     gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
         --method "$DBUS_INTERFACE.SendKey" "$1" "$2" >/dev/null
@@ -466,10 +478,13 @@ send_shortcut 65507 97
 # The preceding native XKB test separately verifies that compose:ralt maps Linux
 # evdev KEY_RIGHTALT (100) to XKB keycode 108 / Multi_key in the us(intl) map.
 send_keysym 65312
+mutter_xkb_probe --wait-field doc_compose_active --equals 1
 send_keysym 46
 send_keysym 46
 send_keysym 65104
+mutter_xkb_probe --wait-field doc_pending_dead_mark --nonzero
 send_keysym 65106
+mutter_xkb_probe
 send_keysym 65
 send_shortcut 65507 115
 send_keysym 65293

@@ -4945,6 +4945,7 @@ keyboard_focused:       .long 0
 .global keyboard_serial, clipboard_serial
 keyboard_serial:        .long 0
 clipboard_serial:       .long 0
+.global keyboard_group, keyboard_focused
 keyboard_group:         .long 0
 .global xkb_modifiers
 xkb_modifiers:          .long 0
@@ -4953,6 +4954,7 @@ level3_physical_down:   .long 0
 level3_mod5_down:       .long 0
 .global event_fd
 event_fd:               .long 0       # initialized to -1 in wayland_main
+.global keymap_format, keymap_size, keymap_processing_complete, keymap_mapping
 keymap_format:          .long 0
 keymap_size:            .long 0
 keymap_processing_complete: .long 0
