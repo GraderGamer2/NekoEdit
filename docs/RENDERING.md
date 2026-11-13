@@ -15,14 +15,22 @@ The current implementation is Wayland-only. The X11 backend is not ready. The so
 
 ## Rasterizer microbenchmark
 
-Run `make bench-renderer` to build and execute paired standalone diagnostics: the exact pre-hash linear-LRU reference path and the hash-indexed implementation, compiled from the same `src/font/rasterizer.c` with identical compiler flags. Both use a deterministic synthetic eight-point outline provider; no system font, Wayland server, compositor, Fontconfig, or third-party font library is needed. Each reports the median of seven independent samples and prints the per-sample values.
+Run `make bench-renderer` to build three variants from the same `src/font/rasterizer.c` and compiler flags:
+
+1. **Linear reference:** pre-hash linear-LRU lookup plus the generic transform mapper.
+2. **Hash-indexed reference:** 64-bucket warm-cache lookup plus the generic transform mapper.
+3. **Current renderer:** hash-indexed lookup plus a dedicated identity-transform glyph blit.
+
+The identity path is used when the Wayland buffer transform is normal (0). It clips the glyph rectangle once against the effective surface bounds and writes rows directly, avoiding a general eight-way coordinate-mapping dispatch for every covered pixel. Rotated and reflected buffers continue using the existing generic mapper. The test-only `FONT_DRAW_GENERIC_REFERENCE` switch compiles the prior implementation unchanged for the paired comparison; it is not present in the production build.
+
+All variants use a deterministic synthetic eight-point outline provider; no system font, Wayland server, compositor, Fontconfig, or third-party font library is needed. Each reports the median of seven independent samples and prints the per-sample values. The comparison script checks that all three framebuffer checksums are identical before reporting timing deltas.
 
 The benchmark reports two separate measurements:
 
 - **Cold rasterization:** direct `font_rasterize_glyph()` calls, covering outline flattening, 4×4 coverage sampling, and mask generation without the glyph cache.
-- **Warm cache draw:** `font_draw_codepoint_size()` calls over a fully populated 128-glyph working set, covering cmap lookup, hash-indexed cache lookup, and pixel alpha blending. The same executable also exercises bucket collisions, full LRU eviction, cache hits after replacement, and `font_cache_clear()`; those correctness checks are outside the timed warm loop.
+- **Warm cache draw:** `font_draw_codepoint_size()` calls over a fully populated 128-glyph working set, covering cmap lookup, cache lookup, and pixel alpha blending. This measures the glyph-level draw path, not the complete document frame. Each variant also exercises bucket collisions (where applicable), full LRU eviction, cache hits after replacement, and `font_cache_clear()`; those correctness checks are outside the timed warm loop.
 
-Timing uses Linux `CLOCK_MONOTONIC_RAW`. The linear-reference and hash-indexed runs are executed consecutively in the same job to reduce cross-run hardware and runner variance. Results are diagnostic, not pass/fail thresholds; compare the paired medians, and inspect the seven samples for outliers. The benchmark is intentionally not a CI speed gate. The synthetic outline is intentionally deterministic and does not model every real font's contour complexity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-rasterizer changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
+Timing uses Linux `CLOCK_MONOTONIC_RAW`. The three variants run consecutively in the same job to reduce cross-run hardware and runner variance. Results are diagnostic, not pass/fail thresholds; compare the paired medians and inspect the seven samples for outliers. The benchmark is intentionally not a CI speed gate. The synthetic outline is deterministic and does not model real-font contour diversity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-paint changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
 
 ## Font selection and loading
 

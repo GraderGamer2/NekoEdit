@@ -413,6 +413,34 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
     if (!gid || gid>=(uint32_t)font_num_glyphs) return 0;
     e=cached(gid,size);
     if (!e || !e->width || !e->height) return 0;
+#ifndef FONT_DRAW_GENERIC_REFERENCE
+    /* Identity is the normal Wayland surface orientation. Avoid dispatching
+     * every covered glyph pixel through the general eight-transform mapper. */
+    if (transform==0u) {
+        int32_t clip_width=width<surface_width?width:surface_width;
+        int32_t clip_height=height<surface_height?height:surface_height;
+        for (uint32_t row=0;row<e->height;++row) {
+            int32_t py=y+e->top+(int32_t)row;
+            if (py<0 || py>=clip_height) continue;
+            uint8_t *dstrow=surface+(int64_t)py*stride;
+            uint32_t source_row=row*BITMAP_SIDE;
+            for (uint32_t col=0;col<e->width;++col) {
+                uint8_t a=e->pixels[source_row+col];
+                if (!a) continue;
+                int32_t px=x+e->left+(int32_t)col;
+                if (px<0 || px>=clip_width) continue;
+                uint32_t *dst=(uint32_t *)(dstrow+(int64_t)px*4);
+                uint32_t old=*dst, inv=255u-a;
+                uint32_t r=(0xd8u*a+((old>>16)&255u)*inv+127u)/255u;
+                uint32_t g=(0xdeu*a+((old>>8)&255u)*inv+127u)/255u;
+                uint32_t b=(0xe9u*a+(old&255u)*inv+127u)/255u;
+                *dst=0xff000000u|(r<<16)|(g<<8)|b;
+            }
+        }
+        return 1;
+    }
+#endif
+    /* Rotated/reflected buffers retain the shared coordinate-mapping path. */
     for (uint32_t row=0;row<e->height;++row) {
         int32_t py=y+e->top+(int32_t)row;
         for (uint32_t col=0;col<e->width;++col) {
