@@ -42,6 +42,8 @@ struct cache_entry {
     uint8_t pixels[BITMAP_BYTES];
 };
 static struct cache_entry cache[CACHE_SLOTS];
+static uint32_t cache_clock;
+
 #ifndef FONT_CACHE_LINEAR_REFERENCE
 static uint16_t cache_buckets[CACHE_HASH_BUCKETS];
 
@@ -84,7 +86,6 @@ static void cache_unlink_slot(uint32_t slot_index) {
     }
 }
 #endif
-static uint32_t cache_clock;
 
 /* Discard all face-local masks after a validated font replacement. */
 void font_cache_clear(void) {
