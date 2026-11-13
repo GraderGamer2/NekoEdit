@@ -93,6 +93,7 @@ extern void doc_delete_selection(void);
 extern void doc_clear_selection(void);
 extern void doc_ensure_cursor_visible(void);
 extern long doc_buffer_grow(void);
+extern long doc_insert_bytes(const uint8_t *, uint32_t);
 extern void history_begin_action(void);
 extern void history_commit_action(void);
 
@@ -292,7 +293,6 @@ static int insert_text(const uint8_t *bytes, uint32_t length)
 {
     uint32_t selected = 0;
     uint32_t needed;
-    uint32_t i;
     if (!length)
         return 0;
     if (doc_selection_active) {
@@ -309,12 +309,9 @@ static int insert_text(const uint8_t *bytes, uint32_t length)
     history_begin_action();
     if (doc_selection_active)
         doc_delete_selection();
-    for (i = 0; i < length; ++i) {
-        (void)doc_insert_byte(bytes[i]);
-        if (doc_storage_error) {
-            history_commit_action();
-            return 0;
-        }
+    if (doc_insert_bytes(bytes, length) < 0 || doc_storage_error) {
+        history_commit_action();
+        return 0;
     }
     doc_clear_selection();
     history_commit_action();

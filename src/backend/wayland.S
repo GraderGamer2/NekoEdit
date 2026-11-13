@@ -17070,6 +17070,78 @@ doc_insert_byte:
     ret
 .size doc_insert_byte, . - doc_insert_byte
 
+# Insert a byte range at the document cursor. This is the large-paste path:
+# reserve/move once, record one history operation, copy once, then rebuild the
+# derived line index lazily on the next render instead of point-updating it
+# once per byte.
+.global doc_insert_bytes
+.type doc_insert_bytes, @function
+doc_insert_bytes:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13d, esi
+    test r13d, r13d
+    jz .Ldoc_insert_bytes_success
+
+    # Reject uint32 overflow before asking the gap buffer to reserve capacity.
+    mov eax, dword ptr [rip + doc_length]
+    add eax, r13d
+    jc .Ldoc_insert_bytes_failed
+    mov edi, eax
+    call doc_buffer_reserve
+    test rax, rax
+    js .Ldoc_insert_bytes_failed
+
+    # A single gap move gives the bulk range one contiguous destination.
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_move_gap
+    mov eax, dword ptr [rip + doc_gap_end]
+    sub eax, dword ptr [rip + doc_gap_start]
+    cmp eax, r13d
+    jb .Ldoc_insert_bytes_failed
+
+    # History stores the inserted bytes as one operation. During Undo/Redo,
+    # history replay suppresses this notification as it does for single bytes.
+    mov edi, dword ptr [rip + doc_cursor]
+    mov rsi, r12
+    mov edx, r13d
+    call history_note_insert_bytes
+
+    mov rdi, qword ptr [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_start]
+    add rdi, rax
+    mov rsi, r12
+    mov ecx, r13d
+    cld
+    rep movsb
+
+    mov eax, r13d
+    add dword ptr [rip + doc_gap_start], eax
+    add dword ptr [rip + doc_length], eax
+    add dword ptr [rip + doc_cursor], eax
+    inc dword ptr [rip + doc_revision]
+    mov dword ptr [rip + doc_storage_error], 0
+
+    # The line index is derived from document bytes. Rebuild it once when the
+    # next frame needs it; preserve the sticky "unavailable" state.
+    cmp dword ptr [rip + doc_line_index_valid], 2
+    je .Ldoc_insert_bytes_success
+    mov dword ptr [rip + doc_line_index_valid], 0
+.Ldoc_insert_bytes_success:
+    xor eax, eax
+    jmp .Ldoc_insert_bytes_return
+.Ldoc_insert_bytes_failed:
+    mov dword ptr [rip + doc_storage_error], 1
+    mov rax, -12
+.Ldoc_insert_bytes_return:
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_insert_bytes, . - doc_insert_bytes
+
 # Insert one Unicode scalar as one to four UTF-8 bytes at the document cursor.
 # The caller has already removed an active selection, so all bytes belong to
 # the same key input action and the existing grapheme/index machinery applies.

@@ -472,10 +472,11 @@ static int append_op(uint32_t offset, uint32_t removed, uint32_t inserted,
     ++tx_operations;
     return 1;
 }
+extern long doc_insert_bytes(const uint8_t *, uint32_t);
+
 static int replace_range(uint32_t offset, uint32_t removed,
                          const uint8_t *inserted, uint32_t inserted_length)
 {
-    uint32_t i;
     uint64_t final_length = (uint64_t)doc_length - removed + inserted_length;
     if (offset > doc_length || removed > doc_length - offset ||
         final_length > 0x7fffffffu || !reserve_doc((uint32_t)final_length)) return 0;
@@ -484,10 +485,9 @@ static int replace_range(uint32_t offset, uint32_t removed,
     doc_selection_active = removed != 0;
     if (removed) doc_delete_selection();
     else { doc_cursor = offset; doc_selection_anchor = offset; doc_selection_active = 0; }
-    for (i = 0; i < inserted_length; ++i) {
-        (void)doc_insert_byte(inserted[i]);
-        if (doc_storage_error) return 0;
-    }
+    if (inserted_length &&
+        (doc_insert_bytes(inserted, inserted_length) < 0 || doc_storage_error))
+        return 0;
     doc_cursor = offset + inserted_length;
     doc_selection_anchor = doc_cursor;
     doc_selection_active = 0;
@@ -829,6 +829,14 @@ void history_note_insert(uint32_t offset, uint32_t byte)
     uint8_t b = (uint8_t)byte;
     if (!tx_active || replaying) return;
     if (!ensure_journal_for_edit() || !append_op(offset, 0, 1, &b))
+        storage_error = tx_error = 1;
+}
+void history_note_insert_bytes(uint32_t offset, const uint8_t *bytes,
+                                uint32_t length)
+{
+    if (!length || !tx_active || replaying) return;
+    if (!ensure_journal_for_edit() ||
+        !append_op(offset, 0, length, bytes))
         storage_error = tx_error = 1;
 }
 void history_note_delete(uint32_t offset, uint32_t length)

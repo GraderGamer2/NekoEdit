@@ -39,6 +39,8 @@ void history_open(const char *path);
 void history_reset(void);
 void history_begin_action(void);
 void history_note_insert(uint32_t offset, uint32_t value);
+void history_note_insert_bytes(uint32_t offset, const uint8_t *bytes,
+                               uint32_t length);
 void history_note_delete(uint32_t offset, uint32_t length);
 void history_commit_action(void);
 int history_undo(void);
@@ -115,6 +117,32 @@ long doc_insert_byte(uint32_t value)
     doc_buffer[doc_gap_start++] = (uint8_t)value;
     ++doc_length;
     ++doc_cursor;
+    doc_storage_error = 0;
+    return 0;
+}
+
+long doc_insert_bytes(const uint8_t *bytes, uint32_t length)
+{
+    uint64_t required = (uint64_t)doc_length + length;
+    if (!length)
+        return 0;
+    if (required > 0x7fffffffu) {
+        doc_storage_error = 1;
+        return -12;
+    }
+    history_note_insert_bytes(doc_cursor, bytes, length);
+    move_gap(doc_cursor);
+    while ((doc_gap_end - doc_gap_start) < length) {
+        if (doc_buffer_grow() < 0) {
+            doc_storage_error = 1;
+            return -12;
+        }
+    }
+    memcpy(doc_buffer + doc_gap_start, bytes, length);
+    doc_gap_start += length;
+    doc_length += length;
+    doc_cursor += length;
+    doc_line_index_valid = 0;
     doc_storage_error = 0;
     return 0;
 }

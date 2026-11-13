@@ -578,7 +578,7 @@ def run(
             else:
                 client, _ = server.accept()
             _FRAME_CALLBACK_STATES[client] = frame_callback_stats
-            client.settimeout(45 if file_workflow or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
+            client.settimeout(45 if file_workflow or clipboard_test or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
@@ -5161,6 +5161,75 @@ xkb_symbols "nekoedit-sparse" {
                             + repr(redo_paste_state["doc_contents"])
                         )
                     observations.append("asynchronous external paste was recorded as one Undo/Redo action")
+
+                    # The 10 MiB transfer must not execute the single-byte
+                    # index/history path millions of times. Keep this in the
+                    # same scenario so the real Wayland pipe and event loop
+                    # are exercised, not only a helper-level unit test.
+                    workflow_shortcut(1990, 44, "Ctrl+Z clear the small clipboard paste")
+                    if read_document_state()["doc_contents"] != b"":
+                        raise AssertionError("could not clear the small paste before the large-paste test")
+
+                    clipboard_combo(2000, 47, "Ctrl+V 10 MiB clipboard paste", redraw=False)
+                    large_paste_request = recv_wayland_message(client)
+                    if large_paste_request[:3] != (
+                        external_offer, 1, clipboard_string("text/plain;charset=utf-8")
+                    ) or len(large_paste_request[3]) != 1:
+                        raise AssertionError(
+                            "large Ctrl+V did not request UTF-8 clipboard bytes with one pipe FD: "
+                            + repr(large_paste_request[:3])
+                            + repr(large_paste_request[3])
+                        )
+                    large_paste_fd = large_paste_request[3][0]
+                    large_line = (b"clipboard bulk paste 0123456789abcdef" * 4) + b"\n"
+                    large_size = 10 * 1024 * 1024
+                    large_pasted = (
+                        large_line * ((large_size + len(large_line) - 1) // len(large_line))
+                    )[:large_size]
+                    large_paste_started = time.monotonic()
+                    written = 0
+                    try:
+                        while written < len(large_pasted):
+                            amount = os.write(
+                                large_paste_fd, large_pasted[written:written + 65536]
+                            )
+                            if amount <= 0:
+                                raise AssertionError("large clipboard pipe stopped accepting data")
+                            written += amount
+                    finally:
+                        os.close(large_paste_fd)
+                    workflow_redraw("Ctrl+V completes the 10 MiB clipboard paste")
+                    client.sendall(buffer_release_message())
+                    large_paste_elapsed_ms = (time.monotonic() - large_paste_started) * 1000
+                    large_paste_state = read_document_state()
+                    if large_paste_state["doc_contents"] != large_pasted:
+                        raise AssertionError(
+                            "10 MiB clipboard paste changed bytes or order: "
+                            f"{len(large_paste_state['doc_contents'])} != {len(large_pasted)}"
+                        )
+                    expected_large_lines = large_pasted.count(b"\n") + 1
+                    if (
+                        large_paste_state["doc_line_index_valid"] != 1
+                        or large_paste_state["doc_line_count"] != expected_large_lines
+                        or sum(record[2] for record in large_paste_state["doc_line_index_records"])
+                        != len(large_pasted)
+                    ):
+                        raise AssertionError(
+                            "10 MiB clipboard paste produced an invalid line index: "
+                            f"valid={large_paste_state['doc_line_index_valid']} "
+                            f"lines={large_paste_state['doc_line_count']} "
+                            f"expected={expected_large_lines}"
+                        )
+                    workflow_shortcut(2010, 44, "Ctrl+Z undo the 10 MiB clipboard paste")
+                    if read_document_state()["doc_contents"] != b"":
+                        raise AssertionError("Ctrl+Z did not undo the complete 10 MiB paste")
+                    workflow_shortcut(2020, 21, "Ctrl+Y redo the 10 MiB clipboard paste")
+                    if read_document_state()["doc_contents"] != large_pasted:
+                        raise AssertionError("Ctrl+Y did not redo the complete 10 MiB paste")
+                    observations.append(
+                        "10 MiB asynchronous clipboard paste preserved every byte and line-index record; "
+                        f"bulk Undo/Redo passed in {large_paste_elapsed_ms:.1f} ms"
+                    )
                     client.sendall(wire_message(10, 1))
                     return
 
