@@ -554,8 +554,8 @@ def run(
 
             expect_message(client, (1, 0, struct.pack("<I", 7)), "bind sync")
             client.sendall(wire_message(7, 0, struct.pack("<I", 2)))
-            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
-            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
+            expect_message(client, (4, 0, struct.pack("<I", 8)), "create wl_surface")
+            expect_message(client, (6, 2, struct.pack("<II", 9, 8)), "get_xdg_surface")
             expect_message(client, (9, 1, struct.pack("<I", 10)), "get_toplevel")
             expect_message(
                 client, (10, 8, struct.pack("<ii", 480, 360)),
