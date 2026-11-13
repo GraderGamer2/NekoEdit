@@ -1,3 +1,19 @@
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI pending)
+
+Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.
+
+Extend the Wayland mock's ELF-symbol state reader and assert logical/backing dimensions for the initial 800×480 window, 1920×1080 maximize, 800×480 restore, and 720×480 edge resize. This is an architectural boundary-setting step, not a HiDPI implementation. The next change must scale raster positions and glyphs, handle transformed buffer-axis dimensions, and preserve surface-local pointer/layout semantics before sending `wl_surface.set_buffer_scale`. CI pending.
+
+---
+
+## 2026-11-13 — fix effective Wayland scale initialization (CI PASS #871)
+
+The first attempt, Actions [#870](https://github.com/GraderGamer2/NekoEdit/actions/runs/43344591753), failed during assembly because GNU as rejected a non-zero `.long 1` in `.bss`. Storage was changed to zero-filled `.zero 4`; Wayland startup initializes the effective scale to 1 before processing events. No runtime behavior or expected values changed.
+
+Actions [Build and test #871](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954) passed all 15 steps, including freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954/artifacts/14001132220) until 2026-11-14 01:33:26 UTC (08:33:26 WIB).
+
+---
+
 ## 2026-11-13 — live IBus Simple preedit, cancellation, commit, and save reverified (CI PASS #868)
 
 Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) passed the complete 15-step workflow, including nested GNOME Shell 46 / Mutter integration. The live IBus Simple phase produced visible `dead_acute` preedit from the apostrophe key; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and confirmed Ctrl+S / Enter saved exact UTF-8 bytes `C3 A9`. The native Mutter physical-XKB canary also passed Right Alt `Multi_key`, the two-mark dead-key chain, and save. Fcitx and physical keyboard hardware remain separately unverified.

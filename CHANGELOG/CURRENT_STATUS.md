@@ -1,11 +1,18 @@
-## 2026-11-13 — fix BSS initialization for effective Wayland scale (CI retest pending)
+## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI pending)
 
-Derive a dedicated effective scale hint without changing rendering. When wl_compositor is v6 or newer, the compositor's per-surface preferred_buffer_scale is authoritative and starts at the protocol default of 1; on older compositors, use the maximum committed wl_output.scale among outputs entered by the surface. Recompute this value whenever the surface preference, output membership, output scale transaction, or output lifecycle changes.
+Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.
 
-Extend the output mock to run the complete output discovery/membership/hotplug sequence against both a v6 compositor and a legacy v1 compositor. The v6 case proves the per-surface preference overrides higher intersecting-output scales; the legacy case proves the fallback follows committed scale changes and returns to 1 when the surface leaves all outputs. The renderer still uses a scale-1 buffer: no set_buffer_scale request, physical buffer resize, transform application, or pointer-coordinate conversion is included. CI is pending.
+Extend the Wayland mock's ELF-symbol state reader and assert logical/backing dimensions for the initial 800×480 window, 1920×1080 maximize, 800×480 restore, and 720×480 edge resize. This is an architectural boundary-setting step, not a HiDPI implementation. The next change must scale raster positions and glyphs, handle transformed buffer-axis dimensions, and preserve surface-local pointer/layout semantics before sending `wl_surface.set_buffer_scale`. CI pending.
 
+---
 
-The first build attempt, Actions [#870](https://github.com/GraderGamer2/NekoEdit/actions/runs/43344591753), stopped during assembly: the new effective-scale word was declared as a non-zero `.long 1` inside `.bss`, which GNU as rejects. Change the storage to zero-filled `.zero 4`; the existing Wayland startup initialization sets it to 1 before event processing. No runtime behavior or test expectation changes. The corrected commit is being re-run through the full workflow, so an application artifact is not available yet.
+## 2026-11-13 — fix effective Wayland scale initialization (CI PASS #871)
+
+The first attempt, Actions [#870](https://github.com/GraderGamer2/NekoEdit/actions/runs/43344591753), failed during assembly because GNU as rejected a non-zero `.long 1` in `.bss`. Storage was changed to zero-filled `.zero 4`; Wayland startup initializes the effective scale to 1 before processing events. No runtime behavior or expected values changed.
+
+Actions [Build and test #871](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954) passed all 15 steps, including freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock, native `us(intl)` XKB parsing, X.Org importer checks, Compose locale-pack build, GNOME Shell 46 / Mutter integration, and both artifact uploads. The `nekoedit-linux-x86_64` artifact is [available here](https://github.com/GraderGamer2/NekoEdit/actions/runs/43345347954/artifacts/14001132220) until 2026-11-14 01:33:26 UTC (08:33:26 WIB).
+
+---
 
 ## 2026-11-13 — track compositor-preferred surface scale and transform (CI PASS #868)
 

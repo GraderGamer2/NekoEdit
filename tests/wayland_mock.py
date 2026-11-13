@@ -6508,7 +6508,7 @@ xkb_symbols "nekoedit-sparse" {
                     picker_symbols = {}
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
-                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_focus", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_pixel_width", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder",
+                        if len(fields) == 3 and fields[2] in {"picker_mode", "picker_focus", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_buffer_width", "window_buffer_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_pixel_width", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder",
                         "doc_hscroll_drag", "doc_hscroll_thumb_left", "doc_hscroll_thumb_width", "doc_hscroll_drag_offset", "window_doc_bottom", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_cursor", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_capacity", "doc_line_count", "doc_line_index_valid", "doc_line_index_columns"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
@@ -6556,7 +6556,12 @@ xkb_symbols "nekoedit-sparse" {
 
                     initial_editor_state = picker_state()
                     if (
-                        initial_editor_state.get("doc_scroll_thumb_height") != 0
+                        initial_editor_state.get("window_width") != 800
+                        or initial_editor_state.get("window_height") != 480
+                        or initial_editor_state.get("window_buffer_width") != 800
+                        or initial_editor_state.get("window_buffer_height") != 480
+                        or initial_editor_state.get("window_stride") != 3200
+                        or initial_editor_state.get("doc_scroll_thumb_height") != 0
                         or initial_editor_state.get("doc_view_top_row") != 0
                         or initial_editor_state.get("window_doc_pixel_width") != 760
                     ):
@@ -7302,6 +7307,8 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         max_state.get("window_width") != 1920
                         or max_state.get("window_height") != 1080
+                        or max_state.get("window_buffer_width") != 1920
+                        or max_state.get("window_buffer_height") != 1080
                         or max_state.get("window_stride") != 7680
                         or max_state.get("window_buffer_id") != maximized_buffer_id
                         or max_state.get("window_is_maximized") != 1
@@ -7364,6 +7371,9 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         restored_state.get("window_width") != 800
                         or restored_state.get("window_height") != 480
+                        or restored_state.get("window_buffer_width") != 800
+                        or restored_state.get("window_buffer_height") != 480
+                        or restored_state.get("window_stride") != 3200
                         or restored_state.get("window_buffer_id") != restore_buffer_id
                         or restored_state.get("window_is_maximized") != 0
                         or restored_state.get("window_status_top") != 460
@@ -7460,6 +7470,8 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         edge_state.get("window_width") != 720
                         or edge_state.get("window_height") != 480
+                        or edge_state.get("window_buffer_width") != 720
+                        or edge_state.get("window_buffer_height") != 480
                         or edge_state.get("window_stride") != 2880
                         or edge_state.get("window_buffer_id") != edge_buffer_id
                         or edge_state.get("window_is_maximized") != 0

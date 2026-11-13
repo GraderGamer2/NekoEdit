@@ -4815,9 +4815,14 @@ doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode, find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+.global window_width, window_height, window_buffer_width, window_buffer_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode, find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
+# window_width/height are surface-local dimensions. The backing dimensions
+# are pixel extents; window_stride is their byte pitch. They remain 1:1 until
+# the renderer begins applying the compositor's preferred buffer scale.
+window_buffer_width:    .long 0
+window_buffer_height:   .long 0
 window_stride:          .long 0
 window_status_top:      .long 0
 window_doc_bottom:       .long 0
@@ -5647,9 +5652,9 @@ wayland_main:
     # wl_shm_pool.create_buffer(new_id=12, offset=0, width, height, stride, XRGB8888=1)
     mov dword ptr [rip + payload_buffer], 12
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_buffer_width]
     mov dword ptr [rip + payload_buffer + 8], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_buffer_height]
     mov dword ptr [rip + payload_buffer + 12], eax
     mov eax, dword ptr [rip + window_stride]
     mov dword ptr [rip + payload_buffer + 16], eax
@@ -12700,7 +12705,7 @@ draw_rect:
     jle .draw_rect_done
     test r15d, r15d
     jle .draw_rect_done
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_buffer_width]
     cmp r12d, eax
     jae .draw_rect_done
     sub eax, r12d
@@ -12708,7 +12713,7 @@ draw_rect:
     jbe .draw_rect_width_ready
     mov r14d, eax
 .draw_rect_width_ready:
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_buffer_height]
     cmp r13d, eax
     jae .draw_rect_done
     sub eax, r13d
@@ -14279,9 +14284,15 @@ render_text_input_preedit:
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
 window_update_geometry:
+    # Keep protocol/layout dimensions separate from the software buffer.
+    # This first step deliberately preserves scale 1, so physical extents match
+    # the current surface-local dimensions until coordinate conversion lands.
     mov eax, dword ptr [rip + window_width]
+    mov dword ptr [rip + window_buffer_width], eax
     shl eax, 2
     mov dword ptr [rip + window_stride], eax
+    mov eax, dword ptr [rip + window_height]
+    mov dword ptr [rip + window_buffer_height], eax
     mov eax, dword ptr [rip + window_height]
     sub eax, 20
     mov dword ptr [rip + window_status_top], eax
@@ -14769,8 +14780,10 @@ window_apply_pending_resize:
     mov dword ptr [rip + next_client_object_id], eax
     mov dword ptr [rip + payload_buffer], r14d
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov dword ptr [rip + payload_buffer + 8], r12d
-    mov dword ptr [rip + payload_buffer + 12], r13d
+    mov eax, dword ptr [rip + window_buffer_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_buffer_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
     mov eax, dword ptr [rip + window_stride]
     mov dword ptr [rip + payload_buffer + 16], eax
     mov dword ptr [rip + payload_buffer + 20], 1
@@ -19404,9 +19417,9 @@ draw_glyph:
     js .glyph_done
     test r13d, r13d
     js .glyph_done
-    cmp r12d, dword ptr [rip + window_width]
+    cmp r12d, dword ptr [rip + window_buffer_width]
     jae .glyph_done
-    cmp r13d, dword ptr [rip + window_height]
+    cmp r13d, dword ptr [rip + window_buffer_height]
     jae .glyph_done
     # Render parsed TrueType glyphs when a font is active; retain the compact
     # 5x7 bitmap only for missing/unsupported fonts or individual glyphs.
@@ -19416,8 +19429,8 @@ draw_glyph:
     mov esi, r12d
     mov edx, r13d
     mov rcx, qword ptr [rip + shm_mapping]
-    mov r8d, dword ptr [rip + window_width]
-    mov r9d, dword ptr [rip + window_height]
+    mov r8d, dword ptr [rip + window_buffer_width]
+    mov r9d, dword ptr [rip + window_buffer_height]
     sub rsp, 16
     mov eax, dword ptr [rip + window_stride]
     mov dword ptr [rsp], eax
@@ -19631,11 +19644,11 @@ draw_glyph:
     jnc .glyph_next_column
     mov eax, r13d
     add eax, r14d
-    cmp eax, dword ptr [rip + window_height]
+    cmp eax, dword ptr [rip + window_buffer_height]
     jae .glyph_next_column
     mov edx, r12d
     add edx, r15d
-    cmp edx, dword ptr [rip + window_width]
+    cmp edx, dword ptr [rip + window_buffer_width]
     jae .glyph_next_column
     mov ecx, dword ptr [rip + window_stride]
     imul eax, ecx
