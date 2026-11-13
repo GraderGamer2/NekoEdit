@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-13 — compositor-preferred surface scale tracking, CI pending)
+
+Continue from branch `early-alpha`; leave `main` at its merged stable checkpoint. The latest green baseline is commit [8365b7d](https://github.com/GraderGamer2/NekoEdit/commit/8365b7d9abc6e654efb38c0a0fad741016feacc1), Actions [#867](https://github.com/GraderGamer2/NekoEdit/actions/runs/43227267710), with all 15 steps passed. The output-handling implementation discovers up to eight `wl_output` globals, commits each v2+ integer scale only on `wl_output.done`, tracks surface enter/leave membership, handles global removal and version-gated release, reuses free slots for hot-added outputs with fresh contiguous IDs, and passes the nested GNOME Shell 46 / Mutter 46 integration job.
+
+The current working change negotiates `wl_compositor` up to v6 and tracks `wl_surface.preferred_buffer_scale` / `preferred_buffer_transform` separately from the per-output scale cache. The test sends scale 2 then 1 and transform 1 then 0 on a v6 surface; default compositor-v1 scenarios remain unchanged. This is still metadata-only: the renderer, surface-local layout/hit-testing, and shared-memory buffer remain scale 1. Do not claim HiDPI rendering until logical dimensions, physical pixel dimensions/stride, buffer capacity, damage coordinates, and pointer coordinate transforms are changed and tested together. The current preferred-scale patch is committed only after its source/test/docs set is complete; check the newest Actions run before treating it as verified.
+
+Next substantial backend steps: implement that logical/physical coordinate split and a release-safe scale-aware backing store, then evaluate a small release-tracked multi-buffer set. Keep fractional scale/viewport support separate; do not derive the compositor-preferred scale solely from the maximum of intersecting output scales.
+
+---
+
 ## Latest handoff (2026-11-12 — Mutter key-event observation pending CI)
 
 Continue from branch `early-alpha`. Wayland single-buffer frame pacing is implemented and its full protocol mock is green. Actions #845 passed build, command-line tests, complete Wayland mock, ELF inspection, real `us(intl)` parser, X.Org importer, and locale-pack build. The isolated IBus daemon and its D-Bus-activated portal now start successfully. Mutter's native physical-XKB Compose/dead-key/save canary and the text-input-v3 manager/focus/enable/state-commit handshake pass.

@@ -60,6 +60,12 @@ The client discovers up to eight `wl_output` globals and binds each at no more t
 
 For diagnostics and the next rendering milestone, the backend maintains the number of outputs currently containing the surface and the maximum committed integer scale among them (returning to 1 when none are entered). The mock checks that scale changes remain staged until each output's `wl_output.done`. **This is metadata tracking only.** The current renderer still uses one scale-1 shared buffer and logical coordinates; it does not call `wl_surface.set_buffer_scale`, convert logical dimensions to physical pixels, use `wp_fractional_scale_v1` or `wp_viewporter`, or re-layout when the output scale changes. Correct high-DPI rendering requires those dimensions and hit-testing coordinates to become separate concepts, plus release-safe buffer replacement. No claim of HiDPI readiness is made by this milestone.
 
+## Preferred buffer scale and transform metadata
+
+When the compositor advertises `wl_compositor` version 6 or newer, NekoEdit binds it at version 6 and the created `wl_surface` can receive `preferred_buffer_scale` and `preferred_buffer_transform`. The client tracks both per-surface preferences, validating positive scale values and the transform enum. Older compositors remain bound at their advertised version (up to 6) and retain the default scale 1 / normal transform.
+
+This is metadata-only support. The renderer does not yet call `wl_surface.set_buffer_scale`, apply buffer transforms, or multiply buffer dimensions; logical layout, pointer coordinates, and shared-memory buffers remain scale 1. Applying the preferred scale requires logical-to-physical rendering and backing-store capacity changes to land together.
+
 ## XKB compatibility modifier-map scope
 
 The bounded `xkb_compat` reader supports both `useModMapMods = level1` and `useModMapMods = any`. When the attribute is omitted, XKB's default is `any`. The `level1` scope considers the keysym at Group 1 / Level 1; `any` considers occurrences in any group and level. When multiple matching interpretations have equal specificity, the first declaration wins.

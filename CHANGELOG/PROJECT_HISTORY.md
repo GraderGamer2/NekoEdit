@@ -1,12 +1,22 @@
-## 2026-11-12 — CI #866 stopped on a duplicated test assertion line
+## 2026-11-13 — track compositor-preferred surface scale and transform (CI pending)
 
-Actions [Build and test #866](https://github.com/GraderGamer2/NekoEdit/actions/runs/43226811420) passed the freestanding assembly/C build, ELF inspection, and command-line test set. The Wayland suite did not start because a scripted block move duplicated the `memfd+SCM_RIGHTS buffer verified` observation on one Python source line, producing a SyntaxError. Remove the duplicate line; no application source changes are needed for this harness correction. The reordered startup and output tests remain unverified until the next workflow completes.
+Bind `wl_compositor` at up to v6 instead of unconditionally at v1. This gives the created `wl_surface` the version-6 `preferred_buffer_scale` and `preferred_buffer_transform` events while preserving v1 behavior on older compositors. Track both preferences on the surface, defaulting to scale 1 and normal transform; validate positive scale values and the transform enum. The output integration mock exercises the compositor preference independently of per-output scale transactions.
 
-## 2026-11-12 — enforce contiguous client IDs before Wayland output binding (CI pending)
+This is selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`. CI is pending.
+
+## 2026-11-13 — Wayland output discovery, atomic scale cache and hotplug (CI PASS #867)
+
+Actions [Build and test #867](https://github.com/GraderGamer2/NekoEdit/actions/runs/43227267710) passed all 15 steps. The Wayland mock verified v3/v2 output discovery, per-output scale changes committed only on `wl_output.done`, multi-output surface membership, v3 release vs v2 local proxy discard, hot-add with a fresh contiguous client ID, surface leave, and scale-cache recomputation. The nested GNOME Shell 46 / Mutter 46 integration job also completed successfully. No high-DPI rendering claim is made: the output cache remains metadata-only and the buffer is still scale 1.
+
+## 2026-11-12 — CI #866 stopped on a duplicated test assertion line (fixed; CI PASS #867)
+
+Actions [Build and test #866](https://github.com/GraderGamer2/NekoEdit/actions/runs/43226811420) passed the freestanding assembly/C build, ELF inspection, and command-line test set. The Wayland suite did not start because a scripted block move duplicated the `memfd+SCM_RIGHTS buffer verified` observation on one Python source line, producing a SyntaxError. The duplicate line was removed in commit [8365b7d](https://github.com/GraderGamer2/NekoEdit/commit/8365b7d9abc6e654efb38c0a0fad741016feacc1). Actions [Build and test #867](https://github.com/GraderGamer2/NekoEdit/actions/runs/43227267710) then passed the corrected Wayland mock and the complete GNOME Shell/Mutter integration job.
+
+## 2026-11-12 — enforce contiguous client IDs before Wayland output binding (CI PASS #867)
 
 Reorder startup so output proxies are bound only after fixed objects 8–14 and any optional input-service objects have been allocated. Defer the first shared-buffer attach/damage/commit until after those output bindings; the no-seat path uses the next free ID after the initial window/shm objects. Registry announcements are still captured in both startup roundtrips, but object creation is deferred until the allocator can issue contiguous new IDs. This directly addresses Mutter's `wl_registry.bind` rejection from #865.
 
-The output cache now stages each positive v2+ `wl_output.scale` value and publishes it only when that output's `wl_output.done` arrives. The mock checks independent pending/committed values for a v3 and v2 output, then repeats the transaction for a hot-added output. It still verifies version-gated release, surface membership, and scale-summary recomputation. Output scale remains metadata only; the active framebuffer is still scale 1. CI is pending.
+The output cache now stages each positive v2+ `wl_output.scale` value and publishes it only when that output's `wl_output.done` arrives. The mock checks independent pending/committed values for a v3 and v2 output, then repeats the transaction for a hot-added output. It still verifies version-gated release, surface membership, and scale-summary recomputation. Output scale remains metadata only; the active framebuffer is still scale 1. This startup reorder and the complete output suite passed in Actions #867.
 
 ## 2026-11-12 — CI #865 output mock passed; Mutter exposed non-contiguous new_id startup ordering
 
@@ -14,17 +24,17 @@ Actions [Build and test #865](https://github.com/GraderGamer2/NekoEdit/actions/r
 
 The correction reserves output client IDs only after the fixed surface/toplevel/shm and seat bootstrap IDs, pointer/keyboard objects, and optional cursor/clipboard/text-input objects have been allocated. The initial buffer attach/map is delayed until these output bindings complete. This preserves the monotonic allocator and keeps surface.enter events associated with already-bound output objects.
 
-## 2026-11-12 — route startup and steady-state Wayland output events (CI pending)
+## 2026-11-12 — route startup and steady-state Wayland output events (CI PASS #867)
 
-Actions [Build and test #864](https://github.com/GraderGamer2/NekoEdit/actions/runs/43223717648) passed the freestanding build and all existing Wayland scenarios, then the new output mock reported that `wl_output.scale` remained at its default value. The output handlers were present, but three pre-existing conditional branches still jumped past them: the initial display event path, the initial seat roundtrip, and the steady-state seat-event path. Update those branch targets so registry events and output/surface events actually reach their handlers. The failure was in event routing, not output parsing or object binding. CI is pending.
+Actions [Build and test #864](https://github.com/GraderGamer2/NekoEdit/actions/runs/43223717648) passed the freestanding build and all existing Wayland scenarios, then the new output mock reported that `wl_output.scale` remained at its default value. The output handlers were present, but three pre-existing conditional branches still jumped past them: the initial display event path, the initial seat roundtrip, and the steady-state seat-event path. Update those branch targets so registry events and output/surface events actually reach their handlers. The failure was in event routing, not output parsing or object binding. The corrected dispatch routes the initial registry events, initial seat roundtrip and steady-state output/surface events; the complete regression passed in #867.
 
 ---
 
-## 2026-11-12 — Wayland output discovery and integer-scale metadata (implementation; CI pending)
+## 2026-11-12 — Wayland output discovery and integer-scale metadata (CI PASS #867)
 
 Add a bounded cache for up to eight `wl_output` globals. The client binds outputs at no more than protocol version 3, records each output's negotiated version and integer scale (default 1), tracks which outputs the Wayland surface enters/leaves, and handles registry global removal. It sends `wl_output.release` only for v3 resources; v1/v2 outputs are dropped locally. New output announcements reuse free cache slots but receive fresh IDs from the monotonic client-object allocator. The cache reports the entered-output count and maximum scale as metadata.
 
-The client still renders into the existing scale-1 shared buffer. It does not yet apply `wl_surface.set_buffer_scale`, use preferred/fractional scale or viewporter protocols, or translate logical dimensions to physical buffer dimensions. Those require separating logical layout/hit-testing from pixel geometry and keeping buffer replacement release-safe. The mock adds two outputs at different scales, surface enter/leave, v2/v3 removal semantics, and a hot-added output. CI is pending.
+The client still renders into the existing scale-1 shared buffer. It does not yet apply `wl_surface.set_buffer_scale`, use preferred/fractional scale or viewporter protocols, or translate logical dimensions to physical buffer dimensions. Those require separating logical layout/hit-testing from pixel geometry and keeping buffer replacement release-safe. The mock adds two outputs at different scales, surface enter/leave, v2/v3 removal semantics, atomic `scale`/`done` updates, and a hot-added output. Actions #867 passed the mock plus nested GNOME Shell 46 / Mutter 46 integration.
 
 ---
 

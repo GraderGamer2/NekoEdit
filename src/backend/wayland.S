@@ -4843,6 +4843,7 @@ socket_fd:             .quad 0
 shm_fd:                .quad 0
 shm_mapping:           .quad 0
 compositor_global:     .long 0
+compositor_version:    .long 0
 shm_global:            .long 0
 xdg_global:            .long 0
 .global clipboard_manager_global
@@ -4865,6 +4866,12 @@ output_pending_valid:     .zero 32
 output_surface_entered:   .zero 32
 surface_output_count:     .long 0
 surface_output_max_scale: .long 0
+.global surface_preferred_buffer_scale, surface_preferred_scale_seen
+.global surface_preferred_buffer_transform, surface_preferred_transform_seen
+surface_preferred_buffer_scale:     .long 0
+surface_preferred_scale_seen:       .long 0
+surface_preferred_buffer_transform: .long 0
+surface_preferred_transform_seen:   .long 0
 .global text_input_manager_global, text_input_manager_object, text_input_object
 .global text_input_entered, text_input_enabled, text_input_commit_serial
 .global text_input_preedit_length, text_input_preedit_cursor_begin, text_input_preedit_cursor_end
@@ -5240,6 +5247,10 @@ wayland_main:
     mov dword ptr [rip + pointer_inside], 0
     mov dword ptr [rip + pointer_enter_serial], 0
     mov dword ptr [rip + surface_output_max_scale], 1
+    mov dword ptr [rip + surface_preferred_buffer_scale], 1
+    mov dword ptr [rip + surface_preferred_scale_seen], 0
+    mov dword ptr [rip + surface_preferred_buffer_transform], 0
+    mov dword ptr [rip + surface_preferred_transform_seen], 0
     mov dword ptr [rip + cursor_shape_current], 0
     call window_update_geometry
     call doc_storage_init
@@ -5395,7 +5406,7 @@ wayland_main:
     mov edi, dword ptr [rip + compositor_global]
     lea rsi, [rip + iface_compositor]
     mov edx, 14                 # strlen("wl_compositor") + NUL
-    mov ecx, 1
+    mov ecx, dword ptr [rip + compositor_version]
     mov r8d, 4
     call wl_registry_bind
     test rax, rax
@@ -12476,6 +12487,17 @@ registry_capture_global:
     jz .registry_try_shm
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + compositor_global], eax
+    mov eax, dword ptr [rip + event_payload + 4]
+    add eax, 3
+    and eax, -4
+    lea rdi, [rip + event_payload + 8]
+    add rdi, rax
+    mov edx, dword ptr [rdi]
+    cmp edx, 6
+    jbe .registry_compositor_version_ready
+    mov edx, 6
+.registry_compositor_version_ready:
+    mov dword ptr [rip + compositor_version], edx
     jmp .registry_done
 .registry_try_shm:
     lea rdi, [rip + event_payload + 8]
@@ -23355,7 +23377,33 @@ handle_surface_output_event:
     je .surface_output_enter
     cmp eax, 1
     je .surface_output_leave
+    cmp eax, 2
+    je .surface_output_preferred_scale
+    cmp eax, 3
+    je .surface_output_preferred_transform
     jmp .surface_output_not_found
+.surface_output_preferred_scale:
+    cmp dword ptr [rip + compositor_version], 6
+    jb .surface_output_protocol_error
+    cmp dword ptr [rip + last_size], 4
+    jb .surface_output_protocol_error
+    mov eax, dword ptr [rip + event_payload]
+    test eax, eax
+    jle .surface_output_protocol_error
+    mov dword ptr [rip + surface_preferred_buffer_scale], eax
+    mov dword ptr [rip + surface_preferred_scale_seen], 1
+    jmp .surface_output_handled
+.surface_output_preferred_transform:
+    cmp dword ptr [rip + compositor_version], 6
+    jb .surface_output_protocol_error
+    cmp dword ptr [rip + last_size], 4
+    jb .surface_output_protocol_error
+    mov eax, dword ptr [rip + event_payload]
+    cmp eax, 7
+    ja .surface_output_protocol_error
+    mov dword ptr [rip + surface_preferred_buffer_transform], eax
+    mov dword ptr [rip + surface_preferred_transform_seen], 1
+    jmp .surface_output_handled
 .surface_output_enter:
     mov r13d, 1
     jmp .surface_output_find
@@ -23380,6 +23428,9 @@ handle_surface_output_event:
     call output_recompute_surface_scale
 .surface_output_handled:
     mov eax, 1
+    jmp .surface_output_return
+.surface_output_protocol_error:
+    mov rax, -71
     jmp .surface_output_return
 .surface_output_not_found:
     xor eax, eax

@@ -98,7 +98,7 @@ The current prototype implements a deliberately small part of the stable core pr
 
 - Read WAYLAND_DISPLAY (default wayland-0) and XDG_RUNTIME_DIR; absolute WAYLAND_DISPLAY paths are supported.
 - Connect to the Wayland Unix-domain stream socket with socket/connect syscalls.
-- Request wl_registry and bind wl_compositor, wl_shm, and xdg_wm_base at protocol version 1.
+- Request wl_registry and bind wl_compositor at no more than v6 (for preferred surface scale/transform events where available), wl_shm at v1, and xdg_wm_base at v1.
 - Discover up to eight wl_output globals, bind at no more than v3 after the fixed bootstrap IDs and optional input-service objects are allocated, track v2+ integer scale transactionally through wl_output.done, and track wl_surface.enter/leave membership. Handle global removal with version-gated release requests. This cache is metadata only; the surface still renders at scale 1.
 - Create wl_surface, xdg_surface, and xdg_toplevel objects.
 - Set the window title and perform the initial empty surface commit.
@@ -109,7 +109,7 @@ The current prototype implements a deliberately small part of the stable core pr
 - Draw Minimize, Maximize/Restore, and Close controls in the application title bar and serialize the corresponding xdg_toplevel requests or clean client shutdown.
 - Answer xdg_wm_base.ping and exit on xdg_toplevel.close.
 
-The Wayland prototype has one active release-tracked buffer rather than a static-size buffer set. Configure-driven resizing and single-buffer `wl_surface.frame` pacing are implemented. Output discovery, integer-scale metadata, output hotplug, and surface enter/leave membership are tracked for up to eight outputs, but this data is not yet applied to `wl_surface.set_buffer_scale` or logical-to-physical rendering; fractional scaling and release-tracked multi-buffer scheduling are not implemented. The event loop waits in poll for socket, keyboard-repeat timer, pointer-selection auto-scroll timer, or clipboard activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It intentionally binds the core globals at protocol version 1 to keep the initial request/event surface small.
+The Wayland prototype has one active release-tracked buffer rather than a static-size buffer set. Configure-driven resizing and single-buffer `wl_surface.frame` pacing are implemented. Output discovery, integer-scale metadata, output hotplug, surface enter/leave membership, and compositor-preferred surface buffer scale/transform are tracked for up to eight outputs and the current surface. Those preferences are not yet applied to `wl_surface.set_buffer_scale` or logical-to-physical rendering; fractional scaling and release-tracked multi-buffer scheduling are not implemented. The event loop waits in poll for socket, keyboard-repeat timer, pointer-selection auto-scroll timer, or clipboard activity. Seat discovery, keyboard/pointer input, software text rendering, and file operations are also implemented in the active branch. It binds wl_compositor at up to v6, while wl_shm and xdg_wm_base remain at v1.
 
 See [WAYLAND_BACKEND.md](WAYLAND_BACKEND.md).
 
@@ -121,7 +121,7 @@ Seat hotplug lifecycle is mock-tested for seat versions 1–4, including protoco
 Seat capability hotplug now releases/abandons removed pointer and keyboard proxies according to the bound seat version, clears stale input state, stops pointer-drag auto-scroll, and recreates pointer-bound cursor-shape state on re-addition. The mock covers seat versions 1–4.
 
 
-Further work: apply output scale to physical buffer allocation while preserving logical surface coordinates and pointer hit-testing; add preferred/fractional scale support where available; replace the single active buffer with a small release-tracked buffer set; and continue protocol interoperability testing. The app-drawn window controls and configure-driven resizing are implemented. Clipboard data-device support will be added as a separate service with immutable snapshot ownership.
+Further work: apply the tracked preferred buffer scale/transform to physical buffer allocation while preserving logical surface coordinates and pointer hit-testing; add fractional scale support where available; replace the single active buffer with a small release-tracked buffer set; and continue protocol interoperability testing. The app-drawn window controls and configure-driven resizing are implemented. Clipboard data-device support will be added as a separate service with immutable snapshot ownership.
 
 ### X11
 

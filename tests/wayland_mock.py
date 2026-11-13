@@ -439,8 +439,9 @@ def run(
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
+            compositor_advertised_version = 6 if output_tracking_test else 1
             globals_payload = (
-                registry_global(1, "wl_compositor")
+                registry_global(1, "wl_compositor", version=compositor_advertised_version)
                 + registry_global(2, "wl_shm")
                 + registry_global(3, "xdg_wm_base")
                 + registry_global(4, "wl_seat", version=advertised_seat_version)
@@ -476,7 +477,7 @@ def run(
                 if (global_name, interface, version, new_id) != (
                     expected_name,
                     expected_iface,
-                    1,
+                    (compositor_advertised_version if expected_iface == b"wl_compositor" else 1),
                     expected_object,
                 ):
                     raise AssertionError(f"unexpected bind arguments: {message!r}")
@@ -717,6 +718,9 @@ def run(
                         "output_global_names", "output_object_ids", "output_versions",
                         "output_scales", "output_pending_scales", "output_pending_valid",
                         "output_surface_entered", "surface_output_count", "surface_output_max_scale",
+                        "compositor_version", "surface_preferred_buffer_scale",
+                        "surface_preferred_scale_seen", "surface_preferred_buffer_transform",
+                        "surface_preferred_transform_seen",
                     )
                     for symbol_line in subprocess.check_output(
                         ["nm", "-n", binary], text=True
@@ -759,8 +763,25 @@ def run(
                         + wire_message(8, 0, struct.pack("<I", output_v3_id))
                         + wire_message(8, 0, struct.pack("<I", output_v2_id))
                     )
+                    wait_output("compositor_version", 6)
                     wait_output("output_global_names", 8, 0)
                     wait_output("output_global_names", 9, 1)
+
+                    # wl_surface v6 carries compositor-preferred scale/transform.
+                    client.sendall(
+                        wire_message(8, 2, struct.pack("<I", 2))
+                        + wire_message(8, 3, struct.pack("<I", 1))
+                    )
+                    wait_output("surface_preferred_buffer_scale", 2)
+                    wait_output("surface_preferred_scale_seen", 1)
+                    wait_output("surface_preferred_buffer_transform", 1)
+                    wait_output("surface_preferred_transform_seen", 1)
+                    client.sendall(
+                        wire_message(8, 2, struct.pack("<I", 1))
+                        + wire_message(8, 3, struct.pack("<I", 0))
+                    )
+                    wait_output("surface_preferred_buffer_scale", 1)
+                    wait_output("surface_preferred_buffer_transform", 0)
                     wait_output("output_object_ids", output_v3_id, 0)
                     wait_output("output_object_ids", output_v2_id, 1)
                     wait_output("output_versions", 3, 0)
@@ -784,7 +805,8 @@ def run(
                     wait_output("output_scales", 3, 1)
                     wait_output("surface_output_max_scale", 3)
                     observations.append(
-                        "wl_output v3/v2 discovery, atomic scale+done updates and multi-output surface.enter membership verified"
+                        "wl_compositor v6 preferred surface scale/transform and wl_output v3/v2 atomic scale+done, "
+                        "multi-output membership and hotplug lifecycle verified"
                     )
 
                     # Remove an entered v3 output: the client must send its
