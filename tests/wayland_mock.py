@@ -297,11 +297,15 @@ def run(
     verify_frame_callbacks: bool = False,
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
+    initial_preferred_buffer_scale: int = 1,
+    dpi_runtime_test: bool = False,
     output_tracking_test: bool = False,
     output_tracking_legacy_test: bool = False,
 ) -> None:
     # Resolve before file-workflow tests change the child process CWD.
     binary = os.path.abspath(binary)
+    if initial_preferred_buffer_scale not in (1, 2):
+        raise ValueError("the current Wayland scale tests support only 1x and 2x")
     output_tracking_enabled = output_tracking_test or output_tracking_legacy_test
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     locale_scenarios = (
@@ -441,7 +445,7 @@ def run(
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
-            compositor_advertised_version = 6 if output_tracking_test else 1
+            compositor_advertised_version = 6 if (output_tracking_test or initial_preferred_buffer_scale > 1 or dpi_runtime_test) else 1
             globals_payload = (
                 registry_global(1, "wl_compositor", version=compositor_advertised_version)
                 + registry_global(2, "wl_shm")
@@ -506,8 +510,13 @@ def run(
                 raise AssertionError("window title was not serialized as a Wayland string")
             expect_message(client, (8, 6, b""), "initial surface commit")
 
+            preferred_scale_event = (
+                wire_message(8, 2, struct.pack("<I", initial_preferred_buffer_scale))
+                if initial_preferred_buffer_scale > 1 else b""
+            )
             client.sendall(
-                wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
+                preferred_scale_event
+                + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
@@ -540,59 +549,91 @@ def run(
                         for column in range(x, x + width)
                     )
 
-                if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
-                    raise AssertionError("expected title-bar background was not rendered")
-                if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
-                    raise AssertionError("expected title-bar accent rail was not rendered")
-                for button_x, expected_color, button_name in (
-                    (696, 0xFF414B5A, "minimize"),
-                    (728, 0xFF414B5A, "maximize"),
-                    (760, 0xFF754B52, "close"),
-                ):
-                    button_pixel = struct.unpack_from(
-                        "<I", pixels, 4 * 800 * 4 + button_x * 4
-                    )[0]
-                    if button_pixel != expected_color:
-                        raise AssertionError(
-                            f"{button_name} window control was not rendered: {hex(button_pixel)}"
-                        )
-                if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
-                    raise AssertionError("active document tab underline was not rendered")
-                status_top = initial_height - 20
-                if struct.unpack_from("<I", pixels, status_top * 800 * 4)[0] != 0xFF78A9D4:
-                    raise AssertionError("status bar accent separator was not rendered")
-                if struct.unpack_from("<I", pixels, (status_top + 1) * 800 * 4)[0] != 0xFF343D4B:
-                    raise AssertionError("status bar background was not rendered")
-                def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
-                    for row in range(y, y + height):
-                        for column in range(x, x + width):
-                            pixel = struct.unpack_from(
-                                "<I", pixels, row * 800 * 4 + column * 4
-                            )[0]
-                            red, green, blue = (
-                                (pixel >> 16) & 0xFF,
-                                (pixel >> 8) & 0xFF,
-                                pixel & 0xFF,
+                buffer_scale = initial_preferred_buffer_scale
+                buffer_width = 800 * buffer_scale
+                buffer_height = initial_height * buffer_scale
+                buffer_stride = buffer_width * 4
+                if buffer_scale == 1:
+                    if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
+                        raise AssertionError("expected title-bar background was not rendered")
+                    if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
+                        raise AssertionError("expected title-bar accent rail was not rendered")
+                    for button_x, expected_color, button_name in (
+                        (696, 0xFF414B5A, "minimize"),
+                        (728, 0xFF414B5A, "maximize"),
+                        (760, 0xFF754B52, "close"),
+                    ):
+                        button_pixel = struct.unpack_from(
+                            "<I", pixels, 4 * 800 * 4 + button_x * 4
+                        )[0]
+                        if button_pixel != expected_color:
+                            raise AssertionError(
+                                f"{button_name} window control was not rendered: {hex(button_pixel)}"
                             )
-                            if red >= 128 and green >= 138 and blue >= 148:
-                                return True
-                    return False
-
-                if not font_parser_test and not antialiased_ink_present(16, initial_height - 16, 88, 14):
-                    raise AssertionError("logical line status label was not rendered")
-                editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
-                if initial_file is None:
-                    if editor_origin_pixel != 0xFF252A33:
-                        raise AssertionError(
-                            "empty document area should not draw a placeholder; "
-                            f"pixel={hex(editor_origin_pixel)}"
-                        )
-                elif not antialiased_ink_present(12, 88, 24, 16):
-                    raise AssertionError("launch-time file glyph was not rendered near the document origin")
+                    if struct.unpack_from("<I", pixels, 74 * 800 * 4 + 20 * 4)[0] != 0xFF78A9D4:
+                        raise AssertionError("active document tab underline was not rendered")
+                    status_top = initial_height - 20
+                    if struct.unpack_from("<I", pixels, status_top * 800 * 4)[0] != 0xFF78A9D4:
+                        raise AssertionError("status bar accent separator was not rendered")
+                    if struct.unpack_from("<I", pixels, (status_top + 1) * 800 * 4)[0] != 0xFF343D4B:
+                        raise AssertionError("status bar background was not rendered")
+                    def antialiased_ink_present(x: int, y: int, width: int, height: int) -> bool:
+                        for row in range(y, y + height):
+                            for column in range(x, x + width):
+                                pixel = struct.unpack_from(
+                                    "<I", pixels, row * 800 * 4 + column * 4
+                                )[0]
+                                red, green, blue = (
+                                    (pixel >> 16) & 0xFF,
+                                    (pixel >> 8) & 0xFF,
+                                    pixel & 0xFF,
+                                )
+                                if red >= 128 and green >= 138 and blue >= 148:
+                                    return True
+                        return False
+    
+                    if not font_parser_test and not antialiased_ink_present(16, initial_height - 16, 88, 14):
+                        raise AssertionError("logical line status label was not rendered")
+                    editor_origin_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
+                    if initial_file is None:
+                        if editor_origin_pixel != 0xFF252A33:
+                            raise AssertionError(
+                                "empty document area should not draw a placeholder; "
+                                f"pixel={hex(editor_origin_pixel)}"
+                            )
+                    elif not antialiased_ink_present(12, 88, 24, 16):
+                        raise AssertionError("launch-time file glyph was not rendered near the document origin")
+    
+    
+                else:
+                    def physical_pixel(logical_x: int, logical_y: int) -> int:
+                        return struct.unpack_from(
+                            "<I", pixels,
+                            (logical_y * buffer_scale) * buffer_stride
+                            + (logical_x * buffer_scale) * 4,
+                        )[0]
+                    if physical_pixel(2, 10) != 0xFF78A9D4:
+                        raise AssertionError("2x accent rail did not cover the logical 3px width")
+                    if physical_pixel(3, 10) != 0xFF343D4B:
+                        raise AssertionError("2x accent rail spilled beyond its logical width")
+                    if physical_pixel(10, 10) != 0xFF343D4B:
+                        raise AssertionError("2x title-bar rectangle did not cover its logical extent")
+                    if physical_pixel(10, 40) != 0xFF252A33:
+                        raise AssertionError("2x main background did not begin below the logical title bar")
+                    if physical_pixel(4, initial_height - 20) != 0xFF78A9D4:
+                        raise AssertionError("2x status separator was not rendered at physical pixel scale")
+                    # Font loading is disabled in this test by default, so this
+                    # confirms that the embedded 5x7 fallback is enlarged too.
+                    if not any(
+                        physical_pixel(x, y) == 0xFFD8DEE9
+                        for y in range(8, 24) for x in range(16, 112)
+                    ):
+                        raise AssertionError("2x fallback glyphs were not rasterized into physical pixels")
+                    observations.append("2x software rectangles and embedded glyphs preserve logical coordinates")
 
                 expect_message(
                     client,
-                    (11, 0, struct.pack("<6I", 12, 0, 800, initial_height, 3200, 1)),
+                    (11, 0, struct.pack("<6I", 12, 0, buffer_width, buffer_height, buffer_stride, 1)),
                     "create wl_buffer",
                 )
                 observations.append("memfd+SCM_RIGHTS buffer verified")
@@ -710,9 +751,97 @@ def run(
                         )
                     next_test_object_id += 2
                 # Map only after all initial client objects have been allocated.
+                if buffer_scale > 1:
+                    expect_message(
+                        client, (8, 8, struct.pack("<i", buffer_scale)),
+                        "set non-default surface buffer scale",
+                    )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
+                if dpi_runtime_test:
+                    wanted_dpi_state = (
+                        "window_buffer_scale", "window_buffer_created_scale",
+                        "window_buffer_width", "window_buffer_height", "window_stride",
+                        "window_buffer_id", "frame_callback_id",
+                    )
+                    dpi_symbols = {}
+                    for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in wanted_dpi_state:
+                            dpi_symbols[fields[2]] = int(fields[0], 16)
+                    if set(dpi_symbols) != set(wanted_dpi_state):
+                        raise AssertionError(f"DPI state symbols are incomplete: {dpi_symbols!r}")
+
+                    def dpi_value(name: str) -> int:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            raw = os.pread(memory.fileno(), 4, dpi_symbols[name])
+                        if len(raw) != 4:
+                            raise AssertionError(f"short DPI state read for {name}")
+                        return struct.unpack("<I", raw)[0]
+
+                    def wait_dpi(name: str, expected: int) -> None:
+                        deadline = time.monotonic() + 3.0
+                        actual = dpi_value(name)
+                        while actual != expected and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                            actual = dpi_value(name)
+                        if actual != expected:
+                            raise AssertionError(
+                                f"DPI state {name}: expected {expected}, got {actual}"
+                            )
+
+                    # Preference changes immediately, but the original 1x
+                    # descriptor must remain untouched until release.
+                    client.sendall(wire_message(8, 2, struct.pack("<I", 2)))
+                    wait_dpi("window_buffer_scale", 2)
+                    wait_dpi("window_buffer_created_scale", 1)
+                    client.sendall(wire_message(12, 0))
+                    expect_message(client, (12, 0, b""), "destroy released 1x buffer")
+                    create_2x = recv_wayland_message(client)
+                    if create_2x[0:2] != (11, 0) or len(create_2x[2]) != 24 or create_2x[3]:
+                        raise AssertionError(f"2x buffer was not recreated from the shared pool: {create_2x!r}")
+                    buffer_2x, _offset, width_2x, height_2x, stride_2x, format_2x = struct.unpack("<6I", create_2x[2])
+                    if (width_2x, height_2x, stride_2x, format_2x) != (1600, 960, 6400, 1):
+                        raise AssertionError(
+                            f"unexpected 2x physical buffer geometry: {(width_2x, height_2x, stride_2x, format_2x)!r}"
+                        )
+                    expect_message(client, (8, 8, struct.pack("<i", 2)), "commit 2x buffer scale")
+                    expect_message(client, (8, 1, struct.pack("<III", buffer_2x, 0, 0)), "attach 2x buffer")
+                    expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage in logical coordinates")
+                    expect_message(client, (8, 6, b""), "commit 2x buffer")
+                    wait_dpi("window_buffer_created_scale", 2)
+                    wait_dpi("window_buffer_width", 1600)
+                    wait_dpi("window_buffer_height", 960)
+                    wait_dpi("frame_callback_id", 0)
+
+                    # Returning to 1x must also wait for release of the 2x
+                    # descriptor, then restore physical geometry and scaling.
+                    client.sendall(wire_message(8, 2, struct.pack("<I", 1)))
+                    wait_dpi("window_buffer_scale", 1)
+                    wait_dpi("window_buffer_created_scale", 2)
+                    client.sendall(wire_message(buffer_2x, 0))
+                    expect_message(client, (buffer_2x, 0, b""), "destroy released 2x buffer")
+                    create_1x = recv_wayland_message(client)
+                    if create_1x[0:2] != (11, 0) or len(create_1x[2]) != 24 or create_1x[3]:
+                        raise AssertionError(f"1x buffer was not recreated from the shared pool: {create_1x!r}")
+                    buffer_1x, _offset, width_1x, height_1x, stride_1x, format_1x = struct.unpack("<6I", create_1x[2])
+                    if (width_1x, height_1x, stride_1x, format_1x) != (800, 480, 3200, 1):
+                        raise AssertionError(
+                            f"unexpected restored 1x buffer geometry: {(width_1x, height_1x, stride_1x, format_1x)!r}"
+                        )
+                    expect_message(client, (8, 8, struct.pack("<i", 1)), "restore 1x buffer scale")
+                    expect_message(client, (8, 1, struct.pack("<III", buffer_1x, 0, 0)), "attach restored 1x buffer")
+                    expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage restored logical surface")
+                    expect_message(client, (8, 6, b""), "commit restored 1x buffer")
+                    wait_dpi("window_buffer_created_scale", 1)
+                    wait_dpi("window_buffer_width", 800)
+                    wait_dpi("window_buffer_height", 480)
+                    observations.append(
+                        "preferred 1x/2x/1x changes coalesce behind wl_buffer.release; physical buffers resize while damage remains logical"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
                 if output_tracking_enabled:
                     # Inspect the live output cache and surface membership.
                     output_symbols = {}
@@ -9595,5 +9724,9 @@ if __name__ == "__main__":
     # and version-gated wl_output.release.
     run(sys.argv[1], output_tracking_test=True)
     run(sys.argv[1], output_tracking_legacy_test=True)
+    # The preferred scale arrives before the initial wl_buffer is created.
+    run(sys.argv[1], initial_preferred_buffer_scale=2)
+    # Runtime scale changes are release-gated in both directions.
+    run(sys.argv[1], dpi_runtime_test=True)
     # Remove the keyboard while an opted-in text-input-v3 IME has visible preedit.
     run(sys.argv[1], seat_hotplug_ime_test=True, advertised_seat_version=4)

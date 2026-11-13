@@ -1,3 +1,13 @@
+## 2026-11-13 — add bounded integer HiDPI rasterization (CI pending)
+
+Apply compositor/output integer scale to NekoEdit's software renderer while preserving surface-local logical coordinates. The backend now selects 1× or 2× based on the v6 per-surface preference or the older-compositor entered-output fallback. The 2× path is enabled only when the logical width and height are at most 1920×1080, so physical dimensions never exceed the existing 3840×2160 shared-memory pool; compositors before wl_surface.set_buffer_scale remain at 1×.
+
+Raster scale is applied after logical/UI transforms in draw_rect and draw_glyph; TrueType masks accept a physical em up to 64px with a 128×128 mask bound, and the embedded 5×7 fallback fills scale-sized pixel blocks. Text metrics, editor layout/indexing, pointer hit-testing, caret/IME rectangles, and wl_surface.damage stay in logical coordinates. The client sends wl_surface.set_buffer_scale only when the applied value changes and includes it in the matching buffer commit. Scale-only changes use the existing single-buffer release gate and rebuild the descriptor even when logical dimensions are unchanged; an initial unattached buffer can also be replaced if a preference arrives during startup.
+
+The Wayland mock adds a pre-configure 2× first-frame case with physical pixel checks and a runtime 1×→2×→1× transition that checks buffer geometry, byte stride, logical damage, and release-gated replacement. Preferred transform metadata is still not applied; fractional scaling / viewporter, 90°/270° rotation/reflection, and a multi-buffer ring remain future work. Actions validation is pending; no CI result is claimed yet.
+
+---
+
 ## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
 
 Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.

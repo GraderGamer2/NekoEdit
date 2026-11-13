@@ -57,6 +57,7 @@
 .equ BUFFER_SIZE,      (STRIDE * HEIGHT)
 .equ MAX_WINDOW_WIDTH, 3840
 .equ MAX_WINDOW_HEIGHT, 2160
+.equ MAX_BUFFER_SCALE, 2
 .equ SHM_BUFFER_CAPACITY, (MAX_WINDOW_WIDTH * MAX_WINDOW_HEIGHT * 4)
 .equ WINDOW_MIN_WIDTH, 480
 .equ WINDOW_MIN_HEIGHT, 360
@@ -4824,6 +4825,11 @@ window_height:          .long 0
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
+.global window_buffer_scale, window_buffer_created_scale, window_surface_mapped, surface_applied_buffer_scale
+window_buffer_scale:    .long 0
+window_buffer_created_scale: .long 0
+window_surface_mapped:  .long 0
+surface_applied_buffer_scale: .long 0
 window_status_top:      .long 0
 window_doc_bottom:       .long 0
 window_status_bytes_x:  .long 0
@@ -5235,6 +5241,10 @@ wayland_main:
     mov dword ptr [rip + event_fd], -1
     mov dword ptr [rip + window_width], WIDTH
     mov dword ptr [rip + window_height], HEIGHT
+    mov dword ptr [rip + window_buffer_scale], 1
+    mov dword ptr [rip + window_buffer_created_scale], 0
+    mov dword ptr [rip + window_surface_mapped], 0
+    mov dword ptr [rip + surface_applied_buffer_scale], 1
     mov dword ptr [rip + doc_font_size], 12
     mov dword ptr [rip + ui_font_size], 10
     # Load validated persistent settings before the first layout calculation.
@@ -5583,6 +5593,13 @@ wayland_main:
     js .protocol_error
     jmp .wait_configure
 .configure_check_surface:
+    cmp dword ptr [rip + last_object], 8
+    jne .configure_check_xdg_surface
+    call handle_surface_output_event
+    test eax, eax
+    js .protocol_error
+    jmp .wait_configure
+.configure_check_xdg_surface:
     cmp dword ptr [rip + last_object], 9
     jne .wait_configure
     cmp dword ptr [rip + last_opcode], 0
@@ -5666,6 +5683,10 @@ wayland_main:
     call wl_send_request
     test rax, rax
     js .protocol_error
+    mov eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rip + window_buffer_created_scale], eax
+    mov dword ptr [rip + window_resize_pending], 0
+    mov dword ptr [rip + redraw_pending], 0
 
     # Keep wl_shm_pool 11 alive so future configure events can allocate
     # size-specific wl_buffer objects from the same bounded mapping.
@@ -5678,6 +5699,9 @@ wayland_main:
     # the client ID sequence at 13, bind outputs, then map the surface.
     mov dword ptr [rip + next_client_object_id], 13
     call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call window_prepare_initial_buffer_scale
     test rax, rax
     js .protocol_error
     call window_attach_initial_buffer
@@ -5799,6 +5823,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call window_prepare_initial_buffer_scale
     test rax, rax
     js .protocol_error
     call window_attach_initial_buffer
@@ -12697,6 +12724,14 @@ draw_rect:
     div dword ptr [rip + ui_transform_y_den]
     mov r15d, eax
 .draw_rect_transform_done:
+    mov eax, dword ptr [rip + window_buffer_scale]
+    cmp eax, 1
+    jbe .draw_rect_scale_done
+    imul r12d, eax
+    imul r13d, eax
+    imul r14d, eax
+    imul r15d, eax
+.draw_rect_scale_done:
     test r12d, r12d
     js .draw_rect_done
     test r13d, r13d
@@ -14284,14 +14319,28 @@ render_text_input_preedit:
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
 window_update_geometry:
-    # Keep protocol/layout dimensions separate from the software buffer.
-    # This first step deliberately preserves scale 1, so physical extents match
-    # the current surface-local dimensions until coordinate conversion lands.
-    mov eax, dword ptr [rip + window_width]
+    # Preserve surface-local layout coordinates. Use integer 2x only when
+    # set_buffer_scale exists and the physical extent stays inside the bounded
+    # wl_shm pool envelope (3840x2160 pixels).
+    mov eax, 1
+    cmp dword ptr [rip + compositor_version], 3
+    jb .window_geometry_buffer_scale_ready
+    mov edx, dword ptr [rip + surface_effective_buffer_scale]
+    cmp edx, 2
+    jb .window_geometry_buffer_scale_ready
+    cmp dword ptr [rip + window_width], (MAX_WINDOW_WIDTH / MAX_BUFFER_SCALE)
+    ja .window_geometry_buffer_scale_ready
+    cmp dword ptr [rip + window_height], (MAX_WINDOW_HEIGHT / MAX_BUFFER_SCALE)
+    ja .window_geometry_buffer_scale_ready
+    mov eax, MAX_BUFFER_SCALE
+.window_geometry_buffer_scale_ready:
+    mov dword ptr [rip + window_buffer_scale], eax
+    imul eax, dword ptr [rip + window_width]
     mov dword ptr [rip + window_buffer_width], eax
     shl eax, 2
     mov dword ptr [rip + window_stride], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_buffer_scale]
+    imul eax, dword ptr [rip + window_height]
     mov dword ptr [rip + window_buffer_height], eax
     mov eax, dword ptr [rip + window_height]
     sub eax, 20
@@ -14762,7 +14811,11 @@ window_apply_pending_resize:
     cmp r12d, dword ptr [rip + window_width]
     jne .window_resize_dimensions_changed
     cmp r13d, dword ptr [rip + window_height]
-    je .window_resize_present
+    jne .window_resize_dimensions_changed
+    mov eax, dword ptr [rip + window_buffer_scale]
+    cmp eax, dword ptr [rip + window_buffer_created_scale]
+    jne .window_resize_dimensions_changed
+    jmp .window_resize_present
 .window_resize_dimensions_changed:
     mov dword ptr [rip + window_width], r12d
     mov dword ptr [rip + window_height], r13d
@@ -14795,6 +14848,8 @@ window_apply_pending_resize:
     test rax, rax
     js .window_resize_done
     mov dword ptr [rip + window_buffer_id], r14d
+    mov eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rip + window_buffer_created_scale], eax
 
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
@@ -14849,6 +14904,22 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+    cmp dword ptr [rip + compositor_version], 3
+    jb .present_buffer_scale_done
+    mov eax, dword ptr [rip + window_buffer_scale]
+    cmp eax, dword ptr [rip + surface_applied_buffer_scale]
+    je .present_buffer_scale_done
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 8
+    mov esi, 8                  # wl_surface.set_buffer_scale
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rip + surface_applied_buffer_scale], eax
+.present_buffer_scale_done:
     mov eax, dword ptr [rip + window_buffer_id]
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -19413,6 +19484,13 @@ draw_glyph:
     add eax, dword ptr [rip + ui_transform_origin_y]
     mov r13d, eax
 .glyph_transform_done:
+    mov eax, dword ptr [rip + window_buffer_scale]
+    cmp eax, 1
+    jbe .glyph_scale_done
+    imul r12d, eax
+    imul r13d, eax
+    imul r14d, eax
+.glyph_scale_done:
     test r12d, r12d
     js .glyph_done
     test r13d, r13d
@@ -19629,6 +19707,11 @@ draw_glyph:
     imul eax, 7
     lea rbx, [rip + font_5x7]
     add rbx, rax
+    mov r10d, dword ptr [rip + window_buffer_scale]
+    cmp r10d, 1
+    jae .glyph_fallback_scale_ready
+    mov r10d, 1
+.glyph_fallback_scale_ready:
     xor r14d, r14d
 .glyph_row:
     cmp r14d, 7
@@ -19642,14 +19725,26 @@ draw_glyph:
     sub eax, r15d
     bt r8d, eax
     jnc .glyph_next_column
-    mov eax, r13d
-    add eax, r14d
+    xor r11d, r11d
+.glyph_fallback_subrow:
+    cmp r11d, r10d
+    jae .glyph_next_column
+    mov eax, r14d
+    imul eax, r10d
+    add eax, r13d
+    add eax, r11d
     cmp eax, dword ptr [rip + window_buffer_height]
-    jae .glyph_next_column
-    mov edx, r12d
-    add edx, r15d
+    jae .glyph_fallback_next_subrow
+    xor r9d, r9d
+.glyph_fallback_subcolumn:
+    cmp r9d, r10d
+    jae .glyph_fallback_next_subrow
+    mov edx, r15d
+    imul edx, r10d
+    add edx, r12d
+    add edx, r9d
     cmp edx, dword ptr [rip + window_buffer_width]
-    jae .glyph_next_column
+    jae .glyph_fallback_next_subcolumn
     mov ecx, dword ptr [rip + window_stride]
     imul eax, ecx
     shl edx, 2
@@ -19657,6 +19752,12 @@ draw_glyph:
     mov rdi, qword ptr [rip + shm_mapping]
     add rdi, rax
     mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_next_subcolumn:
+    inc r9d
+    jmp .glyph_fallback_subcolumn
+.glyph_fallback_next_subrow:
+    inc r11d
+    jmp .glyph_fallback_subrow
 .glyph_next_column:
     inc r15d
     jmp .glyph_column
@@ -23130,6 +23231,22 @@ render_document:
 .type window_attach_initial_buffer, @function
 window_attach_initial_buffer:
     push rbp
+    cmp dword ptr [rip + compositor_version], 3
+    jb .initial_buffer_scale_done
+    mov eax, dword ptr [rip + window_buffer_scale]
+    cmp eax, dword ptr [rip + surface_applied_buffer_scale]
+    je .initial_buffer_scale_done
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 8
+    mov esi, 8                  # wl_surface.set_buffer_scale
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .initial_buffer_done
+    mov eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rip + surface_applied_buffer_scale], eax
+.initial_buffer_scale_done:
     lea rax, [rip + stage_attach]
     mov qword ptr [rip + failure_stage], rax
     mov eax, dword ptr [rip + window_buffer_id]
@@ -23166,6 +23283,7 @@ window_attach_initial_buffer:
     test rax, rax
     js .initial_buffer_done
     mov dword ptr [rip + buffer_busy], 1
+    mov dword ptr [rip + window_surface_mapped], 1
     xor eax, eax
 .initial_buffer_done:
     pop rbp
@@ -23220,6 +23338,75 @@ output_bind_pending:
 # Recompute entered-output count, max integer scale, and the selected scale hint.
 # wl_compositor v6+ uses the per-surface preference; older versions fall back
 # to the maximum committed scale among entered outputs. Rendering is unchanged.
+# Apply the compositor's current integer-scale preference to the software buffer.
+# During startup, defer descriptor replacement until the initial buffer is attached.
+.type window_scale_schedule, @function
+window_scale_schedule:
+    push r12
+    mov r12d, dword ptr [rip + window_buffer_scale]
+    call window_update_geometry
+    cmp r12d, dword ptr [rip + window_buffer_scale]
+    je .window_scale_schedule_done
+    mov dword ptr [rip + window_resize_pending], 1
+    mov dword ptr [rip + redraw_pending], 1
+    cmp dword ptr [rip + window_surface_mapped], 0
+    je .window_scale_schedule_done
+    cmp dword ptr [rip + buffer_busy], 0
+    jne .window_scale_schedule_done
+    call window_apply_pending_resize
+    test rax, rax
+    js .window_scale_schedule_done
+.window_scale_schedule_done:
+    pop r12
+    ret
+.size window_scale_schedule, . - window_scale_schedule
+
+# Rebuild the first buffer if a preferred scale arrived after its original
+# create_buffer request but before the first surface attachment.
+.type window_prepare_initial_buffer_scale, @function
+window_prepare_initial_buffer_scale:
+    push r12
+    mov eax, dword ptr [rip + window_buffer_created_scale]
+    cmp eax, dword ptr [rip + window_buffer_scale]
+    je .window_prepare_initial_scale_done
+    call render_surface
+    # The original descriptor has never been attached, so it is safe to destroy.
+    mov edi, dword ptr [rip + window_buffer_id]
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .window_prepare_initial_scale_done
+    mov r12d, dword ptr [rip + next_client_object_id]
+    lea eax, [r12d + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    mov dword ptr [rip + payload_buffer], r12d
+    mov dword ptr [rip + payload_buffer + 4], 0
+    mov eax, dword ptr [rip + window_buffer_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + window_buffer_height]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov eax, dword ptr [rip + window_stride]
+    mov dword ptr [rip + payload_buffer + 16], eax
+    mov dword ptr [rip + payload_buffer + 20], 1
+    mov edi, 11
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 24
+    call wl_send_request
+    test rax, rax
+    js .window_prepare_initial_scale_done
+    mov dword ptr [rip + window_buffer_id], r12d
+    mov eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rip + window_buffer_created_scale], eax
+    mov dword ptr [rip + window_resize_pending], 0
+    mov dword ptr [rip + redraw_pending], 0
+.window_prepare_initial_scale_done:
+    pop r12
+    ret
+.size window_prepare_initial_buffer_scale, . - window_prepare_initial_buffer_scale
+
 .type output_recompute_surface_scale, @function
 output_recompute_surface_scale:
     push rbp
@@ -23257,6 +23444,7 @@ output_recompute_surface_scale:
     mov eax, r11d
 .output_recompute_store_scale:
     mov dword ptr [rip + surface_effective_buffer_scale], eax
+    call window_scale_schedule
     pop r13
     pop r12
     pop rbp

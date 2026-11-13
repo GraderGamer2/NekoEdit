@@ -10,7 +10,7 @@ NekoEdit's Wayland backend draws the interface and document into CPU-side pixel 
 - Keep a 128-entry glyph-ID cache to avoid decoding and rasterizing the same glyph on every redraw.
 - Keep the embedded 5×7 bitmap renderer as a fallback when no supported TrueType font is loaded or the outline path cannot draw a glyph.
 
-The current implementation is Wayland-only. The X11 backend is not ready. A text editor does not need a GPU API; performance changes should be based on measured redraw and typing workloads.
+The current implementation is Wayland-only. The X11 backend is not ready. The software renderer supports integer output scales of 1× and 2× when the logical surface fits the preallocated 3840×2160 backing-store envelope. Filled rectangles, TrueType glyphs, and the embedded 5×7 fallback are rasterized at physical scale; document layout, text advances, pointer hit-testing, and surface damage remain logical. The 2× path does not add a runtime library or GPU dependency. A text editor does not need a GPU API; performance changes should be based on measured redraw and typing workloads.
 
 ## Font selection and loading
 
@@ -41,7 +41,7 @@ The parser supports TrueType `glyf` simple and composite glyphs:
 - Composite instructions are bounds-checked and skipped; TrueType hinting is not executed.
 - Empty glyphs are valid. Malformed or over-limit data is rejected rather than read past the mapped file.
 
-Quadratic contours are flattened with bounded deterministic subdivisions, including implied on-curve midpoints between consecutive off-curve points. The rasterizer applies a non-zero-winding fill rule and a 4×4 subpixel coverage grid. Its output is an 8-bit grayscale bitmap bounded to 64×64 pixels. This mask bound is intentionally larger than the 32px maximum document em so descenders and their one-pixel outer padding are not rejected merely because a glyph extends below the baseline; the Wayland renderer alpha-blends the result into the surface.
+Quadratic contours are flattened with bounded deterministic subdivisions, including implied on-curve midpoints between consecutive off-curve points. The rasterizer applies a non-zero-winding fill rule and a 4×4 subpixel coverage grid. Its output is an 8-bit grayscale bitmap bounded to 128×128 pixels. At 1×, the logical document em remains limited to 32px; at 2×, the mask raster size doubles to 64 physical pixels. The larger mask envelope leaves room for descenders and outer padding while the Wayland renderer alpha-blends coverage into the physical backing buffer.
 
 ## Metric-aware text layout
 
@@ -83,7 +83,7 @@ The current renderer does not implement:
 - OpenType CFF/CFF2, WOFF, variable fonts, bitmap/color fonts, or color glyph layers;
 - kerning, GSUB/GPOS, ligatures, script shaping, or bidirectional text;
 - combining-mark positioning or complete emoji ZWJ rendering;
-- non-ASCII keyboard text entry, dead-key/compose input, or Wayland text-input/IME.
+- full OpenType shaping, bidirectional layout, and general combining-mark positioning; XKB, Compose, and text-input-v3 support remain bounded subsets rather than a complete shaping engine.
 
 Glyph fallback and the embedded bitmap keep unsupported content from requiring a third-party font stack, but the result is not typographically equivalent to a shaping engine such as HarfBuzz or a complete rasterizer such as FreeType.
 

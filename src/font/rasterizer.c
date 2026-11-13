@@ -3,9 +3,9 @@
 #define MAX_POINTS 4096u
 #define MAX_CONTOURS 256u
 #define MAX_FLAT_POINTS 16384u
-#define MAX_GLYPH_EM 32u
-/* Descenders and their one-pixel raster padding can exceed one em. */
-#define BITMAP_SIDE 64u
+#define MAX_GLYPH_EM 64u
+/* 2x output scale doubles the 32px logical document-em mask envelope. */
+#define BITMAP_SIDE 128u
 #define BITMAP_BYTES (BITMAP_SIDE * BITMAP_SIDE)
 #define CACHE_SLOTS 128u
 #define SAMPLES 4u
@@ -284,7 +284,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
     struct cache_entry *e;
     if (cp==0x20) return 1;
     if (!font_loaded || !surface || width<=0 || height<=0 || stride<width*4 ||
-        !size || size>32) return 0;
+        !size || size>MAX_GLYPH_EM) return 0;
     gid=font_cmap_lookup(cp);
     if (!gid && cp!=0x3f) gid=font_cmap_lookup(0x3f);
     if (!gid || gid>=(uint32_t)font_num_glyphs) return 0;
