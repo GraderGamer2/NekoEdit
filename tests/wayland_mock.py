@@ -1293,10 +1293,10 @@ def run(
                     # Establish real keyboard focus and non-zero modifier state,
                     # then prove capability removal clears it before a new
                     # keyboard object is created.
-                    client.sendall(wire_message(16, 1, struct.pack("<III", 880, 8, 0)))
+                    client.sendall(wire_message(keyboard_object_id, 1, struct.pack("<III", 880, 8, 0)))
                     wait_state("keyboard_focused", 1)
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 881, 5, 0, 0, 2))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 881, 5, 0, 0, 2))
                     )
                     wait_state("xkb_modifiers", 5)
                     wait_state("ctrl_down", 1)
@@ -1400,7 +1400,7 @@ def run(
                             (98 if (utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test or gap_buffer_test or dynamic_growth_test or grapheme_test or font_parser_test) else 110) * 256,
                         ),
                     )
-                    + wire_message(15, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
+                    + wire_message(pointer_object_id, 3, struct.pack("<IIII", 778, 1000, 0x110, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "redraw damage")
@@ -1470,7 +1470,7 @@ def run(
                 # Each new redraw must wait until the compositor releases the
                 # single wl_buffer; this avoids racing the mock against batching.
                 client.sendall(
-                    wire_message(15, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
+                    wire_message(pointer_object_id, 3, struct.pack("<IIII", 779, 1001, 0x110, 0))
                     + wire_message(12, 0)
                 )  # release the initial document click and its buffer
                 if keyboard_layout_test or unicode_keyboard_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test or right_alt_compose_test or right_alt_level3_test:
@@ -2000,7 +2000,7 @@ xkb_symbols "nekoedit-sparse" {
                 keymap_fd = os.memfd_create("nekoedit-test-keymap", 0)
                 try:
                     os.write(keymap_fd, keymap_data)
-                    keymap_event = wire_message(16, 0, struct.pack("<II", 1, len(keymap_data)))
+                    keymap_event = wire_message(keyboard_object_id, 0, struct.pack("<II", 1, len(keymap_data)))
                     client.sendmsg(
                         [keymap_event],
                         [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", keymap_fd))],
@@ -2532,8 +2532,8 @@ xkb_symbols "nekoedit-sparse" {
                 if advertised_seat_version >= 4:
                     # Use a non-default compositor policy to prove the client
                     # consumes wl_keyboard.repeat_info rather than constants.
-                    keyboard_events += wire_message(16, 5, struct.pack("<ii", 10, 180))
-                keyboard_events += wire_message(16, 1, struct.pack("<III", 1001, 8, 0))
+                    keyboard_events += wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 180))
+                keyboard_events += wire_message(keyboard_object_id, 1, struct.pack("<III", 1001, 8, 0))
                 client.sendall(keyboard_events)
 
                 if font_parser_test:
@@ -3278,8 +3278,8 @@ xkb_symbols "nekoedit-sparse" {
                     # existing editor selection to be removed even with no
                     # additional surrounding bytes requested.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 7001, 7001, 42, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 7002, 7002, 105, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 7001, 7001, 42, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 7002, 7002, 105, 1))
                     )
                     expect_state(
                         committed, 3, "selected UTF-8 scalar", 6, expected_cause=1
@@ -3288,8 +3288,8 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_selection_active") != 1:
                         raise AssertionError("Shift+Left did not produce the expected active selection")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 7003, 7003, 105, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 7004, 7004, 42, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 7003, 7003, 105, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 7004, 7004, 42, 0))
                     )
                     client.sendall(
                         wire_message(18, 4, struct.pack("<II", 0, 0))
@@ -3413,7 +3413,7 @@ xkb_symbols "nekoedit-sparse" {
                     # with key-down so slow frame acknowledgement cannot let
                     # the 300 ms repeat timer fire an extra editing action.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", serial, serial, code, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", serial, serial, code, 1))
                         + wire_message(
                             16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
                         )
@@ -3460,7 +3460,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 def workflow_click(x: int, y: int, serial: int, label: str) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
@@ -3486,7 +3486,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 def workflow_axis(axis: int, value: int, serial: int, label: str) -> None:
                     client.sendall(
-                        wire_message(15, 4, struct.pack("<IIi", serial, axis, value))
+                        wire_message(pointer_object_id, 4, struct.pack("<IIi", serial, axis, value))
                     )
                     workflow_redraw(label)
                     client.sendall(wire_message(12, 0))
@@ -3496,20 +3496,20 @@ xkb_symbols "nekoedit-sparse" {
                     serial: int, label: str
                 ) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                     )
                     workflow_redraw(f"{label}: press")
                     client.sendall(wire_message(12, 0))
                     if child_u32("doc_hscroll_drag") != 1:
                         raise AssertionError(f"{label}: bottom thumb did not enter drag state")
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
                     )
                     workflow_redraw(f"{label}: drag")
                     client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
                     )
                     workflow_redraw(f"{label}: release")
                     client.sendall(wire_message(12, 0))
@@ -3524,8 +3524,8 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     frame_callback_stats["defer"] = True
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1400, 1400, 30, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1401, 1401, 30, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1400, 1400, 30, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1401, 1401, 30, 0))
                     )
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)),
@@ -3550,8 +3550,8 @@ xkb_symbols "nekoedit-sparse" {
                     wait_child_u32("buffer_busy", 0, "release before callback")
                     wait_child_u32("frame_callback_id", callback_id, "callback retained after release")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1402, 1402, 48, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1403, 1403, 48, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1402, 1402, 48, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1403, 1403, 48, 0))
                     )
                     wait_child_u32("doc_length", 2, "second edit during outstanding callback")
                     wait_child_u32("redraw_pending", 1, "redraw queued behind callback")
@@ -3655,12 +3655,12 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     before_shift_wheel = dragged_state["doc_view_left_px"]
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 3141, 3141, 42, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3141, 3141, 42, 1))
                     )
                     workflow_axis(0, -14 * 256, 3142, "Shift+vertical wheel scrolls horizontally")
                     after_shift_wheel = read_document_state()["doc_view_left_px"]
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 3144, 3144, 42, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3144, 3144, 42, 0))
                         + wire_message(12, 0)
                     )
                     if after_shift_wheel != max(0, before_shift_wheel - 14):
@@ -3711,7 +3711,7 @@ xkb_symbols "nekoedit-sparse" {
                     cursor_shape: int = 1,
                 ) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                     )
                     if cursor_shape_supported and cursor_shape != cursor_feedback_state["shape"]:
                         expect_message(
@@ -3738,7 +3738,7 @@ xkb_symbols "nekoedit-sparse" {
                     if request_opcode in (5, 6):
                         enter_serial = serial + 6
                         client.sendall(
-                            wire_message(15, 1, struct.pack("<II", serial + 5, 8))
+                            wire_message(pointer_object_id, 1, struct.pack("<II", serial + 5, 8))
                             + wire_message(
                                 15, 0,
                                 struct.pack("<IIii", enter_serial, 8, x * 256, y * 256),
@@ -3757,8 +3757,8 @@ xkb_symbols "nekoedit-sparse" {
                     serial: int, label: str
                 ) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                     )
                     workflow_redraw(f"{label}: press")
                     client.sendall(wire_message(12, 0))
@@ -3768,7 +3768,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"{label}: scrollbar press did not start a drag; state={press_state!r}"
                         )
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
                     )
                     try:
                         workflow_redraw(f"{label}: drag")
@@ -3780,7 +3780,7 @@ xkb_symbols "nekoedit-sparse" {
                     # second redraw caused by releasing the scrollbar grab.
                     client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
                     )
                     workflow_redraw(f"{label}: release")
                     client.sendall(wire_message(12, 0))
@@ -3790,8 +3790,8 @@ xkb_symbols "nekoedit-sparse" {
                     serial: int, label: str
                 ) -> None:
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, start_x * 256, start_y * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                     )
                     workflow_redraw(f"{label}: press")
                     client.sendall(wire_message(12, 0))
@@ -3801,7 +3801,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"{label}: editor scrollbar press did not start a drag; state={press_state!r}"
                         )
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial + 3, end_x * 256, end_y * 256))
                     )
                     try:
                         workflow_redraw(f"{label}: drag")
@@ -3811,13 +3811,13 @@ xkb_symbols "nekoedit-sparse" {
                         ) from error
                     client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 4, serial + 5, 0x110, 0))
                     )
                     workflow_redraw(f"{label}: release")
                     client.sendall(wire_message(12, 0))
 
                 def workflow_shortcut(serial: int, code: int, label: str, shift: bool = False) -> None:
-                    events = wire_message(16, 3, struct.pack("<IIII", serial, serial, 29, 1))
+                    events = wire_message(keyboard_object_id, 3, struct.pack("<IIII", serial, serial, 29, 1))
                     if shift:
                         events += wire_message(
                             16, 3, struct.pack("<IIII", serial + 1, serial + 1, 42, 1)
@@ -3990,16 +3990,16 @@ xkb_symbols "nekoedit-sparse" {
                     # Simulate pointer_leave during the implicit grab, followed
                     # by motion below the bottom edge of the window.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 3002, 20 * 256, 98 * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", 3003, 3004, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3002, 20 * 256, 98 * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", 3003, 3004, 0x110, 1))
                     )
                     workflow_redraw("begin selection before leaving the window")
                     client.sendall(wire_message(12, 0))
                     if child_u32("pointer_button_down") != 1:
                         raise AssertionError("document press did not begin a selection drag")
                     client.sendall(
-                        wire_message(15, 1, struct.pack("<II", 3005, 8))
-                        + wire_message(15, 2, struct.pack("<Iii", 3006, 40 * 256, 520 * 256))
+                        wire_message(pointer_object_id, 1, struct.pack("<II", 3005, 8))
+                        + wire_message(pointer_object_id, 2, struct.pack("<Iii", 3006, 40 * 256, 520 * 256))
                     )
                     workflow_redraw("drag below the bottom edge while pointer focus is outside")
                     immediate_top = child_u32("doc_view_top_row")
@@ -4021,7 +4021,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"initial={immediate_top}, after_timer={continued_top}"
                         )
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", 3010, 3011, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", 3010, 3011, 0x110, 0))
                         + wire_message(12, 0)
                     )
                     wait_child_u32(
@@ -4038,7 +4038,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Return pointer focus, turn wrapping off, then drag past the
                     # right edge. The horizontal viewport must follow the drag.
                     client.sendall(
-                        wire_message(15, 0, struct.pack("<Iiii", 3020, 8, 20 * 256, 16 * 256))
+                        wire_message(pointer_object_id, 0, struct.pack("<Iiii", 3020, 8, 20 * 256, 16 * 256))
                     )
                     workflow_click(200, 16, 3030, "open Settings before horizontal drag test")
                     workflow_settings_click(200, 124, 3040, "disable Wrap Lines before horizontal drag")
@@ -4050,14 +4050,14 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(20, 98, 3980, "close persistent Settings before document drag")
 
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 4002, 20 * 256, 98 * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", 4003, 4004, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 4002, 20 * 256, 98 * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", 4003, 4004, 0x110, 1))
                     )
                     workflow_redraw("begin horizontal selection drag")
                     client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 1, struct.pack("<II", 4005, 8))
-                        + wire_message(15, 2, struct.pack("<Iii", 4006, 900 * 256, 98 * 256))
+                        wire_message(pointer_object_id, 1, struct.pack("<II", 4005, 8))
+                        + wire_message(pointer_object_id, 2, struct.pack("<Iii", 4006, 900 * 256, 98 * 256))
                     )
                     workflow_redraw("drag beyond the right edge with Wrap Lines disabled")
                     horizontal_left = child_u32("doc_view_left_px")
@@ -4067,7 +4067,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"left={horizontal_left}, active={child_u32('doc_selection_active')}"
                         )
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", 3060, 3061, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", 3060, 3061, 0x110, 0))
                         + wire_message(12, 0)
                         + wire_message(10, 1)
                     )
@@ -4121,15 +4121,15 @@ xkb_symbols "nekoedit-sparse" {
                     # words, rather than dropping back to character selection.
                     workflow_click(58, 98, 1820, "word-drag first click")
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 1832, 58 * 256, 98 * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", 1833, 1834, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 1832, 58 * 256, 98 * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", 1833, 1834, 0x110, 1))
                     )
                     workflow_redraw("word-drag double-click press")
                     client.sendall(wire_message(12, 0))
                     if child_u32("pointer_button_down") != 1 or child_u32("doc_word_drag_active") != 1:
                         raise AssertionError("double-click did not retain the pointer grab for word dragging")
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 1840, 100 * 256, 98 * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 1840, 100 * 256, 98 * 256))
                     )
                     workflow_redraw("extend word selection through the third word")
                     start = min(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
@@ -4139,7 +4139,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"dragging a double-click selection did not extend by whole words: ({start},{end})"
                         )
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", 1843, 1844, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", 1843, 1844, 0x110, 0))
                         + wire_message(12, 0)
                     )
                     wait_child_u32("pointer_button_down", 0, "word-drag release")
@@ -4149,13 +4149,13 @@ xkb_symbols "nekoedit-sparse" {
                     # first word; the fixed edge remains the original word end.
                     workflow_click(100, 98, 1850, "reverse word-drag first click")
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 1862, 100 * 256, 98 * 256))
-                        + wire_message(15, 3, struct.pack("<IIII", 1863, 1864, 0x110, 1))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 1862, 100 * 256, 98 * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", 1863, 1864, 0x110, 1))
                     )
                     workflow_redraw("reverse word-drag double-click press")
                     client.sendall(wire_message(12, 0))
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", 1870, 20 * 256, 98 * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 1870, 20 * 256, 98 * 256))
                     )
                     workflow_redraw("extend word selection backwards to the first word")
                     if child_u32("doc_selection_anchor") != 13 or child_u32("doc_cursor") != 0:
@@ -4164,7 +4164,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"anchor={child_u32('doc_selection_anchor')}, cursor={child_u32('doc_cursor')}"
                         )
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", 1873, 1874, 0x110, 0))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", 1873, 1874, 0x110, 0))
                         + wire_message(12, 0)
                     )
                     wait_child_u32("pointer_button_down", 0, "reverse word-drag release")
@@ -4223,10 +4223,10 @@ xkb_symbols "nekoedit-sparse" {
                     # Redo has been invalidated by the new edit. A no-op shortcut
                     # must not trigger a compositor frame commit.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 2060, 2060, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 2061, 2061, 21, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 2062, 2062, 21, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 2063, 2063, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2060, 2060, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2061, 2061, 21, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2062, 2062, 21, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2063, 2063, 29, 0))
                     )
                     ready, _, _ = select.select([client], [], [], 0.05)
                     if ready:
@@ -4410,7 +4410,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     def context_right_click(x: int, y: int, serial: int, label: str) -> None:
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                             + wire_message(
                                 15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x111, 1)
                             )
@@ -4440,7 +4440,7 @@ xkb_symbols "nekoedit-sparse" {
                         # callbacks use that same protocol object namespace.
                         source_id = child_u32("next_client_object_id")
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                             + wire_message(
                                 15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                             )
@@ -4517,7 +4517,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         context_right_click(220, 120, 2550, "open context menu for Paste")
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", 2570, 235 * 256, 159 * 256))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", 2570, 235 * 256, 159 * 256))
                             + wire_message(
                                 15, 3, struct.pack("<IIII", 2571, 2572, 0x110, 1)
                             )
@@ -4561,7 +4561,7 @@ xkb_symbols "nekoedit-sparse" {
                         # An outside click dismisses but does not click through.
                         context_right_click(220, 120, 2630, "reopen menu for outside-click dismissal")
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", 2640, 400 * 256, 70 * 256))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", 2640, 400 * 256, 70 * 256))
                             + wire_message(
                                 15, 3, struct.pack("<IIII", 2641, 2642, 0x110, 1)
                             )
@@ -5432,8 +5432,8 @@ xkb_symbols "nekoedit-sparse" {
                     def click_settings(x: int, y: int, serial: int, label: str) -> None:
                         wait_buffer_idle(f"{label} waits for the released buffer")
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
-                            + wire_message(15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                            + wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1))
                         )
                         message = recv_wayland_message(client)
                         # A pointer move can update cursor feedback before the surface redraw.
@@ -5456,7 +5456,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         expect_message(client, (8, 6, b""), f"{label} commit")
                         client.sendall(
-                            wire_message(15, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0))
+                            wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 3, serial + 4, 0x110, 0))
                             + wire_message(12, 0)
                         )
                         wait_buffer_idle(f"{label} waits for frame release")
@@ -5732,19 +5732,19 @@ xkb_symbols "nekoedit-sparse" {
                     # produces U+00E9 and Shift selects supplementary U+1F600.
                     key_step(1500, 30, "XKB U00E9 inserts a two-byte UTF-8 scalar")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1502, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1502, 1, 0, 0, 0))
                     )
                     key_step(1510, 30, "XKB U1F600 inserts a four-byte UTF-8 scalar")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1520, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1520, 0, 0, 0, 0))
                     )
                     key_step(1530, 31, "named EuroSign inserts U+20AC")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1540, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1540, 1, 0, 0, 0))
                     )
                     key_step(1550, 31, "named eacute inserts U+00E9")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1560, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1560, 0, 0, 0, 0))
                     )
                     key_step(1570, 32, "named emdash inserts U+2014")
                     key_step(1572, 44, "Greek_alpha inserts U+03B1")
@@ -5995,11 +5995,11 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("keymap_format") != 1:
                         raise AssertionError("Right Alt LevelThree fixture did not activate the parsed XKB keymap")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1000, 1000, 100, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1000, 1000, 100, 1))
                     )
                     key_step(1002, 16, "Right Alt mapped to ISO_Level3_Shift")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1004, 1004, 100, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1004, 1004, 100, 0))
                         + wire_message(12, 0)
                     )
                     contents = read_document_state()["doc_contents"]
@@ -6019,34 +6019,34 @@ xkb_symbols "nekoedit-sparse" {
                     # Shift maps it to 'A', and Group 2 remaps it to 'q'.
                     key_step(1000, 16, "XKB group-one base symbol")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1001, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1001, 1, 0, 0, 0))
                     )
                     key_step(1002, 16, "XKB alphabetic Shift level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1003, 0, 0, 0, 1))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1003, 0, 0, 0, 1))
                     )
                     key_step(1004, 16, "XKB second layout group")
                     # This fixture maps RALT to NoSymbol/Alt_L, not
                     # ISO_Level3_Shift. Use the compositor's Mod5 state instead
                     # of assuming evdev keycode 100 is always LevelThree.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1005, 128, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1005, 128, 0, 0, 0))
                     )
                     key_step(1006, 16, "XKB FOUR_LEVEL_ALPHABETIC compositor Mod5 symbol")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1007, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1007, 0, 0, 0, 0))
                         + wire_message(12, 0)
                     )
                     # LevelThree is commonly a virtual modifier resolved to
                     # real Mod5 by the compositor. It must work even when a
                     # different physical key generated that modifier state.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1010, 0, 0, 0, 0))
-                        + wire_message(16, 4, struct.pack("<IIIII", 1011, 128, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1010, 0, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1011, 128, 0, 0, 0))
                     )
                     key_step(1012, 16, "XKB LevelThree from compositor Mod5 mask")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1014, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1014, 0, 0, 0, 0))
                     )
                     # Verify every remaining ASCII letter using its evdev
                     # position and the parsed XKB keycode/symbol entries.
@@ -6079,38 +6079,38 @@ xkb_symbols "nekoedit-sparse" {
                     # selects level 4, Shift+Caps level 1, LevelThree level 3,
                     # Shift+LevelThree level 4, and Caps+LevelThree level 3.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1070, 0, 0, 2, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1070, 0, 0, 2, 0))
                     )
                     key_step(1072, 21, "SEPARATE type Caps selects level 4")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1074, 1, 0, 2, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1074, 1, 0, 2, 0))
                     )
                     key_step(1076, 21, "SEPARATE type Shift+Caps selects level 1")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1078, 0, 0, 0, 0))
-                        + wire_message(16, 4, struct.pack("<IIIII", 1080, 128, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1078, 0, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1080, 128, 0, 0, 0))
                     )
                     key_step(1082, 21, "SEPARATE type LevelThree selects level 3")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1084, 129, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1084, 129, 0, 0, 0))
                     )
                     key_step(1086, 21, "SEPARATE type Shift+LevelThree selects level 4")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1088, 128, 0, 2, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1088, 128, 0, 2, 0))
                     )
                     key_step(1090, 21, "SEPARATE type Caps+LevelThree selects level 3")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1092, 129, 0, 2, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1092, 129, 0, 2, 0))
                     )
                     key_step(1094, 21, "SEPARATE type Shift+Caps+LevelThree selects level 3")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1096, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1096, 0, 0, 0, 0))
                     )
                     # The normal xkbcomp output uses shorthand arrays for
                     # number-row keys. Depress Shift and verify all twelve
                     # shifted digit-row/punctuation symbols.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1100, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1100, 1, 0, 0, 0))
                     )
                     key_step(1120, 2, "XKB shifted number-row key 2")
                     key_step(1122, 3, "XKB shifted number-row key 3")
@@ -6139,15 +6139,15 @@ xkb_symbols "nekoedit-sparse" {
                     # either alone selects level 2; both select level 1.
                     key_step(1162, 82, "XKB KEYPAD Shift selects numeric level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1164, 0, 0, 16, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1164, 0, 0, 16, 0))
                     )
                     key_step(1166, 82, "XKB KEYPAD NumLock selects numeric level")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1168, 1, 0, 16, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1168, 1, 0, 16, 0))
                     )
                     key_step(1170, 82, "XKB KEYPAD Shift cancels NumLock")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1172, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1172, 0, 0, 0, 0))
                     )
                     # This name is intentionally unlike every conventional type.
                     # The exact parsed map must choose all eight XKB levels.
@@ -6155,11 +6155,11 @@ xkb_symbols "nekoedit-sparse" {
                     # alphabetic for keymap usability, and its declared Shift
                     # map must select Level2 instead of a name-derived family.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1174, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1174, 1, 0, 0, 0))
                     )
                     key_step(1175, 17, "CUSTOM_ALPHA Shift selects its declared Level2")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", 1177, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1177, 0, 0, 0, 0))
                     )
                     custom_states = (
                         (0, 0, "base"),
@@ -6186,27 +6186,27 @@ xkb_symbols "nekoedit-sparse" {
                         )
                         custom_serial += 10
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", custom_serial, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", custom_serial, 0, 0, 0, 0))
                     )
                     # The key's virtualModifiers entry plus modifier_map Mod4
                     # must produce effective V03=Mod4 and select Level2.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 2, 80, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", custom_serial + 2, 80, 0, 0, 0))
                     )
                     key_step(custom_serial + 3, 49, "implicit V03 from modifier_map selects CUSTOM_IMPLICIT Level2")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 5, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", custom_serial + 5, 0, 0, 0, 0))
                     )
                     # Alt_L is resolved indirectly to RALT (Group1/Level1);
                     # the lower keycode RCTL only has it on Level2, while
                     # AD12 has it in Group2. None { <RALT> } above must not
                     # delete the keysym-kind binding.
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 7, 8, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", custom_serial + 7, 8, 0, 0, 0))
                     )
                     key_step(custom_serial + 8, 47, "indirect Alt_L modifier_map selects CUSTOM_INDIRECT Level2")
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", custom_serial + 10, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", custom_serial + 10, 0, 0, 0, 0))
                     )
                     workflow_shortcut(1300, 31, "Ctrl+S saves XKB-translated text")
 
@@ -6337,7 +6337,7 @@ xkb_symbols "nekoedit-sparse" {
                     # The fallback interpretation therefore must not enable it.
                     before_symbol_less_cursor = child_u32("doc_cursor")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1360, 1360, 206, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1360, 1360, 206, 1))
                     )
                     wait_child_u32("keyboard_serial", 1360, "symbol-less RPT4 keydown")
                     time.sleep(0.4)
@@ -6349,7 +6349,7 @@ xkb_symbols "nekoedit-sparse" {
                             "symbol-less RPT4 unexpectedly inserted text or started repeat"
                         )
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1361, 1361, 206, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1361, 1361, 206, 0))
                         + wire_message(12, 0)
                     )
                     wait_child_u32("keyboard_serial", 1361, "symbol-less RPT4 keyup")
@@ -6510,14 +6510,14 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_click(200, 378, 2620, "focus filename search field")
                     # The fixture maps uppercase A/B to distinct 7px/4px advances.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 2628, 2628, 42, 1))
-                        + wire_message(16, 4, struct.pack("<IIIII", 2629, 1, 0, 0, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2628, 2628, 42, 1))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 2629, 1, 0, 0, 0))
                     )
                     key_step(2630, 30, "type uppercase A in font picker field")
                     key_step(2632, 48, "type uppercase B in font picker field")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 2634, 2634, 42, 0))
-                        + wire_message(16, 4, struct.pack("<IIIII", 2635, 0, 0, 0, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 2634, 2634, 42, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 2635, 0, 0, 0, 0))
                         + wire_message(12, 0)
                     )
                     name = picker_bytes("picker_name_buffer", 64)
@@ -7742,7 +7742,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     # The left edge requests a compositor-controlled interactive resize.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 60, 10 * 256, 240 * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial + 60, 10 * 256, 240 * 256))
                     )
                     if cursor_shape_supported and cursor_feedback_state["shape"] != 26:
                         expect_message(
@@ -7760,8 +7760,8 @@ xkb_symbols "nekoedit-sparse" {
                         "left-edge interactive resize request",
                     )
                     client.sendall(
-                        wire_message(15, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
-                        + wire_message(15, 1, struct.pack("<II", serial + 65, 8))
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", serial + 63, serial + 64, 0x110, 0))
+                        + wire_message(pointer_object_id, 1, struct.pack("<II", serial + 65, 8))
                     )
                     # The compositor may refocus the pointer after the interactive
                     # resize completes; the enter serial must be refreshed before
@@ -7857,7 +7857,7 @@ xkb_symbols "nekoedit-sparse" {
                         buffer_id: int, width: int, height: int,
                     ) -> None:
                         client.sendall(
-                            wire_message(15, 2, struct.pack("<Iii", click_serial, x * 256, y * 256))
+                            wire_message(pointer_object_id, 2, struct.pack("<Iii", click_serial, x * 256, y * 256))
                             + wire_message(
                                 15, 3, struct.pack("<IIII", click_serial + 1, click_serial + 2, 0x110, 1)
                             )
@@ -7882,7 +7882,7 @@ xkb_symbols "nekoedit-sparse" {
                     # has a fresh, valid enter serial before opening the picker.
                     resized_enter = serial + 150
                     client.sendall(
-                        wire_message(15, 1, struct.pack("<II", resized_enter - 1, 8))
+                        wire_message(pointer_object_id, 1, struct.pack("<II", resized_enter - 1, 8))
                         + wire_message(
                             15, 0,
                             struct.pack("<IIii", resized_enter, 8, 120 * 256, 12 * 256),
@@ -7982,7 +7982,7 @@ xkb_symbols "nekoedit-sparse" {
 
                     small_enter = serial + 190
                     client.sendall(
-                        wire_message(15, 1, struct.pack("<II", small_enter - 1, 8))
+                        wire_message(pointer_object_id, 1, struct.pack("<II", small_enter - 1, 8))
                         + wire_message(
                             15, 0,
                             struct.pack("<IIii", small_enter, 8, 120 * 256, 12 * 256),
@@ -8023,7 +8023,7 @@ xkb_symbols "nekoedit-sparse" {
                     # The app's own Close control exits cleanly; no terminal
                     # shutdown or synthetic xdg_toplevel.close is required.
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial + 230, 452 * 256, 16 * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial + 230, 452 * 256, 16 * 256))
                     )
                     if cursor_shape_supported and cursor_feedback_state["shape"] != 1:
                         expect_message(
@@ -8063,8 +8063,8 @@ xkb_symbols "nekoedit-sparse" {
                     # Keep this path-specific test independent from the full
                     # empty-document editor interaction suite below.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1800, 1800, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1801, 1801, 30, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1800, 1800, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1801, 1801, 30, 1))
                     )
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), "Ctrl+A attach"
@@ -8074,8 +8074,8 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     expect_message(client, (8, 6, b""), "Ctrl+A commit")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1802, 1802, 30, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1802, 1802, 30, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1803, 1803, 29, 0))
                         + wire_message(12, 0)
                     )
                     # Settings is a real upper-menu item. Verify the default-on
@@ -8106,8 +8106,8 @@ xkb_symbols "nekoedit-sparse" {
                     # Ctrl+S must display the confirmation without writing the
                     # destination. Escape cancels; a second Enter accepts.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1820, 1820, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1821, 1821, 31, 1))
                     )
                     workflow_redraw("Ctrl+S confirmation dialog")
                     if child_u32("save_confirm_open") != 1:
@@ -8116,8 +8116,8 @@ xkb_symbols "nekoedit-sparse" {
                         if saved_file.read() != b"I":
                             raise AssertionError("file was written before save confirmation")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1822, 1822, 31, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1823, 1823, 29, 0))
                         + wire_message(12, 0)
                     )
                     key_step(1830, 1, "cancel save confirmation with Escape")
@@ -8128,15 +8128,15 @@ xkb_symbols "nekoedit-sparse" {
                             raise AssertionError("cancelled save modified the destination")
 
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1840, 1840, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1841, 1841, 31, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1840, 1840, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1841, 1841, 31, 1))
                     )
                     workflow_redraw("reopen Ctrl+S confirmation")
                     if child_u32("save_confirm_open") != 1:
                         raise AssertionError("second Ctrl+S did not reopen confirmation")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1842, 1842, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1843, 1843, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1842, 1842, 31, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1843, 1843, 29, 0))
                         + wire_message(12, 0)
                     )
                     key_step(1850, 28, "accept save confirmation with Enter")
@@ -8150,13 +8150,13 @@ xkb_symbols "nekoedit-sparse" {
                     # the keyboard shortcuts used above.
                     key_step(1860, 30, "append a after the accepted save")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1870, 1870, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1871, 1871, 31, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1870, 1870, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1871, 1871, 31, 1))
                     )
                     workflow_redraw("open save dialog for pointer Cancel")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1872, 1872, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1873, 1873, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1872, 1872, 31, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1873, 1873, 29, 0))
                         + wire_message(12, 0)
                     )
                     workflow_click(484, 272, 1880, "pointer Cancel save dialog")
@@ -8167,13 +8167,13 @@ xkb_symbols "nekoedit-sparse" {
                             raise AssertionError("pointer Cancel modified the destination")
 
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1890, 1890, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1891, 1891, 31, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1890, 1890, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1891, 1891, 31, 1))
                     )
                     workflow_redraw("open save dialog for pointer Save")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1892, 1892, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1893, 1893, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1892, 1892, 31, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1893, 1893, 29, 0))
                         + wire_message(12, 0)
                     )
                     workflow_click(316, 272, 1900, "pointer Save save dialog")
@@ -8220,13 +8220,13 @@ xkb_symbols "nekoedit-sparse" {
                             f"gap-buffer growth did not preserve prefix/suffix bytes: {after_growth!r}"
                         )
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1250, 1250, 29, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1251, 1251, 31, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1250, 1250, 29, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1251, 1251, 31, 1))
                     )
                     workflow_redraw("Ctrl+S after dynamic document growth")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1252, 1252, 31, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1253, 1253, 29, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1252, 1252, 31, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1253, 1253, 29, 0))
                         + wire_message(12, 0)
                     )
                     if child_u32("save_confirm_open") == 1:
@@ -8249,13 +8249,13 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1258, 14, "Backspace deletes x from the suffix")
                     key_step(1260, 111, "Delete removes B after the gap")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1262, 1262, 42, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1263, 1263, 105, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1262, 1262, 42, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1263, 1263, 105, 1))
                     )
                     workflow_redraw("Shift+Left selects y across the gap")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1264, 1264, 105, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1265, 1265, 42, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1264, 1264, 105, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1265, 1265, 42, 0))
                         + wire_message(12, 0)
                     )
                     key_step(1266, 14, "Backspace removes the selected y")
@@ -8276,13 +8276,13 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1306, 106, "Right over four-byte UTF-8 character")
                     # Select the complete four-byte character with Shift+Left.
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1308, 1308, 42, 1))
-                        + wire_message(16, 3, struct.pack("<IIII", 1309, 1309, 105, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1308, 1308, 42, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1309, 1309, 105, 1))
                     )
                     workflow_redraw("Shift+Left selects complete four-byte character")
                     client.sendall(
-                        wire_message(16, 3, struct.pack("<IIII", 1310, 1310, 105, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", 1311, 1311, 42, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1310, 1310, 105, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1311, 1311, 42, 0))
                         + wire_message(12, 0)
                     )
                     key_step(1312, 14, "Backspace removes selected four-byte character")
@@ -8360,9 +8360,9 @@ xkb_symbols "nekoedit-sparse" {
                 # Shift state comes from wl_keyboard.modifiers rather than
                 # depending only on the physical Shift key event.
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1011, 1011, 42, 1))
-                    + wire_message(16, 4, struct.pack("<IIIII", 1012, 1, 0, 0, 0))
-                    + wire_message(16, 3, struct.pack("<IIII", 1013, 1013, 2, 1))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1011, 1011, 42, 1))
+                    + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1012, 1, 0, 0, 0))
+                    + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1013, 1013, 2, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "shifted key attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "shifted key damage")
@@ -8377,9 +8377,9 @@ xkb_symbols "nekoedit-sparse" {
                 # this key-up leaves it held and appends repeat characters to
                 # every later pointer/selection assertion.
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1014, 1014, 2, 0))
-                    + wire_message(16, 3, struct.pack("<IIII", 1015, 1015, 42, 0))
-                    + wire_message(16, 4, struct.pack("<IIIII", 1016, 0, 0, 0, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1014, 1014, 2, 0))
+                    + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1015, 1015, 42, 0))
+                    + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1016, 0, 0, 0, 0))
                     + wire_message(12, 0)
                 )
 
@@ -8415,8 +8415,8 @@ xkb_symbols "nekoedit-sparse" {
 
                 def key_step_shift(serial: int, code: int, label: str) -> None:
                     client.sendall(
-                        wire_message(16, 4, struct.pack("<IIIII", serial, 1, 0, 0, 0))
-                        + wire_message(16, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 1))
+                        wire_message(keyboard_object_id, 4, struct.pack("<IIIII", serial, 1, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 1))
                     )
                     expect_message(
                         client, (8, 1, struct.pack("<III", 12, 0, 0)), f"{label} attach"
@@ -8439,7 +8439,7 @@ xkb_symbols "nekoedit-sparse" {
                             16, 3, struct.pack("<IIII", serial + 2, serial + 2, code, 0)
                         )
                         + wire_message(12, 0)
-                        + wire_message(16, 4, struct.pack("<IIIII", serial + 3, 0, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", serial + 3, 0, 0, 0, 0))
                     )
 
                 pointer_click_pixels = bytearray(len(pixels))
@@ -8450,7 +8450,7 @@ xkb_symbols "nekoedit-sparse" {
                     # another pointer-driven frame.
                     wait_buffer_idle(f"{label} waits for prior buffer release")
                     client.sendall(
-                        wire_message(15, 2, struct.pack("<Iii", serial, x * 256, y * 256))
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", serial, x * 256, y * 256))
                         + wire_message(
                             15, 3, struct.pack("<IIII", serial + 1, serial + 2, 0x110, 1)
                         )
@@ -8707,7 +8707,7 @@ xkb_symbols "nekoedit-sparse" {
                 # the buffer, so a queued repeat redraw cannot overwrite it.
                 repeat_started = time.monotonic()
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1200, 1200, 105, 1))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1200, 1200, 105, 1))
                 )
                 expect_redraw("initial held Left")
                 caret = struct.unpack_from("<I", pixels, 104 * 800 * 4 + 24 * 4)[0]
@@ -8733,14 +8733,14 @@ xkb_symbols "nekoedit-sparse" {
                 if caret != 0xFFFFFFFF:
                     raise AssertionError("continued Left repeat did not cross to the previous line")
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1201, 1201, 105, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1201, 1201, 105, 0))
                     + wire_message(12, 0)
                 )
 
                 # Backspace is repeatable too: after its immediate deletion,
                 # the held key should delete the preceding character again.
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
                 )
                 expect_redraw("initial held Backspace")
                 first_line_b = struct.unpack_from(
@@ -8757,13 +8757,13 @@ xkb_symbols "nekoedit-sparse" {
                 if removed_b != 0xFF252A33:
                     raise AssertionError("held Backspace did not repeat after its initial delay")
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
                     + wire_message(12, 0)
                 )
 
                 # Delete-forward uses the same delayed repeat path.
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1220, 1220, 111, 1))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1220, 1220, 111, 1))
                 )
                 expect_redraw("initial held Delete")
                 first_cell = struct.unpack_from(
@@ -8780,7 +8780,7 @@ xkb_symbols "nekoedit-sparse" {
                 if next_glyph != 0xFF252A33:
                     raise AssertionError("held Delete did not repeat after its initial delay")
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
                     + wire_message(12, 0)
                 )
 
@@ -8905,9 +8905,9 @@ xkb_symbols "nekoedit-sparse" {
                 # Ctrl+A selects the entire document, including content above
                 # the scrolled viewport, while keeping the final caret visible.
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1700, 1700, 29, 1))
-                    + wire_message(16, 4, struct.pack("<IIIII", 1701, 4, 0, 0, 0))
-                    + wire_message(16, 3, struct.pack("<IIII", 1702, 1702, 30, 1))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1700, 1700, 29, 1))
+                    + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1701, 4, 0, 0, 0))
+                    + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1702, 1702, 30, 1))
                 )
                 expect_redraw("Ctrl+A select all")
                 selection_pixel = struct.unpack_from(
@@ -8921,9 +8921,9 @@ xkb_symbols "nekoedit-sparse" {
                 observations.append("Ctrl+A selected the complete document and rendered its visible selection")
                 client.sendall(
                     wire_message(12, 0)
-                    + wire_message(16, 3, struct.pack("<IIII", 1703, 1703, 30, 0))
-                    + wire_message(16, 3, struct.pack("<IIII", 1704, 1704, 29, 0))
-                    + wire_message(16, 4, struct.pack("<IIIII", 1705, 0, 0, 0, 0))
+                    + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1703, 1703, 30, 0))
+                    + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1704, 1704, 29, 0))
+                    + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 1705, 0, 0, 0, 0))
                 )
 
                 def caret_position(expected: tuple[int, int] | None = None) -> tuple[int, int]:
@@ -8951,7 +8951,7 @@ xkb_symbols "nekoedit-sparse" {
                 # A held printable key must insert the initial character and
                 # then additional characters at the compositor's configured rate.
                 before = caret_position()
-                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1710, 1710, 30, 1)))
+                client.sendall(wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1710, 1710, 30, 1)))
                 expect_redraw("initial held printable key")
                 after_press = caret_position()
                 # Ctrl+A left the complete document selected, so this first
@@ -8972,7 +8972,7 @@ xkb_symbols "nekoedit-sparse" {
                 if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("repeated printable-key test did not render its first glyph")
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
                     + wire_message(12, 0)
                 )
                 # Do not start another held key until the event loop has
@@ -8982,7 +8982,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 # Enter repeats as well; each timer tick advances one visual row.
                 before_enter = caret_position()
-                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1720, 1720, 28, 1)))
+                client.sendall(wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1720, 1720, 28, 1)))
                 expect_redraw("initial held Enter")
                 after_enter = caret_position((16, before_enter[1] + 12))
                 if after_enter != (16, before_enter[1] + 12):
@@ -9005,7 +9005,7 @@ xkb_symbols "nekoedit-sparse" {
                     "first repeated Enter insertion",
                 )
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1721, 1721, 28, 0))
                 )
                 wait_child_u32(
                     "repeat_keycode", 0, "held Enter release after first repeat"
@@ -9024,7 +9024,7 @@ xkb_symbols "nekoedit-sparse" {
                 # Tab inserts four spaces per action, both on initial press and repeat.
                 before_tab = caret_position()
                 before_tab_cursor = child_u32("doc_cursor")
-                client.sendall(wire_message(16, 3, struct.pack("<IIII", 1730, 1730, 15, 1)))
+                client.sendall(wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1730, 1730, 15, 1)))
                 # A delayed redraw from the preceding held Enter can otherwise
                 # satisfy expect_redraw() before this Tab event is dispatched.
                 # Synchronize on both its repeat state and actual document edit.
@@ -9048,7 +9048,7 @@ xkb_symbols "nekoedit-sparse" {
                     "first repeated Tab insertion",
                 )
                 client.sendall(
-                    wire_message(16, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
+                    wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1731, 1731, 15, 0))
                 )
                 wait_child_u32(
                     "repeat_keycode", 0, "held Tab release after first repeat"
