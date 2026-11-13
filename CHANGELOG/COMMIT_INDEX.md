@@ -1,3 +1,12 @@
+## 2026-11-13 — retain keyboard keymaps through fractional-scale startup sync (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [9af696716b57dc6089b5b08d80c3ae0ce1f1b003](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003) | fix: retain keyboard keymaps during fractional startup sync |
+
+Actions #899 showed the keyboard proxy was valid and keyboard input reached the client, but no keymap event entered the keymap handler. The follow-up fix dispatches a matching keymap during fractional_scale_startup's blocking display sync. The mock injects an FD-backed NO_KEYMAP event in that second sync and validates the later full XKB map. Live Mutter validation is pending.
+
+---
 ## 2026-11-13 — retain keyboard keymaps through the startup seat roundtrip (CI pending)
 
 | Commit | Subject |

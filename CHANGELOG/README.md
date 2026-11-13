@@ -1,12 +1,14 @@
-## Latest handoff (2026-11-13 — retain keymaps during startup seat sync, CI pending)
+## Latest handoff (2026-11-13 — retain keymaps during fractional-scale startup sync, CI pending)
 
-Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. The current source fix is [789f29b](https://github.com/GraderGamer2/NekoEdit/commit/789f29b7a889fc0d306e1a815617b6b12b576bc0). The supporting startup-event fixture and processed-keymap counter are in [5de2933](https://github.com/GraderGamer2/NekoEdit/commit/5de293344f6fe8d2c451667c87e9c1e4aa2f7fc8); the original test/dispatch instrumentation is in [c262311](https://github.com/GraderGamer2/NekoEdit/commit/c2623115584980a90d1ff18430d90ccca1accaeb).
+Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. Latest source/test commit: [9af6967](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). CI is pending.
 
-Actions #898 failed during assembly because a test-only .bss sentinel was initialized to -1. It has been corrected to zero-initialized storage. No app artifact was produced by that run. Actions #897 passed all pre-Mutter stages but the live GNOME Shell test observed keyboard focus with no completed XKB keymap parse. The exact live cause remains unconfirmed.
+Actions #899 passed every pre-Mutter stage, but its live Compose canary failed. The read-only probe confirmed the seat advertised both capabilities, the keyboard proxy was 15 and pointer proxy 25, and keyboard events reached the normal dispatcher. However, zero keymap events reached the keymap handler, leaving XKB/Compose tables empty.
 
-The startup seat loop now checks buffer release, pointer, then keyboard keymap events in a one-way chain before it tests the sync callback. It uses the same shared FD-validating keymap updater as the main event loop, and unmatched events proceed to sync handling rather than cycling between object checks. The Wayland mock injects a NO_KEYMAP event with its descriptor after get_keyboard but before sync.done, followed later by the full XKB map; the test waits for both updates to finish. This specifically covers the ordering window and FD cleanup. It does not yet establish that this was Mutter's live failure.
+The missing path was a second blocking startup sync: `fractional_scale_startup()` waits for `wl_display.sync` after the initial seat roundtrip, but its loop previously handled only fractional-scale, ping, and registry events. A `wl_keyboard.keymap` event arriving during that wait was discarded. The new source fix routes it through the existing descriptor-validating `keyboard_keymap_dispatch` before checking the sync callback.
 
-Next: inspect the single CI run from this assembled head. The real compositor probe must show the keymap parsed and Compose/dead-key states entering before we call the input regression resolved. Keep fractional-scaling refinements and the release-tracked multi-buffer work queued until the keyboard path is stable.
+The Wayland mock now combines its full XKB parser/input scenario with fractional-scale startup and injects an FD-backed `NO_KEYMAP` event during that second sync. The later complete XKBv1 fixture still replaces it and is checked through the parser's live state. This is deterministic regression coverage; the real Mutter run is still needed to validate the diagnosis.
+
+Next: inspect the one CI run for this head. Do not resume optimization or the multi-buffer renderer change until the live Mutter keymap/Compose test passes. Then continue with fractional scaling and a release-tracked buffer set.
 
 
 ---
