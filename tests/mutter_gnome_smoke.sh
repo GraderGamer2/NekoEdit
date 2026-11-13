@@ -402,15 +402,6 @@ send_keysym() {
     send_key "$keysym" false
     sleep 0.05
 }
-send_keycode() {
-    local keycode="$1"
-    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$DBUS_INTERFACE.SendKeycode" "$keycode" true >/dev/null
-    sleep 0.05
-    gdbus call --session --dest "$BUS_NAME" --object-path "$OBJECT_PATH" \
-        --method "$DBUS_INTERFACE.SendKeycode" "$keycode" false >/dev/null
-    sleep 0.05
-}
 send_shortcut() {
     local modifier="$1"
     local keysym="$2"
@@ -470,9 +461,11 @@ fi
 
 # Replace the canary with the Compose and locale-specific two-dead-key chain.
 send_shortcut 65507 97
-# compose:ralt maps the physical Right Alt key (evdev 100) to Multi_key.
-# Inject the physical key so Mutter uses the active us(intl) XKB mapping.
-send_keycode 100
+# Inject Multi_key directly so the headless Mutter canary tests NekoEdit's
+# Compose state machine independently of virtual-keyboard keycode translation.
+# The preceding native XKB test separately verifies that compose:ralt maps Linux
+# evdev KEY_RIGHTALT (100) to XKB keycode 108 / Multi_key in the us(intl) map.
+send_keysym 65312
 send_keysym 46
 send_keysym 46
 send_keysym 65104

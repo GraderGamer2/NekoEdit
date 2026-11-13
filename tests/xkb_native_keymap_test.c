@@ -190,24 +190,28 @@ main(void)
     failed |= check_symbol(keymap, "period", XKB_KEY_period, (uint32_t)'.');
     failed |= check_symbol(keymap, "A", XKB_KEY_A, (uint32_t)'A');
 
-    const xkb_keycode_t ralt_keycode = 108u;
+    /* Linux evdev keycodes are offset by eight in the XKB keymap. */
+    const uint32_t ralt_evdev_keycode = 100u; /* KEY_RIGHTALT */
+    const xkb_keycode_t ralt_keycode =
+        (xkb_keycode_t)(ralt_evdev_keycode + 8u);
     const xkb_keysym_t *ralt_symbols = NULL;
     const int ralt_symbol_count =
         xkb_keymap_key_get_syms_by_level(keymap, ralt_keycode, 0, 0, &ralt_symbols);
     if (ralt_symbol_count != 1 || ralt_symbols == NULL ||
         ralt_symbols[0] != XKB_KEY_Multi_key ||
         xkb_unicode_levels[(size_t)ralt_keycode * 32u] != 0x110007u ||
-        xkb_key_is_level_three_modifier(100u) != 0) {
+        xkb_key_is_level_three_modifier(ralt_evdev_keycode) != 0) {
         fprintf(stderr,
-                "compose:ralt mapping mismatch: symbols=%d first=0x%08x parsed=0x%08x level3=%d\n",
-                ralt_symbol_count,
+                "compose:ralt mapping mismatch: evdev=%u xkb=%u symbols=%d first=0x%08x parsed=0x%08x level3=%d\n",
+                ralt_evdev_keycode, ralt_keycode, ralt_symbol_count,
                 (ralt_symbol_count > 0 && ralt_symbols != NULL)
                     ? (unsigned)ralt_symbols[0] : 0u,
                 (unsigned)xkb_unicode_levels[(size_t)ralt_keycode * 32u],
-                xkb_key_is_level_three_modifier(100u));
+                xkb_key_is_level_three_modifier(ralt_evdev_keycode));
         failed = 1;
     } else {
-        puts("verified Right Alt resolves as Multi_key, not LevelThree");
+        printf("verified evdev Right Alt %u -> XKB keycode %u -> Multi_key (not LevelThree)\n",
+               ralt_evdev_keycode, ralt_keycode);
     }
 
     if (failed == 0)
