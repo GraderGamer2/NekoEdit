@@ -627,8 +627,10 @@ def run(
                 if os.fstat(shm_fd).st_size != expected_pool_size:
                     raise AssertionError("memfd size does not match the two-slot shared buffer pool")
                 pixels = mmap.mmap(shm_fd, expected_pool_size, access=mmap.ACCESS_READ)
-                active_buffer = {"id": client_buffer_id, "offset": 0}
-                known_buffer_offsets = {client_buffer_id: 0}
+                # The first wl_buffer uses fixed protocol object ID 12.
+                # client_buffer_id is assigned later in specialized test branches.
+                active_buffer = {"id": 12, "offset": 0}
+                known_buffer_offsets = {12: 0}
 
                 def rendered_color_present(
                     x: int, y: int, width: int, height: int, stride: int, color: int
