@@ -1,8 +1,10 @@
-## 2026-11-13 — track compositor-preferred surface scale and transform (CI pending)
+## 2026-11-13 — track compositor-preferred surface scale and transform (CI PASS #868)
 
 Bind `wl_compositor` at up to v6 instead of unconditionally at v1. This gives the created `wl_surface` the version-6 `preferred_buffer_scale` and `preferred_buffer_transform` events while preserving v1 behavior on older compositors. Track both preferences on the surface, defaulting to scale 1 and normal transform; validate positive scale values and the transform enum. The output integration mock exercises the compositor preference independently of per-output scale transactions.
 
-This is selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`. CI is pending.
+Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) passed all 15 workflow steps: freestanding build/ELF verification, CLI and complete Wayland mock, native `us(intl)` parser, X.Org importer, Compose locale pack, nested GNOME Shell 46 / Mutter integration, and both artifact uploads. The mock verified compositor-v6 preferred scale/transform transitions alongside per-output v2/v3 scale transactions and hotplug. Mutter also verified live IBus Simple preedit, Backspace cancellation, U+00E9 commit, and exact UTF-8 save.
+
+This remains selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`.
 
 ## 2026-11-13 — Wayland output discovery, atomic scale cache and hotplug (CI PASS #867)
 
@@ -84,7 +86,7 @@ The Wayland mock adds dedicated hotplug scenarios for both version families. It 
 
 Actions [Build and test #856](https://github.com/GraderGamer2/NekoEdit/actions/runs/43182358544) completed successfully. All 15 workflow steps passed: freestanding x86-64 build and ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, real `us(intl)` keymap validation, X.Org importer verification, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`.
+The native Mutter virtual keyboard canary also passed: Right Alt `Multi_key`, the two-mark dead-key chain, and confirmed Ctrl+S save preserved exactly U+2026 U+1EA6 (`…Ầ`). The live IBus Simple phase passed end to end through GNOME Shell, Mutter 46.2, and NekoEdit's optional text-input-v3 client: the physical apostrophe generated a visible `dead_acute` preedit; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and the normal Ctrl+S / Enter confirmation saved the exact UTF-8 bytes `C3 A9`. Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) independently re-ran this canary successfully in the complete 15-step workflow.
 
 This validates the narrowly gated Mutter 46.0–46.2 compatibility cases: a multibyte preedit's legacy character-index anchor is converted only when it resolves to the same validated cursor byte offset, and the nullable empty-preedit `(0, 1)` anchor is normalized to `(0, 0)`. The mock tests both cases while keeping unrelated malformed UTF-8 boundaries rejected. No IBus, D-Bus, GNOME, or other runtime dependency was added to NekoEdit.
 

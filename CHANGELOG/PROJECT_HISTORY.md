@@ -1,8 +1,14 @@
-## 2026-11-13 — track compositor-preferred surface scale and transform (CI pending)
+## 2026-11-13 — live IBus Simple preedit, cancellation, commit, and save reverified (CI PASS #868)
+
+Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) passed the complete 15-step workflow, including nested GNOME Shell 46 / Mutter integration. The live IBus Simple phase produced visible `dead_acute` preedit from the apostrophe key; Backspace cancelled it without changing document bytes; a fresh apostrophe followed by `e` committed U+00E9 (`é`); and confirmed Ctrl+S / Enter saved exact UTF-8 bytes `C3 A9`. The native Mutter physical-XKB canary also passed Right Alt `Multi_key`, the two-mark dead-key chain, and save. Fcitx and physical keyboard hardware remain separately unverified.
+
+## 2026-11-13 — track compositor-preferred surface scale and transform (CI PASS #868)
 
 Bind `wl_compositor` at up to v6 instead of unconditionally at v1. This gives the created `wl_surface` the version-6 `preferred_buffer_scale` and `preferred_buffer_transform` events while preserving v1 behavior on older compositors. Track both preferences on the surface, defaulting to scale 1 and normal transform; validate positive scale values and the transform enum. The output integration mock exercises the compositor preference independently of per-output scale transactions.
 
-This is selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`. CI is pending.
+Actions [Build and test #868](https://github.com/GraderGamer2/NekoEdit/actions/runs/43342773468) passed all 15 workflow steps: freestanding build/ELF verification, CLI and complete Wayland mock, native `us(intl)` parser, X.Org importer, Compose locale pack, nested GNOME Shell 46 / Mutter integration, and both artifact uploads. The mock verified compositor-v6 preferred scale/transform transitions alongside per-output v2/v3 scale transactions and hotplug. Mutter also verified live IBus Simple preedit, Backspace cancellation, U+00E9 commit, and exact UTF-8 save.
+
+This remains selection metadata only: no buffer-scale request or pixel-dimension change is made. Logical/physical renderer separation and a correctly enlarged backing store must precede `wl_surface.set_buffer_scale`.
 
 ## 2026-11-13 — Wayland output discovery, atomic scale cache and hotplug (CI PASS #867)
 
