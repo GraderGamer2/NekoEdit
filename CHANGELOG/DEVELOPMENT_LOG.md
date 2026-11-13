@@ -1,29 +1,3 @@
-## 2026-11-13 — add identity-transform glyph blit fast path (CI PASS #913)
-
-Actions [Build and test #913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps. The new fast path was built into the freestanding executable and validated by the complete Wayland protocol mock and nested GNOME Shell/Mutter integration, alongside the native XKB, importer, Compose, CLI, ELF, and artifact checks.
-
-Inspection of `font_draw_codepoint_size()` found that every non-transparent pixel in a glyph mask passed through `map_surface_pixel_to_buffer()`, even when `transform == 0` and the usual surface-to-buffer mapping was the identity. The renderer now takes a dedicated branch for transform zero:
-- Computes the effective clipping width and height once from the backing-buffer and logical-surface dimensions.
-- Computes the destination row pointer once per glyph row.
-- Clips each source row and column directly, then applies the existing coverage blend without per-pixel transform dispatch.
-- Returns after the identity draw; all nonzero transforms retain the previous generic mapping loop.
-
-The generic implementation is also retained as a benchmark-only build variant through `FONT_DRAW_GENERIC_REFERENCE`. `make bench-renderer` now builds a three-way comparison: pre-hash linear LRU + generic mapper, hash cache + generic mapper, and hash cache + identity fast path. The comparison script runs each benchmark, parses the seven-sample medians, and rejects the result if the framebuffer checksums differ.
-
-| CI #913 warm-draw variant | Median |
-|---|---:|
-| Linear LRU + generic transform | 258.1 ns/draw |
-| Hash cache + generic transform | 186.5 ns/draw |
-| Hash cache + identity fast path | 166.7 ns/draw |
-
-The identity path reduced the measured warm glyph-draw median by 10.6% versus the hash-cache/generic-mapper variant. The combined reduction relative to the original linear-cache reference was 35.4%. All three checksums matched at `35084948275808`. Cold rasterization medians differed slightly between runs, but rasterization was not modified and that difference is treated as run variance rather than an optimization claim.
-
-Scope remains important: the timed loop uses deterministic synthetic eight-point outlines and measures glyph-level cache lookup plus pixel blending. It does not measure real-font contour diversity, text-layout/index work, complete `render_surface()`, or compositor scheduling. The next milestone should add reproducible document/frame workloads and profile the assembly rectangle and indexed-layout paths before further changes.
-
-Implementation commit: [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388).
-
----
-
 ## 2026-11-13 — measure and optimize warm glyph-cache lookup (CI PASS #912)
 
 Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed all functional workflow stages: freestanding x86-64 build/ELF inspection, CLI smoke tests, paired rasterizer benchmark, full Wayland protocol mock including two-slot SHM ownership and XKB repeat-policy coverage, native `us(intl)` parser test, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter Wayland integration, and artifact uploads.

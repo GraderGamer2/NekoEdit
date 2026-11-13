@@ -1,30 +1,3 @@
-## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
-
-Actions [Build and test #913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321) passed all 16 workflow steps on implementation commit [210bd7dcab51](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388). Validation included the freestanding x86-64 build and ELF checks, CLI/install tests, three-way renderer benchmark, complete Wayland protocol mock, native `us(intl)` XKB parser, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
-
-The normal Wayland identity-transform path in `font_draw_codepoint_size()` now clips the glyph against the effective surface bounds once and writes mask rows directly. This removes the general eight-way coordinate-transform dispatch from each covered pixel on the common unrotated path. Rotated and reflected buffers continue to use the unchanged generic coordinate mapper. The glyph cache and alpha-blend formula are unchanged.
-
-The benchmark now builds three variants from the same source and flags, executes seven samples of 50,000 warm draws per variant, and requires identical framebuffer checksums before reporting timing:
-
-| Synthetic warm glyph-draw median | Median |
-|---|---:|
-| Linear LRU + generic transform (pre-hash reference) | 258.1 ns/draw |
-| Hash-indexed cache + generic transform | 186.5 ns/draw |
-| Hash-indexed cache + identity fast path (current renderer) | 166.7 ns/draw |
-
-The identity blit path measured 10.6% lower warm-draw time than the hash-cache build using the old generic mapper. Across both optimizations, the current path measured 35.4% lower warm-draw time than the pre-hash linear reference. All variants produced the same framebuffer checksum (`35084948275808`). Cold rasterization medians were 13,639.1, 13,641.9, and 13,124.1 ns/glyph respectively; the rasterization algorithm was not changed, so this small spread is not treated as a measured cold-path gain.
-
-These figures are a deterministic synthetic eight-point-outline microbenchmark, not a whole-application speedup. They exclude document layout, full-frame `render_surface()`, Wayland/compositor scheduling, and real installed-font contour diversity. The next performance step is to measure representative document redraw and typing workloads, plus the assembly rectangle and layout/index paths, before selecting another hot-path optimization.
-
-Artifact links from #913:
-- Linux x86-64 executable: [artifact 14044564725](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044564725), 144,327 bytes.
-- Compose locale packs: [artifact 14044674657](https://github.com/GraderGamer2/NekoEdit/actions/runs/43441882321/artifacts/14044674657), 120,536 bytes.
-Both artifacts expire on 2026-11-14 at 14:23:13 UTC (21:23:13 WIB).
-
-Implementation: [210bd7dcab519146370a8c93315e862f5e8fb388](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388).
-
----
-
 ## 2026-11-13 — compare linear and hash-indexed glyph-cache hits (CI PASS #912)
 
 Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the complete build and validation workflow on Ubuntu 24.04, including both benchmark variants, the freestanding ELF and CLI checks, the full multi-buffer Wayland protocol matrix, executable inspection, native `us(intl)` XKB parser validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
