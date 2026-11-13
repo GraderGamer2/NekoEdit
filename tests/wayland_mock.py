@@ -9448,6 +9448,17 @@ xkb_symbols "nekoedit-sparse" {
                 expect_redraw("initial held Enter")
                 after_enter = caret_position((16, before_enter[1] + 12))
                 if after_enter != (16, before_enter[1] + 12):
+                    failure_state = read_document_state()
+                    caret_candidates = [
+                        (x, y)
+                        for y in range(92, 460 - 9, 12)
+                        for x in range(16, 800 - 1, 8)
+                        if all(
+                            struct.unpack_from("<I", pixels, (y + dy) * 800 * 4 + x * 4)[0]
+                            == 0xFFFFFFFF
+                            for dy in range(9)
+                        )
+                    ]
                     raise AssertionError(
                         "initial Enter did not move to the next row: "
                         f"before={before_enter}, after={after_enter}, "
@@ -9457,7 +9468,13 @@ xkb_symbols "nekoedit-sparse" {
                         f"ctrl_down={child_u32('ctrl_down')}, "
                         f"text_input_object={child_u32('text_input_object')}, "
                         f"text_input_enabled={child_u32('text_input_enabled')}, "
-                        f"doc_bytes={read_document_state()['doc_contents'][:24]!r}"
+                        f"doc_gap=({failure_state.get('doc_gap_start')},"
+                        f"{failure_state.get('doc_gap_end')}), "
+                        f"line_index_valid={failure_state.get('doc_line_index_valid')}, "
+                        f"line_count={failure_state.get('doc_line_count')}, "
+                        f"line_records={failure_state.get('doc_line_index_records')}, "
+                        f"caret_candidates={caret_candidates}, "
+                        f"doc_bytes={failure_state['doc_contents'][:24]!r}"
                     )
                 after_enter_cursor = child_u32("doc_cursor")
                 client.sendall(buffer_release_message())
