@@ -4867,7 +4867,7 @@ output_pending_valid:     .zero 32
 output_surface_entered:   .zero 32
 surface_output_count:     .long 0
 surface_output_max_scale: .long 0
-surface_effective_buffer_scale: .long 1
+surface_effective_buffer_scale: .zero 4
 .global surface_preferred_buffer_scale, surface_preferred_scale_seen
 .global surface_preferred_buffer_transform, surface_preferred_transform_seen
 surface_preferred_buffer_scale:     .long 0
