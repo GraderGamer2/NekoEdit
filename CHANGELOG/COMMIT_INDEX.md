@@ -1,3 +1,12 @@
+## 2026-11-13 — isolate fractional-sync keymap regression fixture (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [79e814a30163944fa5cabfd12f682c7aa4de5fd3](https://github.com/GraderGamer2/NekoEdit/commit/79e814a30163944fa5cabfd12f682c7aa4de5fd3) | test: isolate fractional keymap startup regression |
+
+Actions #900 showed that combining the fractional-scale keymap scenario with the full XKB shortcut suite triggered an unrelated `XKB preserve[Control]`/Ctrl+A assertion. The new dedicated test now verifies the two startup NO_KEYMAP dispatches and descriptor handling independently; the existing complete XKB suite remains separate and unchanged. CI is pending.
+
+---
 ## 2026-11-13 — retain keyboard keymaps through fractional-scale startup sync (CI pending)
 
 | Commit | Subject |

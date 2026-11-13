@@ -1,14 +1,12 @@
-## Latest handoff (2026-11-13 — retain keymaps during fractional-scale startup sync, CI pending)
+## Latest handoff (2026-11-13 — isolate fractional-sync keymap regression, CI pending)
 
-Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. Latest source/test commit: [9af6967](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). CI is pending.
+Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. Latest test-fixture commit: [79e814a](https://github.com/GraderGamer2/NekoEdit/commit/79e814a30163944fa5cabfd12f682c7aa4de5fd3). The source dispatcher change is [9af6967](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). CI is pending.
 
-Actions #899 passed every pre-Mutter stage, but its live Compose canary failed. The read-only probe confirmed the seat advertised both capabilities, the keyboard proxy was 15 and pointer proxy 25, and keyboard events reached the normal dispatcher. However, zero keymap events reached the keymap handler, leaving XKB/Compose tables empty.
+Actions #899 showed that keyboard focus and ordinary key events were working, but no keymap event reached the parser. The missing path was the second blocking sync in `fractional_scale_startup()`: it waited for `wl_display.sync` after the initial seat roundtrip but ignored `wl_keyboard.keymap`. The source now routes a matching event through `keyboard_keymap_dispatch` before checking the sync callback.
 
-The missing path was a second blocking startup sync: `fractional_scale_startup()` waits for `wl_display.sync` after the initial seat roundtrip, but its loop previously handled only fractional-scale, ping, and registry events. A `wl_keyboard.keymap` event arriving during that wait was discarded. The new source fix routes it through the existing descriptor-validating `keyboard_keymap_dispatch` before checking the sync callback.
+Actions #900 passed build and CLI tests but the Wayland mock failed in a newly combined test: running the whole XKB shortcut suite together with fractional scaling caused the unrelated `XKB preserve[Control]`/Ctrl+A assertion to fail. The new fixture splits the two concerns. `fractional_sync_keymap_test` injects descriptor-bearing `NO_KEYMAP` events during both startup syncs and verifies exactly two successful dispatches, parser fallback state, and no retained mapping. The existing full XKB layout/shortcut suite is left unchanged.
 
-The Wayland mock now combines its full XKB parser/input scenario with fractional-scale startup and injects an FD-backed `NO_KEYMAP` event during that second sync. The later complete XKBv1 fixture still replaces it and is checked through the parser's live state. This is deterministic regression coverage; the real Mutter run is still needed to validate the diagnosis.
-
-Next: inspect the one CI run for this head. Do not resume optimization or the multi-buffer renderer change until the live Mutter keymap/Compose test passes. Then continue with fractional scaling and a release-tracked buffer set.
+Next: inspect the single CI run for this revised fixture. If the mock passes, let Actions proceed to the live GNOME/Mutter canary and inspect its keymap/Compose probe. Do not return to optimization or the release-tracked multi-buffer renderer until the real input path passes.
 
 
 ---
