@@ -1,3 +1,12 @@
+## 2026-11-13 — trace wl_keyboard keymap event dispatch (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [2fbd4a2bd341dac3147a53236956d987b96f42bb](https://github.com/GraderGamer2/NekoEdit/commit/2fbd4a2bd341dac3147a53236956d987b96f42bb) | test: trace wl_keyboard proxy event dispatch |
+
+Adds test-only inspection of bound input proxy IDs and counters for events matched to wl_keyboard and entry into its keymap handler. Actions #897 identified that the live keymap parser had not completed, but did not yet tell whether the event was missing, misrouted, or intercepted. The next run is diagnostic, not a claimed fix.
+
+---
 ## 2026-11-13 — inspect Mutter-delivered XKB map and Compose dispatch (CI pending)
 
 | Commit | Subject |
