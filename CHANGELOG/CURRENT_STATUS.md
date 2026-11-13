@@ -1,3 +1,9 @@
+## 2026-11-13 — make IME protocol tests slot-aware (CI pending)
+
+The Wayland mock now tracks each `wl_buffer.create_buffer` object ID and its SHM offset, accepts either slot in `wl_surface.attach`, releases the buffer most recently attached, and checks rendered pixels in that slot's mapped region. This updates the text-input-v3 and keyboard-hotplug IME scenarios for the renderer's new, valid second-slot behavior; it does not weaken the compositor ownership assertions. The first CI run had passed the freestanding build and new buffer-pool scenario but exposed a stale fixed-ID assumption in the IME fixture. Revalidation is pending.
+
+---
+
 ## 2026-11-13 — add lazily allocated release-tracked SHM buffer slot (CI pending)
 
 The software renderer now reserves two maximum-size regions in one memfd-backed `wl_shm_pool`, while creating only the first `wl_buffer` at startup. If a frame callback completes while that buffer is still compositor-owned, the next redraw lazily creates a second buffer at the second region's offset and renders into its own mapping. Each slot has an independent busy flag; the aggregate count is flow-control state, not a boolean.

@@ -627,12 +627,14 @@ def run(
                 if os.fstat(shm_fd).st_size != expected_pool_size:
                     raise AssertionError("memfd size does not match the two-slot shared buffer pool")
                 pixels = mmap.mmap(shm_fd, expected_pool_size, access=mmap.ACCESS_READ)
+                active_buffer = {"id": client_buffer_id, "offset": 0}
+                known_buffer_offsets = {client_buffer_id: 0}
 
                 def rendered_color_present(
                     x: int, y: int, width: int, height: int, stride: int, color: int
                 ) -> bool:
                     return any(
-                        struct.unpack_from("<I", pixels, row * stride + column * 4)[0] == color
+                        struct.unpack_from("<I", pixels, active_buffer["offset"] + row * stride + column * 4)[0] == color
                         for row in range(y, y + height)
                         for column in range(x, x + width)
                     )
@@ -3038,6 +3040,48 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     return struct.unpack("<I", raw)[0]
 
+                def expect_buffer_frame(label: str) -> int:
+                    # A redraw may lazily create slot one before attaching it.
+                    # Track protocol object IDs and byte offsets rather than
+                    # assuming every frame reuses the first wl_buffer.
+                    message = recv_wayland_message(client)
+                    while message[0:2] == (11, 0):
+                        if len(message[2]) != 24 or message[3]:
+                            raise AssertionError(f"{label}: malformed wl_buffer.create_buffer: {message!r}")
+                        new_id, offset, width, height, stride, pixel_format = struct.unpack("<6I", message[2])
+                        if (
+                            new_id == 0
+                            or offset not in (0, expected_size)
+                            or width == 0
+                            or height == 0
+                            or stride != width * 4
+                            or stride * height > expected_size
+                            or pixel_format != 1
+                        ):
+                            raise AssertionError(
+                                f"{label}: invalid SHM buffer slot descriptor: "
+                                f"{(new_id, offset, width, height, stride, pixel_format)!r}"
+                            )
+                        known_buffer_offsets[new_id] = offset
+                        message = recv_wayland_message(client)
+                    if message[0:2] != (8, 1) or len(message[2]) != 12 or message[3]:
+                        raise AssertionError(f"{label}: expected wl_surface.attach, got {message!r}")
+                    attached_id, attach_x, attach_y = struct.unpack("<III", message[2])
+                    if attached_id not in known_buffer_offsets or (attach_x, attach_y) != (0, 0):
+                        raise AssertionError(
+                            f"{label}: attached an unknown buffer or nonzero origin: "
+                            f"{(attached_id, attach_x, attach_y)!r}"
+                        )
+                    active_buffer["id"] = attached_id
+                    active_buffer["offset"] = known_buffer_offsets[attached_id]
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        f"{label} damage",
+                    )
+                    expect_message(client, (8, 6, b""), f"{label} commit")
+                    return attached_id
+
+
 
                 if seat_hotplug_ime_test:
                     # This scenario combines the real opt-in text-input-v3
@@ -3055,15 +3099,7 @@ xkb_symbols "nekoedit-sparse" {
                             )
 
                     def expect_hotplug_frame(label: str) -> None:
-                        expect_message(
-                            client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)),
-                            f"{label} attach",
-                        )
-                        expect_message(
-                            client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                            f"{label} damage",
-                        )
-                        expect_message(client, (8, 6, b""), f"{label} commit")
+                        expect_buffer_frame(label)
 
                     def expect_ime_state_update(label: str) -> None:
                         expect_message(
@@ -3090,10 +3126,10 @@ xkb_symbols "nekoedit-sparse" {
                         return wire_message(test_text_input_id, 2, payload)
 
                     # The keyboard enter has already caused a queued redraw.
-                    client.sendall(wire_message(client_buffer_id, 0))
+                    client.sendall(wire_message(active_buffer["id"], 0))
                     expect_hotplug_frame("keyboard-focus redraw")
                     client.sendall(
-                        wire_message(client_buffer_id, 0)
+                        wire_message(active_buffer["id"], 0)
                         + wire_message(test_text_input_id, 0, struct.pack("<I", 8))
                     )
                     expect_message(client, (test_text_input_id, 1, b""), "enable text input for the editor")
@@ -3107,7 +3143,7 @@ xkb_symbols "nekoedit-sparse" {
                     # A matching done acknowledges the first committed state.
                     serial = child_u32("text_input_commit_serial")
                     client.sendall(wire_message(test_text_input_id, 5, struct.pack("<I", serial)))
-                    client.sendall(wire_message(client_buffer_id, 0))
+                    client.sendall(wire_message(active_buffer["id"], 0))
                     expect_hotplug_frame("initial text-input done redraw")
 
                     preedit_text = b"abc"
@@ -3117,7 +3153,7 @@ xkb_symbols "nekoedit-sparse" {
                         + wire_message(test_text_input_id, 5, struct.pack("<I", serial))
                     )
                     expect_ime_state_update("active preedit")
-                    client.sendall(wire_message(client_buffer_id, 0))
+                    client.sendall(wire_message(active_buffer["id"], 0))
                     expect_hotplug_frame("active preedit redraw")
 
                     if (
@@ -3133,7 +3169,7 @@ xkb_symbols "nekoedit-sparse" {
                     # Drain the shared buffer and frame callback before
                     # removing the keyboard so the disable-triggered clear
                     # must be presented immediately by the seat event handler.
-                    client.sendall(wire_message(client_buffer_id, 0))
+                    client.sendall(wire_message(active_buffer["id"], 0))
                     wait_hotplug_state("buffer_busy", 0)
                     wait_hotplug_state("frame_callback_id", 0)
                     previous_frame_requests = frame_callback_stats["requested"]
@@ -3180,17 +3216,10 @@ xkb_symbols "nekoedit-sparse" {
 
                 if text_input_test:
                     def expect_frame(label: str) -> None:
-                        expect_message(
-                            client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), f"{label} attach"
-                        )
-                        expect_message(
-                            client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                            f"{label} damage",
-                        )
-                        expect_message(client, (8, 6, b""), f"{label} commit")
+                        expect_buffer_frame(label)
 
                     def release_frame(label: str) -> None:
-                        client.sendall(wire_message(client_buffer_id, 0))
+                        client.sendall(wire_message(active_buffer["id"], 0))
                         expect_frame(label)
 
                     def expect_state(
@@ -3244,16 +3273,9 @@ xkb_symbols "nekoedit-sparse" {
 
                     # The keyboard is focused, but the IME must remain off until
                     # text-input.enter identifies this surface as its text target.
-                    client.sendall(wire_message(client_buffer_id, 0))
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "keyboard-focus redraw attach"
-                    )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "keyboard-focus redraw damage",
-                    )
-                    expect_message(client, (8, 6, b""), "keyboard-focus redraw commit")
-                    client.sendall(wire_message(client_buffer_id, 0))
+                    client.sendall(wire_message(active_buffer["id"], 0))
+                    expect_buffer_frame("keyboard-focus redraw")
+                    client.sendall(wire_message(active_buffer["id"], 0))
                     client.sendall(wire_message(18, 0, struct.pack("<I", 8)))
                     expect_message(client, (18, 1, b""), "enable text input")
                     expect_message(
@@ -3546,15 +3568,8 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(18, 1, struct.pack("<I", 8)))
                     expect_message(client, (18, 2, b""), "disable text input after leave")
                     expect_message(client, (18, 7, b""), "commit disable state")
-                    client.sendall(wire_message(client_buffer_id, 0))
-                    expect_message(
-                        client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "leave redraw attach"
-                    )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "leave redraw damage",
-                    )
-                    expect_message(client, (8, 6, b""), "leave redraw commit")
+                    client.sendall(wire_message(active_buffer["id"], 0))
+                    expect_buffer_frame("leave redraw")
                     observations.append(
                         "text-input-v3 enter/enable, surrounding-text state, serial-stable done, preedit staging, multibyte commit, delete-surrounding, disable/leave and redraw verified"
                     )
