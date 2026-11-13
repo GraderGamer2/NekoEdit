@@ -892,12 +892,10 @@ def run(
                         )
                     next_test_object_id += 2
                 # Map only after all initial client objects have been allocated.
-                if fractional_scale_test:
-                    expect_message(
-                        client, (8, 8, struct.pack("<i", 1)),
-                        "keep wl_surface buffer scale at 1 for fractional viewport mode",
-                    )
-                elif buffer_scale > 1:
+                # A new wl_surface already defaults to buffer_scale=1;
+                # fractional viewport mode must not send a redundant scale
+                # request or substitute the oversampled source scale here.
+                if not fractional_scale_test and buffer_scale > 1:
                     expect_message(
                         client, (8, 8, struct.pack("<i", buffer_scale)),
                         "set non-default surface buffer scale",
