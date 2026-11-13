@@ -243,9 +243,9 @@ def expect_message(connection, expected, label: str):
 def expect_fractional_scale_startup(
     connection, manager_id: int, viewporter_id: int,
     viewport_id: int, fractional_id: int, sync_callback_id: int,
-    preferred_scale: int,
+    preferred_scale: int, keyboard_object_id: int | None = None,
 ) -> None:
-    """Verify consecutive extension IDs and deliver the initial preferred scale."""
+    """Verify extension IDs and deliver startup events before the scale sync."""
     manager_name = b"wp_fractional_scale_manager_v1\0"
     manager_padded = manager_name + (b"\0" * (-len(manager_name) % 4))
     expect_message(
@@ -274,10 +274,27 @@ def expect_fractional_scale_startup(
         connection, (1, 0, struct.pack("<I", sync_callback_id)),
         "sync initial fractional-scale preference",
     )
-    connection.sendall(
+    scale_and_sync = (
         wire_message(fractional_id, 0, struct.pack("<I", preferred_scale))
         + wire_message(sync_callback_id, 0)
     )
+    if keyboard_object_id is None:
+        connection.sendall(scale_and_sync)
+    else:
+        # A second keymap can arrive after the initial seat sync, while this
+        # extension-owned sync is blocking. Format NO_KEYMAP still carries
+        # an FD, and the client must consume it rather than drop the event.
+        keymap_fd = os.memfd_create("nekoedit-fractional-sync-keymap", 0)
+        try:
+            startup_keymap = wire_message(
+                keyboard_object_id, 0, struct.pack("<II", 0, 0)
+            )
+            connection.sendmsg(
+                [startup_keymap + scale_and_sync],
+                [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", keymap_fd))],
+            )
+        finally:
+            os.close(keymap_fd)
 
 
 def run(
@@ -944,6 +961,7 @@ def run(
                         client, next_test_object_id, next_test_object_id + 1,
                         viewport_object_id, fractional_id, fractional_sync_id,
                         initial_preferred_fractional_scale,
+                        keyboard_object_id if keyboard_layout_test else None,
                     )
                     next_test_object_id += 5
                 if output_tracking_enabled:
@@ -10044,6 +10062,11 @@ if __name__ == "__main__":
     # The bounded 1x/2x source raster keeps protocol buffer_scale=1 while the
     # viewport destination remains in logical surface units.
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=150)
+    # The second startup sync must not consume a wl_keyboard.keymap event.
+    # Combine it with the complete XKB parser/input test and inject an FD-backed
+    # NO_KEYMAP event while fractional_scale_startup is waiting for sync.done.
+    run(sys.argv[1], keyboard_layout_test=True, fractional_scale_test=True,
+        initial_preferred_fractional_scale=150)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=180,
         initial_preferred_buffer_transform=1)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=120)

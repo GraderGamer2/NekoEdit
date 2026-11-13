@@ -23702,7 +23702,7 @@ fractional_scale_startup:
     jmp .fractional_startup_check_sync
 .fractional_startup_registry:
     cmp dword ptr [rip + last_object], 2
-    jne .fractional_startup_check_sync
+    jne .fractional_startup_keyboard
     cmp dword ptr [rip + last_opcode], 0
     je .fractional_startup_global
     cmp dword ptr [rip + last_opcode], 1
@@ -23714,6 +23714,20 @@ fractional_scale_startup:
 .fractional_startup_global_remove:
     call handle_output_global_remove
     test eax, eax
+    js .fractional_startup_return
+.fractional_startup_keyboard:
+    # This sync runs after wl_seat.get_keyboard. The compositor may deliver
+    # the keyboard's initial keymap here, after the earlier seat roundtrip has
+    # already completed. Never let a blocking extension roundtrip discard it.
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .fractional_startup_check_sync
+    cmp dword ptr [rip + last_object], eax
+    jne .fractional_startup_check_sync
+    cmp dword ptr [rip + last_opcode], 0
+    jne .fractional_startup_check_sync
+    call keyboard_keymap_dispatch
+    test rax, rax
     js .fractional_startup_return
 .fractional_startup_check_sync:
     cmp dword ptr [rip + last_object], 1
