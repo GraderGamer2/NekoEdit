@@ -1,12 +1,15 @@
-## Latest handoff (2026-11-13 — isolate fractional-sync keymap regression, CI pending)
+## Latest handoff (2026-11-13 — startup XKB/Compose path validated, CI PASS #901)
 
-Continue on `early-alpha`; keep the stable source checkpoint on `main`, with the full `CHANGELOG/` mirrored there. Latest test-fixture commit: [79e814a](https://github.com/GraderGamer2/NekoEdit/commit/79e814a30163944fa5cabfd12f682c7aa4de5fd3). The source dispatcher change is [9af6967](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). CI is pending.
+Continue development on `early-alpha`; keep `main` at its stable source checkpoint with the full `CHANGELOG/` mirrored. Verified source/test head: [c98c56e](https://github.com/GraderGamer2/NekoEdit/commit/c98c56e51370405551c481e70e0c59e212d431e9). The live keyboard keymap issue is fixed and validated.
 
-Actions #899 showed that keyboard focus and ordinary key events were working, but no keymap event reached the parser. The missing path was the second blocking sync in `fractional_scale_startup()`: it waited for `wl_display.sync` after the initial seat roundtrip but ignored `wl_keyboard.keymap`. The source now routes a matching event through `keyboard_keymap_dispatch` before checking the sync callback.
+Actions [#901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) passed all 16 steps: freestanding assembly build/ELF verification, CLI tests, full Wayland protocol mock, executable inspection, native `us(intl)` XKB parser test, pinned X.Org importer, Compose locale pack, and GNOME Shell 46 / Mutter 46.2 integration. The workflow uploaded:
+- Linux binary (143,151 bytes): [artifact 14027630978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14027630978).
+- Compose locales (120,536 bytes): [artifact 14026798133](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210/artifacts/14026798133).
+Both expire 2026-11-14 17:03:12 WIB.
 
-Actions #900 passed build and CLI tests but the Wayland mock failed in a newly combined test: running the whole XKB shortcut suite together with fractional scaling caused the unrelated `XKB preserve[Control]`/Ctrl+A assertion to fail. The new fixture splits the two concerns. `fractional_sync_keymap_test` injects descriptor-bearing `NO_KEYMAP` events during both startup syncs and verifies exactly two successful dispatches, parser fallback state, and no retained mapping. The existing full XKB layout/shortcut suite is left unchanged.
+Startup keymap events are now handled during both the initial seat sync and `fractional_scale_startup()` sync. The focused `fractional_sync_keymap_test` injects descriptor-bearing `NO_KEYMAP` events into both barriers and verifies that both are processed, parser state is clean, and no descriptor mapping leaks. The complete XKB layout/shortcut suite remains a separate, unchanged test; its Ctrl+A/`preserve[Control]` assertions pass. The live Mutter probe now passes the explicit `Multi_key` Compose and two-dead-key `pt_BR` sequence as well as the default save-confirmation flow. The earlier #900 Ctrl+A failure was a fixture interaction, not an application shortcut regression.
 
-Next: inspect the single CI run for this revised fixture. If the mock passes, let Actions proceed to the live GNOME/Mutter canary and inspect its keymap/Compose probe. Do not return to optimization or the release-tracked multi-buffer renderer until the real input path passes.
+Next engineering target: mature the SHM renderer's storage lifecycle. Review and then implement a release-tracked buffer set, keeping buffer release separate from frame callback completion. Old buffer generations must remain alive through resize/scale/transform transitions until every attached buffer is released. Establish correctness tests first; measure redraw latency and memory before describing it as an optimization.
 
 
 ---

@@ -1,3 +1,14 @@
+## 2026-11-13 — preserve live XKB keymaps across startup syncs (CI PASS #901)
+
+| Commit | Subject |
+|---|---|
+| [9af696716b57dc6089b5b08d80c3ae0ce1f1b003](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003) | fix: retain keyboard keymaps during fractional startup sync |
+| [79e814a30163944fa5cabfd12f682c7aa4de5fd3](https://github.com/GraderGamer2/NekoEdit/commit/79e814a30163944fa5cabfd12f682c7aa4de5fd3) | test: isolate fractional keymap startup regression |
+
+Actions [#901](https://github.com/GraderGamer2/NekoEdit/actions/runs/43405903210) passed all 16 workflow steps, including the focused two-sync `NO_KEYMAP` descriptor test, independent full XKB shortcut suite, and real GNOME Shell/Mutter Compose/dead-key integration. The test-fixture split preserves the Ctrl+A / `preserve[Control]` assertions instead of coupling them to a scenario which intentionally clears the XKB map.
+
+---
+
 ## 2026-11-13 — isolate fractional-sync keymap regression fixture (CI pending)
 
 | Commit | Subject |
