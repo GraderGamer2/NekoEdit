@@ -11,6 +11,7 @@
 #define TOTAL_TEST_GLYPHS (GLYPH_COUNT * 2u)
 #define COLD_RASTER_ITERATIONS 256u
 #define WARM_DRAW_ITERATIONS 50000u
+#define BENCH_SAMPLE_COUNT 7u
 #define SURFACE_WIDTH 128
 #define SURFACE_HEIGHT 64
 #define SURFACE_STRIDE (SURFACE_WIDTH * 4)
@@ -86,29 +87,55 @@ static void fail(const char *message) {
     exit(1);
 }
 
+static uint64_t median_sample(const uint64_t *samples) {
+    uint64_t sorted[BENCH_SAMPLE_COUNT];
+    for (uint32_t i = 0; i < BENCH_SAMPLE_COUNT; ++i) {
+        uint32_t pos = i;
+        while (pos && sorted[pos - 1] > samples[i]) {
+            sorted[pos] = sorted[pos - 1];
+            --pos;
+        }
+        sorted[pos] = samples[i];
+    }
+    return sorted[BENCH_SAMPLE_COUNT / 2u];
+}
+
+static void print_samples(const char *label, const uint64_t *samples,
+                          uint32_t iterations) {
+    printf("%s: %u samples x %u iterations, median %.1f ns/iteration; samples=",
+           label, BENCH_SAMPLE_COUNT, iterations,
+           (double)median_sample(samples) / (double)iterations);
+    for (uint32_t i = 0; i < BENCH_SAMPLE_COUNT; ++i) {
+        printf("%s%.1f", i ? "," : "[",
+               (double)samples[i] / (double)iterations);
+    }
+    puts("]");
+}
+
 int main(void) {
     uint32_t framebuffer[SURFACE_WIDTH * SURFACE_HEIGHT];
-    uint64_t start, cold_elapsed, warm_elapsed, checksum = 0;
+    uint64_t cold_samples[BENCH_SAMPLE_COUNT], warm_samples[BENCH_SAMPLE_COUNT];
+    uint64_t checksum = 0;
     struct timespec resolution;
 
     if (clock_getres(CLOCK_MONOTONIC_RAW, &resolution) != 0)
         fail("CLOCK_MONOTONIC_RAW resolution query failed");
 
-    for (uint32_t i = 0; i < SURFACE_WIDTH * SURFACE_HEIGHT; ++i)
-        framebuffer[i] = 0xff252a33u;
-
-    start = monotonic_raw_ns();
-    for (uint32_t i = 0; i < COLD_RASTER_ITERATIONS; ++i) {
-        uint32_t glyph_id = 33u + (i % GLYPH_COUNT);
-        if (font_rasterize_glyph(glyph_id, 12u) != 0)
-            fail("cold glyph rasterization returned an error");
+    for (uint32_t sample = 0; sample < BENCH_SAMPLE_COUNT; ++sample) {
+        uint64_t start = monotonic_raw_ns();
+        for (uint32_t i = 0; i < COLD_RASTER_ITERATIONS; ++i) {
+            uint32_t glyph_id = 33u + (i % GLYPH_COUNT);
+            if (font_rasterize_glyph(glyph_id, 12u) != 0)
+                fail("cold glyph rasterization returned an error");
+        }
+        cold_samples[sample] = monotonic_raw_ns() - start;
+        if (!font_bitmap_pixel_count || !font_bitmap_width || !font_bitmap_height)
+            fail("cold rasterization produced an empty mask");
     }
-    cold_elapsed = monotonic_raw_ns() - start;
-    if (!font_bitmap_pixel_count || !font_bitmap_width || !font_bitmap_height)
-        fail("cold rasterization produced an empty mask");
 
-    /* Prime every entry, then draw a deterministic pseudorandom sequence over
-     * the full cache working set. This measures lookup plus alpha blending. */
+    /* Prime every entry, then repeatedly draw a deterministic pseudorandom
+     * sequence over the full cache working set. Each sample starts with the
+     * same framebuffer and key sequence; the cache remains warm throughout. */
     font_cache_clear();
     outline_load_count = 0;
     for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
@@ -120,32 +147,34 @@ int main(void) {
                 SURFACE_STRIDE, 12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
             fail("failed to populate the complete glyph cache");
     }
-
     if (outline_load_count != GLYPH_COUNT)
         fail("warm-cache priming did not rasterize exactly 128 unique glyphs");
 
-    uint32_t random_state = 0x4e454b4fu;
-    start = monotonic_raw_ns();
-    for (uint32_t i = 0; i < WARM_DRAW_ITERATIONS; ++i) {
-        random_state = random_state * 1664525u + 1013904223u;
-        uint32_t codepoint = 33u + ((random_state >> 16) & 127u);
-        int32_t x = (int32_t)((i & 7u) * 14u);
-        int32_t y = (int32_t)(((i >> 3) & 3u) * 14u);
-        if (font_draw_codepoint_size(
-                codepoint, x, y, (uint8_t *)framebuffer,
-                SURFACE_WIDTH, SURFACE_HEIGHT, SURFACE_STRIDE,
-                12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
-            fail("warm glyph-cache draw returned an error");
+    for (uint32_t sample = 0; sample < BENCH_SAMPLE_COUNT; ++sample) {
+        for (uint32_t i = 0; i < SURFACE_WIDTH * SURFACE_HEIGHT; ++i)
+            framebuffer[i] = 0xff252a33u;
+        uint32_t random_state = 0x4e454b4fu;
+        uint64_t start = monotonic_raw_ns();
+        for (uint32_t i = 0; i < WARM_DRAW_ITERATIONS; ++i) {
+            random_state = random_state * 1664525u + 1013904223u;
+            uint32_t codepoint = 33u + ((random_state >> 16) & 127u);
+            int32_t x = (int32_t)((i & 7u) * 14u);
+            int32_t y = (int32_t)(((i >> 3) & 3u) * 14u);
+            if (font_draw_codepoint_size(
+                    codepoint, x, y, (uint8_t *)framebuffer,
+                    SURFACE_WIDTH, SURFACE_HEIGHT, SURFACE_STRIDE,
+                    12u, 0u, SURFACE_WIDTH, SURFACE_HEIGHT) != 1)
+                fail("warm glyph-cache draw returned an error");
+        }
+        warm_samples[sample] = monotonic_raw_ns() - start;
     }
-    warm_elapsed = monotonic_raw_ns() - start;
     if (outline_load_count != GLYPH_COUNT)
         fail("warm working-set draws unexpectedly rerasterized a cached glyph");
     for (uint32_t i = 0; i < SURFACE_WIDTH * SURFACE_HEIGHT; ++i)
         checksum += framebuffer[i];
 
     /* Force every LRU slot to be replaced with a disjoint 128-glyph set. The
-     * second pass must hit those entries, and clearing the cache must make the
-     * next pass reload them. This exercises hash-chain unlink and reset paths. */
+     * second pass must hit those entries, and clearing must make them reload. */
     for (uint32_t i = 0; i < GLYPH_COUNT; ++i) {
         uint32_t codepoint = 33u + GLYPH_COUNT + i;
         if (font_draw_codepoint_size(
@@ -179,19 +208,25 @@ int main(void) {
             fail("drawing after cache clear failed");
     }
     if (outline_load_count != TOTAL_TEST_GLYPHS + GLYPH_COUNT)
-        fail("font_cache_clear left stale hash entries behind");
+        fail("font_cache_clear left stale cache entries behind");
 
-    printf("NekoEdit rasterizer microbenchmark (synthetic 8-point outline)\n");
+    puts("NekoEdit rasterizer microbenchmark (synthetic 8-point outline)");
+#ifdef FONT_CACHE_LINEAR_REFERENCE
+    puts("cache implementation: pre-hash linear LRU reference");
+#else
+    puts("cache implementation: hash-indexed warm hits");
+#endif
     printf("CLOCK_MONOTONIC_RAW resolution: %ld ns\n",
            resolution.tv_sec * 1000000000L + resolution.tv_nsec);
-    printf("cold rasterization: %u glyphs, %.1f ns/glyph\n",
-           COLD_RASTER_ITERATIONS,
-           (double)cold_elapsed / (double)COLD_RASTER_ITERATIONS);
-    printf("warm 128-glyph cache draw: %u draws, %.1f ns/draw, checksum=%" PRIu64 "\n",
-           WARM_DRAW_ITERATIONS,
-           (double)warm_elapsed / (double)WARM_DRAW_ITERATIONS,
-           checksum);
-    printf("cache correctness: hit reuse, collision chains, full eviction, and clear passed (%u outline loads)\n",
+    print_samples("cold rasterization", cold_samples, COLD_RASTER_ITERATIONS);
+    print_samples("warm 128-glyph cache draw", warm_samples, WARM_DRAW_ITERATIONS);
+#ifdef FONT_CACHE_LINEAR_REFERENCE
+    printf("cache correctness: warm reuse, LRU replacement, and clear passed (%u outline loads)\n",
            outline_load_count);
+#else
+    printf("cache correctness: hit reuse, collision chains, LRU replacement, and clear passed (%u outline loads)\n",
+           outline_load_count);
+#endif
+    printf("framebuffer checksum: %" PRIu64 "\n", checksum);
     return 0;
 }

@@ -36,12 +36,14 @@ struct cache_entry {
     uint32_t glyph_id, stamp;
     int16_t left, top;
     uint8_t width, height, size, valid;
+#ifndef FONT_CACHE_LINEAR_REFERENCE
     uint16_t hash_next; /* one-based cache slot index; zero terminates a chain */
+#endif
     uint8_t pixels[BITMAP_BYTES];
 };
 static struct cache_entry cache[CACHE_SLOTS];
+#ifndef FONT_CACHE_LINEAR_REFERENCE
 static uint16_t cache_buckets[CACHE_HASH_BUCKETS];
-static uint32_t cache_clock;
 
 _Static_assert((CACHE_HASH_BUCKETS & (CACHE_HASH_BUCKETS - 1u)) == 0u,
                "glyph cache bucket count must be a power of two");
@@ -81,15 +83,21 @@ static void cache_unlink_slot(uint32_t slot_index) {
         link=&cache[current].hash_next;
     }
 }
+#endif
+static uint32_t cache_clock;
 
 /* Discard all face-local masks after a validated font replacement. */
 void font_cache_clear(void) {
     for (uint32_t i=0;i<CACHE_SLOTS;++i) {
         cache[i].valid=0;
         cache[i].stamp=0;
+#ifndef FONT_CACHE_LINEAR_REFERENCE
         cache[i].hash_next=0;
+#endif
     }
+#ifndef FONT_CACHE_LINEAR_REFERENCE
     for (uint32_t i=0;i<CACHE_HASH_BUCKETS;++i) cache_buckets[i]=0;
+#endif
     cache_clock=0;
 }
 
@@ -264,6 +272,30 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
 }
 
 static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
+#ifdef FONT_CACHE_LINEAR_REFERENCE
+    /* Pre-optimization baseline: exact bounded linear search + LRU victim scan. */
+    struct cache_entry *slot=&cache[0];
+    for (uint32_t i=0;i<CACHE_SLOTS;++i) {
+        struct cache_entry *entry=&cache[i];
+        if (entry->valid && entry->glyph_id==glyph_id && entry->size==size) {
+            entry->stamp=++cache_clock;
+            return entry;
+        }
+        if (!entry->valid) slot=entry;
+        else if (slot->valid && entry->stamp<slot->stamp) slot=entry;
+    }
+    if (++cache_clock==0u) {
+        cache_clock=1u;
+        for (uint32_t i=0;i<CACHE_SLOTS;++i) cache[i].stamp=0;
+    }
+    if (font_rasterize_glyph(glyph_id,size)<0) return (struct cache_entry *)0;
+    slot->glyph_id=glyph_id; slot->stamp=cache_clock;
+    slot->left=(int16_t)font_bitmap_left; slot->top=(int16_t)font_bitmap_top;
+    slot->width=(uint8_t)font_bitmap_width; slot->height=(uint8_t)font_bitmap_height;
+    slot->size=(uint8_t)size; slot->valid=1;
+    for (uint32_t i=0;i<BITMAP_BYTES;++i) slot->pixels[i]=font_bitmap_pixels[i];
+    return slot;
+#else
     uint32_t bucket=cache_bucket(glyph_id,size);
     uint16_t link=cache_buckets[bucket];
 
@@ -310,6 +342,7 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
     slot->hash_next=cache_buckets[bucket];
     cache_buckets[bucket]=(uint16_t)(slot_index+1u);
     return slot;
+#endif
 }
 
 /* Wayland backend entry point. Document layout uses the same 12px-em

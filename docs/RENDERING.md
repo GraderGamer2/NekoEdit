@@ -15,14 +15,14 @@ The current implementation is Wayland-only. The X11 backend is not ready. The so
 
 ## Rasterizer microbenchmark
 
-Run `make bench-renderer` to build and execute the standalone hosted diagnostic. It links the same `src/font/rasterizer.c` used by NekoEdit with a deterministic synthetic eight-point outline provider; no system font, Wayland server, compositor, Fontconfig, or third-party font library is needed.
+Run `make bench-renderer` to build and execute paired standalone diagnostics: the exact pre-hash linear-LRU reference path and the hash-indexed implementation, compiled from the same `src/font/rasterizer.c` with identical compiler flags. Both use a deterministic synthetic eight-point outline provider; no system font, Wayland server, compositor, Fontconfig, or third-party font library is needed. Each reports the median of seven independent samples and prints the per-sample values.
 
 The benchmark reports two separate measurements:
 
 - **Cold rasterization:** direct `font_rasterize_glyph()` calls, covering outline flattening, 4×4 coverage sampling, and mask generation without the glyph cache.
 - **Warm cache draw:** `font_draw_codepoint_size()` calls over a fully populated 128-glyph working set, covering cmap lookup, hash-indexed cache lookup, and pixel alpha blending. The same executable also exercises bucket collisions, full LRU eviction, cache hits after replacement, and `font_cache_clear()`; those correctness checks are outside the timed warm loop.
 
-Timing uses Linux `CLOCK_MONOTONIC_RAW`. Results are diagnostic, not pass/fail thresholds: compare repeated runs on the same machine, compiler, power profile, and build settings. The synthetic outline is intentionally deterministic and does not model every real font's contour complexity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-rasterizer changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
+Timing uses Linux `CLOCK_MONOTONIC_RAW`. The linear-reference and hash-indexed runs are executed consecutively in the same job to reduce cross-run hardware and runner variance. Results are diagnostic, not pass/fail thresholds; compare the paired medians, and inspect the seven samples for outliers. The benchmark is intentionally not a CI speed gate. The synthetic outline is intentionally deterministic and does not model every real font's contour complexity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-rasterizer changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
 
 ## Font selection and loading
 

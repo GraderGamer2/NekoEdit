@@ -12,6 +12,7 @@ COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
 XKB_NATIVE_KEYMAP_TEST := $(BUILD_DIR)/xkb_native_keymap_test
 RASTERIZER_BENCH := $(BUILD_DIR)/rasterizer_bench
+RASTERIZER_BENCH_LINEAR := $(BUILD_DIR)/rasterizer_bench_linear
 
 PREFIX ?= /usr/local
 USER_PREFIX ?= $(HOME)/.local
@@ -88,7 +89,14 @@ $(RASTERIZER_BENCH): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
 
-bench-renderer: $(RASTERIZER_BENCH)
+$(RASTERIZER_BENCH_LINEAR): tests/rasterizer_bench.c src/font/rasterizer.c
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_LINEAR_REFERENCE -o "$@" $^
+
+bench-renderer: $(RASTERIZER_BENCH_LINEAR) $(RASTERIZER_BENCH)
+	@echo '=== pre-hash linear LRU reference ==='
+	./$(RASTERIZER_BENCH_LINEAR)
+	@echo '=== hash-indexed cache ==='
 	./$(RASTERIZER_BENCH)
 
 test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
