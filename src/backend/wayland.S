@@ -11766,17 +11766,16 @@ load_document_from_path:
     test rax, rax
     js .load_path_error
 
-    # The staging mapping is already a contiguous document-sized store.
-    # Swap mappings only after EOF and close succeed: this keeps Open atomic
-    # while avoiding a second full-size memory copy for large documents.
-    mov rax, qword ptr [rip + doc_buffer]
-    mov rdx, qword ptr [rip + load_buffer]
-    mov qword ptr [rip + doc_buffer], rdx
-    mov qword ptr [rip + load_buffer], rax
-    mov eax, dword ptr [rip + doc_capacity]
-    mov edx, dword ptr [rip + load_capacity]
-    mov dword ptr [rip + doc_capacity], edx
-    mov dword ptr [rip + load_capacity], eax
+    # Reserve enough live storage before committing the staged contents. If
+    # allocation fails, the previous document and active path remain intact.
+    mov edi, r13d
+    call doc_buffer_reserve
+    test rax, rax
+    js .load_path_error
+    mov rsi, qword ptr [rip + load_buffer]
+    mov rdi, qword ptr [rip + doc_buffer]
+    mov ecx, r13d
+    rep movsb
     mov dword ptr [rip + doc_length], r13d
     mov dword ptr [rip + doc_line_index_valid], 0
     mov dword ptr [rip + doc_line_count], 0
@@ -16556,28 +16555,6 @@ doc_line_index_rebuild:
     mov ebx, 1
     xor r12d, r12d
     mov r15d, dword ptr [rip + doc_length]
-
-    # A newly opened document has its gap at EOF, so the logical bytes form
-    # one contiguous range. SCASB finds newlines without one doc_byte_at call
-    # per byte. Keep the original gap-aware path for edited documents.
-    mov eax, dword ptr [rip + doc_gap_start]
-    cmp eax, r15d
-    jne .Ldoc_index_count_generic
-    mov rdi, qword ptr [rip + doc_buffer]
-    mov ecx, r15d
-    mov al, 10
-.Ldoc_index_count_contiguous:
-    test ecx, ecx
-    jz .Ldoc_index_count_done
-    repne scasb
-    jnz .Ldoc_index_count_done
-    inc ebx
-    cmp ebx, DOC_INDEX_MAX_LINES
-    ja .Ldoc_index_rebuild_failed
-    jmp .Ldoc_index_count_contiguous
-
-.Ldoc_index_count_generic:
-    xor r12d, r12d
 .Ldoc_index_count_lines:
     cmp r12d, r15d
     jae .Ldoc_index_count_done
@@ -16591,7 +16568,6 @@ doc_line_index_rebuild:
 .Ldoc_index_count_next:
     inc r12d
     jmp .Ldoc_index_count_lines
-
 .Ldoc_index_count_done:
     mov edi, ebx
     call doc_line_index_reserve
@@ -16599,67 +16575,6 @@ doc_line_index_rebuild:
     js .Ldoc_index_rebuild_failed
     mov dword ptr [rip + doc_line_count], ebx
     mov dword ptr [rip + doc_max_line_width], 0
-
-    mov eax, dword ptr [rip + doc_gap_start]
-    cmp eax, r15d
-    jne .Ldoc_index_fill_generic
-    xor r12d, r12d              # logical line start
-    xor r14d, r14d              # zero-based line index
-.Ldoc_index_fill_contiguous:
-    mov rdi, qword ptr [rip + doc_buffer]
-    mov eax, r12d
-    add rdi, rax
-    mov ecx, r15d
-    sub ecx, r12d
-    mov al, 10
-    test ecx, ecx
-    jz .Ldoc_index_fill_contiguous_last
-    repne scasb
-    jnz .Ldoc_index_fill_contiguous_last
-
-    # RDI points immediately after the newline found by SCASB.
-    mov r13, qword ptr [rip + doc_buffer]
-    sub rdi, r13
-    mov r13d, edi               # exclusive logical line end
-    mov esi, r13d
-    sub esi, r12d
-    mov edi, r12d
-    call doc_line_index_measure_rows
-    mov ebx, eax
-    mov rdx, qword ptr [rip + doc_line_index_base]
-    mov eax, r14d
-    shl rax, 4
-    add rdx, rax
-    mov eax, r13d
-    sub eax, r12d
-    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], eax
-    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], ebx
-    mov r12d, r13d
-    inc r14d
-    jmp .Ldoc_index_fill_contiguous
-
-.Ldoc_index_fill_contiguous_last:
-    mov esi, r15d
-    sub esi, r12d
-    mov ebp, esi
-    mov edi, r12d
-    mov esi, ebp
-    call doc_line_index_measure_rows
-    mov ebx, eax
-    mov rdx, qword ptr [rip + doc_line_index_base]
-    mov ecx, r14d
-    shl rcx, 4
-    add rdx, rcx
-    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], ebp
-    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], ebx
-    call doc_line_index_build_trees
-    mov eax, dword ptr [rip + window_doc_pixel_width]
-    mov dword ptr [rip + doc_line_index_columns], eax
-    mov dword ptr [rip + doc_line_index_valid], 1
-    mov eax, 1
-    jmp .Ldoc_index_rebuild_return
-
-.Ldoc_index_fill_generic:
     xor r12d, r12d              # logical line start
     xor r13d, r13d              # byte scan offset
     xor r14d, r14d              # zero-based line index

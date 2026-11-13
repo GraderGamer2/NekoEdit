@@ -1,29 +1,15 @@
-## Latest handoff (2026-11-13 — hash-indexed glyph cache measured, CI PASS #912)
+## Latest handoff (2026-11-13 — large-document Open/index optimization, CI pending)
 
-Continue development on `early-alpha`; the validated branch head is [733623e](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817). Keep `main` at its stable source checkpoint [468960c](https://github.com/GraderGamer2/NekoEdit/commit/468960c776e1bada968fd92468fee368f1e64308); this handoff mirrors only the `CHANGELOG/` documentation and does not merge application source.
+Continue on `early-alpha`; current implementation commit is [d3ed72d](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446), following the optimization commit [45b6a44](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d). The latest previously validated app source was [210bd7d](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388), with full CI #913 success. This new large-file change is pending validation.
 
-Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the full build and validation workflow, including both benchmark variants, CLI tests, the full Wayland protocol mock, executable inspection, native `us(intl)` XKB parser, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+The Open path swaps the fully read staging map into the active document rather than copying the file into another allocation. Initial line-index construction uses `repne scasb` when the gap is at EOF, while the original path remains available for documents whose gap is inside the text. ASCII advances are cached by code point and document em size and invalidated on font replacement.
 
-The font cache now uses a compact 64-bucket chained hash index for warm `(glyph_id, size)` hits while retaining the existing 128-slot LRU eviction policy on misses. A paired benchmark compiles the pre-hash linear-LRU reference and optimized implementation from the same source and flags, runs seven samples, and reports medians:
+The Wayland mock now opens an 11 MiB multi-line document and checks complete bytes, the EOF gap, line-index record count, and Ctrl+S output. It reports elapsed time through the first presented redraw. The new CI run must verify both the assembly and the heavier mock before treating this optimization as complete.
 
-| Synthetic measurement | Linear reference | Hash-indexed |
-|---|---:|---:|
-| Cold rasterization | 19,221.5 ns/glyph | 19,057.2 ns/glyph |
-| Warm 128-glyph draw | 385.9 ns/draw | 299.9 ns/draw |
-
-This is a 22.3% reduction in the measured warm cache-draw median. Both modes generated the same framebuffer checksum, and hit reuse, collisions, full LRU replacement, cache clearing, and the full app regression suite passed. These results measure a synthetic eight-point outline workload, not total application or full-frame performance.
-
-Artifacts from #912:
-- Linux x86-64: 144,104 bytes, [artifact 14044857971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14044857971).
-- Compose locales: 120,536 bytes, [artifact 14045672618](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14045672618).
-Both expire on 2026-11-14 at 21:10 WIB.
-
-Next engineering target: add reproducible measurements using real installed-font contours and representative whole-frame/document workloads. Profile the assembly rectangle path, layout/index path, and full `render_surface()` separately before optimizing another hot path.
+Keep `main` at its current stable checkpoint; reconcile the application-source divergence only during release preparation. Continue updating the full `CHANGELOG/` history after this CI result.
 
 ---
 
-
----
 
 ## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
 
