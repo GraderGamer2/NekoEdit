@@ -5220,8 +5220,8 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         large_paste_state["doc_cursor"] != 0
                         or large_paste_state["doc_view_top_row"] != 0
-                        or large_paste_state["doc_scroll_thumb_top"] != 92
-                        or large_paste_state["doc_scroll_thumb_height"] <= 0
+                        or child_u32("doc_scroll_thumb_top") != 92
+                        or child_u32("doc_scroll_thumb_height") <= 0
                     ):
                         raise AssertionError(
                             "10 MiB clipboard paste did not keep the caret and scrollbar "
@@ -5257,7 +5257,7 @@ xkb_symbols "nekoedit-sparse" {
                     if (
                         redo_large_state["doc_cursor"] != 0
                         or redo_large_state["doc_view_top_row"] != 0
-                        or redo_large_state["doc_scroll_thumb_top"] != 92
+                        or child_u32("doc_scroll_thumb_top") != 92
                     ):
                         raise AssertionError(
                             "Redo did not restore the paste-start caret and viewport: "
