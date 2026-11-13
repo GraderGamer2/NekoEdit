@@ -1,3 +1,20 @@
+## 2026-11-13 — bulk clipboard paste and range-based history (CI PASS #923)
+
+Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps on final head [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f). Validation covered the freestanding build/ELF, CLI smoke tests, renderer checksum benchmark, full Wayland protocol matrix, native XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads.
+
+The asynchronous Wayland clipboard receive path previously handed the completed buffer to a loop that called the normal single-byte insertion routine once per byte. That made a large paste perform millions of history and line-index updates on the UI thread. The new range insertion path reserves capacity once, moves the gap once, records the inserted bytes as one operation in the existing history format, copies the range in one bulk operation, and invalidates the derived line index once for rebuilding on the next redraw. History replay uses the same range insertion path for Redo; normal character input remains unchanged.
+
+The real Wayland mock transferred exactly 10,485,760 bytes through the nonblocking clipboard pipe. It verified byte-for-byte document equality, a valid rebuilt index with 70,375 logical lines, the sum of per-line byte lengths, and full Undo/Redo. The measured interval from the start of the clipboard write through the first completed redraw was 621.2 ms on the Ubuntu 24.04 GitHub runner. This is a mock-compositor CI measurement, not a prediction of local desktop latency; Undo/Redo were verified separately and were not part of that timed interval.
+
+Implementation and test commits:
+- [3c4213d50d57](https://github.com/GraderGamer2/NekoEdit/commit/3c4213d50d5744e14709ef833aba71f340e8e537) — bulk gap-buffer insertion and single-range history recording.
+- [1ea16b11534e](https://github.com/GraderGamer2/NekoEdit/commit/1ea16b11534ec7159630deb89ee8b8cecac0b2df) — stress-test nonblocking clipboard pipe writes.
+- [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f) — validate line byte lengths using the line-record field.
+
+Artifacts: Linux x86-64 [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401) (144,791 bytes); Compose packs [14053185608](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053185608) (120,536 bytes). Both expire 2026-11-14 at 15:28 UTC (22:28 WIB).
+
+---
+
 ## 2026-11-13 — streamline large-document Open and line-index construction (CI PASS #920)
 
 Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 workflow steps on implementation/test head [341862ba22b5](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). The run includes the freestanding build/ELF and CLI tests, renderer checksum comparison, full Wayland protocol matrix with an 11 MiB multi-line Open/Save case, executable inspection, native `us(intl)` XKB parsing, pinned X.Org importer, Compose pack generation, live GNOME Shell/Mutter integration, and both artifact uploads.

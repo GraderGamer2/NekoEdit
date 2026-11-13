@@ -1,3 +1,24 @@
+## 2026-11-13 — optimize large clipboard paste with bulk insertion (CI PASS #923)
+
+Actions [Build and test #923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps. The change addresses the synchronous part of the external clipboard path after the nonblocking receive pipe reaches EOF.
+
+Previously, clipboard.c::insert_text iterated over the received buffer and called doc_insert_byte for every byte. The normal single-byte path records one history operation and updates the line index for each insertion. A 10 MiB paste therefore caused millions of point operations even though the clipboard payload had already been received into a contiguous mapping.
+
+The new assembly doc_insert_bytes routine performs the document mutation as one range:
+- Checks final-length overflow and reserves the required capacity once.
+- Moves the document gap to the insertion cursor once and verifies the resulting gap size.
+- Calls the new history_note_insert_bytes hook once, preserving the existing journal format and transaction boundaries.
+- Copies the full payload with one rep movsb and updates document length, cursor and revision once.
+- Invalidates the derived line index once, leaving its rebuild to the next render instead of applying one point update per byte.
+
+history.c now uses this bulk range helper when applying inserted bytes during Undo/Redo as well. The C history test shim provides the corresponding range-insert implementation so the history test binary remains independently linkable. No clipboard-library dependency, thread, helper process, or larger receive ceiling was introduced; the existing 64 MiB limit remains unchanged.
+
+The Wayland mock writes an exact 10,485,760-byte payload through the actual nonblocking clipboard FD, waiting for writability when the pipe fills. It checks complete byte equality, index validity, 70,375 logical lines and total line-byte coverage, then performs Undo and Redo and checks exact document equality after each direction. The clipboard-write-to-first-redraw interval measured 621.2 ms on the Ubuntu 24.04 CI runner. That interval includes the transfer and initial index rebuild; it excludes Undo/Redo, which are verified separately.
+
+The full workflow passed on head [c311b8a8b23c](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f), including freestanding ELF validation, CLI tests, renderer benchmark, Wayland protocol mock matrix, XKB/importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads. The Linux executable artifact is [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401).
+
+---
+
 ## 2026-11-13 — optimize and stress-test large-document Open (CI PASS #920)
 
 Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps, including the new 11 MiB Open/index/Save stress case and nested GNOME Shell/Mutter integration.

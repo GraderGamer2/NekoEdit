@@ -1,3 +1,17 @@
+## 2026-11-13 — bulk insertion for large clipboard payloads (CI PASS #923)
+
+| Commit | Subject |
+|---|---|
+| [3c4213d50d5744e14709ef833aba71f340e8e537](https://github.com/GraderGamer2/NekoEdit/commit/3c4213d50d5744e14709ef833aba71f340e8e537) | perf: bulk insert large clipboard pastes |
+| [1ea16b11534ec7159630deb89ee8b8cecac0b2df](https://github.com/GraderGamer2/NekoEdit/commit/1ea16b11534ec7159630deb89ee8b8cecac0b2df) | test: handle nonblocking clipboard stress writes |
+| [c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f](https://github.com/GraderGamer2/NekoEdit/commit/c311b8a8b23c4ab084f0c251cd2e42bf9e46ea9f) | test: verify line-byte lengths in clipboard stress case |
+
+Actions [#923](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511) passed all 16 workflow steps. The real Wayland mock transferred an exact 10,485,760-byte clipboard payload, compared all document bytes, verified 70,375 line records and complete line-byte coverage, then passed Undo/Redo. The write-to-first-redraw interval was 621.2 ms on the Ubuntu 24.04 GitHub runner; this is a CI mock-compositor measurement, not local desktop timing.
+
+Artifacts: Linux x86-64 [14053660401](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053660401) (144,791 bytes); Compose packs [14053185608](https://github.com/GraderGamer2/NekoEdit/actions/runs/43452537511/artifacts/14053185608) (120,536 bytes). Both expire 2026-11-14 at 15:28 UTC (22:28 WIB).
+
+---
+
 ## 2026-11-13 — large-document Open/index optimization (CI PASS #920)
 
 | Commit | Subject |
