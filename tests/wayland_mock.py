@@ -762,15 +762,26 @@ def run(
                     observations.append("fractional viewport mapped correctly without wl_seat; client object IDs remained valid")
                     # Force a same-size configure after release. The first
                     # redraw callback must start after extension proxy IDs
-                    # 15..18 rather than reusing 13 or 14.
+                    # 15..18 rather than reusing 13 or 14. recv_wayland_message
+                    # consumes frame requests while looking for the attach, so
+                    # verify the callback ID through the recorded request list.
+                    previous_frame_requests = frame_callback_stats["requested"]
                     client.sendall(
                         wire_message(12, 0)
                         + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                         + wire_message(9, 0, struct.pack("<I", 1235))
                     )
                     expect_message(client, (9, 4, struct.pack("<I", 1235)), "acknowledge seat-less configure")
-                    expect_message(client, (8, 3, struct.pack("<I", 19)), "allocate frame callback after fractional proxy IDs")
                     expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "reattach seat-less buffer")
+                    if (
+                        frame_callback_stats["requested"] != previous_frame_requests + 1
+                        or not frame_callback_stats["ids"]
+                        or frame_callback_stats["ids"][-1] != 19
+                    ):
+                        raise AssertionError(
+                            "seat-less frame callback did not use object ID 19 after fractional proxies: "
+                            + repr(frame_callback_stats)
+                        )
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
                         "damage seat-less redraw in logical coordinates",
