@@ -1,3 +1,13 @@
+## 2026-11-13 — preserve regular-file permission bits during atomic save (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [f5bebe236142821a337a98f92b395beaf073b4a8](https://github.com/GraderGamer2/NekoEdit/commit/f5bebe236142821a337a98f92b395beaf073b4a8) | fix: preserve file permissions during atomic save |
+
+The writer checks the existing target's file type and mode before creating the temporary, applies the prior regular-file mode after writing, then fsyncs and renames. The protocol mock checks a non-default `0640` mode across both Ctrl+S and confirmed Save As overwrite. CI validation is pending.
+
+---
+
 ## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
 
 | Commit | Subject |
