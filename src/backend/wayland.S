@@ -4968,7 +4968,7 @@ next_client_object_id:  .long 0
 keymap_event_count:        .long 0
 keymap_event_last_object:  .long 0
 keymap_event_last_size:    .long 0
-keymap_event_last_fd:      .long -1
+keymap_event_last_fd:      .long 0
 keyboard_dispatch_count:  .long 0
 keyboard_dispatch_last_opcode: .long 0
 keyboard_dispatch_last_size: .long 0
@@ -5841,6 +5841,26 @@ wayland_main:
     test eax, eax
     js .protocol_error
     jnz .seat_check_sync
+.seat_check_keyboard_event:
+    # wl_keyboard.keymap may arrive before the initial seat sync callback.
+    # Consume it here instead of dropping it while the bootstrap roundtrip
+    # waits for wl_display.sync.done.
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .seat_check_buffer_release
+    cmp dword ptr [rip + last_object], eax
+    jne .seat_check_buffer_release
+    inc dword ptr [rip + keyboard_dispatch_count]
+    mov eax, dword ptr [rip + last_opcode]
+    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
+    mov eax, dword ptr [rip + last_size]
+    mov dword ptr [rip + keyboard_dispatch_last_size], eax
+    cmp dword ptr [rip + last_opcode], 0
+    jne .seat_check_buffer_release
+    call keyboard_keymap_dispatch
+    test rax, rax
+    js .protocol_error
+    jmp .seat_check_sync
 .seat_check_buffer_release:
     mov eax, dword ptr [rip + window_buffer_id]
     cmp dword ptr [rip + last_object], eax
@@ -5854,7 +5874,7 @@ wayland_main:
     test eax, eax
     jz .seat_check_sync
     cmp dword ptr [rip + last_object], eax
-    jne .seat_check_sync
+    jne .seat_check_keyboard_event
     cmp dword ptr [rip + last_opcode], 0
     je .seat_pointer_enter
     cmp dword ptr [rip + last_opcode], 1
@@ -7081,18 +7101,7 @@ wayland_main:
     je .keyboard_repeat_info
     jmp .event_loop
 .keyboard_keymap:
-    inc dword ptr [rip + keymap_event_count]
-    mov eax, dword ptr [rip + last_object]
-    mov dword ptr [rip + keymap_event_last_object], eax
-    mov eax, dword ptr [rip + last_size]
-    mov dword ptr [rip + keymap_event_last_size], eax
-    mov eax, dword ptr [rip + event_fd]
-    mov dword ptr [rip + keymap_event_last_fd], eax
-    cmp dword ptr [rip + last_size], 8
-    jne .protocol_error
-    cmp dword ptr [rip + event_fd], -1
-    je .protocol_error
-    call keyboard_keymap_update
+    call keyboard_keymap_dispatch
     test rax, rax
     js .protocol_error
     jmp .event_loop
@@ -12580,6 +12589,26 @@ keyboard_keymap_update:
     pop rbx
     ret
 .size keyboard_keymap_update, . - keyboard_keymap_update
+
+# Validate/consume wl_keyboard.keymap in both the bootstrap and main dispatchers.
+.type keyboard_keymap_dispatch, @function
+keyboard_keymap_dispatch:
+    inc dword ptr [rip + keymap_event_count]
+    mov eax, dword ptr [rip + last_object]
+    mov dword ptr [rip + keymap_event_last_object], eax
+    mov eax, dword ptr [rip + last_size]
+    mov dword ptr [rip + keymap_event_last_size], eax
+    mov eax, dword ptr [rip + event_fd]
+    mov dword ptr [rip + keymap_event_last_fd], eax
+    cmp dword ptr [rip + last_size], 8
+    jne .keyboard_keymap_dispatch_bad
+    cmp dword ptr [rip + event_fd], -1
+    je .keyboard_keymap_dispatch_bad
+    jmp keyboard_keymap_update
+.keyboard_keymap_dispatch_bad:
+    mov rax, -71
+    ret
+.size keyboard_keymap_dispatch, . - keyboard_keymap_dispatch
 
 # Read one complete Wayland event; records last_object/opcode/size and payload.
 .type wl_read_event, @function

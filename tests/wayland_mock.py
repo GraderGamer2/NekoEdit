@@ -856,6 +856,21 @@ def run(
                     (13, 1, struct.pack("<I", keyboard_object_id)),
                     "get wl_keyboard",
                 )
+                # Exercise a valid wl_keyboard.keymap event before callback 14
+                # ends the initial seat roundtrip. The no-keymap format carries
+                # an FD too; the client must consume it rather than lose the
+                # first keyboard event while waiting for sync.done.
+                early_keymap_fd = os.memfd_create("nekoedit-early-no-keymap", 0)
+                try:
+                    early_keymap_event = wire_message(
+                        keyboard_object_id, 0, struct.pack("<II", 0, 0)
+                    )
+                    client.sendmsg(
+                        [early_keymap_event],
+                        [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", early_keymap_fd))],
+                    )
+                finally:
+                    os.close(early_keymap_fd)
                 # Send pointer.enter only after get_pointer has created its object,
                 # and before callback 14 ends the client's initial seat roundtrip.
                 client.sendall(
@@ -2161,6 +2176,7 @@ xkb_symbols "nekoedit-sparse" {
                         "xkb_num_lock_mask",
                         "xkb_keymap_ready",
                         "keymap_processing_complete",
+                        "keymap_event_count",
                         "text_input_manager_global",
                         "text_input_manager_object",
                         "text_input_object",
@@ -2195,6 +2211,20 @@ xkb_symbols "nekoedit-sparse" {
                             )[0]
                         if complete != 1:
                             raise AssertionError("XKB keymap parser did not finish processing")
+                        keymap_event_deadline = time.monotonic() + 3.0
+                        keymap_event_count = struct.unpack(
+                            "<I", child_memory("keymap_event_count", 0, 4)
+                        )[0]
+                        while keymap_event_count < 2 and time.monotonic() < keymap_event_deadline:
+                            time.sleep(0.001)
+                            keymap_event_count = struct.unpack(
+                                "<I", child_memory("keymap_event_count", 0, 4)
+                            )[0]
+                        if keymap_event_count < 2:
+                            raise AssertionError(
+                                "wl_keyboard.keymap sent during the initial seat roundtrip was not dispatched "
+                                f"(expected early no-keymap + test XKB map events, got {keymap_event_count})"
+                            )
                         if text_input_advertised and not text_input_test:
                             ime_global = struct.unpack("<I", child_memory("text_input_manager_global", 0, 4))[0]
                             ime_manager = struct.unpack("<I", child_memory("text_input_manager_object", 0, 4))[0]
