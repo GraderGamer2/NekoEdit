@@ -4819,17 +4819,20 @@ doc_wrap_enabled:       .long 1
 .global window_width, window_height, window_buffer_width, window_buffer_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode, find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
 window_width:           .long 0
 window_height:          .long 0
-# window_width/height are surface-local dimensions. The backing dimensions
-# are pixel extents; window_stride is their byte pitch. They remain 1:1 until
-# the renderer begins applying the compositor's preferred buffer scale.
+# window_width/height stay surface-local. Backing dimensions and stride are
+# physical pixels after applying integer scale and the preferred transform.
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
 .global window_buffer_scale, window_buffer_created_scale, window_surface_mapped, surface_applied_buffer_scale
+.global window_buffer_transform, window_buffer_created_transform, surface_applied_buffer_transform
 window_buffer_scale:    .long 0
 window_buffer_created_scale: .long 0
+window_buffer_transform: .long 0
+window_buffer_created_transform: .long 0
 window_surface_mapped:  .long 0
 surface_applied_buffer_scale: .long 0
+surface_applied_buffer_transform: .long 0
 window_status_top:      .long 0
 window_doc_bottom:       .long 0
 window_status_bytes_x:  .long 0
@@ -5243,8 +5246,11 @@ wayland_main:
     mov dword ptr [rip + window_height], HEIGHT
     mov dword ptr [rip + window_buffer_scale], 1
     mov dword ptr [rip + window_buffer_created_scale], 0
+    mov dword ptr [rip + window_buffer_transform], 0
+    mov dword ptr [rip + window_buffer_created_transform], 0
     mov dword ptr [rip + window_surface_mapped], 0
     mov dword ptr [rip + surface_applied_buffer_scale], 1
+    mov dword ptr [rip + surface_applied_buffer_transform], 0
     mov dword ptr [rip + doc_font_size], 12
     mov dword ptr [rip + ui_font_size], 10
     # Load validated persistent settings before the first layout calculation.
@@ -5685,6 +5691,8 @@ wayland_main:
     js .protocol_error
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rip + window_buffer_created_transform], eax
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + redraw_pending], 0
 
@@ -12732,6 +12740,89 @@ draw_rect:
     imul r14d, eax
     imul r15d, eax
 .draw_rect_scale_done:
+    # Convert each logical-surface rectangle to its pre-transformed buffer box.
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, 1
+    je .draw_rect_map_90
+    cmp eax, 2
+    je .draw_rect_map_180
+    cmp eax, 3
+    je .draw_rect_map_270
+    cmp eax, 4
+    je .draw_rect_map_flipped
+    cmp eax, 5
+    je .draw_rect_map_flipped_90
+    cmp eax, 6
+    je .draw_rect_map_flipped_180
+    cmp eax, 7
+    je .draw_rect_map_flipped_270
+    jmp .draw_rect_map_done
+.draw_rect_map_90:
+    mov eax, r13d
+    mov ecx, dword ptr [rip + window_width]
+    imul ecx, dword ptr [rip + window_buffer_scale]
+    sub ecx, r12d
+    sub ecx, r14d
+    mov r12d, eax
+    mov r13d, ecx
+    xchg r14d, r15d
+    jmp .draw_rect_map_done
+.draw_rect_map_180:
+    mov eax, dword ptr [rip + window_width]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r12d
+    sub eax, r14d
+    mov r12d, eax
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r13d
+    sub eax, r15d
+    mov r13d, eax
+    jmp .draw_rect_map_done
+.draw_rect_map_270:
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r13d
+    sub eax, r15d
+    mov ecx, r12d
+    mov r12d, eax
+    mov r13d, ecx
+    xchg r14d, r15d
+    jmp .draw_rect_map_done
+.draw_rect_map_flipped:
+    mov eax, dword ptr [rip + window_width]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r12d
+    sub eax, r14d
+    mov r12d, eax
+    jmp .draw_rect_map_done
+.draw_rect_map_flipped_90:
+    mov eax, r13d
+    mov ecx, r12d
+    mov r12d, eax
+    mov r13d, ecx
+    xchg r14d, r15d
+    jmp .draw_rect_map_done
+.draw_rect_map_flipped_180:
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r13d
+    sub eax, r15d
+    mov r13d, eax
+    jmp .draw_rect_map_done
+.draw_rect_map_flipped_270:
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    sub eax, r13d
+    sub eax, r15d
+    mov ecx, dword ptr [rip + window_width]
+    imul ecx, dword ptr [rip + window_buffer_scale]
+    sub ecx, r12d
+    sub ecx, r14d
+    mov r12d, eax
+    mov r13d, ecx
+    xchg r14d, r15d
+.draw_rect_map_done:
     test r12d, r12d
     js .draw_rect_done
     test r13d, r13d
@@ -14335,13 +14426,31 @@ window_update_geometry:
     mov eax, MAX_BUFFER_SCALE
 .window_geometry_buffer_scale_ready:
     mov dword ptr [rip + window_buffer_scale], eax
-    imul eax, dword ptr [rip + window_width]
+    # Preferred transforms are surface events on wl_compositor v6. On older
+    # compositors, retain the protocol default (normal) transform.
+    xor edx, edx
+    cmp dword ptr [rip + compositor_version], 6
+    jb .window_geometry_transform_ready
+    mov edx, dword ptr [rip + surface_preferred_buffer_transform]
+.window_geometry_transform_ready:
+    mov dword ptr [rip + window_buffer_transform], edx
+    # Compute physical surface extents, then swap backing axes for 90/270 turns.
+    mov eax, dword ptr [rip + window_width]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    mov edx, dword ptr [rip + window_height]
+    imul edx, dword ptr [rip + window_buffer_scale]
+    test dword ptr [rip + window_buffer_transform], 1
+    jnz .window_geometry_swapped_axes
     mov dword ptr [rip + window_buffer_width], eax
+    mov dword ptr [rip + window_buffer_height], edx
+    jmp .window_geometry_stride
+.window_geometry_swapped_axes:
+    mov dword ptr [rip + window_buffer_width], edx
+    mov dword ptr [rip + window_buffer_height], eax
+.window_geometry_stride:
+    mov eax, dword ptr [rip + window_buffer_width]
     shl eax, 2
     mov dword ptr [rip + window_stride], eax
-    mov eax, dword ptr [rip + window_buffer_scale]
-    imul eax, dword ptr [rip + window_height]
-    mov dword ptr [rip + window_buffer_height], eax
     mov eax, dword ptr [rip + window_height]
     sub eax, 20
     mov dword ptr [rip + window_status_top], eax
@@ -14815,6 +14924,9 @@ window_apply_pending_resize:
     mov eax, dword ptr [rip + window_buffer_scale]
     cmp eax, dword ptr [rip + window_buffer_created_scale]
     jne .window_resize_dimensions_changed
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, dword ptr [rip + window_buffer_created_transform]
+    jne .window_resize_dimensions_changed
     jmp .window_resize_present
 .window_resize_dimensions_changed:
     mov dword ptr [rip + window_width], r12d
@@ -14850,6 +14962,8 @@ window_apply_pending_resize:
     mov dword ptr [rip + window_buffer_id], r14d
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rip + window_buffer_created_transform], eax
 
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
@@ -14920,6 +15034,22 @@ present_buffer:
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + surface_applied_buffer_scale], eax
 .present_buffer_scale_done:
+    cmp dword ptr [rip + compositor_version], 2
+    jb .present_buffer_transform_done
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, dword ptr [rip + surface_applied_buffer_transform]
+    je .present_buffer_transform_done
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 8
+    mov esi, 7                  # wl_surface.set_buffer_transform
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rip + surface_applied_buffer_transform], eax
+.present_buffer_transform_done:
     mov eax, dword ptr [rip + window_buffer_id]
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -19495,9 +19625,13 @@ draw_glyph:
     js .glyph_done
     test r13d, r13d
     js .glyph_done
-    cmp r12d, dword ptr [rip + window_buffer_width]
+    mov eax, dword ptr [rip + window_width]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    cmp r12d, eax
     jae .glyph_done
-    cmp r13d, dword ptr [rip + window_buffer_height]
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    cmp r13d, eax
     jae .glyph_done
     # Render parsed TrueType glyphs when a font is active; retain the compact
     # 5x7 bitmap only for missing/unsupported fonts or individual glyphs.
@@ -19509,12 +19643,20 @@ draw_glyph:
     mov rcx, qword ptr [rip + shm_mapping]
     mov r8d, dword ptr [rip + window_buffer_width]
     mov r9d, dword ptr [rip + window_buffer_height]
-    sub rsp, 16
+    sub rsp, 48
     mov eax, dword ptr [rip + window_stride]
     mov dword ptr [rsp], eax
     mov dword ptr [rsp + 8], r14d
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rsp + 16], eax
+    mov eax, dword ptr [rip + window_width]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rsp + 24], eax
+    mov eax, dword ptr [rip + window_height]
+    imul eax, dword ptr [rip + window_buffer_scale]
+    mov dword ptr [rsp + 32], eax
     call font_draw_codepoint_size
-    add rsp, 16
+    add rsp, 48
     test eax, eax
     jnz .glyph_done
 .glyph_bitmap_fallback:
@@ -19733,7 +19875,9 @@ draw_glyph:
     imul eax, r10d
     add eax, r13d
     add eax, r11d
-    cmp eax, dword ptr [rip + window_buffer_height]
+    mov ecx, dword ptr [rip + window_height]
+    imul ecx, r10d
+    cmp eax, ecx
     jae .glyph_fallback_next_subrow
     # Keep the physical row coordinate intact across every horizontal subpixel.
     # The address calculation below repurposes EAX for the byte offset.
@@ -19746,9 +19890,90 @@ draw_glyph:
     imul edx, r10d
     add edx, r12d
     add edx, r9d
+    mov ecx, dword ptr [rip + window_width]
+    imul ecx, r10d
+    cmp edx, ecx
+    jae .glyph_fallback_next_subcolumn
+    # Map this physical surface pixel into the transformed SHM buffer.
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, 1
+    je .glyph_fallback_map_90
+    cmp eax, 2
+    je .glyph_fallback_map_180
+    cmp eax, 3
+    je .glyph_fallback_map_270
+    cmp eax, 4
+    je .glyph_fallback_map_flipped
+    cmp eax, 5
+    je .glyph_fallback_map_flipped_90
+    cmp eax, 6
+    je .glyph_fallback_map_flipped_180
+    cmp eax, 7
+    je .glyph_fallback_map_flipped_270
+    mov eax, esi
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_90:
+    mov ecx, esi
+    mov eax, dword ptr [rip + window_width]
+    imul eax, r10d
+    dec eax
+    sub eax, edx
+    mov edx, ecx
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_180:
+    mov edi, dword ptr [rip + window_width]
+    imul edi, r10d
+    dec edi
+    sub edi, edx
+    mov eax, dword ptr [rip + window_height]
+    imul eax, r10d
+    dec eax
+    sub eax, esi
+    mov edx, edi
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_270:
+    mov ecx, dword ptr [rip + window_height]
+    imul ecx, r10d
+    dec ecx
+    sub ecx, esi
+    mov eax, edx
+    mov edx, ecx
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_flipped:
+    mov eax, dword ptr [rip + window_width]
+    imul eax, r10d
+    dec eax
+    sub eax, edx
+    mov edx, eax
+    mov eax, esi
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_flipped_90:
+    mov eax, esi
+    mov ecx, edx
+    mov edx, eax
+    mov eax, ecx
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_flipped_180:
+    mov eax, dword ptr [rip + window_height]
+    imul eax, r10d
+    dec eax
+    sub eax, esi
+    jmp .glyph_fallback_map_done
+.glyph_fallback_map_flipped_270:
+    mov ecx, dword ptr [rip + window_height]
+    imul ecx, r10d
+    dec ecx
+    sub ecx, esi
+    mov eax, dword ptr [rip + window_width]
+    imul eax, r10d
+    dec eax
+    sub eax, edx
+    mov edx, ecx
+.glyph_fallback_map_done:
     cmp edx, dword ptr [rip + window_buffer_width]
     jae .glyph_fallback_next_subcolumn
-    mov eax, esi
+    cmp eax, dword ptr [rip + window_buffer_height]
+    jae .glyph_fallback_next_subcolumn
     mov ecx, dword ptr [rip + window_stride]
     imul eax, ecx
     shl edx, 2
@@ -23251,6 +23476,22 @@ window_attach_initial_buffer:
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + surface_applied_buffer_scale], eax
 .initial_buffer_scale_done:
+    cmp dword ptr [rip + compositor_version], 2
+    jb .initial_buffer_transform_done
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, dword ptr [rip + surface_applied_buffer_transform]
+    je .initial_buffer_transform_done
+    mov dword ptr [rip + payload_buffer], eax
+    mov edi, 8
+    mov esi, 7                  # wl_surface.set_buffer_transform
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .initial_buffer_done
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rip + surface_applied_buffer_transform], eax
+.initial_buffer_transform_done:
     lea rax, [rip + stage_attach]
     mov qword ptr [rip + failure_stage], rax
     mov eax, dword ptr [rip + window_buffer_id]
@@ -23348,9 +23589,17 @@ output_bind_pending:
 window_scale_schedule:
     push r12
     mov r12d, dword ptr [rip + window_buffer_scale]
+    sub rsp, 16
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rsp], eax
     call window_update_geometry
+    mov eax, dword ptr [rsp]
+    add rsp, 16
     cmp r12d, dword ptr [rip + window_buffer_scale]
+    jne .window_scale_schedule_changed
+    cmp eax, dword ptr [rip + window_buffer_transform]
     je .window_scale_schedule_done
+.window_scale_schedule_changed:
     mov dword ptr [rip + window_resize_pending], 1
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + window_surface_mapped], 0
@@ -23372,7 +23621,11 @@ window_prepare_initial_buffer_scale:
     push r12
     mov eax, dword ptr [rip + window_buffer_created_scale]
     cmp eax, dword ptr [rip + window_buffer_scale]
+    jne .window_prepare_initial_scale_rebuild
+    mov eax, dword ptr [rip + window_buffer_transform]
+    cmp eax, dword ptr [rip + window_buffer_created_transform]
     je .window_prepare_initial_scale_done
+.window_prepare_initial_scale_rebuild:
     call render_surface
     # The original descriptor has never been attached, so it is safe to destroy.
     mov edi, dword ptr [rip + window_buffer_id]
@@ -23404,6 +23657,8 @@ window_prepare_initial_buffer_scale:
     mov dword ptr [rip + window_buffer_id], r12d
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rip + window_buffer_created_transform], eax
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + redraw_pending], 0
 .window_prepare_initial_scale_done:
@@ -23438,8 +23693,8 @@ output_recompute_surface_scale:
     mov dword ptr [rip + surface_output_count], r13d
     mov dword ptr [rip + surface_output_max_scale], r11d
 
-    # Version 6 exposes the compositor's authoritative per-surface preference.
-    # Its protocol default is 1 until preferred_buffer_scale is received.
+    # Version 6 exposes authoritative per-surface scale and transform hints.
+    # Their protocol defaults are scale 1 and the normal transform.
     cmp dword ptr [rip + compositor_version], 6
     jb .output_recompute_legacy_scale
     mov eax, dword ptr [rip + surface_preferred_buffer_scale]
@@ -23630,6 +23885,7 @@ handle_surface_output_event:
     ja .surface_output_protocol_error
     mov dword ptr [rip + surface_preferred_buffer_transform], eax
     mov dword ptr [rip + surface_preferred_transform_seen], 1
+    call output_recompute_surface_scale
     jmp .surface_output_handled
 .surface_output_enter:
     mov r13d, 1

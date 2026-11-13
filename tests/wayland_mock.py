@@ -298,6 +298,7 @@ def run(
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
     initial_preferred_buffer_scale: int = 1,
+    initial_preferred_buffer_transform: int = 0,
     dpi_runtime_test: bool = False,
     output_tracking_test: bool = False,
     output_tracking_legacy_test: bool = False,
@@ -306,6 +307,8 @@ def run(
     binary = os.path.abspath(binary)
     if initial_preferred_buffer_scale not in (1, 2):
         raise ValueError("the current Wayland scale tests support only 1x and 2x")
+    if initial_preferred_buffer_transform not in range(8):
+        raise ValueError("the preferred Wayland buffer transform must be in range 0..7")
     output_tracking_enabled = output_tracking_test or output_tracking_legacy_test
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     locale_scenarios = (
@@ -445,7 +448,10 @@ def run(
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
-            compositor_advertised_version = 6 if (output_tracking_test or initial_preferred_buffer_scale > 1 or dpi_runtime_test) else 1
+            compositor_advertised_version = 6 if (
+                output_tracking_test or initial_preferred_buffer_scale > 1
+                or initial_preferred_buffer_transform != 0 or dpi_runtime_test
+            ) else 1
             globals_payload = (
                 registry_global(1, "wl_compositor", version=compositor_advertised_version)
                 + registry_global(2, "wl_shm")
@@ -514,8 +520,13 @@ def run(
                 wire_message(8, 2, struct.pack("<I", initial_preferred_buffer_scale))
                 if initial_preferred_buffer_scale > 1 else b""
             )
+            preferred_transform_event = (
+                wire_message(8, 3, struct.pack("<I", initial_preferred_buffer_transform))
+                if initial_preferred_buffer_transform != 0 else b""
+            )
             client.sendall(
                 preferred_scale_event
+                + preferred_transform_event
                 + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
@@ -550,10 +561,55 @@ def run(
                     )
 
                 buffer_scale = initial_preferred_buffer_scale
-                buffer_width = 800 * buffer_scale
-                buffer_height = initial_height * buffer_scale
+                surface_pixel_width = 800 * buffer_scale
+                surface_pixel_height = initial_height * buffer_scale
+                buffer_width, buffer_height = (
+                    (surface_pixel_height, surface_pixel_width)
+                    if initial_preferred_buffer_transform % 2
+                    else (surface_pixel_width, surface_pixel_height)
+                )
                 buffer_stride = buffer_width * 4
-                if buffer_scale == 1:
+
+                def logical_buffer_pixel(logical_x: int, logical_y: int) -> int:
+                    # Surface-local pixels are pre-transformed into buffer coordinates.
+                    x = logical_x * buffer_scale
+                    y = logical_y * buffer_scale
+                    transform = initial_preferred_buffer_transform
+                    if transform == 1:
+                        bx, by = y, surface_pixel_width - 1 - x
+                    elif transform == 2:
+                        bx, by = surface_pixel_width - 1 - x, surface_pixel_height - 1 - y
+                    elif transform == 3:
+                        bx, by = surface_pixel_height - 1 - y, x
+                    elif transform == 4:
+                        bx, by = surface_pixel_width - 1 - x, y
+                    elif transform == 5:
+                        bx, by = y, x
+                    elif transform == 6:
+                        bx, by = x, surface_pixel_height - 1 - y
+                    elif transform == 7:
+                        bx, by = surface_pixel_height - 1 - y, surface_pixel_width - 1 - x
+                    else:
+                        bx, by = x, y
+                    return struct.unpack_from(
+                        "<I", pixels, by * buffer_stride + bx * 4
+                    )[0]
+
+                if initial_preferred_buffer_transform != 0:
+                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4:
+                        raise AssertionError("transformed buffer did not preserve the accent rail")
+                    if logical_buffer_pixel(3, 10) != 0xFF343D4B:
+                        raise AssertionError("transformed buffer displaced the title-bar boundary")
+                    if logical_buffer_pixel(400, 40) != 0xFF252A33:
+                        raise AssertionError("transformed buffer did not preserve the document background")
+                    if logical_buffer_pixel(4, initial_height - 20) != 0xFF78A9D4:
+                        raise AssertionError("transformed buffer did not preserve the status separator")
+                    if not any(
+                        logical_buffer_pixel(x, y) != 0xFF343D4B
+                        for y in range(8, 24) for x in range(16, 112)
+                    ):
+                        raise AssertionError("transformed buffer did not rasterize visible title text")
+                elif buffer_scale == 1:
                     if struct.unpack_from("<I", pixels, 4 * 4)[0] != 0xFF343D4B:
                         raise AssertionError("expected title-bar background was not rendered")
                     if struct.unpack_from("<I", pixels, 0)[0] != 0xFF78A9D4:
@@ -607,11 +663,7 @@ def run(
     
                 else:
                     def physical_pixel(logical_x: int, logical_y: int) -> int:
-                        return struct.unpack_from(
-                            "<I", pixels,
-                            (logical_y * buffer_scale) * buffer_stride
-                            + (logical_x * buffer_scale) * 4,
-                        )[0]
+                        return logical_buffer_pixel(logical_x, logical_y)
                     if physical_pixel(2, 10) != 0xFF78A9D4:
                         raise AssertionError("2x accent rail did not cover the logical 3px width")
                     if physical_pixel(3, 10) != 0xFF343D4B:
@@ -756,6 +808,12 @@ def run(
                         client, (8, 8, struct.pack("<i", buffer_scale)),
                         "set non-default surface buffer scale",
                     )
+                if initial_preferred_buffer_transform != 0:
+                    expect_message(
+                        client,
+                        (8, 7, struct.pack("<i", initial_preferred_buffer_transform)),
+                        "set preferred surface buffer transform",
+                    )
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "attach buffer")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
                 expect_message(client, (8, 6, b""), "initial map surface")
@@ -763,6 +821,8 @@ def run(
                     wanted_dpi_state = (
                         "window_buffer_scale", "window_buffer_created_scale",
                         "window_buffer_width", "window_buffer_height", "window_stride",
+                        "window_buffer_transform", "window_buffer_created_transform",
+                        "surface_applied_buffer_transform",
                         "window_buffer_id", "frame_callback_id",
                     )
                     dpi_symbols = {}
@@ -837,8 +897,56 @@ def run(
                     wait_dpi("window_buffer_created_scale", 1)
                     wait_dpi("window_buffer_width", 800)
                     wait_dpi("window_buffer_height", 480)
+
+                    # A transform-only preference change also remains pending
+                    # until the current wl_buffer is released.
+                    client.sendall(wire_message(8, 3, struct.pack("<I", 1)))
+                    wait_dpi("window_buffer_transform", 1)
+                    wait_dpi("window_buffer_created_transform", 0)
+                    client.sendall(wire_message(buffer_1x, 0))
+                    expect_message(client, (buffer_1x, 0, b""), "destroy released normal transform buffer")
+                    create_rotated = recv_wayland_message(client)
+                    if create_rotated[0:2] != (11, 0) or len(create_rotated[2]) != 24 or create_rotated[3]:
+                        raise AssertionError(f"rotated buffer was not recreated from the shared pool: {create_rotated!r}")
+                    buffer_rotated, _offset, width_rotated, height_rotated, stride_rotated, format_rotated = struct.unpack("<6I", create_rotated[2])
+                    if (width_rotated, height_rotated, stride_rotated, format_rotated) != (480, 800, 1920, 1):
+                        raise AssertionError(
+                            f"unexpected 90-degree buffer geometry: {(width_rotated, height_rotated, stride_rotated, format_rotated)!r}"
+                        )
+                    expect_message(client, (8, 7, struct.pack("<i", 1)), "apply runtime 90-degree transform")
+                    expect_message(client, (8, 1, struct.pack("<III", buffer_rotated, 0, 0)), "attach rotated buffer")
+                    expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage logical surface after rotation")
+                    expect_message(client, (8, 6, b""), "commit rotated buffer")
+                    wait_dpi("window_buffer_created_transform", 1)
+                    wait_dpi("window_buffer_width", 480)
+                    wait_dpi("window_buffer_height", 800)
+                    wait_dpi("frame_callback_id", 0)
+
+                    # Restore normal orientation through the same release gate.
+                    client.sendall(wire_message(8, 3, struct.pack("<I", 0)))
+                    wait_dpi("window_buffer_transform", 0)
+                    wait_dpi("window_buffer_created_transform", 1)
+                    client.sendall(wire_message(buffer_rotated, 0))
+                    expect_message(client, (buffer_rotated, 0, b""), "destroy released rotated buffer")
+                    create_normal = recv_wayland_message(client)
+                    if create_normal[0:2] != (11, 0) or len(create_normal[2]) != 24 or create_normal[3]:
+                        raise AssertionError(f"normal buffer was not restored: {create_normal!r}")
+                    buffer_normal, _offset, width_normal, height_normal, stride_normal, format_normal = struct.unpack("<6I", create_normal[2])
+                    if (width_normal, height_normal, stride_normal, format_normal) != (800, 480, 3200, 1):
+                        raise AssertionError(
+                            f"unexpected normal buffer geometry: {(width_normal, height_normal, stride_normal, format_normal)!r}"
+                        )
+                    expect_message(client, (8, 7, struct.pack("<i", 0)), "restore normal buffer transform")
+                    expect_message(client, (8, 1, struct.pack("<III", buffer_normal, 0, 0)), "attach normal buffer")
+                    expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage restored logical surface")
+                    expect_message(client, (8, 6, b""), "commit normal buffer")
+                    wait_dpi("window_buffer_created_transform", 0)
+                    wait_dpi("window_buffer_width", 800)
+                    wait_dpi("window_buffer_height", 480)
+                    wait_dpi("frame_callback_id", 0)
+
                     observations.append(
-                        "preferred 1x/2x/1x changes coalesce behind wl_buffer.release; physical buffers resize while damage remains logical"
+                        "preferred 1x/2x/1x scales and 0/90/0 transforms all replace buffers only after release; logical damage remains unchanged"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -1200,7 +1308,7 @@ def run(
                 expect_message(client, (8, 1, struct.pack("<III", 12, 0, 0)), "redraw attach")
                 expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "redraw damage")
                 expect_message(client, (8, 6, b""), "redraw commit")
-                if not (
+                if initial_preferred_buffer_transform != 0 or not (
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
@@ -1208,12 +1316,8 @@ def run(
                     or line_navigation_test or find_replace_test
                 ):
                     def document_pixel(logical_x: int, logical_y: int) -> int:
-                        # Hit testing stays logical; sample its physical pixel.
-                        return struct.unpack_from(
-                            "<I", pixels,
-                            (logical_y * buffer_scale) * buffer_stride
-                            + (logical_x * buffer_scale) * 4,
-                        )[0]
+                        # Hit testing stays logical; sample the transformed physical buffer.
+                        return logical_buffer_pixel(logical_x, logical_y)
 
                     if initial_file is None or os.path.getsize(initial_file) <= 1:
                         clicked_caret_column = os.path.getsize(initial_file) if initial_file else 0
@@ -8135,9 +8239,9 @@ xkb_symbols "nekoedit-sparse" {
                     a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
                 if a_pixel != 0xFFD8DEE9:
                     raise AssertionError(f"first key did not render an A glyph: {hex(a_pixel)}")
-                if initial_preferred_buffer_scale > 1:
+                if initial_preferred_buffer_scale > 1 or initial_preferred_buffer_transform != 0:
                     observations.append(
-                        "2x startup preserved logical pointer hit-testing, caret placement, and first typed glyph rendering"
+                        "preferred integer scale/transform preserved logical pointer hit-testing, caret placement, and first typed glyph rendering"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -9633,6 +9737,14 @@ if __name__ == "__main__":
             font_parser_test=True,
             font_test_path=font_path,
         )
+        # Exercise the TrueType rasterizer's surface-to-buffer pixel mapping.
+        run(
+            sys.argv[1],
+            initial_file=render_path,
+            font_parser_test=True,
+            font_test_path=font_path,
+            initial_preferred_buffer_transform=1,
+        )
         # Reuse the same deterministic face to validate UI-sized glyph caching,
         # pixel-accurate field editing, and selected file-row geometry.
         run(
@@ -9734,7 +9846,10 @@ if __name__ == "__main__":
     run(sys.argv[1], output_tracking_legacy_test=True)
     # The preferred scale arrives before the initial wl_buffer is created.
     run(sys.argv[1], initial_preferred_buffer_scale=2)
-    # Runtime scale changes are release-gated in both directions.
+    # Exercise all seven non-normal preferred transform values before buffer attach.
+    for preferred_transform in range(1, 8):
+        run(sys.argv[1], initial_preferred_buffer_transform=preferred_transform)
+    # Runtime scale and transform changes are release-gated in both directions.
     run(sys.argv[1], dpi_runtime_test=True)
     # Remove the keyboard while an opted-in text-input-v3 IME has visible preedit.
     run(sys.argv[1], seat_hotplug_ime_test=True, advertised_seat_version=4)

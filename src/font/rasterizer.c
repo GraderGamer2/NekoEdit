@@ -277,14 +277,34 @@ int font_codepoint_advance_pixels(uint32_t codepoint) {
     return font_codepoint_advance_pixels_size(codepoint,size);
 }
 
+static int map_surface_pixel_to_buffer(int32_t x,int32_t y,uint32_t transform,
+                                       int32_t surface_width,int32_t surface_height,
+                                       int32_t *buffer_x,int32_t *buffer_y) {
+    if (x<0 || y<0 || x>=surface_width || y>=surface_height) return 0;
+    switch (transform) {
+    case 0: *buffer_x=x; *buffer_y=y; break;
+    case 1: *buffer_x=y; *buffer_y=surface_width-1-x; break;
+    case 2: *buffer_x=surface_width-1-x; *buffer_y=surface_height-1-y; break;
+    case 3: *buffer_x=surface_height-1-y; *buffer_y=x; break;
+    case 4: *buffer_x=surface_width-1-x; *buffer_y=y; break;
+    case 5: *buffer_x=y; *buffer_y=x; break;
+    case 6: *buffer_x=x; *buffer_y=surface_height-1-y; break;
+    case 7: *buffer_x=surface_height-1-y; *buffer_y=surface_width-1-x; break;
+    default: return 0;
+    }
+    return 1;
+}
+
 int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
                              int32_t width,int32_t height,int32_t stride,
-                             uint32_t size) {
+                             uint32_t size,uint32_t transform,
+                             int32_t surface_width,int32_t surface_height) {
     uint32_t gid;
     struct cache_entry *e;
     if (cp==0x20) return 1;
     if (!font_loaded || !surface || width<=0 || height<=0 || stride<width*4 ||
-        !size || size>MAX_GLYPH_EM) return 0;
+        !size || size>MAX_GLYPH_EM || transform>7 ||
+        surface_width<=0 || surface_height<=0) return 0;
     gid=font_cmap_lookup(cp);
     if (!gid && cp!=0x3f) gid=font_cmap_lookup(0x3f);
     if (!gid || gid>=(uint32_t)font_num_glyphs) return 0;
@@ -292,12 +312,15 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
     if (!e || !e->width || !e->height) return 0;
     for (uint32_t row=0;row<e->height;++row) {
         int32_t py=y+e->top+(int32_t)row;
-        if (py<0 || py>=height) continue;
         for (uint32_t col=0;col<e->width;++col) {
             uint8_t a=e->pixels[row*BITMAP_SIDE+col];
             int32_t px=x+e->left+(int32_t)col;
-            if (!a || px<0 || px>=width) continue;
-            uint32_t *dst=(uint32_t *)(surface+(int64_t)py*stride+px*4);
+            int32_t bx,by;
+            if (!a || !map_surface_pixel_to_buffer(px,py,transform,
+                                                   surface_width,surface_height,&bx,&by))
+                continue;
+            if (bx<0 || by<0 || bx>=width || by>=height) continue;
+            uint32_t *dst=(uint32_t *)(surface+(int64_t)by*stride+bx*4);
             uint32_t old=*dst, inv=255u-a;
             uint32_t r=(0xd8u*a+((old>>16)&255u)*inv+127u)/255u;
             uint32_t g=(0xdeu*a+((old>>8)&255u)*inv+127u)/255u;
@@ -310,5 +333,5 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
 
 int font_draw_codepoint(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
                         int32_t width,int32_t height,int32_t stride) {
-    return font_draw_codepoint_size(cp,x,y,surface,width,height,stride,12);
+    return font_draw_codepoint_size(cp,x,y,surface,width,height,stride,12,0,width,height);
 }
