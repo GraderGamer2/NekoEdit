@@ -1,4 +1,28 @@
-## Latest handoff (2026-11-13 — preferred Wayland buffer transforms, CI PASS #882)
+## Latest handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
+
+Continue development on `early-alpha`; keep `main` at its stable merged source checkpoint with the changelog mirrored. Validated branch head: [9ca9c88](https://github.com/GraderGamer2/NekoEdit/commit/9ca9c88d9ec989d8c07cf3519dcc2bb77d9d6229). Source/test change: [f5bebe2](https://github.com/GraderGamer2/NekoEdit/commit/f5bebe236142821a337a98f92b395beaf073b4a8); documentation change: [9ca9c88](https://github.com/GraderGamer2/NekoEdit/commit/9ca9c88d9ec989d8c07cf3519dcc2bb77d9d6229).
+
+Actions [Build and test #885](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004) passed all 16 workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock (including mode-preserving Ctrl+S and Save As overwrite), executable inspection, native `us(intl)` validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell 46 / Mutter integration, and both artifact uploads.
+
+The atomic save routine now inspects the destination with `newfstatat`. When the path resolves to an existing regular file, it applies that file's permission/special bits to the same-directory temporary with `fchmod` after the final write and before fsync/rename. The mock verifies preservation of a non-default `0640` target for both Ctrl+S and confirmed Save As overwrite. Existing non-regular targets are refused; new files continue to use `0644` filtered by `umask`.
+
+Artifacts: [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016623324) (141,588 bytes) and [nekoedit-compose-locales](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016279718) (120,536 bytes). Both expire 2026-11-14 07:00:06 UTC (14:00:06 WIB).
+
+Remaining save-durability work: consider owner/group, ACL, xattr, and timestamp preservation, and fsync the containing directory after rename. Remaining display work: fractional scaling with `wp_fractional_scale_v1`/`wp_viewporter`, a release-tracked multi-buffer set, and physical mixed-DPI/rotated-monitor testing. After correctness work, gather reproducible startup, typing, scrolling, large-document, and cold/warm glyph-cache timings before optimizing.
+
+---
+
+## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
+
+Continue development on `early-alpha`; keep `main` at its stable merged checkpoint. Source/test commit: [f5bebe2](https://github.com/GraderGamer2/NekoEdit/commit/f5bebe236142821a337a98f92b395beaf073b4a8). It adds a `newfstatat` check before creating the temporary file, rejects an existing non-regular target, and applies an existing regular file's permission/special bits to the temporary with `fchmod` after writing and before `fsync`/rename. New files continue to use `0644` filtered by `umask`.
+
+The Wayland mock checks preservation of a non-default `0640` mode through Ctrl+S and Save As overwrite. The source and test changes are pushed; CI validation is pending. Do not call this fully durable file replacement yet: the routine still does not preserve ownership, ACLs, xattrs, or timestamps, and it does not fsync the containing directory after rename.
+
+Next: finish this save-safety milestone, then resume display maturity work with fractional scaling and buffer scheduling. Keep performance optimization measurement-led.
+
+---
+
+## Previous handoff (2026-11-13 — preferred Wayland buffer transforms, CI PASS #882)
 
 Continue development on `early-alpha`; keep `main` at its merged stable checkpoint. Validated branch commit: [5fd1719](https://github.com/GraderGamer2/NekoEdit/commit/5fd1719ea1c22100dda3e7e65544e56dfe40cdc7). The implementation is in [b44172d](https://github.com/GraderGamer2/NekoEdit/commit/b44172dcf4c8489d4941d442eb69344537b76ee1); follow-up commits corrected the transformed TrueType and framebuffer test probes.
 

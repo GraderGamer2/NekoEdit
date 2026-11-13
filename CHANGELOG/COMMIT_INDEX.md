@@ -1,3 +1,13 @@
+## 2026-11-13 — preserve regular-file permission bits during atomic save (CI PASS #885)
+
+| Commit | Subject |
+|---|---|
+| [f5bebe236142821a337a98f92b395beaf073b4a8](https://github.com/GraderGamer2/NekoEdit/commit/f5bebe236142821a337a98f92b395beaf073b4a8) | fix: preserve file permissions during atomic save |
+
+The writer checks the existing target's file type and mode before creating the temporary, applies the prior regular-file mode after writing, then fsyncs and renames. The protocol mock checks a non-default `0640` mode across both Ctrl+S and confirmed Save As overwrite. Actions [Build and test #885](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004) passed all 16 workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock (including mode-preserving Ctrl+S and Save As overwrite), executable inspection, native `us(intl)` validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell 46 / Mutter integration, and both artifact uploads. Artifacts: [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016623324) (141,588 bytes) and [nekoedit-compose-locales](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016279718) (120,536 bytes); both expire 2026-11-14 07:00:06 UTC (14:00:06 WIB).
+
+---
+
 ## 2026-11-13 — apply all preferred Wayland buffer transforms (CI PASS #882)
 
 | Commit | Subject |
