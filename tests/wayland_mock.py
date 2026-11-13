@@ -5217,6 +5217,23 @@ xkb_symbols "nekoedit-sparse" {
                             "10 MiB clipboard paste changed bytes or order: "
                             f"{len(large_paste_state['doc_contents'])} != {len(large_pasted)}"
                         )
+                    if (
+                        large_paste_state["doc_cursor"] != 0
+                        or large_paste_state["doc_view_top_row"] != 0
+                        or large_paste_state["doc_scroll_thumb_top"] != 92
+                        or large_paste_state["doc_scroll_thumb_height"] <= 0
+                    ):
+                        raise AssertionError(
+                            "10 MiB clipboard paste did not keep the caret and scrollbar "
+                            "anchored at the document start: "
+                            + repr({
+                                key: large_paste_state.get(key)
+                                for key in (
+                                    "doc_cursor", "doc_view_top_row",
+                                    "doc_scroll_thumb_top", "doc_scroll_thumb_height",
+                                )
+                            })
+                        )
                     expected_large_lines = large_pasted.count(b"\n") + 1
                     if (
                         large_paste_state["doc_line_index_valid"] != 1
@@ -5234,8 +5251,23 @@ xkb_symbols "nekoedit-sparse" {
                     if read_document_state()["doc_contents"] != b"":
                         raise AssertionError("Ctrl+Z did not undo the complete 10 MiB paste")
                     workflow_shortcut(2020, 21, "Ctrl+Y redo the 10 MiB clipboard paste")
-                    if read_document_state()["doc_contents"] != large_pasted:
+                    redo_large_state = read_document_state()
+                    if redo_large_state["doc_contents"] != large_pasted:
                         raise AssertionError("Ctrl+Y did not redo the complete 10 MiB paste")
+                    if (
+                        redo_large_state["doc_cursor"] != 0
+                        or redo_large_state["doc_view_top_row"] != 0
+                        or redo_large_state["doc_scroll_thumb_top"] != 92
+                    ):
+                        raise AssertionError(
+                            "Redo did not restore the paste-start caret and viewport: "
+                            + repr({
+                                key: redo_large_state.get(key)
+                                for key in (
+                                    "doc_cursor", "doc_view_top_row", "doc_scroll_thumb_top",
+                                )
+                            })
+                        )
                     observations.append(
                         "10 MiB asynchronous clipboard paste preserved every byte and line-index record; "
                         f"bulk Undo/Redo passed in {large_paste_elapsed_ms:.1f} ms"

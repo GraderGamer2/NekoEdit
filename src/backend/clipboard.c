@@ -293,6 +293,7 @@ static int insert_text(const uint8_t *bytes, uint32_t length)
 {
     uint32_t selected = 0;
     uint32_t needed;
+    uint32_t paste_cursor;
     if (!length)
         return 0;
     if (doc_selection_active) {
@@ -309,10 +310,12 @@ static int insert_text(const uint8_t *bytes, uint32_t length)
     history_begin_action();
     if (doc_selection_active)
         doc_delete_selection();
+    paste_cursor = doc_cursor;
     if (doc_insert_bytes(bytes, length) < 0 || doc_storage_error) {
         history_commit_action();
         return 0;
     }
+    doc_cursor = paste_cursor;
     doc_clear_selection();
     history_commit_action();
     doc_ensure_cursor_visible();
