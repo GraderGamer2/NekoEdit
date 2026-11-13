@@ -1,3 +1,13 @@
+## 2026-11-13 — isolate Mutter Compose delivery from physical Right Alt mapping (CI pending)
+
+Build and test #895 passed the freestanding build/ELF verification, command-line smoke tests, full Wayland protocol mock, native XKB parser, pinned X.Org importer checks, and Compose locale-pack build. Its nested GNOME Shell/Mutter stage failed only when the test attempted to synthesize physical Right Alt with Mutter's raw evdev NotifyKeyboardKeycode(100) API; the document received the later period/dead-key symbols literally rather than the expected Compose output. This run does not establish a failure in NekoEdit's Compose implementation: the same end-to-end canary had passed in earlier runs using an explicit Multi_key keysym.
+
+Restore the Mutter Compose canary to an explicit Multi_key keysym event. The integration test now checks deterministic Compose state-machine delivery and the pt_BR two-dead-key output. The standalone make test-xkb-native check remains responsible for the physical mapping: it compiles evdev/pc105/us(intl)/compose:ralt, feeds the generated map through NekoEdit's own XKB parser, and explicitly verifies Linux evdev KEY_RIGHTALT=100 maps to XKB keycode 108 / Multi_key, not LevelThree. The test extension's raw evdev method remains available for the separate IBus physical-key probe. This separates two assertions instead of representing a keysym injection as physical keyboard input.
+
+Source/test commit: [dfb14ca32fa6](https://github.com/GraderGamer2/NekoEdit/commit/dfb14ca32fa6e21a1b6a997ac3403a5d35196dee). Files changed: tests/mutter_gnome_smoke.sh, tests/xkb_native_keymap_test.c, and docs/MUTTER_INTEGRATION_TEST.md. The replacement CI run is pending; no new pass is claimed yet.
+
+---
+
 ## 2026-11-13 — preserve regular-file permission bits during atomic save (CI PASS #885)
 
 Atomic replacement now queries the existing target with `newfstatat`. If it resolves to a regular file, its permission and special bits are applied to the same-directory temporary with `fchmod` after the final write and before the temporary file is fsynced and renamed. This avoids silently changing a private `0600` document into a `0644` file during Ctrl+S or Save As overwrite. A target that exists but is not a regular file is refused before the replacement is created. New files still use `0644` filtered by the process `umask`.

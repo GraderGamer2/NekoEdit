@@ -1,3 +1,13 @@
+## 2026-11-13 — isolate Mutter Compose delivery from physical Right Alt mapping (CI pending)
+
+| Commit | Subject |
+|---|---|
+| [dfb14ca32fa6e21a1b6a997ac3403a5d35196dee](https://github.com/GraderGamer2/NekoEdit/commit/dfb14ca32fa6e21a1b6a997ac3403a5d35196dee) | test: separate physical XKB mapping from Compose injection |
+
+The Mutter smoke test uses an explicit Multi_key keysym for deterministic Compose coverage. The native XKB test independently asserts evdev Right Alt 100 → XKB keycode 108 → Multi_key with compose:ralt. The preceding Actions #895 run failed only after switching the compositor canary to raw evdev Right Alt injection; this correction is awaiting CI verification.
+
+---
+
 ## 2026-11-13 — preserve regular-file permission bits during atomic save (CI PASS #885)
 
 | Commit | Subject |
