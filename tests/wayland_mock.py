@@ -3437,7 +3437,8 @@ xkb_symbols "nekoedit-sparse" {
                         actual = child_u32(name)
                     if actual != expected:
                         raise AssertionError(
-                            f"{label}: expected {name}={expected}, got {actual}"
+                            f"{label}: expected {name}={expected}, got {actual}; "
+                            f"frame_callback_stats={frame_callback_stats!r}"
                         )
                     return actual
 
