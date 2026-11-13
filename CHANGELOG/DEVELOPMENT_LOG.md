@@ -1,3 +1,14 @@
+## 2026-11-13 — retain keyboard keymaps through fractional-scale startup sync (CI pending)
+
+Actions #899 passed dependency installation, the freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock, executable inspection, native us(intl) XKB parsing, pinned X.Org importer validation, and Compose locale-pack generation. It failed only in the live GNOME Shell/Mutter Compose canary. The process-memory probe showed seat capabilities 3, keyboard proxy 15, pointer proxy 25, and later keyboard events reaching the normal dispatcher, but keymap_event_count and keymap_event_processed_count both remained zero. The editor therefore never parsed the compositor keymap; Multi_key/dead-key state could not activate. This narrows the remaining loss to a synchronous startup event loop rather than the keyboard proxy ID or the normal key-event dispatcher.
+
+Reviewing the second startup barrier found the missing path: after the initial seat sync, fractional_scale_startup sends another wl_display.sync to obtain the initial preferred fractional scale. Its blocking loop handled fractional-scale, ping, and registry events only. Any wl_keyboard.keymap that arrived during that second sync was silently discarded before the normal event loop began.
+
+Route a matching wl_keyboard.keymap event through the existing FD-validating keyboard_keymap_dispatch from the fractional-scale startup loop. The Wayland mock now runs keyboard-layout validation together with fractional-scale startup and injects a descriptor-bearing NO_KEYMAP event during this second sync. It still sends the full XKBv1 fixture later and checks that the parser/event counters show both startup events and the full replacement map were processed. This covers the same second-roundtrip ordering implicated by #899 without adding any runtime dependency or debug interface.
+
+Source/test commit: [9af696716b57](https://github.com/GraderGamer2/NekoEdit/commit/9af696716b57dc6089b5b08d80c3ae0ce1f1b003). Files changed: src/backend/wayland.S and tests/wayland_mock.py. Documentation/changelog commit is the parent of this entry. The next live Mutter run must confirm that the real compositor keymap is parsed and the Compose/dead-key canary passes; no fix is considered validated yet.
+
+---
 ## 2026-11-13 — retain keyboard keymaps through the startup seat roundtrip (CI pending)
 
 Actions #898 stopped at assembly because a test-only descriptor sentinel had been initialized to -1 in .bss. That is corrected to zero-initialized storage in the source chain; the descriptor's live value is recorded separately. No application artifact was produced by #898.
