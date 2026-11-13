@@ -4963,9 +4963,10 @@ keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
 next_client_object_id:  .long 0
-.global keymap_event_count, keymap_event_last_object, keymap_event_last_size, keymap_event_last_fd
+.global keymap_event_count, keymap_event_processed_count, keymap_event_last_object, keymap_event_last_size, keymap_event_last_fd
 .global keyboard_dispatch_count, keyboard_dispatch_last_opcode, keyboard_dispatch_last_size
 keymap_event_count:        .long 0
+keymap_event_processed_count: .long 0
 keymap_event_last_object:  .long 0
 keymap_event_last_size:    .long 0
 keymap_event_last_fd:      .long 0
@@ -5872,7 +5873,7 @@ wayland_main:
 .seat_check_pointer_event:
     mov eax, dword ptr [rip + pointer_object]
     test eax, eax
-    jz .seat_check_sync
+    jz .seat_check_keyboard_event
     cmp dword ptr [rip + last_object], eax
     jne .seat_check_keyboard_event
     cmp dword ptr [rip + last_opcode], 0
@@ -12604,7 +12605,12 @@ keyboard_keymap_dispatch:
     jne .keyboard_keymap_dispatch_bad
     cmp dword ptr [rip + event_fd], -1
     je .keyboard_keymap_dispatch_bad
-    jmp keyboard_keymap_update
+    call keyboard_keymap_update
+    test rax, rax
+    js .keyboard_keymap_dispatch_done
+    inc dword ptr [rip + keymap_event_processed_count]
+.keyboard_keymap_dispatch_done:
+    ret
 .keyboard_keymap_dispatch_bad:
     mov rax, -71
     ret

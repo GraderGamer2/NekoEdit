@@ -42,6 +42,7 @@ WORD_SYMBOLS = (
     "fractional_scale_object",
     "viewport_object",
     "keymap_event_count",
+    "keymap_event_processed_count",
     "keymap_event_last_object",
     "keymap_event_last_size",
     "keymap_event_last_fd",
@@ -156,6 +157,7 @@ def snapshot(memory_fd: int, addresses: dict[str, int]) -> dict[str, Any]:
             "keyboard_dispatch_last_opcode": values["keyboard_dispatch_last_opcode"],
             "keyboard_dispatch_last_size": values["keyboard_dispatch_last_size"],
             "keymap_event_count": values["keymap_event_count"],
+            "keymap_event_processed_count": values["keymap_event_processed_count"],
             "keymap_event_last_object": values["keymap_event_last_object"],
             "keymap_event_last_size": values["keymap_event_last_size"],
             "keymap_event_last_fd": struct.unpack(
