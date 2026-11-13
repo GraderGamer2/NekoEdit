@@ -11,6 +11,7 @@ HISTORY_TEST := $(BUILD_DIR)/history_test
 COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
 XKB_NATIVE_KEYMAP_TEST := $(BUILD_DIR)/xkb_native_keymap_test
+RASTERIZER_BENCH := $(BUILD_DIR)/rasterizer_bench
 
 PREFIX ?= /usr/local
 USER_PREFIX ?= $(HOME)/.local
@@ -26,7 +27,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user locale-packs check inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer locale-packs check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -82,6 +83,13 @@ $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
+
+$(RASTERIZER_BENCH): tests/rasterizer_bench.c src/font/rasterizer.c
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
+
+bench-renderer: $(RASTERIZER_BENCH)
+	./$(RASTERIZER_BENCH)
 
 test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
 	./$(XKB_NATIVE_KEYMAP_TEST)

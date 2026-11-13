@@ -55,6 +55,9 @@ jobs:
       - name: Run command-line smoke tests
         run: make test
 
+      - name: Measure cold rasterization and warm glyph-cache rendering
+        run: make bench-renderer
+
       - name: Run Wayland protocol mock tests (single- and multi-buffer lifecycle)
         run: make test-wayland
 
