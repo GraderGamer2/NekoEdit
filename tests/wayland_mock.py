@@ -8237,7 +8237,7 @@ xkb_symbols "nekoedit-sparse" {
                     return
 
                 key_step(1002, 30, "insert a")
-                if initial_preferred_buffer_scale > 1:
+                if initial_preferred_buffer_scale > 1 or initial_preferred_buffer_transform != 0:
                     a_pixel = document_pixel(17, 92)
                 else:
                     a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
