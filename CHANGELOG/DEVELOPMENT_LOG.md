@@ -1,19 +1,26 @@
-## 2026-11-13 — reduce large-document Open and index overhead (CI pending)
+## 2026-11-13 — optimize and stress-test large-document Open (CI PASS #920)
 
-Large-file inspection identified three repeated costs on the initial Open path: copying every byte from the staging map into a second live map, scanning the contiguous loaded text through `doc_byte_at()` once to count lines and again to find line boundaries, and recalculating common ASCII glyph advances for every character while measuring visual rows.
+Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps, including the new 11 MiB Open/index/Save stress case and nested GNOME Shell/Mutter integration.
 
-The implementation now:
-1. Swaps the transactional staging and live document mappings after the staged file has been completely read and closed. This preserves the old document until commit, removes the full-file byte copy, and transfers the mapping capacity with the pointer.
-2. Uses `repne scasb` to find LF bytes in the contiguous gap-at-EOF case during line counting and record construction. Interior-gap documents retain their original logical-byte accessor path. The scanner explicitly handles an empty final line after a trailing newline.
-3. Caches ASCII glyph advances by code point and document em size. Successful font replacement clears this cache together with the glyph-mask cache; different document sizes occupy separate cache rows.
+Three avoidable costs in the initial Open path were removed or reduced:
 
-The protocol mock now creates an 11 MiB ASCII test document with approximately 90,000 lines. Open is driven through the in-window picker, then the test checks the complete staged contents, committed capacity and EOF gap, line count/records, and exact Ctrl+S output. The harness also reports the elapsed time through the first frame presentation so this workload can provide a repeatable baseline on the CI runner. The test has not yet passed Actions, so the performance result remains pending.
+1. **Full-file commit copy removed.** Once the staging read reaches EOF and close succeeds, the staging and live mmap pointers/capacities are exchanged. The old document remains untouched until that point. The former live mapping becomes the next staging buffer. This eliminates the old `rep movsb` of the entire file into separately reserved live storage.
+2. **Contiguous index scans accelerated.** When the freshly loaded document has its gap at EOF, `repne scasb` finds LF delimiters directly in the contiguous mapping in both the line-count and line-record passes. Interior-gap documents continue through the previous logical-byte accessor. The scanner handles an empty final line following a trailing LF.
+3. **ASCII advance calculation cached.** Common ASCII font advances are cached by code point and document em size, avoiding repeated cmap/hmtx scaling during visual-row measurement. Font replacement clears the per-face advance cache with the glyph cache.
 
-Implementation:
+The test harness now opens and saves an exact 11,534,336-byte, 89,414-line ASCII file via the native picker. It asserts every input byte, the 89,414 line-index records, EOF gap invariant, sufficient mapped capacity, and every saved output byte. The three mock compositor scenarios measured 443.4 ms, 417.2 ms and 423.1 ms from Open confirmation through the first presented redraw (423.1 ms median) on Ubuntu 24.04 GitHub Actions. These are repeatable CI baseline measurements, not local desktop timings or an end-to-end typing/scrolling result.
+
+The first stress run passed the Open, index and Save checks but exposed a test assumption about scrollbar pixel motion. With 178,827 visual rows, a three-row scroll can correctly leave the thumb at the same integer pixel. The test now verifies the exact proportional integer-rounded thumb position and still exercises a drag to the bottom. Actions #920 passed the complete matrix after this correction.
+
+The renderer microbenchmark also passed its framebuffer checksum comparison; the current glyph draw measured 33.1% lower warm-draw time than the linear-cache/generic-transform reference in this CI run. That result is separate from the 11 MiB Open baseline.
+
+Implementation/test commits:
 - [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d).
 - [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446).
+- [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18).
 
 ---
+
 
 ## 2026-11-13 — add identity-transform glyph blit fast path (CI PASS #913)
 

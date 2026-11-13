@@ -1,12 +1,17 @@
-## Latest handoff (2026-11-13 — large-document Open/index optimization, CI pending)
+## Latest handoff (2026-11-13 — large-document Open/index optimization, CI PASS #920)
 
-Continue on `early-alpha`; current implementation commit is [d3ed72d](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446), following the optimization commit [45b6a44](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d). The latest previously validated app source was [210bd7d](https://github.com/GraderGamer2/NekoEdit/commit/210bd7dcab519146370a8c93315e862f5e8fb388), with full CI #913 success. This new large-file change is pending validation.
+Continue development on `early-alpha`; validated implementation/test head is [341862b](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). Actions [#920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps.
 
-The Open path swaps the fully read staging map into the active document rather than copying the file into another allocation. Initial line-index construction uses `repne scasb` when the gap is at EOF, while the original path remains available for documents whose gap is inside the text. ASCII advances are cached by code point and document em size and invalidated on font replacement.
+The Open path swaps a fully read and closed staging mmap into the live document rather than copying the entire file. When the gap is at EOF, initial index construction locates LF delimiters using `repne scasb`; documents with an interior gap retain the original scan. Common ASCII glyph advances are cached by code point and document em size.
 
-The Wayland mock now opens an 11 MiB multi-line document and checks complete bytes, the EOF gap, line-index record count, and Ctrl+S output. It reports elapsed time through the first presented redraw. The new CI run must verify both the assembly and the heavier mock before treating this optimization as complete.
+The mock opened and saved an exact 11 MiB / 11,534,336-byte text file, verified 89,414 line records, 178,827 visual rows, EOF gap placement, exact document bytes and exact saved bytes. Open-confirmation to first presented frame measured 443.4, 417.2 and 423.1 ms in three Ubuntu 24.04 mock-compositor scenarios (423.1 ms median). These figures establish a CI baseline; compare them against a real 10+ MiB file on the user's Debian/Wayland desktop.
 
-Keep `main` at its current stable checkpoint; reconcile the application-source divergence only during release preparation. Continue updating the full `CHANGELOG/` history after this CI result.
+Artifacts:
+- Linux x86-64 executable: [14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320), 144,547 bytes.
+- Compose locale packs: [14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095), 120,536 bytes.
+Both expire 2026-11-14 at 14:52 UTC (21:52 WIB).
+
+Keep `main` at its stable checkpoint; reconcile branch divergence only during release preparation. Next performance work should separately profile full-frame redraw, scrolling and edit latency. Do not equate the large-file Open baseline or synthetic glyph benchmark with overall editing performance.
 
 ---
 

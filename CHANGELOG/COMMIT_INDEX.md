@@ -1,13 +1,19 @@
-## 2026-11-13 — streamline large-document Open and indexing (CI pending)
+## 2026-11-13 — large-document Open/index optimization (CI PASS #920)
 
 | Commit | Subject |
 |---|---|
 | [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d) | perf: streamline large document loading and indexing |
 | [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446) | fix: handle trailing empty line in contiguous index scan |
+| [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18) | test: account for subpixel scrollbar movement on huge documents |
 
-Changes: swap the successfully read Open staging map into the live document instead of copying the whole file; use `repne scasb` to find line boundaries when the loaded document is contiguous; cache ASCII advances by code point and em size. The Wayland mock now opens and saves an 11 MiB multi-line text file, validates its indexed line count and exact bytes, and records first-redraw latency. CI is pending.
+Actions [#920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps. The mock opened and saved 11,534,336 bytes with exact byte equality, indexed 89,414 lines / 178,827 visual rows, and retained the gap at EOF. First-redraw timings across three mock scenarios: 443.4 ms, 417.2 ms and 423.1 ms (423.1 ms median) on the CI runner. The scrollbar check now verifies proportional integer-rounded geometry rather than demanding a visible pixel shift after only three rows in a very large document.
+
+The current renderer also retained checksum `35084948275808`; the warm glyph-draw microbenchmark measured 33.1% lower than the original linear-cache/generic-transform reference. It is not a whole-application speedup claim.
+
+Artifacts: Linux x86-64 [14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320) (144,547 bytes); Compose packs [14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095) (120,536 bytes). Both expire 2026-11-14 at 14:52 UTC (21:52 WIB).
 
 ---
+
 
 ## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
 

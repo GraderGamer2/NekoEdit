@@ -1,18 +1,38 @@
-## 2026-11-13 — streamline large-document Open and line-index construction (CI pending)
+## 2026-11-13 — streamline large-document Open and line-index construction (CI PASS #920)
 
-The Open path now commits a fully read staging mapping by swapping it with the live document mapping, rather than reserving a second live mapping and copying the entire file with `rep movsb`. The previous document remains untouched until the replacement has reached EOF and the input descriptor has closed successfully. After the swap, the new mapping becomes the gap buffer with the gap at EOF; the former live mapping becomes the next Open staging area. The two mapping pointers and their capacities are exchanged together.
+Actions [Build and test #920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 workflow steps on implementation/test head [341862ba22b5](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). The run includes the freestanding build/ELF and CLI tests, renderer checksum comparison, full Wayland protocol matrix with an 11 MiB multi-line Open/Save case, executable inspection, native `us(intl)` XKB parsing, pinned X.Org importer, Compose pack generation, live GNOME Shell/Mutter integration, and both artifact uploads.
 
-Initial line-index construction now uses bounded `repne scasb` newline scans when the document gap is at EOF, avoiding a `doc_byte_at()` function call for each byte in the count and line-boundary passes. Documents with an interior gap retain the original gap-aware scan. The font metric path also caches ASCII advances by code point and document em size; the cache is cleared with the face-local glyph cache after successful font replacement.
+The Open path now swaps the fully read and successfully closed staging mapping into the active document instead of copying all file bytes into a second mapping. This keeps the previous document intact until the replacement is ready while avoiding one full-file memory copy and duplicate live capacity during commit. The former active mapping becomes the next Open staging area.
 
-The Wayland mock's former 65,537-byte regression fixture is being upgraded to an 11 MiB, approximately 90,000-line ASCII document. It verifies exact bytes after Open, the complete line-index record count, the EOF gap invariant, and exact bytes after Ctrl+S. It also records the elapsed time from Enter on the Open picker to the first presented redraw. CI validation is pending; no performance result is claimed yet.
+For documents loaded contiguously with the gap at EOF, initial index construction scans LF bytes directly with `repne scasb` during line counting and line-boundary discovery. The existing gap-aware scan remains active for documents whose gap is inside the text. Common ASCII glyph advances are also cached by code point and document em size; the cache is invalidated whenever a successful font replacement clears the glyph cache.
 
-Implementation commits:
-- [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d) — zero-copy staged document commit, contiguous line-index scanning, and per-size ASCII advance cache.
-- [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446) — correct trailing-empty-line handling in the contiguous scanner and use actual LF bytes in the 11 MiB fixture.
+The Wayland mock opened an exact 11 MiB (11,534,336-byte) ASCII text document with 89,414 logical lines and 178,827 visual rows. It verified the active path, complete document bytes, mapping capacity, EOF gap position, line count and every line-index record, then saved the document and compared the entire saved file byte-for-byte. The measured interval from confirming Open to the first presented redraw was:
 
-The previous document's contents and active path remain intact if reading or closing the replacement file fails, because mapping ownership is exchanged only after successful EOF and close. The live mapping is no longer duplicated at commit time; the staging mapping remains available for the next Open.
+| CI scenario | Open → first presented redraw |
+|---|---:|
+| Wayland scenario 1 | 443.4 ms |
+| Wayland scenario 2 | 417.2 ms |
+| Wayland scenario 3 | 423.1 ms |
+| Median | 423.1 ms |
+
+These are Ubuntu GitHub-runner mock-compositor timings, not a prediction for a user's local desktop or a production benchmark. They provide a repeatable baseline. The test initially exposed an overly strict scrollbar assertion: a three-row viewport move in a 178,827-row document can round to no visible thumb-pixel movement. The application correctly advanced `doc_view_top_row`; the test now checks the exact integer-rounded proportional thumb geometry instead of requiring an immediate one-pixel change.
+
+Renderer benchmark on the same CI run retained identical framebuffer checksums (`35084948275808`) and reported 26.0% lower warm-draw time for the hash cache versus the linear reference, a further 9.6% for the identity path versus the generic mapper, and 33.1% combined. This synthetic glyph benchmark is independent of the large-document timing.
+
+Artifacts from #920:
+- Linux x86-64 executable: [artifact 14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320), 144,547 bytes.
+- Compose locale packs: [artifact 14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095), 120,536 bytes.
+Both expire 2026-11-14 at 14:52:23 UTC (21:52:23 WIB).
+
+Implementation and test changes:
+- [45b6a44847e691431340fb29127b4a01e678d31d](https://github.com/GraderGamer2/NekoEdit/commit/45b6a44847e691431340fb29127b4a01e678d31d) — zero-copy Open commit, contiguous line-index scan and ASCII advance cache.
+- [d3ed72d2687c7ac82c82480a5dfbae32cde3a446](https://github.com/GraderGamer2/NekoEdit/commit/d3ed72d2687c7ac82c82480a5dfbae32cde3a446) — guard trailing-empty-line scanning and build the 11 MiB fixture.
+- [341862ba22b5ec77dc6df01c4052da65a5e28d18](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18) — verify subpixel scrollbar movement using the actual integer geometry and print the large-file timing.
+
+Next: compare this CI baseline with a real 10+ MiB text file on the user's Debian/Wayland desktop. Keep profiling full-frame redraw, scrolling, and editing latency separate from Open/index time; do not infer an application-wide speedup from the load test alone.
 
 ---
+
 
 ## 2026-11-13 — accelerate identity-transform glyph blits (CI PASS #913)
 
