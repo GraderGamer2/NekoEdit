@@ -262,7 +262,10 @@ def expect_message(connection, expected, label: str):
             expected_id, expected_x, expected_y = struct.unpack("<III", expected[2])
             actual_id, actual_x, actual_y = struct.unpack("<III", actual[2])
             if (
-                expected_id == buffer_state["initial_buffer_id"]
+                (
+                    expected_id == buffer_state["initial_buffer_id"]
+                    or expected_id in buffer_state["known_offsets"]
+                )
                 and actual_id in buffer_state["known_offsets"]
                 and (actual_x, actual_y) == (expected_x, expected_y)
             ):
@@ -3109,12 +3112,23 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     return struct.unpack("<I", raw)[0]
 
-                def expect_buffer_frame(label: str) -> int:
+                def expect_buffer_attach(label: str, skip_cursor_shape: bool = False) -> int:
                     # A redraw may lazily create slot one before attaching it.
                     # Track protocol object IDs and byte offsets rather than
                     # assuming every frame reuses the first wl_buffer.
                     message = recv_wayland_message(client)
-                    while message[0:2] == (11, 0):
+                    while True:
+                        if (
+                            skip_cursor_shape
+                            and message[0] == child_u32("cursor_shape_device")
+                            and message[1] == 1
+                        ):
+                            if message[3] or len(message[2]) != 8:
+                                raise AssertionError(f"{label}: malformed cursor-shape update {message!r}")
+                            message = recv_wayland_message(client)
+                            continue
+                        if message[0:2] != (11, 0):
+                            break
                         if len(message[2]) != 24 or message[3]:
                             raise AssertionError(f"{label}: malformed wl_buffer.create_buffer: {message!r}")
                         new_id, offset, width, height, stride, pixel_format = struct.unpack("<6I", message[2])
@@ -3143,6 +3157,10 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     active_buffer["id"] = attached_id
                     active_buffer["offset"] = known_buffer_offsets[attached_id]
+                    return attached_id
+
+                def expect_buffer_frame(label: str, skip_cursor_shape: bool = False) -> int:
+                    attached_id = expect_buffer_attach(label, skip_cursor_shape=skip_cursor_shape)
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
                         f"{label} damage",
@@ -3689,11 +3707,25 @@ xkb_symbols "nekoedit-sparse" {
                                         f"{label}: malformed cursor-shape update {message!r}"
                                     )
                                 continue
-                            if message[:3] != (
-                                8, 1, struct.pack("<III", client_buffer_id, 0, 0)
-                            ) or message[3]:
+                            while message[0:2] == (11, 0):
+                                if len(message[2]) != 24 or message[3]:
+                                    raise AssertionError(
+                                        f"{label}: malformed queued wl_buffer.create_buffer {message!r}"
+                                    )
+                                message = recv_wayland_message(client)
+                            if (
+                                message[0:2] != (8, 1)
+                                or len(message[2]) != 12
+                                or message[3]
+                            ):
                                 raise AssertionError(
                                     f"{label}: unexpected queued redraw request {message!r}"
+                                )
+                            attached_id, attach_x, attach_y = struct.unpack("<III", message[2])
+                            if attached_id not in known_buffer_offsets or (attach_x, attach_y) != (0, 0):
+                                raise AssertionError(
+                                    f"{label}: queued redraw attached an unknown buffer or nonzero origin: "
+                                    f"{(attached_id, attach_x, attach_y)!r}"
                                 )
                             expect_message(
                                 client,
@@ -3735,24 +3767,7 @@ xkb_symbols "nekoedit-sparse" {
                         )
 
                 def workflow_redraw(label: str) -> None:
-                    attach = (8, 1, struct.pack("<III", client_buffer_id, 0, 0))
-                    while True:
-                        actual = recv_wayland_message(client)
-                        # Pointer motion can change the optional cursor shape
-                        # immediately before the surface redraw. Consume that
-                        # protocol request without mistaking it for an attach.
-                        if (
-                            actual[0] == child_u32("cursor_shape_device")
-                            and actual[1] == 1
-                            and len(actual[2]) == 8
-                            and not actual[3]
-                        ):
-                            continue
-                        if actual[:3] != attach:
-                            raise AssertionError(
-                                f"{label} attach: expected {attach!r}, got {actual[:3]!r}"
-                            )
-                        break
+                    expect_buffer_attach(label, skip_cursor_shape=True)
                     expect_message(
                         client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
                     )
@@ -5892,12 +5907,16 @@ xkb_symbols "nekoedit-sparse" {
                             if enter_serial != 777 or shape > 40:
                                 raise AssertionError(f"{label}: invalid cursor-shape update {message!r}")
                             message = recv_wayland_message(client)
-                        if (
-                            message[0:2] != (8, 1)
-                            or message[2] != struct.pack("<III", client_buffer_id, 0, 0)
-                            or message[3]
-                        ):
+                        if message[0:2] == (11, 0):
+                            while message[0:2] == (11, 0):
+                                if len(message[2]) != 24 or message[3]:
+                                    raise AssertionError(f"{label}: malformed wl_buffer.create_buffer {message!r}")
+                                message = recv_wayland_message(client)
+                        if message[0:2] != (8, 1) or len(message[2]) != 12 or message[3]:
                             raise AssertionError(f"{label} attach: unexpected request {message!r}")
+                        attached_id, attach_x, attach_y = struct.unpack("<III", message[2])
+                        if attached_id not in known_buffer_offsets or (attach_x, attach_y) != (0, 0):
+                            raise AssertionError(f"{label} attach: unknown buffer or nonzero origin {message!r}")
                         expect_message(
                             client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
                             f"{label} damage",
