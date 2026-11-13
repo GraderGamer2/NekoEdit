@@ -1,3 +1,23 @@
+## 2026-11-13 — inspect Mutter-delivered XKB map and Compose dispatch (CI pending)
+
+Actions #895 and #896 both passed the build, CLI, complete Wayland protocol mock, native XKB parser, pinned X.Org importer, and locale-pack stages, but failed the live GNOME Shell/Mutter Compose/save canary. #895 used raw evdev Right Alt and failed; #896 restored the explicit Multi_key keysym injection but also failed after the ordinary typing/save canary. This contradicts the initial diagnosis recorded below: switching to an explicit keysym did not restore the current integration test. Importantly, historical Actions #885 passed the same explicit Multi_key path and two-mark dead-key chain, and the backend key-event handler is unchanged between those source checkpoints. The current root cause is therefore still unproven.
+
+Add a test-only, read-only process-memory probe to inspect the actual keymap NekoEdit receives from Mutter. The parent Bash harness opens /proc/<pid>/mem and passes the authorized descriptor to the new Python helper. It records keymap receipt/parse status, the actual parsed Multi_key/dead_grave/dead_circumflex symbol positions, the latest Wayland keyboard event and its evdev/XKB keycodes, and the editor's Compose/dead-key state. The test now requires a parsed live keymap containing those actions, Compose activation after Multi_key, and a pending dead mark after dead_grave. This distinguishes compositor keymap delivery/parsing, event translation, and editor Compose dispatch without adding a runtime debug interface or dependency.
+
+Source/test/documentation commit: [1ad43b229a53](https://github.com/GraderGamer2/NekoEdit/commit/1ad43b229a538c8256fb2fe9bdfb1c976a698800). Files changed: src/backend/wayland.S (test-visible symbol exports only), tests/mutter_gnome_smoke.sh, tests/mutter_xkb_state_probe.py, and docs/MUTTER_INTEGRATION_TEST.md. The next Actions run is pending; no fix or live Mutter pass is claimed.
+
+---
+
+## 2026-11-13 — isolate Mutter Compose delivery from physical Right Alt mapping (CI pending)
+
+Build and test #895 passed the freestanding build/ELF verification, command-line smoke tests, full Wayland protocol mock, native XKB parser, pinned X.Org importer checks, and Compose locale-pack build. Its nested GNOME Shell/Mutter stage failed only when the test attempted to synthesize physical Right Alt with Mutter's raw evdev NotifyKeyboardKeycode(100) API; the document received the later period/dead-key symbols literally rather than the expected Compose output. This run does not establish a failure in NekoEdit's Compose implementation: the same end-to-end canary had passed in earlier runs using an explicit Multi_key keysym.
+
+Restore the Mutter Compose canary to an explicit Multi_key keysym event. The integration test now checks deterministic Compose state-machine delivery and the pt_BR two-dead-key output. The standalone make test-xkb-native check remains responsible for the physical mapping: it compiles evdev/pc105/us(intl)/compose:ralt, feeds the generated map through NekoEdit's own XKB parser, and explicitly verifies Linux evdev KEY_RIGHTALT=100 maps to XKB keycode 108 / Multi_key, not LevelThree. The test extension's raw evdev method remains available for the separate IBus physical-key probe. This separates two assertions instead of representing a keysym injection as physical keyboard input.
+
+Source/test commit: [dfb14ca32fa6](https://github.com/GraderGamer2/NekoEdit/commit/dfb14ca32fa6e21a1b6a997ac3403a5d35196dee). Files changed: tests/mutter_gnome_smoke.sh, tests/xkb_native_keymap_test.c, and docs/MUTTER_INTEGRATION_TEST.md. Correction after Actions #896: the explicit Multi_key canary also failed. The initial assumption that this restored the live Compose test was incorrect; historical #885 passed the same API, so the current regression remains unexplained.
+
+---
+
 ## 2026-11-13 — preserve regular-file permission bits during atomic save (CI PASS #885)
 
 Atomic replacement now queries the existing target with `newfstatat`. If it resolves to a regular file, its permission and special bits are applied to the same-directory temporary with `fchmod` after the final write and before the temporary file is fsynced and renamed. This avoids silently changing a private `0600` document into a `0644` file during Ctrl+S or Save As overwrite. A target that exists but is not a regular file is refused before the replacement is created. New files still use `0644` filtered by the process `umask`.

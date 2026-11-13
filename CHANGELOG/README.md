@@ -1,4 +1,16 @@
-## Latest handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
+## Latest handoff (2026-11-13 — inspect live Mutter XKB and Compose state, CI pending)
+
+Continue development on `early-alpha`; keep `main` at its stable merged source checkpoint with the changelog mirrored. Latest source/test/documentation commit: [1ad43b2](https://github.com/GraderGamer2/NekoEdit/commit/1ad43b229a538c8256fb2fe9bdfb1c976a698800). CI is pending.
+
+The previous diagnosis was incomplete. Actions #895 failed after raw evdev Right Alt injection; #896 failed again after restoring the explicit `Multi_key` keysym. Both pass the build, Wayland protocol mock, native XKB parser and Compose-pack tests, then fail the real Mutter Compose/save canary. Historical #885 passed the same explicit keysym sequence, and the backend's keyboard event handler has not changed between those checkpoints. Do not treat this as a confirmed NekoEdit Compose regression or a fixed test-harness issue yet.
+
+The new test helper `tests/mutter_xkb_state_probe.py` reads the actual keymap and editor state from the live first NekoEdit process. The parent Bash smoke test opens `/proc/<pid>/mem` and passes that already-authorized read-only descriptor to Python. It checks keymap receipt and parser status, confirms the in-memory action table contains `Multi_key`, `dead_grave`, and `dead_circumflex`, records the latest Wayland keyboard event and its evdev/XKB keycodes, and observes Compose/dead-key state transitions. The smoke test now fails at the exact boundary where the state is missing, with a state snapshot, instead of reporting only incorrect final file bytes. This adds no application debug protocol or runtime dependency; assembly exports are limited to symbol visibility for the test.
+
+Next: inspect the single replacement Actions run and use the runtime probe output to isolate whether Mutter supplied an unexpected keymap, the key event maps to an unexpected symbol, or Compose dispatch is not entered. Keep the fractional-scale renderer and multi-buffer work queued until this input-path regression is understood. Once restored, return to the release-tracked buffer set and measurement-led optimization.
+
+---
+
+## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
 
 Continue development on `early-alpha`; keep `main` at its stable merged source checkpoint with the changelog mirrored. Validated branch head: [9ca9c88](https://github.com/GraderGamer2/NekoEdit/commit/9ca9c88d9ec989d8c07cf3519dcc2bb77d9d6229). Source/test change: [f5bebe2](https://github.com/GraderGamer2/NekoEdit/commit/f5bebe236142821a337a98f92b395beaf073b4a8); documentation change: [9ca9c88](https://github.com/GraderGamer2/NekoEdit/commit/9ca9c88d9ec989d8c07cf3519dcc2bb77d9d6229).
 
