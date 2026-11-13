@@ -1,8 +1,12 @@
-## 2026-11-13 — preserve regular-file permission bits during atomic save (CI pending)
+## 2026-11-13 — preserve regular-file permission bits during atomic save (CI PASS #885)
 
 Atomic replacement now queries the existing target with `newfstatat`. If it resolves to a regular file, its permission and special bits are applied to the same-directory temporary with `fchmod` after the final write and before the temporary file is fsynced and renamed. This avoids silently changing a private `0600` document into a `0644` file during Ctrl+S or Save As overwrite. A target that exists but is not a regular file is refused before the replacement is created. New files still use `0644` filtered by the process `umask`.
 
-The Wayland mock captures the initial mode for save-roundtrip cases, exercises an explicit `0640` Ctrl+S target, and sets an existing Save As target to `0640` before confirmed overwrite. It verifies both document bytes and final mode. Ownership, ACLs, extended attributes, timestamps, and containing-directory fsync remain future save-durability work. Actions validation is pending.
+The Wayland mock captures the initial mode for save-roundtrip cases, exercises an explicit `0640` Ctrl+S target, and sets an existing Save As target to `0640` before confirmed overwrite. It verifies both document bytes and final mode. Ownership, ACLs, extended attributes, timestamps, and containing-directory fsync remain future save-durability work.
+
+Actions [Build and test #885](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004) passed all 16 workflow steps: freestanding build/ELF verification, CLI smoke tests, the complete Wayland protocol mock (including mode-preserving Ctrl+S and Save As overwrite), executable inspection, native `us(intl)` validation, pinned X.Org importer verification, Compose locale-pack build, nested GNOME Shell 46 / Mutter integration, and both artifact uploads.
+
+The [nekoedit-linux-x86_64](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016623324) (141,588 bytes) is available until 2026-11-14 07:00:06 UTC (14:00:06 WIB). The [nekoedit-compose-locales](https://github.com/GraderGamer2/NekoEdit/actions/runs/43382342004/artifacts/14016279718) (120,536 bytes) is available until 2026-11-14 07:00:06 UTC (14:00:06 WIB).
 
 ---
 
