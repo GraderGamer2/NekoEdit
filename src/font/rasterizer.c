@@ -43,6 +43,9 @@ struct cache_entry {
 };
 static struct cache_entry cache[CACHE_SLOTS];
 static uint32_t cache_clock;
+/* ASCII advances are stable until the active face is replaced. Cache them
+ * per document em size; zero means that the entry has not been measured. */
+static uint8_t ascii_advance_cache[33][128];
 
 #ifndef FONT_CACHE_LINEAR_REFERENCE
 static uint16_t cache_buckets[CACHE_HASH_BUCKETS];
@@ -89,6 +92,9 @@ static void cache_unlink_slot(uint32_t slot_index) {
 
 /* Discard all face-local masks after a validated font replacement. */
 void font_cache_clear(void) {
+    for (uint32_t size=0;size<=32u;++size)
+        for (uint32_t cp=0;cp<128u;++cp)
+            ascii_advance_cache[size][cp]=0;
     for (uint32_t i=0;i<CACHE_SLOTS;++i) {
         cache[i].valid=0;
         cache[i].stamp=0;
@@ -359,18 +365,28 @@ int32_t font_probe_advance_A, font_probe_advance_B, font_probe_advance_space;
 int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     uint32_t glyph_id, advance, upem;
     uint64_t scaled;
+    uint8_t *ascii_slot=(codepoint<128u && size>0u && size<=32u)
+        ? &ascii_advance_cache[size][codepoint] : (uint8_t *)0;
     if (!font_loaded || !size || size>32) return 8;
+    if (ascii_slot && *ascii_slot) return (int)*ascii_slot;
     glyph_id = font_cmap_lookup(codepoint);
     if (glyph_id == 0 && codepoint != 0x20 && codepoint != 0x3f)
         glyph_id = font_cmap_lookup(0x3f);
-    if (!glyph_id || glyph_id >= (uint32_t)font_num_glyphs) return 8;
+    if (!glyph_id || glyph_id >= (uint32_t)font_num_glyphs) {
+        if (ascii_slot) *ascii_slot=8;
+        return 8;
+    }
     advance = font_glyph_advance(glyph_id);
     upem = (uint32_t)font_units_per_em;
-    if (!advance || upem < 16 || upem > 16384) return 8;
+    if (!advance || upem < 16 || upem > 16384) {
+        if (ascii_slot) *ascii_slot=8;
+        return 8;
+    }
     scaled = (uint64_t)advance * size + upem / 2u;
     scaled /= upem;
     if (scaled < 1) scaled = 1;
     if (scaled > 32) scaled = 32;
+    if (ascii_slot) *ascii_slot=(uint8_t)scaled;
     return (int)scaled;
 }
 

@@ -32,6 +32,12 @@ The benchmark reports two separate measurements:
 
 Timing uses Linux `CLOCK_MONOTONIC_RAW`. The three variants run consecutively in the same job to reduce cross-run hardware and runner variance. Results are diagnostic, not pass/fail thresholds; compare the paired medians and inspect the seven samples for outliers. The benchmark is intentionally not a CI speed gate. The synthetic outline is deterministic and does not model real-font contour diversity. These figures do not measure full-frame `render_surface()`, the assembly rectangle path, document layout, Wayland dispatch, compositor scheduling, startup, or memory residency. Use this target to compare glyph-paint changes; gather separate on-device end-to-end timings before making application-wide optimization claims.
 
+## Large-document Open and index construction
+
+Picker Open reads into a separate geometrically growing staging mapping so a read error cannot destroy the current document. Once EOF and close succeed, NekoEdit swaps the staging and live mapping pointers and capacities; the new document's gap begins at EOF. This avoids a second full-file copy and leaves the former live mapping available as the next staging area. The original active document remains unchanged until this commit point.
+
+When the gap is at EOF, line-index construction uses `repne scasb` to locate LF delimiters directly in the contiguous document bytes for the line-count and line-boundary passes. If the gap is inside the document, the original logical-byte scan remains active. Common ASCII hmtx advances are cached per code point and document em size; the cache is invalidated when the active font is replaced. The Wayland regression harness exercises an 11 MiB multi-line Open, verifies its complete line index and bytes, saves it again, and reports the elapsed time through the first presented redraw.
+
 ## Font selection and loading
 
 No Fontconfig, FreeType, or HarfBuzz dependency is used. Font loading is deterministic rather than a recursive system-font scan:
