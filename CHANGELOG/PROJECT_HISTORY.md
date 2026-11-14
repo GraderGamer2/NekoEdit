@@ -1,3 +1,19 @@
+## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
+
+Extend the line-index layout measurement pass to populate a second sparse checkpoint working set for caret byte-to-visual conversion. The 4,096 direct-mapped entries (24 bytes each; 96 KiB total) are keyed by the shared cache epoch, stable logical-line ID, and 4 KiB line-relative byte bucket. Each entry retains the byte offset, local visual-row index, and horizontal pixel position. Both wrapped and unwrapped metric paths populate the cache. Lookup checks the target bucket and up to 15 preceding buckets, accepting only an entry whose saved byte offset is not after the target.
+
+The design uses stable logical-line IDs instead of absolute document offsets. An edit that changes an earlier line can shift later lines without invalidating those later entries; changing, splitting, or merging a line assigns fresh IDs, while full rebuild/reflow advances the shared epoch. The existing horizontal checkpoint cache and this vertical-byte cache remain separate because they answer different coordinate-mapping questions.
+
+Add test instrumentation for the actual scan start/end in the indexed byte-to-visual mapper. Extend the 4 MiB single-line Wayland test to move the caret to EOF with Ctrl+End while Wrap Lines is enabled, then repeat after disabling wrapping. Both scans must stay within 4 KiB. Keep the independent no-wrap horizontal glyph traversal assertion. Plain End is not an EOF shortcut in wrapped mode; the first #957 test attempt exposed this distinction and the final fixture uses Ctrl+End.
+
+Actions [#959](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359) passed all 17 workflow steps, including freestanding build/ELF, CLI, glyph-cache comparison, complete Wayland protocol mock, ELF inspection, native `us(intl)`, pinned X.Org importer, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: Linux x86-64 [148,935 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091); both expire 2026-11-15 10:24 UTC (17:24 WIB).
+
+This milestone verifies a bounded scan in the 4 MiB fixture; it does not include a controlled before/after latency benchmark. Next performance target is sparse visual-row-to-byte mapping within a very long wrapped logical line. Full-frame software-surface repaint remains separate.
+
+---
+
 ## 2026-11-13 — separate logical surface geometry from backing-buffer pixels (CI PASS #872)
 
 Keep `window_width` / `window_height` as surface-local logical dimensions and add explicit `window_buffer_width` / `window_buffer_height` fields for pixel extents; retain `window_stride` as the physical byte pitch. Initial and resize-created `wl_buffer` requests now consume the backing-buffer fields. Rectangle/glyph bounds and the TrueType renderer's target dimensions also use those pixel extents. The current geometry updater intentionally keeps the dimensions 1:1 and rendering at scale 1; it does not apply the effective scale or preferred transform.

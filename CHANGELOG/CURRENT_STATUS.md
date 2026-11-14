@@ -1,3 +1,28 @@
+## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
+
+**Branch:** `early-alpha` at [07f28ae](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3). Normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint with changelog-only mirrors; `optimization-early-alpha` remains isolated.
+
+Caret byte-to-visual mapping now resumes from a sparse checkpoint instead of always rescanning a long logical line from its start.
+
+- **Cache:** 4,096 direct-mapped slots × 24 bytes = 96 KiB.
+- **Key:** layout/cache epoch, stable logical-line ID, and 4 KiB relative-byte bucket.
+- **Value:** line-relative byte offset, local visual row, and pixel X.
+- **Population:** existing line-index measurement creates the checkpoint stream for both Wrap Lines ON and OFF.
+- **Lookup:** current bucket plus up to 15 preceding buckets; only checkpoints not after the target byte are accepted.
+- **Invalidation:** reflow/rebuild advances the epoch; existing stable line IDs change for affected lines on edit, split, or merge. Line-relative offsets preserve untouched entries when earlier document text shifts.
+
+**Regression:** a 4 MiB single logical line is moved to EOF with Ctrl+End while wrapped and then unwrapped. Test instrumentation asserts that both byte-to-visual scans remain within 4 KiB. The no-wrap horizontal renderer check also remains bounded to 4 KiB. Plain End is intentionally not used for the wrapped case because its correct behavior is to stop at the current visual-row end.
+
+**Validation:** [Actions #959](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359) passed all 17 steps, including build/ELF, CLI, glyph-cache comparison, the complete Wayland mock suite, executable inspection, native XKB `us(intl)`, X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+**Artifacts:** [Linux x86-64 binary (148,935 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091). Expiry: 2026-11-15 10:24 UTC (17:24 WIB).
+
+**Remaining performance work:** sparse visual-row-to-byte mapping for a very long wrapped logical line remains unimplemented; full-frame software-surface repaint also remains unchanged. No before/after latency benchmark was collected, so this milestone verifies bounded caret-mapping work rather than a measured speedup.
+
+Implementation: [73c6521](https://github.com/GraderGamer2/NekoEdit/commit/73c65219ef98f6a4ffe084294710c17b1513b104). Test corrections: [4e7e88d](https://github.com/GraderGamer2/NekoEdit/commit/4e7e88df03069a9f8b51425d72c3b4158dbbf970), [07f28ae](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3).
+
+---
+
 ## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
 
 **Branch:** `early-alpha`; normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint, and `optimization-early-alpha` remains isolated.

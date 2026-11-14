@@ -1,3 +1,26 @@
+## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
+
+Caret-to-visual mapping previously rescanned a long logical line from its first byte after a large caret jump. This remained expensive even after document glyph painting had been bounded to the viewport and no-wrap horizontal mapping had acquired its own pixel checkpoints.
+
+Added a separate sparse byte-position working set:
+- 4,096 direct-mapped entries, 24 bytes each (96 KiB total).
+- Each entry stores the shared layout/cache epoch, stable logical-line ID, 4 KiB byte bucket, line-relative byte offset, local visual-row number, and pixel X.
+- The existing line-index metric pass populates checkpoints in both wrapped and unwrapped modes. A checkpoint is recorded at the line start and at the first grapheme boundary encountered after each 4 KiB bucket boundary.
+- Caret mapping hashes the target line ID and bucket, checks the target bucket and up to 15 preceding buckets, and resumes from a valid checkpoint no later than the requested byte.
+- Relative offsets mean insertions in earlier lines do not invalidate untouched lines merely because their absolute document positions shifted. Existing fresh IDs for edited/split/merged lines and the layout epoch for rebuild/reflow prevent stale positions from being reused.
+
+The Wayland regression uses a 4 MiB one-line document. It moves to true document EOF with Ctrl+End in Wrap Lines ON, measures the actual local byte scan, then disables wrapping and repeats the check. Both modes must scan no more than 4 KiB. The existing horizontal-scroll regression also continues to require no-wrap glyph traversal to stay within 4 KiB. The initial #957 attempt used plain End, which correctly stops at the current visual row in wrapped mode; the regression was corrected to Ctrl+End. The final harness sends the modifier/key events directly because the later-defined shortcut helper is not yet in scope at that earlier test point.
+
+Actions [#959](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359) passed all 17 workflow steps, including the full Wayland protocol mock and nested GNOME Shell/Mutter integration. The freestanding build, CLI tests, glyph-cache comparison, executable inspection, `us(intl)` parser, X.Org importer, Compose pack build, and both artifact uploads also passed.
+
+Artifacts: Linux x86-64 [148,935 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091). Artifacts expire 2026-11-15 10:24 UTC (17:24 WIB).
+
+No before/after timing benchmark was collected. The validated claim is that the measured caret-to-visual scan is bounded to 4 KiB on the 4 MiB single-line fixture in both wrap modes. This does not establish an end-to-end latency or FPS improvement.
+
+Next: add sparse visual-row-to-byte checkpoints for the reverse lookup used when a long wrapped line is scrolled vertically. Full-frame software-surface repainting is unchanged and should be measured separately.
+
+---
+
 ## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
 
 Wrap Lines OFF previously still made the editor walk a long logical line from its first byte to locate the horizontal viewport, and the glyph loop could continue consuming the hidden suffix after reaching the right edge.

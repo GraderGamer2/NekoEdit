@@ -1,3 +1,19 @@
+## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
+
+| Commit | Subject |
+|---|---|
+| [73c65219ef98](https://github.com/GraderGamer2/NekoEdit/commit/73c65219ef98f6a4ffe084294710c17b1513b104) | perf: checkpoint caret mapping within long logical lines |
+| [4e7e88df0306](https://github.com/GraderGamer2/NekoEdit/commit/4e7e88df03069a9f8b51425d72c3b4158dbbf970) | test: use document-end shortcut for wrapped caret mapping |
+| [07f28ae4ccf5](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3) | test: send wrapped document-end shortcut directly |
+
+The 4 MiB single-line regression checks byte-to-visual caret mapping at EOF in both Wrap Lines modes; each measured scan must remain within 4 KiB. The no-wrap horizontal renderer retains its own 4 KiB glyph-traversal assertion. The first test attempt used plain End in wrapped mode (which correctly ends the current visual row); the final test uses Ctrl+End. Actions [#959](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359) passed all 17 workflow steps, including the complete Wayland suite and nested GNOME Shell/Mutter integration.
+
+Artifacts: Linux x86-64 [148,935 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091).
+
+No before/after latency benchmark was collected. Sparse visual-row-to-byte checkpoints for a very long wrapped logical line and full-frame software repaint remain future work.
+
+---
+
 ## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
 
 | Commit | Subject |
