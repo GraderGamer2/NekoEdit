@@ -5136,6 +5136,8 @@ render_damage_top2:     .long 0
 render_damage_height2:  .long 0
 render_damage_bottom1:  .long 0
 render_current_caret_row: .long 0
+render_partial_first_row: .long 0
+render_partial_end_y: .long 0
 shift_down:             .long 0
 shift_physical_down:    .long 0
 caps_lock:              .long 0
@@ -15839,6 +15841,26 @@ render_prepare_slot:
     jbe .render_prepare_rows_ordered
     xchg r13d, r14d
 .render_prepare_rows_ordered:
+    # The dirty band covers the previous row plus both caret rows and one
+    # following row for glyph overhang. Retain logical row bounds so document
+    # painting can jump directly to this interval instead of scanning the
+    # entire visible viewport.
+    mov eax, r13d
+    test eax, eax
+    jz .render_prepare_first_row_ready
+    dec eax
+.render_prepare_first_row_ready:
+    add eax, dword ptr [rip + doc_view_top_row]
+    mov dword ptr [rip + render_partial_first_row], eax
+    lea ecx, [r14d + 2]
+    cmp ecx, dword ptr [rip + window_doc_visible_rows]
+    jbe .render_prepare_end_row_ready
+    mov ecx, dword ptr [rip + window_doc_visible_rows]
+.render_prepare_end_row_ready:
+    imul ecx, dword ptr [rip + window_doc_line_height]
+    add ecx, DOC_TOP
+    mov dword ptr [rip + render_partial_end_y], ecx
+
     mov eax, dword ptr [rip + window_doc_line_height]
     imul r13d, eax
     add r13d, DOC_TOP
@@ -25505,6 +25527,32 @@ render_document:
     push r15
     mov dword ptr [rip + render_document_scan_start], 0
     mov dword ptr [rip + render_document_scan_end], 0
+    cmp dword ptr [rip + render_partial_active], 1
+    jne .Ldocument_render_full_map_start
+    mov edi, dword ptr [rip + render_partial_first_row]
+    xor esi, esi
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_render_partial_map_start
+    mov esi, dword ptr [rip + doc_view_left_px]
+.Ldocument_render_partial_map_start:
+    call doc_visual_to_offset
+    mov r14d, eax
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .Ldocument_render_partial_wrapped_origin
+    lea r12d, [rdx + DOC_LEFT]
+    sub r12d, dword ptr [rip + doc_view_left_px]
+    jmp .Ldocument_render_partial_y
+.Ldocument_render_partial_wrapped_origin:
+    mov r12d, DOC_LEFT
+.Ldocument_render_partial_y:
+    mov eax, dword ptr [rip + render_partial_first_row]
+    sub eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov r13d, eax
+    jmp .Ldocument_render_origin_ready
+
+.Ldocument_render_full_map_start:
     mov r12d, DOC_LEFT
     mov edi, dword ptr [rip + doc_view_top_row]
     xor esi, esi
@@ -25524,6 +25572,11 @@ render_document:
     mov r13d, DOC_TOP
 .Ldocument_render_loop:
     mov dword ptr [rip + render_document_scan_end], r14d
+    cmp dword ptr [rip + render_partial_active], 1
+    jne .Ldocument_render_loop_full_bounds
+    cmp r13d, dword ptr [rip + render_partial_end_y]
+    jge .document_draw_cursor
+.Ldocument_render_loop_full_bounds:
     cmp r14d, dword ptr [rip + doc_length]
     jae .document_draw_cursor
     mov eax, dword ptr [rip + window_doc_bottom]

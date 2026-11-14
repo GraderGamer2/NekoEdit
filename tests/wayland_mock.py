@@ -9849,7 +9849,10 @@ xkb_symbols "nekoedit-sparse" {
                 if dirty_render_test:
                     initial_state = read_document_state()
                     if initial_state["doc_cursor"] != initial_state["doc_length"]:
-                        key_step(1000, 107, "position caret at end of test line")
+                        workflow_shortcut(1000, 107, "Ctrl+End positions caret at document end")
+                    positioned = read_document_state()
+                    if positioned["doc_cursor"] != positioned["doc_length"]:
+                        raise AssertionError("Ctrl+End did not place the dirty-render fixture caret at EOF")
                     partial_frames = []
                     for index, code in enumerate((105, 106, 105, 106)):
                         partial_frames.append(
@@ -9863,7 +9866,27 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"caret navigation did not switch to two-band damage after buffer warm-up: {partial_frames!r}"
                         )
-                    before_edit = read_document_state()["doc_contents"]
+                    painted_state = read_document_state()
+                    expected_length = painted_state["doc_length"]
+                    scan_start = painted_state["render_document_scan_start"]
+                    scan_end = painted_state["render_document_scan_end"]
+                    if (
+                        painted_state["doc_cursor"] != expected_length
+                        or scan_start < expected_length - 512
+                        or scan_end < scan_start
+                        or scan_end - scan_start > 512
+                    ):
+                        raise AssertionError(
+                            "caret-only repaint traversed document rows outside its dirty band: "
+                            + repr({
+                                "cursor": painted_state["doc_cursor"],
+                                "length": expected_length,
+                                "scan_start": scan_start,
+                                "scan_end": scan_end,
+                                "scanned_bytes": scan_end - scan_start,
+                            })
+                        )
+                    before_edit = painted_state["doc_contents"]
                     key_step(1020, 48, "text edit invalidates the partial-render snapshot")
                     after_edit = read_document_state()["doc_contents"]
                     if after_edit != before_edit + b"b":
@@ -10942,7 +10965,7 @@ if __name__ == "__main__":
     dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-")
     try:
         with os.fdopen(dirty_fd, "wb") as dirty_file:
-            dirty_file.write(b"abcdefghijk")
+            dirty_file.write(b"abcdefghijk\n" + (b"0123456789" * 8 + b"\n") * 4096)
         run(sys.argv[1], initial_file=dirty_path, dirty_render_test=True)
     finally:
         try:

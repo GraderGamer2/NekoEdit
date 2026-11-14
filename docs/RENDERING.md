@@ -111,6 +111,14 @@ Double-clicking a word selects its complete word span. Ctrl+Left/Right moves by 
 
 Ctrl+F opens Find and Ctrl+H opens Find/Replace. Enter and F3 move to the next literal match; Shift+F3 moves to the previous match; Ctrl+Enter replaces the selected match; Replace All processes the remaining matches through the document. Search uses byte-exact matching and the modal's query/replacement keyboard entry currently supports the same ASCII XKB subset as the editor. Case folding and non-ASCII keyboard/IME entry remain future work.
 
+## Dirty caret-band repaint
+
+Plain, unselected arrow-key movement can use the conservative two-band repaint described above. The partial path now also bounds document traversal to the logical visual rows covered by that damage: it maps directly to one row before the earlier caret position, then stops after the later caret position and its following overhang row. Wrap Lines ON uses the indexed visual-row mapper; Wrap Lines OFF supplies the current horizontal pixel origin to the same mapper. The document painter therefore no longer walks every visible row for a simple caret-only redraw.
+
+Each SHM slot must still have a compatible committed scene snapshot, and the two caret rows must be visible and at most one row apart. Edits, selection changes, scrolling, pointer drags, IME/Compose, menus, modal UI, resize/scale/transform changes, and stale slot contents retain the complete redraw. Find highlighting and the status footer continue to use their existing safe paths. The Wayland mock now uses a 4,096-row fixture and asserts that the caret-only document scan stays within 512 bytes near EOF; the subsequent text insertion must still use full-frame damage.
+
+This is a bounded-work assertion for the eligible caret path, not a measured end-to-end latency or frame-rate claim. Live GNOME/Mutter use and controlled on-device timings remain outstanding.
+
 ## Text-rendering limits
 
 The document renderer decodes the first Unicode scalar of each grapheme cluster for cmap lookup and rasterization. Grapheme-aware editing/navigation is implemented separately, but that does not constitute full grapheme shaping. Combining marks are not positioned over a base glyph; ZWJ sequences, variation selectors, and multi-scalar emoji are not composed into shaped glyph runs.
