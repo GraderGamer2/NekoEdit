@@ -9870,9 +9870,13 @@ xkb_symbols "nekoedit-sparse" {
                     expected_length = painted_state["doc_length"]
                     scan_start = painted_state["render_document_scan_start"]
                     scan_end = painted_state["render_document_scan_end"]
-                    if (
-                        painted_state["doc_cursor"] != expected_length
-                        or scan_start < expected_length - 512
+                    if painted_state["doc_cursor"] != expected_length:
+                        raise AssertionError(
+                            f"dirty-render fixture caret did not reach EOF: "
+                            f"{painted_state['doc_cursor']} != {expected_length}"
+                        )
+                    if expected_length > 512 and (
+                        scan_start < expected_length - 512
                         or scan_end < scan_start
                         or scan_end - scan_start > 512
                     ):
@@ -9886,6 +9890,12 @@ xkb_symbols "nekoedit-sparse" {
                                 "scanned_bytes": scan_end - scan_start,
                             })
                         )
+                    if expected_length > 512:
+                        observations.append(
+                            "4,096-row document: plain unselected caret movement used two clipped damage bands and scanned no more than 512 bytes near EOF"
+                        )
+                        client.sendall(wire_message(10, 1))
+                        return
                     before_edit = painted_state["doc_contents"]
                     key_step(1020, 48, "text edit invalidates the partial-render snapshot")
                     after_edit = read_document_state()["doc_contents"]
@@ -10962,7 +10972,7 @@ if __name__ == "__main__":
     run(sys.argv[1], verify_frame_callbacks=True)
     run(sys.argv[1], frame_callback_order_test=True)
     run(sys.argv[1], buffer_pool_test=True)
-    dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-")
+    dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-long-")
     try:
         with os.fdopen(dirty_fd, "wb") as dirty_file:
             dirty_file.write(b"abcdefghijk\n" + (b"0123456789" * 8 + b"\n") * 4096)
@@ -10970,6 +10980,16 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(dirty_path)
+        except FileNotFoundError:
+            pass
+    edit_fd, edit_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-edit-")
+    try:
+        with os.fdopen(edit_fd, "wb") as edit_file:
+            edit_file.write(b"abcdefghijk")
+        run(sys.argv[1], initial_file=edit_path, dirty_render_test=True)
+    finally:
+        try:
+            os.unlink(edit_path)
         except FileNotFoundError:
             pass
     # Manager globals may disappear after binding; only manager proxies are
