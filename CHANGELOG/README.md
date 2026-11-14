@@ -1,4 +1,22 @@
-## Latest handoff (2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting; CI PASS #956)
+## Latest handoff (2026-11-14 — sparse byte-to-visual checkpoints for long logical lines; CI PASS #959)
+
+Continue development on `early-alpha` at [07f28ae](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+Added a separate 4 KiB sparse byte-to-visual checkpoint working set for caret mapping. Its 4,096 direct-mapped entries (96 KiB total) retain the cache epoch, stable logical-line ID, byte bucket, line-relative byte offset, local visual row, and pixel X. The line-index metric pass populates checkpoints in both Wrap Lines modes. Lookup starts at the target bucket and probes up to the preceding 15 buckets; relative offsets allow untouched later lines to keep their entries when an earlier edit shifts absolute document positions. Rebuild/reflow advances the epoch, while edited/split/merged lines receive new stable IDs.
+
+The 4 MiB single-line Wayland regression moves the caret to document EOF with Ctrl+End, checks the mapper's byte scan in Wrap Lines ON and OFF, and requires each measured scan to remain within 4 KiB. The prior no-wrap horizontal glyph-paint check still verifies a 4 KiB traversal bound while scrolling. These are bounded-work regression assertions, not a measured frame-rate or latency improvement.
+
+Actions [#959](`https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359`) passed all 17 workflow steps: freestanding build and ELF verification, CLI smoke tests, glyph-cache comparison, full Wayland protocol suite (including the 4 MiB wrapped/unwrapped caret checks and 11 MiB Open/Save), executable inspection, native `us(intl)` parser, pinned X.Org importer, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: Linux x86-64 [148,935 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091). Both expire 2026-11-15 10:24 UTC (17:24 WIB).
+
+The first #957 attempt exposed a test assumption: plain End stops at the current visual-row end when wrapping is enabled, so the EOF regression now correctly uses Ctrl+End. The final direct-event test harness passed in #959.
+
+No controlled before/after latency benchmark was collected. Next, add sparse visual-row-to-byte checkpoints for a very long wrapped logical line. Full-frame software-surface repainting remains a separate optimization target.
+
+---
+
+## Previous handoff (2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting; CI PASS #956)
 
 Continue development on `early-alpha` at [4f6acac](https://github.com/GraderGamer2/NekoEdit/commit/4f6acac6255e404d36d8ba95a775f1c0da3b856c). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
