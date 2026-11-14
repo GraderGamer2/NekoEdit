@@ -4,9 +4,11 @@ Continue normal development on `early-alpha` at `-O2`; keep `optimization-early-
 
 The implementation selects two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). Explicit configure dimensions are retained independently; maximized/fullscreen/tiled states remain compositor-managed. The app separates compositor surface dimensions from a virtual layout and applies one uniform density transform to boxes, TrueType glyphs, bitmap fallback and pointer hit-testing. Damage, buffer sizes and viewport destinations remain in surface coordinates.
 
-The responsive resize tests now cover 720×480 surface -> 0.9× density -> 800×533 virtual layout, and 480×360 minimum surface -> 0.75× density -> 640×480 virtual layout. They assert transformed footer/picker geometry and projected pixel/pointer coordinates.
+Responsive resize tests cover 720×480 surface -> 0.9× density -> 800×533 virtual layout, and 480×360 minimum surface -> 0.75× density -> 640×480 virtual layout.
 
-Actions #940 passed the build, CLI and renderer benchmark, then progressed through the large Wayland test matrix, including the corrected legacy-seat v3 repeat fallback. It stopped in the output-tracking test because its `wl_surface.leave` event still used hard-coded object ID 21 after the initial output-sync callback shifted the client object sequence. The mock now uses the allocated `hot_added_output_id`. CI is pending after this test-only correction. The dedicated 1080p/1440p-at-2× startup-size scenario is still not confirmed by a passing full run; real GNOME/Mutter visual and input testing remains outstanding. Application source and `-O2` remain unchanged.
+Actions #941 passed build, CLI and renderer checks, and progressed through the main Wayland matrix into the output-tracking case. That mock exposed two stale hard-coded IDs for the hot-added output: its `wl_surface.leave` and final `wl_output.release` checks must use the dynamically allocated client object ID, while `wl_registry.global_remove` continues using the separate registry global name. Both expectations now use the dynamic ID. The dedicated 1080p-vs-1440p/2× startup-size scenario immediately follows output tracking and still needs a passing full run. CI is pending; real GNOME/Mutter visual and input testing remains outstanding. App source and `-O2` remain unchanged.
+
+---
 
 ---
 

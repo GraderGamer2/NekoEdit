@@ -1533,7 +1533,9 @@ def run(
                     wait_output("surface_effective_buffer_scale", 1)
 
                     client.sendall(wire_message(2, 1, struct.pack("<I", 10)))
-                    expect_message(client, (21, 0, b""), "release removed hot-added wl_output v3")
+                    expect_message(
+                        client, (hot_added_output_id, 0, b""), "release removed hot-added wl_output v3"
+                    )
                     wait_output("output_global_names", 0, 0)
                     wait_output("output_object_ids", 0, 0)
                     observations.append(

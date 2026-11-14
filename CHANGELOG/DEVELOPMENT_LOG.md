@@ -48,6 +48,12 @@ The build, CLI, renderer benchmark, initial frame/repeat scenarios, legacy `wl_s
 
 The source `wl_registry.global_remove` handler correctly cleared the output entry when it received the corresponding global name. Updated the mock to send `wl_surface.leave` with `hot_added_output_id`, matching the subsequent dynamically assigned `wl_output.release` expectation. No application source changes are needed.
 
+### Follow-up after Actions #941 — use the dynamic hot-added ID for release too
+
+Actions #941 passed build, CLI and renderer checks, then reached the output-tracking mock. The preceding fix corrected `wl_surface.leave`, but the mock's final `wl_output.release` expectation still hard-coded object ID 21. The backend correctly sent release for the actual hot-added client object, ID 22 in this run.
+
+The test now consistently uses `hot_added_output_id` for the hot-added `wl_output.bind`, `wl_surface.enter/leave`, and `wl_output.release`. Registry global names remain the separate values used by `wl_registry.global_remove`. The feature implementation is unchanged. The two-output startup-size test is immediately after the output-tracking scenarios and has not yet been reached by a passing CI run.
+
 ### Regression and validation
 
 The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).
