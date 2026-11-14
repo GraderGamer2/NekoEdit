@@ -1,14 +1,13 @@
-## 2026-11-15 — early-alpha compact glyph-mask initialization and cache rows (Actions #976 PASS)
+## 2026-11-15 — early-alpha provider-safe clipboard paste and 30 Hz key repeat (Actions #977 PASS)
 
 | Commit | Subject |
 |---|---|
-| [3ed2dd0](https://github.com/GraderGamer2/NekoEdit/commit/3ed2dd0bd1037d6885cb908c24e6acd73d69d740) | perf: pack glyph cache masks and bound scratch clears |
-| [0d44d39](https://github.com/GraderGamer2/NekoEdit/commit/0d44d399e9b5d4a2ab8fb01f71ea26e601477d22) | fix: use correct glyph mask row strides |
-| [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e) | test: declare glyph mask bearings in benchmark |
+| [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c) | fix: make large clipboard transfers provider-safe and repeat all ordinary keys |
+| [8095dd5](https://github.com/GraderGamer2/NekoEdit/commit/8095dd5ffa50119910154b7650840688037799b2) | test: clarify compositor repeat delay coverage |
 
-Actions #976 passed all 17 steps and all five variants matched cache-fill and warm framebuffer checksums. Compact storage improved cold rasterization by 14.1% and cold cache fill/draw by 14.2% against legacy storage; warm draw was 0.7% slower. The per-entry 128×128 allocation remains unchanged. This commit updates changelog documentation only; no application source on `main` changed.
+Actions #977 passed all 17 steps. The 10 MiB Wayland clipboard regression uses `UTF8_STRING`, asserts a blocking provider FD, and verifies exact bytes, line indexing and Undo/Redo. The repeat regression verifies a fixed 30 Hz for normal editing/navigation keys irrespective of XKB repeat flags, while preserving the compositor delay. The changes and tests are on `early-alpha`; application source on `main` is unchanged.
 
-Artifacts: [Linux x86-64, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364).
+Artifacts: [Linux x86-64, 151,038 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14127667227); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14128111687).
 
 ---
 

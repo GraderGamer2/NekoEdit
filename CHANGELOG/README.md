@@ -1,19 +1,16 @@
-## Latest handoff (2026-11-15 — early-alpha compact glyph masks; CI PASS #976)
+## Latest handoff (2026-11-15 — early-alpha clipboard and keyboard repeat fixes; CI PASS #977)
 
-The application source on `main` remains unchanged. Continue source development on `early-alpha` at [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e). This is a changelog-only mirror; do not merge editor source to `main`. Normal development remains `-O2`, unstripped.
+The application source on `main` remains unchanged. Continue application development on `early-alpha` at [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c). This is a changelog-only mirror; do not merge editor source to `main`. Normal development remains `-O2`, unstripped.
 
-The latest glyph-cache optimization initializes only active glyph bounds, writes uncovered pixels as zero to prevent stale scratch data, and copies cache rows packed at the glyph width. Both normal and transformed buffer paths use the correct row stride; a large-then-small glyph test guards against stale pixels.
+**Clipboard/paste:** The receiver already allows up to 64 MiB. The clipboard pipe previously made both ends nonblocking, so the external provider got a nonblocking writer. Only NekoEdit's read end is now nonblocking. `UTF8_STRING` is also accepted for GTK/X11 clipboard compatibility. Actions #977's Wayland mock verified a complete 10 MiB transfer, exact content and line indexing, and Undo/Redo using a blocking provider FD. Manual l3afpad verification on the target machine remains recommended.
 
-[Actions #976](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868) passed all 17 steps, including the five-way renderer comparison, all seven non-normal Wayland transforms, 11 MiB Open/Save and nested GNOME Shell/Mutter. Cache-fill checksum `35083399697745` and warm framebuffer checksum `35084948275808` matched across variants. Synthetic cold rasterization and cold cache-fill/draw improved about 14.1–14.2%; warm draw was 0.7% slower, effectively neutral in this measurement.
+**Keyboard repeat:** Every ordinary key now repeats at a fixed 30 ticks per second regardless of XKB per-key repeat flags; the compositor's initial delay is retained. Modifier, lock and Compose keys remain excluded, and Ctrl shortcuts stay single-shot. Automated coverage includes arrows, Backspace, Delete, Enter, Tab and printable keys.
 
-The fixed per-entry 128×128 pixel arrays still occupy about 2 MiB. The optimization reduces active-byte clearing/copying but does not shrink that static allocation. A shared variable-size cache arena is a potential next memory-footprint optimization, requiring a separate allocator/eviction design.
+[Actions #977](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206) passed all 17 steps, including the full Wayland mock, native XKB tests, X.Org importer, Compose build, nested Mutter integration and both artifact uploads.
 
-Artifacts: [Linux x86-64 executable, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364).
+Artifacts: [Linux x86-64 executable, 151,038 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14127667227); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14128111687).
 
-The selection auto-scroll fix passed [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935); user testing confirms selection works at screen top and bottom. The opaque-pixel blend optimization passed [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385).
-
-Application source remains on `early-alpha`. This mirror on `main` changes only `CHANGELOG` documentation.
----
+All these changes remain on `early-alpha`; this mirror on `main` contains changelog documentation only.
 
 ## Latest handoff (2026-11-15 — early-alpha caret-only document traversal bounded; CI PASS #970)
 
