@@ -1,3 +1,19 @@
+## 2026-11-15 — dirty caret-band document traversal bounded (CI PASS #970)
+
+| Commit | Subject |
+|---|---|
+| [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd) | perf: bound caret-only document repaint traversal |
+| [05e56a9](https://github.com/GraderGamer2/NekoEdit/commit/05e56a924a61ab0f6ac5a3393a779077651276bf) | test: isolate dirty-render long-document scenario |
+| [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05) | test: split dirty traversal and edit fallback cases |
+
+The renderer maps to the dirty visual-row interval and stops document traversal at its end. The 4,096-row Wayland fixture requires a maximum 512-byte scan near EOF during plain unselected caret navigation. A separate 11-byte test ensures text insertion still uses full-frame damage and preserves the appended byte. Actions #970 passed all build, CLI, renderer equivalence, Wayland, ELF, XKB, X.Org importer, Compose and nested GNOME Shell/Mutter checks.
+
+Artifacts: [Linux x86-64, 150,886 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123966705); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123123164).
+
+No end-to-end latency claim is made; target-machine visual testing and controlled input-to-present timing remain outstanding.
+
+---
+
 ## 2026-11-14 — dirty caret-band rendering validated (CI PASS #967)
 
 | Commit | Subject |

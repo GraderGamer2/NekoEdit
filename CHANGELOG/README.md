@@ -1,4 +1,16 @@
-## Latest handoff (2026-11-14 — dirty caret repaint; CI PASS #967)
+## Latest handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
+
+Continue development on `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). The renderer change is [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd); the following commits refine only its mock coverage. Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+The caret-only partial-render path now maps directly to the visual rows covered by its dirty bands and stops document traversal at the end of that interval. Wrap Lines ON uses the indexed visual-row mapper; Wrap Lines OFF includes the horizontal viewport origin. Matching pixel clipping, Wayland damage rectangles, and per-SHM-slot snapshot guards remain in place. Edits, selections, scrolling, IME/Compose, overlays, drag, resize/scale changes, transformed buffers and stale snapshots keep the full-frame fallback.
+
+Actions [#970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed the full Wayland mock, including a 4,096-row fixture that asserts a maximum 512-byte document scan during caret-only navigation and a separate edit-fallback fixture that requires full-frame damage and exact inserted bytes. Build/ELF, CLI, renderer equivalence, dual-buffer, 11 MiB Open/Save, XKB, X.Org importer, Compose, and nested GNOME Shell/Mutter checks also passed. Both artifacts were uploaded.
+
+This validates bounded document traversal for eligible caret-only redraws, not a measured end-to-end speedup. Next: manual GNOME/Mutter visual testing on the target machine, then controlled input-to-present measurements before expanding the partial-render path to other input classes.
+
+---
+
+## Previous handoff (2026-11-14 — dirty caret repaint; CI PASS #967)
 
 Continue development on `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 

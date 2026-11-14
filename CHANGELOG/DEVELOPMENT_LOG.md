@@ -1,3 +1,19 @@
+## 2026-11-15 — dirty caret-band document traversal bounded (Actions #970 PASS)
+
+**Branch:** `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). **Rendering implementation:** [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd). **Workflow:** [Actions run #970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed the complete workflow.
+
+The caret-only partial-render path now bounds document traversal to the same visual-row interval as its dirty pixel bands. `render_prepare_slot` records the first dirty row (one row before the earlier caret) and the exclusive end after the later caret plus one row of overhang. `render_document` maps directly to that first row through `doc_visual_to_offset` (including the horizontal pixel origin when Wrap Lines is OFF) and stops at the interval's end. The full-render path is unchanged.
+
+The optimization remains guarded by the existing per-SHM-slot committed snapshots. It applies only to plain, unselected arrow-key movement with both caret rows visible and no more than one row apart. Edits, selections, scrolling, IME/Compose, overlays, pointer drags, resizes, scale changes, transformed buffers and stale snapshots retain the full-frame fallback.
+
+The Wayland mock now checks a 4,096-row document and requires caret-only movement near EOF to scan no more than 512 document bytes while using two-band damage. A separate 11-byte fixture verifies that text insertion still uses full-frame damage and appends the exact expected byte. Actions #968 and #969 exposed test-harness assumptions; the long-document traversal and short-document edit-fallback cases are now isolated. Actions #970 passed the complete suite, including dual-buffer coverage, 11 MiB Open/Save, XKB, X.Org importer, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: Linux x86-64 executable, 150,886 bytes ([#14123966705](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123966705)); Compose locale packs, 120,536 bytes ([#14123123164](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123123164)).
+
+This is a bounded-work verification for eligible caret-only redraws, not an end-to-end FPS or latency claim. Manual visual testing on the target GNOME/Mutter session and controlled input-to-present measurements remain outstanding.
+
+---
+
 ## 2026-11-14 — dirty caret-band rendering validated (Actions #967 PASS)
 
 **Branch:** `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
