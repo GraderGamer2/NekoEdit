@@ -4710,7 +4710,7 @@ xkb_symbols "nekoedit-sparse" {
                         or state["doc_line_index_records"][0][1] <= 1
                     ):
                         raise AssertionError("multi-megabyte horizontal fixture did not load wrapped: " + repr(state))
-                    key_step(3185, 107, "End moves caret to end of the multi-megabyte wrapped line")
+                    workflow_shortcut(3160, 107, "Ctrl+End moves caret to end of the multi-megabyte wrapped line")
                     state = read_document_state()
                     caret_scan_start = state["doc_offset_visual_scan_start"]
                     caret_scan_end = state["doc_offset_visual_scan_end"]
