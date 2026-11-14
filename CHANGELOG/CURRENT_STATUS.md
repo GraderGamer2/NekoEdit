@@ -1,3 +1,36 @@
+## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
+
+**Branch/head:** `early-alpha` at [cb2ebe5](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53). **Workflow:** [Actions #983](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115) passed all 17 steps.
+
+### Source changes
+
+- `src/backend/wayland.S`: `draw_rect` now precomputes the initial row address and row padding, advancing the row pointer instead of recomputing the row address for each scanline. Applied to full-frame and both clipped-band loops.
+- `src/backend/wayland.S`: Fenwick-tree initialization stores each line's own byte and visual-row contributions in the first pass; the second pass only propagates to parent nodes.
+- `src/editor/gap_buffer.h`: shared `REP MOVSB` byte/range copy helpers. Logical ranges are copied in at most two spans around the editor gap.
+- `src/backend/clipboard.c`: selection snapshots now use the shared bulk range copy rather than calling `doc_byte_at` once per byte.
+- `src/editor/history.c`: document hash and initial base snapshot operate on the two physical gap-buffer spans; the initial snapshot no longer issues one write syscall per document byte. Removed/inserted transaction payloads and compact-record encoding also use bulk copies.
+- `Makefile`: C function/data sections, `-fno-ident`, linker `--gc-sections`, and `size` output in `make inspect`. The development default remains `-O2`.
+- Assembly section isolation: all 308 uniquely typed functions in `entry.S`, `syscall.S`, `sfnt.S`, `wayland.S`, and `xkb.S` have their own executable `.text.*` sections so linker garbage collection can work at function granularity.
+- Added `tests/clipboard_range_test.c` for all ranges and gap positions across four gap sizes.
+
+### Validation
+
+Actions #983 passed: freestanding build and ELF checks; CLI/host tests; clipboard-range and history tests; renderer equivalence benchmark; full Wayland mock including clipboard, dirty rendering and 11 MiB Open/Save; native `us(intl)` parser validation; pinned X.Org importer; Compose locale-pack build; nested GNOME Shell/Mutter integration; and both artifact uploads.
+
+Final ELF has no interpreter or `DT_NEEDED` entries. `size` output: text **237,542**, data **64**, BSS **3,764,856** bytes (ELF total section allocation 4,002,462 bytes). Uploaded executable artifact: **151,072 bytes**; previous comparable #979 artifact: 151,261 bytes, a 189-byte reduction. Compose packs: **120,536 bytes**. Artifacts expire 2026-11-16 03:21 WIB.
+
+### Accuracy and remaining work
+
+No end-to-end performance timing was collected for this optimization series. The changes reduce repeated row-address calculations, redundant Fenwick operations, per-byte gap-buffer lookup/copy loops, and per-byte history snapshot syscalls. The artifact-size difference is small and should not be marketed as a substantial binary shrink. The nested GNOME/Mutter test is automated integration coverage, not a manual test on the user's live desktop.
+
+The source review covered the assembly and C modules/build configuration. The TrueType rasterization algorithm, XKB parsing tables, Compose/locale parsing, and preferences serialization were left structurally unchanged because no safe rewrite was justified without focused before/after benchmarks. Next: controlled input-to-present and large-document tests on the target GNOME/Mutter session; profile index invalidation/rebuild and full-frame edit rendering before changing those algorithms.
+
+Implementation commits:
+- [4ea34cfd](https://github.com/GraderGamer2/NekoEdit/commit/4ea34cfd6ee502ad7bb1a6dfdb1b103d5cc6c1d9)
+- [0e32b6a4](https://github.com/GraderGamer2/NekoEdit/commit/0e32b6a4e51911ebdc543d4cc365889ff566f6f2)
+- [aa4d6e48](https://github.com/GraderGamer2/NekoEdit/commit/aa4d6e4808dcf83e028de72bfcc6605498a531b2)
+- [cb2ebe5f](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53) (test-fixture cleanup)
+
 ## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
 
 **Branch:** `early-alpha` at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c); normal development remains `-O2`, unstripped. **Workflow:** [Actions #979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed all steps.

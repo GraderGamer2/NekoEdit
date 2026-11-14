@@ -1,3 +1,22 @@
+## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
+
+| Commit | Subject |
+|---|---|
+| [4ea34cfd6ee5](https://github.com/GraderGamer2/NekoEdit/commit/4ea34cfd6ee502ad7bb1a6dfdb1b103d5cc6c1d9) | perf: streamline row fills and gap-buffer copies |
+| [0e32b6a4e519](https://github.com/GraderGamer2/NekoEdit/commit/0e32b6a4e51911ebdc543d4cc365889ff566f6f2) | perf: bulk process gap-buffer history data |
+| [aa4d6e4808dc](https://github.com/GraderGamer2/NekoEdit/commit/aa4d6e4808dcf83e028de72bfcc6605498a531b2) | build: isolate assembly functions for section garbage collection |
+| [cb2ebe5fd798](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53) | test: remove stale clipboard fixture state |
+
+`draw_rect` now advances a prepared row pointer; Fenwick tree nodes are initialized without redundant own-value additions. The new shared `gap_buffer.h` copies logical ranges in at most two `REP MOVSB` spans and is used by clipboard and history. History hashing and base snapshot creation process the physical spans directly, removing per-byte document lookup and per-byte write syscalls. C and all 308 typed assembly functions are sectionized for linker garbage collection; `make inspect` reports the ELF section sizes. Development stays `-O2`.
+
+Actions [#983](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115) passed all 17 workflow steps, including the full Wayland mock and 11 MiB Open/Save coverage, renderer checks, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter, and artifact uploads. The gap-copy unit test checks all ranges across all gap positions for four different gap sizes.
+
+ELF `size`: text 237,542, data 64, BSS 3,764,856 bytes. Uploaded executable artifact: 151,072 bytes, compared with 151,261 bytes in #979 (189-byte decrease). Compose packs: 120,536 bytes. No end-to-end speed claim is made.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115/artifacts/14130417080); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115/artifacts/14129999886). Expiry: 2026-11-16 03:21 WIB.
+
+---
+
 ## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
 
 | Commit | Subject |

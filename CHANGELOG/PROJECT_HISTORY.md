@@ -1509,3 +1509,15 @@ The Wayland mock checks thirteen additional keysym scalar/action cells directly 
 Actions [Build and test #695](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496) passed all eight workflow steps, including the complete Wayland mock, ELF inspection, and artifact upload. Artifact [13648893107](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496/artifacts/13648893107) is 104,167 bytes; ZIP SHA-256 `5762e219685c3734e77e8b2bd7e9fad0bdb39d3ca4c742d969fe330a8d407c4c`.
 
 The user reports the last build works perfectly and sees no visible behavior difference. This is consistent with backend-only alias coverage; live manual validation of additional script layouts is not claimed. `Ctrl+Shift+Left` was previously confirmed manually. The requested three-command right-click context menu remains a separate unimplemented roadmap item.
+
+
+## 2026-11-15 — low-level rendering, gap-buffer, history and link-size optimization
+
+A broad audit of NekoEdit's x86-64 assembly, freestanding C modules and build configuration identified several avoidable costs without requiring a new runtime dependency or a change to the established editor architecture.
+
+The renderer's rectangle fill now walks successive scanlines with a rolling pointer, avoiding repeated row-address multiplication and addition. Fenwick tree setup combines node initialization with its own per-line values. Clipboard selection and undo-history data paths now use a shared gap-buffer range helper that copies no more than two contiguous spans. Large history initialization no longer hashes the document byte-by-byte or performs one write syscall per byte.
+
+C code and 308 individually typed assembly routines now have function/data-level section granularity, allowing the static linker to discard unreachable function sections. The normal build remains `-O2` and unstripped. The change did not add a shared-library or third-party runtime requirement.
+
+Actions #983 passed the complete workflow, including the Wayland protocol suite, 11 MiB Open/Save, the new gap-range regression, native XKB verification, Compose/importer checks and nested GNOME Shell/Mutter integration. The resulting ELF reported text 237,542 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,072 bytes, 189 bytes smaller than the prior comparable artifact. No end-to-end latency improvement is claimed; the next development step is controlled profiling on the user's desktop, especially the remaining full-frame/edit redraw and index rebuild paths.
+

@@ -1,3 +1,31 @@
+## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
+
+Performed a source/build audit across the assembly backends, C support modules and Makefile, then applied conservative improvements to measured or visibly repeated work.
+
+The rectangle fill routine now computes a starting row pointer and per-row padding once, then advances a pointer after each `REP STOSD`. This removes the per-row multiply and address additions from the full-frame and dirty-band loops. Fenwick construction now seeds each node from its line's own byte/visual-row values during the initialization pass; the following pass no longer reloads and adds those same values before parent propagation.
+
+Added `src/editor/gap_buffer.h` to share bulk gap-buffer copy operations. A logical `[begin,end)` range is physically contiguous on at most two sides of the gap, so `gap_buffer_copy_range` uses at most two `REP MOVSB` copies. Clipboard selection snapshots, history deleted-byte capture, and history transaction encoding use this instead of per-byte calls/loops. `hash_doc` now hashes the prefix/suffix spans directly. `reset_file_to_current` writes the initial document snapshot in at most two bulk writes; previously it issued a write syscall for every byte in the base document.
+
+The build now compiles C code with `-ffunction-sections -fdata-sections -fno-ident`, links with `--gc-sections`, and reports section size through `make inspect`. All 308 uniquely typed assembly functions across the Wayland, XKB, SFNT, entry and syscall files were isolated into separate executable sections. The normal development profile remains `-O2`, unstripped, with no third-party runtime dependency.
+
+Added exhaustive representative gap-range coverage: every start/end selection for each gap position in a 19-byte logical document, using gap sizes 1, 7, 16 and 31. Existing host history tests and clipboard/Wayland integration cover the production call sites.
+
+Validation: Actions [#983](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115) passed all 17 steps. This includes build/ELF, CLI and C tests, renderer equivalence, full Wayland mock with 11 MiB Open/Save and clipboard scenarios, native `us(intl)`, X.Org importer, Compose pack, nested GNOME Shell/Mutter, and artifact uploads. An earlier intermediate run (#982) stopped at compilation of the new range test because three fixture assignments still referenced the old clipboard globals; commit [cb2ebe5](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53) removed those stale assignments, and #983 passed.
+
+Final `size` output: text 237,542 bytes; data 64 bytes; BSS 3,764,856 bytes. Uploaded executable artifact: 151,072 bytes; prior comparable #979 artifact: 151,261 bytes. This is a 189-byte artifact-size decrease. Compose pack artifact: 120,536 bytes. The artifacts expire 2026-11-16 03:21 WIB.
+
+No new end-to-end speed benchmark was performed. The optimization claims are limited to removed work in the affected loops/syscalls; the small artifact-size delta is reported separately. No live GNOME session retest is claimed.
+
+The review also covered the TrueType rasterizer, SFNT parser, XKB parser/key tables, Compose/locale loader, clipboard/history/preferences support, Linux entry/syscall layer and build configuration. No broad parser/rasterizer rewrite was made: those paths need focused profiling and equivalence/performance measurements first. Follow-up should measure target-machine large-document edit/input-to-present behavior and profile line-index invalidation/rebuild and full-frame edit repaint.
+
+Implementation commits:
+- [4ea34cfd](https://github.com/GraderGamer2/NekoEdit/commit/4ea34cfd6ee502ad7bb1a6dfdb1b103d5cc6c1d9) — row fills, Fenwick initialization and first clipboard bulk copy.
+- [0e32b6a4](https://github.com/GraderGamer2/NekoEdit/commit/0e32b6a4e51911ebdc543d4cc365889ff566f6f2) — shared gap-buffer helpers and history bulk paths.
+- [aa4d6e48](https://github.com/GraderGamer2/NekoEdit/commit/aa4d6e4808dcf83e028de72bfcc6605498a531b2) — assembly per-function sections for linker GC.
+- [cb2ebe5f](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53) — clipboard range test fixture correction.
+
+---
+
 ## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
 
 **Branch:** `early-alpha` at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c); normal development remains `-O2`, unstripped. **Workflow:** [Actions #979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed all steps.
