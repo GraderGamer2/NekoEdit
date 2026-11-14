@@ -284,6 +284,11 @@ int main(void) {
 #else
     puts("cache implementation: hash-indexed warm hits");
 #endif
+#ifdef FONT_CACHE_AOS_REFERENCE
+    puts("cache metadata layout: array-of-structures reference");
+#else
+    puts("cache metadata layout: compact structure-of-arrays");
+#endif
     printf("CLOCK_MONOTONIC_RAW resolution: %ld ns\n",
            resolution.tv_sec * 1000000000L + resolution.tv_nsec);
     print_samples("cold rasterization", cold_samples, COLD_RASTER_ITERATIONS);

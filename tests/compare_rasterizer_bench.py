@@ -65,10 +65,11 @@ def reduction(before: float, after: float) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 6:
+    if len(sys.argv) != 7:
         print(
             "usage: compare_rasterizer_bench.py LINEAR HASH_GENERIC "
-            "HASH_IDENTITY_REFERENCE HASH_OPAQUE_STORAGE_REFERENCE HASH_COMPACT",
+            "HASH_IDENTITY_REFERENCE HASH_OPAQUE_STORAGE_REFERENCE "
+            "HASH_COMPACT_AOS HASH_COMPACT_SOA",
             file=sys.stderr,
         )
         return 2
@@ -78,7 +79,8 @@ def main() -> int:
         ("hash cache + generic transform + reference blend/storage", sys.argv[2]),
         ("hash cache + identity path + reference blend/storage", sys.argv[3]),
         ("hash cache + identity + opaque blend + legacy mask storage", sys.argv[4]),
-        ("hash cache + identity + opaque blend + compact mask storage", sys.argv[5]),
+        ("hash cache + identity + opaque blend + compact mask + AoS metadata", sys.argv[5]),
+        ("hash cache + identity + opaque blend + compact mask + SoA metadata", sys.argv[6]),
     )
     results = [run(label, executable) for label, executable in labels]
     checksums = {result.checksum for result in results}
@@ -93,7 +95,10 @@ def main() -> int:
         print(f"=== {result.label} ===")
         print(result.output, end="" if result.output.endswith("\n") else "\n")
 
-    linear, hash_generic, hash_identity_reference, opaque_legacy_storage, compact_current = results
+    (
+        linear, hash_generic, hash_identity_reference, opaque_legacy_storage,
+        compact_aos_metadata, compact_soa_metadata,
+    ) = results
     print("=== paired median comparison ===")
     print(
         "warm draw: linear -> hash cache: "
@@ -108,20 +113,24 @@ def main() -> int:
         f"{reduction(hash_identity_reference.warm_ns, opaque_legacy_storage.warm_ns)} lower"
     )
     print(
-        "warm draw: opaque blend/legacy storage -> compact mask storage: "
-        f"{reduction(opaque_legacy_storage.warm_ns, compact_current.warm_ns)} lower"
+        "warm draw: opaque blend/legacy storage -> compact SoA renderer: "
+        f"{reduction(opaque_legacy_storage.warm_ns, compact_soa_metadata.warm_ns)} lower"
+    )
+    print(
+        "warm draw: compact AoS -> compact SoA metadata: "
+        f"{reduction(compact_aos_metadata.warm_ns, compact_soa_metadata.warm_ns)} lower"
     )
     print(
         "warm draw: linear -> current renderer: "
-        f"{reduction(linear.warm_ns, compact_current.warm_ns)} lower"
+        f"{reduction(linear.warm_ns, compact_soa_metadata.warm_ns)} lower"
     )
     print(
         "cold rasterization: legacy -> active-bounds initialization: "
-        f"{reduction(opaque_legacy_storage.cold_ns, compact_current.cold_ns)} lower"
+        f"{reduction(opaque_legacy_storage.cold_ns, compact_soa_metadata.cold_ns)} lower"
     )
     print(
         "cold cache fill: legacy -> compact mask storage: "
-        f"{reduction(opaque_legacy_storage.fill_ns, compact_current.fill_ns)} lower"
+        f"{reduction(opaque_legacy_storage.fill_ns, compact_soa_metadata.fill_ns)} lower"
     )
     print(f"identical cache-fill checksum: {linear.fill_checksum}")
     print(f"identical warm framebuffer checksum: {linear.checksum}")
