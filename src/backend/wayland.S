@@ -18251,8 +18251,8 @@ doc_line_index_rebuild:
     mov r15d, dword ptr [rip + doc_length]
 
     # A newly opened document has its gap at EOF, so the logical bytes form
-    # one contiguous range. SCASB finds newlines without one doc_byte_at call
-    # per byte. Keep the original gap-aware path for edited documents.
+    # one contiguous range. Keep this single-span SCASB fast path; edited
+    # documents use the two-span SCASB scan below.
     mov eax, dword ptr [rip + doc_gap_start]
     cmp eax, r15d
     jne .Ldoc_index_count_generic
@@ -18270,20 +18270,37 @@ doc_line_index_rebuild:
     jmp .Ldoc_index_count_contiguous
 
 .Ldoc_index_count_generic:
-    xor r12d, r12d
-.Ldoc_index_count_lines:
-    cmp r12d, r15d
-    jae .Ldoc_index_count_done
-    mov edi, r12d
-    call doc_byte_at
-    cmp eax, 10
-    jne .Ldoc_index_count_next
+    # Scan the physical prefix and suffix independently. The logical stream
+    # remains ordered, but each span is contiguous and can use SCASB.
+    mov rdi, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_start]
+    mov al, 10
+.Ldoc_index_count_prefix:
+    test ecx, ecx
+    jz .Ldoc_index_count_suffix_setup
+    repne scasb
+    jnz .Ldoc_index_count_suffix_setup
     inc ebx
     cmp ebx, DOC_INDEX_MAX_LINES
     ja .Ldoc_index_rebuild_failed
-.Ldoc_index_count_next:
-    inc r12d
-    jmp .Ldoc_index_count_lines
+    jmp .Ldoc_index_count_prefix
+
+.Ldoc_index_count_suffix_setup:
+    mov rdi, qword ptr [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rdi, rax
+    mov ecx, r15d
+    sub ecx, dword ptr [rip + doc_gap_start]
+    mov al, 10
+.Ldoc_index_count_suffix:
+    test ecx, ecx
+    jz .Ldoc_index_count_done
+    repne scasb
+    jnz .Ldoc_index_count_done
+    inc ebx
+    cmp ebx, DOC_INDEX_MAX_LINES
+    ja .Ldoc_index_rebuild_failed
+    jmp .Ldoc_index_count_suffix
 
 .Ldoc_index_count_done:
     mov edi, ebx
@@ -18359,54 +18376,87 @@ doc_line_index_rebuild:
     jmp .Ldoc_index_rebuild_return
 
 .Ldoc_index_fill_generic:
+    # Use a common logical line accumulator while SCASB walks the prefix and
+    # then the suffix. A line may begin in the prefix and finish in the suffix.
     xor r12d, r12d              # logical line start
-    xor r13d, r13d              # byte scan offset
     xor r14d, r14d              # zero-based line index
-.Ldoc_index_fill_lines:
-    cmp r13d, r15d
-    jae .Ldoc_index_fill_last_line
-    mov edi, r13d
-    call doc_byte_at
-    cmp eax, 10
-    jne .Ldoc_index_fill_next_byte
+    xor ebp, ebp                # logical offset represented by R13
+    xor r15d, r15d              # 0=prefix, 1=suffix
+    mov r13, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_start]
+.Ldoc_index_fill_span_loop:
+    test ecx, ecx
+    jz .Ldoc_index_fill_span_done
+    mov rdi, r13
+    mov al, 10
+    repne scasb
+    jnz .Ldoc_index_fill_span_done
+
+    # RDI points after the LF. Convert its distance from this span's start
+    # into a logical exclusive end, before advancing to the next span byte.
+    mov rbx, rdi
+    sub rbx, r13
+    add ebx, ebp
+    mov r13, rdi
+    mov dword ptr [rsp], ecx
+    mov ebp, ebx
+
     mov edi, r14d
     call doc_line_index_assign_id
     mov edx, eax
-    lea esi, [r13d + 1]
+    mov esi, ebx
     sub esi, r12d
     mov edi, r12d
     call doc_line_index_measure_rows
-    mov ebx, eax
+    mov dword ptr [rsp + 4], eax
     mov rdx, qword ptr [rip + doc_line_index_base]
     mov eax, r14d
     shl rax, 4
     add rdx, rax
-    lea ecx, [r13d + 1]
-    sub ecx, r12d
-    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], ecx
-    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], ebx
-    lea r12d, [r13d + 1]
+    mov eax, ebx
+    sub eax, r12d
+    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], eax
+    mov eax, dword ptr [rsp + 4]
+    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], eax
+
+    mov r12d, ebx
     inc r14d
-.Ldoc_index_fill_next_byte:
-    inc r13d
-    jmp .Ldoc_index_fill_lines
+    mov ecx, dword ptr [rsp]
+    jmp .Ldoc_index_fill_span_loop
+
+.Ldoc_index_fill_span_done:
+    # The prefix ended; continue at buffer+gap_end with its logical base at
+    # gap_start. After the suffix, finish with the possibly empty final line.
+    test r15d, r15d
+    jnz .Ldoc_index_fill_last_line
+    mov r15d, 1
+    mov r13, qword ptr [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add r13, rax
+    mov ebp, dword ptr [rip + doc_gap_start]
+    mov ecx, dword ptr [rip + doc_length]
+    sub ecx, ebp
+    jmp .Ldoc_index_fill_span_loop
+
 .Ldoc_index_fill_last_line:
+    mov r15d, dword ptr [rip + doc_length]
     mov esi, r15d
     sub esi, r12d
-    mov ebp, esi
+    mov ebx, esi
     mov edi, r14d
     call doc_line_index_assign_id
     mov edx, eax
     mov edi, r12d
-    mov esi, ebp
+    mov esi, ebx
     call doc_line_index_measure_rows
-    mov ebx, eax
+    mov dword ptr [rsp + 4], eax
     mov rdx, qword ptr [rip + doc_line_index_base]
     mov ecx, r14d
     shl rcx, 4
     add rdx, rcx
-    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], ebp
-    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], ebx
+    mov dword ptr [rdx + DOC_INDEX_BYTES_OFFSET], ebx
+    mov eax, dword ptr [rsp + 4]
+    mov dword ptr [rdx + DOC_INDEX_ROWS_OFFSET], eax
     call doc_line_index_build_trees
     mov eax, dword ptr [rip + window_doc_pixel_width]
     mov dword ptr [rip + doc_line_index_columns], eax

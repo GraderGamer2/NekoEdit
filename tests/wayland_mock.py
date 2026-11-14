@@ -3398,6 +3398,19 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("short child state read for " + name)
                     return struct.unpack("<I", raw)[0]
 
+                def child_set_u32(name: str, value: int) -> None:
+                    if name not in child_symbol_addresses:
+                        child_u32(name)
+                    with open(
+                        f"/proc/{process_holder[0].pid}/mem", "r+b", buffering=0
+                    ) as memory:
+                        written = os.pwrite(
+                            memory.fileno(), struct.pack("<I", value),
+                            child_symbol_addresses[name],
+                        )
+                    if written != 4:
+                        raise AssertionError("short child state write for " + name)
+
                 def child_u32_at(name: str, byte_offset: int) -> int:
                     if name not in child_symbol_addresses:
                         # Reuse the same nm-derived symbol cache as child_u32.
@@ -6304,16 +6317,30 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1300, 30, "insert ordinary byte inside indexed long line")
                     after_insert = fixture[:16] + b"a" + fixture[16:]
                     assert_index("ordinary insertion", after_insert, (6, 102, 2), (1, 2, 1))
-                    key_step(1302, 14, "Backspace ordinary byte inside indexed long line")
+                    state = read_document_state()
+                    if not (0 < state["doc_gap_start"] < state["doc_length"]):
+                        raise AssertionError("gap-aware rebuild fixture did not leave an interior gap: " + repr(state))
+                    child_set_u32("doc_line_index_valid", 0)
+                    key_step(1301, 105, "force rebuild with gap inside a logical line")
+                    assert_index("gap-aware rebuild across a logical line", after_insert, (6, 102, 2), (1, 2, 1))
+                    key_step(1302, 106, "restore caret after gap-aware rebuild")
+                    key_step(1304, 14, "Backspace ordinary byte inside indexed long line")
                     assert_index("ordinary deletion", fixture, (6, 101, 2), (1, 2, 1))
-                    key_step(1304, 28, "split indexed long line with Enter")
+                    key_step(1306, 28, "split indexed long line with Enter")
                     split = fixture[:16] + b"\n" + fixture[16:]
                     assert_index("newline split", split, (6, 11, 91, 2), (1, 1, 1, 1))
-                    key_step(1306, 14, "merge indexed logical lines with Backspace")
+                    state = read_document_state()
+                    if state["doc_gap_start"] != 17:
+                        raise AssertionError("newline split did not leave gap immediately after LF: " + repr(state))
+                    child_set_u32("doc_line_index_valid", 0)
+                    key_step(1307, 105, "force rebuild with LF immediately before gap")
+                    assert_index("gap-aware rebuild at newline boundary", split, (6, 11, 91, 2), (1, 1, 1, 1))
+                    key_step(1308, 106, "restore caret after newline-boundary rebuild")
+                    key_step(1310, 14, "merge indexed logical lines with Backspace")
                     assert_index("newline merge", fixture, (6, 101, 2), (1, 2, 1))
-                    workflow_shortcut(1310, 31, "save after indexed edit round-trip")
+                    workflow_shortcut(1312, 31, "save after indexed edit round-trip")
                     observations.append(
-                        "document line index rebuilt from mixed hard/soft-wrapped lines; ordinary insertion/deletion point-updated Fenwick trees; Enter split and Backspace merge rebuilt line records and prefix trees"
+                        "document line index rebuilt from mixed hard/soft-wrapped lines with the gap inside a logical line and immediately after LF; ordinary insertion/deletion point-updated Fenwick trees; Enter split and Backspace merge rebuilt line records and prefix trees"
                     )
                     client.sendall(wire_message(10, 1))
                     return
