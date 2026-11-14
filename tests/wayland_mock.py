@@ -7535,7 +7535,7 @@ xkb_symbols "nekoedit-sparse" {
                     for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
                         fields = symbol_line.split()
                         if len(fields) == 3 and fields[2] in {"picker_mode", "picker_focus", "picker_dir_fd", "picker_error", "picker_entry_count", "picker_selected", "picker_scroll", "picker_scroll_drag", "picker_scroll_thumb_top", "picker_scroll_thumb_height", "pointer_x", "pointer_y", "pointer_inside", "picker_path_length", "picker_path_cursor", "picker_path_buffer", "picker_current_path", "picker_name_length", "picker_name_cursor", "picker_name_match", "picker_suggestion_count", "picker_suggestion_selected", "picker_suggestion_indices", "picker_edit_select_all", "picker_name_buffer", "picker_last_click_index", "window_width", "window_height", "window_buffer_width", "window_buffer_height", "window_stride", "window_buffer_id", "window_is_maximized", "window_status_top", "window_status_bytes_x", "window_status_mode_x", "window_doc_pixel_width", "window_doc_visible_rows", "doc_capacity", "doc_gap_start", "doc_gap_end", "doc_storage_error", "doc_view_top_row", "doc_scroll_drag", "doc_scroll_drag_offset", "doc_scroll_thumb_top", "doc_scroll_thumb_height", "doc_total_visual_rows", "doc_wheel_remainder",
-                        "doc_hscroll_drag", "doc_hscroll_thumb_left", "doc_hscroll_thumb_width", "doc_hscroll_drag_offset", "window_doc_bottom", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_cursor", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_capacity", "doc_line_count", "doc_line_index_valid", "doc_line_index_columns"}:
+                        "doc_hscroll_drag", "doc_hscroll_thumb_left", "doc_hscroll_thumb_width", "doc_hscroll_drag_offset", "window_doc_bottom", "picker_panel_x", "picker_panel_y", "picker_panel_width", "picker_panel_height", "path_prompt_x", "path_prompt_y", "path_prompt_width", "path_prompt_height", "picker_last_click_time", "doc_length", "doc_cursor", "doc_buffer", "current_file_path", "current_path_buffer", "picker_target_buffer", "doc_save_error", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_capacity", "doc_line_count", "doc_line_index_valid", "doc_line_index_columns", "window_surface_width", "window_surface_height", "window_ui_scale_120"}:
                             picker_symbols[fields[2]] = int(fields[0], 16)
 
                     def picker_state() -> dict[str, object]:
@@ -8378,24 +8378,27 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (8, 6, b""), "commit maximized surface")
                     max_state = picker_state()
                     if (
-                        max_state.get("window_width") != 1920
-                        or max_state.get("window_height") != 1080
+                        max_state.get("window_surface_width") != 1920
+                        or max_state.get("window_surface_height") != 1080
+                        or max_state.get("window_ui_scale_120") != 240
+                        or max_state.get("window_width") != 960
+                        or max_state.get("window_height") != 540
                         or max_state.get("window_buffer_width") != 1920
                         or max_state.get("window_buffer_height") != 1080
                         or max_state.get("window_stride") != 7680
                         or max_state.get("window_buffer_id") != maximized_buffer_id
                         or max_state.get("window_is_maximized") != 1
-                        or max_state.get("window_status_top") != 1060
-                        or max_state.get("window_status_bytes_x") != 1180
-                        or max_state.get("window_status_mode_x") != 1864
-                        or max_state.get("window_doc_pixel_width") != 1880
-                        or max_state.get("window_doc_visible_rows") != 80
-                        or max_state.get("picker_panel_x") != 588
-                        or max_state.get("picker_panel_y") != 328
+                        or max_state.get("window_status_top") != 520
+                        or max_state.get("window_status_bytes_x") != 580
+                        or max_state.get("window_status_mode_x") != 904
+                        or max_state.get("window_doc_pixel_width") != 920
+                        or max_state.get("window_doc_visible_rows") != 35
+                        or max_state.get("picker_panel_x") != 108
+                        or max_state.get("picker_panel_y") != 58
                         or max_state.get("picker_panel_width") != 744
                         or max_state.get("picker_panel_height") != 424
-                        or max_state.get("path_prompt_x") != 608
-                        or max_state.get("path_prompt_y") != 448
+                        or max_state.get("path_prompt_x") != 128
+                        or max_state.get("path_prompt_y") != 178
                         or max_state.get("path_prompt_width") != 704
                         or max_state.get("path_prompt_height") != 176
                     ):
