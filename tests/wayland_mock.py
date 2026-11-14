@@ -9855,9 +9855,13 @@ xkb_symbols "nekoedit-sparse" {
                         partial_frames.append(
                             key_step(1002 + index * 3, code, f"dirty caret movement {index + 1}")
                         )
-                    if not all(partial_frames):
+                    # The first attempt can select the other SHM slot before
+                    # that slot has a matching snapshot. It must full-repaint
+                    # once, then the following three alternating frames must
+                    # use the narrow path.
+                    if not all(partial_frames[1:]):
                         raise AssertionError(
-                            f"plain unselected Left/Right navigation did not consistently use two-band damage: {partial_frames!r}"
+                            f"caret navigation did not switch to two-band damage after buffer warm-up: {partial_frames!r}"
                         )
                     before_edit = read_document_state()["doc_contents"]
                     key_step(1020, 48, "text edit invalidates the partial-render snapshot")
@@ -10230,9 +10234,23 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(
                         client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), f"{label} attach"
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
-                    )
+                    damage = recv_wayland_message(client)
+                    if damage[0:2] != (8, 2) or damage[3] or len(damage[2]) != 16:
+                        raise AssertionError(f"{label}: malformed first damage request: {damage!r}")
+                    rect1 = struct.unpack("<4I", damage[2])
+                    full_frame = (0, 0, 800, initial_height)
+                    if rect1 != full_frame:
+                        if "Left" not in label:
+                            raise AssertionError(f"{label}: only held Left navigation may use partial damage: {rect1!r}")
+                        x1, y1, width1, height1 = rect1
+                        if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
+                            raise AssertionError(f"{label}: invalid caret damage rectangle: {rect1!r}")
+                        damage2 = recv_wayland_message(client)
+                        if damage2[0:2] != (8, 2) or damage2[3] or len(damage2[2]) != 16:
+                            raise AssertionError(f"{label}: malformed status damage request: {damage2!r}")
+                        x2, y2, width2, height2 = struct.unpack("<4I", damage2[2])
+                        if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > initial_height:
+                            raise AssertionError(f"{label}: invalid status damage rectangle: {(x2, y2, width2, height2)!r}")
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
                 # Hold Left: the initial press acts immediately, then repeat

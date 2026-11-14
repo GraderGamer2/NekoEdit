@@ -1,4 +1,14 @@
-## Latest handoff (2026-11-14 — dirty caret-band repaint; Actions pending)
+## Latest handoff (2026-11-14 — dirty caret-band repaint; mock fix pending Actions)
+
+Continue development on `early-alpha`; keep `main` as the stable application-source checkpoint and `optimization-early-alpha` isolated. Normal development remains `-O2`, unstripped.
+
+The renderer has a conservative dirty caret-band path for plain unselected arrow navigation. It clips rectangle, bitmap glyph and TrueType glyph pixel writes to the old/new caret-row neighbourhood plus the status footer, and submits matching Wayland damage rectangles. Each SHM slot maintains its own state snapshot; an unknown/stale slot performs one safe full repaint before it can use the partial path. Text edits, selection, pointer drag, scrolling, IME/Compose, overlays, viewport or scale changes, transformed buffers and state mismatches keep full redraw.
+
+Actions #963 built the ELF and passed CLI smoke and rasterizer comparison, but the Wayland mock needed updates for the newly valid two-band held-Left damage and initial slot warm-up. The test-only correction is committed separately; Actions rerun, live GNOME/Mutter smoke testing and end-to-end performance measurements remain pending. Visible-row layout traversal is not yet skipped, so no latency improvement is claimed.
+
+---
+
+## Previous handoff (2026-11-14 — dirty caret-band repaint; Actions pending)
 
 Continue development on `early-alpha` at its current committed head; keep `main` as the stable application-source checkpoint and keep `optimization-early-alpha` isolated. Normal development remains `-O2`, unstripped.
 

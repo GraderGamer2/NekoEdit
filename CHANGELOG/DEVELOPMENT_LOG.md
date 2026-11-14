@@ -1,3 +1,11 @@
+## 2026-11-14 — dirty-render mock expectation correction
+
+Actions run #963 built the ELF successfully, passed the command-line smoke tests and renderer equivalence/microbenchmark checks, then exposed a stale test assumption in the Wayland mock: the held-Left repeat scenario required a single full-frame damage request even though the newly enabled caret-only path correctly emitted two damage bands. The focused test also needed to permit the first redraw to use the safe full-frame fallback while an initially unrendered SHM slot receives its first snapshot.
+
+The mock now accepts two well-formed damage bands only for held plain Left navigation, while Backspace and text edits continue to require full-frame damage. The focused test permits one initial full repaint and requires the subsequent alternating caret moves to use the partial path. No renderer source changes are made in this correction. Actions validation is pending.
+
+---
+
 ## 2026-11-14 — first dirty caret-band repaint pass
 
 The Wayland software renderer now has a conservative partial-paint path for plain, unselected Left/Right/Up/Down caret movement. It clips rectangle fills, the embedded bitmap-glyph writer, and the TrueType glyph blitter to a band around the old/new caret rows plus a separate status-footer band. The corresponding two `wl_surface.damage` requests cover those same surface-coordinate regions. Other redraw classes retain full damage and full-surface pixel writes.

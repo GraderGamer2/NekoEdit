@@ -1,3 +1,11 @@
+## 2026-11-14 — dirty-render test expectation correction (Actions pending)
+
+Adjust the Wayland mock to recognize the new two-band damage requests for plain held-Left navigation, while keeping non-caret operations such as Backspace on the full-frame expectation. The focused partial-render test allows the first buffer warm-up repaint to fall back to full-frame, then requires the next three alternating caret frames to use two-band damage.
+
+This change follows Actions #963: build, CLI smoke, and rasterizer equivalence checks passed; the Wayland mock stopped at a stale full-frame assertion for held Left. Renderer code is unchanged by this correction. The updated Actions run is pending.
+
+---
+
 ## 2026-11-14 — dirty caret-band repaint (Actions pending)
 
 Add a conservative partial repaint for plain, unselected arrow-key caret navigation. The renderer clips software rectangle fills, embedded bitmap glyph writes and TrueType glyph writes to the old/new caret-row neighbourhood plus the status footer. It submits matching horizontal Wayland damage rectangles. Per-slot snapshots track the scene generation, document revision, viewport, caret row, line pitch, font/wrap settings, UI density, backing raster scale and buffer transform, so each of the two SHM slots is independently verified before partial reuse. Snapshot updates occur only after successful commits.

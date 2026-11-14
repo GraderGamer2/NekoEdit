@@ -1,3 +1,14 @@
+## 2026-11-14 — dirty caret-band repaint (mock correction pending)
+
+| Commit | Subject |
+|---|---|
+| [863196e](https://github.com/GraderGamer2/NekoEdit/commit/863196ef9bae96b6216b41315ba42871cbc9edac) | perf: add conservative dirty caret-band repaint |
+| pending | test: accept dirty caret damage in held-key mock |
+
+The renderer uses per-SHM-slot snapshots to gate partial caret-row and footer repaint. The Wayland mock now recognizes the two damage rectangles on held Left repeats and permits an initial full repaint while warming the alternate slot. Actions #963 compiled and passed CLI/rasterizer checks; the mock expectation correction is awaiting the next run.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 | Commit | Subject |

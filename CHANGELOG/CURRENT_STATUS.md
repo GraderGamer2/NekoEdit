@@ -1,3 +1,11 @@
+## 2026-11-14 — dirty-render test correction (Actions pending)
+
+Commit `863196e` contains the first dirty caret-band rendering implementation. The initial Actions run #963 compiled and linked successfully, passed CLI smoke tests, and passed rasterizer correctness/benchmark comparison. The Wayland mock then failed because its held-Left repeat assertion still expected exactly one full-frame damage rectangle. It was updated to accept the two-band damage form only for plain Left navigation, while Backspace/edit checks remain full-frame. The focused test now accepts one initial full redraw while the second SHM slot acquires its first valid snapshot, then requires three partial caret frames.
+
+No rendering-source changes are included in this test-only correction. The next Actions run is pending; live GNOME/Mutter testing and end-to-end performance measurements remain outstanding.
+
+---
+
 ## 2026-11-14 — first dirty caret-band repaint pass (Actions pending)
 
 **Branch:** `early-alpha`. Development remains `-O2`, unstripped; `main` remains the stable application-source checkpoint and `optimization-early-alpha` remains isolated.
