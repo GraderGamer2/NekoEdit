@@ -1,15 +1,28 @@
+## 2026-11-15 — compact glyph-mask initialization and cache rows (Actions #976 PASS)
+
+| Commit | Subject |
+|---|---|
+| [3ed2dd0](https://github.com/GraderGamer2/NekoEdit/commit/3ed2dd0bd1037d6885cb908c24e6acd73d69d740) | perf: pack glyph cache masks and bound scratch clears |
+| [0d44d39](https://github.com/GraderGamer2/NekoEdit/commit/0d44d399e9b5d4a2ab8fb01f71ea26e601477d22) | fix: use correct glyph mask row strides |
+| [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e) | test: declare glyph mask bearings in benchmark |
+
+Actions #976 passed all 17 steps. The five-way differential benchmark confirmed matching cache-fill and warm framebuffer checksums across legacy and compact mask storage. Against the opaque-blend/legacy-storage variant, compact storage reduced cold rasterization by 14.1% (15,523.7 → 13,338.6 ns) and cold cache fill/draw by 14.2% (15,655.1 → 13,428.3 ns). Warm draw was 0.7% slower (107.9 → 108.7 ns), so the gain is specific to cold glyph work. The scratch-reuse regression verifies that a small glyph matches clean initialization after a larger glyph was rasterized first.
+
+The cache entries still reserve fixed 128×128 pixel arrays (about 2 MiB total); only active rectangles are initialized/copied and rows are packed. No static cache-allocation reduction is claimed.
+
+Artifacts: [Linux x86-64, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364).
+
+---
+
 ## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
 
 | Commit | Subject |
 |---|---|
 | [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776) | perf: skip blending fully opaque glyph pixels |
 
-The identity-transform TrueType blitter writes alpha-255 pixels directly as the opaque foreground color, while antialiased edges and transformed-buffer rendering retain the original blend. The four-way benchmark requires matching framebuffer checksums. Actions #973 passed all 17 steps.
+Actions #973 passed all 17 steps. Warm draw measured 169.2 ns with the opaque-pixel fast path versus 239.5 ns for the same identity renderer with the original blend (29.4% lower); all four framebuffer checksums matched.
 
-Warm draw measured 239.5 ns with the previous identity-path blend and 169.2 ns with the opaque-pixel fast path (29.4% lower); the complete cache/transform/compositing sequence measured 410.0 ns for the original reference and 169.2 ns for the current renderer (58.7% lower). This is a synthetic microbenchmark, not an end-to-end latency claim.
-
-Artifacts: [Linux x86-64, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expiry: 2026-11-16 01:42:57 WIB.
-
+---
 ---
 
 ## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
