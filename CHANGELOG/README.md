@@ -1,3 +1,13 @@
+## Latest handoff (2026-11-15 — compact glyph-cache metadata; CI PASS #978)
+
+Continue source development on `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53). Application source on `main` remains untouched; mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
+
+The TrueType glyph cache now separates its compact lookup/LRU metadata from the 16 KiB per-slot pixel-mask storage. This keeps the 128 metadata records in a small contiguous working set instead of striding across large glyph-mask records. Cache keys, hash chains, LRU stamp semantics, and drawing behavior remain unchanged.
+
+The benchmark compares compact AoS and SoA layouts directly. The synthetic 128-glyph warm-draw median improved from 182.0 ns to 176.6 ns per draw (3.0% lower), with identical cache-fill and framebuffer checksums. This is a microbenchmark result, not an end-to-end latency or FPS claim. Actions [#978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689) passed the full build, Wayland, XKB, X.Org, Compose, nested GNOME Shell/Mutter and artifact-upload workflow.
+
+Artifacts: [Linux x86-64 executable, 151,091 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128074614); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128294260).
+
 ## Latest handoff (2026-11-15 — early-alpha clipboard and keyboard repeat fixes; CI PASS #977)
 
 The application source on `main` remains unchanged. Continue application development on `early-alpha` at [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c). This is a changelog-only mirror; do not merge editor source to `main`. Normal development remains `-O2`, unstripped.
