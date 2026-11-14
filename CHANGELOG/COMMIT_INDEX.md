@@ -1,13 +1,23 @@
-## 2026-11-15 — early-alpha signed pointer coordinates for selection edge auto-scroll (Actions #972 pending)
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
+
+| Commit | Subject |
+|---|---|
+| [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776) | perf: skip blending fully opaque glyph pixels |
+
+Actions #973 passed all 17 steps. The four-way benchmark confirmed matching framebuffer checksums. Warm draw measured 169.2 ns with the opaque-pixel optimization versus 239.5 ns for the same identity renderer with the original blend (29.4% lower); the current renderer measured 169.2 ns versus 410.0 ns for the original reference (58.7% lower). Synthetic microbenchmark only.
+
+Artifacts: [Linux x86-64, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expiry: 2026-11-16 01:42 WIB.
+
+---
+
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
 
 | Commit | Subject |
 |---|---|
 | [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3) | fix: preserve negative pointer coordinates during selection drag |
 | [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688) | test: allow more time for full hosted Wayland smoke |
 
-The pointer conversion now uses signed division for both axes during pointer enter/motion and geometry rebasing, so negative surface-local positions outside the window remain negative through UI scaling. The pointer-drag mock adds upward auto-scroll using a negative Y coordinate and checks that the stationary timer does not reverse direction. Existing downward and no-wrap horizontal checks remain.
-
-Actions #971 passed build, CLI, and renderer equivalence but hit the 30-second outer mock-process timeout in an earlier wrapped-row click scenario. Actions #972 has the outer timeout increased to 60 seconds (socket/frame deadlines unchanged); its build, CLI and renderer-equivalence steps passed, while Wayland validation is pending.
+Actions #972 passed all 17 steps, including the full Wayland mock, 11 MiB Open/Save and nested GNOME Shell/Mutter integration. The user confirmed selection auto-scroll works at the top and bottom screen edges.
 
 ---
 

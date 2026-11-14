@@ -1,14 +1,24 @@
-## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 pending)
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
 
-**Code branch:** `early-alpha`; implementation [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). **Test-timeout adjustment:** [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+**Code branch:** early-alpha; the main application source is unchanged, and this is a changelog-only mirror. Implementation: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). **Workflow:** [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
 
-The pointer-coordinate conversion used unsigned division after extracting the signed 24.8 `wl_fixed` surface coordinates. During an implicit button grab, motion can continue after the pointer leaves the surface; negative Y above the window (and negative X to its left) was therefore converted to a large positive virtual coordinate. In the selection-drag path, an upward drag could be mistaken for a downward edge drag.
+The TrueType glyph blitter's normal identity-transform path writes alpha-255 pixels directly as the fixed opaque foreground color 0xffd8dee9, skipping the destination read and three-channel blend. Antialiased edge pixels and rotated/reflected paths retain the original blending logic.
 
-The conversion now uses signed division for both axes in pointer enter, pointer motion, and geometry-change rebasing. The selection scroll thresholds and `doc_scroll_by` direction logic are unchanged. The Wayland mock extends the existing selection auto-scroll scenario: after scrolling down into the document, it drags above the surface using a negative Y coordinate and asserts that both the immediate update and stationary timer never reverse the upward direction. Existing below-window and no-wrap horizontal drag checks remain.
+The benchmark compares four builds to isolate linear vs. hash-indexed cache, generic vs. identity transform, and original vs. opaque-pixel blending. All four variants produced the same framebuffer checksum. Warm glyph drawing measured 239.5 ns with the previous identity-path blend and 169.2 ns with the opaque-pixel fast path, a 29.4% reduction. Across all accumulated renderer improvements, warm draw measured 410.0 ns for the original reference and 169.2 ns for the current path, 58.7% lower. This seven-sample synthetic 8-point-outline microbenchmark is not an end-to-end latency or FPS measurement.
 
-**Validation:** Actions [#971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626527336) passed build/ELF, CLI smoke, and rasterizer equivalence, but its full Wayland mock process reached the generic 30-second outer timeout during the earlier soft-wrap keyboard/click scenario before the new regression ran. The follow-up [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) is running with that outer timeout raised to 60 seconds; the internal compositor/frame deadlines are unchanged. Build, CLI, and rasterizer checks have passed in #972; Wayland validation is pending.
+Actions #973 passed build/ELF, CLI smoke, renderer comparison, the complete Wayland mock (including 11 MiB Open/Save), executable inspection, native us(intl) parsing, X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-Manual GNOME/Mutter confirmation on the target machine remains outstanding. The application source on `main` remains unchanged; this changelog mirror contains no source changes.
+Artifacts: [Linux x86-64 executable, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expire 2026-11-16 01:42 WIB.
+
+---
+
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
+
+**Code branch:** early-alpha; the main application source is unchanged, and this is a changelog-only mirror. Implementation: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3); timeout test adjustment: [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+
+Wayland surface-local pointer positions are signed 24.8 coordinates. Under an implicit button grab, motion outside the window can be negative; unsigned division during UI scaling previously wrapped those values into large positive coordinates and could reverse edge auto-scroll. Pointer enter/motion and geometry rebasing now use signed division for both axes.
+
+Actions [#972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 steps, including the complete Wayland mock, 11 MiB Open/Save, and nested GNOME Shell/Mutter integration. The user confirmed selection now scrolls correctly at both screen edges. The application source on main remains unchanged.
 
 ---
 
