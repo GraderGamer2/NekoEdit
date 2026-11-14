@@ -1,3 +1,17 @@
+## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
+
+| Commit | Subject |
+|---|---|
+| [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c) | perf: skip clean rows in clipped rectangle rendering |
+
+During caret-only partial rendering, `draw_rect` now intersects each rectangle with the two ordered dirty Y bands before iterating rows. The full-window background therefore visits only dirty-band rows rather than scanning the full surface height. The full-frame path has a separate unclipped loop. The Wayland mock measures background-row visits and asserts fewer than one full surface height for every partial caret frame; fallback frames leave the clipped counter unchanged.
+
+Actions #979 passed the complete build, Wayland, XKB, X.Org, Compose, nested GNOME Shell/Mutter and artifact-upload workflow. This verifies reduced row-loop work, not an end-to-end frame-time/FPS gain.
+
+Artifacts: [Linux x86-64, 151,261 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14128774572); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14129257247).
+
+---
+
 ## 2026-11-15 — compact TrueType glyph-cache metadata (Actions #978 PASS)
 
 | Commit | Subject |
