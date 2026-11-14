@@ -11150,6 +11150,7 @@ if __name__ == "__main__":
         "A\u0903"
         "\r\n"
         "Z"
+        "The quick brown fox jumps over 0123456789."
     ).encode("utf-8")
     try:
         with os.fdopen(grapheme_fd, "wb") as grapheme_file:
