@@ -31,6 +31,7 @@ int32_t font_glyph_points_y[TEST_POINT_CAPACITY];
 
 extern uint8_t font_bitmap_pixels[128u * 128u];
 extern uint32_t font_bitmap_width, font_bitmap_height, font_bitmap_pixel_count;
+extern int32_t font_bitmap_left, font_bitmap_top;
 extern int font_rasterize_glyph(uint32_t glyph_id, uint32_t size);
 extern void font_cache_clear(void);
 extern int font_draw_codepoint_size(
