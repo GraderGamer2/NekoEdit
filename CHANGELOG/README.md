@@ -1,14 +1,16 @@
-## Latest handoff (2026-11-14 — exact fractional Wayland raster; CI PASS #945)
+## Latest handoff (2026-11-14 — printable-ASCII grapheme fast path; CI PASS #951)
 
-Continue development on early-alpha at -O2; keep optimization-early-alpha isolated.
+Continue development on `early-alpha` at [0318e43](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00); keep `main` as the stable source checkpoint and mirror the changelog without merging application source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-Fractional-scale-v1 now uses the compositor's exact preferred numerator in 120ths for its backing raster, rather than choosing only 1× or 2×. The protocol buffer scale remains 1; the viewport destination and surface damage remain logical. Backing dimensions round to nearest physical pixel with halves away from zero, are capped to 2× and the two-slot shared-memory geometry, and account for rotated axes. The numerator participates in buffer-generation identity, and old slots must both be released before replacement.
+`doc_grapheme_next` now bypasses UTF-8 scalar decoding and grapheme-property range scans for printable ASCII when the next byte is ASCII or the current byte is at EOF. A non-ASCII successor goes through the full Unicode path, preserving ASCII-base combining sequences, ZWJ and SpacingMark joins. The existing C0/DEL and CRLF handling remains unchanged. The Wayland mock traverses an extended ASCII sentence in both directions alongside the Unicode 18.0 grapheme fixture.
 
-Actions [#945](https://github.com/GraderGamer2/NekoEdit/actions/runs/43569752292) passed all 17 steps: freestanding build, CLI smoke tests, renderer cache comparison, Wayland mock matrix (including 11 MiB Open/Save), XKB checks, locale-pack build, and nested GNOME Shell/Mutter integration.
+Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps, including freestanding build, CLI tests, renderer-cache comparison, full Wayland mock with 11 MiB Open/Save, XKB and pinned importer checks, Compose locale generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-The mock covers 0.75×, 1×, 1.25×, 1.5×, and 1.75× preferences plus the transformed 721.5→722 rounding boundary. Documentation now matches the exact fractional implementation and two-slot buffer lifecycle.
+Artifacts: Linux x86-64 [147,031 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106073579); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106337951).
 
-Remaining work: verify visual rendering/input on the live Debian/GNOME session, test mixed-DPI output moves and updates while both buffer slots are busy, then profile large-document rendering. X11 remains a separate future backend.
+The 11 MiB Open-to-first-presented-redraw mock measured 124.9, 125.8 and 126.7 ms. No pre-change baseline exists, so this is not a claimed speedup. Next, profile real installed-font rendering, representative full-frame redraws, editing and scrolling before selecting a broader hot path. Live desktop profiling on the Debian session remains separate.
+
+---
 
 ---
 

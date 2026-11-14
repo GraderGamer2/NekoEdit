@@ -121,6 +121,16 @@ The current renderer does not implement:
 
 Glyph fallback and the embedded bitmap keep unsupported content from requiring a third-party font stack, but the result is not typographically equivalent to a shaping engine such as HarfBuzz or a complete rasterizer such as FreeType.
 
+## Printable-ASCII grapheme boundary fast path
+
+The editor's shared `doc_grapheme_next` iterator has a narrow fast path for printable ASCII bytes U+0020 through U+007E. It advances one byte directly only when the following byte is also ASCII or the current byte is at EOF. In those cases the following position is a grapheme boundary, so UTF-8 scalar decoding and Unicode property-range lookups are unnecessary.
+
+A following high-bit byte deliberately sends the current ASCII base through the general Unicode algorithm. This preserves UAX #29 joins to non-ASCII Extend, ZWJ, and SpacingMark characters. C0 controls, DEL, CR/LF, and non-ASCII current bytes also retain the full path; CRLF and multi-scalar grapheme clusters therefore keep their existing editing semantics. The optimization applies to the common ASCII traversal path used by document rendering, line measurement, indexed visual mapping, and caret operations.
+
+The Wayland regression traverses an appended printable-ASCII sentence with Right and Left and continues to test combining sequences, emoji modifiers/ZWJ, regional indicators, Hangul, Indic conjuncts, Prepend, SpacingMark, and CRLF. Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed the full workflow.
+
+No isolated timing or before/after full-frame comparison was collected for this change. The existing 11 MiB Open-to-first-presented-redraw mock measured 124.9–126.7 ms across three runs, but this cannot be attributed to the fast path without a matching baseline. Representative real-font rendering, full-frame redraw, editing, and scrolling benchmarks remain future work.
+
 ## Verification and correctness
 
 The mock Wayland integration test builds a deterministic synthetic TrueType font and checks SFNT table/outline parsing, simple and composite glyph decoding, curve rasterization, antialiased pixels in the shared-memory framebuffer, horizontal 8px/5px glyph advances, a cmap-mapped 3px space advance, a 32px lowercase-j descender mask exceeding 32px height, transactional runtime font rejection and replacement, face-local glyph-cache invalidation, wrapping/indexed visual rows, proportional pointer hit-testing, and OS/2 `USE_TYPO_METRICS` vertical line pitch (with hhea retained as fallback). GitHub Actions [Build and test #400](https://github.com/GraderGamer2/NekoEdit/actions/runs/42355081260) passed the complete workflow on the metric-layout implementation. This is mock-compositor coverage; a manual GNOME/Mutter smoke test of the latest font layout remains outstanding.

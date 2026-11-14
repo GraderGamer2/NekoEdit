@@ -1,3 +1,15 @@
+## 2026-11-14 — printable-ASCII grapheme fast path (CI PASS #951)
+
+Added a small fast path in `doc_grapheme_next`: a printable ASCII byte followed by another ASCII byte, or by EOF, advances directly by one byte. It avoids UTF-8 scalar decoding and Unicode grapheme-property scans for the common ASCII run used by rendering, layout/index traversal, and editing. A high-bit successor deliberately selects the original Unicode path so ASCII bases followed by combining marks, ZWJ, or spacing marks retain their UAX #29 cluster behavior. C0 controls, DEL, CR/LF and non-ASCII current bytes are unchanged.
+
+The Wayland grapheme fixture now appends a sentence containing spaces, letters, punctuation, and digits. Right/Left navigation traverses every appended byte and then returns to the CRLF boundary for the existing atomic Backspace check. Combining sequences and the existing Unicode 18.0 grapheme coverage remain in the same scenario.
+
+Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps, including the full Wayland mock, 11 MiB Open/Save, XKB and importer checks, Compose pack generation, nested GNOME Shell/Mutter integration, and artifact uploads. The 11 MiB open-to-first-redraw mock samples were 124.9, 125.8, and 126.7 ms; no pre-patch baseline exists, so this records workload context rather than a measured optimization delta.
+
+Commits: [6e1c30a](https://github.com/GraderGamer2/NekoEdit/commit/6e1c30a693957bce667368d20dd72d1b51c504b4), [a888422](https://github.com/GraderGamer2/NekoEdit/commit/a8884220ed9d7fd0943b83868319a11f06019efc), [0318e43](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00).
+
+---
+
 ## 2026-11-14 — exact fractional Wayland backing raster
 
 Implemented exact preferred fractional rasterization on early-alpha without changing the development optimization default.
