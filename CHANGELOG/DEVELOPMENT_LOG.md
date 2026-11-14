@@ -1,3 +1,15 @@
+## 2026-11-14 — printable-ASCII reverse grapheme fast path (CI PASS #952)
+
+Added a guarded fast path to `doc_grapheme_prev`. Once the previous scalar start is known, the function can return it directly when both it and the immediately preceding byte are printable ASCII. This pair is guaranteed to be separated by a grapheme boundary, so the Unicode property/boundary scan is unnecessary. Controls (including CR/LF) and all non-ASCII cases keep the existing general path.
+
+The existing Wayland grapheme fixture already walks the extended ASCII sentence backward. It exercises repeated fast-path returns, then reaches the ASCII/CRLF edge and verifies that Backspace still removes CRLF atomically; the combining-mark, emoji/ZWJ, regional-indicator, Hangul, Indic, Prepend, SpacingMark and pointer-hit-test cases remain in the full fixture.
+
+Actions [#952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed all 17 workflow steps, including the complete Wayland mock and nested GNOME Shell/Mutter integration. The 11 MiB open-to-first-redraw samples were 166.8, 167.2 and 167.3 ms. That open timing does not exercise the new backward shortcut, and a controlled Left/Backspace performance comparison has not yet been run.
+
+Commit: [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92).
+
+---
+
 ## 2026-11-14 — printable-ASCII grapheme fast path (CI PASS #951)
 
 Added a small fast path in `doc_grapheme_next`: a printable ASCII byte followed by another ASCII byte, or by EOF, advances directly by one byte. It avoids UTF-8 scalar decoding and Unicode grapheme-property scans for the common ASCII run used by rendering, layout/index traversal, and editing. A high-bit successor deliberately selects the original Unicode path so ASCII bases followed by combining marks, ZWJ, or spacing marks retain their UAX #29 cluster behavior. C0 controls, DEL, CR/LF and non-ASCII current bytes are unchanged.

@@ -1,3 +1,12 @@
+## 2026-11-14 — printable-ASCII reverse grapheme fast path (CI PASS #952)
+
+- [43190c1e1c0e](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92) — `perf: fast-path adjacent printable ASCII grapheme reverse`
+- `doc_grapheme_prev` returns the prior byte directly only when both adjacent bytes are printable ASCII; CR/LF, controls, and non-ASCII pairs retain the original boundary scan.
+- Actions [#952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed all 17 workflow steps, including the full Wayland grapheme and 11 MiB Open/Save mock, XKB/importer checks, Compose build, GNOME Shell/Mutter integration, and artifact uploads.
+- No Left/Backspace timing benchmark was collected; the 11 MiB Open timing is unrelated to this path.
+
+---
+
 ## 2026-11-14 — printable-ASCII grapheme fast path (CI PASS #951)
 
 | Commit | Subject |

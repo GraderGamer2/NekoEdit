@@ -121,15 +121,15 @@ The current renderer does not implement:
 
 Glyph fallback and the embedded bitmap keep unsupported content from requiring a third-party font stack, but the result is not typographically equivalent to a shaping engine such as HarfBuzz or a complete rasterizer such as FreeType.
 
-## Printable-ASCII grapheme boundary fast path
+## Printable-ASCII grapheme boundary fast paths
 
-The editor's shared `doc_grapheme_next` iterator has a narrow fast path for printable ASCII bytes U+0020 through U+007E. It advances one byte directly only when the following byte is also ASCII or the current byte is at EOF. In those cases the following position is a grapheme boundary, so UTF-8 scalar decoding and Unicode property-range lookups are unnecessary.
+The shared `doc_grapheme_next` iterator has a narrow forward shortcut for printable ASCII bytes U+0020 through U+007E. It advances one byte directly only when the following byte is also ASCII or the current byte is at EOF. A following high-bit byte sends the current ASCII base through the general Unicode algorithm, preserving UAX #29 joins to Extend, ZWJ, and SpacingMark characters.
 
-A following high-bit byte deliberately sends the current ASCII base through the general Unicode algorithm. This preserves UAX #29 joins to non-ASCII Extend, ZWJ, and SpacingMark characters. C0 controls, DEL, CR/LF, and non-ASCII current bytes also retain the full path; CRLF and multi-scalar grapheme clusters therefore keep their existing editing semantics. The optimization applies to the common ASCII traversal path used by document rendering, line measurement, indexed visual mapping, and caret operations.
+The matching `doc_grapheme_prev` shortcut returns the previous scalar start directly only when both that scalar and the immediately preceding byte are printable ASCII. This guarantees a grapheme boundary for the pair. C0 controls, DEL, CR/LF, and non-ASCII bytes in either direction retain the full grapheme-boundary path, so CRLF and multi-scalar clusters keep their existing editing semantics.
 
-The Wayland regression traverses an appended printable-ASCII sentence with Right and Left and continues to test combining sequences, emoji modifiers/ZWJ, regional indicators, Hangul, Indic conjuncts, Prepend, SpacingMark, and CRLF. Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed the full workflow.
+The Wayland regression traverses an appended printable-ASCII sentence with Right and Left, then checks Backspace at the ASCII/CRLF edge. Combining sequences, emoji modifiers/ZWJ, regional indicators, Hangul, Indic conjuncts, Prepend, SpacingMark and pointer hit-testing remain covered. Actions [#952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed the full workflow.
 
-No isolated timing or before/after full-frame comparison was collected for this change. The existing 11 MiB Open-to-first-presented-redraw mock measured 124.9–126.7 ms across three runs, but this cannot be attributed to the fast path without a matching baseline. Representative real-font rendering, full-frame redraw, editing, and scrolling benchmarks remain future work.
+No isolated timing comparison was collected for either fast path. The 11 MiB Open-to-first-presented-redraw mock measured 166.8–167.3 ms in #952, but that does not exercise the reverse-navigation shortcut and cannot establish its effect. Separate real-font redraw, line/index and repeated navigation/editing benchmarks remain future work.
 
 ## Verification and correctness
 
