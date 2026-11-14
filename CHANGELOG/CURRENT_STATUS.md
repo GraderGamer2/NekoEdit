@@ -1,3 +1,13 @@
+## 2026-11-14 — dirty caret-band rendering validated (Actions #967 PASS)
+
+**Branch:** `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+
+The new dirty caret-band path passed the complete CI workflow: ELF build/inspection, command-line smoke tests, linear-reference versus hash-indexed glyph-cache equivalence, the Wayland protocol mock (including the focused partial-damage test, dual-SHM-buffer cases, and 11 MiB Open/Save), XKB keymap checks, X.Org source/import verification, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts were uploaded successfully.
+
+The renderer remains deliberately conservative: plain unselected arrow-key caret motion can repaint the old/new caret-row neighbourhood and status footer, with per-slot SHM snapshots. Edits, selection, scroll, overlays, IME/Compose, resize/scale changes, transformed buffers and stale slot state keep the full-frame fallback. This reduces pixel writes and compositor damage area, but visible-row layout traversal is still performed; no end-to-end latency improvement is claimed. User-machine GNOME/Mutter smoke testing and controlled performance measurements remain outstanding.
+
+---
+
 ## 2026-11-14 — dirty-render fixture boundary correction (Actions pending)
 
 Actions #965 revealed that a six-character fixture placed the initial-click caret at column 6, outside the generic non-empty-file assertion's sampled columns 9–11. Commit `52be775` extended the fixture to twelve characters, but Actions #966 showed that the pointer click clamps to EOF at column 12 (x=112), just beyond the same assertion. The fixture is now eleven characters, placing the clamped caret within columns 9–11. The focused test continues to navigate explicitly to EOF before checking dirty Left/Right damage and edit fallback. Build, CLI smoke and rasterizer comparison passed in #966; the new Wayland mock run is pending. Renderer source is unchanged.

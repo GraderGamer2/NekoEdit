@@ -1,4 +1,14 @@
-## Latest handoff (2026-11-14 — dirty caret repaint; fixture boundary fix pending Actions)
+## Latest handoff (2026-11-14 — dirty caret repaint; CI PASS #967)
+
+Continue development on `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+The first dirty-render pass handles plain unselected arrow-key navigation by clipping rectangle, bitmap-glyph and TrueType-glyph pixel writes to the old/new caret-row neighbourhood plus the status footer, then submitting matching Wayland damage bands. Each SHM slot has an independent scene/document/view/font/scale snapshot; unknown or stale slots take a full repaint. Edits, selections, scrolling, IME/Compose, overlays, resizes, scale changes and non-normal transforms remain on the full-frame path.
+
+[Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) passed the complete CI workflow, including the focused dirty-render Wayland mock, dual-buffer tests, 11 MiB Open/Save coverage, and nested GNOME Shell/Mutter integration. The build and Compose/Linux artifacts were uploaded. The latest changes are recorded in `CHANGELOG/COMMIT_INDEX.md`.
+
+The optimization currently reduces software pixel writes and compositor damage, not visible-row layout traversal. There is no measured end-to-end latency claim yet. The next rendering optimization should investigate skipping document-row layout/glyph traversal outside the dirty band, retaining the conservative full-frame fallback for any uncertain state. A user-machine visual smoke test and controlled performance measurements remain outstanding.
+
+## Previous handoff (2026-11-14 — dirty caret repaint; fixture boundary fix pending Actions)
 
 Continue on `early-alpha`; keep `main` as the stable application-source checkpoint and mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
 
