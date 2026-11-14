@@ -16428,6 +16428,27 @@ doc_grapheme_prev:
     mov edi, r12d
     call doc_utf8_prev
     mov r13d, eax
+    test r13d, r13d
+    jz .Ldoc_grapheme_prev_zero
+
+    # Two adjacent printable-ASCII scalars are always separate graphemes.
+    # Return the preceding scalar boundary without the Unicode property scan.
+    # Controls (including CR/LF) and any non-ASCII byte use the full path.
+    mov edi, r13d
+    call doc_byte_at
+    cmp eax, 32
+    jb .Ldoc_grapheme_prev_scan
+    cmp eax, 127
+    jae .Ldoc_grapheme_prev_scan
+    lea edi, [r13d - 1]
+    call doc_byte_at
+    cmp eax, 32
+    jb .Ldoc_grapheme_prev_scan
+    cmp eax, 127
+    jae .Ldoc_grapheme_prev_scan
+    mov eax, r13d
+    jmp .Ldoc_grapheme_prev_return
+
 .Ldoc_grapheme_prev_scan:
     test r13d, r13d
     jz .Ldoc_grapheme_prev_zero
