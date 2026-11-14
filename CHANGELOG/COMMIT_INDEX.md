@@ -1,3 +1,15 @@
+## 2026-11-15 — compact TrueType glyph-cache metadata (Actions #978 PASS)
+
+| Commit | Subject |
+|---|---|
+| [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53) | perf: compact TrueType glyph cache metadata |
+
+Actions #978 passed the full workflow. The TrueType cache's 128-entry metadata now lives separately from the per-slot 16 KiB glyph masks. The matched compact AoS/SoA benchmark measured 182.0 ns versus 176.6 ns per warm glyph draw (3.0% lower) with identical cache-fill and framebuffer checksums. The result is a synthetic microbenchmark, not an end-to-end editor performance claim.
+
+Artifacts: [Linux x86-64, 151,091 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128074614); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128294260).
+
+---
+
 ## 2026-11-15 — provider-safe large clipboard paste and 30 Hz key repeat (Actions #977 PASS)
 
 | Commit | Subject |
