@@ -8462,7 +8462,7 @@ xkb_symbols "nekoedit-sparse" {
                         or max_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"maximized configure was not applied: {max_state!r}")
-                    max_close_pixel = struct.unpack_from("<I", pixels, 4 * 7680 + 1880 * 4)[0]
+                    max_close_pixel = struct.unpack_from("<I", pixels, 8 * 7680 + 1880 * 4)[0]
                     if max_close_pixel != 0xFF754B52:
                         raise AssertionError(
                             f"window controls did not follow the maximized width: {hex(max_close_pixel)}"
