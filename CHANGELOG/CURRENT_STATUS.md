@@ -1,6 +1,39 @@
+## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
+
+**Branch/head:** `early-alpha` at [cb2ebe5](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53). **Workflow:** [Actions #983](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115) passed all 17 steps.
+
+### Source changes
+
+- `src/backend/wayland.S`: `draw_rect` now precomputes the initial row address and row padding, advancing the row pointer instead of recomputing the row address for each scanline. Applied to full-frame and both clipped-band loops.
+- `src/backend/wayland.S`: Fenwick-tree initialization stores each line's own byte and visual-row contributions in the first pass; the second pass only propagates to parent nodes.
+- `src/editor/gap_buffer.h`: shared `REP MOVSB` byte/range copy helpers. Logical ranges are copied in at most two spans around the editor gap.
+- `src/backend/clipboard.c`: selection snapshots now use the shared bulk range copy rather than calling `doc_byte_at` once per byte.
+- `src/editor/history.c`: document hash and initial base snapshot operate on the two physical gap-buffer spans; the initial snapshot no longer issues one write syscall per document byte. Removed/inserted transaction payloads and compact-record encoding also use bulk copies.
+- `Makefile`: C function/data sections, `-fno-ident`, linker `--gc-sections`, and `size` output in `make inspect`. The development default remains `-O2`.
+- Assembly section isolation: all 308 uniquely typed functions in `entry.S`, `syscall.S`, `sfnt.S`, `wayland.S`, and `xkb.S` have their own executable `.text.*` sections so linker garbage collection can work at function granularity.
+- Added `tests/clipboard_range_test.c` for all ranges and gap positions across four gap sizes.
+
+### Validation
+
+Actions #983 passed: freestanding build and ELF checks; CLI/host tests; clipboard-range and history tests; renderer equivalence benchmark; full Wayland mock including clipboard, dirty rendering and 11 MiB Open/Save; native `us(intl)` parser validation; pinned X.Org importer; Compose locale-pack build; nested GNOME Shell/Mutter integration; and both artifact uploads.
+
+Final ELF has no interpreter or `DT_NEEDED` entries. `size` output: text **237,542**, data **64**, BSS **3,764,856** bytes (ELF total section allocation 4,002,462 bytes). Uploaded executable artifact: **151,072 bytes**; previous comparable #979 artifact: 151,261 bytes, a 189-byte reduction. Compose packs: **120,536 bytes**. Artifacts expire 2026-11-16 03:21 WIB.
+
+### Accuracy and remaining work
+
+No end-to-end performance timing was collected for this optimization series. The changes reduce repeated row-address calculations, redundant Fenwick operations, per-byte gap-buffer lookup/copy loops, and per-byte history snapshot syscalls. The artifact-size difference is small and should not be marketed as a substantial binary shrink. The nested GNOME/Mutter test is automated integration coverage, not a manual test on the user's live desktop.
+
+The source review covered the assembly and C modules/build configuration. The TrueType rasterization algorithm, XKB parsing tables, Compose/locale parsing, and preferences serialization were left structurally unchanged because no safe rewrite was justified without focused before/after benchmarks. Next: controlled input-to-present and large-document tests on the target GNOME/Mutter session; profile index invalidation/rebuild and full-frame edit rendering before changing those algorithms.
+
+Implementation commits:
+- [4ea34cfd](https://github.com/GraderGamer2/NekoEdit/commit/4ea34cfd6ee502ad7bb1a6dfdb1b103d5cc6c1d9)
+- [0e32b6a4](https://github.com/GraderGamer2/NekoEdit/commit/0e32b6a4e51911ebdc543d4cc365889ff566f6f2)
+- [aa4d6e48](https://github.com/GraderGamer2/NekoEdit/commit/aa4d6e4808dcf83e028de72bfcc6605498a531b2)
+- [cb2ebe5f](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53) (test-fixture cleanup)
+
 ## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
 
-**Development branch:** `early-alpha`; stable application source on `main` remains unchanged. at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c); normal development remains `-O2`, unstripped. **Workflow:** [Actions #979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed all steps.
+**Branch:** `early-alpha` at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c); normal development remains `-O2`, unstripped. **Workflow:** [Actions #979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed all steps.
 
 During caret-only partial rendering, `draw_rect` previously iterated over every row of each rectangle and checked whether that row intersected either dirty clip band. This meant the full-window background rectangle still scanned the entire window height despite only repainting the caret and status bands.
 
@@ -14,7 +47,7 @@ Artifacts: [Linux x86-64 executable, 151,261 bytes](https://github.com/GraderGam
 
 ## 2026-11-15 — compact TrueType glyph-cache metadata (Actions #978 PASS)
 
-**Development branch:** `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53); stable application source on `main` remains unchanged. Normal development remains `-O2`, unstripped. **Workflow:** [Actions #978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689) passed all steps.
+**Branch:** `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53); normal development remains `-O2`, unstripped. **Workflow:** [Actions #978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689) passed all steps.
 
 The glyph cache now stores its hot lookup/LRU metadata separately from its 128 per-slot 16 KiB pixel masks. The old array-of-structures layout made metadata lookups and the bounded LRU victim scan step across large pixel-bearing records. The new structure-of-arrays layout keeps metadata compact and contiguous. Cache keys, hash chains, stamp-based LRU behavior, slot identity, mask storage, and rasterization/drawing results are preserved.
 
@@ -24,60 +57,120 @@ Actions #978 passed the freestanding build/ELF checks, CLI tests, all renderer e
 
 Artifacts: [Linux x86-64 executable, 151,091 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128074614); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128294260). Expiry: 2026-11-16 02:38 WIB.
 
-## 2026-11-15 — early-alpha provider-safe clipboard paste and 30 Hz key repeat (Actions #977 PASS)
+## 2026-11-15 — provider-safe large clipboard paste and 30 Hz key repeat (Actions #977 PASS)
 
-**Code branch:** `early-alpha`; the application source on `main` is unchanged. This is a changelog-only mirror. Implementation: [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c); repeat-test comment clarification: [8095dd5](https://github.com/GraderGamer2/NekoEdit/commit/8095dd5ffa50119910154b7650840688037799b2). **Workflow:** [Actions #977](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206) passed all 17 steps.
+**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. Implementation: [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c); repeat-test comment clarification: [8095dd5](https://github.com/GraderGamer2/NekoEdit/commit/8095dd5ffa50119910154b7650840688037799b2). **Workflow:** [Actions #977](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206) passed all 17 steps.
 
-**Clipboard/paste:** The receive limit in early-alpha remains 64 MiB; there is no deliberate 4 MiB paste cap. The provider-facing pipe writer had incorrectly inherited `O_NONBLOCK`. The receiver now keeps only its read end nonblocking, and accepts the `UTF8_STRING` compatibility MIME in addition to `text/plain;charset=utf-8` and `text/plain`. The Wayland mock sends an exact 10 MiB `UTF8_STRING` payload over a blocking provider FD, verifies every byte and line-index record, then verifies bulk Undo/Redo. This is a synthetic Wayland provider; a direct test with the user's installed l3afpad remains recommended.
+**Clipboard/paste:** The receive limit was already 64 MiB and the document buffer supports substantially larger documents; there was no intentional 4 MiB paste cap. The clipboard receive pipe had been created with `O_NONBLOCK` on both ends, which also exposed a nonblocking writer FD to the external clipboard provider. The receiver now creates a close-on-exec pipe, then marks only its own read end nonblocking. The provider gets a normal blocking write FD. NekoEdit also recognizes `UTF8_STRING` in addition to `text/plain;charset=utf-8` and `text/plain`, improving compatibility with GTK/X11-bridged clipboard owners.
 
-**Keyboard repeat:** The application no longer gates repeat on per-key XKB repeat flags. Every ordinary key repeats at a fixed 30 Hz, while the compositor's initial delay is retained. Modifier, lock, and Compose keys remain excluded; Ctrl shortcuts remain single-shot. The Wayland mock verifies Left, Backspace, Delete, Enter, Tab and printable characters, including custom XKB keys marked `repeat=False`.
+The Wayland mock asserts that the provider receives a blocking FD, offers only `UTF8_STRING`, and sends an exact 10 MiB payload through it. NekoEdit preserves every byte and line-index record; bulk Undo/Redo passed. The measured mock transfer plus Undo/Redo completed in 159.4 ms. This verifies NekoEdit's receive path and the GTK/X11 MIME fallback; a direct test with the user's installed l3afpad build still remains useful.
 
-Actions #977 passed build/ELF, CLI smoke, renderer comparison, the full Wayland protocol mock (including 10 MiB clipboard paste and 11 MiB Open/Save), executable inspection, native XKB parsing, X.Org importer checks, Compose generation, and nested GNOME Shell/Mutter integration. Application source on `main` remains unchanged.
+**Keyboard repeat:** The app previously gated repeat on `xkb_key_repeats()`. That allowed keymap repeat policy to suppress editing keys such as Backspace/Enter even though NekoEdit had a client-side timer. The application now starts its timer for every ordinary key, independent of per-key XKB repeat flags, at a fixed **30 ticks per second**. It retains the compositor's initial repeat delay (180 ms in the modern-protocol regression; 300 ms fallback when repeat-info is unavailable). Modifier, lock, and Compose keys remain excluded; Ctrl shortcuts remain single-shot.
 
-Artifacts: [Linux x86-64 executable, 151,038 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14127667227); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14128111687).
+The Wayland regression verifies repeat for Left, Backspace, Delete, Enter, Tab and printable keys, including custom XKB fixtures with `repeat=False`. The test also changes `wl_keyboard.repeat_info` while a key is held and confirms that the delay updates while the repeat rate stays at 30 Hz.
 
----
+**Validation:** Actions #977 passed freestanding build/ELF validation, CLI smoke, renderer equivalence, the full Wayland protocol mock (including 10 MiB clipboard paste and 11 MiB Open/Save), executable inspection, native `us(intl)` parsing, pinned X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-## 2026-11-15 — early-alpha opaque glyph pixel fast path (Actions #973 PASS)
-
-**Code branch:** `early-alpha`; the application source on `main` is unchanged. This is a changelog-only mirror. Implementation: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776); [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
-
-The normal TrueType identity-transform blitter writes fully opaque pixels directly and skips the destination read and blend arithmetic; antialiased edges and transformed paths retain the old blend. Four benchmark variants matched framebuffer checksums. Warm drawing improved 29.4% against the same hash-cache/identity renderer with the previous blend. These are synthetic microbenchmark results, not an end-to-end editor latency claim.
+Artifacts: [Linux x86-64 executable, 151,038 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14127667227); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14128111687). Expiry: 2026-11-16 02:13 WIB.
 
 ---
+
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
+
+**Branch:** `early-alpha`; implementation [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). **Workflow:** [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
+
+The TrueType glyph blitter's normal identity-transform path writes alpha-255 pixels directly as the fixed opaque foreground color `0xffd8dee9`, skipping the destination read and three-channel blend. Antialiased edge pixels and rotated/reflected paths retain the original blend. A four-way benchmark required matching framebuffer checksums; warm draw improved from 239.5 ns to 169.2 ns per glyph draw (29.4% lower) against the same hash-cache/identity renderer with the previous blend. The cumulative comparison against the original linear-cache/generic-transform reference was 58.7% lower. These are synthetic microbenchmark results, not an end-to-end editor latency or FPS claim.
+
 ---
 
 ## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
 
-**Code branch:** early-alpha; the main application source is unchanged, and this is a changelog-only mirror. Implementation: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3); timeout test adjustment: [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+**Branch:** `early-alpha`; implementation [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3); timeout test adjustment [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
 
-Wayland surface-local pointer positions are signed 24.8 coordinates. Under an implicit button grab, motion outside the window can be negative; unsigned division during UI scaling previously wrapped those values into large positive coordinates and could reverse edge auto-scroll. Pointer enter/motion and geometry rebasing now use signed division for both axes.
-
-Actions [#972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 steps, including the complete Wayland mock, 11 MiB Open/Save, and nested GNOME Shell/Mutter integration. The user confirmed selection now scrolls correctly at both screen edges. The application source on main remains unchanged.
+Wayland pointer coordinates are signed 24.8 surface-local values. During an implicit button grab, motion can continue outside the surface and produce negative X/Y values. Unsigned division previously wrapped them into large positive virtual coordinates, which could reverse selection edge auto-scroll. Pointer enter/motion and geometry rebasing now preserve signed values. Actions #972 passed all 17 steps, including the Wayland mock, 11 MiB Open/Save, and nested Mutter integration. The user confirmed selection works at both screen edges.
 
 ---
 
-## 2026-11-15 — early-alpha caret-only document traversal bounded (Actions #970 PASS)
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
 
-**Code branch:** `early-alpha`, renderer implementation [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd), test harness [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). **Workflow:** [Actions run #970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed. The application source on `main` remains unchanged; this commit mirrors changelog documentation only.
+**Branch:** early-alpha; normal development remains -O2, unstripped. Implementation: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). Test-timeout adjustment: [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
 
-Current rendering milestone: for eligible plain, unselected arrow-key movement, `render_document` now maps directly to the first dirty visual row and stops after the later caret row plus one row of glyph overhang. This aligns document-byte traversal with the existing clipped pixel bands and Wayland damage rectangles. Per-SHM-slot snapshot checks and the conservative full-frame fallback for edits, selection, scrolling, overlays, IME/Compose, drag, resize/scale changes, transformed buffers and stale state remain in force.
+Wayland pointer coordinates are signed 24.8 surface-local values. During an implicit button grab, pointer motion can continue outside the surface and produce negative X/Y coordinates. The previous unsigned division converted negative positions into large positive virtual coordinates, which could reverse selection auto-scroll when dragging above or left of the window. Pointer enter, pointer motion, and geometry-change rebasing now use signed division for both axes; the scroll thresholds and doc_scroll_by direction logic are unchanged.
 
-The Wayland mock passed with two isolated regressions: a 4,096-row document requiring no more than 512 bytes of document traversal during caret-only movement, and an 11-byte document where insertion must still use full-frame damage and append the exact expected byte. The rest of Actions #970 passed as well: freestanding build and ELF inspection, CLI tests, renderer equivalence, dual-SHM and 11 MiB Open/Save coverage, native XKB parsing, X.Org importer, Compose generation, and nested GNOME Shell/Mutter integration.
-
-Artifacts: [Linux x86-64 executable, 150,886 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123966705); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123123164).
-
-No end-to-end latency improvement is claimed without controlled measurements. Manual GNOME/Mutter testing on the target machine remains outstanding.
+The Wayland mock covers downward and upward auto-scroll, including negative Y above the surface and a stationary timer check that forbids direction reversal, as well as no-wrap horizontal drag. Actions [#972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 workflow steps, including the complete Wayland protocol mock (with 11 MiB Open/Save), ELF inspection, us(intl) keymap validation, X.Org importer checks, Compose-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads. The user also confirmed that selection now scrolls correctly at the top and bottom edges of the screen.
 
 ---
 
-## 2026-11-14 — early-alpha dirty caret-band rendering validated (Actions #967 PASS)
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
 
-**Code branch:** `early-alpha`, commit [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+**Branch:** early-alpha; normal development remains -O2, unstripped. Implementation: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). Test-timeout adjustment: [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
 
-The conservative dirty-caret repaint passed the full CI workflow: ELF build/inspection, CLI smoke, glyph-cache reference equivalence, focused Wayland dirty-damage and dual-SHM tests, 11 MiB Open/Save coverage, XKB checks, X.Org importer checks, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts uploaded successfully.
+Wayland pointer coordinates are signed 24.8 surface-local values. During an implicit button grab, pointer motion can continue outside the surface and produce negative X/Y coordinates. The previous unsigned division converted negative positions into large positive virtual coordinates, which could reverse selection auto-scroll when dragging above or left of the window. Pointer enter, pointer motion, and geometry-change rebasing now use signed division for both axes; the scroll thresholds and doc_scroll_by direction logic are unchanged.
 
-This is a changelog-only mirror on `main`; the application source and renderer implementation remain on `early-alpha`. The optimization reduces pixel writes and compositor damage for plain unselected arrow-key movement, but still traverses visible document layout and has no measured end-to-end latency claim. User-machine visual smoke testing and controlled performance measurements remain outstanding.
+The Wayland mock covers downward and upward auto-scroll, including negative Y above the surface and a stationary timer check that forbids direction reversal, as well as no-wrap horizontal drag. Actions [#972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 workflow steps, including the complete Wayland protocol mock (with 11 MiB Open/Save), ELF inspection, us(intl) keymap validation, X.Org importer checks, Compose-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads. The user has also confirmed that selection now scrolls correctly at the top and bottom edges of the screen.
+
+---
+---
+
+## 2026-11-15 — dirty caret-band document traversal bounded (Actions #970 PASS)
+
+**Branch:** `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). **Rendering implementation:** [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd). **Workflow:** [Actions run #970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed the complete workflow.
+
+Current rendering milestone: the caret-only partial-render path now bounds document traversal to the same visual-row interval as its dirty pixel bands. `render_prepare_slot` records the first dirty row (one row before the earlier caret) and the exclusive end after the later caret plus one row of overhang. `render_document` maps directly to that first row through `doc_visual_to_offset` (including the horizontal pixel origin when Wrap Lines is OFF) and stops at the interval's end. The full-render path is unchanged.
+
+The optimization remains guarded by the existing per-SHM-slot committed snapshots. It applies only to plain, unselected arrow-key movement with both caret rows visible and no more than one row apart. Edits, selections, scrolling, IME/Compose, overlays, pointer drags, resizes, scale changes, transformed buffers and stale snapshots retain the full-frame fallback.
+
+The Wayland mock now checks a 4,096-row document and requires caret-only movement near EOF to scan no more than 512 document bytes while using two-band damage. A separate 11-byte fixture verifies that text insertion still uses full-frame damage and appends the exact expected byte. Actions #968 and #969 exposed test-harness assumptions; the long-document traversal and short-document edit-fallback cases are now isolated. Actions #970 passed the complete suite, including dual-buffer coverage, 11 MiB Open/Save, XKB, X.Org importer, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: Linux x86-64 executable, 150,886 bytes ([#14123966705](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123966705)); Compose locale packs, 120,536 bytes ([#14123123164](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123123164)).
+
+This is a bounded-work verification for eligible caret-only redraws, not an end-to-end FPS or latency claim. Manual visual testing on the target GNOME/Mutter session and controlled input-to-present measurements remain outstanding.
+
+---
+
+## 2026-11-14 — dirty caret-band rendering validated (Actions #967 PASS)
+
+**Branch:** `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+
+The new dirty caret-band path passed the complete CI workflow: ELF build/inspection, command-line smoke tests, linear-reference versus hash-indexed glyph-cache equivalence, the Wayland protocol mock (including the focused partial-damage test, dual-SHM-buffer cases, and 11 MiB Open/Save), XKB keymap checks, X.Org source/import verification, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts were uploaded successfully.
+
+The renderer remains deliberately conservative: plain unselected arrow-key caret motion can repaint the old/new caret-row neighbourhood and status footer, with per-slot SHM snapshots. Edits, selection, scroll, overlays, IME/Compose, resize/scale changes, transformed buffers and stale slot state keep the full-frame fallback. This reduces pixel writes and compositor damage area, but visible-row layout traversal is still performed; no end-to-end latency improvement is claimed. User-machine GNOME/Mutter smoke testing and controlled performance measurements remain outstanding.
+
+---
+
+## 2026-11-14 — dirty-render fixture boundary correction (Actions pending)
+
+Actions #965 revealed that a six-character fixture placed the initial-click caret at column 6, outside the generic non-empty-file assertion's sampled columns 9–11. Commit `52be775` extended the fixture to twelve characters, but Actions #966 showed that the pointer click clamps to EOF at column 12 (x=112), just beyond the same assertion. The fixture is now eleven characters, placing the clamped caret within columns 9–11. The focused test continues to navigate explicitly to EOF before checking dirty Left/Right damage and edit fallback. Build, CLI smoke and rasterizer comparison passed in #966; the new Wayland mock run is pending. Renderer source is unchanged.
+
+---
+
+## 2026-11-14 — dirty-render fixture correction (Actions pending)
+
+Actions #965 passed ELF build, command-line smoke tests, rasterizer reference checks, and the ordinary Wayland protocol cases, including keyboard navigation, repeat, scrolling, selection, and dual-SHM-buffer handling. It failed only at the focused dirty-render scenario's generic initial-click assertion: its six-byte fixture correctly placed the caret at column 6, but that assertion samples columns 9–11 for non-empty files. The test fixture is extended to twelve characters, matching the existing assertion's expected click area. Its next step still moves to EOF explicitly before the dirty-caret sequence. Renderer source is unchanged. Actions for this correction are pending; GNOME/Mutter and measured editor-latency validation remain outstanding.
+
+---
+
+## 2026-11-14 — dual-slot Wayland test correction (Actions pending)
+
+The dirty caret-band implementation is committed in `863196e`. Actions #963 passed build, CLI smoke, and rasterizer equivalence checks, then failed because the held-Left assertion required full-frame damage. Commit `d682b6b` updated the mock for two-band held-Left damage and the first-slot warm-up fallback. Actions #964 passed build, CLI smoke, and rasterizer checks, then exposed a separate mock bug: caret pixel assertions indexed the two-slot SHM pool from offset zero rather than the currently attached buffer offset. The test now adds the active slot offset for caret scans and related pixel checks. No renderer source code changed in either test correction. Actions rerun is pending; GNOME/Mutter smoke and performance testing remain outstanding.
+
+---
+
+## 2026-11-14 — dirty-render test correction (Actions pending)
+
+Commit `863196e` contains the first dirty caret-band rendering implementation. The initial Actions run #963 compiled and linked successfully, passed CLI smoke tests, and passed rasterizer correctness/benchmark comparison. The Wayland mock then failed because its held-Left repeat assertion still expected exactly one full-frame damage rectangle. It was updated to accept the two-band damage form only for plain Left navigation, while Backspace/edit checks remain full-frame. The focused test now accepts one initial full redraw while the second SHM slot acquires its first valid snapshot, then requires three partial caret frames.
+
+No rendering-source changes are included in this test-only correction. The next Actions run is pending; live GNOME/Mutter testing and end-to-end performance measurements remain outstanding.
+
+---
+
+## 2026-11-14 — first dirty caret-band repaint pass (Actions pending)
+
+**Branch:** `early-alpha`. Development remains `-O2`, unstripped; `main` remains the stable application-source checkpoint and `optimization-early-alpha` remains isolated.
+
+Plain, unselected arrow-key caret navigation can now use a clipped repaint of the old/new caret-row neighbourhood plus the status footer. Software rectangle fills, embedded bitmap glyphs, and TrueType glyph pixels obey the same two physical-buffer clip bands; Wayland receives matching surface-coordinate damage rectangles. Each shared-memory slot stores its own scene generation, document revision, viewport, caret row, line pitch, font size, wrap state, UI density, raster scale, and buffer transform. Snapshots advance only after successful commits.
+
+The partial path is disabled for selections, pointer drags, IME/Compose, menus, History, dialogs, Find/Replace, resizes, pending scale/transform changes, and stale/mismatched slot state. All such cases preserve a complete redraw. The mock adds a focused test for partial Left/Right damage and full-frame edit fallback. Actions validation and manual GNOME/Mutter testing are pending. This pass reduces pixel writes and compositor damage; it does not yet skip visible-row layout traversal and has no measured end-to-end speedup.
 
 ---
 

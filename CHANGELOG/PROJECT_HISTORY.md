@@ -1,10 +1,44 @@
-## 2026-11-14 — early-alpha dirty caret-band rendering validated (Actions #967 PASS)
+## 2026-11-14 — dirty caret-band rendering validated (Actions #967 PASS)
 
-**Code branch:** `early-alpha`, commit [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+**Branch:** `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
 
-The conservative dirty-caret repaint passed the full CI workflow: ELF build/inspection, CLI smoke, glyph-cache reference equivalence, focused Wayland dirty-damage and dual-SHM tests, 11 MiB Open/Save coverage, XKB checks, X.Org importer checks, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts uploaded successfully.
+The new dirty caret-band path passed the complete CI workflow: ELF build/inspection, command-line smoke tests, linear-reference versus hash-indexed glyph-cache equivalence, the Wayland protocol mock (including the focused partial-damage test, dual-SHM-buffer cases, and 11 MiB Open/Save), XKB keymap checks, X.Org source/import verification, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts were uploaded successfully.
 
-This is a changelog-only mirror on `main`; the application source and renderer implementation remain on `early-alpha`. The optimization reduces pixel writes and compositor damage for plain unselected arrow-key movement, but still traverses visible document layout and has no measured end-to-end latency claim. User-machine visual smoke testing and controlled performance measurements remain outstanding.
+The renderer remains deliberately conservative: plain unselected arrow-key caret motion can repaint the old/new caret-row neighbourhood and status footer, with per-slot SHM snapshots. Edits, selection, scroll, overlays, IME/Compose, resize/scale changes, transformed buffers and stale slot state keep the full-frame fallback. This reduces pixel writes and compositor damage area, but visible-row layout traversal is still performed; no end-to-end latency improvement is claimed. User-machine GNOME/Mutter smoke testing and controlled performance measurements remain outstanding.
+
+---
+
+## 2026-11-14 — dirty-render fixture click boundary correction
+
+Adjust the focused fixture to eleven ASCII characters. Actions #966 passed build, command-line smoke and rasterizer comparison, then showed the initial pointer click clamping the twelve-character fixture to EOF at column 12, while the shared non-empty-file click assertion samples columns 9–11. Eleven bytes put the clamped caret at column 11, within the tested range. The scenario subsequently positions the caret at EOF explicitly before the dirty-render sequence. This remains a test-only change; renderer source is unchanged.
+
+---
+
+## 2026-11-14 — dirty-render fixture click-position correction
+
+Extend the focused dirty-render test fixture from six to twelve ASCII characters. Actions #965 passed compilation, command-line smoke, rasterizer comparisons, and the regular Wayland mock cases, but its generic initial-click assertion samples columns 9–11 for non-empty files; the six-byte fixture correctly reported a caret at column 6 and therefore did not satisfy that generic check. The longer fixture aligns its clicked caret with the asserted range, after which the focused test places the caret at EOF before exercising partial Left/Right navigation. This is a test-only correction; renderer code is unchanged.
+
+---
+
+## 2026-11-14 — dual-slot caret pixel test correction (Actions pending)
+
+Correct the held-key caret assertions to inspect the currently attached SHM slot. The mock already tracks each `wl_buffer`'s pool offset; the caret scan, candidate diagnostics and adjacent glyph-pixel assertions now use that active offset instead of assuming slot zero. This follows Actions #964, which passed compilation, CLI smoke and rasterizer comparisons but failed because the mock inspected the other slot's older frame. Renderer code remains unchanged.
+
+---
+
+## 2026-11-14 — dirty-render test expectation correction (Actions pending)
+
+Adjust the Wayland mock to recognize the new two-band damage requests for plain held-Left navigation, while keeping non-caret operations such as Backspace on the full-frame expectation. The focused partial-render test allows the first buffer warm-up repaint to fall back to full-frame, then requires the next three alternating caret frames to use two-band damage.
+
+This change follows Actions #963: build, CLI smoke, and rasterizer equivalence checks passed; the Wayland mock stopped at a stale full-frame assertion for held Left. Renderer code is unchanged by this correction. The updated Actions run is pending.
+
+---
+
+## 2026-11-14 — dirty caret-band repaint (Actions pending)
+
+Add a conservative partial repaint for plain, unselected arrow-key caret navigation. The renderer clips software rectangle fills, embedded bitmap glyph writes and TrueType glyph writes to the old/new caret-row neighbourhood plus the status footer. It submits matching horizontal Wayland damage rectangles. Per-slot snapshots track the scene generation, document revision, viewport, caret row, line pitch, font/wrap settings, UI density, backing raster scale and buffer transform, so each of the two SHM slots is independently verified before partial reuse. Snapshot updates occur only after successful commits.
+
+Edits, selection, pointer drag, scrolling, IME/Compose, overlays, resizes, scale changes, transformed buffers and stale snapshots use the existing full-render path. The mock checks repeated Left/Right movement for the two-band path and text insertion for full-frame fallback. Actions, live GNOME/Mutter smoke testing, and controlled performance measurements remain pending. The path currently reduces pixel writes and damage area; visible-row layout traversal is still unchanged.
 
 ---
 
@@ -1475,3 +1509,15 @@ The Wayland mock checks thirteen additional keysym scalar/action cells directly 
 Actions [Build and test #695](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496) passed all eight workflow steps, including the complete Wayland mock, ELF inspection, and artifact upload. Artifact [13648893107](https://github.com/GraderGamer2/NekoEdit/actions/runs/42560170496/artifacts/13648893107) is 104,167 bytes; ZIP SHA-256 `5762e219685c3734e77e8b2bd7e9fad0bdb39d3ca4c742d969fe330a8d407c4c`.
 
 The user reports the last build works perfectly and sees no visible behavior difference. This is consistent with backend-only alias coverage; live manual validation of additional script layouts is not claimed. `Ctrl+Shift+Left` was previously confirmed manually. The requested three-command right-click context menu remains a separate unimplemented roadmap item.
+
+
+## 2026-11-15 — low-level rendering, gap-buffer, history and link-size optimization
+
+A broad audit of NekoEdit's x86-64 assembly, freestanding C modules and build configuration identified several avoidable costs without requiring a new runtime dependency or a change to the established editor architecture.
+
+The renderer's rectangle fill now walks successive scanlines with a rolling pointer, avoiding repeated row-address multiplication and addition. Fenwick tree setup combines node initialization with its own per-line values. Clipboard selection and undo-history data paths now use a shared gap-buffer range helper that copies no more than two contiguous spans. Large history initialization no longer hashes the document byte-by-byte or performs one write syscall per byte.
+
+C code and 308 individually typed assembly routines now have function/data-level section granularity, allowing the static linker to discard unreachable function sections. The normal build remains `-O2` and unstripped. The change did not add a shared-library or third-party runtime requirement.
+
+Actions #983 passed the complete workflow, including the Wayland protocol suite, 11 MiB Open/Save, the new gap-range regression, native XKB verification, Compose/importer checks and nested GNOME Shell/Mutter integration. The resulting ELF reported text 237,542 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,072 bytes, 189 bytes smaller than the prior comparable artifact. No end-to-end latency improvement is claimed; the next development step is controlled profiling on the user's desktop, especially the remaining full-frame/edit redraw and index rebuild paths.
+
