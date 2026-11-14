@@ -4710,7 +4710,21 @@ xkb_symbols "nekoedit-sparse" {
                         or state["doc_line_index_records"][0][1] <= 1
                     ):
                         raise AssertionError("multi-megabyte horizontal fixture did not load wrapped: " + repr(state))
-                    workflow_shortcut(3160, 107, "Ctrl+End moves caret to end of the multi-megabyte wrapped line")
+                    # This scenario exits before workflow_shortcut is defined
+                    # later in fake_compositor, so send the same Ctrl+End events
+                    # directly using the early workflow_redraw helper.
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3160, 3160, 29, 1))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 3180, 4, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3161, 3161, 107, 1))
+                    )
+                    workflow_redraw("Ctrl+End moves caret to end of the multi-megabyte wrapped line")
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3163, 3163, 107, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3165, 3165, 29, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 3181, 0, 0, 0, 0))
+                        + buffer_release_message()
+                    )
                     state = read_document_state()
                     caret_scan_start = state["doc_offset_visual_scan_start"]
                     caret_scan_end = state["doc_offset_visual_scan_end"]
