@@ -1,4 +1,5 @@
 .intel_syntax noprefix
+.extern font_set_render_clip
 
 .equ SYS_read,          0
 .equ SYS_write,         1
@@ -4876,6 +4877,18 @@ window_buffer_created_surface_width: .long 0
 window_buffer_created_surface_height: .long 0
 window_buffer_slot_ids: .zero 8
 window_buffer_slot_busy: .zero 8
+window_buffer_slot_render_valid: .zero 8
+window_buffer_slot_render_scene_generation: .zero 8
+window_buffer_slot_render_doc_revision: .zero 8
+window_buffer_slot_render_view_top: .zero 8
+window_buffer_slot_render_view_left: .zero 8
+window_buffer_slot_render_caret_row: .zero 8
+window_buffer_slot_render_line_height: .zero 8
+window_buffer_slot_render_font_size: .zero 8
+window_buffer_slot_render_wrap: .zero 8
+window_buffer_slot_render_ui_scale: .zero 8
+window_buffer_slot_render_raster_scale: .zero 8
+window_buffer_slot_render_transform: .zero 8
 window_buffer_last_slot: .long 0
 buffer_slot_new_id:     .long 0
 window_buffer_id:       .long 0
@@ -5109,6 +5122,20 @@ buffer_busy:            .long 0
 frame_callback_id:      .long 0
 present_buffer_stage:   .long 0
 redraw_pending:         .long 0
+redraw_cursor_candidate: .long 0
+render_scene_generation: .long 0
+render_partial_active:  .long 0
+render_clip_enabled:    .long 0
+render_clip_top1:       .long 0
+render_clip_bottom1:    .long 0
+render_clip_top2:       .long 0
+render_clip_bottom2:    .long 0
+render_damage_top1:     .long 0
+render_damage_height1:  .long 0
+render_damage_top2:     .long 0
+render_damage_height2:  .long 0
+render_damage_bottom1:  .long 0
+render_current_caret_row: .long 0
 shift_down:             .long 0
 shift_physical_down:    .long 0
 caps_lock:              .long 0
@@ -6095,12 +6122,38 @@ wayland_main:
     lea rdi, [rip + poll_fds]
     call clipboard_poll_dispatch
     test eax, eax
-    jnz .keyboard_changed
-    jmp .event_loop
+    jz .event_loop
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+    jmp .keyboard_changed
 .event_read_wayland:
     call wl_read_event
     test rax, rax
     js .protocol_error
+    # A pending caret-only candidate belongs to the frame callback or buffer
+    # release that unblocks its first redraw attempt. Any other event changes
+    # the scene ordering, so force the next presentation through full repaint.
+    cmp dword ptr [rip + redraw_cursor_candidate], 0
+    je .event_read_candidate_done
+    mov eax, dword ptr [rip + frame_callback_id]
+    test eax, eax
+    jz .event_read_candidate_slot0
+    cmp dword ptr [rip + last_object], eax
+    je .event_read_candidate_done
+.event_read_candidate_slot0:
+    mov eax, dword ptr [rip + window_buffer_slot_ids]
+    test eax, eax
+    jz .event_read_candidate_slot1
+    cmp dword ptr [rip + last_object], eax
+    je .event_read_candidate_done
+.event_read_candidate_slot1:
+    mov eax, dword ptr [rip + window_buffer_slot_ids + 4]
+    test eax, eax
+    jz .event_read_candidate_clear
+    cmp dword ptr [rip + last_object], eax
+    je .event_read_candidate_done
+.event_read_candidate_clear:
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+.event_read_candidate_done:
     cmp dword ptr [rip + last_object], 6
     jne .check_registry_event
     cmp dword ptr [rip + last_opcode], 0
@@ -7232,6 +7285,7 @@ wayland_main:
     jmp .document_scroll_redraw
 
 .event_repeat_timer:
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov edi, dword ptr [rip + repeat_timer_fd]
     lea rsi, [rip + repeat_timer_read]
     mov edx, 8
@@ -8299,6 +8353,7 @@ wayland_main:
 .Lneko_keyboard_left_plain:
     cmp dword ptr [rip + doc_cursor], 0
     je .event_loop
+    mov dword ptr [rip + redraw_cursor_candidate], 1
     mov edi, dword ptr [rip + doc_cursor]
     call doc_grapheme_prev
     mov dword ptr [rip + doc_cursor], eax
@@ -8331,6 +8386,7 @@ wayland_main:
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_length]
     jae .event_loop
+    mov dword ptr [rip + redraw_cursor_candidate], 1
     mov edi, eax
     call doc_grapheme_next
     mov dword ptr [rip + doc_cursor], eax
@@ -8355,6 +8411,10 @@ wayland_main:
     call doc_finish_keyboard_selection
     jmp .keyboard_changed
 .Lneko_keyboard_up_plain:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_up_plain_move
+    mov dword ptr [rip + redraw_cursor_candidate], 1
+.Lneko_keyboard_up_plain_move:
     xor edi, edi
     call doc_move_vertical
     call doc_clear_selection
@@ -8368,6 +8428,10 @@ wayland_main:
     call doc_finish_keyboard_selection
     jmp .keyboard_changed
 .Lneko_keyboard_down_plain:
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .Lneko_keyboard_down_plain_move
+    mov dword ptr [rip + redraw_cursor_candidate], 1
+.Lneko_keyboard_down_plain_move:
     mov edi, 1
     call doc_move_vertical
     call doc_clear_selection
@@ -8479,6 +8543,15 @@ wayland_main:
     test rax, rax
     js .protocol_error
 .Lkeyboard_changed_without_ime:
+    cmp dword ptr [rip + redraw_cursor_candidate], 1
+    jne .Lkeyboard_scene_invalidate
+    cmp dword ptr [rip + text_input_object], 0
+    jne .Lkeyboard_scene_invalidate
+    jmp .Lkeyboard_scene_ready
+.Lkeyboard_scene_invalidate:
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+.Lkeyboard_scene_ready:
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
     test rax, rax
@@ -8493,6 +8566,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 .Ldocument_scroll_without_ime:
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
     test rax, rax
@@ -8513,6 +8588,8 @@ wayland_main:
     je .text_input_redraw_only
     jmp .event_loop
 .text_input_redraw_only:
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
     test rax, rax
@@ -13193,6 +13270,18 @@ draw_rect:
     jae .draw_rect_done
     mov eax, r13d
     add eax, r10d
+    cmp dword ptr [rip + render_clip_enabled], 0
+    je .draw_rect_row_paint
+    cmp eax, dword ptr [rip + render_clip_top1]
+    jb .draw_rect_row_check_band2
+    cmp eax, dword ptr [rip + render_clip_bottom1]
+    jb .draw_rect_row_paint
+.draw_rect_row_check_band2:
+    cmp eax, dword ptr [rip + render_clip_top2]
+    jb .draw_rect_row_skip
+    cmp eax, dword ptr [rip + render_clip_bottom2]
+    jae .draw_rect_row_skip
+.draw_rect_row_paint:
     mov ecx, dword ptr [rip + window_stride]
     imul rax, rcx
     mov edx, r12d
@@ -13203,6 +13292,7 @@ draw_rect:
     mov ecx, r14d
     mov eax, r11d
     rep stosd
+.draw_rect_row_skip:
     inc r10d
     jmp .draw_rect_row
 .draw_rect_done:
@@ -15431,6 +15521,8 @@ window_handle_surface_configure:
     mov r12d, 1
 .window_surface_keep_height:
     mov dword ptr [rip + window_resize_pending], r12d
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + buffer_busy], 0
     jne .window_surface_configure_done
@@ -15485,6 +15577,8 @@ window_apply_pending_resize:
     jne .window_resize_dimensions_changed
     jmp .window_resize_present
 .window_resize_dimensions_changed:
+    mov dword ptr [rip + window_buffer_slot_render_valid], 0
+    mov dword ptr [rip + window_buffer_slot_render_valid + 4], 0
     mov dword ptr [rip + window_surface_width], r12d
     mov dword ptr [rip + window_surface_height], r13d
     call window_update_geometry
@@ -15609,11 +15703,329 @@ window_create_second_buffer:
     mov eax, dword ptr [rip + buffer_slot_new_id]
     mov dword ptr [rip + window_buffer_slot_ids + 4], eax
     mov dword ptr [rip + window_buffer_slot_busy + 4], 0
+    mov dword ptr [rip + window_buffer_slot_render_valid + 4], 0
     xor eax, eax
 .window_create_second_buffer_done:
     add rsp, 8
     ret
 .size window_create_second_buffer, . - window_create_second_buffer
+
+# Configure software paint clipping for a simple caret move.
+# EDI=buffer slot (0 or 1); RAX=1 when partial repaint is safe.
+.type render_prepare_slot, @function
+render_prepare_slot:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov dword ptr [rip + render_partial_active], 0
+    call render_disable_clip
+
+    cmp dword ptr [rip + redraw_cursor_candidate], 1
+    jne .render_prepare_full
+    cmp dword ptr [rip + window_buffer_transform], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + ui_transform_active], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_selection_active], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + pointer_button_down], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_scroll_drag], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_hscroll_drag], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + text_input_object], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_pending_dead_mark], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_compose_active], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + file_menu_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + settings_menu_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + settings_locale_dropdown_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + context_menu_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + history_tab_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + picker_mode], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + window_resize_pending], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + window_doc_visible_rows], 0
+    je .render_prepare_full
+    cmp dword ptr [rip + window_doc_line_height], 0
+    je .render_prepare_full
+
+    lea rbx, [rip + window_buffer_slot_render_valid]
+    cmp dword ptr [rbx + r12*4], 1
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_scene_generation]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + render_scene_generation]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_doc_revision]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + doc_revision]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_view_top]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + doc_view_top_row]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_view_left]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + doc_view_left_px]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_line_height]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + window_doc_line_height]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_font_size]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + doc_font_size]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_wrap]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + doc_wrap_enabled]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_ui_scale]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + window_ui_scale_120]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_raster_scale]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + window_buffer_raster_scale_120]
+    jne .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_transform]
+    mov eax, dword ptr [rbx + r12*4]
+    cmp eax, dword ptr [rip + window_buffer_transform]
+    jne .render_prepare_full
+
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov dword ptr [rip + render_current_caret_row], eax
+    mov r14d, eax
+    sub r14d, dword ptr [rip + doc_view_top_row]
+    js .render_prepare_full
+    cmp r14d, dword ptr [rip + window_doc_visible_rows]
+    jae .render_prepare_full
+
+    lea rbx, [rip + window_buffer_slot_render_caret_row]
+    mov r13d, dword ptr [rbx + r12*4]
+    sub r13d, dword ptr [rip + doc_view_top_row]
+    js .render_prepare_full
+    cmp r13d, dword ptr [rip + window_doc_visible_rows]
+    jae .render_prepare_full
+
+    mov eax, r13d
+    sub eax, r14d
+    jns .render_prepare_distance_ready
+    neg eax
+.render_prepare_distance_ready:
+    cmp eax, 1
+    ja .render_prepare_full
+    cmp r13d, r14d
+    jbe .render_prepare_rows_ordered
+    xchg r13d, r14d
+.render_prepare_rows_ordered:
+    mov eax, dword ptr [rip + window_doc_line_height]
+    imul r13d, eax
+    add r13d, DOC_TOP
+    sub r13d, eax
+    cmp r13d, DOC_TOP
+    jge .render_prepare_top_ready
+    mov r13d, DOC_TOP
+.render_prepare_top_ready:
+    lea eax, [r14d + 2]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    cmp eax, dword ptr [rip + window_status_top]
+    jle .render_prepare_bottom_ready
+    mov eax, dword ptr [rip + window_status_top]
+.render_prepare_bottom_ready:
+    mov r15d, eax
+
+    imul r13d, dword ptr [rip + window_ui_scale_120]
+    mov eax, r13d
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jz .render_prepare_surface_top_zero
+    dec eax
+.render_prepare_surface_top_zero:
+    mov dword ptr [rip + render_damage_top1], eax
+    mov eax, r15d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    add eax, 119
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    inc eax
+    cmp eax, dword ptr [rip + window_surface_height]
+    jbe .render_prepare_surface_bottom_clamped
+    mov eax, dword ptr [rip + window_surface_height]
+.render_prepare_surface_bottom_clamped:
+    sub eax, dword ptr [rip + render_damage_top1]
+    jbe .render_prepare_full
+    mov dword ptr [rip + render_damage_height1], eax
+    add eax, dword ptr [rip + render_damage_top1]
+    mov dword ptr [rip + render_damage_bottom1], eax
+
+    mov eax, dword ptr [rip + window_status_top]
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jz .render_prepare_status_top_zero
+    dec eax
+.render_prepare_status_top_zero:
+    mov dword ptr [rip + render_damage_top2], eax
+    mov edx, dword ptr [rip + window_surface_height]
+    sub edx, eax
+    jbe .render_prepare_full
+    mov dword ptr [rip + render_damage_height2], edx
+
+    mov eax, dword ptr [rip + render_damage_top1]
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jz .render_prepare_clip_top1_zero
+    dec eax
+.render_prepare_clip_top1_zero:
+    mov dword ptr [rip + render_clip_top1], eax
+    mov eax, dword ptr [rip + render_damage_bottom1]
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    add eax, 119
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    inc eax
+    cmp eax, dword ptr [rip + window_buffer_height]
+    jbe .render_prepare_clip_bottom1_clamped
+    mov eax, dword ptr [rip + window_buffer_height]
+.render_prepare_clip_bottom1_clamped:
+    mov dword ptr [rip + render_clip_bottom1], eax
+
+    mov eax, dword ptr [rip + render_damage_top2]
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jz .render_prepare_clip_top2_zero
+    dec eax
+.render_prepare_clip_top2_zero:
+    mov dword ptr [rip + render_clip_top2], eax
+    mov eax, dword ptr [rip + window_buffer_height]
+    mov dword ptr [rip + render_clip_bottom2], eax
+
+    mov dword ptr [rip + render_clip_enabled], 1
+    mov dword ptr [rip + render_partial_active], 1
+    mov edi, 1
+    mov esi, dword ptr [rip + render_clip_top1]
+    mov edx, dword ptr [rip + render_clip_bottom1]
+    mov ecx, dword ptr [rip + render_clip_top2]
+    mov r8d, dword ptr [rip + render_clip_bottom2]
+    call font_set_render_clip
+    mov eax, 1
+    jmp .render_prepare_done
+.render_prepare_full:
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+    call render_disable_clip
+    xor eax, eax
+.render_prepare_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_prepare_slot, . - render_prepare_slot
+
+.type render_disable_clip, @function
+render_disable_clip:
+    sub rsp, 8
+    mov dword ptr [rip + render_clip_enabled], 0
+    xor edi, edi
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call font_set_render_clip
+    add rsp, 8
+    ret
+.size render_disable_clip, . - render_disable_clip
+
+.type render_store_slot_metadata, @function
+render_store_slot_metadata:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    lea rbx, [rip + window_buffer_slot_render_valid]
+    mov dword ptr [rbx + r12*4], 0
+    lea rbx, [rip + window_buffer_slot_render_scene_generation]
+    mov eax, dword ptr [rip + render_scene_generation]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_doc_revision]
+    mov eax, dword ptr [rip + doc_revision]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_view_top]
+    mov eax, dword ptr [rip + doc_view_top_row]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_view_left]
+    mov eax, dword ptr [rip + doc_view_left_px]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_line_height]
+    mov eax, dword ptr [rip + window_doc_line_height]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_font_size]
+    mov eax, dword ptr [rip + doc_font_size]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_wrap]
+    mov eax, dword ptr [rip + doc_wrap_enabled]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_ui_scale]
+    mov eax, dword ptr [rip + window_ui_scale_120]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_raster_scale]
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_transform]
+    mov eax, dword ptr [rip + window_buffer_transform]
+    mov dword ptr [rbx + r12*4], eax
+    mov edi, dword ptr [rip + doc_cursor]
+    call doc_offset_to_visual
+    mov dword ptr [rip + render_current_caret_row], eax
+    lea rbx, [rip + window_buffer_slot_render_caret_row]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_valid]
+    mov dword ptr [rbx + r12*4], 1
+    xor eax, eax
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size render_store_slot_metadata, . - render_store_slot_metadata
 
 .type present_buffer, @function
 present_buffer:
@@ -15671,7 +16083,10 @@ present_buffer:
     add rdx, SHM_BUFFER_CAPACITY
 .present_buffer_mapping_ready:
     mov qword ptr [rip + shm_mapping], rdx
+    mov edi, r12d
+    call render_prepare_slot
     call render_surface
+    call render_disable_clip
     mov dword ptr [rip + present_buffer_stage], 1
     # A frame callback throttles commits; wl_buffer.release independently
     # controls which backing slot may be mutated.
@@ -15740,6 +16155,38 @@ present_buffer:
     test rax, rax
     js .present_buffer_done
     mov dword ptr [rip + present_buffer_stage], 4
+    cmp dword ptr [rip + render_partial_active], 1
+    jne .present_buffer_full_damage
+    mov dword ptr [rip + payload_buffer], 0
+    mov eax, dword ptr [rip + render_damage_top1]
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov eax, dword ptr [rip + window_surface_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + render_damage_height1]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov edi, 8
+    mov esi, 2
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    mov dword ptr [rip + payload_buffer], 0
+    mov eax, dword ptr [rip + render_damage_top2]
+    mov dword ptr [rip + payload_buffer + 4], eax
+    mov eax, dword ptr [rip + window_surface_width]
+    mov dword ptr [rip + payload_buffer + 8], eax
+    mov eax, dword ptr [rip + render_damage_height2]
+    mov dword ptr [rip + payload_buffer + 12], eax
+    mov edi, 8
+    mov esi, 2
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 16
+    call wl_send_request
+    test rax, rax
+    js .present_buffer_done
+    jmp .present_buffer_damage_done
+.present_buffer_full_damage:
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
     mov eax, dword ptr [rip + window_surface_width]
@@ -15753,6 +16200,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+.present_buffer_damage_done:
     mov dword ptr [rip + present_buffer_stage], 5
     mov edi, 8
     mov esi, 6
@@ -15762,6 +16210,10 @@ present_buffer:
     test rax, rax
     js .present_buffer_done
     mov dword ptr [rip + present_buffer_stage], 6
+    mov edi, r12d
+    call render_store_slot_metadata
+    mov dword ptr [rip + render_partial_active], 0
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     lea rdx, [rip + window_buffer_slot_busy]
     mov dword ptr [rdx + r12*4], 1
     inc dword ptr [rip + buffer_busy]
@@ -21567,6 +22019,18 @@ draw_glyph:
     jae .glyph_fallback_next_subcolumn
     cmp eax, dword ptr [rip + window_buffer_height]
     jae .glyph_fallback_next_subcolumn
+    cmp dword ptr [rip + render_clip_enabled], 0
+    je .glyph_fallback_clip_done
+    cmp eax, dword ptr [rip + render_clip_top1]
+    jb .glyph_fallback_clip_band2
+    cmp eax, dword ptr [rip + render_clip_bottom1]
+    jb .glyph_fallback_clip_done
+.glyph_fallback_clip_band2:
+    cmp eax, dword ptr [rip + render_clip_top2]
+    jb .glyph_fallback_next_subcolumn
+    cmp eax, dword ptr [rip + render_clip_bottom2]
+    jae .glyph_fallback_next_subcolumn
+.glyph_fallback_clip_done:
     mov ecx, dword ptr [rip + window_stride]
     imul eax, ecx
     shl edx, 2
@@ -25590,6 +26054,8 @@ window_attach_initial_buffer:
     call wl_send_request
     test rax, rax
     js .initial_buffer_done
+    mov edi, 0
+    call render_store_slot_metadata
     mov dword ptr [rip + window_buffer_slot_busy], 1
     mov dword ptr [rip + window_buffer_slot_busy + 4], 0
     mov dword ptr [rip + window_buffer_last_slot], 0
@@ -25823,6 +26289,8 @@ window_scale_schedule:
     je .window_scale_schedule_done
 .window_scale_schedule_changed:
     mov dword ptr [rip + window_resize_pending], 1
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     cmp dword ptr [rip + window_surface_mapped], 0
     je .window_scale_schedule_done
@@ -26453,6 +26921,8 @@ handle_seat_capabilities:
     test rax, rax
     js .seat_caps_done
 .seat_caps_keyboard_redraw:
+    inc dword ptr [rip + render_scene_generation]
+    mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
 
 .seat_caps_add_pointer:

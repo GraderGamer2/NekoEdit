@@ -406,6 +406,7 @@ def run(
     word_navigation_test: bool = False,
     pointer_drag_test: bool = False,
     line_navigation_test: bool = False,
+    dirty_render_test: bool = False,
     find_replace_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
@@ -4041,22 +4042,42 @@ xkb_symbols "nekoedit-sparse" {
 
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
-                ) -> None:
-                    # This helper models a tap, not a held key. Queue key-up
-                    # with key-down so slow frame acknowledgement cannot let
-                    # the 300 ms repeat timer fire an extra editing action.
-                    client.sendall(
-                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", serial, serial, code, 1))
-                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
-                        )
+                ) -> bool:
+                    # The focused dirty-render test sends key-up only after its
+                    # frame has committed; normal cases retain the tap helper.
+                    key_down = wire_message(
+                        keyboard_object_id, 3, struct.pack("<IIII", serial, serial, code, 1)
                     )
+                    key_up = wire_message(
+                        keyboard_object_id, 3, struct.pack("<IIII", serial + 1, serial + 1, code, 0)
+                    )
+                    client.sendall(key_down if dirty_render_test else key_down + key_up)
                     expect_message(
                         client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), f"{label} attach"
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
-                    )
+                    damage = recv_wayland_message(client)
+                    if damage[0:2] != (8, 2) or damage[3] or len(damage[2]) != 16:
+                        raise AssertionError(f"{label}: malformed first wl_surface.damage request: {damage!r}")
+                    rect1 = struct.unpack("<4I", damage[2])
+                    partial = rect1 != (0, 0, 800, initial_height)
+                    if partial:
+                        if code not in (103, 105, 106, 108):
+                            raise AssertionError(f"{label}: non-caret input unexpectedly used partial damage: {rect1!r}")
+                        x1, y1, width1, height1 = rect1
+                        if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
+                            raise AssertionError(f"{label}: invalid caret-band damage rectangle: {rect1!r}")
+                        damage2 = recv_wayland_message(client)
+                        if damage2[0:2] != (8, 2) or damage2[3] or len(damage2[2]) != 16:
+                            raise AssertionError(f"{label}: malformed status-band damage request: {damage2!r}")
+                        rect2 = struct.unpack("<4I", damage2[2])
+                        x2, y2, width2, height2 = rect2
+                        if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > initial_height:
+                            raise AssertionError(f"{label}: invalid status-band damage rectangle: {rect2!r}")
+                    elif rect1 != (0, 0, 800, initial_height):
+                        raise AssertionError(f"{label}: invalid full-frame damage rectangle: {rect1!r}")
                     expect_message(client, (8, 6, b""), f"{label} commit")
+                    if dirty_render_test:
+                        client.sendall(key_up)
                     client.sendall(buffer_release_message())
                     # A key release can race a coalesced redraw behind the frame
                     # just committed. Drain that bounded follow-up rather than
@@ -4124,6 +4145,7 @@ xkb_symbols "nekoedit-sparse" {
                             serial + 2, 28, label + " — confirm pending save",
                             auto_confirm=False,
                         )
+                    return partial
 
                 def workflow_redraw(label: str) -> None:
                     expect_buffer_attach(label, skip_cursor_shape=True)
@@ -9824,6 +9846,32 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     return
 
+                if dirty_render_test:
+                    initial_state = read_document_state()
+                    if initial_state["doc_cursor"] != initial_state["doc_length"]:
+                        key_step(1000, 107, "position caret at end of test line")
+                    partial_frames = []
+                    for index, code in enumerate((105, 106, 105, 106)):
+                        partial_frames.append(
+                            key_step(1002 + index * 3, code, f"dirty caret movement {index + 1}")
+                        )
+                    if not all(partial_frames):
+                        raise AssertionError(
+                            f"plain unselected Left/Right navigation did not consistently use two-band damage: {partial_frames!r}"
+                        )
+                    before_edit = read_document_state()["doc_contents"]
+                    key_step(1020, 48, "text edit invalidates the partial-render snapshot")
+                    after_edit = read_document_state()["doc_contents"]
+                    if after_edit != before_edit + b"b":
+                        raise AssertionError(
+                            f"text edit changed unexpected document bytes: before={before_edit!r}, after={after_edit!r}"
+                        )
+                    observations.append(
+                        "plain unselected Left/Right movement used two clipped damage bands; text insertion used full-frame damage"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 key_step(1002, 30, "insert a")
                 if initial_preferred_buffer_scale > 1 or initial_preferred_buffer_transform != 0 or fractional_scale_test:
                     # Fractional raster scales move the exact physical sample
@@ -10873,6 +10921,16 @@ if __name__ == "__main__":
     run(sys.argv[1], verify_frame_callbacks=True)
     run(sys.argv[1], frame_callback_order_test=True)
     run(sys.argv[1], buffer_pool_test=True)
+    dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-")
+    try:
+        with os.fdopen(dirty_fd, "wb") as dirty_file:
+            dirty_file.write(b"abcdef")
+        run(sys.argv[1], initial_file=dirty_path, dirty_render_test=True)
+    finally:
+        try:
+            os.unlink(dirty_path)
+        except FileNotFoundError:
+            pass
     # Manager globals may disappear after binding; only manager proxies are
     # destroyed, while their already-created surface objects remain usable.
     run(

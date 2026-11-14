@@ -149,3 +149,12 @@ Overlay glyphs are rasterized at the active UI font size. Their advances are con
 ## Latest interaction verification
 
 GitHub Actions [Build and test #493](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760) passed the complete Wayland mock-compositor suite. It verifies the draggable bottom scrollbar, both horizontal wheel paths, adaptive overlay sizing and centering, Ctrl+word and logical-line navigation, Shift-extended selection, double-click word selection, and Find/Replace document contents. Artifact [13581805940](https://github.com/GraderGamer2/NekoEdit/actions/runs/42391111760/artifacts/13581805940) is 67,298 bytes. This remains protocol/mock verification; manual GNOME/Mutter testing of these interactions is still outstanding.
+
+
+## Dirty caret-band repaint
+
+The first partial-paint path is intentionally narrow: an unselected Left/Right/Up/Down caret move can repaint two horizontal bands instead of the whole buffer. The first band covers the old and new caret rows plus one neighbouring line of vertical overhang; the second covers the status footer, whose line/column values change with the caret. Both bands are clipped in the software rectangle, bitmap-glyph, and TrueType-glyph write paths, and the Wayland commit carries matching surface-coordinate damage rectangles.
+
+Partial rendering is permitted only when the target shared-memory slot has a valid snapshot of the same scene generation, document revision, viewport, font size, wrap mode, line pitch, UI scale, raster scale, and transform. The old and new caret rows must both be visible and no more than one visual row apart. Each buffer slot stores its own caret row and scene metadata because the two compositor-owned buffers can contain different historical frames. The metadata is advanced only after a successful commit.
+
+Text edits, selections, IME/preedit or Compose state, scrolling, menus, History, dialogs, Find/Replace, pointer drags, resizes, scale/transform changes, and any mismatched slot snapshot use the full-frame path. Non-normal buffer transforms also use the full-frame path. A fallback preserves correctness when the previous contents of a particular slot cannot be proven compatible. This first pass reduces software pixel writes and compositor damage area; it does not yet skip the visible document-layout traversal. No end-to-end speedup is claimed until a controlled benchmark is collected.

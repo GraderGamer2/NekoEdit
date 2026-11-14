@@ -43,6 +43,23 @@ struct cache_entry {
 };
 static struct cache_entry cache[CACHE_SLOTS];
 static uint32_t cache_clock;
+
+static int32_t render_clip_enabled;
+static int32_t render_clip_top1,render_clip_bottom1;
+static int32_t render_clip_top2,render_clip_bottom2;
+
+void font_set_render_clip(int32_t enabled,int32_t top1,int32_t bottom1,
+                          int32_t top2,int32_t bottom2) {
+    render_clip_enabled=enabled!=0;
+    render_clip_top1=top1; render_clip_bottom1=bottom1;
+    render_clip_top2=top2; render_clip_bottom2=bottom2;
+}
+
+static int render_clip_contains_y(int32_t y) {
+    return !render_clip_enabled ||
+        ((y>=render_clip_top1 && y<render_clip_bottom1) ||
+         (y>=render_clip_top2 && y<render_clip_bottom2));
+}
 /* ASCII advances are stable until the active face is replaced. Cache them
  * per document em size; zero means that the entry has not been measured. */
 static uint8_t ascii_advance_cache[33][128];
@@ -437,7 +454,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
         int32_t clip_height=height<surface_height?height:surface_height;
         for (uint32_t row=0;row<e->height;++row) {
             int32_t py=y+e->top+(int32_t)row;
-            if (py<0 || py>=clip_height) continue;
+            if (py<0 || py>=clip_height || !render_clip_contains_y(py)) continue;
             uint8_t *dstrow=surface+(int64_t)py*stride;
             uint32_t source_row=row*BITMAP_SIDE;
             for (uint32_t col=0;col<e->width;++col) {
@@ -466,7 +483,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
             if (!a || !map_surface_pixel_to_buffer(px,py,transform,
                                                    surface_width,surface_height,&bx,&by))
                 continue;
-            if (bx<0 || by<0 || bx>=width || by>=height) continue;
+            if (bx<0 || by<0 || bx>=width || by>=height || !render_clip_contains_y(by)) continue;
             uint32_t *dst=(uint32_t *)(surface+(int64_t)by*stride+bx*4);
             uint32_t old=*dst, inv=255u-a;
             uint32_t r=(0xd8u*a+((old>>16)&255u)*inv+127u)/255u;

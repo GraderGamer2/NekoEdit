@@ -1,4 +1,14 @@
-## Latest handoff (2026-11-14 — wrapped visual-row checkpoints; CI PASS #961)
+## Latest handoff (2026-11-14 — dirty caret-band repaint; Actions pending)
+
+Continue development on `early-alpha` at its current committed head; keep `main` as the stable application-source checkpoint and keep `optimization-early-alpha` isolated. Normal development remains `-O2`, unstripped.
+
+The first conservative dirty-rendering pass targets plain, unselected arrow-key caret movement. It clips software rectangle fills, bitmap glyphs and TrueType glyphs to the old/new caret neighbourhood plus the status footer, then sends two corresponding Wayland damage rectangles. Per-slot snapshots protect the two SHM buffers against stale prior frames. Text edits, selections, pointer drags, scrolling, IME/Compose, menus/dialogs, viewport or scale changes, non-normal transforms, and snapshot mismatches retain the full-frame path.
+
+The focused mock requires partial damage on repeated Left/Right movement and full damage after text insertion. Visible-row layout traversal is still performed, so the verified scope is reduced pixel writes and damage area—not a measured latency improvement. Full Actions validation and a live GNOME/Mutter smoke test are pending.
+
+---
+
+## Previous handoff (2026-11-14 — wrapped visual-row checkpoints; CI PASS #961)
 
 Continue development on `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 

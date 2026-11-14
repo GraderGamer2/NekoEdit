@@ -1,3 +1,11 @@
+## 2026-11-14 — dirty caret-band repaint (Actions pending)
+
+Add a conservative partial repaint for plain, unselected arrow-key caret navigation. The renderer clips software rectangle fills, embedded bitmap glyph writes and TrueType glyph writes to the old/new caret-row neighbourhood plus the status footer. It submits matching horizontal Wayland damage rectangles. Per-slot snapshots track the scene generation, document revision, viewport, caret row, line pitch, font/wrap settings, UI density, backing raster scale and buffer transform, so each of the two SHM slots is independently verified before partial reuse. Snapshot updates occur only after successful commits.
+
+Edits, selection, pointer drag, scrolling, IME/Compose, overlays, resizes, scale changes, transformed buffers and stale snapshots use the existing full-render path. The mock checks repeated Left/Right movement for the two-band path and text insertion for full-frame fallback. Actions, live GNOME/Mutter smoke testing, and controlled performance measurements remain pending. The path currently reduces pixel writes and damage area; visible-row layout traversal is still unchanged.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 Reuse the sparse byte-to-visual checkpoints for the reverse coordinate lookup performed by `doc_visual_to_offset_indexed`. After Fenwick lookup identifies the logical line, the mapper uses the line's stable ID and the shared cache epoch to search its 4 KiB byte buckets. Because checkpoint local visual rows are monotonic with byte position, lookup binary-searches the lexicographic pair (local visual row, pixel X), choosing the greatest checkpoint not after the requested coordinate. The saved byte offset, row, and X initialize the existing UTF-8/grapheme-aware scan. A checkpoint at X=300 on row N is deliberately rejected for a request at X=0 on that same row, so beginning-of-row text is not skipped.

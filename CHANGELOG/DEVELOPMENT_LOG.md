@@ -1,3 +1,13 @@
+## 2026-11-14 — first dirty caret-band repaint pass
+
+The Wayland software renderer now has a conservative partial-paint path for plain, unselected Left/Right/Up/Down caret movement. It clips rectangle fills, the embedded bitmap-glyph writer, and the TrueType glyph blitter to a band around the old/new caret rows plus a separate status-footer band. The corresponding two `wl_surface.damage` requests cover those same surface-coordinate regions. Other redraw classes retain full damage and full-surface pixel writes.
+
+The optimization uses per-slot render snapshots for scene generation, document revision, viewport offsets, caret visual row, line pitch, document font size, wrap mode, UI density, backing raster scale, and buffer transform. A slot is eligible only if its snapshot matches the current editor state, the caret rows are visible and at most one row apart, and there is no selection, pointer drag, IME/Compose state, menu, modal overlay, resize, or non-normal transform. Snapshots are committed only after a successful Wayland commit; resize invalidates both. Pending caret candidates are cancelled by unrelated input/events before a deferred redraw, preventing an unrelated scene update from inheriting a partial repaint.
+
+The Wayland mock adds a focused scenario that requires two clipped damage rectangles for repeated plain Left/Right navigation and a full-frame damage fallback after text insertion. Actions validation is pending. No performance percentage is claimed; the implementation currently reduces pixel writes and Wayland damage, not visible-row traversal. Manual GNOME/Mutter smoke testing and controlled end-to-end timing remain outstanding.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 The indexed reverse mapper `doc_visual_to_offset_indexed` previously found the logical line with the Fenwick tree, then scanned that line from its first byte to find a requested visual row and pixel column. A very long wrapped logical line could therefore still incur a long scan during viewport painting, selection mapping, find highlighting, and pointer hit-testing after vertical scrolling.

@@ -1,3 +1,13 @@
+## 2026-11-14 — first dirty caret-band repaint pass (Actions pending)
+
+**Branch:** `early-alpha`. Development remains `-O2`, unstripped; `main` remains the stable application-source checkpoint and `optimization-early-alpha` remains isolated.
+
+Plain, unselected arrow-key caret navigation can now use a clipped repaint of the old/new caret-row neighbourhood plus the status footer. Software rectangle fills, embedded bitmap glyphs, and TrueType glyph pixels obey the same two physical-buffer clip bands; Wayland receives matching surface-coordinate damage rectangles. Each shared-memory slot stores its own scene generation, document revision, viewport, caret row, line pitch, font size, wrap state, UI density, raster scale, and buffer transform. Snapshots advance only after successful commits.
+
+The partial path is disabled for selections, pointer drags, IME/Compose, menus, History, dialogs, Find/Replace, resizes, pending scale/transform changes, and stale/mismatched slot state. All such cases preserve a complete redraw. The mock adds a focused test for partial Left/Right damage and full-frame edit fallback. Actions validation and manual GNOME/Mutter testing are pending. This pass reduces pixel writes and compositor damage; it does not yet skip visible-row layout traversal and has no measured end-to-end speedup.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 **Branch:** `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint with changelog-only mirrors; `optimization-early-alpha` remains isolated.
