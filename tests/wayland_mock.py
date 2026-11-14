@@ -3880,25 +3880,30 @@ xkb_symbols "nekoedit-sparse" {
                         while time.monotonic() < settle_deadline:
                             callback_id = child_u32("frame_callback_id")
                             busy_slots = child_u32("buffer_busy")
-                            if callback_id == 0 and busy_slots == 0:
-                                if quiet_since is None:
-                                    quiet_since = time.monotonic()
-                                elif time.monotonic() - quiet_since >= 0.025:
-                                    break
+                            redraw_pending = child_u32("redraw_pending")
+                            # recv_wayland_message sends callback.done as soon as
+                            # it reads wl_surface.commit. The child may not have
+                            # consumed that event yet, so a nonzero callback ID
+                            # with no mock-side pending callback is not a new frame.
+                            if callback_id != 0 or busy_slots != 0:
+                                quiet_since = None
                                 time.sleep(0.002)
                                 continue
-                            quiet_since = None
-                            if callback_id != 0 and not frame_callback_stats["pending"]:
+                            if redraw_pending:
+                                quiet_since = None
                                 if followup_frames >= 2:
                                     raise AssertionError(
                                         f"{label}: more than two follow-up frames were queued"
                                     )
+                                # Let the event-loop branch handling callback.done
+                                # enter present_buffer before waiting on the socket.
+                                time.sleep(0.002)
                                 client.settimeout(max(0.05, settle_deadline - time.monotonic()))
                                 try:
-                                    expect_buffer_frame(f"{label} coalesced follow-up frame")
+                                    expect_buffer_frame(f"{label} queued follow-up redraw")
                                 except Exception as error:
                                     raise AssertionError(
-                                        f"{label}: follow-up attach timed out or failed; "
+                                        f"{label}: queued redraw failed; "
                                         f"callback={child_u32('frame_callback_id')}, "
                                         f"stage={child_u32('present_buffer_stage')}, "
                                         f"busy={child_u32('buffer_busy')}, "
@@ -3908,12 +3913,17 @@ xkb_symbols "nekoedit-sparse" {
                                 client.sendall(buffer_release_message())
                                 followup_frames += 1
                                 continue
+                            if quiet_since is None:
+                                quiet_since = time.monotonic()
+                            elif time.monotonic() - quiet_since >= 0.025:
+                                break
                             time.sleep(0.002)
                         else:
                             raise AssertionError(
                                 f"{label}: frame/buffer gates did not settle; "
                                 f"callback={child_u32('frame_callback_id')}, "
                                 f"busy={child_u32('buffer_busy')}, "
+                                f"redraw={child_u32('redraw_pending')}, "
                                 f"stats={frame_callback_stats!r}"
                             )
                     finally:
