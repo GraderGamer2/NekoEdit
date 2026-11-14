@@ -1,15 +1,26 @@
-## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
+## 2026-11-15 — early-alpha compact glyph-mask initialization and cache rows (Actions #976 PASS)
 
-**Code branch:** early-alpha; the main application source is unchanged, and this is a changelog-only mirror. Implementation: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). **Workflow:** [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
+**Code branch:** `early-alpha`; the application source on `main` is unchanged. This is a changelog-only mirror. Implementation: [3ed2dd0](https://github.com/GraderGamer2/NekoEdit/commit/3ed2dd0bd1037d6885cb908c24e6acd73d69d740); row-stride correction: [0d44d39](https://github.com/GraderGamer2/NekoEdit/commit/0d44d399e9b5d4a2ab8fb01f71ea26e601477d22); benchmark declarations: [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e). **Workflow:** [Actions #976](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868) passed all 17 steps.
 
-The TrueType glyph blitter's normal identity-transform path writes alpha-255 pixels directly as the fixed opaque foreground color 0xffd8dee9, skipping the destination read and three-channel blend. Antialiased edge pixels and rotated/reflected paths retain the original blending logic.
+`font_rasterize_glyph` initializes only the active glyph bounds and writes explicit zeroes for uncovered pixels. Cache misses copy only the active rectangle into rows packed at the glyph's actual width; both identity and transformed-buffer drawing use the proper stride. The large-to-small scratch-reuse regression verifies that prior glyph pixels cannot leak into a smaller mask.
 
-The benchmark compares four builds to isolate linear vs. hash-indexed cache, generic vs. identity transform, and original vs. opaque-pixel blending. All four variants produced the same framebuffer checksum. Warm glyph drawing measured 239.5 ns with the previous identity-path blend and 169.2 ns with the opaque-pixel fast path, a 29.4% reduction. Across all accumulated renderer improvements, warm draw measured 410.0 ns for the original reference and 169.2 ns for the current path, 58.7% lower. This seven-sample synthetic 8-point-outline microbenchmark is not an end-to-end latency or FPS measurement.
+The five-way benchmark requires matching cache-fill and warm framebuffer checksums. Versus the same opaque-blend renderer with legacy storage, cold rasterization improved 14.1% (15,523.7 → 13,338.6 ns) and cold cache fill/draw improved 14.2% (15,655.1 → 13,428.3 ns). Warm drawing was 0.7% slower (107.9 → 108.7 ns), so no warm-path gain is claimed. All five variants matched cache-fill checksum `35083399697745` and warm checksum `35084948275808`.
 
-Actions #973 passed build/ELF, CLI smoke, renderer comparison, the complete Wayland mock (including 11 MiB Open/Save), executable inspection, native us(intl) parsing, X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+The cache entries still reserve fixed 128×128 arrays (about 2 MiB total); this change reduces active scratch/cache traffic but not the static pixel-array allocation. A shared variable-size mask arena remains a separate design candidate.
 
-Artifacts: [Linux x86-64 executable, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expire 2026-11-16 01:42 WIB.
+Actions #976 passed build/ELF, CLI, renderer equivalence, full Wayland mock (including seven non-normal preferred transforms and 11 MiB Open/Save), executable inspection, native XKB parsing, X.Org importer verification, Compose generation, nested GNOME Shell/Mutter, and both artifact uploads. Application source on `main` remains unchanged.
 
+Artifacts: [Linux x86-64 executable, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364). Expiry: 2026-11-16 01:53 WIB.
+
+---
+
+## 2026-11-15 — early-alpha opaque glyph pixel fast path (Actions #973 PASS)
+
+**Code branch:** `early-alpha`; the application source on `main` is unchanged. This is a changelog-only mirror. Implementation: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776); [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
+
+The normal TrueType identity-transform blitter writes fully opaque pixels directly and skips the destination read and blend arithmetic; antialiased edges and transformed paths retain the old blend. Four benchmark variants matched framebuffer checksums. Warm drawing improved 29.4% against the same hash-cache/identity renderer with the previous blend. These are synthetic microbenchmark results, not an end-to-end editor latency claim.
+
+---
 ---
 
 ## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)

@@ -1,16 +1,18 @@
-## Latest handoff (2026-11-15 — opaque glyph pixel fast path; CI PASS #973)
+## Latest handoff (2026-11-15 — early-alpha compact glyph masks; CI PASS #976)
 
-The application source on main remains unchanged. Continue source development on early-alpha at [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). These are changelog-only mirrors; do not merge editor source to main. Normal development remains -O2, unstripped.
+The application source on `main` remains unchanged. Continue source development on `early-alpha` at [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e). This is a changelog-only mirror; do not merge editor source to `main`. Normal development remains `-O2`, unstripped.
 
-The TrueType identity-transform glyph blitter now writes fully opaque mask pixels directly, skipping destination reads and blend arithmetic. Antialiased edge pixels and rotated/reflected buffer paths keep the original blend.
+The latest glyph-cache optimization initializes only active glyph bounds, writes uncovered pixels as zero to prevent stale scratch data, and copies cache rows packed at the glyph width. Both normal and transformed buffer paths use the correct row stride; a large-then-small glyph test guards against stale pixels.
 
-Actions [#973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps. A four-way synthetic rasterizer benchmark required matching framebuffer checksums and measured 169.2 ns per warm glyph draw for the new path versus 239.5 ns for the same identity renderer with the original blend (29.4% lower). The full cumulative comparison was 169.2 ns versus 410.0 ns for the original linear-cache/generic-transform reference (58.7% lower). These results do not represent end-to-end editor latency or FPS.
+[Actions #976](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868) passed all 17 steps, including the five-way renderer comparison, all seven non-normal Wayland transforms, 11 MiB Open/Save and nested GNOME Shell/Mutter. Cache-fill checksum `35083399697745` and warm framebuffer checksum `35084948275808` matched across variants. Synthetic cold rasterization and cold cache-fill/draw improved about 14.1–14.2%; warm draw was 0.7% slower, effectively neutral in this measurement.
 
-Artifacts: [Linux x86-64 executable, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expire 2026-11-16 01:42 WIB.
+The fixed per-entry 128×128 pixel arrays still occupy about 2 MiB. The optimization reduces active-byte clearing/copying but does not shrink that static allocation. A shared variable-size cache arena is a potential next memory-footprint optimization, requiring a separate allocator/eviction design.
 
-The selection edge auto-scroll fix is also complete: [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed the full Wayland and nested Mutter suites, and the user confirmed that selection works at both screen edges. Source fix: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3).
+Artifacts: [Linux x86-64 executable, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364).
 
-Next: continue from early-alpha and use real editor profiling to choose the next hot path. Retain a reference implementation and conservative rendering fallbacks for each optimization.
+The selection auto-scroll fix passed [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935); user testing confirms selection works at screen top and bottom. The opaque-pixel blend optimization passed [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385).
+
+Application source remains on `early-alpha`. This mirror on `main` changes only `CHANGELOG` documentation.
 ---
 
 ## Latest handoff (2026-11-15 — early-alpha caret-only document traversal bounded; CI PASS #970)
