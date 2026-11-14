@@ -3108,8 +3108,8 @@ xkb_symbols "nekoedit-sparse" {
 
                 keyboard_events = b""
                 if advertised_seat_version >= 4:
-                    # Use a non-default compositor policy to prove the client
-                    # consumes wl_keyboard.repeat_info rather than constants.
+                    # Advertise a non-default compositor delay. NekoEdit
+                    # preserves this delay while using its requested fixed 30 Hz rate.
                     keyboard_events += wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 180))
                 keyboard_events += wire_message(keyboard_object_id, 1, struct.pack("<III", 1001, 8, 0))
                 client.sendall(keyboard_events)
