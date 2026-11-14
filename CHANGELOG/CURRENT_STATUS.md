@@ -40,7 +40,7 @@ The output-aware startup sizing scenario still has not been reached in a passing
 
 The build, CLI, renderer benchmark, and the main frame-callback repeat test all passed. The run proceeded to the separate legacy-seat compatibility case, which deliberately advertises `wl_seat` version 3. That protocol version has no `wl_keyboard.repeat_info`, so NekoEdit correctly retained its 30 Hz / 300 ms local fallback. The added assertion incorrectly expected the 10 Hz / 180 ms policy from the version-4+ case.
 
-The mock now selects its expected repeat policy from the advertised seat version: 10 Hz / 180 ms when version 4+ sends `repeat_info`, and 30 Hz / 300 ms for v3 fallback. This is a test correction; the application's repeat behavior is unchanged. The next run should proceed beyond the legacy-seat case and continue toward the output-mode startup scenario.
+The mock now selects its expected repeat policy from the advertised seat version: 10 Hz / 180 ms when version 4+ sends `repeat_info`, and 30 Hz / 300 ms for v3 fallback. This is a test correction; the application's repeat behavior is unchanged. The next run proceeded through the legacy-seat case and into output hotplug testing. It then exposed a hard-coded stale hot-added output object ID in the mock's `wl_surface.leave` event; the source `global_remove` handler did clear the output table when sent the matching global name. The mock now sends leave for `hot_added_output_id` rather than assuming object ID 21. The dedicated output-mode startup scenario still awaits a passing full run.
 
 
 

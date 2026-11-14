@@ -42,6 +42,12 @@ The normal frame-callback repeat test passed with the compositor-provided 10 Hz 
 
 The test now derives its expected repeat rate and delay from `advertised_seat_version`: 10/180 for version 4+ and 30/300 for version 3. It continues to verify the active repeat key, actual document mutation, and rendered pixel update. No application source changes are required.
 
+### Follow-up after Actions #940 — use the allocated hot-added output ID for surface.leave
+
+The build, CLI, renderer benchmark, initial frame/repeat scenarios, legacy `wl_seat` v3 fallback, and intervening Wayland scenarios passed. The output-tracking test then failed because its `wl_surface.leave` event still hard-coded output object ID 21. The same test now allocates the hot-added `wl_output` object dynamically as `hot_added_output_id` (the initial output-state sync callback has shifted the monotonic client object-ID sequence), so the hard-coded leave did not match the entered output slot.
+
+The source `wl_registry.global_remove` handler correctly cleared the output entry when it received the corresponding global name. Updated the mock to send `wl_surface.leave` with `hot_added_output_id`, matching the subsequent dynamically assigned `wl_output.release` expectation. No application source changes are needed.
+
 ### Regression and validation
 
 The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).

@@ -1526,7 +1526,7 @@ def run(
                     wait_output("surface_output_max_scale", 4)
                     wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 4)
 
-                    client.sendall(wire_message(8, 1, struct.pack("<I", 21)))
+                    client.sendall(wire_message(8, 1, struct.pack("<I", hot_added_output_id)))
                     wait_output("output_surface_entered", 0, 0)
                     wait_output("surface_output_count", 0)
                     wait_output("surface_output_max_scale", 1)

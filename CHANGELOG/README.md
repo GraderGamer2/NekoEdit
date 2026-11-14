@@ -1,16 +1,14 @@
 ## Latest handoff (2026-11-14 — output-aware startup sizing; CI pending)
 
-Continue normal development on `early-alpha` at `-O2`. Keep `optimization-early-alpha` isolated.
+Continue normal development on `early-alpha` at `-O2`; keep `optimization-early-alpha` isolated.
 
 The implementation selects two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). Explicit configure dimensions are retained independently; maximized/fullscreen/tiled states remain compositor-managed. The app separates compositor surface dimensions from a virtual layout and applies one uniform density transform to boxes, TrueType glyphs, bitmap fallback and pointer hit-testing. Damage, buffer sizes and viewport destinations remain in surface coordinates.
 
-The test suite now accounts for responsive resize geometry:
-- 720×480 surface -> 0.9× density -> 800×533 virtual layout.
-- 480×360 minimum surface -> 0.75× density floor -> 640×480 virtual layout.
-- Footer/picker geometry and pixel/pointer coordinates are projected between virtual and surface coordinates.
-- Backspace/Delete repeat checks wait for the actual document mutation before checking rendered frames.
+The responsive resize tests now cover 720×480 surface -> 0.9× density -> 800×533 virtual layout, and 480×360 minimum surface -> 0.75× density -> 640×480 virtual layout. They assert transformed footer/picker geometry and projected pixel/pointer coordinates.
 
-Actions #939 passed the build, CLI, renderer benchmark and the normal frame-callback repeat scenario, then failed in the independent legacy-seat v3 compatibility case. Seat v3 has no compositor `repeat_info`, so NekoEdit correctly uses its 30 Hz / 300 ms fallback; the mock incorrectly expected the v4+ 10 Hz / 180 ms values. The mock expectation is now version-aware. CI remains pending, and the dedicated two-output 1080p-vs-1440p/2× startup test still needs a passing run followed by real GNOME/Mutter visual/input testing. Application source and `-O2` remain unchanged; do not merge the optimization branch.
+Actions #940 passed the build, CLI and renderer benchmark, then progressed through the large Wayland test matrix, including the corrected legacy-seat v3 repeat fallback. It stopped in the output-tracking test because its `wl_surface.leave` event still used hard-coded object ID 21 after the initial output-sync callback shifted the client object sequence. The mock now uses the allocated `hot_added_output_id`. CI is pending after this test-only correction. The dedicated 1080p/1440p-at-2× startup-size scenario is still not confirmed by a passing full run; real GNOME/Mutter visual and input testing remains outstanding. Application source and `-O2` remain unchanged.
+
+---
 
 ---
 
