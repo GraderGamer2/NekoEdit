@@ -737,11 +737,18 @@ def run(
                 )
                 buffer_stride = buffer_width * 4
 
-                def logical_buffer_pixel(logical_x: int, logical_y: int) -> int:
+                def logical_buffer_pixel(
+                    logical_x: int, logical_y: int, transform_override: int | None = None
+                ) -> int:
                     # Surface-local pixels are pre-transformed into buffer coordinates.
+                    # An override lets runtime-generation tests inspect a new
+                    # transform without shadowing the run() argument in this thread.
                     x = logical_x * raster_scale_120 // 120
                     y = logical_y * raster_scale_120 // 120
-                    transform = initial_preferred_buffer_transform
+                    transform = (
+                        initial_preferred_buffer_transform
+                        if transform_override is None else transform_override
+                    )
                     if transform == 1:
                         bx, by = y, surface_pixel_width - 1 - x
                     elif transform == 2:
@@ -4499,8 +4506,7 @@ xkb_symbols "nekoedit-sparse" {
                     buffer_width = 540
                     buffer_height = 960
                     buffer_stride = 2160
-                    initial_preferred_buffer_transform = 1
-                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4:
+                    if logical_buffer_pixel(2, 10, transform_override=1) != 0xFF78A9D4:
                         raise AssertionError("replacement generation did not rasterize into its transformed SHM coordinates")
                     client.sendall(wire_message(new_id, 0))
                     wait_child_u32("buffer_busy", 0, "replacement buffer release")
