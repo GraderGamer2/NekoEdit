@@ -15381,7 +15381,9 @@ window_handle_surface_configure:
     call wl_send_request
     test rax, rax
     js .window_surface_configure_done
-    mov r12d, 0
+    # A scale/transform change may already have queued a generation rebuild.
+    # An unchanged xdg configure must not clear that independent request.
+    mov r12d, dword ptr [rip + window_resize_pending]
     mov eax, dword ptr [rip + window_pending_width]
     test eax, eax
     jz .window_surface_keep_width

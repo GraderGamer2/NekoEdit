@@ -1,3 +1,15 @@
+## 2026-11-14 — preserve pending buffer generations across configure (CI pending)
+
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
+
+Fixed a state-latching bug in the Wayland configure path: an unchanged xdg_surface.configure previously overwrote window_resize_pending with zero, potentially cancelling a fractional-scale or transform rebuild already waiting for wl_buffer.release. The configure handler now starts from the existing pending state and only raises it when configured dimensions actually change.
+
+Added a dedicated mock scenario that owns both SHM slots simultaneously, changes preferred fractional scale several times, rotates the buffer, sends an unchanged configure in the middle, then resizes and releases slot one before slot zero. It verifies that neither old descriptor is destroyed early and that the replacement uses the final 180/120 raster, 90-degree transform, 640×360 logical destination, and 540×960 physical buffer.
+
+**Validation:** A single full Actions run is triggered by this implementation/test push. No local GNOME/Mutter desktop result is claimed; real mixed-DPI validation remains outstanding.
+
+---
+
 ## 2026-11-14 — exact fractional Wayland backing raster (CI PASS #945)
 
 **Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.

@@ -414,6 +414,7 @@ def run(
     expected_saved_bytes: bytes = b"z",
     frame_callback_order_test: bool = False,
     buffer_pool_test: bool = False,
+    buffer_generation_test: bool = False,
     verify_frame_callbacks: bool = False,
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
@@ -579,12 +580,12 @@ def run(
             else:
                 client, _ = server.accept()
             _FRAME_CALLBACK_STATES[client] = frame_callback_stats
-            client.settimeout(45 if file_workflow or clipboard_test or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
+            client.settimeout(45 if buffer_generation_test or file_workflow or clipboard_test or context_menu_test or compose_locale_test or compose_locale_invalid_test or compose_locale_settings_test or compose_locale_system_test or compose_locale_c_fallback_test or compose_locale_ctype_test or compose_locale_lang_test or compose_locale_saved_preference_test or compose_locale_finnish_test or compose_locale_serbian_test else 8)
 
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
             compositor_advertised_version = 6 if (
-                buffer_pool_test or output_tracking_test or window_initial_size_test or initial_preferred_buffer_scale > 1
+                buffer_pool_test or buffer_generation_test or output_tracking_test or window_initial_size_test or initial_preferred_buffer_scale > 1
                 or initial_preferred_buffer_transform != 0 or dpi_runtime_test
                 or fractional_scale_test
             ) else 1
@@ -4259,6 +4260,265 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "lazy two-slot SHM allocation, independent release tracking, separate frame pacing, "
                         "and all-slot scale-generation replacement verified"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
+                if buffer_generation_test:
+                    if not fractional_scale_test or not fractional_id or not viewport_object_id:
+                        raise AssertionError("buffer-generation test requires fractional-scale and viewporter globals")
+                    wait_buffer_idle("startup idle before fractional buffer-generation test")
+                    baseline_requested = frame_callback_stats["requested"]
+                    baseline_completed = frame_callback_stats["completed"]
+                    if frame_callback_stats["pending"]:
+                        raise AssertionError(
+                            f"startup left frame callbacks pending: {frame_callback_stats!r}"
+                        )
+                    slot0_id = child_u32("window_buffer_slot_ids")
+                    if slot0_id != client_buffer_id or child_u32_at("window_buffer_slot_ids", 4) != 0:
+                        raise AssertionError("fractional startup did not begin with only slot zero allocated")
+                    if (
+                        child_u32("window_buffer_created_raster_scale_120") != initial_preferred_fractional_scale
+                        or child_u32("window_buffer_created_transform") != initial_preferred_buffer_transform
+                    ):
+                        raise AssertionError("initial slot generation metadata does not match the preferred raster")
+
+                    # Commit into slot zero, complete its frame callback, but
+                    # deliberately retain compositor ownership of the buffer.
+                    frame_callback_stats["defer"] = True
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1700, 1700, 30, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1701, 1701, 30, 0))
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", slot0_id, 0, 0)),
+                        "fractional slot zero attach",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "fractional slot zero logical damage",
+                    )
+                    expect_message(client, (8, 6, b""), "fractional slot zero commit")
+                    callback0_id = frame_callback_stats["pending"][-1]
+                    wait_child_u32("frame_callback_id", callback0_id, "slot-zero frame callback")
+                    wait_child_u32("buffer_busy", 1, "slot zero retained by compositor")
+                    frame_callback_stats["pending"].remove(callback0_id)
+                    frame_callback_stats["completed"] += 1
+                    client.sendall(wire_message(callback0_id, 0, struct.pack("<I", 1)))
+                    wait_child_u32("frame_callback_id", 0, "slot-zero callback completion")
+                    wait_child_u32("buffer_busy", 1, "slot zero remains busy after callback completion")
+
+                    # The next commit must use a second, independent SHM offset.
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1702, 1702, 48, 1))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1703, 1703, 48, 0))
+                    )
+                    create_slot1 = recv_wayland_message(client)
+                    if create_slot1[:2] != (11, 0) or len(create_slot1[2]) != 24 or create_slot1[3]:
+                        raise AssertionError(f"fractional second-slot creation is malformed: {create_slot1!r}")
+                    slot1_id, slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format = struct.unpack(
+                        "<6I", create_slot1[2]
+                    )
+                    initial_physical_width = (800 * initial_preferred_fractional_scale + 60) // 120
+                    initial_physical_height = (initial_height * initial_preferred_fractional_scale + 60) // 120
+                    if (
+                        slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format
+                    ) != (
+                        expected_size, initial_physical_width, initial_physical_height,
+                        initial_physical_width * 4, 1
+                    ):
+                        raise AssertionError(
+                            "fractional second slot did not use the active generation geometry: "
+                            f"{(slot1_offset, slot1_width, slot1_height, slot1_stride, slot1_format)!r}"
+                        )
+                    if slot1_id in (0, slot0_id):
+                        raise AssertionError("fractional second slot reused an existing object ID")
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", slot1_id, 0, 0)),
+                        "fractional slot one attach",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
+                        "fractional slot one logical damage",
+                    )
+                    expect_message(client, (8, 6, b""), "fractional slot one commit")
+                    callback1_id = frame_callback_stats["pending"][-1]
+                    wait_child_u32("frame_callback_id", callback1_id, "slot-one frame callback")
+                    wait_child_u32("buffer_busy", 2, "both fractional slots compositor-owned")
+                    if (
+                        child_u32_at("window_buffer_slot_busy", 0) != 1
+                        or child_u32_at("window_buffer_slot_busy", 4) != 1
+                        or child_u32_at("window_buffer_slot_ids", 4) != slot1_id
+                    ):
+                        raise AssertionError("two-slot ownership state is inconsistent")
+                    if struct.unpack_from("<I", pixels, expected_size)[0] != 0xFF78A9D4:
+                        raise AssertionError("fractional slot one rendered outside its own SHM offset")
+
+                    # Queue several preferred scales and a quarter-turn while
+                    # both old-generation buffers remain compositor-owned.
+                    for preferred in (210, 90, 180):
+                        client.sendall(wire_message(fractional_id, 0, struct.pack("<I", preferred)))
+                        wait_child_u32(
+                            "window_buffer_raster_scale_120", preferred,
+                            f"preferred fractional raster {preferred}/120",
+                        )
+                        wait_child_u32("window_resize_pending", 1, "fractional generation remains pending")
+                    client.sendall(wire_message(8, 3, struct.pack("<I", 1)))
+                    wait_child_u32("window_buffer_transform", 1, "preferred 90-degree transform")
+                    wait_child_u32("window_resize_pending", 1, "transform remains pending behind both slots")
+
+                    # An unchanged configure must preserve the generation request.
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
+                        + wire_message(9, 0, struct.pack("<I", 1235))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1235)),
+                        "ack unchanged configure during pending generation",
+                    )
+                    wait_child_u32(
+                        "window_resize_pending", 1,
+                        "unchanged configure must preserve the pending buffer generation",
+                    )
+                    if (
+                        child_u32("window_buffer_created_raster_scale_120") != initial_preferred_fractional_scale
+                        or child_u32("window_buffer_created_transform") != initial_preferred_buffer_transform
+                    ):
+                        raise AssertionError("an old-generation descriptor was relabelled before release")
+
+                    # Coalesce the latest scale/transform with a real resize.
+                    client.sendall(
+                        wire_message(10, 0, struct.pack("<iiI", 640, 360, 0))
+                        + wire_message(9, 0, struct.pack("<I", 1236))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1236)),
+                        "ack resize during pending fractional generation",
+                    )
+                    wait_child_u32("window_resize_pending", 1, "resize joins pending generation")
+                    if (
+                        child_u32("window_surface_width") != 800
+                        or child_u32("window_surface_height") != initial_height
+                        or child_u32("window_buffer_created_raster_scale_120") != initial_preferred_fractional_scale
+                    ):
+                        raise AssertionError("live geometry changed before both old slots were released")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            f"old buffer generation emitted a request while both slots were busy: {unexpected!r}"
+                        )
+
+                    # Release in reverse attachment order. The first release
+                    # must not retire or mutate the still-owned slot zero.
+                    client.sendall(wire_message(slot1_id, 0))
+                    wait_child_u32("buffer_busy", 1, "reverse-order release leaves slot zero busy")
+                    if (
+                        child_u32_at("window_buffer_slot_busy", 0) != 1
+                        or child_u32_at("window_buffer_slot_busy", 4) != 0
+                        or child_u32("window_resize_pending") != 1
+                    ):
+                        raise AssertionError("slot-one release corrupted slot-zero ownership or generation state")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            f"generation replaced before the last slot release: {unexpected!r}"
+                        )
+
+                    frame_callback_stats["pending"].remove(callback1_id)
+                    frame_callback_stats["completed"] += 1
+                    client.sendall(wire_message(callback1_id, 0, struct.pack("<I", 2)))
+                    wait_child_u32("frame_callback_id", 0, "slot-one callback completion")
+                    wait_child_u32("buffer_busy", 1, "frame completion does not release slot zero")
+                    wait_child_u32("window_resize_pending", 1, "pending generation survives frame completion")
+                    readable, _, _ = select.select([client], [], [], 0.05)
+                    if readable:
+                        unexpected = recv_wayland_message(client)
+                        raise AssertionError(
+                            f"frame.done substituted for the final buffer release: {unexpected!r}"
+                        )
+
+                    frame_callback_stats["defer"] = False
+                    client.sendall(wire_message(slot0_id, 0))
+                    expect_message(client, (slot0_id, 0, b""), "destroy released old slot zero")
+                    expect_message(client, (slot1_id, 0, b""), "destroy released old slot one")
+                    create_latest = recv_wayland_message(client)
+                    if create_latest[:2] != (11, 0) or len(create_latest[2]) != 24 or create_latest[3]:
+                        raise AssertionError(f"latest generation buffer creation is malformed: {create_latest!r}")
+                    new_id, new_offset, new_width, new_height, new_stride, new_format = struct.unpack(
+                        "<6I", create_latest[2]
+                    )
+                    if (new_offset, new_width, new_height, new_stride, new_format) != (0, 540, 960, 2160, 1):
+                        raise AssertionError(
+                            "coalesced resize/fractional-scale/transform geometry is wrong: "
+                            f"{(new_offset, new_width, new_height, new_stride, new_format)!r}"
+                        )
+                    if new_id in (0, slot0_id, slot1_id):
+                        raise AssertionError("replacement buffer reused a retired object ID")
+                    expect_message(
+                        client, (8, 7, struct.pack("<i", 1)),
+                        "apply latest preferred 90-degree transform",
+                    )
+                    expect_message(
+                        client, (viewport_object_id, 2, struct.pack("<ii", 640, 360)),
+                        "update logical viewport destination after resize",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", new_id, 0, 0)),
+                        "attach latest fractional generation",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 640, 360)),
+                        "damage resized surface in logical coordinates",
+                    )
+                    expect_message(client, (8, 6, b""), "commit latest fractional generation")
+                    wait_child_u32("window_buffer_id", new_id, "latest generation buffer ID")
+                    wait_child_u32("window_surface_width", 640, "latest logical surface width")
+                    wait_child_u32("window_surface_height", 360, "latest logical surface height")
+                    wait_child_u32("window_buffer_created_raster_scale_120", 180, "latest raster numerator")
+                    wait_child_u32("window_buffer_created_transform", 1, "latest buffer transform")
+                    wait_child_u32("window_buffer_created_surface_width", 640, "created generation surface width")
+                    wait_child_u32("window_buffer_created_surface_height", 360, "created generation surface height")
+                    wait_child_u32("window_buffer_width", 540, "rotated physical buffer width")
+                    wait_child_u32("window_buffer_height", 960, "rotated physical buffer height")
+                    wait_child_u32("window_stride", 2160, "rotated physical buffer stride")
+                    wait_child_u32("buffer_busy", 1, "replacement slot-zero ownership")
+                    wait_child_u32("frame_callback_id", 0, "replacement frame callback")
+                    if child_u32_at("window_buffer_slot_ids", 4) != 0:
+                        raise AssertionError("retired slot one remained in the replacement generation")
+                    if (
+                        child_u32_at("window_buffer_slot_busy", 0) != 1
+                        or child_u32_at("window_buffer_slot_busy", 4) != 0
+                    ):
+                        raise AssertionError("replacement slot ownership is incorrect")
+
+                    raster_scale_120 = 180
+                    surface_pixel_width = 960
+                    surface_pixel_height = 540
+                    buffer_width = 540
+                    buffer_height = 960
+                    buffer_stride = 2160
+                    initial_preferred_buffer_transform = 1
+                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4:
+                        raise AssertionError("replacement generation did not rasterize into its transformed SHM coordinates")
+                    client.sendall(wire_message(new_id, 0))
+                    wait_child_u32("buffer_busy", 0, "replacement buffer release")
+                    wait_child_u32("window_buffer_slot_busy", 0, "replacement slot-zero idle state")
+                    wait_child_u32("redraw_pending", 0, "coalesced generation redraw consumed")
+                    if child_u32_at("window_buffer_slot_ids", 4) != 0:
+                        raise AssertionError("replacement generation unexpectedly allocated slot one")
+                    if (
+                        frame_callback_stats["requested"] != baseline_requested + 3
+                        or frame_callback_stats["completed"] != baseline_completed + 3
+                        or frame_callback_stats["pending"]
+                    ):
+                        raise AssertionError(
+                            f"fractional buffer-generation callback accounting is inconsistent: {frame_callback_stats!r}"
+                        )
+                    observations.append(
+                        "fractional two-slot generation: unchanged configure preserves pending state; "
+                        "rapid scales, transform and resize coalesce; reverse-order releases gate retirement"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -10196,6 +10456,13 @@ if __name__ == "__main__":
     run(sys.argv[1], verify_frame_callbacks=True)
     run(sys.argv[1], frame_callback_order_test=True)
     run(sys.argv[1], buffer_pool_test=True)
+    # Stress both owned slots through coalesced fractional-scale/transform/resize changes.
+    run(
+        sys.argv[1],
+        buffer_generation_test=True,
+        fractional_scale_test=True,
+        initial_preferred_fractional_scale=150,
+    )
     # Exercise the optional text-input-v3/IME path independently of the
     # physical-keyboard fallback and without cursor-shape/clipboard globals.
     run(sys.argv[1], text_input_test=True, cursor_shape_supported=False)

@@ -1,3 +1,14 @@
+## 2026-11-14 — latch pending Wayland buffer generations across configure (CI pending)
+
+Implementation/test/docs change on early-alpha:
+- Preserve an existing pending scale/transform rebuild across an unchanged xdg_surface.configure.
+- Exercise both occupied SHM slots, rapid fractional-scale updates, a preferred transform change, an unchanged configure, a logical resize, reverse-order releases, and final generation geometry/pixel rendering.
+- Keep wl_buffer.release ownership separate from wl_callback.done frame pacing.
+
+The full Actions result will be recorded after this push.
+
+---
+
 ## 2026-11-14 — exact fractional Wayland backing raster (CI PASS #945)
 
 | Commit | Subject |
