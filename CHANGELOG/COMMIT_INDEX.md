@@ -1,14 +1,23 @@
-## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 pending)
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 in progress)
+
+| Commit | Subject |
+|---|---|
+| [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776) | perf: skip blending fully opaque glyph pixels |
+
+The identity-transform TrueType blitter now writes alpha-255 pixels directly as the opaque foreground color, while antialiased edges and transformed-buffer rendering retain the original blend. The rasterizer comparison builds four combinations to isolate the cache, identity-transform, and opaque-pixel fast paths, and requires exact framebuffer checksum equality before printing timings. Actions #973 passed build/ELF, CLI, and the comparison step; the Wayland mock and later integration steps remain in progress. No percentage speedup is claimed until the numerical medians and full workflow are reviewed.
+
+---
+
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
 
 | Commit | Subject |
 |---|---|
 | [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3) | fix: preserve negative pointer coordinates during selection drag |
 | [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688) | test: allow more time for full hosted Wayland smoke |
 
-The pointer conversion now uses signed division for both axes during pointer enter/motion and geometry rebasing, so negative surface-local positions outside the window remain negative through UI scaling. The pointer-drag mock adds upward auto-scroll using a negative Y coordinate and checks that the stationary timer does not reverse direction. Existing downward and no-wrap horizontal checks remain.
+Actions #972 passed all 17 workflow steps, including the full Wayland mock, 11 MiB Open/Save, and nested GNOME Shell/Mutter integration. The user confirms selection auto-scroll now works correctly at both screen edges.
 
-Actions #971 passed build, CLI, and renderer equivalence but hit the 30-second outer mock-process timeout in an earlier wrapped-row click scenario. Actions #972 has the outer timeout increased to 60 seconds (socket/frame deadlines unchanged); its build, CLI and renderer-equivalence steps passed, while Wayland validation is pending.
-
+---
 ---
 
 ## 2026-11-15 — dirty caret-band document traversal bounded (CI PASS #970)

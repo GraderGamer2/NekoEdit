@@ -1,13 +1,17 @@
-## Latest handoff (2026-11-15 — selection edge auto-scroll sign fix; Actions #972 pending)
+## Latest handoff (2026-11-15 — opaque glyph pixel fast path; Actions #973 in progress)
 
-Continue source development on `early-alpha` at [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688). The functional fix is [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped.
 
-Selection edge auto-scroll now preserves signed pointer coordinates when scaling Wayland's fixed-point surface positions into virtual UI coordinates. This matters during an implicit pointer grab after the cursor leaves the window: a negative Y above the surface must remain negative, not wrap into a large positive Y. Both axes use signed division on pointer enter/motion and geometry rebasing. Auto-scroll direction and step thresholds themselves are unchanged.
+Continue source development on early-alpha at [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). Normal development remains -O2, unstripped. Keep main as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source.
 
-The Wayland mock now adds a reverse-direction case: it scrolls down, begins a selection drag, moves above the surface with negative Y, and asserts that immediate and timer-driven scrolling remain upward. Existing downward and horizontal drag cases remain. Actions #971 passed build/CLI/rasterizer checks but reached its 30-second outer process timeout during an earlier soft-wrap pointer scenario; it did not reach this new regression. Actions #972 has the outer timeout raised to 60 seconds while all internal mock deadlines remain unchanged. Its build, CLI and rasterizer checks passed; the Wayland step is still running.
+The normal TrueType identity-transform blitter now fast-paths fully opaque glyph mask pixels to a direct foreground-color store. It skips destination reads and blend arithmetic for those pixels; antialiased edges and rotated/reflected paths remain unchanged. The benchmark compares four isolated variants and requires exact framebuffer checksums before presenting timing results.
 
-Do not treat the fix as fully CI-validated until #972 passes. Live visual confirmation in GNOME/Mutter on the target machine remains outstanding.
+ [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) has passed build/ELF, CLI smoke and renderer comparison. The Wayland protocol mock is still running, with XKB, importer, Compose, GNOME Shell/Mutter and artifact steps pending. The successful comparison step confirms identical output checksums, but timing medians have not yet been reviewed. Do not claim a percentage speedup or treat the optimization as fully validated until the full run completes and its benchmark output is examined.
 
+The selection edge auto-scroll fix is complete: [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 steps, including the full Wayland mock and nested Mutter integration. The user confirmed upward and downward edge selection works at the screen boundaries. Its signed-coordinate fix is [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3), with the test timeout adjustment in [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+
+Next: review #973's actual medians and full regression result before selecting another rasterizer/rendering hot path. Keep any next optimization benchmarked against an unchanged reference path and preserve the full-render fallback for uncertain states.
+
+---
 ---
 
 ## Previous handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
