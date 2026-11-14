@@ -1,25 +1,26 @@
-## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
+## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
 
-**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
+**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint, and `optimization-early-alpha` remains isolated.
 
-The main glyph painter already starts from the indexed `doc_view_top_row` and stops at the bottom of the document viewport. Added regression instrumentation to verify that it does not walk from byte zero after a large scrollbar jump. More importantly, two other paint passes were doing work proportional to the document or selection size:
+This milestone closes the main horizontal-painting gap for long logical lines when **Wrap Lines is OFF**:
 
-- Wrapped selection painting previously scanned from the beginning of the document on every redraw. It now resolves the first visible visual row and the first row below the viewport through the existing line/Fenwick index, then visits only the byte span between those offsets.
-- Find highlighting previously enumerated matches across the complete document on every redraw. Added `doc_find_match_bounded` and a viewport-aware range painter. Wrapped mode searches one contiguous visible byte span with query look-behind; no-wrap mode bounds match candidates to the visible horizontal interval of each visible row.
+- Added a parallel stable ID for each logical line and a fixed 1,024-slot (20 KiB) horizontal checkpoint cache. Cache entries retain the line ID, horizontal bucket, byte offset, and measured pixel position.
+- The line IDs move with the existing 16-byte line-index records. Editing a line, splitting it with Enter, or merging it with Backspace assigns fresh IDs to the affected line(s), so old glyph positions are not reused after edits. Full rebuild/reflow advances the cache epoch.
+- No-wrap viewport mapping can resume from a cached checkpoint near the requested horizontal pixel rather than always measuring from the logical line's first byte.
+- The main glyph painter starts at the mapped horizontal viewport and jumps directly to the next logical line once the right edge has been passed. It no longer traverses the hidden suffix of the current no-wrap line.
 
-The 11 MiB / 89,414-line Wayland regression now selects the entire document, jumps the scrollbar into the middle, and asserts that both the glyph renderer and selection painter visit a bounded visible byte range. The measured span was **1,935 bytes for glyphs and 1,935 bytes for selection**, rather than the 11,534,336-byte document. It then enters Find, fast-scrolls 4,096 visual rows, and verifies that Find's search span remains within the test's 16,384-byte safety bound. The full test also retains wheel, proportional thumb, scrollbar drag, and large-document Open/Save coverage.
+The Wayland mock now opens a **4 MiB single-line** document, disables Wrap Lines, moves to End, then scrolls horizontally left and right. It asserts that the glyph painter's traversed byte span stays within **4 KiB** on each checked repaint. The line-index mutation test also checks that stable line IDs remain nonzero and unique across ordinary insertion/deletion, newline split, and newline merge. The earlier 11 MiB multi-line test still verifies **1,935 bytes** of glyph painting and **1,935 bytes** of selection painting after a middle-of-document jump.
 
-**Validation:** [Actions #954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 workflow steps: freestanding build/ELF verification, CLI smoke tests, renderer-cache comparison, full Wayland protocol mock, executable inspection, native `us(intl)` keymap parsing, pinned X.Org importer verification, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+**Validation:** [Actions #956](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865) passed all 17 workflow steps: freestanding build/ELF checks, CLI smoke tests, glyph-cache comparison, full Wayland protocol mock, executable inspection, native `us(intl)` parsing, pinned X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and artifact uploads. The first attempt (#955) caught two nonzero initializers in `.bss`; those counters were changed to zero-initialized storage and the follow-up build passed.
 
-**Measured context:** the existing 11 MiB Open-to-first-presented-redraw samples were 119.2, 118.2, and 117.3 ms. No matched pre-change timing baseline was collected, so these values are workload context, not evidence of a speedup. The byte-span assertion is the direct validation of viewport-bounded painting.
+**Artifacts:** [Linux x86-64 binary (148,575 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14107887437); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14108071561).
 
-**Known limitation:** the common soft-wrapped large-document path is viewport-bounded. Very long logical lines in **Wrap Lines OFF** mode still need a sparse horizontal glyph-advance index: the current row-to-pixel mapping and main glyph traversal can walk hidden horizontal prefixes/suffixes. The next optimization should add bounded per-line horizontal checkpoints and update them safely after edits and font-size changes. Full-frame software-surface background repainting is also unchanged; this work bounds document-content traversal, not partial-buffer damage.
+**Remaining performance work:** caret-to-pixel mapping still scans within a long logical line, and a very long single logical line in Wrap Lines ON mode still needs sparse visual-row checkpoints. The cache is a bounded direct-mapped working set, not a full persistent per-line glyph index. Full-frame software-surface repainting is unchanged. No before/after latency benchmark was collected, so the verified claim is the bounded glyph traversal—not a measured frame-rate multiplier.
 
-Implementation: [213ad8c](https://github.com/GraderGamer2/NekoEdit/commit/213ad8cc5364b46ba132779269c49445e7c7105c); regression instrumentation and visible-range assertion: [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263).
-
-Artifacts: [Linux x86-64 binary (147,612 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107002397); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107551738).
+Implementation: [deb9680](https://github.com/GraderGamer2/NekoEdit/commit/deb968026df279b1b11d3a60490802197e9eba6a); BSS initialization fix and 4 MiB / stable-ID regression coverage: [4f6acac](https://github.com/GraderGamer2/NekoEdit/commit/4f6acac6255e404d36d8ba95a775f1c0da3b856c).
 
 ---
+
 
 ## 2026-11-14 — fast-path printable ASCII reverse grapheme traversal (CI PASS #952)
 
@@ -33,7 +34,7 @@ The existing Wayland grapheme regression traverses the appended ASCII sentence i
 
 **Measured context:** the existing 11 MiB / 89,414-line Open-to-first-presented-redraw mock measured 166.8, 167.2, and 167.3 ms in this run. This open/redraw timing does not exercise the new reverse traversal shortcut, and no controlled pre/post benchmark of Left/Backspace was run. Do not interpret it as a performance regression or speedup.
 
-Implementation: [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92).
+Implementation: [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92). The preceding forward-path and Unicode-guard commits are recorded immediately below in the status history.
 
 Artifacts: [Linux x86-64 binary (147,056 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106089639); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106995382).
 
@@ -61,26 +62,92 @@ Artifacts: [Linux x86-64 binary (147,031 bytes)](https://github.com/GraderGamer2
 
 ---
 
-## 2026-11-14 — measure O2/Os stripping and dead-section removal (CI PASS #927)
+## 2026-11-14 — destroy removed Wayland extension managers (CI PASS #948)
 
-Branch optimization-early-alpha contains the completed eight-profile O2/Os size matrix. [Actions #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 workflow steps. The corrected GNU size -A report separates executable file bytes, .text, .rodata, .data, and .bss.
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
 
-| Variant | File bytes | .text | .rodata | .data | .bss |
-|---|---:|---:|---:|---:|---:|
-| O2 | 345,016 | 138,902 | 90,976 | 64 | 3,645,568 |
-| O2 stripped | 234,944 | 138,902 | 90,976 | 64 | 3,645,568 |
-| O2 + section GC | 344,536 | 138,630 | 90,960 | 64 | 3,645,624 |
-| O2 + section GC stripped | 234,928 | 138,630 | 90,960 | 64 | 3,645,624 |
-| Os | 337,656 | 127,224 | 90,492 | 64 | 3,645,568 |
-| Os stripped | 226,264 | 127,224 | 90,492 | 64 | 3,645,568 |
-| Os + section GC | 337,168 | 126,983 | 90,478 | 64 | 3,645,624 |
-| Os + section GC stripped | 226,256 | 126,983 | 90,478 | 64 | 3,645,624 |
+Fixed global-removal cleanup for the optional fractional-scale and viewporter managers. When either bound global disappears, NekoEdit now sends that manager proxy's destructor request and clears its proxy ID. It deliberately retains the already-created per-surface fractional-scale and viewport objects, which remain independent of their factory manager objects.
 
-Stripping O2 saves 110,072 bytes (31.9%) without changing loadable sections. Stripping Os saves 111,392 bytes; the stripped Os output is 8,680 bytes smaller than stripped O2 (3.69%). Section GC discards five unreachable input sections but saves only 16 bytes after O2 stripping and 8 bytes after Os stripping; its BSS rises by 56 bytes through alignment. Both GC builds pass the complete Wayland protocol mock. Stripped O2/Os pass CLI smoke tests; the normal O2 build passes full Wayland, 11 MiB Open/Save, renderer, XKB/importer, Compose, and Mutter checks.
+Added a compositor mock that removes both manager globals after startup, verifies both manager destructor requests, then changes the preferred fractional scale and resizes the surface. The test verifies that the original per-surface objects remain active and that the existing viewport accepts a new logical destination while a 1.5x backing buffer is created.
 
-**Decision:** Keep normal O2 unstripped for development/testing. Stripping is recommended for release packaging after packaging validation. Keep Os as a performance-benchmark candidate; do not change the default until rendering, scrolling, and editing workloads are compared. Do not adopt section GC solely for size. Application source and default CFLAGS remain unchanged.
+**Validation:** [Actions #948](https://github.com/GraderGamer2/NekoEdit/actions/runs/43574607904) passed the full workflow: freestanding ELF build, CLI checks, renderer comparison, complete Wayland mock suite (including the global-removal/child-object lifecycle regression and previous two-slot generation regression), executable inspection, native XKB and Compose-source checks, locale-pack build, nested GNOME Shell/Mutter integration, and artifact uploads. The specific mock output confirms that both manager proxies were destroyed while the per-surface fractional-scale and viewport objects remained usable. This is protocol-level validation; physical multi-output desktop testing remains outstanding. The implementation is [9d69077](https://github.com/GraderGamer2/NekoEdit/commit/9d6907749ff2a51ea3d2d82fb1c14a61ada913b7).
 
 ---
+
+## 2026-11-14 — preserve pending buffer generations across configure (CI PASS #947)
+
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
+
+Fixed a state-latching bug in the Wayland configure path: an unchanged xdg_surface.configure previously overwrote window_resize_pending with zero, potentially cancelling a fractional-scale or transform rebuild already waiting for wl_buffer.release. The configure handler now starts from the existing pending state and only raises it when configured dimensions actually change.
+
+Added a dedicated mock scenario that owns both SHM slots simultaneously, changes preferred fractional scale several times, rotates the buffer, sends an unchanged configure in the middle, then resizes and releases slot one before slot zero. It verifies that neither old descriptor is destroyed early and that the replacement uses the final 180/120 raster, 90-degree transform, 640×360 logical destination, and 540×960 physical buffer.
+
+**Validation:** [Actions #947](https://github.com/GraderGamer2/NekoEdit/actions/runs/43572916550) passed the full workflow: freestanding ELF build, CLI smoke tests, renderer comparison, the complete Wayland mock suite (including this two-slot fractional-generation case and the existing 11 MiB Open/Save cases), executable inspection, native XKB tests, pinned Compose-source import checks, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads. The first #946 attempt failed before the Wayland suite because the new Python test helper accidentally shadowed a closure variable; [7d33087](https://github.com/GraderGamer2/NekoEdit/commit/7d330870971be5d5fa16dfcedb4e80658c4ddb34) fixes only that test-harness scoping issue. The implementation is [f7191c4](https://github.com/GraderGamer2/NekoEdit/commit/f7191c45277ed9bf29cd741951c91744177d18a6). No user-desktop run is claimed; real mixed-DPI validation remains outstanding.
+
+---
+
+## 2026-11-14 — exact fractional Wayland backing raster (CI PASS #945)
+
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
+
+NekoEdit now uses the compositor's exact wp_fractional_scale_v1.preferred_scale numerator in 120ths for its physical backing raster when both fractional-scale-v1 and viewporter are available. The client keeps wl_surface.set_buffer_scale at 1, sets the viewport destination to logical surface dimensions, and keeps wl_surface.damage in logical coordinates. Physical source dimensions are rounded to nearest pixel with exact half values rounded away from zero, and capped at 2× plus the two-slot shared-memory pool geometry (including odd-transform axis swaps).
+
+The raster scale is separate from the protocol integer scale and is now part of buffer-generation identity. Rectangle edges map to the physical grid, TrueType glyph positions/em sizes use the same density/raster transform, and the embedded 5×7 fallback uses the combined UI/raster ratio. Runtime scale changes rebuild only after both old buffer slots have been released. The startup provisional buffer may be replaced with the exact preferred raster before its first attach.
+
+The Wayland mock covers 90/120 (0.75×), 120/120 (1×), 150/120 (1.25×), 180/120 (1.5×), and 210/120 (1.75×). A transformed 481-logical-pixel height at 1.5× produces 721.5 physical pixels and must round to 722. The test also checks logical viewport/damage dimensions, protocol buffer scale 1, transformed buffer geometry, pixel rendering, and seat-less startup.
+
+**Validation:** Actions [#945](https://github.com/GraderGamer2/NekoEdit/actions/runs/43569752292) passed all 17 workflow steps, including the freestanding ELF build, CLI smoke tests, renderer cache comparison, the full Wayland mock matrix with the 11 MiB Open/Save scenario, XKB parser checks, locale-pack build, and nested GNOME Shell/Mutter integration. The preceding #944 run caught a non-zero .bss initializer; the active raster numerator now has zero-initialized storage and is set to 120 during startup. The first #945 attempt was also adjusted to sample the glyph's logical cell rather than assume a fixed 1× physical pixel coordinate.
+
+Commits:
+- [3bbdd887](https://github.com/GraderGamer2/NekoEdit/commit/3bbdd8876d11974e307718cae02da92ca52bf6a2) — exact fractional-scale raster implementation and expanded mock coverage.
+- [82757c0](https://github.com/GraderGamer2/NekoEdit/commit/82757c0eef0392b23592ab7b17f975920b8c11a9) — zero-initialize raster state in .bss.
+- [f5368cd](https://github.com/GraderGamer2/NekoEdit/commit/f5368cd32ca02cee9091b3b48eaf6049c01ab87c) — make glyph assertion robust to fractional physical pixel placement; CI #945 head.
+- [9e3987e](https://github.com/GraderGamer2/NekoEdit/commit/9e3987e36ed542873126aa433dcf796b28759a53) — update Wayland/rendering documentation.
+
+**Still outstanding:** visual and interactive testing on the user's live GNOME/Mutter session and real mixed-DPI output transitions; exercise scale changes while both slots are busy; performance profiling under a large document; and the X11 backend. CI's nested compositor result does not replace the live desktop check.
+
+---
+
+### Follow-up after CI run #936
+
+The freestanding build, CLI tests, and renderer benchmark passed. The Wayland mock reached the file-workflow scenario, where its pre-density restore click at surface x=1860 mapped to virtual x=930 at the 2× maximized density—inside Close rather than the maximize/restore control. NekoEdit therefore exited normally and the mock waited for an xdg request that correctly was not sent. The test now clicks surface x=1800 (virtual x=900), the scaled restore control. The new dedicated two-output startup-density scenario is later in the test sequence and was not reached by #936; its result remains pending.
+
+
+
+### Follow-up after CI run #937
+
+The freestanding build, CLI smoke tests, and renderer benchmark passed. The Wayland suite passed the earlier editor, large-document, clipboard, and font-picker cases, and the corrected 2× maximize/restore click now selects Restore rather than Close. It then exposed another stale test assumption: the 720×480 and 480×360 compositor resize cases still treated `window_width`/`window_height` as surface dimensions. Their runtime state correctly showed separate surface dimensions and virtual layout dimensions.
+
+The mock now checks:
+- 720×480 surface at 0.9× density -> 800×533 virtual layout.
+- 480×360 minimum surface at the 0.75× density floor -> 640×480 virtual layout.
+- Layout-dependent footer, picker and path-prompt geometry in virtual units, with pixel probes and pointer clicks projected back to surface coordinates.
+- The existing surface buffer sizes, strides, viewport/damage values, and compositor edge-resize behavior unchanged.
+
+The dedicated two-output startup-size case has still not been reached by CI. Actions #938 got past the resized-window geometry checks but then exposed a timing-sensitive assumption in the default frame-callback/key-repeat scenario; the test is being made to wait for the actual document mutation before checking its rendered frame. CI remains pending; no conclusion about the dedicated startup-size scenario is claimed yet.
+
+### Follow-up after CI run #938
+
+The build, CLI and renderer steps passed. The Wayland mock completed the long file-workflow scenario, including the 720×480 and minimum-size layouts, but the first `verify_frame_callbacks` scenario then failed its held-Backspace repeat pixel assertion. The test assumed the next frame after buffer release must be the repeat frame; it can instead be a redraw already queued while frame/buffer ownership is changing.
+
+The mock now verifies that Backspace/Delete actually arm the compositor-provided repeat keycode/rate/delay and waits for the corresponding document cursor/length mutation before checking the committed pixels. This retains the 180 ms initial-delay/10 Hz repeat configuration and tests the resulting edit rather than depending on which frame happens to arrive next. The underlying key-repeat implementation is unchanged.
+
+The output-aware startup sizing scenario still has not been reached in a passing CI run. Validation remains pending; do not mark the milestone complete yet.
+
+### Follow-up after CI run #939
+
+The build, CLI, renderer benchmark, and the main frame-callback repeat test all passed. The run proceeded to the separate legacy-seat compatibility case, which deliberately advertises `wl_seat` version 3. That protocol version has no `wl_keyboard.repeat_info`, so NekoEdit correctly retained its 30 Hz / 300 ms local fallback. The added assertion incorrectly expected the 10 Hz / 180 ms policy from the version-4+ case.
+
+The mock now selects its expected repeat policy from the advertised seat version: 10 Hz / 180 ms when version 4+ sends `repeat_info`, and 30 Hz / 300 ms for v3 fallback. This is a test correction; the application's repeat behavior is unchanged. The next run proceeded through the legacy-seat case and into output hotplug testing. It then exposed a hard-coded stale hot-added output object ID in the mock's `wl_surface.leave` event; the source `global_remove` handler did clear the output table when sent the matching global name. The mock now sends leave for `hot_added_output_id` rather than assuming object ID 21. The output hotplug test now correctly sends `wl_surface.leave` for the dynamically allocated ID, but its final `wl_output.release` expectation still used literal 21. The backend correctly released object 22; that final mock expectation is now also changed to `hot_added_output_id`. The dedicated output-mode startup scenario still awaits a passing full run.
+
+
+
+
+
+**Changed implementation/test/docs:** `src/backend/wayland.S`, `tests/wayland_mock.py`, root README, and the Wayland, architecture, and rendering documentation. The development optimization policy remains unchanged. CI validation is pending for the first build after this change; physical GNOME/Mutter visual and input testing remains necessary after CI.
+
+---
+
 ## 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
 
 Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps on final head [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7). The real Wayland mock transferred 10 MiB through the nonblocking clipboard pipe, verified every byte and all line-index records, confirmed that the caret and viewport remained at the paste's original insertion point, checked that the scrollbar thumb stayed correctly anchored at the top for a paste at offset 0, and passed full Undo/Redo. Redo restored the same caret/viewport state. The end-to-first-redraw interval was 560.7 ms on the Ubuntu 24.04 GitHub runner; Undo/Redo were checked separately and are not included in that timing.

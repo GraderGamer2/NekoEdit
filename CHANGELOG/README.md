@@ -1,16 +1,19 @@
-## Latest handoff (2026-11-14 — viewport-bounded document painting; CI PASS #954)
+## Latest handoff (2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting; CI PASS #956)
 
-Continue development on `early-alpha` at [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263); `main` remains at its stable application-source checkpoint [0f54ed5](https://github.com/GraderGamer2/NekoEdit/commit/0f54ed5c4f2eaa089b121a80e54c473ff8dbadb1). This commit mirrors project history only and does not merge application code. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+Continue development on `early-alpha` at [4f6acac](https://github.com/GraderGamer2/NekoEdit/commit/4f6acac6255e404d36d8ba95a775f1c0da3b856c). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-Wrapped-document glyph painting is confirmed to start at the indexed visible row and stop at the bottom of the viewport. Selection painting now resolves visible byte bounds through the line/Fenwick index and scans only that span. Find highlighting uses bounded candidate search within the visible byte range (with look-behind for matches crossing the top edge); no-wrap uses per-visible-row horizontal candidate intervals.
+For Wrap Lines OFF, NekoEdit now has stable per-line IDs and a 1,024-slot sparse horizontal checkpoint cache. The no-wrap viewport mapper starts from a checkpoint near the horizontal offset, and the glyph renderer jumps over the rest of a line once it reaches the viewport's right edge. A 4 MiB one-line Wayland test moves to End and scrolls left/right; checked glyph traversal stays within 4 KiB per repaint. Stable IDs also pass insert/delete/split/merge mutation checks.
 
-Actions [#954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 steps. In the 11 MiB / 89,414-line test, glyph and selection painting each visited 1,935 bytes after a middle scrollbar jump; Find remained within a 16,384-byte bound after a 4,096-row fast scroll.
+Actions [#956](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865) passed all 17 workflow steps, including the full Wayland suite and nested GNOME Shell/Mutter integration.
 
-Artifacts: Linux x86-64 [147,612 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107002397); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107551738).
+Artifacts: Linux x86-64 [148,575 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14107887437); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14108071561).
 
-No pre-change open/redraw baseline exists; CI samples were 119.2–117.3 ms. Keep performance claims tied to the byte-span assertions, not those timings.
+No controlled before/after latency benchmark was collected. Next, optimize caret-to-pixel mapping on very long lines and add sparse visual-row mapping for a single very long wrapped logical line. Full-frame software-surface repaint remains separate from document-content traversal.
 
-**Next:** add sparse per-line horizontal glyph-advance checkpoints so Wrap Lines OFF can resolve pixel-to-byte positions without scanning hidden prefixes. The main no-wrap glyph pass also needs a matching right-edge stop. Checkpoint invalidation must cover edits, font switches, and font-size changes. Keep full-frame surface repaint separate from document traversal; no partial-buffer-damage redesign has been made.
+---
+
+
+---
 
 ---
 
@@ -20,8 +23,29 @@ No pre-change open/redraw baseline exists; CI samples were 119.2–117.3 ms. Kee
 
 ---
 
+---
 
 ---
+
+---
+
+## Latest handoff (2026-11-13 — large-document Open/index optimization, CI PASS #920)
+
+Continue development on `early-alpha`; validated implementation/test head is [341862b](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). Actions [#920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps.
+
+The Open path swaps a fully read and closed staging mmap into the live document rather than copying the entire file. When the gap is at EOF, initial index construction locates LF delimiters using `repne scasb`; documents with an interior gap retain the original scan. Common ASCII glyph advances are cached by code point and document em size.
+
+The mock opened and saved an exact 11 MiB / 11,534,336-byte text file, verified 89,414 line records, 178,827 visual rows, EOF gap placement, exact document bytes and exact saved bytes. Open-confirmation to first presented frame measured 443.4, 417.2 and 423.1 ms in three Ubuntu 24.04 mock-compositor scenarios (423.1 ms median). These figures establish a CI baseline; compare them against a real 10+ MiB file on the user's Debian/Wayland desktop.
+
+Artifacts:
+- Linux x86-64 executable: [14047923320](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14047923320), 144,547 bytes.
+- Compose locale packs: [14049250095](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583/artifacts/14049250095), 120,536 bytes.
+Both expire 2026-11-14 at 14:52 UTC (21:52 WIB).
+
+Keep `main` at its stable checkpoint; reconcile branch divergence only during release preparation. Next performance work should separately profile full-frame redraw, scrolling and edit latency. Do not equate the large-file Open baseline or synthetic glyph benchmark with overall editing performance.
+
+---
+
 
 ## Previous handoff (2026-11-13 — preserve file modes during atomic save, CI PASS #885)
 
