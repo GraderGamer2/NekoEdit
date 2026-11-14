@@ -54,12 +54,20 @@ uint32_t font_glyph_advance(uint32_t glyph_id) {
  * interface used by sfnt.S. This isolates rasterizer/cache work from font file
  * I/O, installed fonts, Wayland, and compositor scheduling. */
 int font_glyph_load_outline(uint32_t glyph_id) {
-    static const int32_t outline_x[8] = {
+    static const int32_t large_x[8] = {
         160, 420, 520, 520, 420, 160, 60, 60
     };
-    static const int32_t outline_y[8] = {
+    static const int32_t large_y[8] = {
         80, 80, 180, 580, 680, 680, 580, 180
     };
+    static const int32_t small_x[8] = {
+        140, 260, 320, 320, 260, 140, 100, 100
+    };
+    static const int32_t small_y[8] = {
+        280, 280, 320, 440, 480, 480, 440, 320
+    };
+    const int32_t *outline_x = glyph_id == 34u ? small_x : large_x;
+    const int32_t *outline_y = glyph_id == 34u ? small_y : large_y;
     if (glyph_id == 0u || glyph_id >= 512u) return -1;
     ++outline_load_count;
     font_glyph_contour_count = 1;
@@ -85,6 +93,40 @@ static uint64_t monotonic_raw_ns(void) {
 static void fail(const char *message) {
     fprintf(stderr, "rasterizer benchmark setup failed: %s\n", message);
     exit(1);
+}
+
+static uint64_t mask_signature(void) {
+    uint64_t hash=UINT64_C(1469598103934665603);
+    hash=(hash^font_bitmap_width)*UINT64_C(1099511628211);
+    hash=(hash^font_bitmap_height)*UINT64_C(1099511628211);
+    hash=(hash^(uint32_t)font_bitmap_left)*UINT64_C(1099511628211);
+    hash=(hash^(uint32_t)font_bitmap_top)*UINT64_C(1099511628211);
+    hash=(hash^font_bitmap_pixel_count)*UINT64_C(1099511628211);
+    for (uint32_t row=0;row<font_bitmap_height;++row)
+        for (uint32_t col=0;col<font_bitmap_width;++col)
+            hash=(hash^font_bitmap_pixels[row*128u+col])*UINT64_C(1099511628211);
+    return hash;
+}
+
+static void verify_scratch_reuse(void) {
+    uint64_t clean_signature, reused_signature;
+    for (uint32_t i=0;i<128u*128u;++i) font_bitmap_pixels[i]=0;
+    if (font_rasterize_glyph(34u,12u)!=0)
+        fail("fresh-scratch small glyph rasterization failed");
+    clean_signature=mask_signature();
+    if (font_rasterize_glyph(33u,12u)!=0 ||
+        font_rasterize_glyph(34u,12u)!=0)
+        fail("large-to-small scratch reuse rasterization failed");
+    reused_signature=mask_signature();
+    if (clean_signature!=reused_signature)
+        fail("scratch reuse left stale pixels in the smaller glyph mask");
+}
+
+static uint64_t framebuffer_checksum(const uint32_t *framebuffer) {
+    uint64_t checksum=0;
+    for (uint32_t i=0;i<SURFACE_WIDTH*SURFACE_HEIGHT;++i)
+        checksum+=framebuffer[i];
+    return checksum;
 }
 
 static uint64_t median_sample(const uint64_t *samples) {
@@ -114,12 +156,15 @@ static void print_samples(const char *label, const uint64_t *samples,
 
 int main(void) {
     uint32_t framebuffer[SURFACE_WIDTH * SURFACE_HEIGHT];
-    uint64_t cold_samples[BENCH_SAMPLE_COUNT], warm_samples[BENCH_SAMPLE_COUNT];
-    uint64_t checksum = 0;
+    uint64_t cold_samples[BENCH_SAMPLE_COUNT], cache_fill_samples[BENCH_SAMPLE_COUNT];
+    uint64_t warm_samples[BENCH_SAMPLE_COUNT];
+    uint64_t cache_fill_checksum, checksum = 0;
     struct timespec resolution;
 
     if (clock_getres(CLOCK_MONOTONIC_RAW, &resolution) != 0)
         fail("CLOCK_MONOTONIC_RAW resolution query failed");
+
+    verify_scratch_reuse();
 
     for (uint32_t sample = 0; sample < BENCH_SAMPLE_COUNT; ++sample) {
         uint64_t start = monotonic_raw_ns();
@@ -132,6 +177,29 @@ int main(void) {
         if (!font_bitmap_pixel_count || !font_bitmap_width || !font_bitmap_height)
             fail("cold rasterization produced an empty mask");
     }
+
+    /* Measure complete cache misses separately from warm hits. Resetting
+     * the cache and framebuffer is outside the timed interval. */
+    outline_load_count=0;
+    for (uint32_t sample=0;sample<BENCH_SAMPLE_COUNT;++sample) {
+        font_cache_clear();
+        for (uint32_t i=0;i<SURFACE_WIDTH*SURFACE_HEIGHT;++i)
+            framebuffer[i]=0xff252a33u;
+        uint64_t start=monotonic_raw_ns();
+        for (uint32_t i=0;i<GLYPH_COUNT;++i) {
+            uint32_t codepoint=33u+i;
+            if (font_draw_codepoint_size(
+                    codepoint,(int32_t)((i&7u)*14u),
+                    (int32_t)(((i>>3)&3u)*14u),
+                    (uint8_t *)framebuffer,SURFACE_WIDTH,SURFACE_HEIGHT,
+                    SURFACE_STRIDE,12u,0u,SURFACE_WIDTH,SURFACE_HEIGHT)!=1)
+                fail("cold glyph-cache insertion/draw failed");
+        }
+        cache_fill_samples[sample]=monotonic_raw_ns()-start;
+        if (outline_load_count!=(sample+1u)*GLYPH_COUNT)
+            fail("cold cache-fill sample unexpectedly reused a glyph");
+    }
+    cache_fill_checksum=framebuffer_checksum(framebuffer);
 
     /* Prime every entry, then repeatedly draw a deterministic pseudorandom
      * sequence over the full cache working set. Each sample starts with the
@@ -170,8 +238,7 @@ int main(void) {
     }
     if (outline_load_count != GLYPH_COUNT)
         fail("warm working-set draws unexpectedly rerasterized a cached glyph");
-    for (uint32_t i = 0; i < SURFACE_WIDTH * SURFACE_HEIGHT; ++i)
-        checksum += framebuffer[i];
+    checksum=framebuffer_checksum(framebuffer);
 
     /* Force every LRU slot to be replaced with a disjoint 128-glyph set. The
      * second pass must hit those entries, and clearing must make them reload. */
@@ -219,7 +286,13 @@ int main(void) {
     printf("CLOCK_MONOTONIC_RAW resolution: %ld ns\n",
            resolution.tv_sec * 1000000000L + resolution.tv_nsec);
     print_samples("cold rasterization", cold_samples, COLD_RASTER_ITERATIONS);
+    print_samples("cold 128-glyph cache fill and draw", cache_fill_samples, GLYPH_COUNT);
     print_samples("warm 128-glyph cache draw", warm_samples, WARM_DRAW_ITERATIONS);
+#ifdef FONT_GLYPH_STORAGE_REFERENCE
+    puts("glyph storage: legacy full-mask clear/copy and 128-byte row stride");
+#else
+    puts("glyph storage: active-rectangle clear, compact cache rows");
+#endif
 #ifdef FONT_CACHE_LINEAR_REFERENCE
     printf("cache correctness: warm reuse, LRU replacement, and clear passed (%u outline loads)\n",
            outline_load_count);
@@ -227,6 +300,7 @@ int main(void) {
     printf("cache correctness: hit reuse, collision chains, LRU replacement, and clear passed (%u outline loads)\n",
            outline_load_count);
 #endif
+    printf("cache fill framebuffer checksum: %" PRIu64 "\n", cache_fill_checksum);
     printf("framebuffer checksum: %" PRIu64 "\n", checksum);
     return 0;
 }

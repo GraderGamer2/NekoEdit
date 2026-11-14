@@ -247,7 +247,10 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     uint32_t upem,contours;
     font_bitmap_width=font_bitmap_height=font_bitmap_pixel_count=0;
     font_bitmap_left=font_bitmap_top=0;
+#ifdef FONT_GLYPH_STORAGE_REFERENCE
+    /* Legacy baseline: clear the entire fixed 128x128 scratch mask. */
     for (uint32_t i=0;i<BITMAP_BYTES;++i) font_bitmap_pixels[i]=0;
+#endif
     if (!font_loaded || glyph_id>=(uint32_t)font_num_glyphs || !size || size>MAX_GLYPH_EM)
         return -1;
     upem=(uint32_t)font_units_per_em;
@@ -286,13 +289,38 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
                     if (inside(px,py,contours)) ++covered;
                 }
             }
+            uint32_t mask_index=row*BITMAP_SIDE+col;
             if (covered) {
-                font_bitmap_pixels[row*BITMAP_SIDE+col]=(uint8_t)((covered*255u+8u)/16u);
+                font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
                 ++font_bitmap_pixel_count;
             }
+#ifndef FONT_GLYPH_STORAGE_REFERENCE
+            else {
+                /* The scratch buffer is reused; explicitly clear uncovered
+                 * pixels inside this glyph's active rectangle. */
+                font_bitmap_pixels[mask_index]=0;
+            }
+#endif
         }
     }
     return 0;
+}
+
+/* Cache only the active glyph rectangle. The normal representation packs rows
+ * tightly; the reference build preserves the former full 128x128 copy. */
+static void cache_store_bitmap(struct cache_entry *slot) {
+#ifdef FONT_GLYPH_STORAGE_REFERENCE
+    for (uint32_t i=0;i<BITMAP_BYTES;++i)
+        slot->pixels[i]=font_bitmap_pixels[i];
+#else
+    uint32_t width=font_bitmap_width;
+    for (uint32_t row=0;row<font_bitmap_height;++row) {
+        uint32_t source_row=row*cached_stride;
+        uint32_t target_row=row*width;
+        for (uint32_t col=0;col<width;++col)
+            slot->pixels[target_row+col]=font_bitmap_pixels[source_row+col];
+    }
+#endif
 }
 
 static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
@@ -317,7 +345,7 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
     slot->left=(int16_t)font_bitmap_left; slot->top=(int16_t)font_bitmap_top;
     slot->width=(uint8_t)font_bitmap_width; slot->height=(uint8_t)font_bitmap_height;
     slot->size=(uint8_t)size; slot->valid=1;
-    for (uint32_t i=0;i<BITMAP_BYTES;++i) slot->pixels[i]=font_bitmap_pixels[i];
+    cache_store_bitmap(slot);
     return slot;
 #else
     uint32_t bucket=cache_bucket(glyph_id,size);
@@ -361,7 +389,7 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
     slot->left=(int16_t)font_bitmap_left; slot->top=(int16_t)font_bitmap_top;
     slot->width=(uint8_t)font_bitmap_width; slot->height=(uint8_t)font_bitmap_height;
     slot->size=(uint8_t)size; slot->valid=1;
-    for (uint32_t i=0;i<BITMAP_BYTES;++i) slot->pixels[i]=font_bitmap_pixels[i];
+    cache_store_bitmap(slot);
 
     slot->hash_next=cache_buckets[bucket];
     cache_buckets[bucket]=(uint16_t)(slot_index+1u);
@@ -435,7 +463,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
                              int32_t width,int32_t height,int32_t stride,
                              uint32_t size,uint32_t transform,
                              int32_t surface_width,int32_t surface_height) {
-    uint32_t gid;
+    uint32_t gid, cached_stride;
     struct cache_entry *e;
     if (cp==0x20) return 1;
     if (!font_loaded || !surface || width<=0 || height<=0 || stride<width*4 ||
@@ -446,6 +474,11 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
     if (!gid || gid>=(uint32_t)font_num_glyphs) return 0;
     e=cached(gid,size);
     if (!e || !e->width || !e->height) return 0;
+#ifdef FONT_GLYPH_STORAGE_REFERENCE
+    cached_stride=BITMAP_SIDE;
+#else
+    cached_stride=e->width;
+#endif
 #ifndef FONT_DRAW_GENERIC_REFERENCE
     /* Identity is the normal Wayland surface orientation. Avoid dispatching
      * every covered glyph pixel through the general eight-transform mapper. */
@@ -485,7 +518,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
     for (uint32_t row=0;row<e->height;++row) {
         int32_t py=y+e->top+(int32_t)row;
         for (uint32_t col=0;col<e->width;++col) {
-            uint8_t a=e->pixels[row*BITMAP_SIDE+col];
+            uint8_t a=e->pixels[row*cached_stride+col];
             int32_t px=x+e->left+(int32_t)col;
             int32_t bx,by;
             if (!a || !map_surface_pixel_to_buffer(px,py,transform,

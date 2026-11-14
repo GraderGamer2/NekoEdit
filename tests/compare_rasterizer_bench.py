@@ -15,7 +15,9 @@ class Result:
     label: str
     output: str
     cold_ns: float
+    fill_ns: float
     warm_ns: float
+    fill_checksum: str
     checksum: str
 
 
@@ -31,12 +33,17 @@ def run(label: str, executable: str) -> Result:
     cold = re.search(
         r"cold rasterization: .*?median ([0-9.]+) ns/iteration", output
     )
+    fill = re.search(
+        r"cold 128-glyph cache fill and draw: .*?median ([0-9.]+) ns/iteration",
+        output,
+    )
     warm = re.search(
         r"warm 128-glyph cache draw: .*?median ([0-9.]+) ns/iteration",
         output,
     )
-    checksum = re.search(r"framebuffer checksum: ([0-9]+)", output)
-    if not cold or not warm or not checksum:
+    fill_checksum = re.search(r"cache fill framebuffer checksum: ([0-9]+)", output)
+    checksum = re.search(r"^framebuffer checksum: ([0-9]+)$", output, re.MULTILINE)
+    if not cold or not fill or not warm or not fill_checksum or not checksum:
         raise RuntimeError(f"{label}: benchmark output is missing a required metric")
     if "cache correctness:" not in output:
         raise RuntimeError(f"{label}: cache correctness checks did not report success")
@@ -44,7 +51,9 @@ def run(label: str, executable: str) -> Result:
         label=label,
         output=output,
         cold_ns=float(cold.group(1)),
+        fill_ns=float(fill.group(1)),
         warm_ns=float(warm.group(1)),
+        fill_checksum=fill_checksum.group(1),
         checksum=checksum.group(1),
     )
 
@@ -56,23 +65,25 @@ def reduction(before: float, after: float) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 5:
+    if len(sys.argv) != 6:
         print(
             "usage: compare_rasterizer_bench.py LINEAR HASH_GENERIC "
-            "HASH_IDENTITY_REFERENCE HASH_IDENTITY_FAST",
+            "HASH_IDENTITY_REFERENCE HASH_OPAQUE_STORAGE_REFERENCE HASH_COMPACT",
             file=sys.stderr,
         )
         return 2
 
     labels = (
-        ("linear LRU + generic transform + reference blend", sys.argv[1]),
-        ("hash cache + generic transform + reference blend", sys.argv[2]),
-        ("hash cache + identity path + reference blend", sys.argv[3]),
-        ("hash cache + identity path + opaque-pixel fast path", sys.argv[4]),
+        ("linear LRU + generic transform + reference blend/storage", sys.argv[1]),
+        ("hash cache + generic transform + reference blend/storage", sys.argv[2]),
+        ("hash cache + identity path + reference blend/storage", sys.argv[3]),
+        ("hash cache + identity + opaque blend + legacy mask storage", sys.argv[4]),
+        ("hash cache + identity + opaque blend + compact mask storage", sys.argv[5]),
     )
     results = [run(label, executable) for label, executable in labels]
     checksums = {result.checksum for result in results}
-    if len(checksums) != 1:
+    fill_checksums = {result.fill_checksum for result in results}
+    if len(checksums) != 1 or len(fill_checksums) != 1:
         for result in results:
             print(f"--- {result.label} ---\n{result.output}", file=sys.stderr)
         print("error: benchmark variants produced different framebuffers", file=sys.stderr)
@@ -82,7 +93,7 @@ def main() -> int:
         print(f"=== {result.label} ===")
         print(result.output, end="" if result.output.endswith("\n") else "\n")
 
-    linear, hash_generic, hash_identity_reference, hash_identity_fast = results
+    linear, hash_generic, hash_identity_reference, opaque_legacy_storage, compact_current = results
     print("=== paired median comparison ===")
     print(
         "warm draw: linear -> hash cache: "
@@ -94,17 +105,26 @@ def main() -> int:
     )
     print(
         "warm draw: identity reference -> opaque-pixel fast path: "
-        f"{reduction(hash_identity_reference.warm_ns, hash_identity_fast.warm_ns)} lower"
+        f"{reduction(hash_identity_reference.warm_ns, opaque_legacy_storage.warm_ns)} lower"
+    )
+    print(
+        "warm draw: opaque blend/legacy storage -> compact mask storage: "
+        f"{reduction(opaque_legacy_storage.warm_ns, compact_current.warm_ns)} lower"
     )
     print(
         "warm draw: linear -> current renderer: "
-        f"{reduction(linear.warm_ns, hash_identity_fast.warm_ns)} lower"
+        f"{reduction(linear.warm_ns, compact_current.warm_ns)} lower"
     )
     print(
-        "cold rasterization: linear -> current renderer: "
-        f"{reduction(linear.cold_ns, hash_identity_fast.cold_ns)} lower"
+        "cold rasterization: legacy -> active-bounds initialization: "
+        f"{reduction(opaque_legacy_storage.cold_ns, compact_current.cold_ns)} lower"
     )
-    print(f"identical framebuffer checksum: {linear.checksum}")
+    print(
+        "cold cache fill: legacy -> compact mask storage: "
+        f"{reduction(opaque_legacy_storage.fill_ns, compact_current.fill_ns)} lower"
+    )
+    print(f"identical cache-fill checksum: {linear.fill_checksum}")
+    print(f"identical warm framebuffer checksum: {linear.checksum}")
     return 0
 
 
