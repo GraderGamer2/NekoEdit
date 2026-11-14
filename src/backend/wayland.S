@@ -16361,6 +16361,22 @@ doc_grapheme_next:
     mov r12d, edi
     cmp r12d, ebx
     jae .Ldoc_grapheme_next_eof
+
+    # UAX #29 classifies printable ASCII (space through tilde) as Other.
+    # Each byte is therefore a complete grapheme; avoid UTF-8 decoding and
+    # the Unicode property/boundary scans on this overwhelmingly common path.
+    # Keep CR, LF, tabs, C0 controls, and DEL on the full rules path.
+    mov edi, r12d
+    call doc_byte_at
+    cmp eax, 32
+    jb .Ldoc_grapheme_next_decode
+    cmp eax, 127
+    jae .Ldoc_grapheme_next_decode
+    lea r13d, [r12d + 1]
+    jmp .Ldoc_grapheme_next_done
+
+.Ldoc_grapheme_next_decode:
+    mov edi, r12d
     call doc_unicode_decode_at
     mov r13d, edx
 .Ldoc_grapheme_next_scan:

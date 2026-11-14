@@ -6069,6 +6069,10 @@ xkb_symbols "nekoedit-sparse" {
                         "\r\n",                 # CRLF is one grapheme
                         "Z",
                     ]
+                    # Exercise a consecutive printable-ASCII run. Every scalar
+                    # here must remain its own grapheme and cursor boundary.
+                    ascii_fast_path = "The quick brown fox jumps over 0123456789."
+                    clusters.extend(ascii_fast_path)
                     fixture = "".join(clusters).encode("utf-8")
                     offsets = [0]
                     for cluster in clusters:
@@ -6203,7 +6207,8 @@ xkb_symbols "nekoedit-sparse" {
                                     "contents": after_delete["doc_contents"]})
                         )
 
-                    # Move to the final Z, then Backspace over the CRLF cluster.
+                    # Move to document end, then step back over the ASCII run
+                    # and Z so Backspace removes the CRLF immediately before Z.
                     remaining_clusters = clusters[1:2] + clusters[3:]
                     current_offsets = [0]
                     for cluster in remaining_clusters:
@@ -6219,14 +6224,14 @@ xkb_symbols "nekoedit-sparse" {
                     final_state = read_document_state()
                     if final_state["doc_cursor"] != len(expected_after_delete):
                         raise AssertionError("could not reach the end of the grapheme fixture")
-                    # One Left moves before Z, the next reaches the end of CRLF.
-                    key_step(serial, 105, "Left before final Z")
-                    serial += 2
+                    for _ in range(len(ascii_fast_path) + 1):
+                        key_step(serial, 105, "Left across printable ASCII grapheme")
+                        serial += 2
                     key_step(serial, 14, "Backspace complete CRLF grapheme")
                     serial += 2
                     after_crlf = read_document_state()
                     expected_without_crlf = (
-                        clusters[1] + "".join(clusters[3:-2]) + clusters[-1]
+                        clusters[1] + "".join(clusters[3:10]) + "".join(clusters[11:])
                     ).encode("utf-8")
                     if (
                         after_crlf["doc_contents"] != expected_without_crlf
@@ -6238,7 +6243,7 @@ xkb_symbols "nekoedit-sparse" {
                                     "contents": after_crlf["doc_contents"]})
                         )
                     observations.append(
-                        "Unicode 18.0 grapheme navigation verified combining sequences, emoji modifiers and ZWJ family, RI pairing, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF; pointer hit-testing and whole-cluster Backspace/Delete passed"
+                        "Unicode 18.0 grapheme navigation verified printable-ASCII fast-path boundaries, combining sequences, emoji modifiers and ZWJ family, RI pairing, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF; pointer hit-testing and whole-cluster Backspace/Delete passed"
                     )
                     client.sendall(wire_message(10, 1))
                     return
