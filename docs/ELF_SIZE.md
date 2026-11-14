@@ -23,6 +23,7 @@ This makes the unused-code comparison more complete than applying GC to the exis
 
 - **File bytes** is the executable's on-disk size.
 - **.text** is executable code size.
+- **.rodata** is read-only data and lookup tables.
 - **.data** is initialized writable data.
 - **.bss** is zero-initialized runtime storage; it contributes to memory footprint but is not stored as equivalent bytes in the executable.
 - Stripping removes symbol/string-table metadata; it should not change executable instructions or runtime data.
@@ -32,6 +33,6 @@ The ordinary O2 executable remains available with its symbol table for tests tha
 
 ## Toolchain and repeatability
 
-The workflow prints the C compiler, assembler, linker, strip, size, and readelf versions. Run `make size-compare` to create `build/size-matrix/SIZE_REPORT.md` and eight executable variants. All variants are uploaded as a separate Actions artifact.
+The workflow prints the C compiler, assembler, linker, strip, size, and readelf versions. Run `make size-compare` to create `build/size-matrix/SIZE_REPORT.md` and eight executable variants. Section sizes use GNU `size -A`; the default GNU `size` format is not used because its `text` field combines `.text` and `.rodata`. All variants are uploaded as a separate Actions artifact.
 
 No size result is assumed in advance. Keep the default optimization/release policy unchanged until the measured matrix and regression tests have been reviewed.

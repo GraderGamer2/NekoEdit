@@ -170,18 +170,27 @@ def verify_elf(binary: Path, readelf: list[str]) -> None:
         raise RuntimeError(f"{binary.name}: unexpected DT_NEEDED dependency")
 
 
-def size_fields(binary: Path, size_tool: list[str]) -> tuple[int, int, int, int]:
-    result = run(size_tool + [str(binary)], capture=True).stdout
-    rows = [line.split() for line in result.splitlines() if line.strip()]
-    if len(rows) < 2 or len(rows[-1]) < 4:
-        raise RuntimeError(f"cannot parse size output for {binary}")
+def size_fields(
+    binary: Path, size_tool: list[str]
+) -> tuple[int, int, int, int, int]:
+    # GNU size's default Berkeley format combines .text and .rodata into its
+    # single "text" field. Use section-oriented output to report them separately.
+    output = run(size_tool + ["-A", str(binary)], capture=True).stdout
+    sections: dict[str, int] = {}
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) >= 2 and fields[0].startswith("."):
+            try:
+                sections[fields[0]] = sections.get(fields[0], 0) + int(fields[1], 10)
+            except ValueError:
+                continue
     return (
         binary.stat().st_size,
-        int(rows[-1][0]),
-        int(rows[-1][1]),
-        int(rows[-1][2]),
+        sections.get(".text", 0),
+        sections.get(".rodata", 0),
+        sections.get(".data", 0),
+        sections.get(".bss", 0),
     )
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -255,12 +264,15 @@ def main() -> int:
 
     rows = [(label, *size_fields(binary, size_tool)) for label, binary in binaries]
     print("\nELF size comparison (bytes)")
-    print(f"{'Variant':34} {'File bytes':>12} {'.text':>12} {'.data':>10} {'.bss':>12}")
-    print("-" * 86)
-    for label, file_bytes, text_bytes, data_bytes, bss_bytes in rows:
+    print(
+        f"{'Variant':34} {'File bytes':>12} {'.text':>10} "
+        f"{'.rodata':>10} {'.data':>8} {'.bss':>12}"
+    )
+    print("-" * 100)
+    for label, file_bytes, text_bytes, rodata_bytes, data_bytes, bss_bytes in rows:
         print(
-            f"{label:34} {file_bytes:12,d} {text_bytes:12,d} "
-            f"{data_bytes:10,d} {bss_bytes:12,d}"
+            f"{label:34} {file_bytes:12,d} {text_bytes:10,d} "
+            f"{rodata_bytes:10,d} {data_bytes:8,d} {bss_bytes:12,d}"
         )
 
     report = [
@@ -268,12 +280,13 @@ def main() -> int:
         "",
         "All sizes are bytes. .bss is runtime zero-initialized storage and is not stored as equivalent file bytes.",
         "",
-        "| Variant | File bytes | .text | .data | .bss |",
-        "|---|---:|---:|---:|---:|",
+        "| Variant | File bytes | .text | .rodata | .data | .bss |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
-    for label, file_bytes, text_bytes, data_bytes, bss_bytes in rows:
+    for label, file_bytes, text_bytes, rodata_bytes, data_bytes, bss_bytes in rows:
         report.append(
-            f"| {label} | {file_bytes} | {text_bytes} | {data_bytes} | {bss_bytes} |"
+            f"| {label} | {file_bytes} | {text_bytes} | {rodata_bytes} | "
+            f"{data_bytes} | {bss_bytes} |"
         )
     for profile, sections in discarded.items():
         report.extend(["", f"## Discarded sections: {profile}", ""])
