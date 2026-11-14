@@ -8,6 +8,7 @@ on:
       - optimization-early-alpha
     paths-ignore:
       - 'CHANGELOG/**'
+      - 'docs/ELF_SIZE.md'
       - '.github/workflows/locale-packs.yml'
   pull_request:
     branches:
@@ -18,6 +19,7 @@ on:
       - ready_for_review
     paths-ignore:
       - 'CHANGELOG/**'
+      - 'docs/ELF_SIZE.md'
       - '.github/workflows/locale-packs.yml'
   workflow_dispatch:
 

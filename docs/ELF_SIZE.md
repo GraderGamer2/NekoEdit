@@ -35,4 +35,30 @@ The ordinary O2 executable remains available with its symbol table for tests tha
 
 The workflow prints the C compiler, assembler, linker, strip, size, and readelf versions. Run `make size-compare` to create `build/size-matrix/SIZE_REPORT.md` and eight executable variants. Section sizes use GNU `size -A`; the default GNU `size` format is not used because its `text` field combines `.text` and `.rodata`. All variants are uploaded as a separate Actions artifact.
 
-No size result is assumed in advance. Keep the default optimization/release policy unchanged until the measured matrix and regression tests have been reviewed.
+## Measured results — CI #927 passed all 23 steps
+
+Actions [Build and test #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 workflow steps with no failures. The matrix compares the exact normal O2 build against stripped copies, dead-section collection, and the equivalent Os profiles.
+
+| Variant | File bytes | .text | .rodata | .data | .bss |
+|---|---:|---:|---:|---:|---:|
+| O2 | 345,016 | 138,902 | 90,976 | 64 | 3,645,568 |
+| O2 stripped | 234,944 | 138,902 | 90,976 | 64 | 3,645,568 |
+| O2 + section GC | 344,536 | 138,630 | 90,960 | 64 | 3,645,624 |
+| O2 + section GC stripped | 234,928 | 138,630 | 90,960 | 64 | 3,645,624 |
+| Os | 337,656 | 127,224 | 90,492 | 64 | 3,645,568 |
+| Os stripped | 226,264 | 127,224 | 90,492 | 64 | 3,645,568 |
+| Os + section GC | 337,168 | 126,983 | 90,478 | 64 | 3,645,624 |
+| Os + section GC stripped | 226,256 | 126,983 | 90,478 | 64 | 3,645,624 |
+
+### Findings
+
+- **Stripping is the largest win.** O2 falls from 345,016 to 234,944 bytes, saving 110,072 bytes (31.9%). Os falls from 337,656 to 226,264 bytes, saving 111,392 bytes. The loadable .text, .rodata, .data, and .bss sections are unchanged by stripping; the reduction is ELF symbol/string metadata.
+- **Os is smaller than O2.** Before stripping the reduction is 7,360 bytes (2.13%); after stripping it is 8,680 bytes (3.69%). Compiler optimization flags apply to the five C translation units only: rasterizer.c, clipboard.c, compose_locale.c, history.c, and preferences.c. The Wayland, XKB, SFNT, syscall, and entry sources are hand-written assembly, so -Os does not optimize those files.
+- **Section GC works, but is not a meaningful size lever here.** GNU ld discarded five input sections: .text.begin_path_prompt, .text.draw_bounded_ascii, .text.font_draw_codepoint, .text.preferences_locale_is_pt_br, and .rodata.target.13. After stripping, GC saves only 16 bytes at O2 and 8 bytes at Os. Its section splitting increases reported BSS by 56 bytes through alignment.
+- All eight variants passed ELF no-interpreter/no-DT_NEEDED checks. Stripped O2/Os binaries passed CLI smoke tests; O2-GC and Os-GC passed the full Wayland protocol mock. The normal O2 build passed the full 11 MiB Open/Save Wayland suite, renderer benchmark, XKB/importer tests, locale-pack build, and Mutter integration.
+
+### Recommendation
+
+Keep the normal build at **O2 and unstripped** for development and symbol-based testing. Stripping is a strong release-packaging candidate because it changes only ELF metadata. Os is a worthwhile smaller-build candidate, but should not replace O2 until representative rendering, scrolling, and editing benchmarks establish whether its size reduction affects performance. Section GC should not be adopted solely to save file bytes; its measured benefit after stripping is negligible.
+
+The experiment remains isolated on optimization-early-alpha. No application source or default compiler flags were changed. The next step is a runtime comparison of O2 and Os on actual rendering and editing workloads.

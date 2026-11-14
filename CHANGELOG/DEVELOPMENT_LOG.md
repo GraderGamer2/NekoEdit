@@ -1,16 +1,42 @@
-## 2026-11-14 — begin controlled ELF size optimization matrix
+## 2026-11-14 — measure O2/Os stripping and dead-section removal (CI PASS #927)
 
-A dedicated `optimization-early-alpha` branch was created from `early-alpha` at `21384d8f09072f6c1b42cb9745ac901a0a38d1cf`. This branch isolates executable-size experiments from ongoing backend development.
+A dedicated optimization-early-alpha branch was created from early-alpha at 21384d8f09072f6c1b42cb9745ac901a0a38d1cf. The experiment adds a reproducible eight-profile comparison while leaving the normal O2 build and application source unchanged.
 
-The comparison order is deliberate: current O2 executable, O2 stripped, O2 with unused-section removal, then the same sequence repeated with Os. The reproducible eight-profile matrix separates file size, .text, .data and .bss measurements. It records GNU ld's discarded sections and checks every ELF for the no-interpreter/no-DT_NEEDED contract. Stripped binaries receive CLI smoke tests; O2-GC and Os-GC builds receive the full Wayland protocol mock. The standard unstripped O2 build remains the symbol-inspection reference.
+Implementation and CI commits:
+- [1448a57f2aa69773db99463b03a96e612ca86b00](https://github.com/GraderGamer2/NekoEdit/commit/1448a57f2aa69773db99463b03a96e612ca86b00) — add the O2/Os size matrix, temporary assembly function sectioning, and profile regression checks.
+- [82a14039d862446bdf04afc5f023c158fd762c62](https://github.com/GraderGamer2/NekoEdit/commit/82a14039d862446bdf04afc5f023c158fd762c62) — enable push CI on the dedicated branch.
+- [61f1d73246a7f01027bc65e28f05708be39b1782](https://github.com/GraderGamer2/NekoEdit/commit/61f1d73246a7f01027bc65e28f05708be39b1782) — report exact ELF sections separately.
 
-For unused-code collection, the matrix puts C functions/data into individual sections and performs a temporary source transformation that isolates typed assembly functions into individual text sections. It does not rewrite the normal source or normal application build. Assembly data tables remain grouped and are outside this first function-collection experiment.
+## Measured results — CI #927 passed all 23 steps
 
-No default compiler flags or shipped binary policy have been changed pending measured results and regression review.
+Actions [Build and test #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 workflow steps with no failures. The matrix compares the exact normal O2 build against stripped copies, dead-section collection, and the equivalent Os profiles.
+
+| Variant | File bytes | .text | .rodata | .data | .bss |
+|---|---:|---:|---:|---:|---:|
+| O2 | 345,016 | 138,902 | 90,976 | 64 | 3,645,568 |
+| O2 stripped | 234,944 | 138,902 | 90,976 | 64 | 3,645,568 |
+| O2 + section GC | 344,536 | 138,630 | 90,960 | 64 | 3,645,624 |
+| O2 + section GC stripped | 234,928 | 138,630 | 90,960 | 64 | 3,645,624 |
+| Os | 337,656 | 127,224 | 90,492 | 64 | 3,645,568 |
+| Os stripped | 226,264 | 127,224 | 90,492 | 64 | 3,645,568 |
+| Os + section GC | 337,168 | 126,983 | 90,478 | 64 | 3,645,624 |
+| Os + section GC stripped | 226,256 | 126,983 | 90,478 | 64 | 3,645,624 |
+
+### Findings
+
+- **Stripping is the largest win.** O2 falls from 345,016 to 234,944 bytes, saving 110,072 bytes (31.9%). Os falls from 337,656 to 226,264 bytes, saving 111,392 bytes. The loadable .text, .rodata, .data, and .bss sections are unchanged by stripping; the reduction is ELF symbol/string metadata.
+- **Os is smaller than O2.** Before stripping the reduction is 7,360 bytes (2.13%); after stripping it is 8,680 bytes (3.69%). Compiler optimization flags apply to the five C translation units only: rasterizer.c, clipboard.c, compose_locale.c, history.c, and preferences.c. The Wayland, XKB, SFNT, syscall, and entry sources are hand-written assembly, so -Os does not optimize those files.
+- **Section GC works, but is not a meaningful size lever here.** GNU ld discarded five input sections: .text.begin_path_prompt, .text.draw_bounded_ascii, .text.font_draw_codepoint, .text.preferences_locale_is_pt_br, and .rodata.target.13. After stripping, GC saves only 16 bytes at O2 and 8 bytes at Os. Its section splitting increases reported BSS by 56 bytes through alignment.
+- All eight variants passed ELF no-interpreter/no-DT_NEEDED checks. Stripped O2/Os binaries passed CLI smoke tests; O2-GC and Os-GC passed the full Wayland protocol mock. The normal O2 build passed the full 11 MiB Open/Save Wayland suite, renderer benchmark, XKB/importer tests, locale-pack build, and Mutter integration.
+
+### Recommendation
+
+Keep the normal build at **O2 and unstripped** for development and symbol-based testing. Stripping is a strong release-packaging candidate because it changes only ELF metadata. Os is a worthwhile smaller-build candidate, but should not replace O2 until representative rendering, scrolling, and editing benchmarks establish whether its size reduction affects performance. Section GC should not be adopted solely to save file bytes; its measured benefit after stripping is negligible.
+
+The experiment remains isolated on optimization-early-alpha. No application source or default compiler flags were changed. The next step is a runtime comparison of O2 and Os on actual rendering and editing workloads.
 
 ---
-
-## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
+# 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
 
 The previous large-paste optimization left `doc_cursor` immediately after the final inserted byte. The common `doc_ensure_cursor_visible` path therefore treated the end of a multi-megabyte paste as the desired viewport location, even when the paste had begun at the top of an empty document. That produced an unwanted jump away from the start of the newly pasted text.
 
