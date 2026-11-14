@@ -3,13 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Include the production translation unit so this test exercises the exact
- * private gap-buffer copy routine without exposing it as runtime API. */
-#include "../src/backend/clipboard.c"
-
-uint32_t doc_gap_start;
-uint32_t doc_gap_end;
-uint8_t *doc_buffer;
+#include "../src/editor/gap_buffer.h"
 
 #define DOCUMENT_LENGTH 19u
 #define MAX_GAP_SIZE 31u
@@ -41,7 +35,8 @@ int main(void)
                     uint8_t actual[DOCUMENT_LENGTH];
                     uint32_t length = end - begin;
                     memset(actual, 0xcc, sizeof(actual));
-                    copy_document_range(actual, begin, end);
+                    gap_buffer_copy_range(actual, physical, gap_at,
+                                          gap_at + gap_size, begin, end);
                     if (memcmp(actual, logical + begin, length) != 0) {
                         fprintf(stderr,
                                 "clipboard gap-copy mismatch: gap=%u at=%u range=[%u,%u)\n",
@@ -53,6 +48,6 @@ int main(void)
         }
     }
 
-    puts("PASS: clipboard range copy covers every selection across every tested gap position and size");
+    puts("PASS: gap-buffer range copy covers every selection across every tested gap position and size");
     return 0;
 }

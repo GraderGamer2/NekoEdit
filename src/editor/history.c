@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include "gap_buffer.h"
 
 /* Freestanding, append-only edit journal. One keyboard action is one record. */
 #define SYS_read 0
@@ -93,7 +94,6 @@ extern uint32_t doc_length, doc_cursor, doc_selection_anchor, doc_selection_acti
 extern uint32_t doc_capacity, doc_gap_start, doc_gap_end;
 extern uint32_t doc_line_index_valid, doc_storage_error;
 extern uint8_t *doc_buffer;
-extern uint32_t doc_byte_at(uint32_t);
 extern long doc_buffer_grow(void);
 extern long doc_insert_byte(uint32_t);
 extern void doc_delete_selection(void);
@@ -188,11 +188,16 @@ static uint64_t hash_mem(uint64_t h, const uint8_t *p, uint32_t n)
 static uint64_t hash_doc(void)
 {
     uint64_t h = 1469598103934665603ull;
-    uint32_t i;
-    for (i = 0; i < doc_length; ++i) {
-        uint8_t b = (uint8_t)doc_byte_at(i);
-        h = hash_mem(h, &b, 1);
-    }
+    uint32_t before = doc_gap_start;
+    uint32_t after;
+
+    if (before > doc_length)
+        before = doc_length;
+    after = doc_length - before;
+    if (before)
+        h = hash_mem(h, doc_buffer, before);
+    if (after)
+        h = hash_mem(h, doc_buffer + doc_gap_end, after);
     return h;
 }
 static uint64_t hash_identity(const char *p, uint32_t n)
@@ -287,8 +292,8 @@ static int encode_transaction_v2(uint8_t **output, uint32_t *output_size,
         destination += write_varuint(encoded + destination, op.offset);
         destination += write_varuint(encoded + destination, op.removed_length);
         destination += write_varuint(encoded + destination, op.inserted_length);
-        for (j = 0; j < op.removed_length + op.inserted_length; ++j)
-            encoded[destination + j] = tx_buffer[source + j];
+        gap_buffer_copy_bytes(encoded + destination, tx_buffer + source,
+                              op.removed_length + op.inserted_length);
         destination += op.removed_length + op.inserted_length;
         source = (uint32_t)payload_end;
     }
@@ -406,7 +411,8 @@ static uint64_t base_file_offset(void) { return header.header_size; }
 
 static int reset_file_to_current(void)
 {
-    uint32_t i;
+    uint32_t before = doc_gap_start;
+    uint32_t after;
     long r = sc6(SYS_ftruncate, journal_fd, 0, 0, 0, 0, 0);
     if (err(r)) return 0;
     header.magic[0]='N'; header.magic[1]='E'; header.magic[2]='K'; header.magic[3]='O';
@@ -421,10 +427,12 @@ static int reset_file_to_current(void)
     header.flags = 0;
     if (!write_all(journal_fd, &header, sizeof(header)) ||
         !write_all(journal_fd, identity, identity_length)) return 0;
-    for (i = 0; i < doc_length; ++i) {
-        uint8_t b = (uint8_t)doc_byte_at(i);
-        if (!write_all(journal_fd, &b, 1)) return 0;
-    }
+    if (before > doc_length)
+        before = doc_length;
+    after = doc_length - before;
+    if ((before && !write_all(journal_fd, doc_buffer, before)) ||
+        (after && !write_all(journal_fd, doc_buffer + doc_gap_end, after)))
+        return 0;
     if (err(sc6(SYS_fsync, journal_fd, 0, 0, 0, 0, 0))) return 0;
     base_offset = base_file_offset();
     record_count = 0;
@@ -463,10 +471,13 @@ static int append_op(uint32_t offset, uint32_t removed, uint32_t inserted,
     op.offset = offset; op.removed_length = removed; op.inserted_length = inserted;
     for (i = 0; i < sizeof(op); ++i) tx_buffer[tx_used + i] = ((uint8_t *)&op)[i];
     tx_used += sizeof(op);
-    for (i = 0; i < removed; ++i) tx_buffer[tx_used + i] = (uint8_t)doc_byte_at(offset + i);
+    if (removed)
+        gap_buffer_copy_range(tx_buffer + tx_used, doc_buffer,
+                              doc_gap_start, doc_gap_end,
+                              offset, offset + removed);
     tx_used += removed;
     if (inserted && inserted_bytes) {
-        for (i = 0; i < inserted; ++i) tx_buffer[tx_used + i] = inserted_bytes[i];
+        gap_buffer_copy_bytes(tx_buffer + tx_used, inserted_bytes, inserted);
         tx_used += inserted;
     }
     ++tx_operations;

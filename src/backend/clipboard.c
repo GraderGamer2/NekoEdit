@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stddef.h>
+#include "../editor/gap_buffer.h"
 
 /* Native Wayland text clipboard; raw syscalls only, no libc or runtime library. */
 #define SYS_read 0
@@ -446,41 +447,6 @@ static int start_receive(uint32_t offer)
     return 1;
 }
 
-static void copy_bytes(uint8_t *destination, const uint8_t *source,
-                       uint32_t length)
-{
-    /* x86-64 REP MOVSB copies the contiguous sides of the editor gap in bulk. */
-    __asm__ volatile ("rep movsb"
-        : "+D"(destination), "+S"(source), "+c"(length)
-        :
-        : "memory");
-}
-
-/* Copy a logical [begin,end) range from the gap buffer without calling
- * doc_byte_at once per byte. A selection crosses the gap at most once. */
-static void copy_document_range(uint8_t *destination,
-                                uint32_t begin, uint32_t end)
-{
-    uint32_t length = end - begin;
-    uint32_t before = 0;
-    uint32_t gap_size = doc_gap_end - doc_gap_start;
-
-    if (begin < doc_gap_start) {
-        before = doc_gap_start - begin;
-        if (before > length)
-            before = length;
-    }
-    if (before)
-        copy_bytes(destination, doc_buffer + begin, before);
-
-    if (length > before) {
-        uint32_t after_offset = begin + before;
-        copy_bytes(destination + before,
-                   doc_buffer + after_offset + gap_size,
-                   length - before);
-    }
-}
-
 static int copy_selection(int cut)
 {
     uint32_t begin, end, length, source_id, serial;
@@ -510,7 +476,8 @@ static int copy_selection(int cut)
     if (is_error(result))
         return 0;
     snapshot = (uint8_t *)(uintptr_t)result;
-    copy_document_range(snapshot, begin, end);
+    gap_buffer_copy_range(snapshot, doc_buffer, doc_gap_start, doc_gap_end,
+                           begin, end);
 
     source_id = next_client_object_id++;
     source = &sources[index];

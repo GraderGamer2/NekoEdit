@@ -50,6 +50,8 @@ $(BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(BUILD_DIR)/backend/clipboard.o $(BUILD_DIR)/editor/history.o: src/editor/gap_buffer.h
+
 check: $(APP_BINARY)
 	@if $(READELF) -l $(APP_BINARY) | grep -q 'INTERP'; then \
 		echo 'error: executable contains a PT_INTERP segment' >&2; exit 1; \
@@ -90,9 +92,9 @@ $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $^
 
-$(CLIPBOARD_RANGE_TEST): tests/clipboard_range_test.c src/backend/clipboard.c
+$(CLIPBOARD_RANGE_TEST): tests/clipboard_range_test.c src/editor/gap_buffer.h
 	@mkdir -p $(@D)
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ $<
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $<
 
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
