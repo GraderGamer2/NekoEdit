@@ -21,7 +21,7 @@ Protocol-facing geometry deliberately remains in compositor coordinates: buffer 
 
 The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).
 
-The existing output-tracking mock cases were updated for the new initial `wl_display.sync` request. Static assembly review and CI compilation/testing are pending; this change has not yet been verified on a physical Wayland compositor.
+The existing output-tracking mock cases were updated for the new initial `wl_display.sync` request. The first dedicated sizing scenario is placed after the broad file-workflow suite so it has not yet been reached by the latest CI attempt. The maximized restore test now uses the scaled coordinate corresponding to the restore button; at 2× density, surface x=1800 maps to virtual x=900. Run the full suite once after this correction. Physical GNOME/Mutter validation remains outstanding.
 
 ## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
 

@@ -10,6 +10,12 @@ The app now distinguishes compositor surface dimensions from virtual application
 
 Regression work adds an initial-size mock with two outputs: 1920×1080 at 1× and 2560×1440 at 2×. The backend must select the former by logical area, not raw pixel area. The test verifies the replacement of the unattached startup buffer, scaled chrome and text pixels, exact surface/layout/buffer geometry, surface-damage dimensions, and the 1.5× pointer-to-layout coordinate conversion. Existing output-tracking mock scenarios now include the initial output-state roundtrip.
 
+### Follow-up after CI run #936
+
+The freestanding build, CLI tests, and renderer benchmark passed. The Wayland mock reached the file-workflow scenario, where its pre-density restore click at surface x=1860 mapped to virtual x=930 at the 2× maximized density—inside Close rather than the maximize/restore control. NekoEdit therefore exited normally and the mock waited for an xdg request that correctly was not sent. The test now clicks surface x=1800 (virtual x=900), the scaled restore control. The new dedicated two-output startup-density scenario is later in the test sequence and was not reached by #936; its result remains pending.
+
+
+
 **Changed implementation/test/docs:** `src/backend/wayland.S`, `tests/wayland_mock.py`, root README, and the Wayland, architecture, and rendering documentation. The development optimization policy remains unchanged. CI validation is pending for the first build after this change; physical GNOME/Mutter visual and input testing remains necessary after CI.
 
 ---

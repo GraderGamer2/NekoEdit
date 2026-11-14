@@ -8477,7 +8477,9 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Restore: deliver the configure while buffer {maximized_buffer_id} is still
                     # compositor-owned. The client must ack but defer replacement.
-                    workflow_window_click(1860, serial + 30, 10, "restore")
+                    # The maximized UI density is 2x: x=1800 maps to virtual x=900,
+                    # the center of the scaled maximize/restore control (not Close).
+                    workflow_window_click(1800, serial + 30, 10, "restore")
                     client.sendall(
                         wire_message(10, 0, struct.pack("<iiII", 800, 480, 4, 4))
                         + wire_message(9, 0, struct.pack("<I", 1236))
