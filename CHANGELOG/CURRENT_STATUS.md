@@ -1,3 +1,15 @@
+## 2026-11-14 — destroy removed Wayland extension managers (CI pending)
+
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
+
+Fixed global-removal cleanup for the optional fractional-scale and viewporter managers. When either bound global disappears, NekoEdit now sends that manager proxy's destructor request and clears its proxy ID. It deliberately retains the already-created per-surface fractional-scale and viewport objects, which remain independent of their factory manager objects.
+
+Added a compositor mock that removes both manager globals after startup, verifies both manager destructor requests, then changes the preferred fractional scale and resizes the surface. The test verifies that the original per-surface objects remain active and that the existing viewport accepts a new logical destination while a 1.5x backing buffer is created.
+
+**Validation:** Full Actions validation is pending. No physical second-output test is claimed; this is a protocol-level manager lifecycle test that runs without additional displays.
+
+---
+
 ## 2026-11-14 — preserve pending buffer generations across configure (CI PASS #947)
 
 **Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.

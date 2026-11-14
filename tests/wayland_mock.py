@@ -415,6 +415,7 @@ def run(
     frame_callback_order_test: bool = False,
     buffer_pool_test: bool = False,
     buffer_generation_test: bool = False,
+    fractional_manager_removal_test: bool = False,
     verify_frame_callbacks: bool = False,
     seat_hotplug_test: bool = False,
     seat_hotplug_ime_test: bool = False,
@@ -1176,6 +1177,163 @@ def run(
                     "damage surface in compositor logical coordinates",
                 )
                 expect_message(client, (8, 6, b""), "initial map surface")
+                if fractional_manager_removal_test:
+                    if not fractional_scale_test or not viewport_object_id or not fractional_id:
+                        raise AssertionError(
+                            "fractional manager removal test requires the paired fractional-scale/viewporter objects"
+                        )
+
+                    # These are the two bound manager proxies; their child
+                    # per-surface objects must remain valid after manager destruction.
+                    fractional_manager_id = viewport_object_id - 2
+                    viewporter_manager_id = viewport_object_id - 1
+                    names = (
+                        "fractional_scale_manager_global", "viewporter_global",
+                        "fractional_scale_manager_object", "viewporter_object",
+                        "fractional_scale_enabled", "fractional_scale_object", "viewport_object",
+                        "surface_preferred_fractional_scale", "window_buffer_raster_scale_120",
+                        "window_buffer_created_raster_scale_120", "window_surface_width",
+                        "window_surface_height", "window_buffer_width", "window_buffer_height",
+                        "window_stride", "window_buffer_id", "window_buffer_slot_ids",
+                        "buffer_busy", "window_resize_pending",
+                    )
+                    addresses = {}
+                    for symbol_line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                        fields = symbol_line.split()
+                        if len(fields) == 3 and fields[2] in names:
+                            addresses[fields[2]] = int(fields[0], 16)
+                    if set(addresses) != set(names):
+                        raise AssertionError(f"fractional manager lifecycle symbols are incomplete: {addresses!r}")
+
+                    def extension_value(name: str) -> int:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            raw = os.pread(memory.fileno(), 4, addresses[name])
+                        if len(raw) != 4:
+                            raise AssertionError(f"short fractional extension state read for {name}")
+                        return struct.unpack("<I", raw)[0]
+
+                    def wait_extension(name: str, expected: int, label: str) -> None:
+                        deadline = time.monotonic() + 3.0
+                        actual = extension_value(name)
+                        while actual != expected and time.monotonic() < deadline:
+                            time.sleep(0.005)
+                            actual = extension_value(name)
+                        if actual != expected:
+                            raise AssertionError(
+                                f"{label}: expected {name}={expected}, got {actual}"
+                            )
+
+                    if (
+                        extension_value("fractional_scale_manager_global") != 10
+                        or extension_value("viewporter_global") != 11
+                        or extension_value("fractional_scale_manager_object") != fractional_manager_id
+                        or extension_value("viewporter_object") != viewporter_manager_id
+                        or extension_value("fractional_scale_enabled") != 1
+                        or extension_value("fractional_scale_object") != fractional_id
+                        or extension_value("viewport_object") != viewport_object_id
+                    ):
+                        raise AssertionError("fractional manager/child-object setup did not match the mock globals")
+
+                    # Both registry globals disappear after they have been
+                    # bound. The client must destroy the manager proxies, but
+                    # must retain the already-created per-surface objects.
+                    client.sendall(
+                        wire_message(2, 1, struct.pack("<I", 10))
+                        + wire_message(2, 1, struct.pack("<I", 11))
+                    )
+                    expect_message(
+                        client, (fractional_manager_id, 0, b""),
+                        "destroy removed wp_fractional_scale_manager_v1 proxy",
+                    )
+                    expect_message(
+                        client, (viewporter_manager_id, 0, b""),
+                        "destroy removed wp_viewporter proxy",
+                    )
+                    wait_extension("fractional_scale_manager_global", 0, "fractional manager global removal")
+                    wait_extension("viewporter_global", 0, "viewporter global removal")
+                    wait_extension("fractional_scale_manager_object", 0, "fractional manager proxy destruction")
+                    wait_extension("viewporter_object", 0, "viewporter proxy destruction")
+                    if (
+                        extension_value("fractional_scale_enabled") != 1
+                        or extension_value("fractional_scale_object") != fractional_id
+                        or extension_value("viewport_object") != viewport_object_id
+                    ):
+                        raise AssertionError(
+                            "destroying the managers must not invalidate existing per-surface extension objects"
+                        )
+
+                    # Existing per-surface objects remain functional even
+                    # after their factory globals and manager proxies vanish.
+                    client.sendall(
+                        wire_message(fractional_id, 0, struct.pack("<I", 180))
+                        + wire_message(10, 0, struct.pack("<iiI", 640, 360, 0))
+                        + wire_message(9, 0, struct.pack("<I", 1237))
+                    )
+                    expect_message(
+                        client, (9, 4, struct.pack("<I", 1237)),
+                        "ack resize after fractional manager removal",
+                    )
+                    wait_extension("surface_preferred_fractional_scale", 180, "per-surface scale object remains active")
+                    wait_extension("window_resize_pending", 1, "new generation waits for the old buffer release")
+                    if (
+                        extension_value("window_surface_width") != 800
+                        or extension_value("window_surface_height") != initial_height
+                        or extension_value("window_buffer_created_raster_scale_120") != initial_preferred_fractional_scale
+                    ):
+                        raise AssertionError("the old backing generation changed before wl_buffer.release")
+
+                    # Release the old single slot. The client must still use
+                    # the existing viewport object to publish the resized
+                    # logical destination, with exact fractional backing size.
+                    client.sendall(wire_message(client_buffer_id, 0))
+                    expect_message(
+                        client, (client_buffer_id, 0, b""),
+                        "destroy old buffer after fractional manager removal",
+                    )
+                    create_replacement = recv_wayland_message(client)
+                    if create_replacement[:2] != (11, 0) or len(create_replacement[2]) != 24 or create_replacement[3]:
+                        raise AssertionError(f"replacement buffer request is malformed: {create_replacement!r}")
+                    replacement_id, replacement_offset, replacement_width, replacement_height, replacement_stride, replacement_format = struct.unpack(
+                        "<6I", create_replacement[2]
+                    )
+                    if (
+                        replacement_offset, replacement_width, replacement_height,
+                        replacement_stride, replacement_format
+                    ) != (0, 960, 540, 3840, 1):
+                        raise AssertionError(
+                            "post-removal buffer did not retain exact fractional sizing: "
+                            f"{(replacement_offset, replacement_width, replacement_height, replacement_stride, replacement_format)!r}"
+                        )
+                    expect_message(
+                        client, (viewport_object_id, 2, struct.pack("<ii", 640, 360)),
+                        "existing wp_viewport accepts destination update after manager removal",
+                    )
+                    expect_message(
+                        client, (8, 1, struct.pack("<III", replacement_id, 0, 0)),
+                        "attach replacement fractional buffer",
+                    )
+                    expect_message(
+                        client, (8, 2, struct.pack("<4I", 0, 0, 640, 360)),
+                        "damage replacement in logical surface coordinates",
+                    )
+                    expect_message(client, (8, 6, b""), "commit replacement fractional buffer")
+                    wait_extension("window_buffer_id", replacement_id, "replacement buffer ID")
+                    wait_extension("window_surface_width", 640, "resized logical width")
+                    wait_extension("window_surface_height", 360, "resized logical height")
+                    wait_extension("window_buffer_raster_scale_120", 180, "retained fractional raster")
+                    wait_extension("window_buffer_created_raster_scale_120", 180, "replacement raster generation")
+                    wait_extension("window_buffer_width", 960, "replacement physical width")
+                    wait_extension("window_buffer_height", 540, "replacement physical height")
+                    wait_extension("window_stride", 3840, "replacement physical stride")
+                    if extension_value("buffer_busy") != 1:
+                        raise AssertionError("replacement buffer was not marked compositor-owned")
+                    observations.append(
+                        "global_remove destroys bound fractional/viewporter manager proxies while preserving "
+                        "their per-surface objects, fractional scale updates and viewport destination changes"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if window_initial_size_test:
                     wanted_size_symbols = {
                         "window_surface_width", "window_surface_height",
@@ -10462,6 +10620,14 @@ if __name__ == "__main__":
     run(sys.argv[1], verify_frame_callbacks=True)
     run(sys.argv[1], frame_callback_order_test=True)
     run(sys.argv[1], buffer_pool_test=True)
+    # Manager globals may disappear after binding; only manager proxies are
+    # destroyed, while their already-created surface objects remain usable.
+    run(
+        sys.argv[1],
+        fractional_manager_removal_test=True,
+        fractional_scale_test=True,
+        initial_preferred_fractional_scale=150,
+    )
     # Stress both owned slots through coalesced fractional-scale/transform/resize changes.
     run(
         sys.argv[1],

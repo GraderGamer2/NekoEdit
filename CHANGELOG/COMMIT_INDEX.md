@@ -1,3 +1,14 @@
+## 2026-11-14 — destroy bound Wayland extension managers on global removal (CI pending)
+
+- Send `wp_fractional_scale_manager_v1.destroy` and `wp_viewporter.destroy` when their bound registry globals are removed.
+- Preserve the already-created per-surface `wp_fractional_scale_v1` and `wp_viewport` objects.
+- Add a protocol mock that removes both globals, then proves fractional-scale updates and viewport destination changes still work.
+- Physical multi-output validation remains a separate compositor/desktop check.
+
+Full Actions result pending.
+
+---
+
 ## 2026-11-14 — latch pending Wayland buffer generations across configure (CI PASS #947)
 
 Implementation/test/docs change on early-alpha:

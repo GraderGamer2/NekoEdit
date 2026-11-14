@@ -25086,10 +25086,35 @@ handle_output_global_remove:
     inc r13d
     jmp .output_remove_find
 .output_remove_fractional_manager:
+    # global_remove invalidates the registry global, not its already-created
+    # per-surface wp_fractional_scale_v1 object. Destroy only the bound manager.
+    mov edi, dword ptr [rip + fractional_scale_manager_object]
+    test edi, edi
+    jz .output_remove_fractional_manager_clear
+    xor esi, esi                 # wp_fractional_scale_manager_v1.destroy
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .output_remove_return
+    mov dword ptr [rip + fractional_scale_manager_object], 0
+.output_remove_fractional_manager_clear:
     mov dword ptr [rip + fractional_scale_manager_global], 0
     mov eax, 1
     jmp .output_remove_return
 .output_remove_viewporter:
+    # Destroying wp_viewporter does not invalidate an existing wp_viewport.
+    mov edi, dword ptr [rip + viewporter_object]
+    test edi, edi
+    jz .output_remove_viewporter_clear
+    xor esi, esi                 # wp_viewporter.destroy
+    lea rdx, [rip + payload_buffer]
+    xor ecx, ecx
+    call wl_send_request
+    test rax, rax
+    js .output_remove_return
+    mov dword ptr [rip + viewporter_object], 0
+.output_remove_viewporter_clear:
     mov dword ptr [rip + viewporter_global], 0
     mov eax, 1
     jmp .output_remove_return
