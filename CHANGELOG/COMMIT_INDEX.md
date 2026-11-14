@@ -1,3 +1,17 @@
+## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
+
+| Commit | Subject |
+|---|---|
+| [f8ff3f8df057](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983) | perf: scan gap-buffer spans when rebuilding line index |
+
+The EOF-gap fast path remains unchanged. For an internal gap, newline counting and line-record discovery now scan the physical prefix/suffix with `REPNE SCASB`, carrying logical offsets across the gap so a split physical line remains one logical record. The Wayland mock forces rebuilds with the gap inside a line and directly after LF, then checks record spans, row counts, IDs and Fenwick nodes.
+
+Actions [#984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180) passed all 17 steps, including the full Wayland mock, 11 MiB Open/Save, XKB, importer, Compose and nested GNOME Shell/Mutter/IBus integration.
+
+ELF `size`: text 237,686, data 64, BSS 3,764,856 bytes. Executable artifact: 151,150 bytes; Compose artifact: 120,536 bytes. No end-to-end performance gain is claimed.
+
+---
+
 ## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
 
 | Commit | Subject |

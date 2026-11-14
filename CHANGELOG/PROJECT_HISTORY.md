@@ -1,3 +1,15 @@
+## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
+
+The document line-index rebuild now uses contiguous physical-span newline scans when the gap is inside the document. The existing EOF-gap fast path stays as-is. The edited-document count and fill phases use `REPNE SCASB` over the prefix and suffix rather than making a `doc_byte_at` call for every byte. Logical line offsets are carried across the gap, including when a single logical line is physically split by it. Existing grapheme-aware visual-row measurement is unchanged.
+
+The Wayland mock now forces a full rebuild with the gap inside a long logical line and another rebuild with the gap directly after an inserted LF. Both assert exact line bytes, row counts, unique stable IDs and Fenwick-tree aggregates. Ordinary insertion/deletion point updates and newline split/merge behavior remain covered.
+
+Implementation [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983) passed all 17 steps in Actions [#984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180), including the full Wayland suite and 11 MiB Open/Save, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus, and artifact uploads.
+
+The ELF contains text 237,686 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,150 bytes and Compose packs are 120,536 bytes. No end-to-end performance gain is asserted; no before/after timing was collected.
+
+---
+
 ## 2026-11-14 — dirty caret-band rendering validated (Actions #967 PASS)
 
 **Branch:** `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
