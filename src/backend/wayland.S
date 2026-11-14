@@ -93,6 +93,10 @@
 .equ DOC_HSCROLL_CACHE_SLOTS, 1024
 .equ DOC_HSCROLL_CACHE_MASK, (DOC_HSCROLL_CACHE_SLOTS - 1)
 .equ DOC_HSCROLL_CACHE_ENTRY_SIZE, 20
+.equ DOC_VBYTE_CACHE_SLOTS, 4096
+.equ DOC_VBYTE_CACHE_MASK, (DOC_VBYTE_CACHE_SLOTS - 1)
+.equ DOC_VBYTE_CACHE_ENTRY_SIZE, 24
+.equ DOC_VBYTE_CACHE_BUCKET_SHIFT, 12
 .equ PATH_CAPACITY,    4096
 .equ PICKER_MAX_ENTRIES, 128
 .equ PICKER_ENTRY_SIZE, 260
@@ -5033,6 +5037,9 @@ render_find_scan_end:   .long 0
 .global render_document_scan_start, render_document_scan_end
 render_document_scan_start: .long 0
 render_document_scan_end:   .long 0
+.global doc_offset_visual_scan_start, doc_offset_visual_scan_end
+doc_offset_visual_scan_start: .long 0
+doc_offset_visual_scan_end:   .long 0
 .global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
@@ -5080,6 +5087,9 @@ doc_hscroll_cache_epoch: .long 0
 .balign 16
 doc_hscroll_checkpoint_cache:
     .zero (DOC_HSCROLL_CACHE_SLOTS * DOC_HSCROLL_CACHE_ENTRY_SIZE)
+.balign 16
+doc_vbyte_checkpoint_cache:
+    .zero (DOC_VBYTE_CACHE_SLOTS * DOC_VBYTE_CACHE_ENTRY_SIZE)
 .global doc_line_index_valid
 doc_line_index_valid:   .long 0
 doc_line_index_columns: .long 0
@@ -16753,6 +16763,89 @@ doc_hscroll_cache_lookup:
     ret
 .size doc_hscroll_cache_lookup, . - doc_hscroll_cache_lookup
 
+
+# Sparse byte-to-visual checkpoints are keyed by stable logical-line ID.
+# Offsets are relative to the logical line so edits before an untouched line
+# do not invalidate its cached positions.
+# EDI=line ID, ESI=4 KiB byte bucket, EDX=line-relative byte offset,
+# ECX=local visual row, R8D=pixel X.
+.type doc_vbyte_cache_store, @function
+doc_vbyte_cache_store:
+    mov r9d, edx
+    mov r10d, ecx
+    mov r11d, r8d
+    mov eax, esi
+    imul eax, eax, 13
+    xor eax, edi
+    and eax, DOC_VBYTE_CACHE_MASK
+    imul rax, rax, DOC_VBYTE_CACHE_ENTRY_SIZE
+    lea rdx, [rip + doc_vbyte_checkpoint_cache]
+    add rdx, rax
+    mov eax, dword ptr [rip + doc_hscroll_cache_epoch]
+    mov dword ptr [rdx], eax
+    mov dword ptr [rdx + 4], edi
+    mov dword ptr [rdx + 8], esi
+    mov dword ptr [rdx + 12], r9d
+    mov dword ptr [rdx + 16], r10d
+    mov dword ptr [rdx + 20], r11d
+    ret
+.size doc_vbyte_cache_store, . - doc_vbyte_cache_store
+
+# EDI=line ID, ESI=target 4 KiB bucket, EDX=line-relative target offset.
+# Returns EAX=relative offset, EDX=local visual row, ECX=pixel X; -1 on miss.
+.type doc_vbyte_cache_lookup, @function
+doc_vbyte_cache_lookup:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12d, edi
+    mov r13d, esi
+    mov ebx, edx
+    mov r14d, 16
+.Ldoc_vbyte_cache_lookup_probe:
+    mov eax, r13d
+    imul eax, eax, 13
+    xor eax, r12d
+    and eax, DOC_VBYTE_CACHE_MASK
+    imul rax, rax, DOC_VBYTE_CACHE_ENTRY_SIZE
+    lea rdx, [rip + doc_vbyte_checkpoint_cache]
+    add rax, rdx
+    mov edx, dword ptr [rip + doc_hscroll_cache_epoch]
+    cmp dword ptr [rax], edx
+    jne .Ldoc_vbyte_cache_lookup_miss
+    cmp dword ptr [rax + 4], r12d
+    jne .Ldoc_vbyte_cache_lookup_miss
+    cmp dword ptr [rax + 8], r13d
+    jne .Ldoc_vbyte_cache_lookup_miss
+    mov edx, dword ptr [rax + 12]
+    cmp edx, ebx
+    ja .Ldoc_vbyte_cache_lookup_miss
+    mov edx, dword ptr [rax + 16]
+    mov ecx, dword ptr [rax + 20]
+    mov eax, dword ptr [rax + 12]
+    jmp .Ldoc_vbyte_cache_lookup_done
+.Ldoc_vbyte_cache_lookup_miss:
+    dec r14d
+    jz .Ldoc_vbyte_cache_lookup_not_found
+    test r13d, r13d
+    jz .Ldoc_vbyte_cache_lookup_not_found
+    dec r13d
+    jmp .Ldoc_vbyte_cache_lookup_probe
+.Ldoc_vbyte_cache_lookup_not_found:
+    mov eax, -1
+    xor edx, edx
+    xor ecx, ecx
+.Ldoc_vbyte_cache_lookup_done:
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_vbyte_cache_lookup, . - doc_vbyte_cache_lookup
+
 # EDI=logical line byte start, ESI=byte span, EDX=stable line ID.
 # Returns EAX=visual rows >= 1.
 .type doc_line_index_measure_rows, @function
@@ -16763,10 +16856,13 @@ doc_line_index_measure_rows:
     push r12
     push r13
     push r14
-    sub rsp, 8
+    push r15
+    sub rsp, 16
     mov r14d, edx
     mov dword ptr [rsp], 1
+    mov dword ptr [rsp + 4], 0
     mov r12d, edi
+    mov r15d, edi
     lea r13d, [rdi + rsi]
     test esi, esi
     jz .Ldoc_index_unwrapped_end_ready
@@ -16777,9 +16873,29 @@ doc_line_index_measure_rows:
     dec r13d
 .Ldoc_index_unwrapped_end_ready:
     xor ebx, ebx
+    mov edi, r14d
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call doc_vbyte_cache_store
 .Ldoc_index_unwrapped_loop:
     cmp r12d, r13d
     jae .Ldoc_index_unwrapped_done
+    mov eax, r12d
+    sub eax, r15d
+    shr eax, DOC_VBYTE_CACHE_BUCKET_SHIFT
+    cmp eax, dword ptr [rsp + 4]
+    jbe .Ldoc_index_unwrapped_horizontal_checkpoint
+    mov dword ptr [rsp + 4], eax
+    mov edi, r14d
+    mov esi, eax
+    mov edx, r12d
+    sub edx, r15d
+    xor ecx, ecx
+    mov r8d, ebx
+    call doc_vbyte_cache_store
+.Ldoc_index_unwrapped_horizontal_checkpoint:
 .Ldoc_index_unwrapped_checkpoint:
     mov eax, dword ptr [rsp]
     shl eax, 8
@@ -16828,7 +16944,8 @@ doc_line_index_measure_rows:
     mov dword ptr [rip + doc_max_line_width], ebx
 .Ldoc_index_unwrapped_return:
     mov eax, 1
-    add rsp, 8
+    add rsp, 16
+    pop r15
     pop r14
     pop r13
     pop r12
@@ -16840,6 +16957,11 @@ doc_line_index_measure_rows:
     push r13
     push r14
     push r15
+    push rbp
+    sub rsp, 8
+    mov dword ptr [rsp], edx
+    mov dword ptr [rsp + 4], 0
+    mov ebp, edi
     mov r12d, edi
     lea r13d, [rdi + rsi]
     test esi, esi
@@ -16857,9 +16979,30 @@ doc_line_index_measure_rows:
 .Ldoc_index_measure_width_ready:
     mov r14d, 1
     xor ebx, ebx
+    mov edi, dword ptr [rsp]
+    xor esi, esi
+    xor edx, edx
+    xor ecx, ecx
+    xor r8d, r8d
+    call doc_vbyte_cache_store
 .Ldoc_index_measure_loop:
     cmp r12d, r13d
     jae .Ldoc_index_measure_done
+    mov eax, r12d
+    sub eax, ebp
+    shr eax, DOC_VBYTE_CACHE_BUCKET_SHIFT
+    cmp eax, dword ptr [rsp + 4]
+    jbe .Ldoc_index_measure_read_byte
+    mov dword ptr [rsp + 4], eax
+    mov edi, dword ptr [rsp]
+    mov esi, eax
+    mov edx, r12d
+    sub edx, ebp
+    mov ecx, r14d
+    dec ecx
+    mov r8d, ebx
+    call doc_vbyte_cache_store
+.Ldoc_index_measure_read_byte:
     mov edi, r12d
     call doc_byte_at
     cmp eax, 10
@@ -16904,6 +17047,8 @@ doc_line_index_measure_rows:
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_done:
     mov eax, r14d
+    add rsp, 8
+    pop rbp
     pop r15
     pop r14
     pop r13
@@ -18368,10 +18513,28 @@ doc_offset_to_visual_indexed:
     mov eax, dword ptr [rdi + DOC_INDEX_BYTES_OFFSET]
     add eax, r13d
     mov r15d, eax
+    mov edi, ebx
+    call doc_line_index_get_id
+    mov dword ptr [rsp], eax
     cmp r12d, r15d
     cmova r12d, r15d
+    mov edx, r12d
+    sub edx, r13d
+    mov esi, edx
+    shr esi, DOC_VBYTE_CACHE_BUCKET_SHIFT
+    mov edi, dword ptr [rsp]
+    call doc_vbyte_cache_lookup
+    cmp eax, -1
+    je .Ldoc_offset_indexed_cache_miss
+    add r13d, eax
+    mov ebx, edx
+    mov r14d, ecx
+    jmp .Ldoc_offset_indexed_cache_ready
+.Ldoc_offset_indexed_cache_miss:
     xor ebx, ebx
     xor r14d, r14d
+.Ldoc_offset_indexed_cache_ready:
+    mov dword ptr [rip + doc_offset_visual_scan_start], r13d
 .Ldoc_offset_indexed_scan:
     cmp r13d, r12d
     jae .Ldoc_offset_indexed_boundary
@@ -18455,6 +18618,7 @@ doc_offset_to_visual_indexed:
     inc ebx
     xor r14d, r14d
 .Ldoc_offset_indexed_done:
+    mov dword ptr [rip + doc_offset_visual_scan_end], r13d
     add ebp, ebx
     mov eax, ebp
     mov edx, r14d

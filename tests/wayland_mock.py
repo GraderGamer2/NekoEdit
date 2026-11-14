@@ -3327,7 +3327,8 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_selection_active", "render_selection_scan_start",
                         "render_selection_scan_end", "render_find_scan_start",
                         "render_find_scan_end", "render_document_scan_start",
-                        "render_document_scan_end", "context_menu_open", "context_menu_x",
+                        "render_document_scan_end", "doc_offset_visual_scan_start",
+                        "doc_offset_visual_scan_end", "context_menu_open", "context_menu_x",
                         "context_menu_y",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
@@ -4709,6 +4710,26 @@ xkb_symbols "nekoedit-sparse" {
                         or state["doc_line_index_records"][0][1] <= 1
                     ):
                         raise AssertionError("multi-megabyte horizontal fixture did not load wrapped: " + repr(state))
+                    key_step(3185, 107, "End moves caret to end of the multi-megabyte wrapped line")
+                    state = read_document_state()
+                    caret_scan_start = state["doc_offset_visual_scan_start"]
+                    caret_scan_end = state["doc_offset_visual_scan_end"]
+                    if (
+                        state["doc_cursor"] != expected_length
+                        or caret_scan_start < expected_length - 4096
+                        or caret_scan_end < caret_scan_start
+                        or caret_scan_end > expected_length
+                        or caret_scan_end - caret_scan_start > 4096
+                    ):
+                        raise AssertionError(
+                            "wrapped caret-to-visual mapping rescanned the long line instead of using a nearby byte checkpoint: "
+                            + repr({
+                                "cursor": state["doc_cursor"],
+                                "scan_start": caret_scan_start,
+                                "scan_end": caret_scan_end,
+                                "length": state["doc_length"],
+                            })
+                        )
                     workflow_click(200, 20, 3190, "open Settings for large horizontal-render test")
                     if read_document_state()["settings_menu_open"] != 1:
                         raise AssertionError("Settings did not open for large horizontal-render test")
@@ -4722,6 +4743,22 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("large line did not become horizontally scrollable: " + repr(state))
                     key_step(3200, 107, "End moves the caret to the end of the multi-megabyte line")
                     state = read_document_state()
+                    caret_scan_start = state["doc_offset_visual_scan_start"]
+                    caret_scan_end = state["doc_offset_visual_scan_end"]
+                    if (
+                        caret_scan_start < expected_length - 4096
+                        or caret_scan_end < caret_scan_start
+                        or caret_scan_end > expected_length
+                        or caret_scan_end - caret_scan_start > 4096
+                    ):
+                        raise AssertionError(
+                            "unwrapped caret-to-visual mapping did not use a nearby byte checkpoint: "
+                            + repr({
+                                "scan_start": caret_scan_start,
+                                "scan_end": caret_scan_end,
+                                "length": state["doc_length"],
+                            })
+                        )
                     scan_start = state["render_document_scan_start"]
                     scan_end = state["render_document_scan_end"]
                     if (
@@ -4763,7 +4800,7 @@ xkb_symbols "nekoedit-sparse" {
                             "repeated horizontal redraw did not reuse visible-position checkpoints: " + repr(state)
                         )
                     observations.append(
-                        "4 MiB unwrapped line: horizontal checkpoints jump near the visible byte range; glyph traversal stays within 4 KiB across repeated horizontal scrolling"
+                        "4 MiB line in wrapped and unwrapped modes: byte checkpoints bound caret-to-visual scans to 4 KiB; horizontal checkpoints also bound no-wrap glyph traversal across repeated scrolling"
                     )
                     client.sendall(wire_message(10, 1))
                     return
