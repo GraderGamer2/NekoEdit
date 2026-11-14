@@ -5075,8 +5075,8 @@ doc_line_index_capacity: .long 0
 doc_line_count:         .long 0
 doc_line_index_ids:     .quad 0
 doc_line_index_ids_capacity: .long 0
-doc_line_index_next_id: .long 1
-doc_hscroll_cache_epoch: .long 1
+doc_line_index_next_id: .long 0
+doc_hscroll_cache_epoch: .long 0
 .balign 16
 doc_hscroll_checkpoint_cache:
     .zero (DOC_HSCROLL_CACHE_SLOTS * DOC_HSCROLL_CACHE_ENTRY_SIZE)
@@ -16756,7 +16756,6 @@ doc_hscroll_cache_lookup:
 # EDI=logical line byte start, ESI=byte span, EDX=stable line ID.
 # Returns EAX=visual rows >= 1.
 .type doc_line_index_measure_rows, @function
-.type doc_line_index_measure_rows, @function
 doc_line_index_measure_rows:
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .Ldoc_index_measure_wrapped
@@ -18500,6 +18499,7 @@ doc_visual_to_offset_indexed:
     mov edi, ebx
     call doc_line_index_get_id
     mov dword ptr [rsp + 4], eax
+    xor r14d, r14d
     mov dword ptr [rsp + 8], 1
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .Ldoc_visual_indexed_cache_ready

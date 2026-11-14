@@ -402,6 +402,7 @@ def run(
     clipboard_persistence_test: bool = False,
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
+    horizontal_render_bound_test: bool = False,
     word_navigation_test: bool = False,
     pointer_drag_test: bool = False,
     line_navigation_test: bool = False,
@@ -1890,7 +1891,7 @@ def run(
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
-                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or word_navigation_test or pointer_drag_test
+                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or word_navigation_test or pointer_drag_test
                     or line_navigation_test or find_replace_test
                 ):
                     def document_pixel(logical_x: int, logical_y: int) -> int:
@@ -3317,7 +3318,7 @@ xkb_symbols "nekoedit-sparse" {
                     if len(fields) == 3 and fields[2] in {
                         "doc_length", "doc_buffer", "doc_capacity", "doc_cursor",
                         "doc_gap_start", "doc_gap_end", "doc_storage_error",
-                        "doc_line_index_base", "doc_line_index_bytes",
+                        "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_ids",
                         "doc_line_index_capacity", "doc_line_count",
                         "doc_line_index_valid", "doc_line_index_columns",
                         "doc_view_top_row", "doc_view_left_px", "doc_wrap_enabled",
@@ -3335,7 +3336,7 @@ xkb_symbols "nekoedit-sparse" {
                     with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
                         fd = memory.fileno()
                         state: dict[str, object] = {}
-                        qword_names = {"doc_buffer", "doc_line_index_base", "doc_line_index_bytes"}
+                        qword_names = {"doc_buffer", "doc_line_index_base", "doc_line_index_bytes", "doc_line_index_ids"}
                         for name in document_symbols:
                             size = 8 if name in qword_names else 4
                             raw = os.pread(fd, size, document_symbols[name])
@@ -3362,6 +3363,14 @@ xkb_symbols "nekoedit-sparse" {
                             ]
                         else:
                             state["doc_line_index_records"] = []
+                        state["doc_line_index_id_values"] = []
+                        if line_index_test and state.get("doc_line_index_ids", 0) and line_count:
+                            raw_ids = os.pread(fd, line_count * 4, state["doc_line_index_ids"])
+                            if len(raw_ids) != line_count * 4:
+                                raise AssertionError("short read from stable line-ID mapping")
+                            state["doc_line_index_id_values"] = list(
+                                struct.unpack("<" + ("I" * line_count), raw_ids)
+                            )
                         return state
 
                 child_symbol_addresses: dict[str, int] = {}
@@ -4690,6 +4699,75 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if horizontal_render_bound_test:
+                    state = read_document_state()
+                    expected_length = 4 * 1024 * 1024
+                    if (
+                        state["doc_length"] != expected_length
+                        or state["doc_wrap_enabled"] != 1
+                        or state["doc_line_count"] != 1
+                        or state["doc_line_index_records"][0][1] <= 1
+                    ):
+                        raise AssertionError("multi-megabyte horizontal fixture did not load wrapped: " + repr(state))
+                    workflow_click(200, 20, 3190, "open Settings for large horizontal-render test")
+                    if read_document_state()["settings_menu_open"] != 1:
+                        raise AssertionError("Settings did not open for large horizontal-render test")
+                    workflow_settings_click(200, 124, 3195, "disable Wrap Lines for large horizontal-render test")
+                    state = read_document_state()
+                    if (
+                        state["doc_wrap_enabled"] != 0
+                        or state["doc_total_visual_rows"] != 1
+                        or state["settings_menu_open"] != 1
+                    ):
+                        raise AssertionError("large line did not become horizontally scrollable: " + repr(state))
+                    key_step(3200, 107, "End moves the caret to the end of the multi-megabyte line")
+                    state = read_document_state()
+                    scan_start = state["render_document_scan_start"]
+                    scan_end = state["render_document_scan_end"]
+                    if (
+                        state["doc_cursor"] != expected_length
+                        or state["doc_view_left_px"] < 100000
+                        or scan_start < expected_length - 4096
+                        or scan_end <= scan_start
+                        or scan_end - scan_start > 4096
+                    ):
+                        raise AssertionError(
+                            "no-wrap renderer traversed the invisible prefix instead of jumping to the visible end: "
+                            + repr({
+                                "cursor": state["doc_cursor"],
+                                "left_px": state["doc_view_left_px"],
+                                "scan_start": scan_start,
+                                "scan_end": scan_end,
+                                "length": state["doc_length"],
+                            })
+                        )
+                    before_left = state["doc_view_left_px"]
+                    workflow_axis(1, -14 * 256, 3210, "scroll left within the multi-megabyte line")
+                    state = read_document_state()
+                    if (
+                        state["doc_view_left_px"] != max(0, before_left - 14)
+                        or state["render_document_scan_start"] < expected_length - 8192
+                        or state["render_document_scan_end"] - state["render_document_scan_start"] > 4096
+                    ):
+                        raise AssertionError(
+                            "horizontal movement caused no-wrap rendering to rescan the hidden prefix: " + repr(state)
+                        )
+                    workflow_axis(1, 14 * 256, 3220, "scroll back right within the multi-megabyte line")
+                    state = read_document_state()
+                    if (
+                        state["doc_view_left_px"] != before_left
+                        or state["render_document_scan_start"] < expected_length - 4096
+                        or state["render_document_scan_end"] - state["render_document_scan_start"] > 4096
+                    ):
+                        raise AssertionError(
+                            "repeated horizontal redraw did not reuse visible-position checkpoints: " + repr(state)
+                        )
+                    observations.append(
+                        "4 MiB unwrapped line: horizontal checkpoints jump near the visible byte range; glyph traversal stays within 4 KiB across repeated horizontal scrolling"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if horizontal_scroll_test:
                     state = read_document_state()
                     if state["doc_wrap_enabled"] != 1 or state["doc_line_index_records"][0][1] <= 1:
@@ -6002,6 +6080,13 @@ xkb_symbols "nekoedit-sparse" {
                             or len(records) != len(expected_spans)
                         ):
                             raise AssertionError(label + ": index is not valid/current: " + repr(state))
+                        line_ids = tuple(state.get("doc_line_index_id_values", ()))
+                        if (
+                            len(line_ids) != len(expected_spans)
+                            or any(line_id == 0 for line_id in line_ids)
+                            or len(set(line_ids)) != len(line_ids)
+                        ):
+                            raise AssertionError(label + ": stable line IDs are missing or duplicated: " + repr(line_ids))
                         actual_spans = tuple(record[0] for record in records)
                         actual_rows = tuple(record[1] for record in records)
                         if actual_spans != expected_spans or actual_rows != expected_rows:
@@ -11226,6 +11311,24 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(horizontal_path)
+        except FileNotFoundError:
+            pass
+
+    # Large unwrapped single-line painting must jump to the visible horizontal
+    # region rather than traverse the multi-megabyte hidden prefix on each frame.
+    horizontal_render_fd, horizontal_render_path = tempfile.mkstemp(prefix="nekoedit-horizontal-render-")
+    try:
+        with os.fdopen(horizontal_render_fd, "wb") as horizontal_render_file:
+            horizontal_render_file.write(b"A" * (4 * 1024 * 1024))
+        run(
+            sys.argv[1],
+            initial_file=horizontal_render_path,
+            horizontal_render_bound_test=True,
+            cursor_shape_supported=False,
+        )
+    finally:
+        try:
+            os.unlink(horizontal_render_path)
         except FileNotFoundError:
             pass
 
