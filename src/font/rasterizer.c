@@ -463,6 +463,14 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
                 int32_t px=x+e->left+(int32_t)col;
                 if (px<0 || px>=clip_width) continue;
                 uint32_t *dst=(uint32_t *)(dstrow+(int64_t)px*4);
+#ifndef FONT_DRAW_BLEND_REFERENCE
+                /* Fully covered mask pixels are already the opaque foreground
+                 * color. Skip the destination read and three-channel blend. */
+                if (a == 255u) {
+                    *dst = 0xffd8dee9u;
+                    continue;
+                }
+#endif
                 uint32_t old=*dst, inv=255u-a;
                 uint32_t r=(0xd8u*a+((old>>16)&255u)*inv+127u)/255u;
                 uint32_t g=(0xdeu*a+((old>>8)&255u)*inv+127u)/255u;

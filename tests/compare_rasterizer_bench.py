@@ -56,17 +56,19 @@ def reduction(before: float, after: float) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 4:
+    if len(sys.argv) != 5:
         print(
-            "usage: compare_rasterizer_bench.py LINEAR HASH_GENERIC HASH_FAST",
+            "usage: compare_rasterizer_bench.py LINEAR HASH_GENERIC "
+            "HASH_IDENTITY_REFERENCE HASH_IDENTITY_FAST",
             file=sys.stderr,
         )
         return 2
 
     labels = (
-        ("linear LRU + generic transform", sys.argv[1]),
-        ("hash cache + generic transform", sys.argv[2]),
-        ("hash cache + identity fast path", sys.argv[3]),
+        ("linear LRU + generic transform + reference blend", sys.argv[1]),
+        ("hash cache + generic transform + reference blend", sys.argv[2]),
+        ("hash cache + identity path + reference blend", sys.argv[3]),
+        ("hash cache + identity path + opaque-pixel fast path", sys.argv[4]),
     )
     results = [run(label, executable) for label, executable in labels]
     checksums = {result.checksum for result in results}
@@ -80,7 +82,7 @@ def main() -> int:
         print(f"=== {result.label} ===")
         print(result.output, end="" if result.output.endswith("\n") else "\n")
 
-    linear, hash_generic, hash_fast = results
+    linear, hash_generic, hash_identity_reference, hash_identity_fast = results
     print("=== paired median comparison ===")
     print(
         "warm draw: linear -> hash cache: "
@@ -88,15 +90,19 @@ def main() -> int:
     )
     print(
         "warm draw: generic -> identity fast path: "
-        f"{reduction(hash_generic.warm_ns, hash_fast.warm_ns)} lower"
+        f"{reduction(hash_generic.warm_ns, hash_identity_reference.warm_ns)} lower"
+    )
+    print(
+        "warm draw: identity reference -> opaque-pixel fast path: "
+        f"{reduction(hash_identity_reference.warm_ns, hash_identity_fast.warm_ns)} lower"
     )
     print(
         "warm draw: linear -> current renderer: "
-        f"{reduction(linear.warm_ns, hash_fast.warm_ns)} lower"
+        f"{reduction(linear.warm_ns, hash_identity_fast.warm_ns)} lower"
     )
     print(
         "cold rasterization: linear -> current renderer: "
-        f"{reduction(linear.cold_ns, hash_fast.cold_ns)} lower"
+        f"{reduction(linear.cold_ns, hash_identity_fast.cold_ns)} lower"
     )
     print(f"identical framebuffer checksum: {linear.checksum}")
     return 0
