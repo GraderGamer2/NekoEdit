@@ -1,3 +1,17 @@
+## 2026-11-15 — early-alpha caret-only document traversal bounded (Actions #970 PASS)
+
+**Code branch:** `early-alpha`, renderer implementation [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd), test harness [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). **Workflow:** [Actions run #970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed. The application source on `main` remains unchanged; this commit mirrors changelog documentation only.
+
+Current rendering milestone: for eligible plain, unselected arrow-key movement, `render_document` now maps directly to the first dirty visual row and stops after the later caret row plus one row of glyph overhang. This aligns document-byte traversal with the existing clipped pixel bands and Wayland damage rectangles. Per-SHM-slot snapshot checks and the conservative full-frame fallback for edits, selection, scrolling, overlays, IME/Compose, drag, resize/scale changes, transformed buffers and stale state remain in force.
+
+The Wayland mock passed with two isolated regressions: a 4,096-row document requiring no more than 512 bytes of document traversal during caret-only movement, and an 11-byte document where insertion must still use full-frame damage and append the exact expected byte. The rest of Actions #970 passed as well: freestanding build and ELF inspection, CLI tests, renderer equivalence, dual-SHM and 11 MiB Open/Save coverage, native XKB parsing, X.Org importer, Compose generation, and nested GNOME Shell/Mutter integration.
+
+Artifacts: [Linux x86-64 executable, 150,886 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123966705); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492/artifacts/14123123164).
+
+No end-to-end latency improvement is claimed without controlled measurements. Manual GNOME/Mutter testing on the target machine remains outstanding.
+
+---
+
 ## 2026-11-14 — early-alpha dirty caret-band rendering validated (Actions #967 PASS)
 
 **Code branch:** `early-alpha`, commit [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.

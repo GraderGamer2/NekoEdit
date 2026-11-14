@@ -1,3 +1,15 @@
+## Latest handoff (2026-11-15 — early-alpha caret-only document traversal bounded; CI PASS #970)
+
+The application source on `main` remains unchanged. Continue source development on `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05); the renderer implementation is [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd). These `CHANGELOG` updates are documentation-only mirrors.
+
+For eligible plain, unselected arrow-key movement, `render_document` maps directly to the first dirty visual row and stops after the later caret row plus one overhang row. Per-SHM-slot snapshot validation and the full-frame fallback for edits, selection, scrolling, overlays, IME/Compose, drag, resize/scale changes, transformed buffers and stale state remain in force.
+
+Actions [#970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed the full Wayland mock, including a 4,096-row/512-byte traversal-bound test and a separate test proving text insertion still uses full-frame damage. The full build, CLI, renderer, XKB, X.Org importer, Compose, and nested GNOME Shell/Mutter checks passed and both artifacts were uploaded.
+
+No end-to-end latency improvement is claimed; manual target-machine testing and controlled timing remain the next validation steps.
+
+---
+
 ## Latest handoff (2026-11-14 — early-alpha dirty repaint; CI PASS #967)
 
 The stable application-source checkpoint on `main` is unchanged. Continue source development on `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf); the changelog files here mirror the current development checkpoint only.
