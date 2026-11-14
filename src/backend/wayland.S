@@ -18810,6 +18810,7 @@ doc_visual_to_offset_indexed:
 .Ldoc_visual_indexed_wrapped_row_cache:
     mov edi, dword ptr [rsp + 4]
     mov edx, r12d
+    mov r8d, ebp
     call doc_vbyte_cache_lookup_row
     cmp eax, -1
     je .Ldoc_visual_indexed_cache_ready
