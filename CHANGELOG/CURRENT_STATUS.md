@@ -1,3 +1,23 @@
+## 2026-11-14 — fast-path printable ASCII reverse grapheme traversal (CI PASS #952)
+
+**Branch:** `early-alpha`; normal development remains at `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
+
+Added the matching backward fast path to `doc_grapheme_prev`. After finding the previous UTF-8 scalar start, the routine returns that offset without calling `doc_grapheme_is_break` only when both that scalar and the immediately preceding byte are printable ASCII (0x20–0x7E). Two adjacent printable-ASCII scalars are separate grapheme clusters. If either byte is a control, CR/LF, or non-ASCII, the existing general Unicode boundary algorithm remains in use. The forward iterator has the corresponding guarded shortcut: it advances directly for printable ASCII only when the following byte is ASCII or the document ends, and falls back for high-bit successors to preserve Extend, ZWJ, and SpacingMark joins.
+
+The existing Wayland grapheme regression traverses the appended ASCII sentence in both directions. On reverse traversal it reaches the ASCII/CRLF edge, takes the general path, and verifies Backspace removes CRLF as one grapheme. The fixture also retains combining sequences, emoji modifiers, a ZWJ family, regional-indicator pairing, Hangul, Indic conjuncts, Prepend, SpacingMark, pointer hit-testing, and whole-grapheme Backspace/Delete checks.
+
+**Validation:** [Actions #952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed all 17 steps: freestanding build/ELF checks, CLI smoke tests, renderer-cache comparison, the full Wayland mock including 11 MiB Open/Save and Unicode grapheme navigation, executable inspection, native `us(intl)` keymap parsing, pinned X.Org importer verification, Compose locale-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+**Measured context:** the existing 11 MiB / 89,414-line Open-to-first-presented-redraw mock measured 166.8, 167.2, and 167.3 ms in this run. This open/redraw timing does not exercise the new reverse traversal shortcut, and no controlled pre/post benchmark of Left/Backspace was run. Do not interpret it as a performance regression or speedup.
+
+Implementation: [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92).
+
+Artifacts: [Linux x86-64 binary (147,056 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106089639); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106995382).
+
+**Next:** measure real installed-font full-frame redraw, line-layout/index traversal, and repeated Left/Right or Backspace workloads separately. Do not change the `-O2` default until repeatable baselines distinguish document rendering from navigation.
+
+---
+
 ## 2026-11-14 — fast-path printable ASCII grapheme boundaries (CI PASS #951)
 
 **Branch:** `early-alpha`; normal development remains at `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.

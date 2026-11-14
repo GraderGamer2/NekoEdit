@@ -1,14 +1,16 @@
-## Latest handoff (2026-11-14 — printable-ASCII grapheme fast path; CI PASS #951)
+## Latest handoff (2026-11-14 — bidirectional printable-ASCII grapheme fast paths; CI PASS #952)
 
-Continue development on `early-alpha` at [0318e43](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00); `main` remains at its stable source checkpoint [5ce2c3f](https://github.com/GraderGamer2/NekoEdit/commit/5ce2c3fe546ee11dd16188906b55783600cea12b). This handoff mirrors project history on `main` without merging application source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+Continue development on `early-alpha` at [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92); `main` remains at its stable source checkpoint [5ce2c3f](https://github.com/GraderGamer2/NekoEdit/commit/5ce2c3fe546ee11dd16188906b55783600cea12b). This handoff mirrors project history on `main` without merging application source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-`doc_grapheme_next` now bypasses UTF-8 scalar decoding and grapheme-property range scans for printable ASCII when the next byte is ASCII or the current byte is at EOF. A non-ASCII successor goes through the full Unicode path, preserving ASCII-base combining sequences, ZWJ and SpacingMark joins. The existing C0/DEL and CRLF handling remains unchanged. The Wayland mock traverses an extended ASCII sentence in both directions alongside the Unicode 18.0 grapheme fixture.
+Both `doc_grapheme_next` and `doc_grapheme_prev` now have conservative printable-ASCII shortcuts. Forward traversal skips scalar decoding and Unicode property scans only when the next byte is ASCII or EOF; a high-bit successor takes the general path so ASCII-base combining, ZWJ and SpacingMark joins are retained. Reverse traversal skips the boundary scan only when the previous scalar and the byte before it are both printable ASCII. Controls, CR/LF and non-ASCII sequences use the existing general algorithm.
 
-Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps, including freestanding build, CLI tests, renderer-cache comparison, full Wayland mock with 11 MiB Open/Save, XKB and pinned importer checks, Compose locale generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+Actions [#952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed all 17 workflow steps, including the full Wayland mock, 11 MiB Open/Save, native XKB and X.Org importer checks, Compose locale build, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-Artifacts: Linux x86-64 [147,031 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106073579); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106337951).
+Artifacts: Linux x86-64 [147,056 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106089639); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106995382).
 
-The 11 MiB Open-to-first-presented-redraw mock measured 124.9, 125.8 and 126.7 ms. No pre-change baseline exists, so this is not a claimed speedup. Next, profile real installed-font rendering, representative full-frame redraws, editing and scrolling before selecting a broader hot path. Live desktop profiling on the Debian session remains separate.
+The 11 MiB Open-to-first-redraw mock measured 166.8–167.3 ms in #952. This does not measure the reverse-navigation path, and no controlled Left/Backspace before/after timing has been collected. Next, create separate repeatable workloads for real-font full-frame redraw, line/index traversal and backward/forward editing before making broader performance claims. Live desktop profiling remains separate.
+
+---
 
 ---
 
