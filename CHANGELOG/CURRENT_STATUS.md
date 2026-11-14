@@ -1,3 +1,30 @@
+## 2026-11-15 — batch Find/Replace index maintenance (Actions #985 PASS)
+
+**Branch/head:** `early-alpha` at [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c). **Workflow:** [Actions #985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631) passed the complete 17-step build, mock, integration and artifact workflow.
+
+### Source changes
+
+- `src/backend/wayland.S`: `doc_replace_selection_with_buffer` now deletes the selected match and calls the existing `doc_insert_bytes` range primitive once with the contiguous replacement buffer. It no longer loops through the replacement one byte at a time with `doc_insert_byte`.
+- Range insertion records the inserted replacement as one history operation and marks the derived line index invalid. The Replace All search loop reads document bytes directly and does not force an index rebuild; the next render rebuilds the index after the replacement batch instead of rebuilding it once for each match.
+- Clipboard paste and Open already used bulk/lazy index handling; this change addresses the separate Find/Replace path. Unicode grapheme rules, line measurement, and gap-buffer storage layout are unchanged.
+
+### Regression coverage
+
+The Wayland mock's Find/Replace fixture now contains 65 remaining matches after Replace Current. It verifies Replace Current and Replace All, including the final replacement count of 65, exact document bytes, all 66 logical line spans, visual-row counts, unique stable line IDs, and both Fenwick-tree node arrays. Existing Find query editing, match highlighting, Enter/F3 navigation, Replace Current and Replace All interaction checks remain active.
+
+### Validation
+
+Actions [#985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631) passed all 17 workflow steps: freestanding build and ELF checks, CLI/host tests, renderer equivalence, the full Wayland protocol mock (including the 65-match Replace All regression and 11 MiB Open/Save), native `us(intl)` XKB, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter and IBus integration, and both artifact uploads.
+
+ELF `size`: text **237,670**, data **64**, BSS **3,764,856** bytes. Executable artifact: **151,138 bytes**; Compose locale pack artifact: **120,536 bytes**. The executable is 12 bytes smaller than #984; this is only a build-size observation, not evidence of a meaningful performance or speed improvement.
+
+No before/after end-to-end timing was collected. The automated Wayland and GNOME Shell/Mutter/IBus tests passed; this is not a manual retest on the user's live desktop.
+
+Implementation: [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c).
+Workflow: [Actions #985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631).
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131304250); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131676146). Both artifacts expire **2026-11-16 03:51 WIB**.
+
+---
 ## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
 
 **Branch/head:** `early-alpha` at [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983). **Workflow:** [Actions #984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180) passed all 17 steps.

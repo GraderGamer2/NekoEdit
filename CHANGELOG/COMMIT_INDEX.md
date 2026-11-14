@@ -1,3 +1,21 @@
+## 2026-11-15 — batch Find/Replace index maintenance (Actions #985 PASS)
+
+| Commit | Subject |
+|---|---|
+| [ad18f921af70](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c) | perf: batch find-and-replace insertions |
+
+`doc_replace_selection_with_buffer` now inserts the contiguous replacement buffer with one `doc_insert_bytes` call rather than issuing one `doc_insert_byte` call for every byte. Each replacement is stored as a range history operation. Since Find/Replace searches the document directly without ensuring the line index, Replace All leaves the index invalid through the full batch and the next render performs one lazy rebuild.
+
+The Wayland mock extends the fixture to 65 remaining matches after Replace Current. It verifies both replacement modes, exact content, 66 logical line spans, visual-row counts, stable unique line IDs, Fenwick nodes and the Replace All count.
+
+Actions [#985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631) passed all 17 workflow steps, including the complete Wayland mock, 11 MiB Open/Save, renderer checks, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus and both artifact uploads.
+
+ELF `size`: text 237,670, data 64, BSS 3,764,856 bytes. Executable artifact: 151,138 bytes; Compose artifact: 120,536 bytes. The executable is 12 bytes smaller than #984; no end-to-end speed gain is claimed.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131304250); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131676146). Expiry: 2026-11-16 03:51 WIB.
+
+---
+
 ## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
 
 | Commit | Subject |
