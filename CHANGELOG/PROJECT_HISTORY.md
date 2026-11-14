@@ -1,3 +1,19 @@
+## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
+
+Reuse the sparse byte-to-visual checkpoints for the reverse coordinate lookup performed by `doc_visual_to_offset_indexed`. After Fenwick lookup identifies the logical line, the mapper uses the line's stable ID and the shared cache epoch to search its 4 KiB byte buckets. Because checkpoint local visual rows are monotonic with byte position, lookup binary-searches the lexicographic pair (local visual row, pixel X), choosing the greatest checkpoint not after the requested coordinate. The saved byte offset, row, and X initialize the existing UTF-8/grapheme-aware scan. A checkpoint at X=300 on row N is deliberately rejected for a request at X=0 on that same row, so beginning-of-row text is not skipped.
+
+If a direct-mapped bucket is missing or a slot contains a collision, the lookup examines the fixed 4,096-entry cache and chooses the closest earlier row/column coordinate for the same stable line ID and epoch. This keeps the fallback bounded and reuses the existing 96 KiB cache instead of allocating a second index. Unwrapped mode continues to use the separate horizontal-pixel checkpoint path.
+
+Extend the 4 MiB single-line Wayland regression. Ctrl+End scrolls the wrapped document to the final viewport; scan instrumentation checks that reverse visual-row-to-byte mapping starts within the last 64 KiB and consumes no more than 4 KiB. Existing checks continue to cover caret byte-to-visual mapping within 4 KiB in both Wrap Lines modes and no-wrap glyph traversal within 4 KiB during horizontal scrolling.
+
+Actions [#961](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233) passed all 17 steps, including the full Wayland protocol mock, 11 MiB Open/Save, executable inspection, native `us(intl)` keymap parsing, pinned X.Org importer verification, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads. The previous #960 run stopped at an ordinary soft-wrap frame/buffer settle gate; the final version in #961 passed the complete suite.
+
+Artifacts: Linux x86-64 [149,288 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14109863343); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14110002983); both expire 2026-11-15 10:39 UTC (17:39 WIB).
+
+This milestone verifies bounded mapping work in the 4 MiB fixture; it does not include a controlled before/after latency benchmark. The software surface is still fully repainted on each frame. Next, measure `render_surface` and build dirty-region invalidation with explicit coverage for selection cleanup, caret movement, scrolling, UI overlays, and buffer generation changes.
+
+---
+
 ## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
 
 Extend the line-index layout measurement pass to populate a second sparse checkpoint working set for caret byte-to-visual conversion. The 4,096 direct-mapped entries (24 bytes each; 96 KiB total) are keyed by the shared cache epoch, stable logical-line ID, and 4 KiB line-relative byte bucket. Each entry retains the byte offset, local visual-row index, and horizontal pixel position. Both wrapped and unwrapped metric paths populate the cache. Lookup checks the target bucket and up to 15 preceding buckets, accepting only an entry whose saved byte offset is not after the target.

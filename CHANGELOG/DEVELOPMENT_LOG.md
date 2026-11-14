@@ -1,3 +1,26 @@
+## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
+
+The indexed reverse mapper `doc_visual_to_offset_indexed` previously found the logical line with the Fenwick tree, then scanned that line from its first byte to find a requested visual row and pixel column. A very long wrapped logical line could therefore still incur a long scan during viewport painting, selection mapping, find highlighting, and pointer hit-testing after vertical scrolling.
+
+Reused the existing 4,096-slot byte-to-visual checkpoint working set (24 bytes per entry; 96 KiB total) for the reverse direction:
+- The mapper derives the maximum 4 KiB bucket from the logical line's byte span and uses the stable line ID and shared layout epoch to locate checkpoints.
+- Since checkpoint row numbers are monotonic with increasing byte buckets, lookup binary-searches the lexicographic coordinate **(local visual row, pixel X)**. It resumes from the greatest checkpoint not after the requested coordinate.
+- Comparing pixel X as well as row is important: a checkpoint can occur partway across a visual row. A later checkpoint on that same row must not be used when the caller requests an earlier X, or the mapper would skip text at the beginning of that row.
+- If a bucket is missing or its direct-mapped slot contains a collision, lookup scans the fixed 4,096-entry working set and selects the closest earlier row/column checkpoint. This fallback is bounded and does not allocate another cache.
+- Wrap Lines OFF continues to use the existing horizontal-pixel checkpoint path.
+
+The 4 MiB single-line Wayland fixture now checks the reverse mapper after Ctrl+End scrolls the wrapped document to its final rows. Test instrumentation requires the scan to resume within the last 64 KiB of the fixture and to consume no more than 4 KiB. The same scenario still verifies byte-to-visual caret mapping within 4 KiB in wrapped and unwrapped modes, plus the separate no-wrap glyph traversal bound during horizontal scrolling.
+
+The first run of this change, Actions #960, reached the existing Wayland mock's ordinary soft-wrap typing scenario but failed its frame/buffer settle gate. The final version passes the complete suite in [Actions #961](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233), all 17 steps, including nested GNOME Shell/Mutter integration. Build/ELF, CLI smoke tests, glyph-cache comparison, executable inspection, `us(intl)` parser, X.Org importer, Compose pack generation, and both artifact uploads also passed.
+
+Artifacts: Linux x86-64 [149,288 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14109863343); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14110002983). Both expire 2026-11-15 10:39 UTC (17:39 WIB).
+
+No controlled before/after timing benchmark was collected. The validated claim is bounded local byte traversal in the 4 MiB fixture, not a measured frame-rate multiplier. Full-frame software-surface repaint remains unchanged.
+
+Next performance target: measure the full `render_surface` repaint path and introduce dirty-region rendering only with explicit invalidation for document pixels, caret/selection, status, menus, dialogs, and resized buffers.
+
+---
+
 ## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
 
 Caret-to-visual mapping previously rescanned a long logical line from its first byte after a large caret jump. This remained expensive even after document glyph painting had been bounded to the viewport and no-wrap horizontal mapping had acquired its own pixel checkpoints.

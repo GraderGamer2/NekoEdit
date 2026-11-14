@@ -1,3 +1,21 @@
+## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
+
+**Branch:** `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint with changelog-only mirrors; `optimization-early-alpha` remains isolated.
+
+Wrapped visual-row-to-byte mapping now reuses the 4,096-entry (96 KiB) sparse byte checkpoint cache. Lookup narrows to the logical line using the Fenwick index, then binary-searches the monotonic checkpoint coordinates by **(local visual row, pixel X)**. It resumes from the last checkpoint not after the requested row/column. Including pixel X avoids starting after the requested insertion point when a checkpoint sits partway across a row. Missing buckets or direct-mapped collisions trigger a fixed scan of the 4,096 cache entries; no extra cache allocation was added. Wrap Lines OFF retains its horizontal checkpoint lookup.
+
+**Regression:** the 4 MiB one-line Wayland scenario scrolls to the final wrapped rows and asserts that reverse mapping resumes within the last 64 KiB and scans no more than 4 KiB. It also retains the wrapped/unwrapped caret byte-to-visual checks and the no-wrap horizontal glyph-paint bound.
+
+**Validation:** [Actions #961](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233) passed all 17 workflow steps: freestanding build/ELF checks, CLI smoke tests, glyph-cache comparison, full Wayland mock including 11 MiB Open/Save, executable inspection, native XKB `us(intl)`, X.Org importer verification, Compose locale-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads. Actions #960 did not complete the Wayland mock because an ordinary soft-wrap scenario hit its frame/buffer settle gate; #961 passed the full suite.
+
+**Artifacts:** [Linux x86-64 binary (149,288 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14109863343); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14110002983). Expiry: 2026-11-15 10:39 UTC (17:39 WIB).
+
+**Remaining performance work:** full-frame `render_surface` repaint still fills the complete background and redraws UI chrome on each presented frame. No before/after latency benchmark was collected, so this milestone establishes a bounded reverse-mapping scan rather than an end-to-end speedup.
+
+Implementation: [9509f33](https://github.com/GraderGamer2/NekoEdit/commit/9509f33ac2aecf64be27858c19d32973a6dadf61); row/column checkpoint selection: [c8eba1a](https://github.com/GraderGamer2/NekoEdit/commit/c8eba1a2bca7d8225fea466e8f2d4e5b568fb8c5); target-X call wiring: [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4).
+
+---
+
 ## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
 
 **Branch:** `early-alpha` at [07f28ae](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3). Normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint with changelog-only mirrors; `optimization-early-alpha` remains isolated.

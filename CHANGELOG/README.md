@@ -1,4 +1,20 @@
-## Latest handoff (2026-11-14 — sparse byte-to-visual checkpoints for long logical lines; CI PASS #959)
+## Latest handoff (2026-11-14 — wrapped visual-row checkpoints; CI PASS #961)
+
+Continue development on `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+Wrapped visual-row-to-byte mapping now reuses the 4,096-entry (96 KiB) sparse per-line byte checkpoint working set. It binary-searches the monotonic checkpoint coordinates by the pair **(local visual row, pixel X)**, selecting the last checkpoint not after the requested row/column. Including X prevents a checkpoint in the middle of a row from skipping earlier text when the caller asks for a smaller column. A missing bucket or direct-map collision falls back to a fixed scan of the 4,096 cache entries. Wrap Lines OFF retains the existing horizontal-pixel checkpoint path.
+
+The 4 MiB single-line Wayland regression checks the reverse mapper at the final wrapped rows and requires its local byte scan to stay within 4 KiB. The existing Ctrl+End caret-mapping regression continues to enforce the same bound in both Wrap Lines modes; the no-wrap glyph painter retains its separate 4 KiB traversal bound.
+
+Actions [#961](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233) passed all 17 workflow steps, including the full Wayland suite, 11 MiB Open/Save, executable inspection, native `us(intl)` parsing, X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: Linux x86-64 [149,288 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14109863343); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14110002983). Both expire 2026-11-15 10:39 UTC (17:39 WIB).
+
+No controlled before/after latency benchmark was collected. The remaining major rendering cost is the full software-surface repaint, which still redraws the full background and UI chrome on each presented frame. Next: profile the full-frame repaint path and design safe dirty-region invalidation without compromising selection cleanup, scrolling, menus, or buffer ownership.
+
+---
+
+## Previous handoff (2026-11-14 — sparse byte-to-visual checkpoints for long logical lines; CI PASS #959)
 
 Continue development on `early-alpha` at [07f28ae](https://github.com/GraderGamer2/NekoEdit/commit/07f28ae4ccf5bab14aa8ff683a3acfc93a9da8e3). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 

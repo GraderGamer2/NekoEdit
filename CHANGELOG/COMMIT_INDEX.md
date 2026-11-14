@@ -1,3 +1,19 @@
+## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
+
+| Commit | Subject |
+|---|---|
+| [9509f33ac2ae](https://github.com/GraderGamer2/NekoEdit/commit/9509f33ac2aecf64be27858c19d32973a6dadf61) | perf: checkpoint wrapped visual-row to byte mapping |
+| [c8eba1a2bca7](https://github.com/GraderGamer2/NekoEdit/commit/c8eba1a2bca7d8225fea466e8f2d4e5b568fb8c5) | perf: respect pixel position in wrapped row checkpoints |
+| [090cad8f9c2e](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4) | perf: pass target X to wrapped row lookup |
+
+The 4 MiB single-line Wayland fixture verifies that the reverse mapper resumes from a checkpoint near the final wrapped rows and scans no more than 4 KiB. It also retains caret byte-to-visual bounds in both wrap modes and the no-wrap horizontal glyph traversal assertion. Actions [#961](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233) passed all 17 steps, including the full Wayland suite and nested GNOME Shell/Mutter integration.
+
+Artifacts: Linux x86-64 [149,288 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14109863343); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43586060233/artifacts/14110002983).
+
+No before/after latency benchmark was collected. Full-frame software-surface repaint remains future work.
+
+---
+
 ## 2026-11-14 — sparse byte-to-visual checkpoints for long logical lines (CI PASS #959)
 
 | Commit | Subject |
