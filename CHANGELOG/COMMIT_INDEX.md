@@ -1,3 +1,14 @@
+## 2026-11-14 — ELF size comparison: O2, Os, stripping, and section GC (CI PASS #927)
+
+| Commit | Subject |
+|---|---|
+| [1448a57f2aa69773db99463b03a96e612ca86b00](https://github.com/GraderGamer2/NekoEdit/commit/1448a57f2aa69773db99463b03a96e612ca86b00) | build: add controlled O2 and Os ELF size matrix |
+| [82a14039d862446bdf04afc5f023c158fd762c62](https://github.com/GraderGamer2/NekoEdit/commit/82a14039d862446bdf04afc5f023c158fd762c62) | ci: run ELF size matrix on optimization branch |
+| [61f1d73246a7f01027bc65e28f05708be39b1782](https://github.com/GraderGamer2/NekoEdit/commit/61f1d73246a7f01027bc65e28f05708be39b1782) | fix: report ELF section sizes separately |
+
+[Actions #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 steps. Stripped O2 is 234,944 bytes (31.9% smaller than unstripped O2); stripped Os is 226,264 bytes (8,680 bytes smaller than stripped O2). Section GC discards five dead input sections but reduces the stripped output by only 16 bytes at O2 and 8 bytes at Os. No default flags or application source changed. O2 remains the unstripped development/test baseline; Os awaits real workload benchmarks.
+
+---
 ## 2026-11-13 — preserve clipboard paste origin and top-of-document viewport (CI PASS #925)
 
 | Commit | Subject |
