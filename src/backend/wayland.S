@@ -4840,7 +4840,7 @@ window_ui_scale_120:     .long 0      # initialized to 120 before first geometry
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
-window_buffer_raster_scale_120: .long 120
+window_buffer_raster_scale_120: .long 0
 window_buffer_created_raster_scale_120: .long 0
 window_raster_surface_width: .long 0
 window_raster_surface_height: .long 0
