@@ -1,13 +1,15 @@
 AS       ?= as
 LD       ?= ld
 READELF  ?= readelf
+SIZE     ?= size
 PYTHON   ?= python3
 CC       ?= cc
-CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns
+CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections -fno-ident
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
+CLIPBOARD_RANGE_TEST := $(BUILD_DIR)/clipboard_range_test
 COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
 XKB_NATIVE_KEYMAP_TEST := $(BUILD_DIR)/xkb_native_keymap_test
@@ -26,7 +28,7 @@ USER_ICON_DIR ?= $(USER_PREFIX)/share/icons/hicolor/scalable/apps
 MAKE_DEFAULT ?= 0
 
 ASFLAGS  ?= --64 --fatal-warnings
-LDFLAGS  ?= -static -no-pie -z noexecstack -e _start
+LDFLAGS  ?= -static -no-pie -z noexecstack -e _start --gc-sections
 
 SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
@@ -61,11 +63,13 @@ inspect: $(APP_BINARY)
 	$(READELF) -h $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
+	$(SIZE) $(APP_BINARY)
 
-test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
+test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
+	./$(CLIPBOARD_RANGE_TEST)
 	$(PYTHON) tests/compose_pack_test.py
 	$(PYTHON) tests/compose_import_test.py
 	$(PYTHON) tests/user_xcompose_import_test.py
@@ -85,6 +89,10 @@ $(PREFERENCES_TEST): tests/preferences_test.c src/editor/preferences.c
 $(HISTORY_TEST): tests/history_test.c src/editor/history.c
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $^
+
+$(CLIPBOARD_RANGE_TEST): tests/clipboard_range_test.c src/backend/clipboard.c
+	@mkdir -p $(@D)
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -Wl,--gc-sections -o $@ $<
 
 test-wayland: $(APP_BINARY)
 	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)

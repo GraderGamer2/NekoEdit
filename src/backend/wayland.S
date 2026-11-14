@@ -13255,13 +13255,9 @@ draw_rect:
     cmp dword ptr [rip + render_clip_enabled], 0
     jne .draw_rect_clipped_rows
 
-    # The common full-frame path has no per-row clipping tests.
-    xor r10d, r10d
-.draw_rect_row_full:
-    cmp r10d, r15d
-    jae .draw_rect_done
+    # Set up the first scanline once. REP STOSD advances RDI across the
+    # rectangle; the stride padding advances it to the next scanline.
     mov eax, r13d
-    add eax, r10d
     mov ecx, dword ptr [rip + window_stride]
     imul rax, rcx
     mov edx, r12d
@@ -13269,9 +13265,18 @@ draw_rect:
     add rax, rdx
     add rax, rbx
     mov rdi, rax
-    mov ecx, r14d
+    mov esi, dword ptr [rip + window_stride]
+    mov edx, r14d
+    shl edx, 2
+    sub esi, edx
     mov eax, r11d
+    xor r10d, r10d
+.draw_rect_row_full:
+    cmp r10d, r15d
+    jae .draw_rect_done
+    mov ecx, r14d
     rep stosd
+    add rdi, rsi
     inc r10d
     jmp .draw_rect_row_full
 
@@ -13308,11 +13313,7 @@ draw_rect:
     cmp r10d, r9d
     jae .draw_rect_clip_band2_start
 
-.draw_rect_clip_band1_loop:
-    test r8d, r8d
-    jz .draw_rect_clip_band1_counter_done
-    inc dword ptr [rip + render_clip_background_row_visits]
-.draw_rect_clip_band1_counter_done:
+.draw_rect_clip_band1_setup:
     mov eax, r10d
     mov ecx, dword ptr [rip + window_stride]
     imul rax, rcx
@@ -13321,9 +13322,19 @@ draw_rect:
     add rax, rdx
     add rax, rbx
     mov rdi, rax
+    mov esi, dword ptr [rip + window_stride]
+    mov edx, r14d
+    shl edx, 2
+    sub esi, edx
+.draw_rect_clip_band1_loop:
+    test r8d, r8d
+    jz .draw_rect_clip_band1_counter_done
+    inc dword ptr [rip + render_clip_background_row_visits]
+.draw_rect_clip_band1_counter_done:
     mov ecx, r14d
     mov eax, r11d
     rep stosd
+    add rdi, rsi
     inc r10d
     cmp r10d, r9d
     jb .draw_rect_clip_band1_loop
@@ -13350,11 +13361,7 @@ draw_rect:
     cmp r10d, r9d
     jae .draw_rect_done
 
-.draw_rect_clip_band2_loop:
-    test r8d, r8d
-    jz .draw_rect_clip_band2_counter_done
-    inc dword ptr [rip + render_clip_background_row_visits]
-.draw_rect_clip_band2_counter_done:
+.draw_rect_clip_band2_setup:
     mov eax, r10d
     mov ecx, dword ptr [rip + window_stride]
     imul rax, rcx
@@ -13363,9 +13370,19 @@ draw_rect:
     add rax, rdx
     add rax, rbx
     mov rdi, rax
+    mov esi, dword ptr [rip + window_stride]
+    mov edx, r14d
+    shl edx, 2
+    sub esi, edx
+.draw_rect_clip_band2_loop:
+    test r8d, r8d
+    jz .draw_rect_clip_band2_counter_done
+    inc dword ptr [rip + render_clip_background_row_visits]
+.draw_rect_clip_band2_counter_done:
     mov ecx, r14d
     mov eax, r11d
     rep stosd
+    add rdi, rsi
     inc r10d
     cmp r10d, r9d
     jb .draw_rect_clip_band2_loop
@@ -17755,8 +17772,10 @@ doc_line_index_build_trees:
     mov eax, r13d
     shl rax, 4
     lea rdi, [rbx + rax]
-    mov dword ptr [rdi + DOC_INDEX_BYTE_TREE_OFFSET], 0
-    mov dword ptr [rdi + DOC_INDEX_ROW_TREE_OFFSET], 0
+    mov eax, dword ptr [rdi + DOC_INDEX_BYTES_OFFSET]
+    mov dword ptr [rdi + DOC_INDEX_BYTE_TREE_OFFSET], eax
+    mov eax, dword ptr [rdi + DOC_INDEX_ROWS_OFFSET]
+    mov dword ptr [rdi + DOC_INDEX_ROW_TREE_OFFSET], eax
     inc r13d
     jmp .Ldoc_index_tree_zero_loop
 .Ldoc_index_tree_build_begin:
@@ -17768,10 +17787,6 @@ doc_line_index_build_trees:
     dec eax
     shl rax, 4
     lea rdi, [rbx + rax]
-    mov eax, dword ptr [rdi + DOC_INDEX_BYTES_OFFSET]
-    add dword ptr [rdi + DOC_INDEX_BYTE_TREE_OFFSET], eax
-    mov eax, dword ptr [rdi + DOC_INDEX_ROWS_OFFSET]
-    add dword ptr [rdi + DOC_INDEX_ROW_TREE_OFFSET], eax
     mov ecx, r13d
     mov edx, ecx
     neg edx
