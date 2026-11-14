@@ -4,6 +4,7 @@
 .global linux_write_all
 .type linux_write_all, @function
 # RDI = fd, RSI = buffer, RDX = byte count. EAX = 0 or negative errno.
+.pushsection .text.linux_write_all,"ax",@progbits
 linux_write_all:
     push rbx
     push r12
@@ -40,10 +41,12 @@ linux_write_all:
     pop rbx
     ret
 .size linux_write_all, . - linux_write_all
+.popsection
 
 .global linux_read_exact
 .type linux_read_exact, @function
 # RDI = fd, RSI = buffer, RDX = byte count. EAX = 0 or negative errno.
+.pushsection .text.linux_read_exact,"ax",@progbits
 linux_read_exact:
     push rbx
     push r12
@@ -80,14 +83,17 @@ linux_read_exact:
     pop rbx
     ret
 .size linux_read_exact, . - linux_read_exact
+.popsection
 
 .global linux_exit
 .type linux_exit, @function
 # EDI = exit status. Does not return.
+.pushsection .text.linux_exit,"ax",@progbits
 linux_exit:
     mov eax, 60                 # __NR_exit
     syscall
     ud2
 .size linux_exit, . - linux_exit
+.popsection
 
 .section .note.GNU-stack,"",@progbits

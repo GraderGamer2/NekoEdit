@@ -5386,6 +5386,7 @@ xkb_parse_error_table_samples: .zero 64
 .section .text
 .global xkb_reset_keymap
 .type xkb_reset_keymap, @function
+.pushsection .text.xkb_reset_keymap,"ax",@progbits
 xkb_reset_keymap:
     push rdi
     push rsi
@@ -5552,10 +5553,12 @@ xkb_reset_keymap:
     pop rdi
     ret
 .size xkb_reset_keymap, . - xkb_reset_keymap
+.popsection
 
 # Returns token kind in EAX: 0=end, 1=word/string, 2=<KEYNAME>, punctuation=ASCII.
 # Token contents are copied to .Lxkb_token (truncated safely at 63 bytes).
 .type .Lxkb_next_token, @function
+.pushsection .text..Lxkb_next_token,"ax",@progbits
 .Lxkb_next_token:
     push rbx
     push r12
@@ -5773,9 +5776,11 @@ xkb_reset_keymap:
     xor eax, eax
     jmp .Lxkb_token_done
 .size .Lxkb_next_token, . - .Lxkb_next_token
+.popsection
 
 # RDI points to a NUL-terminated expected token; EAX=1 for equality.
 .type .Lxkb_token_is, @function
+.pushsection .text..Lxkb_token_is,"ax",@progbits
 .Lxkb_token_is:
     push rbx
     push r12
@@ -5800,9 +5805,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_token_is, . - .Lxkb_token_is
+.popsection
 
 # Convert current decimal token to EAX; EDX=1 if valid, else EDX=0.
 .type .Lxkb_parse_decimal, @function
+.pushsection .text..Lxkb_parse_decimal,"ax",@progbits
 .Lxkb_parse_decimal:
     push rbx
     push r12
@@ -5836,9 +5843,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_decimal, . - .Lxkb_parse_decimal
+.popsection
 
 # Current token is Group1..Group4; EAX=zero-based group or -1.
 .type .Lxkb_parse_group, @function
+.pushsection .text..Lxkb_parse_group,"ax",@progbits
 .Lxkb_parse_group:
     push rbx
     cmp dword ptr [rip + .Lxkb_token_length], 6
@@ -5861,9 +5870,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_group, . - .Lxkb_parse_group
+.popsection
 
 # Search xkb_key_names for the four-byte .Lxkb_keyname_tmp; EAX=keycode or 0.
 .type .Lxkb_find_keycode, @function
+.pushsection .text..Lxkb_find_keycode,"ax",@progbits
 .Lxkb_find_keycode:
     push rbx
     push r12
@@ -5906,9 +5917,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_find_keycode, . - .Lxkb_find_keycode
+.popsection
 
 # Parse xkb_keycodes entries of the form <NAME> = decimal;.
 .type .Lxkb_parse_keycodes, @function
+.pushsection .text..Lxkb_parse_keycodes,"ax",@progbits
 .Lxkb_parse_keycodes:
     push rbx
     push r12
@@ -6018,11 +6031,13 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_keycodes, . - .Lxkb_parse_keycodes
+.popsection
 
 # Return type flags for the current type token in EAX.
 # Search the current token for a case-sensitive NUL-terminated substring.
 # RDI=needle; EAX=1 when found.
 .type .Lxkb_token_contains, @function
+.pushsection .text..Lxkb_token_contains,"ax",@progbits
 .Lxkb_token_contains:
     push rbx
     push r12
@@ -6058,9 +6073,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_token_contains, . - .Lxkb_token_contains
+.popsection
 
 # Resolve the current token to a previously declared XKB type; EAX=-1 if absent.
 .type .Lxkb_find_type, @function
+.pushsection .text..Lxkb_find_type,"ax",@progbits
 .Lxkb_find_type:
     push rbx
     push r12
@@ -6102,9 +6119,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_find_type, . - .Lxkb_find_type
+.popsection
 
 # Register the current token as a virtual-modifier name. EAX=index or -1.
 .type .Lxkb_register_virtual, @function
+.pushsection .text..Lxkb_register_virtual,"ax",@progbits
 .Lxkb_register_virtual:
     push rbx
     push r12
@@ -6199,10 +6218,12 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_register_virtual, . - .Lxkb_register_virtual
+.popsection
 
 # Find a previously declared virtual modifier by the current token.
 # EAX=index or -1. Unlike register_virtual this never creates a declaration.
 .type .Lxkb_find_virtual, @function
+.pushsection .text..Lxkb_find_virtual,"ax",@progbits
 .Lxkb_find_virtual:
     push rbx
     push r12
@@ -6244,6 +6265,7 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_find_virtual, . - .Lxkb_find_virtual
+.popsection
 
 # Scan all sections before parsing types so virtual modifier indices reflect
 # declaration order across the complete text-v1 keymap.
@@ -6252,6 +6274,7 @@ xkb_reset_keymap:
 # delimiter in EDX; the virtual modifier's declaration index remains separate
 # from the effective wire mask.
 .type .Lxkb_parse_vmod_encoding, @function
+.pushsection .text..Lxkb_parse_vmod_encoding,"ax",@progbits
 .Lxkb_parse_vmod_encoding:
     push rbx
     push r12
@@ -6299,8 +6322,10 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_vmod_encoding, . - .Lxkb_parse_vmod_encoding
+.popsection
 
 .type .Lxkb_parse_virtual_modifiers, @function
+.pushsection .text..Lxkb_parse_virtual_modifiers,"ax",@progbits
 .Lxkb_parse_virtual_modifiers:
     push rbx
     push r12
@@ -6375,11 +6400,13 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_virtual_modifiers, . - .Lxkb_parse_virtual_modifiers
+.popsection
 
 # Convert a modifier name token into its 32-bit XKB modifier bit.
 # Rebase built-in fallback type maps after virtual modifier declarations
 # have supplied the effective XKB 32-bit masks for LevelThree and NumLock.
 .type .Lxkb_rebase_builtin_types, @function
+.pushsection .text..Lxkb_rebase_builtin_types,"ax",@progbits
 .Lxkb_rebase_builtin_types:
     mov eax, dword ptr [rip + xkb_level_three_mask]
     mov ecx, eax
@@ -6415,10 +6442,12 @@ xkb_reset_keymap:
     mov dword ptr [rip + xkb_type_map_masks + 660], ecx
     ret
 .size .Lxkb_rebase_builtin_types, . - .Lxkb_rebase_builtin_types
+.popsection
 
 # Parse an unsigned 32-bit decimal or 0x-prefixed modifier mask.
 # EAX=mask, EDX=1 on success. Overflow and malformed literals fail closed.
 .type .Lxkb_parse_mask_literal, @function
+.pushsection .text..Lxkb_parse_mask_literal,"ax",@progbits
 .Lxkb_parse_mask_literal:
     push rbx
     push r12
@@ -6497,8 +6526,10 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_mask_literal, . - .Lxkb_parse_mask_literal
+.popsection
 
 .type .Lxkb_modifier_bit, @function
+.pushsection .text..Lxkb_modifier_bit,"ax",@progbits
 .Lxkb_modifier_bit:
     push rbx
     push r12
@@ -6642,9 +6673,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_modifier_bit, . - .Lxkb_modifier_bit
+.popsection
 
 # Parse a plus-separated modifier list through the requested delimiter in EDI.
 .type .Lxkb_parse_modmask, @function
+.pushsection .text..Lxkb_parse_modmask,"ax",@progbits
 .Lxkb_parse_modmask:
     push rbx
     push r12
@@ -6681,8 +6714,10 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_modmask, . - .Lxkb_parse_modmask
+.popsection
 
 .type .Lxkb_parse_level_number, @function
+.pushsection .text..Lxkb_parse_level_number,"ax",@progbits
 .Lxkb_parse_level_number:
     cmp dword ptr [rip + .Lxkb_token_length], 1
     jne .Lxkb_level_number_long
@@ -6712,9 +6747,11 @@ xkb_reset_keymap:
     mov eax, -1
     ret
 .size .Lxkb_parse_level_number, . - .Lxkb_parse_level_number
+.popsection
 
 # Parse one xkb_types type body into the bounded exact modifier-to-level table.
 .type .Lxkb_parse_type_body, @function
+.pushsection .text..Lxkb_parse_type_body,"ax",@progbits
 .Lxkb_parse_type_body:
     push rbx
     push r12
@@ -6933,8 +6970,10 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_type_body, . - .Lxkb_parse_type_body
+.popsection
 
 .type .Lxkb_parse_types, @function
+.pushsection .text..Lxkb_parse_types,"ax",@progbits
 .Lxkb_parse_types:
     push rbx
     push r12
@@ -7050,8 +7089,10 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_parse_types, . - .Lxkb_parse_types
+.popsection
 
 .type .Lxkb_classify_type, @function
+.pushsection .text..Lxkb_classify_type,"ax",@progbits
 .Lxkb_classify_type:
     push rbx
     xor ebx, ebx
@@ -7101,9 +7142,11 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_classify_type, . - .Lxkb_classify_type
+.popsection
 
 # Convert current keysym token to printable ASCII in EAX, otherwise zero.
 .type .Lxkb_keysym_ascii, @function
+.pushsection .text..Lxkb_keysym_ascii,"ax",@progbits
 .Lxkb_keysym_ascii:
     push rbx
     push r12
@@ -7145,6 +7188,7 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_keysym_ascii, . - .Lxkb_keysym_ascii
+.popsection
 
 # Convert a printable ASCII or XKB Unicode keysym token to a Unicode scalar.
 # XKB's Uxxxx/Uxxxxx/Uxxxxxx forms are accepted; invalid scalars return zero.
@@ -7152,6 +7196,7 @@ xkb_reset_keymap:
 # This table is intentionally limited to common modifier/system keysyms;
 # unsupported names return zero and are not guessed.
 .type .Lxkb_keysym_modifier_id, @function
+.pushsection .text..Lxkb_keysym_modifier_id,"ax",@progbits
 .Lxkb_keysym_modifier_id:
     lea rdi, [rip + .Lxkb_sym_shift_l]
     call .Lxkb_token_is
@@ -7345,8 +7390,10 @@ xkb_reset_keymap:
 .Lxkb_keysym_id_iso_last_group:  mov eax, 0xfe0e; ret
 .Lxkb_keysym_id_iso_last_group_lock: mov eax, 0xfe0f; ret
 .size .Lxkb_keysym_modifier_id, . - .Lxkb_keysym_modifier_id
+.popsection
 
 .type .Lxkb_keysym_unicode, @function
+.pushsection .text..Lxkb_keysym_unicode,"ax",@progbits
 .Lxkb_keysym_unicode:
     push rbx
     push r12
@@ -7420,12 +7467,14 @@ xkb_reset_keymap:
     pop rbx
     ret
 .size .Lxkb_keysym_unicode, . - .Lxkb_keysym_unicode
+.popsection
 
 # RDI=keysym name bytes; ESI=length (1..63). EAX=Unicode scalar or zero.
 # Reuse the XKB parser's bounded resolver without leaving its shared tokenizer
 # scratch modified when the native Compose importer calls back into it.
 .global xkb_keysym_name_to_unicode
 .type xkb_keysym_name_to_unicode, @function
+.pushsection .text.xkb_keysym_name_to_unicode,"ax",@progbits
 xkb_keysym_name_to_unicode:
     push rbx
     push r12
@@ -7473,10 +7522,12 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size xkb_keysym_name_to_unicode, . - xkb_keysym_name_to_unicode
+.popsection
 
 # Resolve a bounded set of common named X11/XKB Unicode keysyms.
 # EAX is the mapped scalar, or zero when the token is not in this alias table.
 .type .Lxkb_keysym_named_unicode, @function
+.pushsection .text..Lxkb_keysym_named_unicode,"ax",@progbits
 .Lxkb_keysym_named_unicode:
     push rbx
     push r12
@@ -7509,9 +7560,11 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_keysym_named_unicode, . - .Lxkb_keysym_named_unicode
+.popsection
 
 # Parse the symbols array following symbols[GroupN] = [ ... ].
 .type .Lxkb_parse_symbol_array, @function
+.pushsection .text..Lxkb_parse_symbol_array,"ax",@progbits
 .Lxkb_parse_symbol_array:
     push rbx
     push r12
@@ -7597,11 +7650,13 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_parse_symbol_array, . - .Lxkb_parse_symbol_array
+.popsection
 
 # Parse the shorthand XKB form: key <NAME> { [ symbol, shifted_symbol ] }.
 # The opening '[' has already been consumed. Reuse the same bounded symbol
 # array parser with Group1 and level zero as the starting position.
 .type .Lxkb_parse_inline_symbol_array, @function
+.pushsection .text..Lxkb_parse_inline_symbol_array,"ax",@progbits
 .Lxkb_parse_inline_symbol_array:
     push rbx
     push r12
@@ -7611,9 +7666,11 @@ xkb_keysym_name_to_unicode:
     mov dword ptr [rip + .Lxkb_level], 0
     jmp .Lxkb_symbol_array_loop
 .size .Lxkb_parse_inline_symbol_array, . - .Lxkb_parse_inline_symbol_array
+.popsection
 
 # Parse attributes inside one key <NAME> { ... } block.
 .type .Lxkb_parse_key_block, @function
+.pushsection .text..Lxkb_parse_key_block,"ax",@progbits
 .Lxkb_parse_key_block:
     push rbx
     push r12
@@ -7882,6 +7939,7 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_parse_key_block, . - .Lxkb_parse_key_block
+.popsection
 
 # Queue direct keycode and recognized indirect keysym real-modifier bindings:
 # modifier_map Mod5 { <RALT>, <RCTL> }; modifier_map Mod1 { Alt_L };.
@@ -7890,6 +7948,7 @@ xkb_keysym_name_to_unicode:
 # lowest group first, then lowest level, then lowest keycode.
 # EDI=raw keysym; EAX=matching keycode or zero.
 .type .Lxkb_find_key_for_keysym, @function
+.pushsection .text..Lxkb_find_key_for_keysym,"ax",@progbits
 .Lxkb_find_key_for_keysym:
     push rbx
     push r12
@@ -7937,8 +7996,10 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_find_key_for_keysym, . - .Lxkb_find_key_for_keysym
+.popsection
 
 .type .Lxkb_parse_modifier_map, @function
+.pushsection .text..Lxkb_parse_modifier_map,"ax",@progbits
 .Lxkb_parse_modifier_map:
     push rbx
     push r12
@@ -8030,6 +8091,7 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_parse_modifier_map, . - .Lxkb_parse_modifier_map
+.popsection
 
 
 # Aggregate each key's real modifier map into the effective encodings of all
@@ -8037,6 +8099,7 @@ xkb_keysym_name_to_unicode:
 # Resolve direct keycode and indirect keysym modifier_map targets after
 # every key's symbols have been parsed. None deletion is exact-target sensitive.
 .type .Lxkb_resolve_modifier_maps, @function
+.pushsection .text..Lxkb_resolve_modifier_maps,"ax",@progbits
 .Lxkb_resolve_modifier_maps:
     push rbx
     push r12
@@ -8146,11 +8209,13 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_resolve_modifier_maps, . - .Lxkb_resolve_modifier_maps
+.popsection
 
 
 # Skip an unsupported statement while respecting nested action/indicator blocks.
 # EAX=0 at ';', 1 when the containing section/rule '}' is consumed, -1 at EOF.
 .type .Lxkb_compat_skip_statement, @function
+.pushsection .text..Lxkb_compat_skip_statement,"ax",@progbits
 .Lxkb_compat_skip_statement:
     push r12
     xor r12d, r12d
@@ -8187,10 +8252,12 @@ xkb_keysym_name_to_unicode:
     pop r12
     ret
 .size .Lxkb_compat_skip_statement, . - .Lxkb_compat_skip_statement
+.popsection
 
 # Resolve a real-modifier token used by an xkb_compat predicate.
 # EAX=mask, EDX=1 on success; virtual names and numeric masks are rejected.
 .type .Lxkb_compat_real_modifier_bit, @function
+.pushsection .text..Lxkb_compat_real_modifier_bit,"ax",@progbits
 .Lxkb_compat_real_modifier_bit:
     lea rdi, [rip + .Lxkb_mod_shift]
     call .Lxkb_token_is
@@ -8253,9 +8320,11 @@ xkb_keysym_name_to_unicode:
     mov edx, 1
     ret
 .size .Lxkb_compat_real_modifier_bit, . - .Lxkb_compat_real_modifier_bit
+.popsection
 
 # Parse the parenthesized real-modifier mask of AnyOf/NoneOf/AllOf/Exactly.
 .type .Lxkb_compat_parse_real_mask, @function
+.pushsection .text..Lxkb_compat_parse_real_mask,"ax",@progbits
 .Lxkb_compat_parse_real_mask:
     push rbx
     push r12
@@ -8291,10 +8360,12 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_compat_parse_real_mask, . - .Lxkb_compat_parse_real_mask
+.popsection
 
 # Parse one interpret body. Unknown attributes (notably general actions) are
 # skipped as nested statements, but virtualModifier and useModMapMods are kept.
 .type .Lxkb_compat_parse_body, @function
+.pushsection .text..Lxkb_compat_parse_body,"ax",@progbits
 .Lxkb_compat_parse_body:
 .Lxkb_compat_body_loop:
     call .Lxkb_next_token
@@ -8397,9 +8468,11 @@ xkb_keysym_name_to_unicode:
     mov eax, -1
     ret
 .size .Lxkb_compat_parse_body, . - .Lxkb_compat_parse_body
+.popsection
 
 # Parse one "interpret keysym + predicate { ... }" rule.
 .type .Lxkb_compat_parse_interpret, @function
+.pushsection .text..Lxkb_compat_parse_interpret,"ax",@progbits
 .Lxkb_compat_parse_interpret:
     mov dword ptr [rip + .Lxkb_compat_tmp_keysym], 0
     mov dword ptr [rip + .Lxkb_compat_tmp_mask], 255
@@ -8568,9 +8641,11 @@ xkb_keysym_name_to_unicode:
     mov eax, -1
     ret
 .size .Lxkb_compat_parse_interpret, . - .Lxkb_compat_parse_interpret
+.popsection
 
 # Parse the optional xkb_compat component after key symbols are available.
 .type .Lxkb_parse_compat, @function
+.pushsection .text..Lxkb_parse_compat,"ax",@progbits
 .Lxkb_parse_compat:
     push rbx
 .Lxkb_compat_find_section:
@@ -8622,11 +8697,13 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_parse_compat, . - .Lxkb_parse_compat
+.popsection
 
 # Apply the best matching interpretation to each represented keysym level.
 # Specific keysyms outrank wildcard rules; predicate rank breaks those ties.
 # Equal-specificity ties retain the first declaration. Explicit key vmods win.
 .type .Lxkb_apply_compat_virtual_maps, @function
+.pushsection .text..Lxkb_apply_compat_virtual_maps,"ax",@progbits
 .Lxkb_apply_compat_virtual_maps:
     push rbx
     push rbp
@@ -8806,8 +8883,10 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_apply_compat_virtual_maps, . - .Lxkb_apply_compat_virtual_maps
+.popsection
 
 .type .Lxkb_apply_virtual_modifier_maps, @function
+.pushsection .text..Lxkb_apply_virtual_modifier_maps,"ax",@progbits
 .Lxkb_apply_virtual_modifier_maps:
     push rbx
     push r12
@@ -8877,9 +8956,11 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_apply_virtual_modifier_maps, . - .Lxkb_apply_virtual_modifier_maps
+.popsection
 
 # Parse xkb_symbols key definitions.
 .type .Lxkb_parse_symbols, @function
+.pushsection .text..Lxkb_parse_symbols,"ax",@progbits
 .Lxkb_parse_symbols:
     push rbx
     push r12
@@ -9012,11 +9093,13 @@ xkb_keysym_name_to_unicode:
     pop rbx
     ret
 .size .Lxkb_parse_symbols, . - .Lxkb_parse_symbols
+.popsection
 
 # RDI=text, ESI=size. Returns zero when at least one keycode/symbol pair is
 # usable, otherwise negative. Invalid/unsupported maps leave the fallback live.
 .global xkb_parse_keymap
 .type xkb_parse_keymap, @function
+.pushsection .text.xkb_parse_keymap,"ax",@progbits
 xkb_parse_keymap:
     push rbx
     push r12
@@ -9145,10 +9228,12 @@ xkb_parse_keymap:
     pop rbx
     ret
 .size xkb_parse_keymap, . - xkb_parse_keymap
+.popsection
 
 # RDI=internal XKB keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
 # Return zero-based level by exact lookup in the key group's declared type.
 .type .Lxkb_select_level, @function
+.pushsection .text..Lxkb_select_level,"ax",@progbits
 .Lxkb_select_level:
     push rbx
     push r12
@@ -9230,11 +9315,13 @@ xkb_parse_keymap:
     pop rbx
     ret
 .size .Lxkb_select_level, . - .Lxkb_select_level
+.popsection
 
 # RDI=evdev keycode, ESI=32-bit XKB modifier state, EDX=group.
 # Return the consumed-modifier mask for the selected type-map entry.
 .global xkb_lookup_consumed_modifiers
 .type xkb_lookup_consumed_modifiers, @function
+.pushsection .text.xkb_lookup_consumed_modifiers,"ax",@progbits
 xkb_lookup_consumed_modifiers:
     # Keep SysV call-site alignment before the nested level lookup.
     push rbx
@@ -9264,12 +9351,14 @@ xkb_lookup_consumed_modifiers:
     pop rbx
     ret
 .size xkb_lookup_consumed_modifiers, . - xkb_lookup_consumed_modifiers
+.popsection
 
 # RDI=Linux evdev keycode. EAX=1 only when Group 1 / Level 1 in one
 # declared group is ISO_Level3_Shift. Do not infer this from a fixed evdev
 # position: compose:ralt maps the same physical key to Multi_key.
 .global xkb_key_is_level_three_modifier
 .type xkb_key_is_level_three_modifier, @function
+.pushsection .text.xkb_key_is_level_three_modifier,"ax",@progbits
 xkb_key_is_level_three_modifier:
     cmp dword ptr [rip + xkb_keymap_ready], 1
     jne .Lxkb_ralt_not_level_three
@@ -9297,11 +9386,13 @@ xkb_key_is_level_three_modifier:
     mov eax, 1
     ret
 .size xkb_key_is_level_three_modifier, . - xkb_key_is_level_three_modifier
+.popsection
 
 # RDI=Linux evdev keycode. EAX=1 if this key is configured to repeat.
 # Modifier/group actions remain compositor-owned; this query only reads keymap policy.
 .global xkb_key_repeats
 .type xkb_key_repeats, @function
+.pushsection .text.xkb_key_repeats,"ax",@progbits
 xkb_key_repeats:
     cmp dword ptr [rip + xkb_keymap_ready], 1
     jne .Lxkb_key_repeat_default
@@ -9321,11 +9412,13 @@ xkb_key_repeats:
     xor eax, eax
     ret
 .size xkb_key_repeats, . - xkb_key_repeats
+.popsection
 
 # RDI=evdev keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
 # Returns an ASCII byte or zero. Wayland keycodes need the XKB +8 offset.
 .global xkb_lookup_ascii
 .type xkb_lookup_ascii, @function
+.pushsection .text.xkb_lookup_ascii,"ax",@progbits
 xkb_lookup_ascii:
     push rbx
     push r12
@@ -9379,11 +9472,13 @@ xkb_lookup_ascii:
     pop rbx
     ret
 .size xkb_lookup_ascii, . - xkb_lookup_ascii
+.popsection
 
 # RDI=evdev keycode, ESI=32-bit XKB modifier-index mask, EDX=group.
 # Returns an XKB Unicode keysym scalar or zero.
 .global xkb_lookup_unicode
 .type xkb_lookup_unicode, @function
+.pushsection .text.xkb_lookup_unicode,"ax",@progbits
 xkb_lookup_unicode:
     push rbx
     push r12
@@ -9437,5 +9532,6 @@ xkb_lookup_unicode:
     pop rbx
     ret
 .size xkb_lookup_unicode, . - xkb_lookup_unicode
+.popsection
 
 .section .note.GNU-stack,"",@progbits

@@ -40,6 +40,7 @@ initial_file_path: .quad 0
 .extern linux_exit
 .global _start
 .type _start, @function
+.pushsection .text._start,"ax",@progbits
 _start:
     # Preserve envp for the freestanding backend: envp = &argv[argc + 1].
     mov rax, qword ptr [rsp]
@@ -121,8 +122,10 @@ _start:
     jmp linux_exit
 
 .size _start, . - _start
+.popsection
 
 .type string_equal, @function
+.pushsection .text.string_equal,"ax",@progbits
 string_equal:
     mov r8, rdi
     mov r9, rsi
@@ -142,5 +145,6 @@ string_equal:
     xor eax, eax
     ret
 .size string_equal, . - string_equal
+.popsection
 
 .section .note.GNU-stack,"",@progbits

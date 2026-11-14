@@ -196,23 +196,28 @@ font_state_backup_size:         .quad 0
 
 # Read an unsigned big-endian 16-bit integer. RDI points at two validated bytes.
 .type font_be16, @function
+.pushsection .text.font_be16,"ax",@progbits
 font_be16:
     movzx eax, word ptr [rdi]
     rol ax, 8
     ret
 .size font_be16, . - font_be16
+.popsection
 
 # Read an unsigned big-endian 32-bit integer. RDI points at four validated bytes.
 .type font_be32, @function
+.pushsection .text.font_be32,"ax",@progbits
 font_be32:
     mov eax, dword ptr [rdi]
     bswap eax
     ret
 .size font_be32, . - font_be32
+.popsection
 
 # Find a top-level table by its four-byte little-endian tag.
 # EDI=tag; returns EAX=file offset, EDX=length, CF=0; CF=1 if absent/invalid.
 .type font_find_table, @function
+.pushsection .text.font_find_table,"ax",@progbits
 font_find_table:
     push rbx
     push r12
@@ -259,10 +264,12 @@ font_find_table:
     pop rbx
     ret
 .size font_find_table, . - font_find_table
+.popsection
 
 # Validate cmap header and select a Unicode format 12 or 4 subtable.
 # Uses the best available Unicode platform/encoding record; rejects unsafe lengths.
 .type font_parse_cmap, @function
+.pushsection .text.font_parse_cmap,"ax",@progbits
 font_parse_cmap:
     push rbx
     push rbp
@@ -439,10 +446,12 @@ font_parse_cmap:
     pop rbx
     ret
 .size font_parse_cmap, . - font_parse_cmap
+.popsection
 
 # Validate the core TrueType table directory and metadata.
 # Returns EAX=0 on success, -1 on malformed/unsupported input.
 .type font_parse_mapped, @function
+.pushsection .text.font_parse_mapped,"ax",@progbits
 font_parse_mapped:
     push rbx
     push rbp
@@ -674,11 +683,13 @@ font_parse_mapped:
     pop rbx
     ret
 .size font_parse_mapped, . - font_parse_mapped
+.popsection
 
 # Load and validate one font path transactionally. The old mapping and every
 # parser offset/metric remain live until the candidate has passed validation.
 # RDI=NUL-terminated path; EAX=0 success, negative on failure.
 .type font_try_path, @function
+.pushsection .text.font_try_path,"ax",@progbits
 font_try_path:
     push rbx
     push r12
@@ -974,18 +985,22 @@ font_try_path:
     pop rbx
     ret
 .size font_try_path, . - font_try_path
+.popsection
 
 # Runtime Settings entry point; shares font_try_path's transactional contract.
 .global font_replace_path
 .type font_replace_path, @function
+.pushsection .text.font_replace_path,"ax",@progbits
 font_replace_path:
     jmp font_try_path
 .size font_replace_path, . - font_replace_path
+.popsection
 
 # Map a Unicode scalar to a glyph index using cmap format 4 or 12.
 # EDI=code point; EAX=glyph ID or zero for missing/invalid.
 .global font_cmap_lookup
 .type font_cmap_lookup, @function
+.pushsection .text.font_cmap_lookup,"ax",@progbits
 font_cmap_lookup:
     push rbx
     push rbp
@@ -1144,10 +1159,12 @@ font_cmap_lookup:
     pop rbx
     ret
 .size font_cmap_lookup, . - font_cmap_lookup
+.popsection
 
 # Return an advance width in font units for EDI=glyph ID.
 .global font_glyph_advance
 .type font_glyph_advance, @function
+.pushsection .text.font_glyph_advance,"ax",@progbits
 font_glyph_advance:
     sub rsp, 8
     cmp edi, dword ptr [rip + font_num_glyphs]
@@ -1172,10 +1189,12 @@ font_glyph_advance:
     add rsp, 8
     ret
 .size font_glyph_advance, . - font_glyph_advance
+.popsection
 
 # Save the current aggregate outline into the frame for one composite depth.
 # EDI=depth. This is called immediately before a recursive child decode.
 .type font_outline_frame_save, @function
+.pushsection .text.font_outline_frame_save,"ax",@progbits
 font_outline_frame_save:
     push rbx
     push r12
@@ -1224,11 +1243,13 @@ font_outline_frame_save:
     pop rbx
     ret
 .size font_outline_frame_save, . - font_outline_frame_save
+.popsection
 
 # Merge the decoded child outline into the saved parent aggregate.
 # EDI=depth, ESI/EDX=XY offsets or parent/child point indices,
 # ECX/R8D/R9D/R10D=(xscale, scale01, scale10, yscale), R11D=1 for XY args.
 .type font_outline_frame_merge, @function
+.pushsection .text.font_outline_frame_merge,"ax",@progbits
 font_outline_frame_merge:
     push rbx
     push rbp
@@ -1487,11 +1508,13 @@ font_outline_frame_merge:
     pop rbx
     ret
 .size font_outline_frame_merge, . - font_outline_frame_merge
+.popsection
 
 # Public wrapper starts a fresh bounded recursion chain. Internal recursive
 # calls use a depth-specific frame to preserve each parent's partial outline.
 .global font_glyph_load_outline
 .type font_glyph_load_outline, @function
+.pushsection .text.font_glyph_load_outline,"ax",@progbits
 font_glyph_load_outline:
     sub rsp, 8
     xor esi, esi
@@ -1499,10 +1522,12 @@ font_glyph_load_outline:
     add rsp, 8
     ret
 .size font_glyph_load_outline, . - font_glyph_load_outline
+.popsection
 
 # Decode simple or composite TrueType glyphs into bounded design-unit arrays.
 # EDI=glyph ID, ESI=recursion depth. Returns 0 on success or -1 for malformed/unsupported data.
 .type font_glyph_load_outline_internal, @function
+.pushsection .text.font_glyph_load_outline_internal,"ax",@progbits
 font_glyph_load_outline_internal:
     push rbx
     push rbp
@@ -2074,12 +2099,14 @@ font_glyph_load_outline_internal:
     pop rbx
     ret
 .size font_glyph_load_outline_internal, . - font_glyph_load_outline_internal
+.popsection
 
 # Initialize the optional font engine. NEKOEDIT_DISABLE_FONT=1 forces the
 # embedded bitmap for deterministic legacy tests. Otherwise explicit
 # NEKOEDIT_FONT takes precedence over deterministic common system-font paths.
 .global font_init
 .type font_init, @function
+.pushsection .text.font_init,"ax",@progbits
 font_init:
     push rbx
     push r12
@@ -2229,5 +2256,6 @@ font_init:
     pop rbx
     ret
 .size font_init, . - font_init
+.popsection
 
 .section .note.GNU-stack,"",@progbits

@@ -5375,6 +5375,7 @@ recv_msg_control:      .zero 64
 .extern text_input_opt_in
 .global wayland_main
 .type wayland_main, @function
+.pushsection .text.wayland_main,"ax",@progbits
 wayland_main:
     push rbp                    # keep 16-byte call-site stack alignment
     mov dword ptr [rip + event_fd], -1
@@ -8704,10 +8705,12 @@ wayland_main:
     mov edi, 1
     jmp linux_exit
 .size wayland_main, . - wayland_main
+.popsection
 
 # Allocate separate growable mappings for the live document and transactional
 # Open staging area. Both start small and grow geometrically with mremap.
 .type doc_storage_init, @function
+.pushsection .text.doc_storage_init,"ax",@progbits
 doc_storage_init:
     push rbx
     mov eax, SYS_mmap
@@ -8752,12 +8755,14 @@ doc_storage_init:
     pop rbx
     ret
 .size doc_storage_init, . - doc_storage_init
+.popsection
 
 # Grow the live gap buffer geometrically. Existing suffix bytes are relocated
 # to the end of the enlarged mapping; logical byte offsets remain unchanged.
 # RAX=0 on success, negative errno on failure.
 .global doc_buffer_grow
 .type doc_buffer_grow, @function
+.pushsection .text.doc_buffer_grow,"ax",@progbits
 doc_buffer_grow:
     push rbx
     push r12
@@ -8822,10 +8827,12 @@ doc_buffer_grow:
     mov rax, -12
     jmp .doc_buffer_grow_return
 .size doc_buffer_grow, . - doc_buffer_grow
+.popsection
 
 # EDI=minimum required live-document capacity. Preserve the current logical
 # document and grow until the requested size is available.
 .type doc_buffer_reserve, @function
+.pushsection .text.doc_buffer_reserve,"ax",@progbits
 doc_buffer_reserve:
     push rbx
     mov ebx, edi
@@ -8847,10 +8854,12 @@ doc_buffer_reserve:
     mov rax, -12
     jmp .doc_buffer_reserve_return
 .size doc_buffer_reserve, . - doc_buffer_reserve
+.popsection
 
 # Grow the independent Open staging mapping. Unlike the live document this is
 # a contiguous byte stream, so mremap needs no gap/suffix relocation.
 .type load_buffer_grow, @function
+.pushsection .text.load_buffer_grow,"ax",@progbits
 load_buffer_grow:
     push r12
     push r13
@@ -8887,10 +8896,12 @@ load_buffer_grow:
     pop r12
     ret
 .size load_buffer_grow, . - load_buffer_grow
+.popsection
 
 # Load an optional initial file. A nonexistent path is a new, empty document.
 # The live document mapping grows geometrically if the file fills its capacity.
 .type load_initial_document, @function
+.pushsection .text.load_initial_document,"ax",@progbits
 load_initial_document:
     push rbx
     push r12
@@ -9017,10 +9028,12 @@ load_initial_document:
     pop rbx
     ret
 .size load_initial_document, . - load_initial_document
+.popsection
 
 # Copy the basename into the tab label without retaining or rewriting argv.
 
 .type picker_start, @function
+.pushsection .text.picker_start,"ax",@progbits
 picker_start:
     push rbx
     push r12
@@ -9126,8 +9139,10 @@ picker_start:
     pop rbx
     ret
 .size picker_start, . - picker_start
+.popsection
 
 .type picker_scan_directory, @function
+.pushsection .text.picker_scan_directory,"ax",@progbits
 picker_scan_directory:
     push rbx
     push rbp
@@ -9333,8 +9348,10 @@ picker_scan_directory:
     pop rbx
     ret
 .size picker_scan_directory, . - picker_scan_directory
+.popsection
 
 .type picker_insert_candidate, @function
+.pushsection .text.picker_insert_candidate,"ax",@progbits
 picker_insert_candidate:
     push rbx
     push r12
@@ -9414,12 +9431,14 @@ picker_insert_candidate:
     pop rbx
     ret
 .size picker_insert_candidate, . - picker_insert_candidate
+.popsection
 
 
 
 # Reuse the existing bounded .nlp directory scanner to refresh installed packs.
 # The scanner's entry array remains available after picker_close().
 .type settings_locale_refresh, @function
+.pushsection .text.settings_locale_refresh,"ax",@progbits
 settings_locale_refresh:
     push rbx
     push r12
@@ -9448,10 +9467,12 @@ settings_locale_refresh:
     xor eax, eax
     ret
 .size settings_locale_refresh, . - settings_locale_refresh
+.popsection
 
 # Resolve the current saved/effective tag to the matching dynamic list item.
 # Item zero is the built-in en_US locale; installed packs follow scanner order.
 .type settings_locale_sync_selection, @function
+.pushsection .text.settings_locale_sync_selection,"ax",@progbits
 settings_locale_sync_selection:
     push rbx
     push r12
@@ -9533,9 +9554,11 @@ settings_locale_sync_selection:
     pop rbx
     ret
 .size settings_locale_sync_selection, . - settings_locale_sync_selection
+.popsection
 
 # Keep the highlighted item in the six-row viewport.
 .type settings_locale_dropdown_adjust, @function
+.pushsection .text.settings_locale_dropdown_adjust,"ax",@progbits
 settings_locale_dropdown_adjust:
     mov eax, dword ptr [rip + settings_locale_dropdown_selected]
     cmp eax, 5
@@ -9547,9 +9570,11 @@ settings_locale_dropdown_adjust:
     mov dword ptr [rip + settings_locale_dropdown_scroll], 0
     ret
 .size settings_locale_dropdown_adjust, . - settings_locale_dropdown_adjust
+.popsection
 
 # Apply the highlighted item. Base is item zero; other rows map to picker_entries.
 .type settings_locale_activate, @function
+.pushsection .text.settings_locale_activate,"ax",@progbits
 settings_locale_activate:
     push rbx
     push r12
@@ -9590,8 +9615,10 @@ settings_locale_activate:
     pop rbx
     ret
 .size settings_locale_activate, . - settings_locale_activate
+.popsection
 
 .type render_settings_locale_dropdown, @function
+.pushsection .text.render_settings_locale_dropdown,"ax",@progbits
 render_settings_locale_dropdown:
     cmp dword ptr [rip + settings_locale_dropdown_open], 1
     jne .render_settings_locale_dropdown_done
@@ -9691,8 +9718,10 @@ render_settings_locale_dropdown:
 .render_settings_locale_dropdown_done:
     ret
 .size render_settings_locale_dropdown, . - render_settings_locale_dropdown
+.popsection
 
 .type picker_close, @function
+.pushsection .text.picker_close,"ax",@progbits
 picker_close:
     mov dword ptr [rip + picker_mode], 0
     mov dword ptr [rip + picker_overwrite_pending], 0
@@ -9707,8 +9736,10 @@ picker_close:
 .picker_close_done:
     ret
 .size picker_close, . - picker_close
+.popsection
 
 .type picker_copy_path_to_field, @function
+.pushsection .text.picker_copy_path_to_field,"ax",@progbits
 picker_copy_path_to_field:
     lea rsi, [rip + picker_current_path]
     lea rdi, [rip + picker_path_buffer]
@@ -9720,8 +9751,10 @@ picker_copy_path_to_field:
     mov dword ptr [rip + picker_path_view_start], 0
     ret
 .size picker_copy_path_to_field, . - picker_copy_path_to_field
+.popsection
 
 .type picker_enter_directory, @function
+.pushsection .text.picker_enter_directory,"ax",@progbits
 picker_enter_directory:
     # RDI points to a NUL-terminated name relative to picker_dir_fd.
     push rbx
@@ -9802,8 +9835,10 @@ picker_enter_directory:
     pop rbx
     ret
 .size picker_enter_directory, . - picker_enter_directory
+.popsection
 
 .type picker_go_parent, @function
+.pushsection .text.picker_go_parent,"ax",@progbits
 picker_go_parent:
     push rbx
     push r12
@@ -9867,8 +9902,10 @@ picker_go_parent:
     pop rbx
     ret
 .size picker_go_parent, . - picker_go_parent
+.popsection
 
 .type picker_go_home, @function
+.pushsection .text.picker_go_home,"ax",@progbits
 picker_go_home:
     push rbx
     push r12
@@ -9915,8 +9952,10 @@ picker_go_home:
     pop rbx
     ret
 .size picker_go_home, . - picker_go_home
+.popsection
 
 .type picker_navigate_path, @function
+.pushsection .text.picker_navigate_path,"ax",@progbits
 picker_navigate_path:
     push rbx
     push r12
@@ -9966,8 +10005,10 @@ picker_navigate_path:
     pop rbx
     ret
 .size picker_navigate_path, . - picker_navigate_path
+.popsection
 
 .type picker_copy_selected_name, @function
+.pushsection .text.picker_copy_selected_name,"ax",@progbits
 picker_copy_selected_name:
     push rbx
     mov eax, dword ptr [rip + picker_selected]
@@ -10010,10 +10051,12 @@ picker_copy_selected_name:
     pop rbx
     ret
 .size picker_copy_selected_name, . - picker_copy_selected_name
+.popsection
 
 # Case-insensitive ASCII filename-prefix search. Collect up to five regular-file
 # suggestions, default to the first result, and scroll that result into view.
 .type picker_find_name_prefix, @function
+.pushsection .text.picker_find_name_prefix,"ax",@progbits
 picker_find_name_prefix:
     push rbx
     push r12
@@ -10100,10 +10143,12 @@ picker_find_name_prefix:
     pop rbx
     ret
 .size picker_find_name_prefix, . - picker_find_name_prefix
+.popsection
 
 # Move the active autocomplete candidate without changing the typed prefix.
 # EDI is -1 or +1. The first matching filename remains the default candidate.
 .type picker_cycle_suggestion, @function
+.pushsection .text.picker_cycle_suggestion,"ax",@progbits
 picker_cycle_suggestion:
     mov ecx, dword ptr [rip + picker_suggestion_count]
     test ecx, ecx
@@ -10138,10 +10183,12 @@ picker_cycle_suggestion:
 .picker_cycle_suggestion_done:
     ret
 .size picker_cycle_suggestion, . - picker_cycle_suggestion
+.popsection
 
 # Accept the highlighted suggestion into the filename field and return focus
 # to the list. The user can then press Enter or click Open to activate it.
 .type picker_accept_suggestion, @function
+.pushsection .text.picker_accept_suggestion,"ax",@progbits
 picker_accept_suggestion:
     mov eax, dword ptr [rip + picker_suggestion_count]
     test eax, eax
@@ -10155,9 +10202,11 @@ picker_accept_suggestion:
 .picker_accept_suggestion_done:
     ret
 .size picker_accept_suggestion, . - picker_accept_suggestion
+.popsection
 
 # Insert AL at the current field cursor, replacing the field first after Ctrl+A.
 .type picker_edit_insert_byte, @function
+.pushsection .text.picker_edit_insert_byte,"ax",@progbits
 picker_edit_insert_byte:
     push rbx
     push r12
@@ -10234,9 +10283,11 @@ picker_edit_insert_byte:
     pop rbx
     ret
 .size picker_edit_insert_byte, . - picker_edit_insert_byte
+.popsection
 
 # EDI=1 removes the byte before the cursor; EDI=0 removes the byte at it.
 .type picker_edit_delete_byte, @function
+.pushsection .text.picker_edit_delete_byte,"ax",@progbits
 picker_edit_delete_byte:
     push rbx
     push r12
@@ -10310,9 +10361,11 @@ picker_edit_delete_byte:
     pop rbx
     ret
 .size picker_edit_delete_byte, . - picker_edit_delete_byte
+.popsection
 
 
 .type picker_build_target, @function
+.pushsection .text.picker_build_target,"ax",@progbits
 picker_build_target:
     push rbx
     push r12
@@ -10385,8 +10438,10 @@ picker_build_target:
     pop rbx
     ret
 .size picker_build_target, . - picker_build_target
+.popsection
 
 .type picker_commit_active_path, @function
+.pushsection .text.picker_commit_active_path,"ax",@progbits
 picker_commit_active_path:
     push r12
     lea rsi, [rip + picker_target_buffer]
@@ -10408,9 +10463,11 @@ picker_commit_active_path:
     pop r12
     ret
 .size picker_commit_active_path, . - picker_commit_active_path
+.popsection
 
 
 .type history_open_selected, @function
+.pushsection .text.history_open_selected,"ax",@progbits
 history_open_selected:
     push r12
     mov edi, dword ptr [rip + history_search_selected]
@@ -10440,8 +10497,10 @@ history_open_selected:
     pop r12
     ret
 .size history_open_selected, . - history_open_selected
+.popsection
 
 .type picker_load_font, @function
+.pushsection .text.picker_load_font,"ax",@progbits
 picker_load_font:
     push r12
     call picker_build_target
@@ -10492,8 +10551,10 @@ picker_load_font:
     pop r12
     ret
 .size picker_load_font, . - picker_load_font
+.popsection
 
 .type picker_install_locale, @function
+.pushsection .text.picker_install_locale,"ax",@progbits
 picker_install_locale:
     push r12
     call picker_build_target
@@ -10527,8 +10588,10 @@ picker_install_locale:
     pop r12
     ret
 .size picker_install_locale, . - picker_install_locale
+.popsection
 
 .type picker_import_xcompose, @function
+.pushsection .text.picker_import_xcompose,"ax",@progbits
 picker_import_xcompose:
     push r12
     call picker_build_target
@@ -10562,9 +10625,11 @@ picker_import_xcompose:
     pop r12
     ret
 .size picker_import_xcompose, . - picker_import_xcompose
+.popsection
 
 
 .type picker_open_file, @function
+.pushsection .text.picker_open_file,"ax",@progbits
 picker_open_file:
     push r12
     call picker_build_target
@@ -10604,8 +10669,10 @@ picker_open_file:
     pop r12
     ret
 .size picker_open_file, . - picker_open_file
+.popsection
 
 .type picker_save_file, @function
+.pushsection .text.picker_save_file,"ax",@progbits
 picker_save_file:
     push r12
     call picker_build_target
@@ -10647,8 +10714,10 @@ picker_save_file:
     pop r12
     ret
 .size picker_save_file, . - picker_save_file
+.popsection
 
 .type picker_confirm_overwrite, @function
+.pushsection .text.picker_confirm_overwrite,"ax",@progbits
 picker_confirm_overwrite:
     push r12
     cmp dword ptr [rip + history_export_mode], 0
@@ -10678,8 +10747,10 @@ picker_confirm_overwrite:
     pop r12
     ret
 .size picker_confirm_overwrite, . - picker_confirm_overwrite
+.popsection
 
 .type picker_select_locale, @function
+.pushsection .text.picker_select_locale,"ax",@progbits
 picker_select_locale:
     push rbx
     push r12
@@ -10746,8 +10817,10 @@ picker_select_locale:
     pop rbx
     ret
 .size picker_select_locale, . - picker_select_locale
+.popsection
 
 .type picker_confirm_action, @function
+.pushsection .text.picker_confirm_action,"ax",@progbits
 picker_confirm_action:
     cmp dword ptr [rip + picker_mode], 6
     je .picker_confirm_action_import_xcompose
@@ -10824,8 +10897,10 @@ picker_confirm_action:
     mov rax, -2
     ret
 .size picker_confirm_action, . - picker_confirm_action
+.popsection
 
 .type picker_move_selection, @function
+.pushsection .text.picker_move_selection,"ax",@progbits
 picker_move_selection:
     sub rsp, 8
     mov eax, dword ptr [rip + picker_entry_count]
@@ -10867,10 +10942,12 @@ picker_move_selection:
     add rsp, 8
     ret
 .size picker_move_selection, . - picker_move_selection
+.popsection
 
 # Clamp a relative row delta to the current directory's valid scroll range.
 # EDI=delta rows. EAX=1 when the scroll offset changed, otherwise 0.
 .type picker_scroll_by, @function
+.pushsection .text.picker_scroll_by,"ax",@progbits
 picker_scroll_by:
     mov eax, dword ptr [rip + picker_entry_count]
     sub eax, PICKER_VISIBLE_ROWS
@@ -10896,10 +10973,12 @@ picker_scroll_by:
     xor eax, eax
     ret
 .size picker_scroll_by, . - picker_scroll_by
+.popsection
 
 # Recompute scrollbar thumb geometry from the current entry count and offset.
 # The track spans PICKER_TRACK_HEIGHT pixels; the thumb has a small minimum.
 .type picker_scrollbar_geometry, @function
+.pushsection .text.picker_scrollbar_geometry,"ax",@progbits
 picker_scrollbar_geometry:
     push rbx
     mov ecx, dword ptr [rip + picker_entry_count]
@@ -10938,9 +11017,11 @@ picker_scrollbar_geometry:
     pop rbx
     ret
 .size picker_scrollbar_geometry, . - picker_scrollbar_geometry
+.popsection
 
 # ESI=pointer y. Convert a dragged thumb top into a clamped row offset.
 .type picker_scrollbar_drag_to_y, @function
+.pushsection .text.picker_scrollbar_drag_to_y,"ax",@progbits
 picker_scrollbar_drag_to_y:
     push rbx
     push r12
@@ -10981,9 +11062,11 @@ picker_scrollbar_drag_to_y:
     pop rbx
     ret
 .size picker_scrollbar_drag_to_y, . - picker_scrollbar_drag_to_y
+.popsection
 
 # Begin dragging or track-clicking the scrollbar at surface y=ESI.
 .type picker_scrollbar_begin_drag, @function
+.pushsection .text.picker_scrollbar_begin_drag,"ax",@progbits
 picker_scrollbar_begin_drag:
     push r12
     cmp dword ptr [rip + picker_entry_count], PICKER_VISIBLE_ROWS
@@ -11013,9 +11096,11 @@ picker_scrollbar_begin_drag:
     pop r12
     ret
 .size picker_scrollbar_begin_drag, . - picker_scrollbar_begin_drag
+.popsection
 
 
 .type picker_handle_key, @function
+.pushsection .text.picker_handle_key,"ax",@progbits
 picker_handle_key:
     push rbx
     push r12
@@ -11319,8 +11404,10 @@ picker_handle_key:
     pop rbx
     ret
 .size picker_handle_key, . - picker_handle_key
+.popsection
 
 .type picker_handle_pointer, @function
+.pushsection .text.picker_handle_pointer,"ax",@progbits
 picker_handle_pointer:
     push rbx
     push r12
@@ -11596,8 +11683,10 @@ picker_handle_pointer:
     pop rbx
     ret
 .size picker_handle_pointer, . - picker_handle_pointer
+.popsection
 
 .type set_active_document_name, @function
+.pushsection .text.set_active_document_name,"ax",@progbits
 set_active_document_name:
     lea rdi, [rip + active_document_name]
     mov rsi, r12
@@ -11627,10 +11716,12 @@ set_active_document_name:
     mov byte ptr [rdi + rcx], 0
     ret
 .size set_active_document_name, . - set_active_document_name
+.popsection
 
 # Save the active document. Untitled is routed to the in-window Save As
 # prompt by its caller; this routine deliberately refuses a null path.
 .type save_document_file, @function
+.pushsection .text.save_document_file,"ax",@progbits
 save_document_file:
     mov rdi, qword ptr [rip + current_file_path]
     test rdi, rdi
@@ -11641,11 +11732,13 @@ save_document_file:
     mov rax, -2
     ret
 .size save_document_file, . - save_document_file
+.popsection
 
 # Atomically replace PATH with the current document. The temporary is created
 # in the destination directory (exclusive create), fully written, fsynced,
 # closed, then renamed over the target. A failed write never truncates target.
 .type save_document_to_path, @function
+.pushsection .text.save_document_to_path,"ax",@progbits
 save_document_to_path:
     mov qword ptr [rip + save_target_path], rdi
     push rbx
@@ -11850,10 +11943,12 @@ save_document_to_path:
     pop rbx
     ret
 .size save_document_to_path, . - save_document_to_path
+.popsection
 
 # Open a replacement document into a separate growable staging mapping first.
 # The active document/path/tab are committed only after EOF and successful close.
 .type load_document_from_path, @function
+.pushsection .text.load_document_from_path,"ax",@progbits
 load_document_from_path:
     push rbx
     push r12
@@ -11969,21 +12064,27 @@ load_document_from_path:
     pop rbx
     ret
 .size load_document_from_path, . - load_document_from_path
+.popsection
 
 
 .type start_open_prompt, @function
+.pushsection .text.start_open_prompt,"ax",@progbits
 start_open_prompt:
     mov edi, 1
     jmp picker_start
 .size start_open_prompt, . - start_open_prompt
+.popsection
 
 .type start_save_as_prompt, @function
+.pushsection .text.start_save_as_prompt,"ax",@progbits
 start_save_as_prompt:
     mov edi, 2
     jmp picker_start
 .size start_save_as_prompt, . - start_save_as_prompt
+.popsection
 
 .type begin_path_prompt, @function
+.pushsection .text.begin_path_prompt,"ax",@progbits
 begin_path_prompt:
     mov dword ptr [rip + path_prompt_mode], edi
     mov dword ptr [rip + path_prompt_length], 0
@@ -11994,8 +12095,10 @@ begin_path_prompt:
     mov dword ptr [rip + doc_save_error], 0
     ret
 .size begin_path_prompt, . - begin_path_prompt
+.popsection
 
 .type cancel_path_prompt, @function
+.pushsection .text.cancel_path_prompt,"ax",@progbits
 cancel_path_prompt:
     mov dword ptr [rip + path_prompt_mode], 0
     mov dword ptr [rip + path_prompt_length], 0
@@ -12004,9 +12107,11 @@ cancel_path_prompt:
     mov dword ptr [rip + doc_save_error], 0
     ret
 .size cancel_path_prompt, . - cancel_path_prompt
+.popsection
 
 # Commit the entered path only after the corresponding file operation succeeds.
 .type commit_path_prompt, @function
+.pushsection .text.commit_path_prompt,"ax",@progbits
 commit_path_prompt:
     push r12
     lea rsi, [rip + path_prompt_buffer]
@@ -12025,8 +12130,10 @@ commit_path_prompt:
     pop r12
     ret
 .size commit_path_prompt, . - commit_path_prompt
+.popsection
 
 .type confirm_path_prompt, @function
+.pushsection .text.confirm_path_prompt,"ax",@progbits
 confirm_path_prompt:
     push rbp
     cmp dword ptr [rip + path_prompt_length], 0
@@ -12065,8 +12172,10 @@ confirm_path_prompt:
     pop rbp
     ret
 .size confirm_path_prompt, . - confirm_path_prompt
+.popsection
 
 .type save_current_document, @function
+.pushsection .text.save_current_document,"ax",@progbits
 save_current_document:
     cmp qword ptr [rip + current_file_path], 0
     je .save_current_prompt
@@ -12075,10 +12184,12 @@ save_current_document:
 .save_current_prompt:
     jmp start_save_as_prompt
 .size save_current_document, . - save_current_document
+.popsection
 
 # EDI=0 current document, 1 picker target, 2 path-prompt target.
 # Return 1 when a modal is pending, otherwise the save result.
 .type request_save_confirmation, @function
+.pushsection .text.request_save_confirmation,"ax",@progbits
 request_save_confirmation:
     mov dword ptr [rip + save_confirm_action], edi
     cmp dword ptr [rip + save_confirm_enabled], 0
@@ -12089,16 +12200,20 @@ request_save_confirmation:
     mov eax, 1
     ret
 .size request_save_confirmation, . - request_save_confirmation
+.popsection
 
 .type cancel_save_confirmation, @function
+.pushsection .text.cancel_save_confirmation,"ax",@progbits
 cancel_save_confirmation:
     mov dword ptr [rip + save_confirm_open], 0
     mov dword ptr [rip + save_confirm_action], 0
     xor eax, eax
     ret
 .size cancel_save_confirmation, . - cancel_save_confirmation
+.popsection
 
 .type request_locale_remove_confirmation, @function
+.pushsection .text.request_locale_remove_confirmation,"ax",@progbits
 request_locale_remove_confirmation:
     mov dword ptr [rip + save_confirm_action], 3
     mov dword ptr [rip + save_confirm_open], 1
@@ -12107,8 +12222,10 @@ request_locale_remove_confirmation:
     mov eax, 1
     ret
 .size request_locale_remove_confirmation, . - request_locale_remove_confirmation
+.popsection
 
 .type confirm_save_action, @function
+.pushsection .text.confirm_save_action,"ax",@progbits
 confirm_save_action:
     push rbx
     mov ebx, dword ptr [rip + save_confirm_action]
@@ -12189,6 +12306,7 @@ confirm_save_action:
     pop rbx
     ret
 .size confirm_save_action, . - confirm_save_action
+.popsection
 
 .section .rodata
 temp_prefix: .ascii ".nekoedit-"
@@ -12213,6 +12331,7 @@ ui_find_all_label: .asciz "Replace All complete"
 
 # Print a NUL-terminated string to stderr. Input: RSI = string.
 .type write_stderr_cstr, @function
+.pushsection .text.write_stderr_cstr,"ax",@progbits
 write_stderr_cstr:
     push rbx
     push r12
@@ -12238,10 +12357,12 @@ write_stderr_cstr:
     pop rbx
     ret
 .size write_stderr_cstr, . - write_stderr_cstr
+.popsection
 
 # Print an unsigned 32-bit integer in decimal to stderr. Input: EDI=value.
 # env_lookup(key=rdi, key_length=esi) -> rax=value pointer or 0.
 .type env_lookup, @function
+.pushsection .text.env_lookup,"ax",@progbits
 env_lookup:
     push rbx
     push r12
@@ -12282,9 +12403,11 @@ env_lookup:
     pop rbx
     ret
 .size env_lookup, . - env_lookup
+.popsection
 
 # copy_cstr(dst=rdi, src=rsi, max=edx) -> eax length, -1 if not terminated in bound.
 .type copy_cstr, @function
+.pushsection .text.copy_cstr,"ax",@progbits
 copy_cstr:
     xor ecx, ecx
 .copy_loop:
@@ -12303,10 +12426,12 @@ copy_cstr:
     mov rax, -1
     ret
 .size copy_cstr, . - copy_cstr
+.popsection
 
 # Parse WAYLAND_SOCKET as a non-negative decimal file descriptor.
 # RSI = NUL-terminated decimal string. RAX = fd or -EINVAL.
 .type parse_socket_fd, @function
+.pushsection .text.parse_socket_fd,"ax",@progbits
 parse_socket_fd:
     xor eax, eax
     xor ecx, ecx
@@ -12333,11 +12458,13 @@ parse_socket_fd:
     mov rax, -22
     ret
 .size parse_socket_fd, . - parse_socket_fd
+.popsection
 
 # Write all bytes to the Wayland stream with MSG_NOSIGNAL so a closed
 # compositor socket becomes a normal -EPIPE result instead of killing the app.
 # RDI=socket, RSI=buffer, RDX=length. RAX=0 or negative errno.
 .type wl_send_all, @function
+.pushsection .text.wl_send_all,"ax",@progbits
 wl_send_all:
     push rbx
     push r12
@@ -12377,10 +12504,12 @@ wl_send_all:
     pop rbx
     ret
 .size wl_send_all, . - wl_send_all
+.popsection
 
 # wl_send_request(object=rdi, opcode=esi, payload=rdx, payload_length=ecx).
 .global wl_send_request
 .type wl_send_request, @function
+.pushsection .text.wl_send_request,"ax",@progbits
 wl_send_request:
     push rbx
     push r12
@@ -12412,10 +12541,12 @@ wl_send_request:
     pop rbx
     ret
 .size wl_send_request, . - wl_send_request
+.popsection
 
 # wl_send_request_fd(object=rdi, opcode=esi, payload=rdx, payload_length=ecx, fd=r8).
 .global wl_send_request_fd
 .type wl_send_request_fd, @function
+.pushsection .text.wl_send_request_fd,"ax",@progbits
 wl_send_request_fd:
     push rbx
     push r12
@@ -12485,11 +12616,13 @@ wl_send_request_fd:
     pop rbx
     ret
 .size wl_send_request_fd, . - wl_send_request_fd
+.popsection
 
 # Bind global: rdi=name, rsi=interface string, edx=string bytes including NUL,
 # ecx=version, r8d=new object id.
 .global wl_registry_bind
 .type wl_registry_bind, @function
+.pushsection .text.wl_registry_bind,"ax",@progbits
 wl_registry_bind:
     push rbx
     push r12
@@ -12532,10 +12665,12 @@ wl_registry_bind:
     pop rbx
     ret
 .size wl_registry_bind, . - wl_registry_bind
+.popsection
 
 # Receive exactly RDX bytes from an AF_UNIX stream while preserving SCM_RIGHTS.
 # RDI=socket, RSI=destination, RDX=length. RAX=0 or negative errno.
 .type wl_recv_exact, @function
+.pushsection .text.wl_recv_exact,"ax",@progbits
 wl_recv_exact:
     push rbx
     push r12
@@ -12643,12 +12778,14 @@ wl_recv_exact:
     pop rbx
     ret
 .size wl_recv_exact, . - wl_recv_exact
+.popsection
 
 # Consume and validate the wl_keyboard.keymap event's descriptor.
 # XKB_V1 is retained as a bounded, read-only MAP_PRIVATE mapping for the
 # upcoming parser; this stage deliberately leaves the legacy key translator
 # active until keysyms and modifier levels are implemented.
 .type keyboard_keymap_update, @function
+.pushsection .text.keyboard_keymap_update,"ax",@progbits
 keyboard_keymap_update:
     push rbx
     push r12
@@ -12760,9 +12897,11 @@ keyboard_keymap_update:
     pop rbx
     ret
 .size keyboard_keymap_update, . - keyboard_keymap_update
+.popsection
 
 # Validate/consume wl_keyboard.keymap in both the bootstrap and main dispatchers.
 .type keyboard_keymap_dispatch, @function
+.pushsection .text.keyboard_keymap_dispatch,"ax",@progbits
 keyboard_keymap_dispatch:
     inc dword ptr [rip + keymap_event_count]
     mov eax, dword ptr [rip + last_object]
@@ -12785,9 +12924,11 @@ keyboard_keymap_dispatch:
     mov rax, -71
     ret
 .size keyboard_keymap_dispatch, . - keyboard_keymap_dispatch
+.popsection
 
 # Read one complete Wayland event; records last_object/opcode/size and payload.
 .type wl_read_event, @function
+.pushsection .text.wl_read_event,"ax",@progbits
 wl_read_event:
     push rbp
     # Any descriptor not consumed by the preceding event is not allowed to
@@ -12844,9 +12985,11 @@ wl_read_event:
     mov rax, -71
     jmp .read_event_done
 .size wl_read_event, . - wl_read_event
+.popsection
 
 # Registry.global payload: name, interface string, version.
 .type registry_capture_global, @function
+.pushsection .text.registry_capture_global,"ax",@progbits
 registry_capture_global:
     push rbp
     push r12
@@ -13019,8 +13162,10 @@ registry_capture_global:
     pop rbp
     ret
 .size registry_capture_global, . - registry_capture_global
+.popsection
 
 .type string_equal, @function
+.pushsection .text.string_equal,"ax",@progbits
 string_equal:
     mov r8, rdi
     mov r9, rsi
@@ -13040,10 +13185,12 @@ string_equal:
     xor eax, eax
     ret
 .size string_equal, . - string_equal
+.popsection
 
 # Draw a filled rectangle.
 # Inputs: RDI=base, ESI=x, EDX=y, ECX=width, R8D=height, R9D=XRGB8888.
 .type draw_rect, @function
+.pushsection .text.draw_rect,"ax",@progbits
 draw_rect:
     push rbx
     push r12
@@ -13394,9 +13541,11 @@ draw_rect:
     pop rbx
     ret
 .size draw_rect, . - draw_rect
+.popsection
 
 # Repaint the editor surface, including document chrome and status information.
 .type render_surface, @function
+.pushsection .text.render_surface,"ax",@progbits
 render_surface:
     push rbp
     # Main application background.
@@ -13562,12 +13711,14 @@ render_surface:
     pop rbp
     ret
 .size render_surface, . - render_surface
+.popsection
 
 # Attach and repaint the one buffer, but only after wl_buffer.release.
 # RAX = 0 on success, negative on failure.
 # Retain pointer focus/coordinates even if wl_pointer.enter arrives during
 # the initial seat roundtrip, before the regular event loop is running.
 .type pointer_capture_enter, @function
+.pushsection .text.pointer_capture_enter,"ax",@progbits
 pointer_capture_enter:
     cmp dword ptr [rip + last_size], 16
     jb .pointer_capture_enter_done
@@ -13593,11 +13744,13 @@ pointer_capture_enter:
     xor eax, eax
     ret
 .size pointer_capture_enter, . - pointer_capture_enter
+.popsection
 
 # wl_fixed pointer coordinates are signed. During an implicit button grab,
 # motion can continue beyond the surface and produce negative X/Y values.
 # Preserve that sign when converting surface coordinates to virtual UI space.
 .type pointer_capture_motion, @function
+.pushsection .text.pointer_capture_motion,"ax",@progbits
 pointer_capture_motion:
     cmp dword ptr [rip + last_size], 12
     jb .pointer_capture_motion_done
@@ -13619,10 +13772,12 @@ pointer_capture_motion:
     xor eax, eax
     ret
 .size pointer_capture_motion, . - pointer_capture_motion
+.popsection
 
 # Return xdg_toplevel.resize_edge bits from the last virtual application pointer position.
 # The same calculation drives resize cursor feedback and button-press requests.
 .type window_get_resize_edges, @function
+.pushsection .text.window_get_resize_edges,"ax",@progbits
 window_get_resize_edges:
     cmp dword ptr [rip + window_is_maximized], 0
     jne .window_get_resize_edges_none
@@ -13683,10 +13838,12 @@ window_get_resize_edges:
     xor eax, eax
     ret
 .size window_get_resize_edges, . - window_get_resize_edges
+.popsection
 
 # Use the optional wp_cursor_shape_manager_v1 extension to show resize cursors
 # while hovering. The actual drag still uses xdg_toplevel.resize and the button serial.
 .type window_update_cursor_shape, @function
+.pushsection .text.window_update_cursor_shape,"ax",@progbits
 window_update_cursor_shape:
     push r12
     cmp dword ptr [rip + cursor_shape_device], 0
@@ -13746,10 +13903,12 @@ window_update_cursor_shape:
     pop r12
     ret
 .size window_update_cursor_shape, . - window_update_cursor_shape
+.popsection
 
 # Bind cursor-shape manager and get a cursor-shape device for the wl_pointer.
 # Both objects use the shared dense client-object ID allocator.
 .type cursor_shape_setup, @function
+.pushsection .text.cursor_shape_setup,"ax",@progbits
 cursor_shape_setup:
     push r12
     cmp dword ptr [rip + cursor_shape_global], 0
@@ -13806,12 +13965,14 @@ cursor_shape_setup:
     pop r12
     ret
 .size cursor_shape_setup, . - cursor_shape_setup
+.popsection
 
 
 # Optional Wayland text-input-v3 client. It is deliberately opt-in because
 # enabling it suppresses printable wl_keyboard insertion while awaiting IME
 # commits; live GNOME/Mutter handoff must be validated before making it default.
 .type text_input_setup, @function
+.pushsection .text.text_input_setup,"ax",@progbits
 text_input_setup:
     push r12
     cmp dword ptr [rip + text_input_opt_in], 1
@@ -13855,8 +14016,10 @@ text_input_setup:
     pop r12
     ret
 .size text_input_setup, . - text_input_setup
+.popsection
 
 .type text_input_commit_request, @function
+.pushsection .text.text_input_commit_request,"ax",@progbits
 text_input_commit_request:
     mov edi, dword ptr [rip + text_input_object]
     mov esi, 7
@@ -13870,10 +14033,12 @@ text_input_commit_request:
 .Lti_commit_request_return:
     ret
 .size text_input_commit_request, . - text_input_commit_request
+.popsection
 
 # Return the screen-space IME caret position after rendering the preedit prefix.
 # EAX=x, EDX=y. Layout follows the document's active wrap/scroll mode.
 .type text_input_preedit_caret_position, @function
+.pushsection .text.text_input_preedit_caret_position,"ax",@progbits
 text_input_preedit_caret_position:
     push rbx
     push r12
@@ -13936,9 +14101,11 @@ text_input_preedit_caret_position:
     pop rbx
     ret
 .size text_input_preedit_caret_position, . - text_input_preedit_caret_position
+.popsection
 
 # Keep text input enabled only while the document itself is the focused target.
 .type text_input_update_state, @function
+.pushsection .text.text_input_update_state,"ax",@progbits
 text_input_update_state:
     push rbx
     push r12
@@ -14197,10 +14364,12 @@ text_input_update_state:
     pop rbx
     ret
 .size text_input_update_state, . - text_input_update_state
+.popsection
 
 # A Wayland string is length-prefixed and NUL-terminated; copy it before the
 # protocol event buffer can be reused. RDI=destination, ESI=capacity, EDX=tail bytes.
 .type text_input_copy_event_string, @function
+.pushsection .text.text_input_copy_event_string,"ax",@progbits
 text_input_copy_event_string:
     push rbx
     push r12
@@ -14253,9 +14422,11 @@ text_input_copy_event_string:
     mov eax, -1
     jmp .Lti_string_return
 .size text_input_copy_event_string, . - text_input_copy_event_string
+.popsection
 
 # Reject malformed UTF-8 from protocol strings before they enter the gap buffer.
 .type text_input_validate_utf8, @function
+.pushsection .text.text_input_validate_utf8,"ax",@progbits
 text_input_validate_utf8:
     push rbx
     push r12
@@ -14361,8 +14532,10 @@ text_input_validate_utf8:
     pop rbx
     ret
 .size text_input_validate_utf8, . - text_input_validate_utf8
+.popsection
 
 .type text_input_handle_event, @function
+.pushsection .text.text_input_handle_event,"ax",@progbits
 text_input_handle_event:
     cmp edi, 0
     je .Lti_enter
@@ -14583,9 +14756,11 @@ text_input_handle_event:
     xor eax, eax
     ret
 .size text_input_handle_event, . - text_input_handle_event
+.popsection
 
 # Apply delete-surrounding and commit-string as a single journal operation.
 .type text_input_apply_done, @function
+.pushsection .text.text_input_apply_done,"ax",@progbits
 text_input_apply_done:
     push rbx
     push r12
@@ -14753,8 +14928,10 @@ text_input_apply_done:
     pop rbx
     ret
 .size text_input_apply_done, . - text_input_apply_done
+.popsection
 
 .type text_input_decode_scalar, @function
+.pushsection .text.text_input_decode_scalar,"ax",@progbits
 text_input_decode_scalar:
     movzx eax, byte ptr [rdi + rsi]
     cmp eax, 0x80
@@ -14802,10 +14979,12 @@ text_input_decode_scalar:
     mov edx, 1
     ret
 .size text_input_decode_scalar, . - text_input_decode_scalar
+.popsection
 
 # Render the pending composition as underlined text at the document caret.
 # The input-method cursor offset is measured in UTF-8 bytes.
 .type render_text_input_preedit, @function
+.pushsection .text.render_text_input_preedit,"ax",@progbits
 render_text_input_preedit:
     push rbx
     push rbp
@@ -14946,9 +15125,11 @@ render_text_input_preedit:
     pop rbx
     ret
 .size render_text_input_preedit, . - render_text_input_preedit
+.popsection
 
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
+.pushsection .text.window_update_geometry,"ax",@progbits
 window_update_geometry:
     # Uniform density maps the existing virtual UI coordinate space to the
     # compositor surface. Use the smaller axis so text and controls never warp.
@@ -15195,9 +15376,11 @@ window_update_geometry:
     mov dword ptr [rip + pointer_y], eax
     ret
 .size window_update_geometry, . - window_update_geometry
+.popsection
 
 # Recalculate window-anchored and centered overlay geometry after every configure.
 .type window_update_layout_geometry, @function
+.pushsection .text.window_update_layout_geometry,"ax",@progbits
 window_update_layout_geometry:
     push rbx
     # Footer metadata is distributed across the available width. Preserve the
@@ -15425,9 +15608,11 @@ window_update_layout_geometry:
     pop rbx
     ret
 .size window_update_layout_geometry, . - window_update_layout_geometry
+.popsection
 
 # Convert surface coordinates to the 256x168 Settings design coordinate space.
 .type settings_pointer_to_design, @function
+.pushsection .text.settings_pointer_to_design,"ax",@progbits
 settings_pointer_to_design:
     push rbx
     push r12
@@ -15465,9 +15650,11 @@ settings_pointer_to_design:
     pop rbx
     ret
 .size settings_pointer_to_design, . - settings_pointer_to_design
+.popsection
 
 # Parse xdg_toplevel.configure: width, height, and a uint32 array of states.
 .type window_capture_toplevel_configure, @function
+.pushsection .text.window_capture_toplevel_configure,"ax",@progbits
 window_capture_toplevel_configure:
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -15533,8 +15720,10 @@ window_capture_toplevel_configure:
     mov rax, -71
     ret
 .size window_capture_toplevel_configure, . - window_capture_toplevel_configure
+.popsection
 
 .type window_commit_initial_size, @function
+.pushsection .text.window_commit_initial_size,"ax",@progbits
 window_commit_initial_size:
     mov eax, dword ptr [rip + window_pending_width]
     test eax, eax
@@ -15551,10 +15740,12 @@ window_commit_initial_size:
     call window_update_geometry
     ret
 .size window_commit_initial_size, . - window_commit_initial_size
+.popsection
 
 # Match either retained wl_buffer object and clear only its own ownership bit.
 # RAX = 1 when a release was consumed, otherwise 0.
 .type window_handle_buffer_release, @function
+.pushsection .text.window_handle_buffer_release,"ax",@progbits
 window_handle_buffer_release:
     cmp dword ptr [rip + last_opcode], 0
     jne .window_buffer_release_unmatched
@@ -15584,8 +15775,10 @@ window_handle_buffer_release:
     mov eax, 1
     ret
 .size window_handle_buffer_release, . - window_handle_buffer_release
+.popsection
 
 .type window_handle_surface_configure, @function
+.pushsection .text.window_handle_surface_configure,"ax",@progbits
 window_handle_surface_configure:
     push r12
     mov eax, dword ptr [rip + event_payload]
@@ -15625,8 +15818,10 @@ window_handle_surface_configure:
     pop r12
     ret
 .size window_handle_surface_configure, . - window_handle_surface_configure
+.popsection
 
 .type window_apply_pending_resize, @function
+.pushsection .text.window_apply_pending_resize,"ax",@progbits
 window_apply_pending_resize:
     push rbx
     push r12
@@ -15750,8 +15945,10 @@ window_apply_pending_resize:
     pop rbx
     ret
 .size window_apply_pending_resize, . - window_apply_pending_resize
+.popsection
 
 .type application_exit, @function
+.pushsection .text.application_exit,"ax",@progbits
 application_exit:
     # This leaf exit path is entered through CALL with RSP=8 mod 16.
     # Align the stack before calling the C handoff routine.
@@ -15769,9 +15966,11 @@ application_exit:
     xor edi, edi
     jmp linux_exit
 .size application_exit, . - application_exit
+.popsection
 
 # Allocate the lazily used second buffer at the second half of the SHM pool.
 .type window_create_second_buffer, @function
+.pushsection .text.window_create_second_buffer,"ax",@progbits
 window_create_second_buffer:
     sub rsp, 8
     mov eax, dword ptr [rip + next_client_object_id]
@@ -15803,10 +16002,12 @@ window_create_second_buffer:
     add rsp, 8
     ret
 .size window_create_second_buffer, . - window_create_second_buffer
+.popsection
 
 # Configure software paint clipping for a simple caret move.
 # EDI=buffer slot (0 or 1); RAX=1 when partial repaint is safe.
 .type render_prepare_slot, @function
+.pushsection .text.render_prepare_slot,"ax",@progbits
 render_prepare_slot:
     push rbx
     push r12
@@ -16070,8 +16271,10 @@ render_prepare_slot:
     pop rbx
     ret
 .size render_prepare_slot, . - render_prepare_slot
+.popsection
 
 .type render_disable_clip, @function
+.pushsection .text.render_disable_clip,"ax",@progbits
 render_disable_clip:
     sub rsp, 8
     mov dword ptr [rip + render_clip_enabled], 0
@@ -16084,8 +16287,10 @@ render_disable_clip:
     add rsp, 8
     ret
 .size render_disable_clip, . - render_disable_clip
+.popsection
 
 .type render_store_slot_metadata, @function
+.pushsection .text.render_store_slot_metadata,"ax",@progbits
 render_store_slot_metadata:
     push rbx
     push r12
@@ -16140,8 +16345,10 @@ render_store_slot_metadata:
     pop rbx
     ret
 .size render_store_slot_metadata, . - render_store_slot_metadata
+.popsection
 
 .type present_buffer, @function
+.pushsection .text.present_buffer,"ax",@progbits
 present_buffer:
     # r12d retains the selected slot across the renderer and protocol calls.
     mov dword ptr [rip + present_buffer_stage], 0
@@ -16343,6 +16550,7 @@ present_buffer:
     pop r12
     ret
 .size present_buffer, . - present_buffer
+.popsection
 
 # Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
 # as single-byte replacement units so the original file bytes remain editable.
@@ -16351,6 +16559,7 @@ present_buffer:
 .type doc_byte_at, @function
 # Read one logical document byte, translating around the movable gap.
 # EDI=logical byte offset; EAX=byte value (zero for an out-of-range offset).
+.pushsection .text.doc_byte_at,"ax",@progbits
 doc_byte_at:
     mov eax, edi
     cmp eax, dword ptr [rip + doc_length]
@@ -16368,10 +16577,12 @@ doc_byte_at:
     xor eax, eax
     ret
 .size doc_byte_at, . - doc_byte_at
+.popsection
 
 # Move the gap to a logical byte offset. EDI is clamped to doc_length.
 # The gap is [doc_gap_start, doc_gap_end); bytes outside it stay in order.
 .type doc_move_gap, @function
+.pushsection .text.doc_move_gap,"ax",@progbits
 doc_move_gap:
     push rbx
     push r12
@@ -16433,11 +16644,13 @@ doc_move_gap:
     pop rbx
     ret
 .size doc_move_gap, . - doc_move_gap
+.popsection
 
 # Return the byte offset after one valid UTF-8 scalar. Invalid bytes are treated
 # as single-byte replacement units so the original file bytes remain editable.
 # EDI=logical byte offset; EAX=next logical byte offset.
 .type doc_utf8_next, @function
+.pushsection .text.doc_utf8_next,"ax",@progbits
 doc_utf8_next:
     push rbx
     mov r8d, edi
@@ -16548,10 +16761,12 @@ doc_utf8_next:
     pop rbx
     ret
 .size doc_utf8_next, . - doc_utf8_next
+.popsection
 
 # Return the start of the valid UTF-8 scalar ending at EDI. Invalid trailing
 # bytes remain individually addressable. EDI=byte offset; EAX=previous offset.
 .type doc_utf8_prev, @function
+.pushsection .text.doc_utf8_prev,"ax",@progbits
 doc_utf8_prev:
     push rbx
     push r12
@@ -16592,11 +16807,13 @@ doc_utf8_prev:
     pop rbx
     ret
 .size doc_utf8_prev, . - doc_utf8_prev
+.popsection
 
 
 # Generic binary search over sorted {first,last,value} Unicode ranges.
 # EDI=code point, RSI=table address, EDX=entry count; EAX=property or zero.
 .type unicode_range_lookup, @function
+.pushsection .text.unicode_range_lookup,"ax",@progbits
 unicode_range_lookup:
     mov r8d, edi
     mov r9, rsi
@@ -16628,11 +16845,13 @@ unicode_range_lookup:
     xor eax, eax
     ret
 .size unicode_range_lookup, . - unicode_range_lookup
+.popsection
 
 # Return Unicode 18.0 Grapheme_Cluster_Break for EDI.
 # CR=1, LF=2, Control=3, Extend=4, ZWJ=5, RI=6, Prepend=7,
 # SpacingMark=8, L=9, V=10, T=11, LV=12, LVT=13, Other=0.
 .type doc_grapheme_property, @function
+.pushsection .text.doc_grapheme_property,"ax",@progbits
 doc_grapheme_property:
     cmp edi, 0xac00
     jb .Ldoc_gcb_table_lookup
@@ -16655,25 +16874,31 @@ doc_grapheme_property:
     mov edx, (unicode_gcb_ranges_end - unicode_gcb_ranges) / 12
     jmp unicode_range_lookup
 .size doc_grapheme_property, . - doc_grapheme_property
+.popsection
 
 .type doc_indic_conjunct_property, @function
+.pushsection .text.doc_indic_conjunct_property,"ax",@progbits
 doc_indic_conjunct_property:
     lea rsi, [rip + unicode_incb_ranges]
     mov edx, (unicode_incb_ranges_end - unicode_incb_ranges) / 12
     jmp unicode_range_lookup
 .size doc_indic_conjunct_property, . - doc_indic_conjunct_property
+.popsection
 
 .type doc_is_extended_pictographic, @function
+.pushsection .text.doc_is_extended_pictographic,"ax",@progbits
 doc_is_extended_pictographic:
     lea rsi, [rip + unicode_extended_pictographic_ranges]
     mov edx, (unicode_extended_pictographic_ranges_end - unicode_extended_pictographic_ranges) / 12
     jmp unicode_range_lookup
 .size doc_is_extended_pictographic, . - doc_is_extended_pictographic
+.popsection
 
 # Decode the UTF-8 scalar at logical byte offset EDI.
 # Returns EAX=code point and EDX=byte offset immediately after it.
 # Invalid UTF-8 bytes stay addressable as independent one-byte units.
 .type doc_unicode_decode_at, @function
+.pushsection .text.doc_unicode_decode_at,"ax",@progbits
 doc_unicode_decode_at:
     push rbx
     push r12
@@ -16747,11 +16972,13 @@ doc_unicode_decode_at:
     pop rbx
     ret
 .size doc_unicode_decode_at, . - doc_unicode_decode_at
+.popsection
 
 # Decide whether there is an extended grapheme boundary between adjacent
 # scalar starts: EDI=previous scalar offset, ESI=current scalar offset.
 # EAX=1 for a break, EAX=0 for no break.
 .type doc_grapheme_is_break, @function
+.pushsection .text.doc_grapheme_is_break,"ax",@progbits
 doc_grapheme_is_break:
     push rbx
     push rbp
@@ -16948,9 +17175,11 @@ doc_grapheme_is_break:
     pop rbx
     ret
 .size doc_grapheme_is_break, . - doc_grapheme_is_break
+.popsection
 
 # EDI=cluster start; EAX=next extended grapheme boundary, or EOF.
 .type doc_grapheme_next, @function
+.pushsection .text.doc_grapheme_next,"ax",@progbits
 doc_grapheme_next:
     push rbx
     push r12
@@ -17011,9 +17240,11 @@ doc_grapheme_next:
     pop rbx
     ret
 .size doc_grapheme_next, . - doc_grapheme_next
+.popsection
 
 # EDI=cursor insertion offset; EAX=previous extended grapheme boundary.
 .type doc_grapheme_prev, @function
+.pushsection .text.doc_grapheme_prev,"ax",@progbits
 doc_grapheme_prev:
     push rbx
     push r12
@@ -17073,12 +17304,14 @@ doc_grapheme_prev:
     pop rbx
     ret
 .size doc_grapheme_prev, . - doc_grapheme_prev
+.popsection
 
 
 # Each 16-byte logical-line record stores byte span, wrapped visual rows, and
 # one node from each Fenwick prefix tree. Byte spans include a terminating LF.
 # The index mapping is bounded and independent of the document gap buffer.
 .type doc_line_index_reserve, @function
+.pushsection .text.doc_line_index_reserve,"ax",@progbits
 doc_line_index_reserve:
     push rbx
     push rbp
@@ -17154,9 +17387,11 @@ doc_line_index_reserve:
     pop rbx
     ret
 .size doc_line_index_reserve, . - doc_line_index_reserve
+.popsection
 
 # Parallel stable IDs follow logical lines across byte-offset shifts.
 .type doc_line_index_ids_reserve, @function
+.pushsection .text.doc_line_index_ids_reserve,"ax",@progbits
 doc_line_index_ids_reserve:
     push rbx
     push r12
@@ -17224,9 +17459,11 @@ doc_line_index_ids_reserve:
     pop rbx
     ret
 .size doc_line_index_ids_reserve, . - doc_line_index_ids_reserve
+.popsection
 
 # Assign a fresh nonzero ID to EDI=zero-based logical line index.
 .type doc_line_index_assign_id, @function
+.pushsection .text.doc_line_index_assign_id,"ax",@progbits
 doc_line_index_assign_id:
     mov eax, dword ptr [rip + doc_line_index_next_id]
     test eax, eax
@@ -17246,8 +17483,10 @@ doc_line_index_assign_id:
     mov dword ptr [rdx], eax
     ret
 .size doc_line_index_assign_id, . - doc_line_index_assign_id
+.popsection
 
 .type doc_line_index_get_id, @function
+.pushsection .text.doc_line_index_get_id,"ax",@progbits
 doc_line_index_get_id:
     mov eax, edi
     shl rax, 2
@@ -17256,9 +17495,11 @@ doc_line_index_get_id:
     mov eax, dword ptr [rdx]
     ret
 .size doc_line_index_get_id, . - doc_line_index_get_id
+.popsection
 
 # EDI=line ID, ESI=256px bucket, EDX=byte offset, ECX=pixel X.
 .type doc_hscroll_cache_store, @function
+.pushsection .text.doc_hscroll_cache_store,"ax",@progbits
 doc_hscroll_cache_store:
     mov r8d, edx
     mov r9d, ecx
@@ -17277,10 +17518,12 @@ doc_hscroll_cache_store:
     mov dword ptr [rdx + 16], r9d
     ret
 .size doc_hscroll_cache_store, . - doc_hscroll_cache_store
+.popsection
 
 # EDI=line ID, ESI=target bucket, EDX=target pixel X.
 # Returns EAX=byte offset, EDX=pixel X, ECX=checkpoint bucket; -1 on miss.
 .type doc_hscroll_cache_lookup, @function
+.pushsection .text.doc_hscroll_cache_lookup,"ax",@progbits
 doc_hscroll_cache_lookup:
     push rbx
     push r12
@@ -17331,6 +17574,7 @@ doc_hscroll_cache_lookup:
     pop rbx
     ret
 .size doc_hscroll_cache_lookup, . - doc_hscroll_cache_lookup
+.popsection
 
 
 # Sparse byte-to-visual checkpoints are keyed by stable logical-line ID.
@@ -17339,6 +17583,7 @@ doc_hscroll_cache_lookup:
 # EDI=line ID, ESI=4 KiB byte bucket, EDX=line-relative byte offset,
 # ECX=local visual row, R8D=pixel X.
 .type doc_vbyte_cache_store, @function
+.pushsection .text.doc_vbyte_cache_store,"ax",@progbits
 doc_vbyte_cache_store:
     mov r9d, edx
     mov r10d, ecx
@@ -17359,10 +17604,12 @@ doc_vbyte_cache_store:
     mov dword ptr [rdx + 20], r11d
     ret
 .size doc_vbyte_cache_store, . - doc_vbyte_cache_store
+.popsection
 
 # EDI=line ID, ESI=target 4 KiB bucket, EDX=line-relative target offset.
 # Returns EAX=relative offset, EDX=local visual row, ECX=pixel X; -1 on miss.
 .type doc_vbyte_cache_lookup, @function
+.pushsection .text.doc_vbyte_cache_lookup,"ax",@progbits
 doc_vbyte_cache_lookup:
     push rbx
     push r12
@@ -17414,6 +17661,7 @@ doc_vbyte_cache_lookup:
     pop rbx
     ret
 .size doc_vbyte_cache_lookup, . - doc_vbyte_cache_lookup
+.popsection
 
 
 # EDI=line ID, ESI=maximum line-relative 4 KiB bucket,
@@ -17421,6 +17669,7 @@ doc_vbyte_cache_lookup:
 # Return the greatest cached (row, X) not after the target coordinate.
 # EAX=relative byte offset, EDX=checkpoint row, ECX=checkpoint X; -1 on miss.
 .type doc_vbyte_cache_lookup_row, @function
+.pushsection .text.doc_vbyte_cache_lookup_row,"ax",@progbits
 doc_vbyte_cache_lookup_row:
     push rbx
     push rbp
@@ -17544,10 +17793,12 @@ doc_vbyte_cache_lookup_row:
     pop rbx
     ret
 .size doc_vbyte_cache_lookup_row, . - doc_vbyte_cache_lookup_row
+.popsection
 
 # EDI=logical line byte start, ESI=byte span, EDX=stable line ID.
 # Returns EAX=visual rows >= 1.
 .type doc_line_index_measure_rows, @function
+.pushsection .text.doc_line_index_measure_rows,"ax",@progbits
 doc_line_index_measure_rows:
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .Ldoc_index_measure_wrapped
@@ -17755,10 +18006,12 @@ doc_line_index_measure_rows:
     pop rbx
     ret
 .size doc_line_index_measure_rows, . - doc_line_index_measure_rows
+.popsection
 
 # Linear Fenwick construction. Nodes are reset first so rebuilds after line
 # insertion/merging cannot retain stale parent aggregates.
 .type doc_line_index_build_trees, @function
+.pushsection .text.doc_line_index_build_trees,"ax",@progbits
 doc_line_index_build_trees:
     push rbx
     push r12
@@ -17812,9 +18065,11 @@ doc_line_index_build_trees:
     pop rbx
     ret
 .size doc_line_index_build_trees, . - doc_line_index_build_trees
+.popsection
 
 # Sum the first EDI line values from the Fenwick tree at record offset ESI.
 .type doc_line_index_prefix_sum, @function
+.pushsection .text.doc_line_index_prefix_sum,"ax",@progbits
 doc_line_index_prefix_sum:
     push rbx
     push r12
@@ -17844,10 +18099,12 @@ doc_line_index_prefix_sum:
     pop rbx
     ret
 .size doc_line_index_prefix_sum, . - doc_line_index_prefix_sum
+.popsection
 
 # EDI=coordinate, ESI=Fenwick field offset; return line index in EAX and
 # its starting byte/visual-row prefix in EDX. EOF clamps to the final record.
 .type doc_line_index_find_prefix, @function
+.pushsection .text.doc_line_index_find_prefix,"ax",@progbits
 doc_line_index_find_prefix:
     push rbx
     push rbp
@@ -17916,9 +18173,11 @@ doc_line_index_find_prefix:
     pop rbx
     ret
 .size doc_line_index_find_prefix, . - doc_line_index_find_prefix
+.popsection
 
 # Reflow only row counts after the window text width changes.
 .type doc_line_index_reflow, @function
+.pushsection .text.doc_line_index_reflow,"ax",@progbits
 doc_line_index_reflow:
     inc dword ptr [rip + doc_hscroll_cache_epoch]
     jnz .Ldoc_index_reflow_epoch_ready
@@ -17967,10 +18226,12 @@ doc_line_index_reflow:
     pop rbx
     ret
 .size doc_line_index_reflow, . - doc_line_index_reflow
+.popsection
 
 # Rebuild records from the logical byte stream, retaining an empty final line
 # when the document ends in LF. Failure disables indexing until the next edit.
 .type doc_line_index_rebuild, @function
+.pushsection .text.doc_line_index_rebuild,"ax",@progbits
 doc_line_index_rebuild:
     push rbx
     push rbp
@@ -18166,8 +18427,10 @@ doc_line_index_rebuild:
     pop rbx
     ret
 .size doc_line_index_rebuild, . - doc_line_index_rebuild
+.popsection
 
 .type doc_line_index_ensure, @function
+.pushsection .text.doc_line_index_ensure,"ax",@progbits
 doc_line_index_ensure:
     push rbx
     push r12
@@ -18195,10 +18458,12 @@ doc_line_index_ensure:
     pop rbx
     ret
 .size doc_line_index_ensure, . - doc_line_index_ensure
+.popsection
 
 # Point-update a Fenwick tree by signed delta. EDI=line index, ESI=delta,
 # EDX=record field offset (8 for bytes or 12 for visual rows).
 .type doc_line_index_fenwick_add, @function
+.pushsection .text.doc_line_index_fenwick_add,"ax",@progbits
 doc_line_index_fenwick_add:
     push rbx
     push r12
@@ -18228,10 +18493,12 @@ doc_line_index_fenwick_add:
     pop rbx
     ret
 .size doc_line_index_fenwick_add, . - doc_line_index_fenwick_add
+.popsection
 
 # Update a line after a single insertion. A newline splits its current record;
 # ordinary bytes change one line value and point-update both Fenwick trees.
 .type doc_line_index_apply_insert, @function
+.pushsection .text.doc_line_index_apply_insert,"ax",@progbits
 doc_line_index_apply_insert:
     push rbx
     push rbp
@@ -18389,10 +18656,12 @@ doc_line_index_apply_insert:
     pop rbx
     ret
 .size doc_line_index_apply_insert, . - doc_line_index_apply_insert
+.popsection
 
 # Update a line after deletion. Removing LF merges adjacent records; deleting
 # ordinary UTF-8 bytes updates only the affected line and its prefix-tree paths.
 .type doc_line_index_apply_delete, @function
+.pushsection .text.doc_line_index_apply_delete,"ax",@progbits
 doc_line_index_apply_delete:
     push rbx
     push rbp
@@ -18521,12 +18790,14 @@ doc_line_index_apply_delete:
     pop rbx
     ret
 .size doc_line_index_apply_delete, . - doc_line_index_apply_delete
+.popsection
 
 
 # Insert one byte at the logical cursor. Grow the mapping when its gap is empty.
 .global doc_insert_byte
 .type doc_insert_byte, @function
 # Insert a byte at the logical cursor by consuming one byte from the gap.
+.pushsection .text.doc_insert_byte,"ax",@progbits
 doc_insert_byte:
     push rbx
     push r12
@@ -18567,6 +18838,7 @@ doc_insert_byte:
     pop rbx
     ret
 .size doc_insert_byte, . - doc_insert_byte
+.popsection
 
 # Insert a byte range at the document cursor. This is the large-paste path:
 # reserve/move once, record one history operation, copy once, then rebuild the
@@ -18574,6 +18846,7 @@ doc_insert_byte:
 # once per byte.
 .global doc_insert_bytes
 .type doc_insert_bytes, @function
+.pushsection .text.doc_insert_bytes,"ax",@progbits
 doc_insert_bytes:
     push rbx
     push r12
@@ -18639,12 +18912,14 @@ doc_insert_bytes:
     pop rbx
     ret
 .size doc_insert_bytes, . - doc_insert_bytes
+.popsection
 
 # Insert one Unicode scalar as one to four UTF-8 bytes at the document cursor.
 # The caller has already removed an active selection, so all bytes belong to
 # the same key input action and the existing grapheme/index machinery applies.
 .global doc_insert_codepoint_utf8
 .type doc_insert_codepoint_utf8, @function
+.pushsection .text.doc_insert_codepoint_utf8,"ax",@progbits
 doc_insert_codepoint_utf8:
     push rbx
     push r12
@@ -18741,8 +19016,10 @@ doc_insert_codepoint_utf8:
     pop rbx
     ret
 .size doc_insert_codepoint_utf8, . - doc_insert_codepoint_utf8
+.popsection
 
 .type doc_delete_at_cursor, @function
+.pushsection .text.doc_delete_at_cursor,"ax",@progbits
 doc_delete_at_cursor:
     push rbx
     push rbp
@@ -18797,10 +19074,12 @@ doc_delete_at_cursor:
     pop rbx
     ret
 .size doc_delete_at_cursor, . - doc_delete_at_cursor
+.popsection
 
 .global doc_delete_selection
 .type doc_delete_selection, @function
 # Remove a logical selection by extending the gap over its selected bytes.
+.pushsection .text.doc_delete_selection,"ax",@progbits
 doc_delete_selection:
     push rbx
     push r12
@@ -18839,20 +19118,24 @@ doc_delete_selection:
     pop rbx
     ret
 .size doc_delete_selection, . - doc_delete_selection
+.popsection
 
 # Clear selection state while retaining the current insertion point.
 .global doc_clear_selection
 .type doc_clear_selection, @function
+.pushsection .text.doc_clear_selection,"ax",@progbits
 doc_clear_selection:
     mov dword ptr [rip + doc_selection_active], 0
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
     ret
 .size doc_clear_selection, . - doc_clear_selection
+.popsection
 
 # Start compositor-configured repeat for ordinary keys. Modifier and lock
 # keys are intentionally excluded. EAX=Linux evdev keycode.
 .type repeat_start_if_supported, @function
+.pushsection .text.repeat_start_if_supported,"ax",@progbits
 repeat_start_if_supported:
     # Shift, Ctrl, Alt, Meta/Super, Caps/Num/Scroll Lock and Compose do not repeat.
     cmp eax, 42
@@ -18917,10 +19200,12 @@ repeat_start_if_supported:
 .Lneko_repeat_start_done:
     ret
 .size repeat_start_if_supported, . - repeat_start_if_supported
+.popsection
 
 # A separate periodic timer drives edge auto-scroll during mouse selection.
 # The initial 120ms delay avoids scrolling during an ordinary short drag.
 .type doc_drag_timer_start, @function
+.pushsection .text.doc_drag_timer_start,"ax",@progbits
 doc_drag_timer_start:
     cmp dword ptr [rip + doc_drag_timer_fd], 0
     je .Ldoc_drag_timer_start_done
@@ -18939,8 +19224,10 @@ doc_drag_timer_start:
     xor eax, eax
     ret
 .size doc_drag_timer_start, . - doc_drag_timer_start
+.popsection
 
 .type doc_drag_timer_stop, @function
+.pushsection .text.doc_drag_timer_stop,"ax",@progbits
 doc_drag_timer_stop:
     cmp dword ptr [rip + doc_drag_timer_fd], 0
     je .Ldoc_drag_timer_stop_done
@@ -18959,8 +19246,10 @@ doc_drag_timer_stop:
     xor eax, eax
     ret
 .size doc_drag_timer_stop, . - doc_drag_timer_stop
+.popsection
 
 .type repeat_cancel, @function
+.pushsection .text.repeat_cancel,"ax",@progbits
 repeat_cancel:
     mov dword ptr [rip + repeat_keycode], 0
     cmp dword ptr [rip + repeat_timer_fd], 0
@@ -18978,9 +19267,11 @@ repeat_cancel:
 .Lneko_repeat_cancel_done:
     ret
 .size repeat_cancel, . - repeat_cancel
+.popsection
 
 # Begin or update a selection driven by Shift+navigation.
 .type doc_begin_keyboard_selection, @function
+.pushsection .text.doc_begin_keyboard_selection,"ax",@progbits
 doc_begin_keyboard_selection:
     cmp dword ptr [rip + doc_selection_active], 0
     jne .Lneko_begin_keyboard_selection_done
@@ -18989,8 +19280,10 @@ doc_begin_keyboard_selection:
 .Lneko_begin_keyboard_selection_done:
     ret
 .size doc_begin_keyboard_selection, . - doc_begin_keyboard_selection
+.popsection
 
 .type doc_finish_keyboard_selection, @function
+.pushsection .text.doc_finish_keyboard_selection,"ax",@progbits
 doc_finish_keyboard_selection:
     mov eax, dword ptr [rip + doc_cursor]
     cmp eax, dword ptr [rip + doc_selection_anchor]
@@ -19001,9 +19294,11 @@ doc_finish_keyboard_selection:
     mov dword ptr [rip + doc_selection_active], 0
     ret
 .size doc_finish_keyboard_selection, . - doc_finish_keyboard_selection
+.popsection
 
 # EDI=0 Home, EDI=1 End.
 .type doc_move_line_edge, @function
+.pushsection .text.doc_move_line_edge,"ax",@progbits
 doc_move_line_edge:
     push rbx
     push r12
@@ -19043,6 +19338,7 @@ doc_move_line_edge:
     pop rbx
     ret
 .size doc_move_line_edge, . - doc_move_line_edge
+.popsection
 
 # Place the document cursor from surface-local pixel coordinates.
 # EDI=x, ESI=y. Clicks snap to the nearest character insertion boundary;
@@ -19050,6 +19346,7 @@ doc_move_line_edge:
 # Map a document byte offset to its soft-wrapped visual row and column.
 # EDI=byte offset; returns EAX=row and EDX=column.
 .type doc_offset_to_visual, @function
+.pushsection .text.doc_offset_to_visual,"ax",@progbits
 doc_offset_to_visual:
     push r12
     mov r12d, edi
@@ -19066,9 +19363,11 @@ doc_offset_to_visual:
     pop r12
     ret
 .size doc_offset_to_visual, . - doc_offset_to_visual
+.popsection
 
 .type doc_offset_to_visual_legacy, @function
 .type doc_offset_to_visual_legacy, @function
+.pushsection .text.doc_offset_to_visual_legacy,"ax",@progbits
 doc_offset_to_visual_legacy:
     push rbx
     push r12
@@ -19179,12 +19478,14 @@ doc_offset_to_visual_legacy:
     pop rbx
     ret
 .size doc_offset_to_visual_legacy, . - doc_offset_to_visual_legacy
+.popsection
 
 
 # Fenwick lookup narrows visual mapping to one logical line; local scanning
 # preserves the editor's existing tab, control-byte, and UTF-8 semantics.
 .type doc_offset_to_visual_indexed, @function
 .type doc_offset_to_visual_indexed, @function
+.pushsection .text.doc_offset_to_visual_indexed,"ax",@progbits
 doc_offset_to_visual_indexed:
     push rbx
     push rbp
@@ -19328,9 +19629,11 @@ doc_offset_to_visual_indexed:
     pop rbx
     ret
 .size doc_offset_to_visual_indexed, . - doc_offset_to_visual_indexed
+.popsection
 
 .type doc_visual_to_offset_indexed, @function
 .type doc_visual_to_offset_indexed, @function
+.pushsection .text.doc_visual_to_offset_indexed,"ax",@progbits
 doc_visual_to_offset_indexed:
     push rbx
     push rbp
@@ -19514,11 +19817,13 @@ doc_visual_to_offset_indexed:
     pop rbx
     ret
 .size doc_visual_to_offset_indexed, . - doc_visual_to_offset_indexed
+.popsection
 
 
 # Map a visual row/column to the nearest byte insertion boundary.
 # EDI=visual row, ESI=visual column; returns EAX=byte offset.
 .type doc_visual_to_offset, @function
+.pushsection .text.doc_visual_to_offset,"ax",@progbits
 doc_visual_to_offset:
     push r12
     push r13
@@ -19542,9 +19847,11 @@ doc_visual_to_offset:
     pop r12
     ret
 .size doc_visual_to_offset, . - doc_visual_to_offset
+.popsection
 
 .type doc_visual_to_offset_legacy, @function
 .type doc_visual_to_offset_legacy, @function
+.pushsection .text.doc_visual_to_offset_legacy,"ax",@progbits
 doc_visual_to_offset_legacy:
     push rbx
     push rbp
@@ -19662,10 +19969,12 @@ doc_visual_to_offset_legacy:
     pop rbx
     ret
 .size doc_visual_to_offset_legacy, . - doc_visual_to_offset_legacy
+.popsection
 
 # Derive total visual rows and thumb geometry from the wrapped document.
 # The roadmap's line-start index will later avoid scanning the complete file here.
 .type doc_scrollbar_geometry, @function
+.pushsection .text.doc_scrollbar_geometry,"ax",@progbits
 doc_scrollbar_geometry:
     push rbx
     push r12
@@ -19722,9 +20031,11 @@ doc_scrollbar_geometry:
     pop rbx
     ret
 .size doc_scrollbar_geometry, . - doc_scrollbar_geometry
+.popsection
 
 # EDI=signed visual-row delta; EAX reports whether the viewport moved.
 .type doc_scroll_by, @function
+.pushsection .text.doc_scroll_by,"ax",@progbits
 doc_scroll_by:
     push rbx
     push r12
@@ -19769,9 +20080,11 @@ doc_scroll_by:
     pop rbx
     ret
 .size doc_scroll_by, . - doc_scroll_by
+.popsection
 
 # EDI=signed pixel delta; horizontal movement is bounded by the active caret.
 .type doc_scroll_horizontal_by, @function
+.pushsection .text.doc_scroll_horizontal_by,"ax",@progbits
 doc_scroll_horizontal_by:
     push rbx
     push r12
@@ -19812,10 +20125,12 @@ doc_scroll_horizontal_by:
     pop rbx
     ret
 .size doc_scroll_horizontal_by, . - doc_scroll_horizontal_by
+.popsection
 
 # ESI=surface-local pointer y; map the captured thumb position to a visual row.
 # Horizontal scrollbar maps the widest logical line into the document viewport.
 .type doc_hscrollbar_geometry, @function
+.pushsection .text.doc_hscrollbar_geometry,"ax",@progbits
 doc_hscrollbar_geometry:
     push rbx
     push r12
@@ -19878,9 +20193,11 @@ doc_hscrollbar_geometry:
     pop rbx
     ret
 .size doc_hscrollbar_geometry, . - doc_hscrollbar_geometry
+.popsection
 
 # ESI=x; update horizontal pixel offset while preserving the thumb grab point.
 .type doc_hscrollbar_drag_to_x, @function
+.pushsection .text.doc_hscrollbar_drag_to_x,"ax",@progbits
 doc_hscrollbar_drag_to_x:
     push rbx
     push r12
@@ -19924,9 +20241,11 @@ doc_hscrollbar_drag_to_x:
     pop rbx
     ret
 .size doc_hscrollbar_drag_to_x, . - doc_hscrollbar_drag_to_x
+.popsection
 
 # ESI=x; clicking the track centers the thumb at the pointer.
 .type doc_hscrollbar_begin_drag, @function
+.pushsection .text.doc_hscrollbar_begin_drag,"ax",@progbits
 doc_hscrollbar_begin_drag:
     push rbx
     push r12
@@ -19956,8 +20275,10 @@ doc_hscrollbar_begin_drag:
     pop rbx
     ret
 .size doc_hscrollbar_begin_drag, . - doc_hscrollbar_begin_drag
+.popsection
 
 .type render_document_hscrollbar, @function
+.pushsection .text.render_document_hscrollbar,"ax",@progbits
 render_document_hscrollbar:
     cmp dword ptr [rip + doc_hscroll_thumb_width], 0
     jle .Lrender_document_hscrollbar_done
@@ -19990,8 +20311,10 @@ render_document_hscrollbar:
 .Lrender_document_hscrollbar_done:
     ret
 .size render_document_hscrollbar, . - render_document_hscrollbar
+.popsection
 
 .type doc_scrollbar_drag_to_y, @function
+.pushsection .text.doc_scrollbar_drag_to_y,"ax",@progbits
 doc_scrollbar_drag_to_y:
     push rbx
     push r12
@@ -20036,10 +20359,12 @@ doc_scrollbar_drag_to_y:
     pop rbx
     ret
 .size doc_scrollbar_drag_to_y, . - doc_scrollbar_drag_to_y
+.popsection
 
 # Begin thumb dragging; clicking elsewhere on the track centers the thumb.
 # ESI=surface-local pointer y.
 .type doc_scrollbar_begin_drag, @function
+.pushsection .text.doc_scrollbar_begin_drag,"ax",@progbits
 doc_scrollbar_begin_drag:
     push rbx
     push r12
@@ -20075,9 +20400,11 @@ doc_scrollbar_begin_drag:
     pop rbx
     ret
 .size doc_scrollbar_begin_drag, . - doc_scrollbar_begin_drag
+.popsection
 
 # Draw the vertical track and thumb only when content exceeds the viewport.
 .type render_document_scrollbar, @function
+.pushsection .text.render_document_scrollbar,"ax",@progbits
 render_document_scrollbar:
     cmp dword ptr [rip + doc_scroll_thumb_height], 0
     jle .Lrender_document_scrollbar_done
@@ -20105,10 +20432,12 @@ render_document_scrollbar:
 .Lrender_document_scrollbar_done:
     ret
 .size render_document_scrollbar, . - render_document_scrollbar
+.popsection
 
 # Keep the active insertion point within both visible document axes.
 .global doc_ensure_cursor_visible
 .type doc_ensure_cursor_visible, @function
+.pushsection .text.doc_ensure_cursor_visible,"ax",@progbits
 doc_ensure_cursor_visible:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
@@ -20149,6 +20478,7 @@ doc_ensure_cursor_visible:
 .Lneko_ensure_cursor_done:
     ret
 .size doc_ensure_cursor_visible, . - doc_ensure_cursor_visible
+.popsection
 
 # Place cursor from surface-local coordinates; rows include the current scroll.
 # EDI=1 for a timer tick, 0 for a pointer-motion update. Surface-local
@@ -20156,6 +20486,7 @@ doc_ensure_cursor_visible:
 # Motion beyond the document viewport scrolls vertically in either wrap mode;
 # horizontal auto-scroll is enabled only while soft wrapping is disabled.
 .type doc_drag_pointer_update, @function
+.pushsection .text.doc_drag_pointer_update,"ax",@progbits
 doc_drag_pointer_update:
     push rbx
     push r12
@@ -20316,8 +20647,10 @@ doc_drag_pointer_update:
     pop rbx
     ret
 .size doc_drag_pointer_update, . - doc_drag_pointer_update
+.popsection
 
 .type doc_place_cursor_from_pointer, @function
+.pushsection .text.doc_place_cursor_from_pointer,"ax",@progbits
 doc_place_cursor_from_pointer:
     mov eax, edi
     sub eax, DOC_LEFT
@@ -20345,9 +20678,11 @@ doc_place_cursor_from_pointer:
     mov dword ptr [rip + doc_cursor], eax
     ret
 .size doc_place_cursor_from_pointer, . - doc_place_cursor_from_pointer
+.popsection
 
 # EDI=0 moves up; EDI=1 moves down by one visual row.
 .type doc_move_vertical, @function
+.pushsection .text.doc_move_vertical,"ax",@progbits
 doc_move_vertical:
     push rbx
     push r12
@@ -20373,9 +20708,11 @@ doc_move_vertical:
     pop rbx
     ret
 .size doc_move_vertical, . - doc_move_vertical
+.popsection
 
 # Open the Find/Replace modal. EDI=1 for Find, EDI=2 for Find/Replace.
 .type find_replace_open, @function
+.pushsection .text.find_replace_open,"ax",@progbits
 find_replace_open:
     mov dword ptr [rip + find_replace_mode], edi
     mov dword ptr [rip + find_replace_focus], 0
@@ -20389,16 +20726,20 @@ find_replace_open:
     mov dword ptr [rip + settings_menu_open], 0
     ret
 .size find_replace_open, . - find_replace_open
+.popsection
 
 .type find_replace_close, @function
+.pushsection .text.find_replace_close,"ax",@progbits
 find_replace_close:
     mov dword ptr [rip + find_replace_mode], 0
     mov dword ptr [rip + find_field_select_all], 0
     ret
 .size find_replace_close, . - find_replace_close
+.popsection
 
 # Insert EDI (an ASCII byte) at the active Find/Replace field cursor.
 .type find_input_insert_byte, @function
+.pushsection .text.find_input_insert_byte,"ax",@progbits
 find_input_insert_byte:
     push rbx
     push r12
@@ -20451,9 +20792,11 @@ find_input_insert_byte:
     pop rbx
     ret
 .size find_input_insert_byte, . - find_input_insert_byte
+.popsection
 
 # EDI=1 backspace, EDI=0 delete-forward in the active field.
 .type find_input_delete, @function
+.pushsection .text.find_input_delete,"ax",@progbits
 find_input_delete:
     push rbx
     push r12
@@ -20516,10 +20859,12 @@ find_input_delete:
     pop rbx
     ret
 .size find_input_delete, . - find_input_delete
+.popsection
 
 # EDI=start byte offset; ESI=1 searches forward, ESI=0 backward.
 # Search wraps once and returns EAX=match offset or -1.
 .type doc_find_match, @function
+.pushsection .text.doc_find_match,"ax",@progbits
 doc_find_match:
     push rbx
     push rbp
@@ -20614,10 +20959,12 @@ doc_find_match:
     pop rbx
     ret
 .size doc_find_match, . - doc_find_match
+.popsection
 
 .type doc_find_match_bounded, @function
 # EDI = first candidate byte; ESI = exclusive candidate-start limit.
 # Search forward without wrapping; EAX = match offset or -1.
+.pushsection .text.doc_find_match_bounded,"ax",@progbits
 doc_find_match_bounded:
     push rbx
     push r12
@@ -20668,8 +21015,10 @@ doc_find_match_bounded:
     pop rbx
     ret
 .size doc_find_match_bounded, . - doc_find_match_bounded
+.popsection
 
 .type doc_find_next, @function
+.pushsection .text.doc_find_next,"ax",@progbits
 doc_find_next:
     cmp dword ptr [rip + find_query_length], 0
     je .Ldoc_find_next_empty
@@ -20707,8 +21056,10 @@ doc_find_next:
     xor eax, eax
     ret
 .size doc_find_next, . - doc_find_next
+.popsection
 
 .type doc_find_previous, @function
+.pushsection .text.doc_find_previous,"ax",@progbits
 doc_find_previous:
     cmp dword ptr [rip + find_query_length], 0
     je .Ldoc_find_previous_empty
@@ -20752,9 +21103,11 @@ doc_find_previous:
     xor eax, eax
     ret
 .size doc_find_previous, . - doc_find_previous
+.popsection
 
 # Replace the currently selected query; caller guarantees the selection matches.
 .type doc_replace_selection_with_buffer, @function
+.pushsection .text.doc_replace_selection_with_buffer,"ax",@progbits
 doc_replace_selection_with_buffer:
     push rbx
     call doc_delete_selection
@@ -20774,8 +21127,10 @@ doc_replace_selection_with_buffer:
     pop rbx
     ret
 .size doc_replace_selection_with_buffer, . - doc_replace_selection_with_buffer
+.popsection
 
 .type doc_find_selection_matches, @function
+.pushsection .text.doc_find_selection_matches,"ax",@progbits
 doc_find_selection_matches:
     cmp dword ptr [rip + doc_selection_active], 0
     je .Ldoc_find_selection_no
@@ -20816,8 +21171,10 @@ doc_find_selection_matches:
     xor eax, eax
     ret
 .size doc_find_selection_matches, . - doc_find_selection_matches
+.popsection
 
 .type doc_find_replace_current, @function
+.pushsection .text.doc_find_replace_current,"ax",@progbits
 doc_find_replace_current:
     call doc_find_selection_matches
     test eax, eax
@@ -20831,8 +21188,10 @@ doc_find_replace_current:
     xor eax, eax
     ret
 .size doc_find_replace_current, . - doc_find_replace_current
+.popsection
 
 .type doc_find_replace_all, @function
+.pushsection .text.doc_find_replace_all,"ax",@progbits
 doc_find_replace_all:
     push rbx
     mov dword ptr [rip + find_replace_count], 0
@@ -20870,9 +21229,11 @@ doc_find_replace_all:
     pop rbx
     ret
 .size doc_find_replace_all, . - doc_find_replace_all
+.popsection
 
 # Convert pointer pixels to the Find/Replace modal's 448x192 design grid.
 .type find_pointer_to_design, @function
+.pushsection .text.find_pointer_to_design,"ax",@progbits
 find_pointer_to_design:
     push rbx
     push r12
@@ -20908,8 +21269,10 @@ find_pointer_to_design:
     pop rbx
     ret
 .size find_pointer_to_design, . - find_pointer_to_design
+.popsection
 
 .type find_replace_handle_pointer, @function
+.pushsection .text.find_replace_handle_pointer,"ax",@progbits
 find_replace_handle_pointer:
     push rbx
     mov ebx, dword ptr [rip + pointer_y]
@@ -20979,12 +21342,14 @@ find_replace_handle_pointer:
     pop rbx
     ret
 .size find_replace_handle_pointer, . - find_replace_handle_pointer
+.popsection
 
 # Translate printable input from the active XKB keymap when the supported
 # text-v1 subset was parsed. A parsed map's non-ASCII keys are deliberately
 # ignored rather than silently producing an unrelated US-QWERTY character.
 # Find/Replace field measurements share the same active overlay font transform.
 .type find_measure_ascii_prefix, @function
+.pushsection .text.find_measure_ascii_prefix,"ax",@progbits
 find_measure_ascii_prefix:
     push rbx
     push r12
@@ -21008,9 +21373,11 @@ find_measure_ascii_prefix:
     pop rbx
     ret
 .size find_measure_ascii_prefix, . - find_measure_ascii_prefix
+.popsection
 
 # RDI=field buffer, ESI=cursor, EDX=visible width; keep the caret in the viewport.
 .type find_field_view_start, @function
+.pushsection .text.find_field_view_start,"ax",@progbits
 find_field_view_start:
     push rbp
     push rbx
@@ -21041,8 +21408,10 @@ find_field_view_start:
     pop rbp
     ret
 .size find_field_view_start, . - find_field_view_start
+.popsection
 
 .type keycode_to_ascii, @function
+.pushsection .text.keycode_to_ascii,"ax",@progbits
 keycode_to_ascii:
     push rbx
     mov ebx, edi
@@ -21090,10 +21459,12 @@ keycode_to_ascii:
     pop rbx
     ret
 .size keycode_to_ascii, . - keycode_to_ascii
+.popsection
 
 # Document entry path: preserve ASCII fallback while accepting Unicode XKB
 # keysyms from a parsed text-v1 keymap. Prompt/search widgets remain ASCII.
 .type keycode_to_unicode, @function
+.pushsection .text.keycode_to_unicode,"ax",@progbits
 keycode_to_unicode:
     push rbx
     mov ebx, edi
@@ -21111,10 +21482,12 @@ keycode_to_unicode:
     pop rbx
     ret
 .size keycode_to_unicode, . - keycode_to_unicode
+.popsection
 
 # Return a precomposed Unicode scalar for (EDI=base, ESI=combining mark).
 # Zero means no precomposed mapping exists; callers preserve base+mark.
 .type doc_compose_precomposed, @function
+.pushsection .text.doc_compose_precomposed,"ax",@progbits
 doc_compose_precomposed:
     push rbx
     push r12
@@ -21143,9 +21516,11 @@ doc_compose_precomposed:
     pop rbx
     ret
 .size doc_compose_precomposed, . - doc_compose_precomposed
+.popsection
 
 # Flush pending dead-key marks literally. first..seventh hold up to seven marks.
 .type doc_flush_pending_dead_literal, @function
+.pushsection .text.doc_flush_pending_dead_literal,"ax",@progbits
 doc_flush_pending_dead_literal:
     push rbx
     push r12
@@ -21180,6 +21555,7 @@ doc_flush_pending_dead_literal:
     pop rbx
     ret
 .size doc_flush_pending_dead_literal, . - doc_flush_pending_dead_literal
+.popsection
 
 # Insert a Unicode scalar, arm a dead key, or process a bounded Multi_key pair.
 # Dead-key actions use 0x110001..0x110024; 0x110007 remains reserved for
@@ -21189,6 +21565,7 @@ doc_flush_pending_dead_literal:
 # Resolve one two-symbol Multi_key sequence (EDI=first, ESI=second).
 # EAX is the composed Unicode scalar, or zero for an unsupported pair.
 .type doc_compose_pair, @function
+.pushsection .text.doc_compose_pair,"ax",@progbits
 doc_compose_pair:
     push rbx
     push r12
@@ -21217,8 +21594,10 @@ doc_compose_pair:
     pop rbx
     ret
 .size doc_compose_pair, . - doc_compose_pair
+.popsection
 
 .type doc_compose_triplet_prefix, @function
+.pushsection .text.doc_compose_triplet_prefix,"ax",@progbits
 doc_compose_triplet_prefix:
     push rbx
     push r12
@@ -21247,8 +21626,10 @@ doc_compose_triplet_prefix:
     pop rbx
     ret
 .size doc_compose_triplet_prefix, . - doc_compose_triplet_prefix
+.popsection
 
 .type doc_compose_triplet, @function
+.pushsection .text.doc_compose_triplet,"ax",@progbits
 doc_compose_triplet:
     push rbx
     push r12
@@ -21282,8 +21663,10 @@ doc_compose_triplet:
     pop rbx
     ret
 .size doc_compose_triplet, . - doc_compose_triplet
+.popsection
 
 .type doc_insert_keyboard_codepoint, @function
+.pushsection .text.doc_insert_keyboard_codepoint,"ax",@progbits
 doc_insert_keyboard_codepoint:
     push rbx
     push r12
@@ -21707,8 +22090,10 @@ doc_insert_keyboard_codepoint:
     pop rbx
     ret
 .size doc_insert_keyboard_codepoint, . - doc_insert_keyboard_codepoint
+.popsection
 
 .type draw_glyph, @function
+.pushsection .text.draw_glyph,"ax",@progbits
 draw_glyph:
     push rbx
     push r12
@@ -22170,12 +22555,14 @@ draw_glyph:
     pop rbx
     ret
 .size draw_glyph, . - draw_glyph
+.popsection
 
 # Return a design-space advance for the active overlay transform.
 # The glyph is rasterized at ui_transform_font_size, but its origin is transformed
 # by ui_transform_x_num/ui_transform_x_den. Convert the same screen-pixel hmtx
 # advance back to design coordinates so the next origin lands on the next glyph.
 .type ui_font_advance_pixels, @function
+.pushsection .text.ui_font_advance_pixels,"ax",@progbits
 ui_font_advance_pixels:
     push rbx
     mov ebx, edi
@@ -22211,10 +22598,12 @@ ui_font_advance_pixels:
     pop rbx
     ret
 .size ui_font_advance_pixels, . - ui_font_advance_pixels
+.popsection
 
 # Draw a NUL-terminated ASCII label. EDI=x, ESI=y, RDX=string; EAX=next x.
 .type draw_text, @function
 .type draw_text, @function
+.pushsection .text.draw_text,"ax",@progbits
 draw_text:
     push rbx
     push r12
@@ -22250,10 +22639,12 @@ draw_text:
     pop rbx
     ret
 .size draw_text, . - draw_text
+.popsection
 
 # Draw an unsigned decimal value. EAX=value, EDI=x, ESI=y; returns next x.
 .type draw_decimal, @function
 .type draw_decimal, @function
+.pushsection .text.draw_decimal,"ax",@progbits
 draw_decimal:
     push rbp
     push rbx
@@ -22335,10 +22726,12 @@ draw_decimal:
     pop rbp
     ret
 .size draw_decimal, . - draw_decimal
+.popsection
 
 # Render the live logical line/column and current byte count in the footer.
 # Columns are one-based; tabs advance to the next four-column stop.
 .type render_status_bar, @function
+.pushsection .text.render_status_bar,"ax",@progbits
 render_status_bar:
     push rbp
     push rbx
@@ -22465,12 +22858,14 @@ render_status_bar:
     pop rbp
     ret
 .size render_status_bar, . - render_status_bar
+.popsection
 
 
 .type draw_bounded_ascii, @function
 # RDI=x, ESI=y, RDX=NUL-terminated byte string, ECX=maximum bytes.
 # Non-printable and non-ASCII bytes are rendered as '?' while path operations
 # continue to use the untouched original name/path bytes.
+.pushsection .text.draw_bounded_ascii,"ax",@progbits
 draw_bounded_ascii:
     push rbx
     push r12
@@ -22519,11 +22914,13 @@ draw_bounded_ascii:
     pop rbx
     ret
 .size draw_bounded_ascii, . - draw_bounded_ascii
+.popsection
 
 
 # Return a picker design-space advance using the rendered UI font size.
 # This is shared by text clipping, caret placement, and pointer hit-testing.
 .type picker_font_advance_pixels, @function
+.pushsection .text.picker_font_advance_pixels,"ax",@progbits
 picker_font_advance_pixels:
     push rbx
     mov ebx, edi
@@ -22548,9 +22945,11 @@ picker_font_advance_pixels:
     pop rbx
     ret
 .size picker_font_advance_pixels, . - picker_font_advance_pixels
+.popsection
 
 # RDI=ASCII text pointer, ESI=character count. EAX=prefix width in logical UI pixels.
 .type picker_measure_ascii_prefix, @function
+.pushsection .text.picker_measure_ascii_prefix,"ax",@progbits
 picker_measure_ascii_prefix:
     push rbx
     push r12
@@ -22574,10 +22973,12 @@ picker_measure_ascii_prefix:
     pop rbx
     ret
 .size picker_measure_ascii_prefix, . - picker_measure_ascii_prefix
+.popsection
 
 # RDI=ASCII text pointer, ESI=length, EDX=target X in logical UI pixels.
 # Return the nearest insertion boundary using the same glyph-advance midpoint as drawing.
 .type picker_hit_test_ascii, @function
+.pushsection .text.picker_hit_test_ascii,"ax",@progbits
 picker_hit_test_ascii:
     push rbx
     push r12
@@ -22611,10 +23012,12 @@ picker_hit_test_ascii:
     pop rbx
     ret
 .size picker_hit_test_ascii, . - picker_hit_test_ascii
+.popsection
 
 # RDI=ASCII text pointer, ESI=cursor offset, EDX=max visible width.
 # Walk backward from the cursor so it remains visible in a proportional text field.
 .type picker_field_view_start, @function
+.pushsection .text.picker_field_view_start,"ax",@progbits
 picker_field_view_start:
     push rbp
     push rbx
@@ -22645,10 +23048,12 @@ picker_field_view_start:
     pop rbp
     ret
 .size picker_field_view_start, . - picker_field_view_start
+.popsection
 
 # RDI=x, ESI=y, RDX=NUL-terminated ASCII, ECX=max logical pixel width.
 # Truncate at glyph boundaries so a long proportional name cannot enter adjacent controls.
 .type draw_bounded_ascii_width, @function
+.pushsection .text.draw_bounded_ascii_width,"ax",@progbits
 draw_bounded_ascii_width:
     push rbp
     push rbx
@@ -22703,8 +23108,10 @@ draw_bounded_ascii_width:
     pop rbp
     ret
 .size draw_bounded_ascii_width, . - draw_bounded_ascii_width
+.popsection
 
 .type render_picker, @function
+.pushsection .text.render_picker,"ax",@progbits
 render_picker:
     cmp dword ptr [rip + picker_mode], 0
     je .render_picker_done
@@ -23280,8 +23687,10 @@ render_picker:
 .render_picker_done:
     ret
 .size render_picker, . - render_picker
+.popsection
 
 .type render_window_controls, @function
+.pushsection .text.render_window_controls,"ax",@progbits
 render_window_controls:
     push rbx
     push r12
@@ -23358,8 +23767,10 @@ render_window_controls:
     pop rbx
     ret
 .size render_window_controls, . - render_window_controls
+.popsection
 
 .type render_file_menu, @function
+.pushsection .text.render_file_menu,"ax",@progbits
 render_file_menu:
     cmp dword ptr [rip + file_menu_open], 1
     je .render_file_menu_draw_file
@@ -23644,9 +24055,11 @@ render_file_menu:
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
+.popsection
 
 # Minimal three-command document context menu, painted after all other UI.
 .type render_context_menu, @function
+.pushsection .text.render_context_menu,"ax",@progbits
 render_context_menu:
     cmp dword ptr [rip + context_menu_open], 1
     jne .Lrender_context_menu_done
@@ -23700,11 +24113,13 @@ render_context_menu:
 .Lrender_context_menu_done:
     ret
 .size render_context_menu, . - render_context_menu
+.popsection
 
 # Build a horizontally scrolled view of the History path query.
 # The full query remains in history_search_query_buffer; this display slice
 # keeps the insertion caret visible even when the query exceeds the field.
 .type history_search_prepare_display, @function
+.pushsection .text.history_search_prepare_display,"ax",@progbits
 history_search_prepare_display:
     push rbx
     push r12
@@ -23806,7 +24221,10 @@ history_search_prepare_display:
     pop rbx
     ret
 
+.size history_search_prepare_display, . - history_search_prepare_display
 .type render_history_manager, @function
+.popsection
+.pushsection .text.render_history_manager,"ax",@progbits
 render_history_manager:
     push rbx
     push r12
@@ -24101,8 +24519,10 @@ render_history_manager:
     pop rbx
     ret
 .size render_history_manager, . - render_history_manager
+.popsection
 
 .type render_save_confirmation, @function
+.pushsection .text.render_save_confirmation,"ax",@progbits
 render_save_confirmation:
     cmp dword ptr [rip + save_confirm_open], 0
     je .render_save_confirmation_done
@@ -24189,8 +24609,10 @@ render_save_confirmation:
 .render_save_confirmation_done:
     ret
 .size render_save_confirmation, . - render_save_confirmation
+.popsection
 
 .type render_find_replace, @function
+.pushsection .text.render_find_replace,"ax",@progbits
 render_find_replace:
     cmp dword ptr [rip + find_replace_mode], 0
     je .render_find_replace_done
@@ -24468,8 +24890,10 @@ render_find_replace:
 .render_find_replace_done:
     ret
 .size render_find_replace, . - render_find_replace
+.popsection
 
 .type render_path_prompt, @function
+.pushsection .text.render_path_prompt,"ax",@progbits
 render_path_prompt:
     cmp dword ptr [rip + path_prompt_mode], 0
     je .render_path_prompt_done
@@ -24605,10 +25029,12 @@ render_path_prompt:
 .render_path_prompt_done:
     ret
 .size render_path_prompt, . - render_path_prompt
+.popsection
 
 
 # Clip selection rectangles to the text viewport. Arguments follow draw_rect.
 .type draw_document_selection_rect, @function
+.pushsection .text.draw_document_selection_rect,"ax",@progbits
 draw_document_selection_rect:
     push rbx
     movsxd rbx, esi
@@ -24642,11 +25068,13 @@ draw_document_selection_rect:
     pop rbx
     ret
 .size draw_document_selection_rect, . - draw_document_selection_rect
+.popsection
 
 # Paint every literal query occurrence in the document. The active match is
 # subsequently overpainted by render_selection, so the current result remains
 # visually distinct while all other occurrences stay highlighted.
 .type render_find_highlights, @function
+.pushsection .text.render_find_highlights,"ax",@progbits
 render_find_highlights:
     cmp dword ptr [rip + find_replace_mode], 0
     je .Lrender_find_highlights_done
@@ -24744,9 +25172,11 @@ render_find_highlights:
 .Lrender_find_highlights_done:
     ret
 .size render_find_highlights, . - render_find_highlights
+.popsection
 
 .type render_find_highlights_range, @function
 # EDI = inclusive first candidate offset; ESI = exclusive candidate-start limit.
+.pushsection .text.render_find_highlights_range,"ax",@progbits
 render_find_highlights_range:
     push rbp
     push rbx
@@ -24826,11 +25256,13 @@ render_find_highlights_range:
     pop rbp
     ret
 .size render_find_highlights_range, . - render_find_highlights_range
+.popsection
 
 
 
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
+.pushsection .text.render_selection,"ax",@progbits
 render_selection:
     push rbp
     push rbx
@@ -25029,8 +25461,10 @@ render_selection:
     pop rbp
     ret
 .size render_selection, . - render_selection
+.popsection
 
 .type render_selection_unwrapped, @function
+.pushsection .text.render_selection_unwrapped,"ax",@progbits
 render_selection_unwrapped:
     push rbp
     push rbx
@@ -25189,12 +25623,14 @@ render_selection_unwrapped:
     pop rbp
     ret
 .size render_selection_unwrapped, . - render_selection_unwrapped
+.popsection
 
 
 
 # ASCII alphanumerics/underscore and non-ASCII scalars form word runs.
 # Keeping Unicode scripts together is preferable to splitting multibyte words.
 .type doc_codepoint_is_word, @function
+.pushsection .text.doc_codepoint_is_word,"ax",@progbits
 doc_codepoint_is_word:
     cmp edi, '0'
     jb .Ldoc_word_non_ascii
@@ -25225,9 +25661,11 @@ doc_codepoint_is_word:
     xor eax, eax
     ret
 .size doc_codepoint_is_word, . - doc_codepoint_is_word
+.popsection
 
 # EDI=0: previous word start. EDI=1: next word start.
 .type doc_move_word, @function
+.pushsection .text.doc_move_word,"ax",@progbits
 doc_move_word:
     push rbx
     push r12
@@ -25305,10 +25743,12 @@ doc_move_word:
     pop rbx
     ret
 .size doc_move_word, . - doc_move_word
+.popsection
 
 # EDI=0 previous logical line start; EDI=1 next logical line start.
 # This is a paragraph-style move: wrapped visual rows are not treated as lines.
 .type doc_move_line, @function
+.pushsection .text.doc_move_line,"ax",@progbits
 doc_move_line:
     push rbx
     push r12
@@ -25367,10 +25807,12 @@ doc_move_line:
     pop rbx
     ret
 .size doc_move_line, . - doc_move_line
+.popsection
 
 # Double-click word selection. A click landing just after a word is associated
 # with the preceding word, matching the pointer's nearest-boundary hit test.
 .type doc_select_word_at_cursor, @function
+.pushsection .text.doc_select_word_at_cursor,"ax",@progbits
 doc_select_word_at_cursor:
     push rbx
     push r12
@@ -25477,10 +25919,12 @@ doc_select_word_at_cursor:
     pop rbx
     ret
 .size doc_select_word_at_cursor, . - doc_select_word_at_cursor
+.popsection
 
 # Decode one validated UTF-8 scalar at a logical document byte offset.
 # EDI=offset; EAX=Unicode scalar, or '?' for malformed/truncated input.
 .type doc_utf8_decode_at, @function
+.pushsection .text.doc_utf8_decode_at,"ax",@progbits
 doc_utf8_decode_at:
     push rbx
     push r12
@@ -25606,9 +26050,11 @@ doc_utf8_decode_at:
     pop rbx
     ret
 .size doc_utf8_decode_at, . - doc_utf8_decode_at
+.popsection
 
 .type render_document, @function
 .type render_document, @function
+.pushsection .text.render_document,"ax",@progbits
 render_document:
     push rbx
     push r12
@@ -25858,12 +26304,14 @@ render_document:
     pop rbx
     ret
 .size render_document, . - render_document
+.popsection
 
 # Create the optional fractional-scale/viewport objects after the fixed
 # surface, shm, seat and input proxies have consumed their lower object IDs.
 # A display sync ensures the initial preferred_scale event is received before
 # the first buffer dimensions and viewport destination are finalized.
 .type fractional_scale_startup, @function
+.pushsection .text.fractional_scale_startup,"ax",@progbits
 fractional_scale_startup:
     push r12
     push r13
@@ -25961,9 +26409,11 @@ fractional_scale_startup:
     pop r12
     ret
 .size fractional_scale_startup, . - fractional_scale_startup
+.popsection
 
 # Bind the optional fractional-scale manager and viewporter as a pair.
 .type fractional_scale_bind_managers, @function
+.pushsection .text.fractional_scale_bind_managers,"ax",@progbits
 fractional_scale_bind_managers:
     push r12
     push r13
@@ -26002,9 +26452,11 @@ fractional_scale_bind_managers:
     pop r12
     ret
 .size fractional_scale_bind_managers, . - fractional_scale_bind_managers
+.popsection
 
 # Create one wp_viewport and one wp_fractional_scale_v1 for wl_surface 8.
 .type fractional_scale_create_surface_objects, @function
+.pushsection .text.fractional_scale_create_surface_objects,"ax",@progbits
 fractional_scale_create_surface_objects:
     push r12
     push r13
@@ -26046,10 +26498,12 @@ fractional_scale_create_surface_objects:
     pop r12
     ret
 .size fractional_scale_create_surface_objects, . - fractional_scale_create_surface_objects
+.popsection
 
 # wp_fractional_scale_v1.preferred_scale (event opcode 0), in 120ths.
 # RAX=1 when consumed, 0 for another object, negative on malformed input.
 .type handle_fractional_scale_event, @function
+.pushsection .text.handle_fractional_scale_event,"ax",@progbits
 handle_fractional_scale_event:
     sub rsp, 8                  # align output_recompute_surface_scale call
     mov eax, dword ptr [rip + fractional_scale_object]
@@ -26081,9 +26535,11 @@ handle_fractional_scale_event:
     add rsp, 8
     ret
 .size handle_fractional_scale_event, . - handle_fractional_scale_event
+.popsection
 
 # Apply a logical viewport destination only when the toplevel size changes.
 .type window_apply_viewport_destination, @function
+.pushsection .text.window_apply_viewport_destination,"ax",@progbits
 window_apply_viewport_destination:
     sub rsp, 8                  # align wl_send_request call
     mov edi, dword ptr [rip + viewport_object]
@@ -26117,10 +26573,12 @@ window_apply_viewport_destination:
     add rsp, 8
     ret
 .size window_apply_viewport_destination, . - window_apply_viewport_destination
+.popsection
 
 # Attach the first wl_buffer and map the surface after bootstrap IDs and
 # optional input/output proxies have been allocated in monotonic ID order.
 .type window_attach_initial_buffer, @function
+.pushsection .text.window_attach_initial_buffer,"ax",@progbits
 window_attach_initial_buffer:
     push rbp
     cmp dword ptr [rip + compositor_version], 3
@@ -26209,10 +26667,12 @@ window_attach_initial_buffer:
     pop rbp
     ret
 .size window_attach_initial_buffer, . - window_attach_initial_buffer
+.popsection
 
 # Bind pending wl_output globals at at most protocol version 3.
 # The registry name and bound client object ID occupy separate namespaces.
 .type output_bind_pending, @function
+.pushsection .text.output_bind_pending,"ax",@progbits
 output_bind_pending:
     push rbp
     push r12
@@ -26254,8 +26714,10 @@ output_bind_pending:
     pop rbp
     ret
 .size output_bind_pending, . - output_bind_pending
+.popsection
 
 .type output_recompute_display_size, @function
+.pushsection .text.output_recompute_display_size,"ax",@progbits
 output_recompute_display_size:
     push rbx
     push r12
@@ -26311,8 +26773,10 @@ output_recompute_display_size:
     pop rbx
     ret
 .size output_recompute_display_size, . - output_recompute_display_size
+.popsection
 
 .type output_initial_roundtrip, @function
+.pushsection .text.output_initial_roundtrip,"ax",@progbits
 output_initial_roundtrip:
     push rbp
     push r12
@@ -26405,6 +26869,7 @@ output_initial_roundtrip:
     pop rbp
     ret
 .size output_initial_roundtrip, . - output_initial_roundtrip
+.popsection
 
 # Recompute entered-output count, max integer scale, and the selected scale hint.
 # wl_compositor v6+ uses the per-surface preference; older versions fall back
@@ -26412,6 +26877,7 @@ output_initial_roundtrip:
 # Apply the compositor's current integer-scale preference to the software buffer.
 # During startup, defer descriptor replacement until the initial buffer is attached.
 .type window_scale_schedule, @function
+.pushsection .text.window_scale_schedule,"ax",@progbits
 window_scale_schedule:
     push r12
     mov r12d, dword ptr [rip + window_buffer_scale]
@@ -26446,10 +26912,12 @@ window_scale_schedule:
     pop r12
     ret
 .size window_scale_schedule, . - window_scale_schedule
+.popsection
 
 # Rebuild the first buffer if a preferred scale arrived after its original
 # create_buffer request but before the first surface attachment.
 .type window_apply_initial_output_size, @function
+.pushsection .text.window_apply_initial_output_size,"ax",@progbits
 window_apply_initial_output_size:
     cmp dword ptr [rip + window_initial_size_applied], 0
     jne .window_initial_output_size_done
@@ -26500,8 +26968,10 @@ window_apply_initial_output_size:
     xor eax, eax
     ret
 .size window_apply_initial_output_size, . - window_apply_initial_output_size
+.popsection
 
 .type window_prepare_initial_buffer_scale, @function
+.pushsection .text.window_prepare_initial_buffer_scale,"ax",@progbits
 window_prepare_initial_buffer_scale:
     push r12
     call window_apply_initial_output_size
@@ -26574,8 +27044,10 @@ window_prepare_initial_buffer_scale:
     pop r12
     ret
 .size window_prepare_initial_buffer_scale, . - window_prepare_initial_buffer_scale
+.popsection
 
 .type output_recompute_surface_scale, @function
+.pushsection .text.output_recompute_surface_scale,"ax",@progbits
 output_recompute_surface_scale:
     push rbp
     push r12
@@ -26631,9 +27103,11 @@ output_recompute_surface_scale:
     pop rbp
     ret
 .size output_recompute_surface_scale, . - output_recompute_surface_scale
+.popsection
 
 # Handle wl_registry.global_remove. wl_output.release exists since v3 only.
 .type handle_output_global_remove, @function
+.pushsection .text.handle_output_global_remove,"ax",@progbits
 handle_output_global_remove:
     push rbp
     push r12
@@ -26741,9 +27215,11 @@ handle_output_global_remove:
     pop rbp
     ret
 .size handle_output_global_remove, . - handle_output_global_remove
+.popsection
 
 # wl_output.scale (opcode 3, introduced in version 2).
 .type handle_output_event, @function
+.pushsection .text.handle_output_event,"ax",@progbits
 handle_output_event:
     push rbp
     push r12
@@ -26865,9 +27341,11 @@ handle_output_event:
     pop rbp
     ret
 .size handle_output_event, . - handle_output_event
+.popsection
 
 # wl_surface.enter/leave (opcodes 0/1) maintain output membership.
 .type handle_surface_output_event, @function
+.pushsection .text.handle_surface_output_event,"ax",@progbits
 handle_surface_output_event:
     push rbp
     push r12
@@ -26944,10 +27422,12 @@ handle_surface_output_event:
     pop rbp
     ret
 .size handle_surface_output_event, . - handle_surface_output_event
+.popsection
 
 # Create input objects after wl_seat advertises their capabilities.
 # Pointer is allocated before keyboard when both appear in the same event.
 .type handle_seat_capabilities, @function
+.pushsection .text.handle_seat_capabilities,"ax",@progbits
 handle_seat_capabilities:
     # Keep the prior and new complete capability masks separately while
     # release requests and object constructors call the wire helpers.
@@ -27112,9 +27592,11 @@ handle_seat_capabilities:
     pop rbp
     ret
 .size handle_seat_capabilities, . - handle_seat_capabilities
+.popsection
 
 # Answer xdg_wm_base.ping (object 6, opcode 0, serial payload).
 .type handle_xdg_ping, @function
+.pushsection .text.handle_xdg_ping,"ax",@progbits
 handle_xdg_ping:
     mov eax, dword ptr [rip + event_payload]
     mov dword ptr [rip + payload_buffer], eax
@@ -27124,5 +27606,6 @@ handle_xdg_ping:
     mov ecx, 4
     jmp wl_send_request
 .size handle_xdg_ping, . - handle_xdg_ping
+.popsection
 
 .section .note.GNU-stack,"",@progbits
