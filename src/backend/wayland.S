@@ -16850,8 +16850,10 @@ doc_vbyte_cache_lookup:
 .size doc_vbyte_cache_lookup, . - doc_vbyte_cache_lookup
 
 
-# EDI=line ID, ESI=maximum line-relative 4 KiB bucket, EDX=target local row.
-# Returns EAX=relative byte offset, EDX=checkpoint row, ECX=pixel X; -1 on miss.
+# EDI=line ID, ESI=maximum line-relative 4 KiB bucket,
+# EDX=target local visual row, R8D=target pixel X.
+# Return the greatest cached (row, X) not after the target coordinate.
+# EAX=relative byte offset, EDX=checkpoint row, ECX=checkpoint X; -1 on miss.
 .type doc_vbyte_cache_lookup_row, @function
 doc_vbyte_cache_lookup_row:
     push rbx
@@ -16860,6 +16862,8 @@ doc_vbyte_cache_lookup_row:
     push r13
     push r14
     push r15
+    sub rsp, 8
+    mov dword ptr [rsp], r8d
     mov r12d, edi
     mov r13d, edx
     xor r14d, r14d
@@ -16891,6 +16895,11 @@ doc_vbyte_cache_lookup_row:
     mov edx, dword ptr [rax + 16]
     cmp edx, r13d
     ja .Ldoc_vbyte_row_search_lower
+    jb .Ldoc_vbyte_row_candidate
+    mov ecx, dword ptr [rax + 20]
+    cmp ecx, dword ptr [rsp]
+    ja .Ldoc_vbyte_row_search_lower
+.Ldoc_vbyte_row_candidate:
     mov ebx, dword ptr [rax + 12]
     mov ebp, edx
     mov r8d, dword ptr [rax + 20]
@@ -16921,11 +16930,20 @@ doc_vbyte_cache_lookup_row:
     mov eax, dword ptr [r11 + 16]
     cmp eax, r13d
     ja .Ldoc_vbyte_row_linear_next
+    jb .Ldoc_vbyte_row_linear_candidate
+    mov ecx, dword ptr [r11 + 20]
+    cmp ecx, dword ptr [rsp]
+    ja .Ldoc_vbyte_row_linear_next
+.Ldoc_vbyte_row_linear_candidate:
     test r9d, r9d
     jz .Ldoc_vbyte_row_linear_update
     cmp eax, ebp
     ja .Ldoc_vbyte_row_linear_update
     jb .Ldoc_vbyte_row_linear_next
+    mov ecx, dword ptr [r11 + 20]
+    cmp ecx, r8d
+    ja .Ldoc_vbyte_row_linear_next
+    jb .Ldoc_vbyte_row_linear_update
     mov edx, dword ptr [r11 + 12]
     cmp edx, ebx
     jbe .Ldoc_vbyte_row_linear_next
@@ -16951,6 +16969,7 @@ doc_vbyte_cache_lookup_row:
     xor edx, edx
     xor ecx, ecx
 .Ldoc_vbyte_row_done:
+    add rsp, 8
     pop r15
     pop r14
     pop r13
