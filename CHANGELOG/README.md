@@ -6,7 +6,7 @@ Added a separate 4 KiB sparse byte-to-visual checkpoint working set for caret ma
 
 The 4 MiB single-line Wayland regression moves the caret to document EOF with Ctrl+End, checks the mapper's byte scan in Wrap Lines ON and OFF, and requires each measured scan to remain within 4 KiB. The prior no-wrap horizontal glyph-paint check still verifies a 4 KiB traversal bound while scrolling. These are bounded-work regression assertions, not a measured frame-rate or latency improvement.
 
-Actions [#959](`https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359`) passed all 17 workflow steps: freestanding build and ELF verification, CLI smoke tests, glyph-cache comparison, full Wayland protocol suite (including the 4 MiB wrapped/unwrapped caret checks and 11 MiB Open/Save), executable inspection, native `us(intl)` parser, pinned X.Org importer, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+Actions [#959](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359) passed all 17 workflow steps: freestanding build and ELF verification, CLI smoke tests, glyph-cache comparison, full Wayland protocol suite (including the 4 MiB wrapped/unwrapped caret checks and 11 MiB Open/Save), executable inspection, native `us(intl)` parser, pinned X.Org importer, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
 Artifacts: Linux x86-64 [148,935 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110291102); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43584742359/artifacts/14110286091). Both expire 2026-11-15 10:24 UTC (17:24 WIB).
 
