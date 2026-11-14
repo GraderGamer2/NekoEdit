@@ -5040,6 +5040,9 @@ render_document_scan_end:   .long 0
 .global doc_offset_visual_scan_start, doc_offset_visual_scan_end
 doc_offset_visual_scan_start: .long 0
 doc_offset_visual_scan_end:   .long 0
+.global doc_visual_offset_scan_start, doc_visual_offset_scan_end
+doc_visual_offset_scan_start: .long 0
+doc_visual_offset_scan_end:   .long 0
 .global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
@@ -16846,6 +16849,117 @@ doc_vbyte_cache_lookup:
     ret
 .size doc_vbyte_cache_lookup, . - doc_vbyte_cache_lookup
 
+
+# EDI=line ID, ESI=maximum line-relative 4 KiB bucket, EDX=target local row.
+# Returns EAX=relative byte offset, EDX=checkpoint row, ECX=pixel X; -1 on miss.
+.type doc_vbyte_cache_lookup_row, @function
+doc_vbyte_cache_lookup_row:
+    push rbx
+    push rbp
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, edx
+    xor r14d, r14d
+    mov r15d, esi
+    xor ebx, ebx
+    xor ebp, ebp
+    xor r8d, r8d
+    xor r9d, r9d
+.Ldoc_vbyte_row_binary:
+    cmp r14d, r15d
+    ja .Ldoc_vbyte_row_result
+    mov eax, r14d
+    add eax, r15d
+    shr eax, 1
+    mov r10d, eax
+    imul eax, eax, 13
+    xor eax, r12d
+    and eax, DOC_VBYTE_CACHE_MASK
+    imul rax, rax, DOC_VBYTE_CACHE_ENTRY_SIZE
+    lea rdx, [rip + doc_vbyte_checkpoint_cache]
+    add rax, rdx
+    mov edx, dword ptr [rip + doc_hscroll_cache_epoch]
+    cmp dword ptr [rax], edx
+    jne .Ldoc_vbyte_row_linear_fallback
+    cmp dword ptr [rax + 4], r12d
+    jne .Ldoc_vbyte_row_linear_fallback
+    cmp dword ptr [rax + 8], r10d
+    jne .Ldoc_vbyte_row_linear_fallback
+    mov edx, dword ptr [rax + 16]
+    cmp edx, r13d
+    ja .Ldoc_vbyte_row_search_lower
+    mov ebx, dword ptr [rax + 12]
+    mov ebp, edx
+    mov r8d, dword ptr [rax + 20]
+    mov r9d, 1
+    mov r14d, r10d
+    inc r14d
+    jmp .Ldoc_vbyte_row_binary
+.Ldoc_vbyte_row_search_lower:
+    test r10d, r10d
+    jz .Ldoc_vbyte_row_result
+    mov r15d, r10d
+    dec r15d
+    jmp .Ldoc_vbyte_row_binary
+
+.Ldoc_vbyte_row_linear_fallback:
+    lea r11, [rip + doc_vbyte_checkpoint_cache]
+    mov r10d, DOC_VBYTE_CACHE_SLOTS
+    xor ebx, ebx
+    xor ebp, ebp
+    xor r8d, r8d
+    xor r9d, r9d
+.Ldoc_vbyte_row_linear_scan:
+    mov edx, dword ptr [rip + doc_hscroll_cache_epoch]
+    cmp dword ptr [r11], edx
+    jne .Ldoc_vbyte_row_linear_next
+    cmp dword ptr [r11 + 4], r12d
+    jne .Ldoc_vbyte_row_linear_next
+    mov eax, dword ptr [r11 + 16]
+    cmp eax, r13d
+    ja .Ldoc_vbyte_row_linear_next
+    test r9d, r9d
+    jz .Ldoc_vbyte_row_linear_update
+    cmp eax, ebp
+    ja .Ldoc_vbyte_row_linear_update
+    jb .Ldoc_vbyte_row_linear_next
+    mov edx, dword ptr [r11 + 12]
+    cmp edx, ebx
+    jbe .Ldoc_vbyte_row_linear_next
+.Ldoc_vbyte_row_linear_update:
+    mov ebp, eax
+    mov ebx, dword ptr [r11 + 12]
+    mov r8d, dword ptr [r11 + 20]
+    mov r9d, 1
+.Ldoc_vbyte_row_linear_next:
+    add r11, DOC_VBYTE_CACHE_ENTRY_SIZE
+    dec r10d
+    jnz .Ldoc_vbyte_row_linear_scan
+
+.Ldoc_vbyte_row_result:
+    test r9d, r9d
+    jz .Ldoc_vbyte_row_not_found
+    mov eax, ebx
+    mov edx, ebp
+    mov ecx, r8d
+    jmp .Ldoc_vbyte_row_done
+.Ldoc_vbyte_row_not_found:
+    mov eax, -1
+    xor edx, edx
+    xor ecx, ecx
+.Ldoc_vbyte_row_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbp
+    pop rbx
+    ret
+.size doc_vbyte_cache_lookup_row, . - doc_vbyte_cache_lookup_row
+
 # EDI=logical line byte start, ESI=byte span, EDX=stable line ID.
 # Returns EAX=visual rows >= 1.
 .type doc_line_index_measure_rows, @function
@@ -18665,8 +18779,26 @@ doc_visual_to_offset_indexed:
     mov dword ptr [rsp + 4], eax
     xor r14d, r14d
     mov dword ptr [rsp + 8], 1
+    mov dword ptr [rsp + 12], 0
     cmp dword ptr [rip + doc_wrap_enabled], 0
-    jne .Ldoc_visual_indexed_cache_ready
+    je .Ldoc_visual_indexed_horizontal_cache
+    mov esi, r15d
+    sub esi, r13d
+    test esi, esi
+    jz .Ldoc_visual_indexed_wrapped_row_cache
+    dec esi
+    shr esi, DOC_VBYTE_CACHE_BUCKET_SHIFT
+.Ldoc_visual_indexed_wrapped_row_cache:
+    mov edi, dword ptr [rsp + 4]
+    mov edx, r12d
+    call doc_vbyte_cache_lookup_row
+    cmp eax, -1
+    je .Ldoc_visual_indexed_cache_ready
+    add r13d, eax
+    mov dword ptr [rsp + 12], edx
+    mov r14d, ecx
+    jmp .Ldoc_visual_indexed_cache_ready
+.Ldoc_visual_indexed_horizontal_cache:
     mov esi, ebp
     shr esi, 8
     test esi, esi
@@ -18681,7 +18813,8 @@ doc_visual_to_offset_indexed:
     lea eax, [ecx + 1]
     mov dword ptr [rsp + 8], eax
 .Ldoc_visual_indexed_cache_ready:
-    xor ebx, ebx
+    mov ebx, dword ptr [rsp + 12]
+    mov dword ptr [rip + doc_visual_offset_scan_start], r13d
 .Ldoc_visual_indexed_scan:
     cmp r13d, r15d
     jae .Ldoc_visual_indexed_done
@@ -18785,6 +18918,7 @@ doc_visual_to_offset_indexed:
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_done:
+    mov dword ptr [rip + doc_visual_offset_scan_end], r13d
     mov eax, r13d
     mov edx, r14d
     add rsp, 24

@@ -3328,7 +3328,8 @@ xkb_symbols "nekoedit-sparse" {
                         "render_selection_scan_end", "render_find_scan_start",
                         "render_find_scan_end", "render_document_scan_start",
                         "render_document_scan_end", "doc_offset_visual_scan_start",
-                        "doc_offset_visual_scan_end", "context_menu_open", "context_menu_x",
+                        "doc_offset_visual_scan_end", "doc_visual_offset_scan_start",
+                        "doc_visual_offset_scan_end", "context_menu_open", "context_menu_x",
                         "context_menu_y",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
@@ -4726,6 +4727,23 @@ xkb_symbols "nekoedit-sparse" {
                         + buffer_release_message()
                     )
                     state = read_document_state()
+                    visual_scan_start = state["doc_visual_offset_scan_start"]
+                    visual_scan_end = state["doc_visual_offset_scan_end"]
+                    if (
+                        visual_scan_start < expected_length - 65536
+                        or visual_scan_end < visual_scan_start
+                        or visual_scan_end > expected_length
+                        or visual_scan_end - visual_scan_start > 4096
+                    ):
+                        raise AssertionError(
+                            "wrapped visual-row-to-byte mapping rescanned the long line instead of using a nearby checkpoint: "
+                            + repr({
+                                "scan_start": visual_scan_start,
+                                "scan_end": visual_scan_end,
+                                "length": state["doc_length"],
+                                "view_top_row": state["doc_view_top_row"],
+                            })
+                        )
                     caret_scan_start = state["doc_offset_visual_scan_start"]
                     caret_scan_end = state["doc_offset_visual_scan_end"]
                     if (
@@ -4814,7 +4832,7 @@ xkb_symbols "nekoedit-sparse" {
                             "repeated horizontal redraw did not reuse visible-position checkpoints: " + repr(state)
                         )
                     observations.append(
-                        "4 MiB line in wrapped and unwrapped modes: byte checkpoints bound caret-to-visual scans to 4 KiB; horizontal checkpoints also bound no-wrap glyph traversal across repeated scrolling"
+                        "4 MiB line in wrapped and unwrapped modes: byte checkpoints bound both caret-to-visual and wrapped visual-row-to-byte scans to 4 KiB; horizontal checkpoints also bound no-wrap glyph traversal across repeated scrolling"
                     )
                     client.sendall(wire_message(10, 1))
                     return
