@@ -1,3 +1,17 @@
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 pending)
+
+**Branch:** `early-alpha`; implementation [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). **Test-timeout adjustment:** [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+
+The pointer-coordinate conversion used unsigned division after extracting the signed 24.8 `wl_fixed` surface coordinates. During an implicit button grab, motion can continue after the pointer leaves the surface; negative Y above the window (and negative X to its left) was therefore converted to a large positive virtual coordinate. In the selection-drag path, an upward drag could be mistaken for a downward edge drag.
+
+The conversion now uses signed division for both axes in pointer enter, pointer motion, and geometry-change rebasing. The selection scroll thresholds and `doc_scroll_by` direction logic are unchanged. The Wayland mock extends the existing selection auto-scroll scenario: after scrolling down into the document, it drags above the surface using a negative Y coordinate and asserts that both the immediate update and stationary timer never reverse the upward direction. Existing below-window and no-wrap horizontal drag checks remain.
+
+**Validation:** Actions [#971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626527336) passed build/ELF, CLI smoke, and rasterizer equivalence, but its full Wayland mock process reached the generic 30-second outer timeout during the earlier soft-wrap keyboard/click scenario before the new regression ran. The follow-up [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) is running with that outer timeout raised to 60 seconds; the internal compositor/frame deadlines are unchanged. Build, CLI, and rasterizer checks have passed in #972; Wayland validation is pending.
+
+Manual GNOME/Mutter confirmation on the target machine remains outstanding. Do not claim the behavior is fully validated until Actions #972 completes.
+
+---
+
 ## 2026-11-15 — dirty caret-band document traversal bounded (Actions #970 PASS)
 
 **Branch:** `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). **Rendering implementation:** [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd). **Workflow:** [Actions run #970](https://github.com/GraderGamer2/NekoEdit/actions/runs/43619977492) passed the complete workflow.

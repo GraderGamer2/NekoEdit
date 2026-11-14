@@ -1,3 +1,16 @@
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 pending)
+
+| Commit | Subject |
+|---|---|
+| [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3) | fix: preserve negative pointer coordinates during selection drag |
+| [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688) | test: allow more time for full hosted Wayland smoke |
+
+The pointer conversion now uses signed division for both axes during pointer enter/motion and geometry rebasing, so negative surface-local positions outside the window remain negative through UI scaling. The pointer-drag mock adds upward auto-scroll using a negative Y coordinate and checks that the stationary timer does not reverse direction. Existing downward and no-wrap horizontal checks remain.
+
+Actions #971 passed build, CLI, and renderer equivalence but hit the 30-second outer mock-process timeout in an earlier wrapped-row click scenario. Actions #972 has the outer timeout increased to 60 seconds (socket/frame deadlines unchanged); its build, CLI and renderer-equivalence steps passed, while Wayland validation is pending.
+
+---
+
 ## 2026-11-15 — dirty caret-band document traversal bounded (CI PASS #970)
 
 | Commit | Subject |

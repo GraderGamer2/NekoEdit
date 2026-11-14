@@ -1,4 +1,16 @@
-## Latest handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
+## Latest handoff (2026-11-15 — selection edge auto-scroll sign fix; Actions #972 pending)
+
+Continue source development on `early-alpha` at [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688). The functional fix is [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped.
+
+Selection edge auto-scroll now preserves signed pointer coordinates when scaling Wayland's fixed-point surface positions into virtual UI coordinates. This matters during an implicit pointer grab after the cursor leaves the window: a negative Y above the surface must remain negative, not wrap into a large positive Y. Both axes use signed division on pointer enter/motion and geometry rebasing. Auto-scroll direction and step thresholds themselves are unchanged.
+
+The Wayland mock now adds a reverse-direction case: it scrolls down, begins a selection drag, moves above the surface with negative Y, and asserts that immediate and timer-driven scrolling remain upward. Existing downward and horizontal drag cases remain. Actions #971 passed build/CLI/rasterizer checks but reached its 30-second outer process timeout during an earlier soft-wrap pointer scenario; it did not reach this new regression. Actions #972 has the outer timeout raised to 60 seconds while all internal mock deadlines remain unchanged. Its build, CLI and rasterizer checks passed; the Wayland step is still running.
+
+Do not treat the fix as fully CI-validated until #972 passes. Live visual confirmation in GNOME/Mutter on the target machine remains outstanding.
+
+---
+
+## Previous handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
 
 Continue development on `early-alpha` at [9420d2c](https://github.com/GraderGamer2/NekoEdit/commit/9420d2ce6fe4670bcf155c0306ee4fb77a122b05). The renderer change is [09cf984](https://github.com/GraderGamer2/NekoEdit/commit/09cf98497c60eefef3beeaee767d072efe19defd); the following commits refine only its mock coverage. Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
