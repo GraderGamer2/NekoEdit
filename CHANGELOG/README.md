@@ -1,3 +1,15 @@
+## Latest handoff (2026-11-14 — output-aware window sizing and UI density; CI pending)
+
+Continue normal development on `early-alpha` at `-O2`. The isolated `optimization-early-alpha` branch remains a size experiment and must not be merged into ordinary development.
+
+The next window opens at two-thirds of the largest current logical output when the compositor leaves its initial dimensions unspecified: 1920×1080 at 1× produces 1280×720. Explicit compositor dimensions are preserved independently; maximized/fullscreen/tiled states take precedence. The app maps the existing virtual layout to the real surface using one uniform density, so boxes, text, dialogs, menus and pointer hit-testing scale together. In the reference case the density is 1.5× and the virtual layout is approximately 853×480.
+
+The Wayland mock adds a two-output 1080p-vs-1440p/2× case, verifies the selected logical output, replacement of the unattached startup buffer, rendered chrome/text pixels, damage geometry, internal scale state, and pointer-coordinate conversion. Existing output-tracking scenarios now include the initial output-state sync.
+
+CI has not yet completed for this change. Once it passes, manually test on GNOME/Wayland: startup size, font appearance (especially installed TrueType fonts), 5×7 fallback text, menus/dialog hit targets, resize/maximize/restore, and dragging/selection. Keep `-O2` and do not touch the optimization branch.
+
+---
+
 ## Latest handoff (2026-11-13 — large-document Open/index optimization, CI PASS #920)
 
 Continue development on `early-alpha`; validated implementation/test head is [341862b](https://github.com/GraderGamer2/NekoEdit/commit/341862ba22b5ec77dc6df01c4052da65a5e28d18). Actions [#920](https://github.com/GraderGamer2/NekoEdit/actions/runs/43446479583) passed all 16 steps.

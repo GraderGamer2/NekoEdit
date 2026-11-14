@@ -422,6 +422,7 @@ def run(
     dpi_runtime_test: bool = False,
     output_tracking_test: bool = False,
     output_tracking_legacy_test: bool = False,
+    window_initial_size_test: bool = False,
     fractional_scale_test: bool = False,
     fractional_sync_keymap_test: bool = False,
     initial_preferred_fractional_scale: int = 120,
@@ -440,7 +441,7 @@ def run(
         raise ValueError("the preferred Wayland buffer transform must be in range 0..7")
     if initial_preferred_fractional_scale <= 0:
         raise ValueError("the preferred fractional scale must be a positive 120ths numerator")
-    output_tracking_enabled = output_tracking_test or output_tracking_legacy_test
+    output_tracking_enabled = output_tracking_test or output_tracking_legacy_test or window_initial_size_test
     runtime_dir = tempfile.mkdtemp(prefix="nekoedit-wayland-")
     locale_scenarios = (
         compose_locale_test, compose_locale_invalid_test, compose_locale_settings_test,
@@ -583,7 +584,7 @@ def run(
             expect_message(client, (1, 1, struct.pack("<I", 2)), "get_registry")
             expect_message(client, (1, 0, struct.pack("<I", 3)), "initial sync")
             compositor_advertised_version = 6 if (
-                buffer_pool_test or output_tracking_test or initial_preferred_buffer_scale > 1
+                buffer_pool_test or output_tracking_test or window_initial_size_test or initial_preferred_buffer_scale > 1
                 or initial_preferred_buffer_transform != 0 or dpi_runtime_test
                 or fractional_scale_test
             ) else 1
@@ -668,7 +669,9 @@ def run(
             client.sendall(
                 preferred_scale_event
                 + preferred_transform_event
-                + wire_message(10, 0, struct.pack("<iiI", 800, initial_height, 0))
+                + wire_message(10, 0, struct.pack("<iiI",
+                      0 if window_initial_size_test else 800,
+                      0 if window_initial_size_test else initial_height, 0))
                 + wire_message(9, 0, struct.pack("<I", 1234))
             )
             expect_message(client, (9, 4, struct.pack("<I", 1234)), "ack_configure")
@@ -1065,7 +1068,50 @@ def run(
                             f"bind wl_output global {global_name}",
                         )
                     next_test_object_id += 2
+                    output_sync_id = next_test_object_id
+                    expect_message(
+                        client, (1, 0, struct.pack("<I", output_sync_id)),
+                        "sync initial wl_output mode and scale state",
+                    )
+                    next_test_object_id += 1
+                    initial_output_events = b""
+                    if window_initial_size_test:
+                        initial_output_events += (
+                            wire_message(output_v3_id, 1, struct.pack("<IiiI", 1, 1920, 1080, 60000))
+                            + wire_message(output_v3_id, 3, struct.pack("<i", 1))
+                            + wire_message(output_v3_id, 2)
+                            + wire_message(output_v2_id, 1, struct.pack("<IiiI", 1, 2560, 1440, 60000))
+                            + wire_message(output_v2_id, 3, struct.pack("<i", 2))
+                            + wire_message(output_v2_id, 2)
+                        )
+                    client.sendall(initial_output_events + wire_message(output_sync_id, 0))
                 client_buffer_id = 12
+                if window_initial_size_test:
+                    expect_message(client, (client_buffer_id, 0, b""), "destroy unattached default-size buffer")
+                    client_buffer_id = next_test_object_id
+                    next_test_object_id += 1
+                    surface_pixel_width = 1280
+                    surface_pixel_height = 720
+                    buffer_scale = 1
+                    buffer_width, buffer_height = surface_pixel_width, surface_pixel_height
+                    buffer_stride = buffer_width * 4
+                    expect_message(
+                        client,
+                        (11, 0, struct.pack("<6I", client_buffer_id, 0, buffer_width, buffer_height, buffer_stride, 1)),
+                        "create output-sized startup buffer",
+                    )
+                    if logical_buffer_pixel(4, 20) != 0xFF78A9D4:
+                        raise AssertionError("scaled accent rail did not use the selected UI density")
+                    if logical_buffer_pixel(5, 20) != 0xFF343D4B:
+                        raise AssertionError("scaled accent rail width did not preserve its boundary")
+                    if logical_buffer_pixel(10, 48) != 0xFF252A33:
+                        raise AssertionError("scaled title-bar height did not reach the output-space boundary")
+                    if not any(
+                        logical_buffer_pixel(x, y) == 0xFFD8DEE9
+                        for y in range(10, 38) for x in range(20, 120)
+                    ):
+                        raise AssertionError("UI font glyphs were not rasterized at the selected density")
+                    observations.append("initial output mode/scale selected a 1280x720 window and rebuilt the unattached buffer")
                 target_buffer_scale = 2 if fractional_scale_test and initial_preferred_fractional_scale > 120 else buffer_scale
                 if fractional_scale_test and target_buffer_scale != buffer_scale:
                     expect_message(client, (client_buffer_id, 0, b""), "destroy unattached 1x buffer")
@@ -1107,12 +1153,72 @@ def run(
                     )
                 if fractional_scale_test:
                     expect_message(
-                        client, (viewport_object_id, 2, struct.pack("<ii", 800, initial_height)),
+                        client, (viewport_object_id, 2, struct.pack("<ii", surface_pixel_width // buffer_scale, surface_pixel_height // buffer_scale)),
                         "set logical viewport destination before mapping",
                     )
                 expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "attach buffer")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), "damage surface")
+                expect_message(
+                    client,
+                    (8, 2, struct.pack("<4I", 0, 0, surface_pixel_width // buffer_scale, surface_pixel_height // buffer_scale)),
+                    "damage surface in compositor logical coordinates",
+                )
                 expect_message(client, (8, 6, b""), "initial map surface")
+                if window_initial_size_test:
+                    wanted_size_symbols = {
+                        "window_surface_width", "window_surface_height",
+                        "window_width", "window_height", "window_ui_scale_120",
+                        "window_buffer_width", "window_buffer_height", "window_stride",
+                        "output_display_width", "output_display_height",
+                        "pointer_x", "pointer_y", "pointer_surface_x", "pointer_surface_y",
+                    }
+                    size_symbols = {}
+                    for line in subprocess.check_output(["nm", "-n", binary], text=True).splitlines():
+                        fields = line.split()
+                        if len(fields) == 3 and fields[2] in wanted_size_symbols:
+                            size_symbols[fields[2]] = int(fields[0], 16)
+                    if set(size_symbols) != wanted_size_symbols:
+                        raise AssertionError(f"startup size symbols missing: {size_symbols!r}")
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 1002, 168 * 256, 18 * 256))
+                    )
+                    pointer_deadline = time.monotonic() + 2.0
+                    pointer_state = {}
+                    while time.monotonic() < pointer_deadline:
+                        with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                            pointer_state = {
+                                name: struct.unpack("<I", os.pread(memory.fileno(), 4, size_symbols[name]))[0]
+                                for name in ("pointer_x", "pointer_y", "pointer_surface_x", "pointer_surface_y")
+                            }
+                        if pointer_state == {
+                            "pointer_x": 112, "pointer_y": 12,
+                            "pointer_surface_x": 168, "pointer_surface_y": 18,
+                        }:
+                            break
+                        time.sleep(0.005)
+                    if pointer_state != {
+                        "pointer_x": 112, "pointer_y": 12,
+                        "pointer_surface_x": 168, "pointer_surface_y": 18,
+                    }:
+                        raise AssertionError(f"pointer coordinates did not round-trip through the 1.5x UI density: {pointer_state!r}")
+                    with open(f"/proc/{process_holder[0].pid}/mem", "rb", buffering=0) as memory:
+                        state = {
+                            name: struct.unpack("<I", os.pread(memory.fileno(), 4, address))[0]
+                            for name, address in size_symbols.items()
+                        }
+                    expected = {
+                        "window_surface_width": 1280, "window_surface_height": 720,
+                        "window_width": 853, "window_height": 480, "window_ui_scale_120": 180,
+                        "window_buffer_width": 1280, "window_buffer_height": 720, "window_stride": 5120,
+                        "output_display_width": 1920, "output_display_height": 1080,
+                        "pointer_x": 112, "pointer_y": 12,
+                        "pointer_surface_x": 168, "pointer_surface_y": 18,
+                    }
+                    if state != expected:
+                        raise AssertionError(f"initial size/density did not match 2/3 output rule: {state!r}")
+                    observations.append("virtual layout is 853x480 at 150% density inside the 1280x720 output-sized surface")
+                    observations.append("surface pointer coordinates map back to the virtual UI space at 1.5x density")
+                    client.sendall(wire_message(10, 1))
+                    return
                 if dpi_runtime_test:
                     wanted_dpi_state = (
                         "window_buffer_scale", "window_buffer_created_scale",
@@ -1373,6 +1479,7 @@ def run(
                     wait_output("surface_output_max_scale", 3)
                     wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 3)
 
+                    hot_added_output_id = next_test_object_id
                     # A hot-added output reuses the free table slot but must
                     # receive a fresh client object ID from the monotonic allocator.
                     client.sendall(registry_global(10, "wl_output", version=3))
@@ -1384,16 +1491,16 @@ def run(
                             2, 0,
                             struct.pack("<II", 10, len(output_name))
                             + output_padded
-                            + struct.pack("<II", 3, 21),
+                            + struct.pack("<II", 3, hot_added_output_id),
                         ),
                         "bind hot-added wl_output with a fresh object ID",
                     )
                     client.sendall(
-                        wire_message(21, 3, struct.pack("<I", 4))
-                        + wire_message(8, 0, struct.pack("<I", 21))
+                        wire_message(hot_added_output_id, 3, struct.pack("<I", 4))
+                        + wire_message(8, 0, struct.pack("<I", hot_added_output_id))
                     )
                     wait_output("output_global_names", 10, 0)
-                    wait_output("output_object_ids", 21, 0)
+                    wait_output("output_object_ids", hot_added_output_id, 0)
                     wait_output("output_pending_valid", 1, 0)
                     wait_output("output_pending_scales", 4, 0)
                     wait_output("output_scales", 1, 0)
@@ -1401,7 +1508,7 @@ def run(
                     wait_output("surface_output_count", 2)
                     wait_output("surface_output_max_scale", 3)
                     wait_output("surface_effective_buffer_scale", 1 if output_tracking_test else 3)
-                    client.sendall(wire_message(21, 2))
+                    client.sendall(wire_message(hot_added_output_id, 2))
                     wait_output("output_pending_valid", 0, 0)
                     wait_output("output_scales", 4, 0)
                     wait_output("surface_output_max_scale", 4)
@@ -10589,6 +10696,8 @@ if __name__ == "__main__":
     # and version-gated wl_output.release.
     run(sys.argv[1], output_tracking_test=True)
     run(sys.argv[1], output_tracking_legacy_test=True)
+    # Select 2/3 of the largest current logical output and scale the entire UI.
+    run(sys.argv[1], window_initial_size_test=True)
     # The preferred scale arrives before the initial wl_buffer is created.
     run(sys.argv[1], initial_preferred_buffer_scale=2)
     # Fractional-scale-v1 pairs its 120ths preference with wp_viewporter.

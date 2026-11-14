@@ -4820,11 +4820,21 @@ doc_wrap_enabled:       .long 1
 
 .section .bss
 .balign 16
-.global window_width, window_height, window_buffer_width, window_buffer_height, window_stride, window_status_top, window_doc_bottom, window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height, picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode, picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected, window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height, settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size, find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode, find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count, path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
-window_width:           .long 0
-window_height:          .long 0
-# window_width/height stay surface-local. Backing dimensions and stride are
-# physical pixels after applying integer scale and the preferred transform.
+.global window_width, window_height, window_surface_width, window_surface_height, window_ui_scale_120
+.global window_buffer_width, window_buffer_height, window_stride, window_status_top, window_doc_bottom
+.global window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height
+.global picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode
+.global picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected
+.global window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height
+.global settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size
+.global find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode
+.global find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count
+.global path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
+window_width:           .long 0      # virtual application-layout width
+window_height:          .long 0      # virtual application-layout height
+window_surface_width:   .long 0      # compositor logical surface width
+window_surface_height:  .long 0      # compositor logical surface height
+window_ui_scale_120:     .long 120    # virtual layout -> surface pixels, in 120ths
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
@@ -4848,6 +4858,9 @@ picker_ui_font_size: .long 0
 path_prompt_font_size: .long 0
 ui_transform_font_size: .long 0
 .global window_buffer_slot_ids, window_buffer_slot_busy, window_buffer_last_slot, buffer_busy
+.global window_buffer_created_surface_width, window_buffer_created_surface_height
+window_buffer_created_surface_width: .long 0
+window_buffer_created_surface_height: .long 0
 window_buffer_slot_ids: .zero 8
 window_buffer_slot_busy: .zero 8
 window_buffer_last_slot: .long 0
@@ -4857,6 +4870,8 @@ window_pending_width:   .long 0
 window_pending_height:  .long 0
 window_resize_pending:  .long 0
 window_is_maximized:    .long 0
+window_startup_size_locked: .long 0
+window_initial_size_applied: .long 0
 failure_stage:         .quad 0
 .global process_envp
 process_envp:          .quad 0
@@ -4880,6 +4895,8 @@ cursor_shape_manager:  .long 0
 cursor_shape_device:   .long 0
 .global output_global_names, output_object_ids, output_versions
 .global output_scales, output_pending_scales, output_pending_valid
+.global output_mode_width, output_mode_height, output_pending_mode_width, output_pending_mode_height
+.global output_pending_mode_valid, output_display_width, output_display_height
 .global output_surface_entered, surface_output_count, surface_output_max_scale
 .global surface_effective_buffer_scale
 output_global_names:      .zero 32
@@ -4888,6 +4905,13 @@ output_versions:          .zero 32
 output_scales:            .zero 32
 output_pending_scales:    .zero 32
 output_pending_valid:     .zero 32
+output_mode_width:        .zero 32
+output_mode_height:       .zero 32
+output_pending_mode_width: .zero 32
+output_pending_mode_height: .zero 32
+output_pending_mode_valid: .zero 32
+output_display_width:     .long 0
+output_display_height:    .long 0
 output_surface_entered:   .zero 32
 surface_output_count:     .long 0
 surface_output_max_scale: .long 0
@@ -4943,6 +4967,8 @@ pointer_enter_serial:  .long 0
 cursor_shape_current:  .long 0
 pointer_x:             .long 0
 pointer_y:             .long 0
+pointer_surface_x:     .long 0
+pointer_surface_y:     .long 0
 pointer_serial:        .long 0
 pointer_inside:         .long 0
 .global pointer_created, pointer_object, keyboard_created, keyboard_object
@@ -5286,6 +5312,17 @@ wayland_main:
     mov dword ptr [rip + event_fd], -1
     mov dword ptr [rip + window_width], WIDTH
     mov dword ptr [rip + window_height], HEIGHT
+    mov dword ptr [rip + window_surface_width], WIDTH
+    mov dword ptr [rip + window_surface_height], HEIGHT
+    mov dword ptr [rip + window_ui_scale_120], 120
+    mov dword ptr [rip + window_buffer_created_surface_width], 0
+    mov dword ptr [rip + window_buffer_created_surface_height], 0
+    mov dword ptr [rip + window_startup_size_locked], 0
+    mov dword ptr [rip + window_initial_size_applied], 0
+    mov dword ptr [rip + output_display_width], 0
+    mov dword ptr [rip + output_display_height], 0
+    mov dword ptr [rip + pointer_surface_x], 0
+    mov dword ptr [rip + pointer_surface_y], 0
     mov dword ptr [rip + window_buffer_scale], 1
     mov dword ptr [rip + window_buffer_created_scale], 0
     mov dword ptr [rip + window_buffer_transform], 0
@@ -5759,6 +5796,10 @@ wayland_main:
     mov dword ptr [rip + window_buffer_created_scale], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
+    mov eax, dword ptr [rip + window_surface_width]
+    mov dword ptr [rip + window_buffer_created_surface_width], eax
+    mov eax, dword ptr [rip + window_surface_height]
+    mov dword ptr [rip + window_buffer_created_surface_height], eax
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + redraw_pending], 0
 
@@ -5776,6 +5817,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call output_initial_roundtrip
     test rax, rax
     js .protocol_error
     call window_prepare_initial_buffer_scale
@@ -5931,6 +5975,9 @@ wayland_main:
     test rax, rax
     js .protocol_error
     call output_bind_pending
+    test rax, rax
+    js .protocol_error
+    call output_initial_roundtrip
     test rax, rax
     js .protocol_error
     call window_prepare_initial_buffer_scale
@@ -12832,6 +12879,16 @@ registry_capture_global:
     mov dword ptr [rdi + r12*4], 1
     lea rdi, [rip + output_pending_valid]
     mov dword ptr [rdi + r12*4], 0
+    lea rdi, [rip + output_mode_width]
+    mov dword ptr [rdi + r12*4], 0
+    lea rdi, [rip + output_mode_height]
+    mov dword ptr [rdi + r12*4], 0
+    lea rdi, [rip + output_pending_mode_width]
+    mov dword ptr [rdi + r12*4], 0
+    lea rdi, [rip + output_pending_mode_height]
+    mov dword ptr [rdi + r12*4], 0
+    lea rdi, [rip + output_pending_mode_valid]
+    mov dword ptr [rdi + r12*4], 0
     lea rdi, [rip + output_surface_entered]
     mov dword ptr [rdi + r12*4], 0
     mov eax, dword ptr [rip + event_payload + 4]
@@ -12922,6 +12979,36 @@ draw_rect:
     div dword ptr [rip + ui_transform_y_den]
     mov r15d, eax
 .draw_rect_transform_done:
+    mov eax, dword ptr [rip + window_ui_scale_120]
+    cmp eax, 120
+    je .draw_rect_density_done
+    imul r12d, eax
+    mov eax, r12d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r12d, eax
+    mov eax, r13d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r13d, eax
+    mov eax, r14d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    add eax, 119
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    mov r14d, eax
+    mov eax, r15d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    add eax, 119
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    mov r15d, eax
+.draw_rect_density_done:
     mov eax, dword ptr [rip + window_buffer_scale]
     cmp eax, 1
     jbe .draw_rect_scale_done
@@ -12949,7 +13036,7 @@ draw_rect:
     jmp .draw_rect_map_done
 .draw_rect_map_90:
     mov eax, r13d
-    mov ecx, dword ptr [rip + window_width]
+    mov ecx, dword ptr [rip + window_surface_width]
     imul ecx, dword ptr [rip + window_buffer_scale]
     sub ecx, r12d
     sub ecx, r14d
@@ -12958,19 +13045,19 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_180:
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r12d
     sub eax, r14d
     mov r12d, eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r13d
     sub eax, r15d
     mov r13d, eax
     jmp .draw_rect_map_done
 .draw_rect_map_270:
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r13d
     sub eax, r15d
@@ -12980,7 +13067,7 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_flipped:
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r12d
     sub eax, r14d
@@ -12994,18 +13081,18 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_flipped_180:
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r13d
     sub eax, r15d
     mov r13d, eax
     jmp .draw_rect_map_done
 .draw_rect_map_flipped_270:
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     sub eax, r13d
     sub eax, r15d
-    mov ecx, dword ptr [rip + window_width]
+    mov ecx, dword ptr [rip + window_surface_width]
     imul ecx, dword ptr [rip + window_buffer_scale]
     sub ecx, r12d
     sub ecx, r14d
@@ -13244,9 +13331,17 @@ pointer_capture_enter:
     mov dword ptr [rip + pointer_enter_serial], eax
     mov eax, dword ptr [rip + event_payload + 8]
     sar eax, 8
+    mov dword ptr [rip + pointer_surface_x], eax
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_x], eax
     mov eax, dword ptr [rip + event_payload + 12]
     sar eax, 8
+    mov dword ptr [rip + pointer_surface_y], eax
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_y], eax
     mov dword ptr [rip + pointer_inside], 1
     mov dword ptr [rip + cursor_shape_current], 0
@@ -13261,16 +13356,24 @@ pointer_capture_motion:
     jb .pointer_capture_motion_done
     mov eax, dword ptr [rip + event_payload + 4]
     sar eax, 8
+    mov dword ptr [rip + pointer_surface_x], eax
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_x], eax
     mov eax, dword ptr [rip + event_payload + 8]
     sar eax, 8
+    mov dword ptr [rip + pointer_surface_y], eax
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_y], eax
 .pointer_capture_motion_done:
     xor eax, eax
     ret
 .size pointer_capture_motion, . - pointer_capture_motion
 
-# Return xdg_toplevel.resize_edge bits from the last surface-local pointer position.
+# Return xdg_toplevel.resize_edge bits from the last virtual application pointer position.
 # The same calculation drives resize cursor feedback and button-press requests.
 .type window_get_resize_edges, @function
 window_get_resize_edges:
@@ -14600,9 +14703,56 @@ render_text_input_preedit:
 # Window geometry is shared by rendering, hit-testing, and buffer allocation.
 .type window_update_geometry, @function
 window_update_geometry:
-    # Preserve surface-local layout coordinates. Use a bounded 2x backing
-    # raster when integer buffer scaling or the fractional viewport path is
-    # available; the latter keeps protocol buffer_scale at 1.
+    # Uniform density maps the existing virtual UI coordinate space to the
+    # compositor surface. Use the smaller axis so text and controls never warp.
+    mov eax, dword ptr [rip + window_surface_width]
+    imul eax, 120
+    xor edx, edx
+    mov ecx, WIDTH
+    div ecx
+    mov r8d, eax
+    mov eax, dword ptr [rip + window_surface_height]
+    imul eax, 120
+    xor edx, edx
+    mov ecx, HEIGHT
+    div ecx
+    cmp eax, r8d
+    jae .window_geometry_density_selected
+    mov r8d, eax
+.window_geometry_density_selected:
+    cmp r8d, 90
+    jae .window_geometry_density_min_ready
+    mov r8d, 90
+.window_geometry_density_min_ready:
+    cmp r8d, 240
+    jbe .window_geometry_density_max_ready
+    mov r8d, 240
+.window_geometry_density_max_ready:
+    test r8d, r8d
+    jnz .window_geometry_density_valid
+    mov r8d, 120
+.window_geometry_density_valid:
+    mov dword ptr [rip + window_ui_scale_120], r8d
+    mov eax, dword ptr [rip + window_surface_width]
+    imul eax, 120
+    xor edx, edx
+    div r8d
+    test eax, eax
+    jnz .window_geometry_virtual_width_ready
+    mov eax, 1
+.window_geometry_virtual_width_ready:
+    mov dword ptr [rip + window_width], eax
+    mov eax, dword ptr [rip + window_surface_height]
+    imul eax, 120
+    xor edx, edx
+    div r8d
+    test eax, eax
+    jnz .window_geometry_virtual_height_ready
+    mov eax, 1
+.window_geometry_virtual_height_ready:
+    mov dword ptr [rip + window_height], eax
+
+    # Buffer scale is separate from virtual UI density and uses surface pixels.
     mov eax, 1
     cmp dword ptr [rip + fractional_scale_enabled], 1
     je .window_geometry_scale_protocol_ready
@@ -14612,25 +14762,24 @@ window_update_geometry:
     mov edx, dword ptr [rip + surface_effective_buffer_scale]
     cmp edx, 2
     jb .window_geometry_buffer_scale_ready
-    cmp dword ptr [rip + window_width], (MAX_WINDOW_WIDTH / MAX_BUFFER_SCALE)
+    mov eax, dword ptr [rip + window_surface_width]
+    cmp eax, (MAX_WINDOW_WIDTH / MAX_BUFFER_SCALE)
     ja .window_geometry_buffer_scale_ready
-    cmp dword ptr [rip + window_height], (MAX_WINDOW_HEIGHT / MAX_BUFFER_SCALE)
+    mov eax, dword ptr [rip + window_surface_height]
+    cmp eax, (MAX_WINDOW_HEIGHT / MAX_BUFFER_SCALE)
     ja .window_geometry_buffer_scale_ready
     mov eax, MAX_BUFFER_SCALE
 .window_geometry_buffer_scale_ready:
     mov dword ptr [rip + window_buffer_scale], eax
-    # Preferred transforms are surface events on wl_compositor v6. On older
-    # compositors, retain the protocol default (normal) transform.
     xor edx, edx
     cmp dword ptr [rip + compositor_version], 6
     jb .window_geometry_transform_ready
     mov edx, dword ptr [rip + surface_preferred_buffer_transform]
 .window_geometry_transform_ready:
     mov dword ptr [rip + window_buffer_transform], edx
-    # Compute physical surface extents, then swap backing axes for 90/270 turns.
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, dword ptr [rip + window_buffer_scale]
-    mov edx, dword ptr [rip + window_height]
+    mov edx, dword ptr [rip + window_surface_height]
     imul edx, dword ptr [rip + window_buffer_scale]
     test dword ptr [rip + window_buffer_transform], 1
     jnz .window_geometry_swapped_axes
@@ -14706,6 +14855,17 @@ window_update_geometry:
 .window_geometry_rows_ready:
     mov dword ptr [rip + window_doc_visible_rows], eax
     call window_update_layout_geometry
+    # Pointer enter may precede output discovery; rebase saved surface coordinates.
+    mov eax, dword ptr [rip + pointer_surface_x]
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
+    mov dword ptr [rip + pointer_x], eax
+    mov eax, dword ptr [rip + pointer_surface_y]
+    imul eax, 120
+    xor edx, edx
+    div dword ptr [rip + window_ui_scale_120]
+    mov dword ptr [rip + pointer_y], eax
     ret
 .size window_update_geometry, . - window_update_geometry
 
@@ -14984,6 +15144,7 @@ settings_pointer_to_design:
 window_capture_toplevel_configure:
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
+    mov dword ptr [rip + window_startup_size_locked], 0
     cmp dword ptr [rip + last_size], 12
     jb .window_capture_toplevel_done
     mov eax, dword ptr [rip + event_payload]
@@ -14994,6 +15155,7 @@ window_capture_toplevel_configure:
     cmp eax, MAX_WINDOW_WIDTH
     ja .window_capture_toplevel_error
     mov dword ptr [rip + window_pending_width], eax
+    or dword ptr [rip + window_startup_size_locked], 1
 .window_capture_width_done:
     mov eax, dword ptr [rip + event_payload + 4]
     test eax, eax
@@ -15003,6 +15165,7 @@ window_capture_toplevel_configure:
     cmp eax, MAX_WINDOW_HEIGHT
     ja .window_capture_toplevel_error
     mov dword ptr [rip + window_pending_height], eax
+    or dword ptr [rip + window_startup_size_locked], 2
 .window_capture_height_done:
     mov eax, dword ptr [rip + event_payload + 8]
     mov edx, dword ptr [rip + last_size]
@@ -15017,6 +15180,16 @@ window_capture_toplevel_configure:
 .window_capture_state_loop:
     test ecx, ecx
     jz .window_capture_state_done
+    cmp dword ptr [rdx], 1
+    je .window_capture_state_locked
+    cmp dword ptr [rdx], 2
+    je .window_capture_state_locked
+    cmp dword ptr [rdx], 5
+    jb .window_capture_state_next
+    cmp dword ptr [rdx], 8
+    ja .window_capture_state_next
+.window_capture_state_locked:
+    mov dword ptr [rip + window_startup_size_locked], 3
     cmp dword ptr [rdx], 1
     jne .window_capture_state_next
     mov eax, 1
@@ -15039,12 +15212,12 @@ window_commit_initial_size:
     mov eax, dword ptr [rip + window_pending_width]
     test eax, eax
     jz .window_initial_width_done
-    mov dword ptr [rip + window_width], eax
+    mov dword ptr [rip + window_surface_width], eax
 .window_initial_width_done:
     mov eax, dword ptr [rip + window_pending_height]
     test eax, eax
     jz .window_initial_height_done
-    mov dword ptr [rip + window_height], eax
+    mov dword ptr [rip + window_surface_height], eax
 .window_initial_height_done:
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
@@ -15101,14 +15274,14 @@ window_handle_surface_configure:
     mov eax, dword ptr [rip + window_pending_width]
     test eax, eax
     jz .window_surface_keep_width
-    cmp eax, dword ptr [rip + window_width]
+    cmp eax, dword ptr [rip + window_surface_width]
     je .window_surface_keep_width
     mov r12d, 1
 .window_surface_keep_width:
     mov eax, dword ptr [rip + window_pending_height]
     test eax, eax
     jz .window_surface_keep_height
-    cmp eax, dword ptr [rip + window_height]
+    cmp eax, dword ptr [rip + window_surface_height]
     je .window_surface_keep_height
     mov r12d, 1
 .window_surface_keep_height:
@@ -15136,19 +15309,19 @@ window_apply_pending_resize:
     mov r12d, dword ptr [rip + window_pending_width]
     test r12d, r12d
     jnz .window_resize_width_ready
-    mov r12d, dword ptr [rip + window_width]
+    mov r12d, dword ptr [rip + window_surface_width]
 .window_resize_width_ready:
     mov r13d, dword ptr [rip + window_pending_height]
     test r13d, r13d
     jnz .window_resize_height_ready
-    mov r13d, dword ptr [rip + window_height]
+    mov r13d, dword ptr [rip + window_surface_height]
 .window_resize_height_ready:
     mov dword ptr [rip + window_pending_width], 0
     mov dword ptr [rip + window_pending_height], 0
     mov dword ptr [rip + window_resize_pending], 0
-    cmp r12d, dword ptr [rip + window_width]
+    cmp r12d, dword ptr [rip + window_surface_width]
     jne .window_resize_dimensions_changed
-    cmp r13d, dword ptr [rip + window_height]
+    cmp r13d, dword ptr [rip + window_surface_height]
     jne .window_resize_dimensions_changed
     mov eax, dword ptr [rip + window_buffer_scale]
     cmp eax, dword ptr [rip + window_buffer_created_scale]
@@ -15156,10 +15329,16 @@ window_apply_pending_resize:
     mov eax, dword ptr [rip + window_buffer_transform]
     cmp eax, dword ptr [rip + window_buffer_created_transform]
     jne .window_resize_dimensions_changed
+    mov eax, dword ptr [rip + window_surface_width]
+    cmp eax, dword ptr [rip + window_buffer_created_surface_width]
+    jne .window_resize_dimensions_changed
+    mov eax, dword ptr [rip + window_surface_height]
+    cmp eax, dword ptr [rip + window_buffer_created_surface_height]
+    jne .window_resize_dimensions_changed
     jmp .window_resize_present
 .window_resize_dimensions_changed:
-    mov dword ptr [rip + window_width], r12d
-    mov dword ptr [rip + window_height], r13d
+    mov dword ptr [rip + window_surface_width], r12d
+    mov dword ptr [rip + window_surface_height], r13d
     call window_update_geometry
     # Every old-generation buffer is idle here. Destroy each object before
     # reusing either offset for the new geometry.
@@ -15216,6 +15395,10 @@ window_apply_pending_resize:
     mov dword ptr [rip + window_buffer_created_scale], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
+    mov eax, dword ptr [rip + window_surface_width]
+    mov dword ptr [rip + window_buffer_created_surface_width], eax
+    mov eax, dword ptr [rip + window_surface_height]
+    mov dword ptr [rip + window_buffer_created_surface_height], eax
 
 .window_resize_present:
     cmp dword ptr [rip + buffer_busy], 0
@@ -15404,9 +15587,9 @@ present_buffer:
     js .present_buffer_done
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     mov dword ptr [rip + payload_buffer + 8], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     mov dword ptr [rip + payload_buffer + 12], eax
     mov edi, 8
     mov esi, 2
@@ -20111,6 +20294,29 @@ draw_glyph:
     add eax, dword ptr [rip + ui_transform_origin_y]
     mov r13d, eax
 .glyph_transform_done:
+    mov eax, dword ptr [rip + window_ui_scale_120]
+    cmp eax, 120
+    je .glyph_density_done
+    imul r12d, eax
+    mov eax, r12d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r12d, eax
+    mov eax, r13d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r13d, eax
+    mov eax, r14d
+    imul eax, dword ptr [rip + window_ui_scale_120]
+    add eax, 60
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    mov r14d, eax
+.glyph_density_done:
     mov eax, dword ptr [rip + window_buffer_scale]
     cmp eax, 1
     jbe .glyph_scale_done
@@ -20122,11 +20328,11 @@ draw_glyph:
     js .glyph_done
     test r13d, r13d
     js .glyph_done
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, dword ptr [rip + window_buffer_scale]
     cmp r12d, eax
     jae .glyph_done
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     cmp r13d, eax
     jae .glyph_done
@@ -20146,10 +20352,10 @@ draw_glyph:
     mov dword ptr [rsp + 8], r14d
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rsp + 16], eax
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rsp + 24], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rsp + 32], eax
     call font_draw_codepoint_size
@@ -20346,7 +20552,13 @@ draw_glyph:
     imul eax, 7
     lea rbx, [rip + font_5x7]
     add rbx, rax
-    mov r10d, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_ui_scale_120]
+    add eax, 119
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    imul eax, dword ptr [rip + window_buffer_scale]
+    mov r10d, eax
     cmp r10d, 1
     jae .glyph_fallback_scale_ready
     mov r10d, 1
@@ -20372,7 +20584,7 @@ draw_glyph:
     imul eax, r10d
     add eax, r13d
     add eax, r11d
-    mov ecx, dword ptr [rip + window_height]
+    mov ecx, dword ptr [rip + window_surface_height]
     imul ecx, r10d
     cmp eax, ecx
     jae .glyph_fallback_next_subrow
@@ -20387,7 +20599,7 @@ draw_glyph:
     imul edx, r10d
     add edx, r12d
     add edx, r9d
-    mov ecx, dword ptr [rip + window_width]
+    mov ecx, dword ptr [rip + window_surface_width]
     imul ecx, r10d
     cmp edx, ecx
     jae .glyph_fallback_next_subcolumn
@@ -20411,25 +20623,25 @@ draw_glyph:
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_90:
     mov ecx, esi
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, r10d
     dec eax
     sub eax, edx
     mov edx, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_180:
-    mov edi, dword ptr [rip + window_width]
+    mov edi, dword ptr [rip + window_surface_width]
     imul edi, r10d
     dec edi
     sub edi, edx
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, r10d
     dec eax
     sub eax, esi
     mov edx, edi
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_270:
-    mov ecx, dword ptr [rip + window_height]
+    mov ecx, dword ptr [rip + window_surface_height]
     imul ecx, r10d
     dec ecx
     sub ecx, esi
@@ -20437,7 +20649,7 @@ draw_glyph:
     mov edx, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped:
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, r10d
     dec eax
     sub eax, edx
@@ -20451,17 +20663,17 @@ draw_glyph:
     mov eax, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped_180:
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     imul eax, r10d
     dec eax
     sub eax, esi
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped_270:
-    mov ecx, dword ptr [rip + window_height]
+    mov ecx, dword ptr [rip + window_surface_height]
     imul ecx, r10d
     dec ecx
     sub ecx, esi
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     imul eax, r10d
     dec eax
     sub eax, edx
@@ -24182,16 +24394,16 @@ window_apply_viewport_destination:
     mov edi, dword ptr [rip + viewport_object]
     test edi, edi
     jz .viewport_destination_done
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     cmp eax, dword ptr [rip + viewport_destination_width]
     jne .viewport_destination_send
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     cmp eax, dword ptr [rip + viewport_destination_height]
     je .viewport_destination_done
 .viewport_destination_send:
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     mov dword ptr [rip + payload_buffer], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     mov dword ptr [rip + payload_buffer + 4], eax
     mov edi, dword ptr [rip + viewport_object]
     mov esi, 2
@@ -24200,9 +24412,9 @@ window_apply_viewport_destination:
     call wl_send_request
     test rax, rax
     js .viewport_destination_return
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     mov dword ptr [rip + viewport_destination_width], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     mov dword ptr [rip + viewport_destination_height], eax
 .viewport_destination_done:
     xor eax, eax
@@ -24271,9 +24483,9 @@ window_attach_initial_buffer:
 
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
-    mov eax, dword ptr [rip + window_width]
+    mov eax, dword ptr [rip + window_surface_width]
     mov dword ptr [rip + payload_buffer + 8], eax
-    mov eax, dword ptr [rip + window_height]
+    mov eax, dword ptr [rip + window_surface_height]
     mov dword ptr [rip + payload_buffer + 12], eax
     mov edi, 8
     mov esi, 2                  # wl_surface.damage
@@ -24346,6 +24558,157 @@ output_bind_pending:
     ret
 .size output_bind_pending, . - output_bind_pending
 
+.type output_recompute_display_size, @function
+output_recompute_display_size:
+    push rbx
+    push r12
+    push r13
+    push r14
+    xor r12d, r12d
+    xor r13d, r13d
+    xor r14d, r14d
+    xor ebx, ebx
+.output_display_scan:
+    cmp r12d, 8
+    jae .output_display_store
+    lea rax, [rip + output_mode_width]
+    mov eax, dword ptr [rax + r12*4]
+    test eax, eax
+    jz .output_display_next
+    lea rdx, [rip + output_scales]
+    mov esi, dword ptr [rdx + r12*4]
+    test esi, esi
+    jnz .output_display_scale_ready
+    mov esi, 1
+.output_display_scale_ready:
+    xor edx, edx
+    div esi
+    mov r8d, eax
+    lea rax, [rip + output_mode_height]
+    mov eax, dword ptr [rax + r12*4]
+    test eax, eax
+    jz .output_display_next
+    xor edx, edx
+    div esi
+    mov r9d, eax
+    test r8d, r8d
+    jz .output_display_next
+    test r9d, r9d
+    jz .output_display_next
+    mov eax, r8d
+    imul eax, r9d
+    cmp eax, ebx
+    jbe .output_display_next
+    mov ebx, eax
+    mov r13d, r8d
+    mov r14d, r9d
+.output_display_next:
+    inc r12d
+    jmp .output_display_scan
+.output_display_store:
+    mov dword ptr [rip + output_display_width], r13d
+    mov dword ptr [rip + output_display_height], r14d
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size output_recompute_display_size, . - output_recompute_display_size
+
+.type output_initial_roundtrip, @function
+output_initial_roundtrip:
+    push rbp
+    push r12
+    push r13
+    xor r13d, r13d
+.output_initial_has_output:
+    cmp r13d, 8
+    jae .output_initial_no_outputs
+    lea rax, [rip + output_object_ids]
+    cmp dword ptr [rax + r13*4], 0
+    jne .output_initial_sync
+    inc r13d
+    jmp .output_initial_has_output
+.output_initial_no_outputs:
+    xor eax, eax
+    jmp .output_initial_return
+.output_initial_sync:
+    mov r12d, dword ptr [rip + next_client_object_id]
+    lea eax, [r12 + 1]
+    mov dword ptr [rip + next_client_object_id], eax
+    mov dword ptr [rip + payload_buffer], r12d
+    mov edi, 1
+    xor esi, esi
+    lea rdx, [rip + payload_buffer]
+    mov ecx, 4
+    call wl_send_request
+    test rax, rax
+    js .output_initial_return
+.output_initial_read:
+    call wl_read_event
+    test rax, rax
+    js .output_initial_return
+    cmp dword ptr [rip + last_object], r12d
+    jne .output_initial_ping
+    cmp dword ptr [rip + last_opcode], 0
+    jne .output_initial_read
+    xor eax, eax
+    jmp .output_initial_return
+.output_initial_ping:
+    cmp dword ptr [rip + last_object], 6
+    jne .output_initial_registry
+    cmp dword ptr [rip + last_opcode], 0
+    jne .output_initial_registry
+    call handle_xdg_ping
+    test rax, rax
+    js .output_initial_return
+    jmp .output_initial_read
+.output_initial_registry:
+    cmp dword ptr [rip + last_object], 2
+    jne .output_initial_output
+    cmp dword ptr [rip + last_opcode], 0
+    je .output_initial_global
+    cmp dword ptr [rip + last_opcode], 1
+    je .output_initial_global_remove
+    jmp .output_initial_read
+.output_initial_global:
+    call registry_capture_global
+    jmp .output_initial_read
+.output_initial_global_remove:
+    call handle_output_global_remove
+    test eax, eax
+    js .output_initial_return
+    jmp .output_initial_read
+.output_initial_output:
+    call handle_output_event
+    test eax, eax
+    jnz .output_initial_read
+    mov eax, dword ptr [rip + keyboard_object]
+    test eax, eax
+    jz .output_initial_surface_event
+    cmp dword ptr [rip + last_object], eax
+    jne .output_initial_surface_event
+    cmp dword ptr [rip + last_opcode], 0
+    jne .output_initial_surface_event
+    call keyboard_keymap_dispatch
+    test rax, rax
+    js .output_initial_return
+    jmp .output_initial_read
+.output_initial_surface_event:
+    call handle_surface_output_event
+    test eax, eax
+    jnz .output_initial_read
+    call handle_fractional_scale_event
+    test eax, eax
+    jnz .output_initial_read
+    jmp .output_initial_read
+.output_initial_return:
+    pop r13
+    pop r12
+    pop rbp
+    ret
+.size output_initial_roundtrip, . - output_initial_roundtrip
+
 # Recompute entered-output count, max integer scale, and the selected scale hint.
 # wl_compositor v6+ uses the per-surface preference; older versions fall back
 # to the maximum committed scale among entered outputs. Rendering is unchanged.
@@ -24382,9 +24745,68 @@ window_scale_schedule:
 
 # Rebuild the first buffer if a preferred scale arrived after its original
 # create_buffer request but before the first surface attachment.
+.type window_apply_initial_output_size, @function
+window_apply_initial_output_size:
+    cmp dword ptr [rip + window_initial_size_applied], 0
+    jne .window_initial_output_size_done
+    mov dword ptr [rip + window_initial_size_applied], 1
+    mov eax, dword ptr [rip + output_display_width]
+    test eax, eax
+    jz .window_initial_output_size_done
+
+    # Bit 0 means explicit width; bit 1 means explicit height. A WM-managed
+    # maximized/fullscreen/tiled state locks both dimensions.
+    test dword ptr [rip + window_startup_size_locked], 1
+    jnz .window_initial_width_done
+    imul eax, 2
+    xor edx, edx
+    mov ecx, 3
+    div ecx
+    cmp eax, WINDOW_MIN_WIDTH
+    jae .window_initial_width_min_ready
+    mov eax, WINDOW_MIN_WIDTH
+.window_initial_width_min_ready:
+    cmp eax, MAX_WINDOW_WIDTH
+    jbe .window_initial_width_max_ready
+    mov eax, MAX_WINDOW_WIDTH
+.window_initial_width_max_ready:
+    mov dword ptr [rip + window_surface_width], eax
+.window_initial_width_done:
+    test dword ptr [rip + window_startup_size_locked], 2
+    jnz .window_initial_height_done
+    mov eax, dword ptr [rip + output_display_height]
+    test eax, eax
+    jz .window_initial_output_size_done
+    imul eax, 2
+    xor edx, edx
+    mov ecx, 3
+    div ecx
+    cmp eax, WINDOW_MIN_HEIGHT
+    jae .window_initial_height_min_ready
+    mov eax, WINDOW_MIN_HEIGHT
+.window_initial_height_min_ready:
+    cmp eax, MAX_WINDOW_HEIGHT
+    jbe .window_initial_height_max_ready
+    mov eax, MAX_WINDOW_HEIGHT
+.window_initial_height_max_ready:
+    mov dword ptr [rip + window_surface_height], eax
+.window_initial_height_done:
+    call window_update_geometry
+.window_initial_output_size_done:
+    xor eax, eax
+    ret
+.size window_apply_initial_output_size, . - window_apply_initial_output_size
+
 .type window_prepare_initial_buffer_scale, @function
 window_prepare_initial_buffer_scale:
     push r12
+    call window_apply_initial_output_size
+    mov eax, dword ptr [rip + window_buffer_created_surface_width]
+    cmp eax, dword ptr [rip + window_surface_width]
+    jne .window_prepare_initial_scale_rebuild
+    mov eax, dword ptr [rip + window_buffer_created_surface_height]
+    cmp eax, dword ptr [rip + window_surface_height]
+    jne .window_prepare_initial_scale_rebuild
     mov eax, dword ptr [rip + window_buffer_created_scale]
     cmp eax, dword ptr [rip + window_buffer_scale]
     jne .window_prepare_initial_scale_rebuild
@@ -24433,6 +24855,10 @@ window_prepare_initial_buffer_scale:
     mov dword ptr [rip + window_buffer_created_scale], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
+    mov eax, dword ptr [rip + window_surface_width]
+    mov dword ptr [rip + window_buffer_created_surface_width], eax
+    mov eax, dword ptr [rip + window_surface_height]
+    mov dword ptr [rip + window_buffer_created_surface_height], eax
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + redraw_pending], 0
 .window_prepare_initial_scale_done:
@@ -24565,9 +24991,20 @@ handle_output_global_remove:
     mov dword ptr [rax + r13*4], 1
     lea rax, [rip + output_pending_valid]
     mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_mode_width]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_mode_height]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_pending_mode_width]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_pending_mode_height]
+    mov dword ptr [rax + r13*4], 0
+    lea rax, [rip + output_pending_mode_valid]
+    mov dword ptr [rax + r13*4], 0
     lea rax, [rip + output_surface_entered]
     mov dword ptr [rax + r13*4], 0
     call output_recompute_surface_scale
+    call output_recompute_display_size
     mov eax, 1
     jmp .output_remove_return
 .output_remove_not_found:
@@ -24597,14 +25034,51 @@ handle_output_event:
     jmp .output_event_find
 .output_event_found:
     mov eax, dword ptr [rip + last_opcode]
+    cmp eax, 1
+    je .output_event_mode
     cmp eax, 3
     je .output_event_scale
     cmp eax, 2
     je .output_event_done
     jmp .output_event_handled
-
+.output_event_mode:
+    cmp dword ptr [rip + last_size], 16
+    jb .output_event_protocol_error
+    mov eax, dword ptr [rip + event_payload]
+    test eax, 1
+    jz .output_event_handled
+    mov eax, dword ptr [rip + event_payload + 4]
+    test eax, eax
+    jle .output_event_protocol_error
+    cmp eax, 32768
+    ja .output_event_protocol_error
+    mov edx, dword ptr [rip + event_payload + 8]
+    test edx, edx
+    jle .output_event_protocol_error
+    cmp edx, 32768
+    ja .output_event_protocol_error
+    lea rax, [rip + output_versions]
+    cmp dword ptr [rax + r12*4], 2
+    jb .output_event_mode_immediate
+    lea rax, [rip + output_pending_mode_width]
+    mov edx, dword ptr [rip + event_payload + 4]
+    mov dword ptr [rax + r12*4], edx
+    lea rax, [rip + output_pending_mode_height]
+    mov edx, dword ptr [rip + event_payload + 8]
+    mov dword ptr [rax + r12*4], edx
+    lea rax, [rip + output_pending_mode_valid]
+    mov dword ptr [rax + r12*4], 1
+    jmp .output_event_handled
+.output_event_mode_immediate:
+    lea rax, [rip + output_mode_width]
+    mov edx, dword ptr [rip + event_payload + 4]
+    mov dword ptr [rax + r12*4], edx
+    lea rax, [rip + output_mode_height]
+    mov edx, dword ptr [rip + event_payload + 8]
+    mov dword ptr [rax + r12*4], edx
+    call output_recompute_display_size
+    jmp .output_event_handled
 .output_event_scale:
-    # wl_output.scale is a positive integer, available since version 2.
     cmp dword ptr [rip + last_size], 4
     jb .output_event_protocol_error
     lea rdx, [rip + output_versions]
@@ -24618,27 +25092,44 @@ handle_output_event:
     lea rdx, [rip + output_pending_valid]
     mov dword ptr [rdx + r12*4], 1
     jmp .output_event_handled
-
 .output_event_done:
-    # The compositor groups output-property changes into an atomic update.
     lea rdx, [rip + output_versions]
     cmp dword ptr [rdx + r12*4], 2
     jb .output_event_protocol_error
+    xor r13d, r13d
     lea rdx, [rip + output_pending_valid]
     cmp dword ptr [rdx + r12*4], 0
-    je .output_event_handled
+    je .output_event_commit_mode
     mov dword ptr [rdx + r12*4], 0
     lea rdx, [rip + output_pending_scales]
     mov eax, dword ptr [rdx + r12*4]
     lea rdx, [rip + output_scales]
     mov dword ptr [rdx + r12*4], eax
+    mov r13d, 1
+.output_event_commit_mode:
+    lea rdx, [rip + output_pending_mode_valid]
+    cmp dword ptr [rdx + r12*4], 0
+    je .output_event_commit_done
+    mov dword ptr [rdx + r12*4], 0
+    lea rdx, [rip + output_pending_mode_width]
+    mov eax, dword ptr [rdx + r12*4]
+    lea rdx, [rip + output_mode_width]
+    mov dword ptr [rdx + r12*4], eax
+    lea rdx, [rip + output_pending_mode_height]
+    mov eax, dword ptr [rdx + r12*4]
+    lea rdx, [rip + output_mode_height]
+    mov dword ptr [rdx + r12*4], eax
+    mov r13d, 1
+.output_event_commit_done:
+    test r13d, r13d
+    jz .output_event_handled
     call output_recompute_surface_scale
-
+    call output_recompute_display_size
 .output_event_handled:
     mov eax, 1
     jmp .output_event_return
 .output_event_protocol_error:
-    mov rax, -71                 # EPROTO
+    mov rax, -71
     jmp .output_event_return
 .output_event_not_found:
     xor eax, eax

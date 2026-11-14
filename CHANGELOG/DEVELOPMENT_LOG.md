@@ -1,3 +1,28 @@
+## 2026-11-14 — output-aware startup window sizing and responsive UI density
+
+### Startup output selection
+
+The backend previously had per-output scale metadata but did not retain current output mode dimensions for choosing the initial window size. It now stores the current `wl_output.mode` dimensions alongside the committed `wl_output.scale` value. Version 2+ updates are committed atomically on `wl_output.done`; version 1 mode events are applied immediately. A startup `wl_display.sync` drains the initial output state after output proxies are bound and before the first buffer is attached.
+
+Core Wayland does not identify a primary output. NekoEdit therefore uses the largest current output by *logical* area (mode pixels divided by that output's integer scale) as its deterministic startup reference. For an ordinary toplevel, each dimension left unspecified by the compositor is set to two-thirds of that output dimension. A 1920×1080 mode at scale 1 yields 1280×720. A compositor-supplied width or height is retained independently; maximized, fullscreen, and tiled states suppress both automatic dimensions. Existing minimum and maximum window bounds apply. No output mode means the existing 800×480 fallback is retained.
+
+### Responsive application geometry
+
+The original application coordinate system is now explicitly virtual, separate from the compositor's actual surface width and height. The uniform UI density is calculated from the smaller surface/base-axis ratio, bounded between 0.75× and 2×. At the 1280×720 reference size it is 180/120 (1.5×), mapping the virtual layout to approximately 853×480.
+
+The density is applied at the common renderer/input boundaries:
+- `draw_rect` transforms all interface box positions and extents after any overlay design-space transform.
+- `draw_glyph` scales glyph origins and TrueType em size. The embedded 5×7 fallback uses a whole-cell multiplier, so its 1.5× appearance is approximate.
+- `wl_pointer.enter` and `wl_pointer.motion` keep their surface coordinates and convert them back to virtual coordinates before hit-testing, dragging, caret placement, and menu interaction.
+
+Protocol-facing geometry deliberately remains in compositor coordinates: buffer allocation/stride, `wp_viewport` destination, and Wayland damage use actual surface dimensions. Buffer scale/transform selection and release-safe buffer generation remain independent from application density.
+
+### Regression and validation
+
+The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).
+
+The existing output-tracking mock cases were updated for the new initial `wl_display.sync` request. Static assembly review and CI compilation/testing are pending; this change has not yet been verified on a physical Wayland compositor.
+
 ## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
 
 The previous large-paste optimization left `doc_cursor` immediately after the final inserted byte. The common `doc_ensure_cursor_visible` path therefore treated the end of a multi-megabyte paste as the desired viewport location, even when the paste had begun at the top of an empty document. That produced an unwanted jump away from the start of the newly pasted text.

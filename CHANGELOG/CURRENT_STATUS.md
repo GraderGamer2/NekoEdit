@@ -1,3 +1,19 @@
+## 2026-11-14 — output-aware startup sizing and responsive UI density (CI pending)
+
+**Branch:** `early-alpha`; normal development remains at `-O2`. The isolated `optimization-early-alpha` experiment was not changed.
+
+The Wayland backend now snapshots current `wl_output.mode` and committed `wl_output.scale` values before the first buffer attachment. If the initial `xdg_toplevel.configure` leaves a dimension unspecified, the client chooses two-thirds of the largest current output in logical coordinates. A 1920×1080 output at scale 1 therefore produces a 1280×720 initial surface. A dimension explicitly supplied by the compositor is preserved independently; maximized, fullscreen, or tiled initial states preserve both compositor-managed dimensions. If no usable output mode arrives, the existing 800×480 fallback remains.
+
+The app now distinguishes compositor surface dimensions from virtual application-layout dimensions. A uniform density derived from the limiting axis scales the central rectangle renderer, TrueType glyph origins and em sizes, embedded bitmap glyph rendering, and pointer coordinates used for hit-testing. The document, selection, and layout model remains in virtual units. Wayland buffer allocation, viewport destination, and surface damage continue to use actual compositor surface coordinates. The existing output-buffer scale/transform and release-gated replacement path remains separate from UI density.
+
+**1080p reference result:** 1280×720 compositor surface; 1.5× UI density; 853×480 virtual layout; 1280×720 backing buffer at scale 1. At 1.5×, the embedded 5×7 fallback uses whole-cell upscaling and is less precise than the TrueType path.
+
+Regression work adds an initial-size mock with two outputs: 1920×1080 at 1× and 2560×1440 at 2×. The backend must select the former by logical area, not raw pixel area. The test verifies the replacement of the unattached startup buffer, scaled chrome and text pixels, exact surface/layout/buffer geometry, surface-damage dimensions, and the 1.5× pointer-to-layout coordinate conversion. Existing output-tracking mock scenarios now include the initial output-state roundtrip.
+
+**Changed implementation/test/docs:** `src/backend/wayland.S`, `tests/wayland_mock.py`, root README, and the Wayland, architecture, and rendering documentation. The development optimization policy remains unchanged. CI validation is pending for the first build after this change; physical GNOME/Mutter visual and input testing remains necessary after CI.
+
+---
+
 ## 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
 
 Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps on final head [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7). The real Wayland mock transferred 10 MiB through the nonblocking clipboard pipe, verified every byte and all line-index records, confirmed that the caret and viewport remained at the paste's original insertion point, checked that the scrollbar thumb stayed correctly anchored at the top for a paste at offset 0, and passed full Undo/Redo. Redo restored the same caret/viewport state. The end-to-first-redraw interval was 560.7 ms on the Ubuntu 24.04 GitHub runner; Undo/Redo were checked separately and are not included in that timing.
