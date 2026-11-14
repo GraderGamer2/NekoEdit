@@ -3894,7 +3894,17 @@ xkb_symbols "nekoedit-sparse" {
                                         f"{label}: more than two follow-up frames were queued"
                                     )
                                 client.settimeout(max(0.05, settle_deadline - time.monotonic()))
-                                expect_buffer_frame(f"{label} coalesced follow-up frame")
+                                try:
+                                    expect_buffer_frame(f"{label} coalesced follow-up frame")
+                                except Exception as error:
+                                    raise AssertionError(
+                                        f"{label}: follow-up attach timed out or failed; "
+                                        f"callback={child_u32('frame_callback_id')}, "
+                                        f"stage={child_u32('present_buffer_stage')}, "
+                                        f"busy={child_u32('buffer_busy')}, "
+                                        f"redraw={child_u32('redraw_pending')}, "
+                                        f"stats={frame_callback_stats!r}"
+                                    ) from error
                                 client.sendall(buffer_release_message())
                                 followup_frames += 1
                                 continue

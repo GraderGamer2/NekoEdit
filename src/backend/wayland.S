@@ -5067,8 +5067,9 @@ repeat_timer_read:      .quad 0
 doc_drag_timer_spec:    .zero 32
 doc_drag_timer_read:    .quad 0
 buffer_busy:            .long 0
-.global frame_callback_id
+.global frame_callback_id, present_buffer_stage
 frame_callback_id:      .long 0
+present_buffer_stage:   .long 0
 redraw_pending:         .long 0
 shift_down:             .long 0
 shift_physical_down:    .long 0
@@ -15468,6 +15469,7 @@ window_create_second_buffer:
 .type present_buffer, @function
 present_buffer:
     # r12d retains the selected slot across the renderer and protocol calls.
+    mov dword ptr [rip + present_buffer_stage], 0
     push r12
     cmp dword ptr [rip + frame_callback_id], 0
     jne .present_buffer_blocked
@@ -15521,6 +15523,7 @@ present_buffer:
 .present_buffer_mapping_ready:
     mov qword ptr [rip + shm_mapping], rdx
     call render_surface
+    mov dword ptr [rip + present_buffer_stage], 1
     # A frame callback throttles commits; wl_buffer.release independently
     # controls which backing slot may be mutated.
     mov eax, dword ptr [rip + next_client_object_id]
@@ -15535,6 +15538,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+    mov dword ptr [rip + present_buffer_stage], 2
     cmp dword ptr [rip + compositor_version], 3
     jb .present_buffer_scale_done
     mov eax, dword ptr [rip + window_buffer_scale]
@@ -15574,6 +15578,7 @@ present_buffer:
     call window_apply_viewport_destination
     test rax, rax
     js .present_buffer_done
+    mov dword ptr [rip + present_buffer_stage], 3
     mov eax, dword ptr [rip + window_buffer_id]
     mov dword ptr [rip + payload_buffer], eax
     mov dword ptr [rip + payload_buffer + 4], 0
@@ -15585,6 +15590,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+    mov dword ptr [rip + present_buffer_stage], 4
     mov dword ptr [rip + payload_buffer], 0
     mov dword ptr [rip + payload_buffer + 4], 0
     mov eax, dword ptr [rip + window_surface_width]
@@ -15598,6 +15604,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+    mov dword ptr [rip + present_buffer_stage], 5
     mov edi, 8
     mov esi, 6
     xor edx, edx
@@ -15605,6 +15612,7 @@ present_buffer:
     call wl_send_request
     test rax, rax
     js .present_buffer_done
+    mov dword ptr [rip + present_buffer_stage], 6
     lea rdx, [rip + window_buffer_slot_busy]
     mov dword ptr [rdx + r12*4], 1
     inc dword ptr [rip + buffer_busy]
