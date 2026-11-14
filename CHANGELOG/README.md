@@ -1,19 +1,18 @@
-## Latest handoff (2026-11-15 — compact glyph masks; CI PASS #976)
+## Latest handoff (2026-11-15 — clipboard and keyboard repeat fixes; CI PASS #977)
 
-Continue source development on `early-alpha` at [799777f](https://github.com/GraderGamer2/NekoEdit/commit/799777f605e35ab328db2b09b925a3371279ae3e). The compact-mask implementation is [3ed2dd0](https://github.com/GraderGamer2/NekoEdit/commit/3ed2dd0bd1037d6885cb908c24e6acd73d69d740), with row-stride correction [0d44d39](https://github.com/GraderGamer2/NekoEdit/commit/0d44d399e9b5d4a2ab8fb01f71ea26e601477d22). Normal development remains `-O2`, unstripped. Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source.
+Continue source development on `early-alpha` at [8095dd5](https://github.com/GraderGamer2/NekoEdit/commit/8095dd5ffa50119910154b7650840688037799b2). Functional changes are in [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c). Normal development remains `-O2`, unstripped. Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source.
 
-`font_rasterize_glyph` now initializes only the active glyph bounds, writing explicit zeroes for uncovered pixels. Cache misses copy only the active glyph rectangle into packed rows; identity and transformed drawing use the corresponding stride. A large-to-small scratch-reuse regression checks for stale-mask leakage.
+**Large clipboard paste:** NekoEdit's receive limit is 64 MiB, not 4 MiB. The provider-facing pipe writer was inadvertently nonblocking because `O_NONBLOCK` was set on both ends. Only NekoEdit's read end is now nonblocking, and `UTF8_STRING` is accepted alongside the standard UTF-8/plain MIME types. The Wayland mock verifies a blocking provider FD and an exact 10 MiB transfer with correct indexing and Undo/Redo.
 
-Actions [#976](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868) passed all 17 steps, including the five-way renderer comparison, all seven non-normal Wayland buffer transforms, 11 MiB Open/Save, nested GNOME Shell/Mutter, and artifact uploads. Matching checksums: cache fill `35083399697745`, warm draw `35084948275808`.
+**Keyboard repeat:** Every ordinary key now repeats at 30 ticks/second, regardless of per-key XKB repeat flags. The compositor's initial delay is retained. Modifier, lock and Compose keys are excluded; Ctrl shortcuts remain single-shot. The mock covers arrows, Backspace, Delete, Enter, Tab and printable keys.
 
-In the synthetic benchmark, compact storage reduced cold rasterization by 14.1% and cold cache-fill/draw by 14.2% versus the same renderer with legacy fixed-stride storage. Warm draw was 0.7% slower (108.7 vs. 107.9 ns), effectively neutral in this measurement. Per-entry pixel arrays are still fixed at 128×128, so the 2 MiB static cache reservation has not been reduced; a shared variable-size mask arena is a separate possible optimization.
+[Actions #977](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206) passed all 17 workflow steps, including the full Wayland suite and nested Mutter integration.
 
-Artifacts: [Linux x86-64 executable, 150,989 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127188876); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43628812868/artifacts/14127139364).
+Artifacts: [Linux x86-64 executable, 151,038 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14127667227); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206/artifacts/14128111687).
 
-The selection edge auto-scroll fix is complete: [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 steps and the user confirmed screen-edge selection works. The opaque-pixel blend fast path also passed [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385), with a 29.4% synthetic warm-draw reduction versus the same renderer using the original blend.
+Direct manual verification with l3afpad is still recommended because the automated 10 MiB test uses a synthetic Wayland clipboard owner advertising `UTF8_STRING`. On the user's machine, test a paste of the same 10 MiB document and hold Backspace, Enter, Delete and arrow keys.
 
-Next optimization candidate: evaluate a bounded shared pixel arena for cache entries only if the reduction in static memory footprint justifies allocator and eviction complexity. Keep the current reference comparisons and the full rendering fallbacks.
----
+Keep `main` source untouched and mirror only these changelog updates there.
 
 ## Previous handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
 
