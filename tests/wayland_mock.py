@@ -5126,8 +5126,55 @@ xkb_symbols "nekoedit-sparse" {
                         key_step(serial + 6, 28, label + " — confirm pending save")
                 if find_replace_test:
                     initial = read_document_state()
-                    if initial["doc_contents"] != b"one fish two fish":
+                    find_fixture = b"one fish two fish\n" + (b"row fish\n" * 64)
+                    if initial["doc_contents"] != find_fixture:
                         raise AssertionError("find/replace fixture contents mismatch")
+
+                    def assert_replacement_index(state, expected_contents: bytes, label: str) -> None:
+                        if state["doc_contents"] != expected_contents:
+                            raise AssertionError(
+                                label + ": replacement bytes mismatch: " + repr(state["doc_contents"])
+                            )
+                        parts = expected_contents.split(b"\n")
+                        expected_spans = tuple(
+                            len(part) + (1 if index < len(parts) - 1 else 0)
+                            for index, part in enumerate(parts)
+                        )
+                        expected_rows = (1,) * len(expected_spans)
+                        records = state["doc_line_index_records"]
+                        if (
+                            state["doc_line_index_valid"] != 1
+                            or state["doc_line_count"] != len(expected_spans)
+                            or len(records) != len(expected_spans)
+                        ):
+                            raise AssertionError(label + ": line index was not rebuilt: " + repr(state))
+                        actual_spans = tuple(record[0] for record in records)
+                        actual_rows = tuple(record[1] for record in records)
+                        if actual_spans != expected_spans or actual_rows != expected_rows:
+                            raise AssertionError(
+                                label + ": line metadata mismatch: "
+                                + repr((actual_spans, expected_spans, actual_rows, expected_rows))
+                            )
+                        expected_byte_nodes = []
+                        expected_row_nodes = []
+                        for end in range(1, len(expected_spans) + 1):
+                            lowbit = end & -end
+                            expected_byte_nodes.append(sum(expected_spans[end - lowbit:end]))
+                            expected_row_nodes.append(sum(expected_rows[end - lowbit:end]))
+                        if (
+                            tuple(record[2] for record in records) != tuple(expected_byte_nodes)
+                            or tuple(record[3] for record in records) != tuple(expected_row_nodes)
+                        ):
+                            raise AssertionError(label + ": Fenwick tree mismatch: " + repr(records))
+                        line_ids = tuple(state.get("doc_line_index_id_values", ()))
+                        if (
+                            len(line_ids) != len(expected_spans)
+                            or any(line_id == 0 for line_id in line_ids)
+                            or len(set(line_ids)) != len(line_ids)
+                        ):
+                            raise AssertionError(label + ": line IDs are missing or duplicated: " + repr(line_ids))
+                        if sum(expected_spans) != len(expected_contents):
+                            raise AssertionError(label + ": line spans do not cover the document")
                     workflow_shortcut(1860, 102, "Ctrl+Home establishes search fixture start")
                     workflow_shortcut(1870, 33, "Ctrl+F opens Find")
                     if child_u32("find_replace_mode") != 1:
@@ -5170,10 +5217,8 @@ xkb_symbols "nekoedit-sparse" {
                         key_step(1940 + index * 3, code, f"enter replacement character {index + 1}")
                     workflow_shortcut(1960, 28, "Ctrl+Enter replaces the current match")
                     state = read_document_state()
-                    if state["doc_contents"] != b"one fish two shark":
-                        raise AssertionError(
-                            f"Replace Current produced unexpected bytes: {state['doc_contents']!r}"
-                        )
+                    expected_current = b"one fish two shark\n" + (b"row fish\n" * 64)
+                    assert_replacement_index(state, expected_current, "Replace Current")
                     if child_u32("find_status") != 3:
                         raise AssertionError("Replace Current did not report a replacement")
                     panel_x = child_u32("find_panel_x")
@@ -5184,13 +5229,11 @@ xkb_symbols "nekoedit-sparse" {
                     all_y = panel_y + 164 * panel_height // 192
                     workflow_click(all_x, all_y, 1990, "Replace All replaces remaining matches")
                     state = read_document_state()
-                    if state["doc_contents"] != b"one shark two shark":
+                    expected_all = b"one shark two shark\n" + (b"row shark\n" * 64)
+                    assert_replacement_index(state, expected_all, "Replace All")
+                    if child_u32("find_replace_count") != 65 or child_u32("find_status") != 4:
                         raise AssertionError(
-                            f"Replace All produced unexpected bytes: {state['doc_contents']!r}"
-                        )
-                    if child_u32("find_replace_count") != 1 or child_u32("find_status") != 4:
-                        raise AssertionError(
-                            "Replace All did not report one replacement: "
+                            "Replace All did not report 65 replacements: "
                             f"count={child_u32('find_replace_count')}, status={child_u32('find_status')}"
                         )
                     key_step(2010, 1, "Escape closes Find/Replace")
@@ -11749,9 +11792,15 @@ if __name__ == "__main__":
 
     find_fd, find_path = tempfile.mkstemp(prefix="nekoedit-find-replace-")
     try:
+        find_fixture = b"one fish two fish\n" + (b"row fish\n" * 64)
         with os.fdopen(find_fd, "wb") as document:
-            document.write(b"one fish two fish")
-        run(sys.argv[1], initial_file=find_path, find_replace_test=True)
+            document.write(find_fixture)
+        run(
+            sys.argv[1],
+            initial_file=find_path,
+            find_replace_test=True,
+            line_index_test=True,
+        )
     finally:
         try:
             os.unlink(find_path)

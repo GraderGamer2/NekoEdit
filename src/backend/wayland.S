@@ -21161,16 +21161,14 @@ doc_find_previous:
 doc_replace_selection_with_buffer:
     push rbx
     call doc_delete_selection
-    xor ebx, ebx
-.Ldoc_replace_insert_loop:
-    cmp ebx, dword ptr [rip + find_replacement_length]
-    jae .Ldoc_replace_insert_done
-    lea rdx, [rip + find_replacement_buffer]
-    movzx edi, byte ptr [rdx + rbx]
-    call doc_insert_byte
-    inc ebx
-    jmp .Ldoc_replace_insert_loop
-.Ldoc_replace_insert_done:
+
+    # The replacement is already contiguous in find_replacement_buffer. Insert
+    # it as one range so Replace All does not rebuild and point-update the
+    # document line index once per replacement byte or match.
+    lea rdi, [rip + find_replacement_buffer]
+    mov esi, dword ptr [rip + find_replacement_length]
+    call doc_insert_bytes
+
     mov eax, dword ptr [rip + doc_cursor]
     mov dword ptr [rip + doc_selection_anchor], eax
     mov dword ptr [rip + doc_selection_active], 0
