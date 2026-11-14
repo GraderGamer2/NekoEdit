@@ -8467,9 +8467,9 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"window controls did not follow the maximized width: {hex(max_close_pixel)}"
                         )
-                    if not rendered_color_present(1180, 1066, 48, 7, 7680, 0xFFD8DEE9):
+                    if not rendered_color_present(1160, 1052, 96, 14, 7680, 0xFFD8DEE9):
                         raise AssertionError("the byte-count footer label did not follow the maximized width")
-                    if not rendered_color_present(1864, 1066, 40, 7, 7680, 0xFFD8DEE9):
+                    if not rendered_color_present(1808, 1052, 80, 14, 7680, 0xFFD8DEE9):
                         raise AssertionError("the mode footer label did not follow the maximized width")
                     observations.append(
                         "Maximize acknowledges compositor configure and reallocates/repaints the surface at its new dimensions"
