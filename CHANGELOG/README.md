@@ -1,4 +1,12 @@
-## Latest handoff (2026-11-14 — wrapped visual-row checkpoints; CI PASS #961)
+## Latest handoff (2026-11-14 — early-alpha dirty repaint; CI PASS #967)
+
+The stable application-source checkpoint on `main` is unchanged. Continue source development on `early-alpha` at [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf); the changelog files here mirror the current development checkpoint only.
+
+The renderer has a conservative partial repaint for plain unselected arrow-key movement. Rectangle fills, bitmap glyphs and TrueType glyphs are clipped to the old/new caret-row neighbourhood plus the status footer, with matching Wayland damage bands. Each SHM slot keeps a separate render-state snapshot; unknown or stale slots retain the full-frame fallback. Edits, selections, scroll, IME/Compose, overlays, resizes, scale changes and non-normal buffer transforms also remain full-frame.
+
+[Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) passed the full CI workflow, including the focused dirty-render mock, dual-buffer cases, 11 MiB Open/Save and nested GNOME Shell/Mutter integration. The next optimization candidate is skipping document-row/glyph traversal outside the dirty band. Pixel writes and compositor damage are reduced; no end-to-end latency improvement has yet been measured. User-machine visual testing and controlled benchmarking remain outstanding.
+
+## Previous handoff (2026-11-14 — wrapped visual-row checkpoints; CI PASS #961)
 
 Continue development on `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates without merging editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 

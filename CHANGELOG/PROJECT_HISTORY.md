@@ -1,3 +1,13 @@
+## 2026-11-14 — early-alpha dirty caret-band rendering validated (Actions #967 PASS)
+
+**Code branch:** `early-alpha`, commit [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+
+The conservative dirty-caret repaint passed the full CI workflow: ELF build/inspection, CLI smoke, glyph-cache reference equivalence, focused Wayland dirty-damage and dual-SHM tests, 11 MiB Open/Save coverage, XKB checks, X.Org importer checks, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts uploaded successfully.
+
+This is a changelog-only mirror on `main`; the application source and renderer implementation remain on `early-alpha`. The optimization reduces pixel writes and compositor damage for plain unselected arrow-key movement, but still traverses visible document layout and has no measured end-to-end latency claim. User-machine visual smoke testing and controlled performance measurements remain outstanding.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 Reuse the sparse byte-to-visual checkpoints for the reverse coordinate lookup performed by `doc_visual_to_offset_indexed`. After Fenwick lookup identifies the logical line, the mapper uses the line's stable ID and the shared cache epoch to search its 4 KiB byte buckets. Because checkpoint local visual rows are monotonic with byte position, lookup binary-searches the lexicographic pair (local visual row, pixel X), choosing the greatest checkpoint not after the requested coordinate. The saved byte offset, row, and X initialize the existing UTF-8/grapheme-aware scan. A checkpoint at X=300 on row N is deliberately rejected for a request at X=0 on that same row, so beginning-of-row text is not skipped.

@@ -1,3 +1,13 @@
+## 2026-11-14 — early-alpha dirty caret-band rendering validated (Actions #967 PASS)
+
+**Code branch:** `early-alpha`, commit [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf). **Workflow:** [Actions run #967](https://github.com/GraderGamer2/NekoEdit/actions/runs/43592103656) completed successfully.
+
+The conservative dirty-caret repaint passed the full CI workflow: ELF build/inspection, CLI smoke, glyph-cache reference equivalence, focused Wayland dirty-damage and dual-SHM tests, 11 MiB Open/Save coverage, XKB checks, X.Org importer checks, Compose-pack build, and nested GNOME Shell/Mutter Wayland integration. Compose and Linux x86-64 artifacts uploaded successfully.
+
+This is a changelog-only mirror on `main`; the application source and renderer implementation remain on `early-alpha`. The optimization reduces pixel writes and compositor damage for plain unselected arrow-key movement, but still traverses visible document layout and has no measured end-to-end latency claim. User-machine visual smoke testing and controlled performance measurements remain outstanding.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 **Branch:** `early-alpha` at [090cad8](https://github.com/GraderGamer2/NekoEdit/commit/090cad8f9c2e1621bda8ac07f43b31f95ae65fc4). Normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint with changelog-only mirrors; `optimization-early-alpha` remains isolated.

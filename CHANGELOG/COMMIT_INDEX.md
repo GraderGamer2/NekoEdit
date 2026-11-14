@@ -1,3 +1,17 @@
+## 2026-11-14 — early-alpha dirty caret-band rendering validated (CI PASS #967)
+
+| Commit | Subject |
+|---|---|
+| [863196e](https://github.com/GraderGamer2/NekoEdit/commit/863196ef9bae96b6216b41315ba42871cbc9edac) | perf: add conservative dirty caret-band repaint |
+| [d682b6b](https://github.com/GraderGamer2/NekoEdit/commit/d682b6b547d9dd252b0d0f4e4830a8de2ea2a989) | test: accept dirty caret damage in held-key mock |
+| [b7eda36](https://github.com/GraderGamer2/NekoEdit/commit/b7eda36205316e244382fd675d8ec59e33c9d534) | test: inspect active SHM slot in caret assertions |
+| [52be775](https://github.com/GraderGamer2/NekoEdit/commit/52be775a96d2daf68ffa42fc54f7ff7ba1802792) | test: align dirty render fixture click position |
+| [a786d7b](https://github.com/GraderGamer2/NekoEdit/commit/a786d7b522126121bef8d0d60df940bd3fb8c1bf) | test: keep dirty fixture click within caret assertion range |
+
+Actions #967 passed build/ELF inspection, CLI smoke, glyph-cache equivalence, the focused dirty-render Wayland mock, dual-SHM tests, 11 MiB Open/Save, XKB checks, X.Org importer verification, Compose-pack build and nested GNOME Shell/Mutter integration. This entry tracks development on `early-alpha`; it does not mean application source was merged to `main`.
+
+---
+
 ## 2026-11-14 — wrapped visual-row-to-byte checkpoints (CI PASS #961)
 
 | Commit | Subject |
