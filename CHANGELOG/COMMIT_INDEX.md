@@ -1,3 +1,17 @@
+## 2026-11-14 — printable-ASCII grapheme fast path (CI PASS #951)
+
+| Commit | Subject |
+|---|---|
+| [6e1c30a69395](https://github.com/GraderGamer2/NekoEdit/commit/6e1c30a693957bce667368d20dd72d1b51c504b4) | perf: fast-path printable ASCII grapheme boundaries |
+| [a8884220ed9d](https://github.com/GraderGamer2/NekoEdit/commit/a8884220ed9d7fd0943b83868319a11f06019efc) | fix: preserve ASCII base plus combining grapheme clusters |
+| [0318e4324025](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00) | test: include ASCII grapheme run in fixture document |
+
+Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps. The Wayland mock verifies forward/reverse navigation across each appended printable ASCII byte while preserving combining marks, ZWJ sequences, other Unicode grapheme cases, and atomic CRLF deletion. The three 11 MiB Open-to-first-redraw samples were 124.9, 125.8, and 126.7 ms; no before/after performance comparison was run.
+
+The separate `optimization-early-alpha` branch and normal `-O2` build configuration are unchanged.
+
+---
+
 ## 2026-11-14 — ELF size comparison: O2, Os, stripping, and section GC (CI PASS #927)
 
 | Commit | Subject |

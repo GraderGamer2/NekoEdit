@@ -1,24 +1,16 @@
-## Latest handoff (2026-11-13 — hash-indexed glyph cache measured, CI PASS #912)
+## Latest handoff (2026-11-14 — printable-ASCII grapheme fast path; CI PASS #951)
 
-Continue development on `early-alpha`; the validated branch head is [733623e](https://github.com/GraderGamer2/NekoEdit/commit/733623ecb61fe4e27c953554025febb9cf688817). Keep `main` at its stable source checkpoint [468960c](https://github.com/GraderGamer2/NekoEdit/commit/468960c776e1bada968fd92468fee368f1e64308); this handoff mirrors only the `CHANGELOG/` documentation and does not merge application source.
+Continue development on `early-alpha` at [0318e43](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00); `main` remains at its stable source checkpoint [5ce2c3f](https://github.com/GraderGamer2/NekoEdit/commit/5ce2c3fe546ee11dd16188906b55783600cea12b). This handoff mirrors project history on `main` without merging application source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-Actions [Build and test #912](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253) passed the full build and validation workflow, including both benchmark variants, CLI tests, the full Wayland protocol mock, executable inspection, native `us(intl)` XKB parser, pinned X.Org importer, Compose locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+`doc_grapheme_next` now bypasses UTF-8 scalar decoding and grapheme-property range scans for printable ASCII when the next byte is ASCII or the current byte is at EOF. A non-ASCII successor goes through the full Unicode path, preserving ASCII-base combining sequences, ZWJ and SpacingMark joins. The existing C0/DEL and CRLF handling remains unchanged. The Wayland mock traverses an extended ASCII sentence in both directions alongside the Unicode 18.0 grapheme fixture.
 
-The font cache now uses a compact 64-bucket chained hash index for warm `(glyph_id, size)` hits while retaining the existing 128-slot LRU eviction policy on misses. A paired benchmark compiles the pre-hash linear-LRU reference and optimized implementation from the same source and flags, runs seven samples, and reports medians:
+Actions [#951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps, including freestanding build, CLI tests, renderer-cache comparison, full Wayland mock with 11 MiB Open/Save, XKB and pinned importer checks, Compose locale generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
 
-| Synthetic measurement | Linear reference | Hash-indexed |
-|---|---:|---:|
-| Cold rasterization | 19,221.5 ns/glyph | 19,057.2 ns/glyph |
-| Warm 128-glyph draw | 385.9 ns/draw | 299.9 ns/draw |
+Artifacts: Linux x86-64 [147,031 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106073579); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106337951).
 
-This is a 22.3% reduction in the measured warm cache-draw median. Both modes generated the same framebuffer checksum, and hit reuse, collisions, full LRU replacement, cache clearing, and the full app regression suite passed. These results measure a synthetic eight-point outline workload, not total application or full-frame performance.
+The 11 MiB Open-to-first-presented-redraw mock measured 124.9, 125.8 and 126.7 ms. No pre-change baseline exists, so this is not a claimed speedup. Next, profile real installed-font rendering, representative full-frame redraws, editing and scrolling before selecting a broader hot path. Live desktop profiling on the Debian session remains separate.
 
-Artifacts from #912:
-- Linux x86-64: 144,104 bytes, [artifact 14044857971](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14044857971).
-- Compose locales: 120,536 bytes, [artifact 14045672618](https://github.com/GraderGamer2/NekoEdit/actions/runs/43439822253/artifacts/14045672618).
-Both expire on 2026-11-14 at 21:10 WIB.
-
-Next engineering target: add reproducible measurements using real installed-font contours and representative whole-frame/document workloads. Profile the assembly rectangle path, layout/index path, and full `render_surface()` separately before optimizing another hot path.
+---
 
 ---
 

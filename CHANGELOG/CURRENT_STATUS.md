@@ -1,3 +1,23 @@
+## 2026-11-14 — fast-path printable ASCII grapheme boundaries (CI PASS #951)
+
+**Branch:** `early-alpha`; normal development remains at `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
+
+Added a conservative fast path to `doc_grapheme_next` for printable ASCII bytes (0x20–0x7E). When the current byte is printable ASCII and the following byte is also ASCII—or the current byte is at EOF—the next byte is a known grapheme boundary, so the routine returns the one-byte advance without UTF-8 scalar decoding and Unicode property-range scans. If the next byte has its high bit set, the routine falls back to the full Unicode path. This fallback is essential because an ASCII base may join a following combining mark, ZWJ, or spacing mark under UAX #29. C0 controls, DEL, CR/LF and all non-ASCII cases at the current position retain the original path; CRLF and multi-scalar clusters remain atomic.
+
+Extended the Wayland grapheme regression with a consecutive printable-ASCII sentence. The same test moves the caret Right and Left across every appended character, while retaining combining sequences, emoji modifiers, a ZWJ family, regional-indicator pairing, Hangul, Indic conjuncts, Prepend, SpacingMark, CRLF, pointer hit-testing, and whole-grapheme Backspace/Delete checks. The on-disk fixture and in-test expected cluster list contain identical bytes.
+
+**Validation:** [Actions #951](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768) passed all 17 workflow steps: freestanding build and ELF verification, CLI smoke tests, renderer-cache comparison, complete Wayland protocol mock (including the new grapheme case and 11 MiB Open/Save), executable inspection, native `us(intl)` XKB test, pinned X.Org importer, Compose locale-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+**Measured context:** the existing 11 MiB / 89,414-line Open-to-first-presented-redraw mock reported 124.9, 125.8, and 126.7 ms across three runs. These are CI mock-compositor measurements, not local desktop timings, and no pre-change baseline was collected; they are not evidence of a speedup from this patch.
+
+Implementation: [6e1c30a](https://github.com/GraderGamer2/NekoEdit/commit/6e1c30a693957bce667368d20dd72d1b51c504b4); Unicode correctness guard: [a888422](https://github.com/GraderGamer2/NekoEdit/commit/a8884220ed9d7fd0943b83868319a11f06019efc); fixture correction: [0318e43](https://github.com/GraderGamer2/NekoEdit/commit/0318e4324025755fa29bf5fcee62da1d61a9ce00).
+
+Artifacts: [Linux x86-64 binary (147,031 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106073579); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43575768768/artifacts/14106337951).
+
+**Next:** build representative performance measurements for real installed-font contours, full-frame redraw, editing, and scrolling. Keep the existing `-O2` development default until those workloads are measured against a valid baseline.
+
+---
+
 ## 2026-11-14 — measure O2/Os stripping and dead-section removal (CI PASS #927)
 
 Branch optimization-early-alpha contains the completed eight-profile O2/Os size matrix. [Actions #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 workflow steps. The corrected GNU size -A report separates executable file bytes, .text, .rodata, .data, and .bss.
