@@ -9149,11 +9149,15 @@ xkb_symbols "nekoedit-sparse" {
 
                 key_step(1002, 30, "insert a")
                 if initial_preferred_buffer_scale > 1 or initial_preferred_buffer_transform != 0 or fractional_scale_test:
-                    a_pixel = document_pixel(17, 92)
+                    # Fractional raster scales move the exact physical sample
+                    # point; inspect the first glyph cell in logical space
+                    # rather than assuming its 1x pixel grid.
+                    a_visible = antialiased_ink_present(16, 88, 8, 18)
                 else:
                     a_pixel = struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0]
-                if a_pixel != 0xFFD8DEE9:
-                    raise AssertionError(f"first key did not render an A glyph: {hex(a_pixel)}")
+                    a_visible = a_pixel == 0xFFD8DEE9
+                if not a_visible:
+                    raise AssertionError("first key did not render an A glyph in its logical cell")
                 if initial_preferred_buffer_scale > 1 or initial_preferred_buffer_transform != 0 or fractional_scale_test:
                     observations.append(
                         "integer/fractional scale plus buffer transforms preserved logical pointer hit-testing, caret placement, and glyph rasterization"
