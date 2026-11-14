@@ -1,3 +1,24 @@
+## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
+
+Wrap Lines OFF previously still made the editor walk a long logical line from its first byte to locate the horizontal viewport, and the glyph loop could continue consuming the hidden suffix after reaching the right edge.
+
+Added a stable per-line identity array parallel to the existing line-index records and a fixed 1,024-slot horizontal checkpoint cache. A line's checkpoints are keyed by its stable ID rather than its absolute document byte start, so unrelated lines retain their cache identity when earlier text shifts offsets. Ordinary edits and newline split/merge operations assign fresh IDs to affected lines; rebuild/reflow advances the cache epoch. The cache is populated while unwrapped line metrics are measured.
+
+The indexed visual-to-byte mapper now uses a nearby horizontal checkpoint. The main glyph painter starts at the mapped horizontal viewport and, when it reaches the right edge, jumps to the next logical line at the same horizontal offset rather than traversing the unseen suffix.
+
+Regression coverage:
+- A 4 MiB one-line document is opened with wrapping, switched to Wrap Lines OFF, moved to End, and scrolled horizontally in both directions. Each checked glyph-paint pass remains within a 4 KiB byte span.
+- Existing line-index mutation coverage now asserts stable IDs are nonzero and unique after ordinary insertion/deletion, Enter split, and Backspace merge.
+- The 11 MiB / 89,414-line Open/Save scenario and its 1,935-byte visible glyph/selection paint assertions continue to pass.
+
+The first build attempt (#955) correctly rejected nonzero initializers in `.bss`; the IDs/epoch were changed to zero-initialized storage with runtime initialization. Actions [#956](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865) then passed all 17 workflow steps, including the full Wayland mock and nested GNOME Shell/Mutter integration.
+
+Artifacts: Linux x86-64 [148,575 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14107887437); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14108071561).
+
+No before/after redraw benchmark was collected. Caret-to-pixel conversion on very long lines and sparse mapping within a single very long wrapped logical line remain next optimization targets; the full-frame software surface is still repainted.
+
+---
+
 ## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
 
 The document glyph renderer already maps `doc_view_top_row` through the Fenwick index and stops when it reaches the bottom of the visible document region. Added test-only byte-range counters to make that property observable after a large scroll.

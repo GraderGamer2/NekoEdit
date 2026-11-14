@@ -1,25 +1,26 @@
-## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
+## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
 
-**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
+**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. `main` remains the stable application-source checkpoint, and `optimization-early-alpha` remains isolated.
 
-The main glyph painter already starts from the indexed `doc_view_top_row` and stops at the bottom of the document viewport. Added regression instrumentation to verify that it does not walk from byte zero after a large scrollbar jump. More importantly, two other paint passes were doing work proportional to the document or selection size:
+This milestone closes the main horizontal-painting gap for long logical lines when **Wrap Lines is OFF**:
 
-- Wrapped selection painting previously scanned from the beginning of the document on every redraw. It now resolves the first visible visual row and the first row below the viewport through the existing line/Fenwick index, then visits only the byte span between those offsets.
-- Find highlighting previously enumerated matches across the complete document on every redraw. Added `doc_find_match_bounded` and a viewport-aware range painter. Wrapped mode searches one contiguous visible byte span with query look-behind; no-wrap mode bounds match candidates to the visible horizontal interval of each visible row.
+- Added a parallel stable ID for each logical line and a fixed 1,024-slot (20 KiB) horizontal checkpoint cache. Cache entries retain the line ID, horizontal bucket, byte offset, and measured pixel position.
+- The line IDs move with the existing 16-byte line-index records. Editing a line, splitting it with Enter, or merging it with Backspace assigns fresh IDs to the affected line(s), so old glyph positions are not reused after edits. Full rebuild/reflow advances the cache epoch.
+- No-wrap viewport mapping can resume from a cached checkpoint near the requested horizontal pixel rather than always measuring from the logical line's first byte.
+- The main glyph painter starts at the mapped horizontal viewport and jumps directly to the next logical line once the right edge has been passed. It no longer traverses the hidden suffix of the current no-wrap line.
 
-The 11 MiB / 89,414-line Wayland regression now selects the entire document, jumps the scrollbar into the middle, and asserts that both the glyph renderer and selection painter visit a bounded visible byte range. The measured span was **1,935 bytes for glyphs and 1,935 bytes for selection**, rather than the 11,534,336-byte document. It then enters Find, fast-scrolls 4,096 visual rows, and verifies that Find's search span remains within the test's 16,384-byte safety bound. The full test also retains wheel, proportional thumb, scrollbar drag, and large-document Open/Save coverage.
+The Wayland mock now opens a **4 MiB single-line** document, disables Wrap Lines, moves to End, then scrolls horizontally left and right. It asserts that the glyph painter's traversed byte span stays within **4 KiB** on each checked repaint. The line-index mutation test also checks that stable line IDs remain nonzero and unique across ordinary insertion/deletion, newline split, and newline merge. The earlier 11 MiB multi-line test still verifies **1,935 bytes** of glyph painting and **1,935 bytes** of selection painting after a middle-of-document jump.
 
-**Validation:** [Actions #954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 workflow steps: freestanding build/ELF verification, CLI smoke tests, renderer-cache comparison, full Wayland protocol mock, executable inspection, native `us(intl)` keymap parsing, pinned X.Org importer verification, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+**Validation:** [Actions #956](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865) passed all 17 workflow steps: freestanding build/ELF checks, CLI smoke tests, glyph-cache comparison, full Wayland protocol mock, executable inspection, native `us(intl)` parsing, pinned X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and artifact uploads. The first attempt (#955) caught two nonzero initializers in `.bss`; those counters were changed to zero-initialized storage and the follow-up build passed.
 
-**Measured context:** the existing 11 MiB Open-to-first-presented-redraw samples were 119.2, 118.2, and 117.3 ms. No matched pre-change timing baseline was collected, so these values are workload context, not evidence of a speedup. The byte-span assertion is the direct validation of viewport-bounded painting.
+**Artifacts:** [Linux x86-64 binary (148,575 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14107887437); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14108071561).
 
-**Known limitation:** the common soft-wrapped large-document path is viewport-bounded. Very long logical lines in **Wrap Lines OFF** mode still need a sparse horizontal glyph-advance index: the current row-to-pixel mapping and main glyph traversal can walk hidden horizontal prefixes/suffixes. The next optimization should add bounded per-line horizontal checkpoints and update them safely after edits and font-size changes. Full-frame software-surface background repainting is also unchanged; this work bounds document-content traversal, not partial-buffer damage.
+**Remaining performance work:** caret-to-pixel mapping still scans within a long logical line, and a very long single logical line in Wrap Lines ON mode still needs sparse visual-row checkpoints. The cache is a bounded direct-mapped working set, not a full persistent per-line glyph index. Full-frame software-surface repainting is unchanged. No before/after latency benchmark was collected, so the verified claim is the bounded glyph traversal—not a measured frame-rate multiplier.
 
-Implementation: [213ad8c](https://github.com/GraderGamer2/NekoEdit/commit/213ad8cc5364b46ba132779269c49445e7c7105c); regression instrumentation and visible-range assertion: [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263).
-
-Artifacts: [Linux x86-64 binary (147,612 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107002397); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107551738).
+Implementation: [deb9680](https://github.com/GraderGamer2/NekoEdit/commit/deb968026df279b1b11d3a60490802197e9eba6a); BSS initialization fix and 4 MiB / stable-ID regression coverage: [4f6acac](https://github.com/GraderGamer2/NekoEdit/commit/4f6acac6255e404d36d8ba95a775f1c0da3b856c).
 
 ---
+
 
 ## 2026-11-14 — fast-path printable ASCII reverse grapheme traversal (CI PASS #952)
 

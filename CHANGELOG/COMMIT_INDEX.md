@@ -1,3 +1,18 @@
+## 2026-11-14 — sparse horizontal checkpoints and bounded no-wrap painting (CI PASS #956)
+
+| Commit | Subject |
+|---|---|
+| [deb968026df2](https://github.com/GraderGamer2/NekoEdit/commit/deb968026df279b1b11d3a60490802197e9eba6a) | perf: cache horizontal glyph positions and bound no-wrap painting |
+| [4f6acac6255e](https://github.com/GraderGamer2/NekoEdit/commit/4f6acac6255e404d36d8ba95a775f1c0da3b856c) | test: verify bounded no-wrap rendering on multi-megabyte lines |
+
+A 4 MiB single-line Wayland fixture disables Wrap Lines, moves to End, and scrolls horizontally in both directions. The glyph-paint traversal stays within 4 KiB on each checked repaint. Stable line IDs are checked across ordinary edits and newline split/merge. Actions [#956](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865) passed all 17 workflow steps.
+
+Artifacts: Linux x86-64 [148,575 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14107887437); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43580042865/artifacts/14108071561).
+
+No before/after speed benchmark was collected. Caret-to-pixel mapping on very long lines and sparse row checkpoints for a single very long wrapped line remain open performance work.
+
+---
+
 ## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
 
 | Commit | Subject |
