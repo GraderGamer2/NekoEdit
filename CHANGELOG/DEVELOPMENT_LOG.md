@@ -1,3 +1,19 @@
+## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
+
+The rebuild already used `REPNE SCASB` when the gap was at EOF, but an internal gap sent both newline counting and line-boundary discovery through byte-at-a-time `doc_byte_at` loops. The edited-document path now scans the physical prefix and suffix as independent contiguous spans.
+
+The count pass initializes the prefix pointer at `doc_buffer` and searches exactly `doc_gap_start` bytes, then starts the suffix at `doc_buffer + doc_gap_end` and searches exactly `doc_length - doc_gap_start` bytes. This preserves logical byte order and counts LF characters on both sides of the gap.
+
+The record-fill pass carries the current logical line start and logical offset between spans. Each found LF closes a record using its logical end offset; if no LF occurs before the gap, the same record continues into the suffix. The final unterminated or empty line is retained as before. `doc_line_index_measure_rows`, stable-ID assignment, record layout, and Fenwick-tree construction are unchanged.
+
+The new mock cases deliberately invalidate the current index after an ordinary insertion and after Enter, then trigger rebuilding at two exact gap placements: inside a logical line, and immediately after the inserted LF. The test checks that the rebuilt byte spans, row counts, unique line IDs and Fenwick nodes match the expected logical document. Actions [#984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180) passed the complete 17-step workflow, including the full Wayland mock, 11 MiB Open/Save and nested GNOME Shell/Mutter/IBus integration.
+
+The ELF reports text 237,686 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,150 bytes (78 bytes larger than #983); the Compose artifact is 120,536 bytes. No speed improvement is claimed: no before/after end-to-end timing was collected. The remaining visual-row measurement path still uses its existing grapheme and glyph-width calculations.
+
+Implementation commit: [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983).
+
+---
+
 ## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
 
 Performed a source/build audit across the assembly backends, C support modules and Makefile, then applied conservative improvements to measured or visibly repeated work.

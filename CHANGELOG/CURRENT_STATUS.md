@@ -1,3 +1,29 @@
+## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
+
+**Branch/head:** `early-alpha` at [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983). **Workflow:** [Actions #984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180) passed all 17 steps.
+
+### Source changes
+
+- `src/backend/wayland.S`: retain the existing contiguous EOF-gap newline scan. When the gap is internal, count newlines with `REPNE SCASB` over the physical prefix and suffix rather than invoking `doc_byte_at` for every byte.
+- `src/backend/wayland.S`: fill line-index records by scanning those same two physical spans. Carry the logical line offset and line start across the span transition so a logical line crossing the gap is measured as one record.
+- The existing `doc_line_index_measure_rows` grapheme and pixel-width calculations are unchanged. The optimization targets newline discovery and record boundaries, not the visual-row measurement algorithm.
+
+### Regression coverage
+
+The Wayland mock now forces an index rebuild with the gap in the middle of a logical line and then with the gap immediately after LF. It validates the logical document bytes, line count, each record's byte span and visual-row count, unique stable IDs, and the byte/row Fenwick nodes. Existing ordinary insertion/deletion and newline split/merge checks remain active.
+
+### Validation
+
+Actions #984 passed all 17 steps: freestanding build and ELF checks; command-line and host tests; renderer equivalence; full Wayland protocol mock (including clipboard, dirty rendering, gap-aware line-index cases and 11 MiB Open/Save); native `us(intl)` XKB; pinned X.Org importer; Compose pack; nested GNOME Shell/Mutter and IBus; and both artifact uploads.
+
+ELF `size`: text **237,686**, data **64**, BSS **3,764,856** bytes. Executable artifact: **151,150 bytes** (the previous #983 artifact was 151,072 bytes); Compose pack: **120,536 bytes**. These figures are recorded for transparency, not as a claimed size improvement.
+
+No before/after end-to-end speed measurement was collected. Automated Mutter/IBus integration passed; this is not a manual test on the user's live GNOME session.
+
+Implementation: [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983).
+Workflow: [Actions #984](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180).
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180/artifacts/14130692207); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43638409180/artifacts/14131061717).
+
 ## 2026-11-15 — whole-tree low-level optimization pass (Actions #983 PASS)
 
 **Branch/head:** `early-alpha` at [cb2ebe5](https://github.com/GraderGamer2/NekoEdit/commit/cb2ebe5fd798e5989dcee608ea1518ebfa92cd53). **Workflow:** [Actions #983](https://github.com/GraderGamer2/NekoEdit/actions/runs/43636763115) passed all 17 steps.
