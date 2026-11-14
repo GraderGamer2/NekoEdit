@@ -1,14 +1,18 @@
-## Latest handoff (2026-11-14 — bidirectional printable-ASCII grapheme fast paths; CI PASS #952)
+## Latest handoff (2026-11-14 — viewport-bounded document painting; CI PASS #954)
 
-Continue development on `early-alpha` at [43190c1](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92); `main` remains at its stable source checkpoint [5ce2c3f](https://github.com/GraderGamer2/NekoEdit/commit/5ce2c3fe546ee11dd16188906b55783600cea12b). This handoff mirrors project history on `main` without merging application source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+Continue development on `early-alpha` at [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263); `main` remains at its stable application-source checkpoint [0f54ed5](https://github.com/GraderGamer2/NekoEdit/commit/0f54ed5c4f2eaa089b121a80e54c473ff8dbadb1). This commit mirrors project history only and does not merge application code. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-Both `doc_grapheme_next` and `doc_grapheme_prev` now have conservative printable-ASCII shortcuts. Forward traversal skips scalar decoding and Unicode property scans only when the next byte is ASCII or EOF; a high-bit successor takes the general path so ASCII-base combining, ZWJ and SpacingMark joins are retained. Reverse traversal skips the boundary scan only when the previous scalar and the byte before it are both printable ASCII. Controls, CR/LF and non-ASCII sequences use the existing general algorithm.
+Wrapped-document glyph painting is confirmed to start at the indexed visible row and stop at the bottom of the viewport. Selection painting now resolves visible byte bounds through the line/Fenwick index and scans only that span. Find highlighting uses bounded candidate search within the visible byte range (with look-behind for matches crossing the top edge); no-wrap uses per-visible-row horizontal candidate intervals.
 
-Actions [#952](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933) passed all 17 workflow steps, including the full Wayland mock, 11 MiB Open/Save, native XKB and X.Org importer checks, Compose locale build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+Actions [#954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 steps. In the 11 MiB / 89,414-line test, glyph and selection painting each visited 1,935 bytes after a middle scrollbar jump; Find remained within a 16,384-byte bound after a 4,096-row fast scroll.
 
-Artifacts: Linux x86-64 [147,056 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106089639); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43576391933/artifacts/14106995382).
+Artifacts: Linux x86-64 [147,612 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107002397); Compose packs [120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107551738).
 
-The 11 MiB Open-to-first-redraw mock measured 166.8–167.3 ms in #952. This does not measure the reverse-navigation path, and no controlled Left/Backspace before/after timing has been collected. Next, create separate repeatable workloads for real-font full-frame redraw, line/index traversal and backward/forward editing before making broader performance claims. Live desktop profiling remains separate.
+No pre-change open/redraw baseline exists; CI samples were 119.2–117.3 ms. Keep performance claims tied to the byte-span assertions, not those timings.
+
+**Next:** add sparse per-line horizontal glyph-advance checkpoints so Wrap Lines OFF can resolve pixel-to-byte positions without scanning hidden prefixes. The main no-wrap glyph pass also needs a matching right-edge stop. Checkpoint invalidation must cover edits, font switches, and font-size changes. Keep full-frame surface repaint separate from document traversal; no partial-buffer-damage redesign has been made.
+
+---
 
 ---
 

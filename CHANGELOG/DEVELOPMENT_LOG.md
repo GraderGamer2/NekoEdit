@@ -1,3 +1,21 @@
+## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
+
+The document glyph renderer already maps `doc_view_top_row` through the Fenwick index and stops when it reaches the bottom of the visible document region. Added test-only byte-range counters to make that property observable after a large scroll.
+
+Changed the expensive auxiliary paint passes:
+- Wrapped selection rendering maps the visible top row and the row immediately below the viewport to byte offsets, then scans only the visible selection span.
+- Find highlighting uses a new non-wrapping bounded byte-search helper and searches only the viewport's visible span, with enough look-behind to paint a match that begins just above the viewport. In no-wrap mode, candidate ranges are limited to each visible row's horizontal interval.
+
+The 11 MiB / 89,414-line Wayland scenario selects the full document and drags the scrollbar to the middle. It measured a 1,935-byte glyph-paint span and a 1,935-byte selection-paint span. It then enters Find and fast-scrolls 4,096 rows, asserting that the Find search range stays within 16,384 bytes. Actions [#954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 workflow steps, including Wayland, native XKB, importer checks, Compose generation, and GNOME Shell/Mutter integration.
+
+Open-to-first-redraw samples were 119.2, 118.2, and 117.3 ms. There is no matched before/after baseline, so these are recorded only as context.
+
+The remaining horizontal edge case is a very long logical line with Wrap Lines disabled. Mapping a horizontal pixel coordinate to a byte still scans from that logical line's start, and the glyph pass can visit a hidden suffix. A sparse per-line horizontal advance/checkpoint index is the next safe optimization; its invalidation/update rules must cover editing and font metric changes.
+
+Implementation: [213ad8c](https://github.com/GraderGamer2/NekoEdit/commit/213ad8cc5364b46ba132779269c49445e7c7105c); regression instrumentation: [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263).
+
+---
+
 ## 2026-11-14 — printable-ASCII reverse grapheme fast path (CI PASS #952)
 
 Added a guarded fast path to `doc_grapheme_prev`. Once the previous scalar start is known, the function can return it directly when both it and the immediately preceding byte are printable ASCII. This pair is guaranteed to be separated by a grapheme boundary, so the Unicode property/boundary scan is unnecessary. Controls (including CR/LF) and all non-ASCII cases keep the existing general path.

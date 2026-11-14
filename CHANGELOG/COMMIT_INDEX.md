@@ -1,3 +1,16 @@
+## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
+
+| Commit | Subject |
+|---|---|
+| [213ad8cc5364](https://github.com/GraderGamer2/NekoEdit/commit/213ad8cc5364b46ba132779269c49445e7c7105c) | perf: bound selection and find painting to visible viewport |
+| [ab34e2fe9f43](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263) | test: assert glyph renderer stays within visible document rows |
+
+The 11 MiB / 89,414-line Wayland regression verifies a 1,935-byte glyph-paint span and a 1,935-byte selection-paint span after a middle-of-document scrollbar jump. Find highlighting is checked against a 16,384-byte scan-span limit after a 4,096-row fast wheel scroll. Actions [#954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 workflow steps.
+
+No pre-change timing baseline was collected: 11 MiB Open-to-first-redraw samples were 119.2, 118.2 and 117.3 ms. Long horizontally scrolled lines with Wrap Lines disabled remain a future sparse-index optimization.
+
+---
+
 ## 2026-11-14 — printable-ASCII reverse grapheme fast path (CI PASS #952)
 
 - [43190c1e1c0e](https://github.com/GraderGamer2/NekoEdit/commit/43190c1e1c0e6893e6cc2ab453c3bf1bcf881c92) — `perf: fast-path adjacent printable ASCII grapheme reverse`
