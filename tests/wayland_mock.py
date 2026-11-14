@@ -1893,7 +1893,7 @@ def run(
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
                     or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or word_navigation_test or pointer_drag_test
-                    or line_navigation_test or find_replace_test
+                    or line_navigation_test or find_replace_test or dirty_render_test
                 ):
                     def document_pixel(logical_x: int, logical_y: int) -> int:
                         # Hit testing stays logical; sample the transformed physical buffer.
