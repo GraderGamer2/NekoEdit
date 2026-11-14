@@ -1,3 +1,9 @@
+## 2026-11-14 — dirty-render fixture click boundary correction
+
+Actions #966 passed the build, command-line smoke tests and rasterizer comparison, then reached the focused Wayland scenario. Its initial click landed at EOF for the 12-character fixture (caret column 12, x=112), one column beyond the existing generic non-empty-file pixel assertion's sampled columns 9–11. The fixture is now eleven characters, so the same click clamps to a caret position within the assertion's tested range. The focused scenario still moves to EOF explicitly before its repeated arrow-key and insertion checks. This is a test-fixture adjustment only; renderer source remains unchanged. Actions validation is pending.
+
+---
+
 ## 2026-11-14 — dirty-render click fixture length correction
 
 Actions #965 passed the build, command-line tests, rasterizer comparison, and the regular Wayland mock cases, including the two-buffer pool. The focused dirty-render scenario then stopped in the shared initial-click assertion before reaching its own navigation checks. The fixture had six bytes, while that generic non-empty-file assertion samples caret positions at columns 9–11; the observed caret at column 6 was correct for the file. Extend the fixture to twelve ASCII bytes so the initial click lands in the range the generic assertion checks. The subsequent test still explicitly moves the caret to EOF before exercising repeated Left/Right navigation and insertion. Renderer source is unchanged.

@@ -5,6 +5,20 @@
 | [863196e](https://github.com/GraderGamer2/NekoEdit/commit/863196ef9bae96b6216b41315ba42871cbc9edac) | perf: add conservative dirty caret-band repaint |
 | [d682b6b](https://github.com/GraderGamer2/NekoEdit/commit/d682b6b547d9dd252b0d0f4e4830a8de2ea2a989) | test: accept dirty caret damage in held-key mock |
 | [b7eda36](https://github.com/GraderGamer2/NekoEdit/commit/b7eda36205316e244382fd675d8ec59e33c9d534) | test: inspect active SHM slot in caret assertions |
+| [52be775](https://github.com/GraderGamer2/NekoEdit/commit/52be775a96d2daf68ffa42fc54f7ff7ba1802792) | test: align dirty render fixture click position |
+| pending | test: keep dirty fixture click within caret assertion range |
+
+The renderer uses per-SHM-slot snapshots to gate partial caret-row and footer repaint. The mock accepts narrow two-band damage for held Left navigation, allows one safe full repaint while warming the alternate slot, and reads pixel data from the attached buffer's pool offset. Actions #965/#966 passed build, command-line smoke and rasterizer comparison. The focused scenario's initial-click assertion samples columns 9–11; the twelve-character fixture used in #966 clamped the click to column 12, so the test fixture is reduced to eleven characters. The test then navigates to EOF explicitly before partial-render assertions.
+
+---
+
+## 2026-11-14 — dirty caret-band rendering and mock corrections (Actions pending)
+
+| Commit | Subject |
+|---|---|
+| [863196e](https://github.com/GraderGamer2/NekoEdit/commit/863196ef9bae96b6216b41315ba42871cbc9edac) | perf: add conservative dirty caret-band repaint |
+| [d682b6b](https://github.com/GraderGamer2/NekoEdit/commit/d682b6b547d9dd252b0d0f4e4830a8de2ea2a989) | test: accept dirty caret damage in held-key mock |
+| [b7eda36](https://github.com/GraderGamer2/NekoEdit/commit/b7eda36205316e244382fd675d8ec59e33c9d534) | test: inspect active SHM slot in caret assertions |
 | pending | test: align dirty-render fixture click position |
 
 The renderer uses per-SHM-slot snapshots to gate partial caret-row and footer repaint. The mock accepts narrow two-band damage for held Left navigation, allows one safe full repaint while warming the alternate slot, and reads pixel data from the attached buffer's pool offset. Actions #965 passed build, command-line smoke, rasterizer comparison, and the regular Wayland mock cases. The focused dirty-render test's shared click assertion expected columns 9–11 while its six-character fixture correctly placed the caret at column 6; the fixture now uses twelve characters and still explicitly moves to EOF before the dirty-render checks. The next Actions run is pending.

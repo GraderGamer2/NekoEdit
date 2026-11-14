@@ -1,3 +1,9 @@
+## 2026-11-14 — dirty-render fixture boundary correction (Actions pending)
+
+Actions #965 revealed that a six-character fixture placed the initial-click caret at column 6, outside the generic non-empty-file assertion's sampled columns 9–11. Commit `52be775` extended the fixture to twelve characters, but Actions #966 showed that the pointer click clamps to EOF at column 12 (x=112), just beyond the same assertion. The fixture is now eleven characters, placing the clamped caret within columns 9–11. The focused test continues to navigate explicitly to EOF before checking dirty Left/Right damage and edit fallback. Build, CLI smoke and rasterizer comparison passed in #966; the new Wayland mock run is pending. Renderer source is unchanged.
+
+---
+
 ## 2026-11-14 — dirty-render fixture correction (Actions pending)
 
 Actions #965 passed ELF build, command-line smoke tests, rasterizer reference checks, and the ordinary Wayland protocol cases, including keyboard navigation, repeat, scrolling, selection, and dual-SHM-buffer handling. It failed only at the focused dirty-render scenario's generic initial-click assertion: its six-byte fixture correctly placed the caret at column 6, but that assertion samples columns 9–11 for non-empty files. The test fixture is extended to twelve characters, matching the existing assertion's expected click area. Its next step still moves to EOF explicitly before the dirty-caret sequence. Renderer source is unchanged. Actions for this correction are pending; GNOME/Mutter and measured editor-latency validation remain outstanding.
