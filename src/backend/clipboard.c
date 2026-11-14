@@ -100,6 +100,7 @@ extern void history_commit_action(void);
 static const char manager_interface[] = "wl_data_device_manager";
 static const char mime_utf8[] = "text/plain;charset=utf-8";
 static const char mime_plain[] = "text/plain";
+static const char mime_utf8_x11[] = "UTF8_STRING";
 
 static uint32_t manager_object;
 static uint32_t device_object;
@@ -396,14 +397,33 @@ static int start_receive(uint32_t offer)
         return 0;
     if (selected_mimes & 1u)
         mime = mime_utf8;
+    else if (selected_mimes & 4u)
+        mime = mime_utf8_x11;
     else if (selected_mimes & 2u)
         mime = mime_plain;
     else
         return 0;
-    result = syscall6(SYS_pipe2, (long)pipe_fds, O_NONBLOCK | O_CLOEXEC,
+    /* The write end belongs to the clipboard provider. Keep it blocking:
+     * several native providers perform a straight write() loop and do not
+     * expect EAGAIN from the descriptor supplied by wl_data_offer.receive.
+     * Only our own read end needs O_NONBLOCK for the event-loop poll path. */
+    result = syscall6(SYS_pipe2, (long)pipe_fds, O_CLOEXEC,
                       0, 0, 0, 0);
     if (is_error(result))
         return 0;
+    result = syscall6(SYS_fcntl, pipe_fds[0], F_GETFL, 0, 0, 0, 0);
+    if (is_error(result)) {
+        close_fd(pipe_fds[0]);
+        close_fd(pipe_fds[1]);
+        return 0;
+    }
+    result = syscall6(SYS_fcntl, pipe_fds[0], F_SETFL,
+                      result | O_NONBLOCK, 0, 0, 0);
+    if (is_error(result)) {
+        close_fd(pipe_fds[0]);
+        close_fd(pipe_fds[1]);
+        return 0;
+    }
     result = map_memory(RECEIVE_INITIAL);
     if (is_error(result)) {
         close_fd(pipe_fds[0]);
@@ -617,6 +637,8 @@ int clipboard_handle_event(uint32_t object_id, uint32_t opcode,
             return 1;
         if (equal_mime(payload + 4, mime_utf8, length))
             pending_mimes |= 1u;
+        else if (equal_mime(payload + 4, mime_utf8_x11, length))
+            pending_mimes |= 4u;
         else if (equal_mime(payload + 4, mime_plain, length))
             pending_mimes |= 2u;
         if (selected_offer == pending_offer)

@@ -81,7 +81,6 @@
 .equ REPEAT_DEFAULT_DELAY_MS, 300
 .equ REPEAT_DEFAULT_RATE, 30
 .equ REPEAT_NS_PER_SECOND, 1000000000
-.equ REPEAT_MAX_RATE, 1000
 .equ DOC_INITIAL_CAPACITY, 65536
 .equ DOC_MAX_CAPACITY, 0x40000000
 .equ DOC_INDEX_INITIAL_LINES, 256
@@ -5331,7 +5330,6 @@ recv_msg_control:      .zero 64
 .extern xkb_reset_keymap
 .extern xkb_lookup_ascii
 .extern xkb_lookup_consumed_modifiers
-.extern xkb_key_repeats
 .extern xkb_key_is_level_three_modifier
 .extern xkb_level_three_mask
 .extern xkb_num_lock_mask
@@ -7308,31 +7306,22 @@ wayland_main:
 .keyboard_repeat_info:
     cmp dword ptr [rip + last_size], 8
     jb .event_loop
-    # wl_keyboard.repeat_info(rate, delay). Negative values violate the
-    # protocol; a zero rate disables client-side repetition.
+    # wl_keyboard.repeat_info(rate, delay). Validate both wire values, use
+    # the compositor's initial delay, and keep NekoEdit's requested 30 Hz rate.
+    # This fixed application rate intentionally overrides compositor rate=0
+    # or other rates; modifier/lock keys remain excluded by the key filter.
     mov eax, dword ptr [rip + event_payload]
     test eax, eax
     js .protocol_error
     mov edx, dword ptr [rip + event_payload + 4]
     test edx, edx
     js .protocol_error
-    # Defend the timerfd path against pathological rates while preserving
-    # practical compositor settings (the normal desktop range is far lower).
-    cmp eax, REPEAT_MAX_RATE
-    jbe .Lneko_repeat_rate_capped
-    mov eax, REPEAT_MAX_RATE
-.Lneko_repeat_rate_capped:
-    mov dword ptr [rip + repeat_rate], eax
+    mov dword ptr [rip + repeat_rate], REPEAT_DEFAULT_RATE
     mov dword ptr [rip + repeat_delay_ms], edx
-    test eax, eax
-    jnz .Lneko_repeat_info_reconfigure
-    call repeat_cancel
-    jmp .event_loop
-.Lneko_repeat_info_reconfigure:
     mov eax, dword ptr [rip + repeat_keycode]
     test eax, eax
     jz .event_loop
-    # A changed rate/delay takes effect for the currently held key too.
+    # A changed compositor delay takes effect for the currently held key.
     call repeat_start_if_supported
     jmp .event_loop
 
@@ -7525,16 +7514,11 @@ wayland_main:
     mov eax, dword ptr [rip + shift_physical_down]
     mov dword ptr [rip + shift_down], eax
 .Lkeyboard_key_modifiers_ready:
+    # Repeat every ordinary key, including editing and control keys whose XKB
+    # map says repeat=False. Modifier/lock/Compose exclusions are centralized
+    # in repeat_start_if_supported; Ctrl shortcuts remain single-shot.
     cmp dword ptr [rip + ctrl_down], 0
     jne .keyboard_key_no_repeat
-    mov edi, dword ptr [rip + event_payload + 8]
-    call xkb_key_repeats
-    test eax, eax
-    jnz .keyboard_key_repeat_allowed
-    # A non-repeat key must not leave a previous key's timer active.
-    call repeat_cancel
-    jmp .keyboard_key_no_repeat
-.keyboard_key_repeat_allowed:
     mov eax, dword ptr [rip + event_payload + 8]
     call repeat_start_if_supported
 .keyboard_key_no_repeat:

@@ -5964,6 +5964,10 @@ xkb_symbols "nekoedit-sparse" {
                             + repr(paste_request[3])
                         )
                     paste_fd = paste_request[3][0]
+                    if not os.get_blocking(paste_fd):
+                        raise AssertionError(
+                            "clipboard provider received a nonblocking writer FD"
+                        )
                     pasted = b"pasted from another Wayland client\n"
                     try:
                         os.write(paste_fd, pasted)
@@ -6006,10 +6010,20 @@ xkb_symbols "nekoedit-sparse" {
                     if read_document_state()["doc_contents"] != b"":
                         raise AssertionError("could not clear the small paste before the large-paste test")
 
-                    clipboard_combo(2000, 47, "Ctrl+V 10 MiB clipboard paste", redraw=False)
+                    # Exercise the GTK3/X11 compatibility MIME commonly
+                    # exposed by legacy text editors when copying over Wayland.
+                    large_external_offer = 0xFF000021
+                    client.sendall(
+                        wire_message(18, 0, struct.pack("<I", large_external_offer))
+                        + wire_message(
+                            large_external_offer, 0, clipboard_string("UTF8_STRING")
+                        )
+                        + wire_message(18, 5, struct.pack("<I", large_external_offer))
+                    )
+                    clipboard_combo(2000, 47, "Ctrl+V 10 MiB UTF8_STRING clipboard paste", redraw=False)
                     large_paste_request = recv_wayland_message(client)
                     if large_paste_request[:3] != (
-                        external_offer, 1, clipboard_string("text/plain;charset=utf-8")
+                        large_external_offer, 1, clipboard_string("UTF8_STRING")
                     ) or len(large_paste_request[3]) != 1:
                         raise AssertionError(
                             "large Ctrl+V did not request UTF-8 clipboard bytes with one pipe FD: "
@@ -6017,6 +6031,10 @@ xkb_symbols "nekoedit-sparse" {
                             + repr(large_paste_request[3])
                         )
                     large_paste_fd = large_paste_request[3][0]
+                    if not os.get_blocking(large_paste_fd):
+                        raise AssertionError(
+                            "10 MiB clipboard provider received a nonblocking writer FD"
+                        )
                     large_line = (b"clipboard bulk paste 0123456789abcdef" * 4) + b"\n"
                     large_size = 10 * 1024 * 1024
                     large_pasted = (
@@ -6025,20 +6043,12 @@ xkb_symbols "nekoedit-sparse" {
                     large_paste_started = time.monotonic()
                     written = 0
                     try:
+                        # A blocking provider write mirrors GTK's synchronous
+                        # wl_data_source.send path and catches O_NONBLOCK leakage.
                         while written < len(large_pasted):
-                            try:
-                                amount = os.write(
-                                    large_paste_fd, large_pasted[written:written + 65536]
-                                )
-                            except BlockingIOError:
-                                _readable, writable, _exceptional = select.select(
-                                    [], [large_paste_fd], [], 5
-                                )
-                                if not writable:
-                                    raise AssertionError(
-                                        "large clipboard pipe remained non-writable"
-                                    )
-                                continue
+                            amount = os.write(
+                                large_paste_fd, large_pasted[written:written + 65536]
+                            )
                             if amount <= 0:
                                 raise AssertionError("large clipboard pipe stopped accepting data")
                             written += amount
@@ -7701,7 +7711,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
 
                     def check_key_repeat_policy(
-                        keycode: int, serial: int, should_repeat: bool, label: str
+                        keycode: int, serial: int, label: str
                     ) -> None:
                         before_cursor = child_u32("doc_cursor")
                         client.sendall(
@@ -7714,43 +7724,38 @@ xkb_symbols "nekoedit-sparse" {
                             "doc_cursor", before_cursor + 1,
                             label + " initial symbol insertion",
                         )
-                        if should_repeat:
-                            wait_child_u32(
-                                "repeat_keycode", keycode,
-                                label + " starts the XKB-permitted repeat timer",
+                        # XKB repeat=False is advisory for ordinary editing keys;
+                        # NekoEdit repeats every non-modifier key at a fixed 30 Hz.
+                        wait_child_u32(
+                            "repeat_keycode", keycode,
+                            label + " starts the application repeat timer",
+                        )
+                        client.sendall(
+                            wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 180))
+                        )
+                        if (
+                            child_u32("repeat_rate") != 30
+                            or child_u32("repeat_delay_ms") != 180
+                        ):
+                            raise AssertionError(
+                                label + " did not retain 30 Hz while applying compositor delay: "
+                                + repr({
+                                    "repeat_rate": child_u32("repeat_rate"),
+                                    "repeat_delay_ms": child_u32("repeat_delay_ms"),
+                                })
                             )
-                            # Reconfigure an already-held repeat key. The client
-                            # must restart its timer with the compositor's new delay.
-                            client.sendall(
-                                wire_message(keyboard_object_id, 5, struct.pack("<ii", 10, 180))
+                        repeat_deadline = time.monotonic() + 1.5
+                        while (
+                            child_u32("doc_cursor") <= before_cursor + 1
+                            and time.monotonic() < repeat_deadline
+                        ):
+                            time.sleep(0.005)
+                        if child_u32("doc_cursor") <= before_cursor + 1:
+                            raise AssertionError(
+                                label + " did not produce a repeated editing action"
                             )
-                            repeat_deadline = time.monotonic() + 1.5
-                            while (
-                                child_u32("doc_cursor") <= before_cursor + 1
-                                and time.monotonic() < repeat_deadline
-                            ):
-                                time.sleep(0.005)
-                            if child_u32("doc_cursor") <= before_cursor + 1:
-                                raise AssertionError(
-                                    label + " was marked repeatable but no repeated edit arrived"
-                                )
-                            workflow_redraw(label + " repeated key")
-                            client.sendall(buffer_release_message())
-                        else:
-                            if child_u32("repeat_keycode") != 0:
-                                raise AssertionError(
-                                    label + " incorrectly started a repeat timer: "
-                                    + str(child_u32("repeat_keycode"))
-                                )
-                            # The compositor's test policy is 180 ms before
-                            # repeat. Hold beyond that delay and verify the
-                            # repeat-disabled key produced only its first symbol.
-                            time.sleep(0.4)
-                            if child_u32("doc_cursor") != before_cursor + 1:
-                                raise AssertionError(
-                                    label + " repeated despite XKB repeat=False: "
-                                    + str(child_u32("doc_cursor"))
-                                )
+                        workflow_redraw(label + " repeated key")
+                        client.sendall(buffer_release_message())
                         client.sendall(
                             wire_message(keyboard_object_id, 3,
                                 struct.pack("<IIII", serial + 1, serial + 1, keycode, 0),
@@ -7761,36 +7766,35 @@ xkb_symbols "nekoedit-sparse" {
                             "repeat_keycode", 0, label + " key release cancels repeat"
                         )
 
-                    # These keycodes are mapped in the custom fixture:
-                    # RPT0 inherits interpret.repeat=False (Mod1),
-                    # RPT1 overrides it to True (Mod2),
-                    # RPT2 explicitly overrides compat True with key repeat=False,
-                    # and RPT3 explicitly overrides the default False with True.
-                    check_key_repeat_policy(202, 1320, False, "RPT0 inherited compatibility repeat=False")
-                    check_key_repeat_policy(203, 1330, True, "RPT1 compatibility repeat=True")
-                    check_key_repeat_policy(204, 1340, False, "RPT2 explicit key repeat=False")
-                    check_key_repeat_policy(205, 1350, True, "RPT3 explicit key repeat=True")
+                    # The parser still records these XKB distinctions, but the
+                    # editor's interaction policy repeats every ordinary key,
+                    # including keys explicitly marked repeat=False.
+                    check_key_repeat_policy(202, 1320, "RPT0 inherited compatibility repeat=False")
+                    check_key_repeat_policy(203, 1330, "RPT1 compatibility repeat=True")
+                    check_key_repeat_policy(204, 1340, "RPT2 explicit key repeat=False")
+                    check_key_repeat_policy(205, 1350, "RPT3 explicit key repeat=True")
+                    # Return/Enter is one of the editor's editing commands and
+                    # must repeat through the same timer as ordinary symbols.
+                    check_key_repeat_policy(28, 1370, "Return/Enter key")
 
-                    # RPT4 is a defined keycode with no Group1/Level1 symbol.
-                    # The fallback interpretation therefore must not enable it.
+                    # RPT4 has no Group1/Level1 symbol, so repeats do not edit
+                    # text, but the ordinary key still receives the timer.
                     before_symbol_less_cursor = child_u32("doc_cursor")
                     client.sendall(
-                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1360, 1360, 206, 1))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1380, 1380, 206, 1))
                     )
-                    wait_child_u32("keyboard_serial", 1360, "symbol-less RPT4 keydown")
+                    wait_child_u32("keyboard_serial", 1380, "symbol-less RPT4 keydown")
+                    wait_child_u32("repeat_keycode", 206, "symbol-less RPT4 starts repeat timer")
+                    if child_u32("repeat_rate") != 30:
+                        raise AssertionError("symbol-less RPT4 did not use the fixed 30 Hz repeat rate")
                     time.sleep(0.4)
-                    if (
-                        child_u32("repeat_keycode") != 0
-                        or child_u32("doc_cursor") != before_symbol_less_cursor
-                    ):
-                        raise AssertionError(
-                            "symbol-less RPT4 unexpectedly inserted text or started repeat"
-                        )
+                    if child_u32("doc_cursor") != before_symbol_less_cursor:
+                        raise AssertionError("symbol-less RPT4 unexpectedly inserted text")
                     client.sendall(
-                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1361, 1361, 206, 0))
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1381, 1381, 206, 0))
                         + buffer_release_message()
                     )
-                    wait_child_u32("keyboard_serial", 1361, "symbol-less RPT4 keyup")
+                    wait_child_u32("keyboard_serial", 1381, "symbol-less RPT4 keyup")
                     wait_child_u32("repeat_keycode", 0, "symbol-less RPT4 release")
 
                     client.sendall(wire_message(10, 1))
@@ -10351,8 +10355,8 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
                 # Hold Left: the initial press acts immediately, then repeat
-                # begins after the compositor-specified delay and continues at
-                # roughly 30 Hz. Snapshot each rendered frame before releasing
+                # begins after the compositor delay and continues at exactly
+                # the application's configured 30 ticks per second. Snapshot each rendered frame before releasing
                 # the buffer, so a queued repeat redraw cannot overwrite it.
                 repeat_started = time.monotonic()
                 client.sendall(
@@ -10388,7 +10392,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 # Backspace is repeatable too: after its immediate deletion,
                 # the held key should delete the preceding character again.
-                expected_repeat_rate = 10 if advertised_seat_version >= 4 else 30
+                expected_repeat_rate = 30
                 expected_repeat_delay_ms = 180 if advertised_seat_version >= 4 else 300
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
@@ -10496,7 +10500,7 @@ xkb_symbols "nekoedit-sparse" {
                 )
 
                 observations.append(
-                    "keyboard auto-repeat used the compositor/fallback delay and repeated Left, Backspace, and Delete while held"
+                    "30 Hz auto-repeat repeated Left, Backspace, Delete, and Enter while held"
                 )
 
                 # Insert enough characters to pass the 95-cell line width.
