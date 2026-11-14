@@ -17,6 +17,14 @@ The density is applied at the common renderer/input boundaries:
 
 Protocol-facing geometry deliberately remains in compositor coordinates: buffer allocation/stride, `wp_viewport` destination, and Wayland damage use actual surface dimensions. Buffer scale/transform selection and release-safe buffer generation remain independent from application density.
 
+### Follow-up after Wayland mock failure in Actions #937
+
+Actions #937 reached the file-workflow interactive resize case after the restore-button coordinate was corrected. The failure was not a compositor configure failure: the child state showed surface 720×480, buffer 720×480, stride 2880, and UI density 108/120, which correctly derives virtual layout 800×533. The assertion still expected the old surface-valued `window_width`/`window_height` and old footer/picker dimensions.
+
+The same compatibility issue existed at the advertised 480×360 minimum. With the configured minimum UI density of 90/120 (0.75×), the virtual layout is 640×480. Updated both resize scenarios to assert surface dimensions, virtual dimensions, density, and the layout-derived footer, picker and path-prompt geometry separately. Rendered footer probes and the picker Cancel pixel/click coordinates now apply the same density transform back into physical surface pixels. The 720×480 test uses 0.9×; the minimum-size case uses 0.75×.
+
+The app source was not changed for this correction. The previous failure demonstrated the new coordinate split was already active; the mock was still reading the virtual layout fields as though they were Wayland surface dimensions. Re-run the full suite once on the corrected test commit. The dedicated two-output startup sizing test is later in the file and has not yet been reached.
+
 ### Regression and validation
 
 The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).

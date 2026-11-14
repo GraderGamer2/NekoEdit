@@ -1,12 +1,14 @@
-## Latest handoff (2026-11-14 — output-aware window sizing and UI density; CI pending)
+## Latest handoff (2026-11-14 — output-aware startup sizing; CI pending)
 
-Continue normal development on `early-alpha` at `-O2`. The isolated `optimization-early-alpha` branch remains a size experiment and must not be merged into ordinary development.
+Continue normal development on `early-alpha` at `-O2`. Keep `optimization-early-alpha` isolated.
 
-The next window opens at two-thirds of the largest current logical output when the compositor leaves its initial dimensions unspecified: 1920×1080 at 1× produces 1280×720. Explicit compositor dimensions are preserved independently; maximized/fullscreen/tiled states take precedence. The app maps the existing virtual layout to the real surface using one uniform density, so boxes, text, dialogs, menus and pointer hit-testing scale together. In the reference case the density is 1.5× and the virtual layout is approximately 853×480.
+The implementation chooses two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). It preserves explicit compositor dimensions independently and leaves maximized/fullscreen/tiled states compositor-managed. The app uses a virtual layout coordinate system and one uniform density transform for boxes, glyphs and pointer hit-testing; Wayland surface dimensions, buffer geometry and damage remain in compositor coordinates.
 
-The Wayland mock adds a two-output 1080p-vs-1440p/2× case, verifies the selected logical output, replacement of the unattached startup buffer, rendered chrome/text pixels, damage geometry, internal scale state, and pointer-coordinate conversion. Existing output-tracking scenarios now include the initial output-state sync. CI build #936 succeeded, but the file-workflow test used an unscaled restore coordinate that hit Close at 2× density; the test has been corrected and the dedicated output-size case remains pending.
+The latest CI run passed the build, CLI and renderer checks. Its Wayland suite progressed into the file-workflow resize tests, where old assertions still treated `window_width` and `window_height` as surface dimensions. They are now virtual layout dimensions: 720×480 surface -> 0.9× density -> 800×533 virtual layout; 480×360 minimum surface -> 0.75× floor -> 640×480 virtual layout. The corresponding picker/footer pixel tests and pointer clicks have been projected through the same scale.
 
-CI has not yet completed for this change. Once it passes, manually test on GNOME/Wayland: startup size, font appearance (especially installed TrueType fonts), 5×7 fallback text, menus/dialog hit targets, resize/maximize/restore, and dragging/selection. Keep `-O2` and do not touch the optimization branch.
+CI is pending after the test correction. The dedicated initial two-output 1080p/1440p-at-2× selection case is still waiting to be reached by the full suite. Do not call the feature fully validated until that passes; real GNOME/Mutter visual/input testing is still outstanding. The source implementation is unchanged in this follow-up, and the experiment branch remains untouched.
+
+---
 
 ---
 

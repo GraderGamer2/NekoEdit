@@ -8603,32 +8603,36 @@ xkb_symbols "nekoedit-sparse" {
                     cursor_feedback_state["shape"] = 26
                     edge_state = picker_state()
                     if (
-                        edge_state.get("window_width") != 720
-                        or edge_state.get("window_height") != 480
+                        edge_state.get("window_surface_width") != 720
+                        or edge_state.get("window_surface_height") != 480
+                        or edge_state.get("window_width") != 800
+                        or edge_state.get("window_height") != 533
+                        or edge_state.get("window_ui_scale_120") != 108
                         or edge_state.get("window_buffer_width") != 720
                         or edge_state.get("window_buffer_height") != 480
                         or edge_state.get("window_stride") != 2880
                         or edge_state.get("window_buffer_id") != edge_buffer_id
                         or edge_state.get("window_is_maximized") != 0
-                        or edge_state.get("window_status_top") != 460
-                        or edge_state.get("window_status_bytes_x") != 430
-                        or edge_state.get("window_status_mode_x") != 664
-                        or edge_state.get("window_doc_pixel_width") != 680
-                        or edge_state.get("window_doc_visible_rows") != 30
-                        or edge_state.get("picker_panel_x") != 16
-                        or edge_state.get("picker_panel_y") != 28
-                        or edge_state.get("picker_panel_width") != 688
+                        or edge_state.get("window_status_top") != 513
+                        or edge_state.get("window_doc_bottom") != 513
+                        or edge_state.get("window_status_bytes_x") != 480
+                        or edge_state.get("window_status_mode_x") != 744
+                        or edge_state.get("window_doc_pixel_width") != 760
+                        or edge_state.get("window_doc_visible_rows") != 35
+                        or edge_state.get("picker_panel_x") != 28
+                        or edge_state.get("picker_panel_y") != 54
+                        or edge_state.get("picker_panel_width") != 744
                         or edge_state.get("picker_panel_height") != 424
-                        or edge_state.get("path_prompt_x") != 16
-                        or edge_state.get("path_prompt_y") != 148
-                        or edge_state.get("path_prompt_width") != 688
+                        or edge_state.get("path_prompt_x") != 48
+                        or edge_state.get("path_prompt_y") != 174
+                        or edge_state.get("path_prompt_width") != 704
                         or edge_state.get("path_prompt_height") != 176
                     ):
                         raise AssertionError(f"interactive resize configure was not applied: {edge_state!r}")
                     client.sendall(wire_message(edge_buffer_id, 0))
-                    if not rendered_color_present(430, 466, 48, 7, 2880, 0xFFD8DEE9):
+                    if not rendered_color_present(432, 467, 48, 7, 2880, 0xFFD8DEE9):
                         raise AssertionError("the byte-count footer label did not follow the 720px resized width")
-                    if not rendered_color_present(664, 466, 40, 7, 2880, 0xFFD8DEE9):
+                    if not rendered_color_present(670, 467, 40, 7, 2880, 0xFFD8DEE9):
                         raise AssertionError("the mode footer label did not follow the 720px resized width")
 
                     # Probe every remaining edge and corner with coordinates
@@ -8702,16 +8706,16 @@ xkb_symbols "nekoedit-sparse" {
                     picker_720 = picker_state()
                     if (
                         picker_720.get("picker_mode") != 1
-                        or picker_720.get("picker_panel_x") != 16
-                        or picker_720.get("picker_panel_y") != 28
-                        or picker_720.get("picker_panel_width") != 688
+                        or picker_720.get("picker_panel_x") != 28
+                        or picker_720.get("picker_panel_y") != 54
+                        or picker_720.get("picker_panel_width") != 744
                         or picker_720.get("picker_panel_height") != 424
                     ):
-                        raise AssertionError(f"picker did not fit the 720x480 window: {picker_720!r}")
-                    cancel_x_720 = 16 + ((636 - 40) * 688 // 720)
-                    cancel_y_720 = 28 + ((412 - 36) * 424 // 408)
-                    cancel_pixel_x_720 = 16 + ((605 - 40) * 688 // 720)
-                    cancel_pixel_y_720 = 28 + ((400 - 36) * 424 // 408)
+                        raise AssertionError(f"picker did not fit the 720x480 surface's virtual layout: {picker_720!r}")
+                    cancel_x_720 = (28 + ((636 - 40) * 744 // 720)) * 9 // 10
+                    cancel_y_720 = (54 + ((412 - 36) * 424 // 408)) * 9 // 10
+                    cancel_pixel_x_720 = (28 + ((605 - 40) * 744 // 720)) * 9 // 10
+                    cancel_pixel_y_720 = (54 + ((400 - 36) * 424 // 408)) * 9 // 10
                     if struct.unpack_from("<I", pixels, cancel_pixel_y_720 * 2880 + cancel_pixel_x_720 * 4)[0] != 0xFF414B5A:
                         raise AssertionError("resized picker Cancel button background was not drawn at its fitted location")
                     resized_ui_click(
@@ -8753,27 +8757,30 @@ xkb_symbols "nekoedit-sparse" {
                     expect_message(client, (8, 6, b""), "commit minimum-size surface")
                     small_state = picker_state()
                     if (
-                        small_state.get("window_width") != 480
-                        or small_state.get("window_height") != 360
-                        or small_state.get("window_status_top") != 340
-                        or small_state.get("window_status_bytes_x") != 280
-                        or small_state.get("window_status_mode_x") != 424
-                        or small_state.get("window_doc_pixel_width") != 440
-                        or small_state.get("window_doc_visible_rows") != 20
+                        small_state.get("window_surface_width") != 480
+                        or small_state.get("window_surface_height") != 360
+                        or small_state.get("window_width") != 640
+                        or small_state.get("window_height") != 480
+                        or small_state.get("window_ui_scale_120") != 90
+                        or small_state.get("window_status_top") != 460
+                        or small_state.get("window_status_bytes_x") != 380
+                        or small_state.get("window_status_mode_x") != 584
+                        or small_state.get("window_doc_pixel_width") != 600
+                        or small_state.get("window_doc_visible_rows") != 30
                         or small_state.get("picker_panel_x") != 16
-                        or small_state.get("picker_panel_y") != 16
-                        or small_state.get("picker_panel_width") != 448
-                        or small_state.get("picker_panel_height") != 328
+                        or small_state.get("picker_panel_y") != 28
+                        or small_state.get("picker_panel_width") != 608
+                        or small_state.get("picker_panel_height") != 424
                         or small_state.get("path_prompt_x") != 16
-                        or small_state.get("path_prompt_y") != 88
-                        or small_state.get("path_prompt_width") != 448
+                        or small_state.get("path_prompt_y") != 148
+                        or small_state.get("path_prompt_width") != 608
                         or small_state.get("path_prompt_height") != 176
                         or small_state.get("window_buffer_id") != small_buffer_id
                     ):
                         raise AssertionError(f"minimum-size layout geometry is inconsistent: {small_state!r}")
-                    if not rendered_color_present(280, 346, 48, 7, 1920, 0xFFD8DEE9):
+                    if not rendered_color_present(285, 350, 48, 7, 1920, 0xFFD8DEE9):
                         raise AssertionError("the byte-count footer label did not fit the minimum width")
-                    if not rendered_color_present(424, 346, 40, 7, 1920, 0xFFD8DEE9):
+                    if not rendered_color_present(438, 350, 40, 7, 1920, 0xFFD8DEE9):
                         raise AssertionError("the mode footer label did not fit the minimum width")
                     client.sendall(wire_message(small_buffer_id, 0))
 
@@ -8781,7 +8788,7 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(
                         wire_message(pointer_object_id, 1, struct.pack("<II", small_enter - 1, 8))
                         + wire_message(pointer_object_id, 0,
-                            struct.pack("<IIii", small_enter, 8, 120 * 256, 12 * 256),
+                            struct.pack("<IIii", small_enter, 8, 90 * 256, 9 * 256),
                         )
                     )
                     if cursor_shape_supported:
@@ -8792,18 +8799,18 @@ xkb_symbols "nekoedit-sparse" {
                     cursor_feedback_state["enter_serial"] = small_enter
                     cursor_feedback_state["shape"] = 1
                     resized_ui_click(
-                        120, 12, serial + 200, "open File menu at minimum size", small_buffer_id, 480, 360
+                        90, 9, serial + 200, "open File menu at minimum size", small_buffer_id, 480, 360
                     )
                     resized_ui_click(
-                        120, 48, serial + 210, "open picker at minimum size", small_buffer_id, 480, 360
+                        90, 36, serial + 210, "open picker at minimum size", small_buffer_id, 480, 360
                     )
                     picker_small = picker_state()
                     if picker_small.get("picker_mode") != 1:
                         raise AssertionError(f"picker did not open at minimum size: {picker_small!r}")
-                    cancel_x_small = 16 + ((636 - 40) * 448 // 720)
-                    cancel_y_small = 16 + ((412 - 36) * 328 // 408)
-                    cancel_pixel_x_small = 16 + ((605 - 40) * 448 // 720)
-                    cancel_pixel_y_small = 16 + ((400 - 36) * 328 // 408)
+                    cancel_x_small = (16 + ((636 - 40) * 608 // 720)) * 3 // 4
+                    cancel_y_small = (28 + ((412 - 36) * 424 // 408)) * 3 // 4
+                    cancel_pixel_x_small = (16 + ((605 - 40) * 608 // 720)) * 3 // 4
+                    cancel_pixel_y_small = (28 + ((400 - 36) * 424 // 408)) * 3 // 4
                     if struct.unpack_from("<I", pixels, cancel_pixel_y_small * 1920 + cancel_pixel_x_small * 4)[0] != 0xFF414B5A:
                         raise AssertionError("minimum-size picker Cancel background was not drawn at its fitted location")
                     resized_ui_click(
