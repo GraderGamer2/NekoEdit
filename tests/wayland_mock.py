@@ -3323,7 +3323,9 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_view_top_row", "doc_view_left_px", "doc_wrap_enabled",
                         "doc_total_visual_rows", "doc_scroll_thumb_height",
                         "window_doc_pixel_width", "settings_menu_open",
-                        "doc_selection_active", "context_menu_open", "context_menu_x",
+                        "doc_selection_active", "render_selection_scan_start",
+                        "render_selection_scan_end", "render_find_scan_start",
+                        "render_find_scan_end", "context_menu_open", "context_menu_x",
                         "context_menu_y",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
@@ -8823,6 +8825,87 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"editor wheel-up did not move toward the document start: {editor_scroll_state!r}"
                         )
+
+                    # Ctrl+A selects the whole 11 MiB document. Scroll its
+                    # selection paint into the middle and inspect its byte span.
+                    workflow_shortcut(serial + 10, 30, "Ctrl+A selects the complete 11 MiB document")
+                    selection_full_state = read_document_state()
+                    if selection_full_state.get("doc_selection_active") != 1:
+                        raise AssertionError("Ctrl+A did not activate the large-document selection")
+                    drag_state = picker_state()
+                    middle_center = 92 + (drag_state["window_status_top"] - 92) // 2
+                    workflow_editor_scrollbar_drag(
+                        scrollbar_x,
+                        drag_state["doc_scroll_thumb_top"] + drag_state["doc_scroll_thumb_height"] // 2,
+                        scrollbar_x,
+                        middle_center,
+                        serial + 20,
+                        "scroll a full-document selection into the middle",
+                    )
+                    selection_view_state = read_document_state()
+                    selection_scan_start = selection_view_state.get("render_selection_scan_start", 0)
+                    selection_scan_end = selection_view_state.get("render_selection_scan_end", 0)
+                    if (
+                        selection_view_state.get("doc_view_top_row", 0) <= 0
+                        or selection_scan_start <= 0
+                        or selection_scan_end <= selection_scan_start
+                        or selection_scan_end - selection_scan_start > 16384
+                    ):
+                        raise AssertionError(
+                            "selection painting scanned outside the visible middle viewport: "
+                            + repr({
+                                "view_top": selection_view_state.get("doc_view_top_row"),
+                                "scan_start": selection_scan_start,
+                                "scan_end": selection_scan_end,
+                                "doc_length": selection_view_state.get("doc_length"),
+                            })
+                        )
+
+                    # The large fixture repeats 'cdef' throughout the file.
+                    # Find should search only the visible byte span when moved.
+                    workflow_shortcut(serial + 40, 102, "Ctrl+Home clears selection and returns to the document start")
+                    workflow_shortcut(serial + 50, 33, "Ctrl+F opens Find on the large document")
+                    for index, code in enumerate((46, 32, 18, 33)):
+                        key_step(serial + 60 + index * 3, code, f"enter large-document Find character {index + 1}")
+                    find_top_state = read_document_state()
+                    find_top_start = find_top_state.get("render_find_scan_start", 0)
+                    find_top_end = find_top_state.get("render_find_scan_end", 0)
+                    if (
+                        child_u32("find_replace_mode") != 1
+                        or find_top_end <= find_top_start
+                        or find_top_end - find_top_start > 16384
+                    ):
+                        raise AssertionError(
+                            "Find highlighting did not stay within the visible top viewport: "
+                            + repr({"scan_start": find_top_start, "scan_end": find_top_end})
+                        )
+                    workflow_axis(
+                        0, 4096 * 14 * 256, serial + 80,
+                        "fast wheel scroll through the large document with Find active",
+                    )
+                    find_scrolled_state = read_document_state()
+                    find_scan_start = find_scrolled_state.get("render_find_scan_start", 0)
+                    find_scan_end = find_scrolled_state.get("render_find_scan_end", 0)
+                    if (
+                        find_scrolled_state.get("doc_view_top_row", 0) <= 0
+                        or find_scan_start <= 0
+                        or find_scan_end <= find_scan_start
+                        or find_scan_end - find_scan_start > 16384
+                    ):
+                        raise AssertionError(
+                            "Find highlighting searched outside the fast-scrolled viewport: "
+                            + repr({
+                                "view_top": find_scrolled_state.get("doc_view_top_row"),
+                                "scan_start": find_scan_start,
+                                "scan_end": find_scan_end,
+                                "doc_length": find_scrolled_state.get("doc_length"),
+                            })
+                        )
+                    key_step(serial + 95, 1, "Escape closes large-document Find")
+                    serial += 110
+                    observations.append(
+                        "large-document selection and Find painting scan only indexed visible rows after scrollbar and fast-wheel scrolling"
+                    )
                     observations.append(
                         "editor scrollbar visibility, proportional thumb rendering, pointer drag, and wheel scrolling verified"
                     )

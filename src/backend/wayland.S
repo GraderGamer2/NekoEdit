@@ -5021,6 +5021,12 @@ doc_selection_active:   .long 0
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
+.global render_selection_scan_start, render_selection_scan_end
+render_selection_scan_start: .long 0
+render_selection_scan_end:   .long 0
+.global render_find_scan_start, render_find_scan_end
+render_find_scan_start: .long 0
+render_find_scan_end:   .long 0
 .global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
@@ -18288,6 +18294,7 @@ doc_visual_to_offset_indexed:
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_done:
     mov eax, r13d
+    mov edx, r14d
     add rsp, 8
     pop r15
     pop r14
@@ -18436,6 +18443,7 @@ doc_visual_to_offset_legacy:
     jmp .Lneko_visual_offset_scan
 .Lneko_visual_offset_end:
     mov eax, r14d
+    mov edx, ebp
     pop r15
     pop r14
     pop r13
@@ -19396,6 +19404,60 @@ doc_find_match:
     pop rbx
     ret
 .size doc_find_match, . - doc_find_match
+
+.type doc_find_match_bounded, @function
+# EDI = first candidate byte; ESI = exclusive candidate-start limit.
+# Search forward without wrapping; EAX = match offset or -1.
+doc_find_match_bounded:
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 8
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, dword ptr [rip + find_query_length]
+    test r14d, r14d
+    jz .Ldoc_find_bounded_none
+    mov eax, dword ptr [rip + doc_length]
+    cmp eax, r14d
+    jb .Ldoc_find_bounded_none
+    sub eax, r14d
+    inc eax
+    cmp r13d, eax
+    jbe .Ldoc_find_bounded_limit_ready
+    mov r13d, eax
+.Ldoc_find_bounded_limit_ready:
+    cmp r12d, r13d
+    jae .Ldoc_find_bounded_none
+.Ldoc_find_bounded_candidate:
+    xor ebx, ebx
+.Ldoc_find_bounded_compare:
+    mov edi, r12d
+    add edi, ebx
+    call doc_byte_at
+    lea rcx, [rip + find_query_buffer]
+    cmp al, byte ptr [rcx + rbx]
+    jne .Ldoc_find_bounded_miss
+    inc ebx
+    cmp ebx, r14d
+    jb .Ldoc_find_bounded_compare
+    mov eax, r12d
+    jmp .Ldoc_find_bounded_done
+.Ldoc_find_bounded_miss:
+    inc r12d
+    cmp r12d, r13d
+    jb .Ldoc_find_bounded_candidate
+.Ldoc_find_bounded_none:
+    mov eax, -1
+.Ldoc_find_bounded_done:
+    add rsp, 8
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_find_match_bounded, . - doc_find_match_bounded
 
 .type doc_find_next, @function
 doc_find_next:
@@ -23368,39 +23430,132 @@ render_find_highlights:
     je .Lrender_find_highlights_done
     cmp dword ptr [rip + find_query_length], 0
     je .Lrender_find_highlights_done
+    push rbp
     push rbx
     push r12
     push r13
     push r14
     push r15
-    sub rsp, 32
+    sub rsp, 8
     mov r14d, dword ptr [rip + find_query_length]
+    mov dword ptr [rip + render_find_scan_start], 0
+    mov dword ptr [rip + render_find_scan_end], 0
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lrender_find_highlights_unwrapped
+
+    # Wrapped text occupies one contiguous visible byte span. Include enough
+    # leading bytes to retain a match whose first characters are above the top.
+    mov edi, dword ptr [rip + doc_view_top_row]
+    xor esi, esi
+    call doc_visual_to_offset
+    mov r12d, eax
+    mov eax, r14d
+    dec eax
+    cmp r12d, eax
+    jb .Lrender_find_highlights_wrapped_clamp
+    sub r12d, eax
+    jmp .Lrender_find_highlights_wrapped_start_ready
+.Lrender_find_highlights_wrapped_clamp:
     xor r12d, r12d
-.Lrender_find_highlights_next_match:
-    # Start one byte after the previous result so overlapping occurrences
-    # are highlighted too. A wrapped result below the scan point ends the pass.
-    mov edi, r12d
-    mov esi, 1
-    call doc_find_match
-    test eax, eax
-    js .Lrender_find_highlights_finish
-    cmp eax, r12d
-    jb .Lrender_find_highlights_finish
+.Lrender_find_highlights_wrapped_start_ready:
+    mov edi, dword ptr [rip + doc_view_top_row]
+    add edi, dword ptr [rip + window_doc_visible_rows]
+    xor esi, esi
+    call doc_visual_to_offset
     mov r13d, eax
+    mov dword ptr [rip + render_find_scan_start], r12d
+    mov dword ptr [rip + render_find_scan_end], r13d
+    mov edi, r12d
+    mov esi, r13d
+    call render_find_highlights_range
+    jmp .Lrender_find_highlights_return
+
+.Lrender_find_highlights_unwrapped:
+    mov r15d, dword ptr [rip + doc_view_top_row]
+    mov ebp, r15d
+    add ebp, dword ptr [rip + window_doc_visible_rows]
+.Lrender_find_highlights_unwrapped_row:
+    cmp r15d, ebp
+    jae .Lrender_find_highlights_return
+
+    # Include enough horizontal look-behind for any ASCII query byte sequence.
+    mov eax, r14d
+    shl eax, 5
+    mov esi, dword ptr [rip + doc_view_left_px]
+    cmp esi, eax
+    jb .Lrender_find_highlights_left_clamp
+    sub esi, eax
+    jmp .Lrender_find_highlights_left_ready
+.Lrender_find_highlights_left_clamp:
+    xor esi, esi
+.Lrender_find_highlights_left_ready:
+    mov edi, r15d
+    call doc_visual_to_offset
+    mov r12d, eax
+
+    mov edi, r15d
+    mov esi, dword ptr [rip + doc_view_left_px]
+    add esi, dword ptr [rip + window_doc_pixel_width]
+    add esi, 32
+    call doc_visual_to_offset
+    mov r13d, eax
+
+    cmp r15d, dword ptr [rip + doc_view_top_row]
+    jne .Lrender_find_highlights_keep_start
+    mov dword ptr [rip + render_find_scan_start], r12d
+.Lrender_find_highlights_keep_start:
+    mov dword ptr [rip + render_find_scan_end], r13d
+    mov edi, r12d
+    mov esi, r13d
+    call render_find_highlights_range
+    inc r15d
+    jmp .Lrender_find_highlights_unwrapped_row
+
+.Lrender_find_highlights_return:
+    add rsp, 8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+.Lrender_find_highlights_done:
+    ret
+.size render_find_highlights, . - render_find_highlights
+
+.type render_find_highlights_range, @function
+# EDI = inclusive first candidate offset; ESI = exclusive candidate-start limit.
+render_find_highlights_range:
+    push rbp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, dword ptr [rip + find_query_length]
+    cmp r12d, r13d
+    jae .Lrender_find_range_done
+
+.Lrender_find_range_next_match:
+    mov edi, r12d
+    mov esi, r13d
+    call doc_find_match_bounded
+    cmp eax, -1
+    je .Lrender_find_range_done
+    mov r15d, eax
     lea r12d, [rax + 1]
-    xor r15d, r15d
-.Lrender_find_highlights_match_bytes:
-    cmp r15d, r14d
-    jae .Lrender_find_highlights_next_match
-    mov eax, r13d
-    add eax, r15d
+    xor ebx, ebx
+.Lrender_find_range_match_bytes:
+    mov eax, r15d
+    add eax, ebx
     mov dword ptr [rsp], eax
     mov edi, eax
     call doc_offset_to_visual
     mov dword ptr [rsp + 4], eax
     mov dword ptr [rsp + 8], edx
-    # Find currently accepts ASCII keymap text, so each query byte is one
-    # document glyph; use the active font's real proportional advance.
     mov edi, dword ptr [rsp]
     call doc_byte_at
     mov edi, eax
@@ -23410,9 +23565,9 @@ render_find_highlights:
     mov eax, dword ptr [rsp + 4]
     sub eax, dword ptr [rip + doc_view_top_row]
     test eax, eax
-    js .Lrender_find_highlights_advance
+    js .Lrender_find_range_advance_byte
     cmp eax, dword ptr [rip + window_doc_visible_rows]
-    jae .Lrender_find_highlights_advance
+    jae .Lrender_find_range_advance_byte
     imul eax, dword ptr [rip + window_doc_line_height]
     add eax, DOC_TOP
     mov dword ptr [rsp + 16], eax
@@ -23420,9 +23575,9 @@ render_find_highlights:
     mov eax, dword ptr [rsp + 8]
     add eax, DOC_LEFT
     cmp dword ptr [rip + doc_wrap_enabled], 0
-    jne .Lrender_find_highlights_x_ready
+    jne .Lrender_find_range_x_ready
     sub eax, dword ptr [rip + doc_view_left_px]
-.Lrender_find_highlights_x_ready:
+.Lrender_find_range_x_ready:
     mov dword ptr [rsp + 20], eax
 
     mov rdi, qword ptr [rip + shm_mapping]
@@ -23432,31 +23587,42 @@ render_find_highlights:
     mov r8d, dword ptr [rip + window_doc_line_height]
     mov r9d, 0xff8f7834
     call draw_document_selection_rect
-.Lrender_find_highlights_advance:
-    inc r15d
-    jmp .Lrender_find_highlights_match_bytes
 
-.Lrender_find_highlights_finish:
-    add rsp, 32
+.Lrender_find_range_advance_byte:
+    inc ebx
+    cmp ebx, r14d
+    jb .Lrender_find_range_match_bytes
+    jmp .Lrender_find_range_next_match
+
+.Lrender_find_range_done:
+    add rsp, 40
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
-.Lrender_find_highlights_done:
+    pop rbp
     ret
+.size render_find_highlights_range, . - render_find_highlights_range
+
 .size render_find_highlights, . - render_find_highlights
 
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
 render_selection:
+    push rbp
     push rbx
     push r12
     push r13
     push r14
     push r15
+    sub rsp, 8
     cmp dword ptr [rip + doc_selection_active], 0
-    je .Lneko_render_selection_done
+    jne .Lneko_render_selection_active
+    mov dword ptr [rip + render_selection_scan_start], 0
+    mov dword ptr [rip + render_selection_scan_end], 0
+    jmp .Lneko_render_selection_done
+.Lneko_render_selection_active:
     cmp dword ptr [rip + doc_wrap_enabled], 0
     je .Lneko_render_selection_unwrapped
 
@@ -23469,20 +23635,32 @@ render_selection:
     mov dword ptr [rip + doc_selection_start], eax
     mov dword ptr [rip + doc_selection_end], edx
 
-    # Render in the same pixel coordinate space used by hmtx layout and hit-testing.
+    mov edi, dword ptr [rip + doc_view_top_row]
+    xor esi, esi
+    call doc_visual_to_offset
+    mov r14d, eax
+    mov edi, dword ptr [rip + doc_view_top_row]
+    add edi, dword ptr [rip + window_doc_visible_rows]
+    xor esi, esi
+    call doc_visual_to_offset
+    mov ebp, eax
+    mov dword ptr [rip + render_selection_scan_start], r14d
+    mov dword ptr [rip + render_selection_scan_end], r14d
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
-    mov eax, dword ptr [rip + doc_view_top_row]
-    imul eax, dword ptr [rip + window_doc_line_height]
-    sub r13d, eax
-    xor r14d, r14d
-.Lneko_render_selection_scan:
-    cmp r14d, dword ptr [rip + doc_length]
+    cmp r14d, dword ptr [rip + doc_selection_end]
     jae .Lneko_render_selection_done
-    mov eax, dword ptr [rip + doc_selection_end]
-    cmp r14d, eax
+    cmp r14d, ebp
     jae .Lneko_render_selection_done
 
+.Lneko_render_selection_scan:
+    mov dword ptr [rip + render_selection_scan_end], r14d
+    cmp r14d, dword ptr [rip + doc_length]
+    jae .Lneko_render_selection_done
+    cmp r14d, dword ptr [rip + doc_selection_end]
+    jae .Lneko_render_selection_done
+    cmp r14d, ebp
+    jae .Lneko_render_selection_done
     mov edi, r14d
     call doc_byte_at
     mov ebx, eax
@@ -23540,13 +23718,14 @@ render_selection:
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_tab:
-    # Tabs advance to the next 32-pixel stop, wrapping as one visual token.
     mov eax, r12d
     sub eax, DOC_LEFT
     lea edx, [eax + 32]
     and edx, -32
     sub edx, eax
     mov r15d, edx
+    mov eax, r12d
+    sub eax, DOC_LEFT
     add eax, r15d
     cmp eax, dword ptr [rip + window_doc_pixel_width]
     jbe .Lneko_render_selection_tab_fit
@@ -23618,25 +23797,26 @@ render_selection:
 
 .Lneko_render_selection_unwrapped:
     call render_selection_unwrapped
-    jmp .Lneko_render_selection_done
-
 .Lneko_render_selection_done:
+    add rsp, 8
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
+    pop rbp
     ret
+.size render_selection, . - render_selection
 
-
-# Paint selected bytes in no-wrap mode using absolute line-pixel columns.
 .type render_selection_unwrapped, @function
 render_selection_unwrapped:
+    push rbp
     push rbx
     push r12
     push r13
     push r14
     push r15
+    sub rsp, 40
     mov eax, dword ptr [rip + doc_selection_anchor]
     mov edx, dword ptr [rip + doc_cursor]
     cmp eax, edx
@@ -23645,31 +23825,61 @@ render_selection_unwrapped:
 .Lselection_unwrapped_bounds:
     mov dword ptr [rip + doc_selection_start], eax
     mov dword ptr [rip + doc_selection_end], edx
-    xor r12d, r12d
-    mov r13d, DOC_LEFT
-    sub r13d, dword ptr [rip + doc_view_left_px]
-    mov r14d, DOC_TOP
+
     mov eax, dword ptr [rip + doc_view_top_row]
-    imul eax, dword ptr [rip + window_doc_line_height]
-    sub r14d, eax
-.Lselection_unwrapped_scan:
-    cmp r12d, dword ptr [rip + doc_length]
+    add eax, dword ptr [rip + window_doc_visible_rows]
+    mov dword ptr [rsp], eax
+    mov r14d, dword ptr [rip + doc_view_top_row]
+    mov dword ptr [rip + render_selection_scan_start], 0
+    mov dword ptr [rip + render_selection_scan_end], 0
+
+.Lselection_unwrapped_row:
+    cmp r14d, dword ptr [rsp]
     jae .Lselection_unwrapped_done
-    mov eax, dword ptr [rip + doc_selection_end]
-    cmp r12d, eax
+
+    mov esi, dword ptr [rip + doc_view_left_px]
+    cmp esi, 32
+    jb .Lselection_unwrapped_start_column_ready
+    sub esi, 32
+.Lselection_unwrapped_start_column_ready:
+    mov edi, r14d
+    call doc_visual_to_offset
+    mov r12d, eax
+    mov r13d, edx
+    add r13d, DOC_LEFT
+    sub r13d, dword ptr [rip + doc_view_left_px]
+
+    mov edi, r14d
+    mov esi, dword ptr [rip + doc_view_left_px]
+    add esi, dword ptr [rip + window_doc_pixel_width]
+    add esi, 32
+    call doc_visual_to_offset
+    mov ebp, eax
+    cmp r14d, dword ptr [rip + doc_view_top_row]
+    jne .Lselection_unwrapped_keep_scan_start
+    mov dword ptr [rip + render_selection_scan_start], r12d
+.Lselection_unwrapped_keep_scan_start:
+    mov dword ptr [rip + render_selection_scan_end], ebp
+    mov eax, r14d
+    sub eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov dword ptr [rsp + 4], eax
+
+    cmp r12d, dword ptr [rip + doc_selection_end]
+    jae .Lselection_unwrapped_done
+    cmp r12d, ebp
+    jae .Lselection_unwrapped_next_row
+
+.Lselection_unwrapped_scan:
+    mov dword ptr [rip + render_selection_scan_end], r12d
+    cmp r12d, ebp
+    jae .Lselection_unwrapped_row_end
+    cmp r12d, dword ptr [rip + doc_selection_end]
     jae .Lselection_unwrapped_done
     mov edi, r12d
     call doc_byte_at
     mov ebx, eax
-    cmp ebx, 10
-    je .Lselection_unwrapped_newline
-    cmp ebx, 13
-    jne .Lselection_unwrapped_not_cr
-    lea edi, [r12d + 1]
-    call doc_byte_at
-    cmp eax, 10
-    je .Lselection_unwrapped_newline
-.Lselection_unwrapped_not_cr:
     cmp ebx, 9
     je .Lselection_unwrapped_tab
     cmp ebx, 32
@@ -23696,15 +23906,9 @@ render_selection_unwrapped:
     mov eax, dword ptr [rip + doc_selection_start]
     cmp r12d, eax
     jb .Lselection_unwrapped_advance
-    cmp r14d, DOC_TOP
-    jl .Lselection_unwrapped_advance
-    mov eax, dword ptr [rip + window_doc_bottom]
-    sub eax, dword ptr [rip + window_doc_line_height]
-    cmp r14d, eax
-    jae .Lselection_unwrapped_advance
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, r13d
-    mov edx, r14d
+    mov edx, dword ptr [rsp + 4]
     mov ecx, r15d
     mov r8d, dword ptr [rip + window_doc_line_height]
     mov r9d, 0xff5e81ac
@@ -23715,43 +23919,55 @@ render_selection_unwrapped:
     call doc_grapheme_next
     mov r12d, eax
     jmp .Lselection_unwrapped_scan
-.Lselection_unwrapped_newline:
-    mov eax, dword ptr [rip + doc_selection_start]
-    cmp r12d, eax
-    jb .Lselection_unwrapped_newline_next
-    cmp r14d, DOC_TOP
-    jl .Lselection_unwrapped_newline_next
-    mov eax, dword ptr [rip + window_doc_bottom]
-    sub eax, dword ptr [rip + window_doc_line_height]
-    cmp r14d, eax
-    jae .Lselection_unwrapped_newline_next
-    mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, r13d
-    mov edx, r14d
-    mov ecx, 8
-    mov r8d, dword ptr [rip + window_doc_line_height]
-    mov r9d, 0xff5e81ac
-    call draw_document_selection_rect
-.Lselection_unwrapped_newline_next:
-    mov r13d, DOC_LEFT
-    sub r13d, dword ptr [rip + doc_view_left_px]
-    add r14d, dword ptr [rip + window_doc_line_height]
-    mov edi, r12d
-    call doc_grapheme_next
-    mov r12d, eax
-    jmp .Lselection_unwrapped_scan
 .Lselection_unwrapped_control:
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
     jmp .Lselection_unwrapped_scan
+
+.Lselection_unwrapped_row_end:
+    # A selected LF or CRLF occupies a small trailing cell after visible text.
+    cmp ebp, dword ptr [rip + doc_length]
+    jae .Lselection_unwrapped_next_row
+    mov eax, dword ptr [rip + doc_selection_start]
+    cmp ebp, eax
+    jb .Lselection_unwrapped_next_row
+    mov eax, dword ptr [rip + doc_selection_end]
+    cmp ebp, eax
+    jae .Lselection_unwrapped_next_row
+    mov edi, ebp
+    call doc_byte_at
+    cmp eax, 10
+    je .Lselection_unwrapped_paint_newline
+    cmp eax, 13
+    jne .Lselection_unwrapped_next_row
+    lea edi, [rbp + 1]
+    call doc_byte_at
+    cmp eax, 10
+    jne .Lselection_unwrapped_next_row
+.Lselection_unwrapped_paint_newline:
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, r13d
+    mov edx, dword ptr [rsp + 4]
+    mov ecx, 8
+    mov r8d, dword ptr [rip + window_doc_line_height]
+    mov r9d, 0xff5e81ac
+    call draw_document_selection_rect
+.Lselection_unwrapped_next_row:
+    inc r14d
+    jmp .Lselection_unwrapped_row
+
 .Lselection_unwrapped_done:
+    add rsp, 40
     pop r15
     pop r14
     pop r13
     pop r12
     pop rbx
+    pop rbp
     ret
+.size render_selection_unwrapped, . - render_selection_unwrapped
+
 .size render_selection_unwrapped, . - render_selection_unwrapped
 
 # ASCII alphanumerics/underscore and non-ASCII scalars form word runs.
