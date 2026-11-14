@@ -3328,7 +3328,8 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_selection_active", "render_selection_scan_start",
                         "render_selection_scan_end", "render_find_scan_start",
                         "render_find_scan_end", "render_document_scan_start",
-                        "render_document_scan_end", "doc_offset_visual_scan_start",
+                        "render_document_scan_end", "render_clip_background_row_visits",
+                        "doc_offset_visual_scan_start",
                         "doc_offset_visual_scan_end", "doc_visual_offset_scan_start",
                         "doc_visual_offset_scan_end", "context_menu_open", "context_menu_x",
                         "context_menu_y",
@@ -4040,11 +4041,17 @@ xkb_symbols "nekoedit-sparse" {
                     finally:
                         client.settimeout(original_timeout)
 
+                dirty_render_background_row_deltas: list[int] = []
+
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
                 ) -> bool:
                     # The focused dirty-render test sends key-up only after its
                     # frame has committed; normal cases retain the tap helper.
+                    clip_rows_before = (
+                        child_u32("render_clip_background_row_visits")
+                        if dirty_render_test else 0
+                    )
                     key_down = wire_message(
                         keyboard_object_id, 3, struct.pack("<IIII", serial, serial, code, 1)
                     )
@@ -4077,6 +4084,10 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(f"{label}: invalid full-frame damage rectangle: {rect1!r}")
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     if dirty_render_test:
+                        clip_rows_after = child_u32("render_clip_background_row_visits")
+                        dirty_render_background_row_deltas.append(
+                            (clip_rows_after - clip_rows_before) & 0xFFFFFFFF
+                        )
                         client.sendall(key_up)
                     client.sendall(buffer_release_message())
                     # A key release can race a coalesced redraw behind the frame
@@ -9934,6 +9945,31 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError(
                             f"caret navigation did not switch to two-band damage after buffer warm-up: {partial_frames!r}"
                         )
+                    if len(dirty_render_background_row_deltas) != len(partial_frames):
+                        raise AssertionError(
+                            "dirty-render row-visit instrumentation missed a committed frame: "
+                            + repr(dirty_render_background_row_deltas)
+                        )
+                    for frame_index, (used_partial_damage, row_visits) in enumerate(
+                        zip(partial_frames, dirty_render_background_row_deltas, strict=True)
+                    ):
+                        if used_partial_damage and row_visits >= initial_height:
+                            raise AssertionError(
+                                "partial caret repaint still scanned the full-height background rectangle: "
+                                + repr({
+                                    "frame": frame_index + 1,
+                                    "background_rows_visited": row_visits,
+                                    "surface_height": initial_height,
+                                })
+                            )
+                        if not used_partial_damage and row_visits != 0:
+                            raise AssertionError(
+                                "full-frame fallback unexpectedly used clipped background row traversal: "
+                                + repr({
+                                    "frame": frame_index + 1,
+                                    "background_rows_visited": row_visits,
+                                })
+                            )
                     painted_state = read_document_state()
                     expected_length = painted_state["doc_length"]
                     scan_start = painted_state["render_document_scan_start"]

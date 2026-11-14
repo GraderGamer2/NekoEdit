@@ -5129,6 +5129,8 @@ render_clip_top1:       .long 0
 render_clip_bottom1:    .long 0
 render_clip_top2:       .long 0
 render_clip_bottom2:    .long 0
+.global render_clip_background_row_visits
+render_clip_background_row_visits: .long 0
 render_damage_top1:     .long 0
 render_damage_height1:  .long 0
 render_damage_top2:     .long 0
@@ -13250,24 +13252,16 @@ draw_rect:
     jbe .draw_rect_height_ready
     mov r15d, eax
 .draw_rect_height_ready:
+    cmp dword ptr [rip + render_clip_enabled], 0
+    jne .draw_rect_clipped_rows
+
+    # The common full-frame path has no per-row clipping tests.
     xor r10d, r10d
-.draw_rect_row:
+.draw_rect_row_full:
     cmp r10d, r15d
     jae .draw_rect_done
     mov eax, r13d
     add eax, r10d
-    cmp dword ptr [rip + render_clip_enabled], 0
-    je .draw_rect_row_paint
-    cmp eax, dword ptr [rip + render_clip_top1]
-    jb .draw_rect_row_check_band2
-    cmp eax, dword ptr [rip + render_clip_bottom1]
-    jb .draw_rect_row_paint
-.draw_rect_row_check_band2:
-    cmp eax, dword ptr [rip + render_clip_top2]
-    jb .draw_rect_row_skip
-    cmp eax, dword ptr [rip + render_clip_bottom2]
-    jae .draw_rect_row_skip
-.draw_rect_row_paint:
     mov ecx, dword ptr [rip + window_stride]
     imul rax, rcx
     mov edx, r12d
@@ -13278,9 +13272,103 @@ draw_rect:
     mov ecx, r14d
     mov eax, r11d
     rep stosd
-.draw_rect_row_skip:
     inc r10d
-    jmp .draw_rect_row
+    jmp .draw_rect_row_full
+
+.draw_rect_clipped_rows:
+    # render_clip_* are buffer-space row intervals. Intersect the rectangle
+    # with each interval up front, avoiding a full-height scan for skipped rows.
+    # Keep the intervals ordered and non-overlapping even if their edges touch.
+    xor r8d, r8d
+    test r12d, r12d
+    jne .draw_rect_clip_band1_start
+    test r13d, r13d
+    jne .draw_rect_clip_band1_start
+    mov eax, dword ptr [rip + window_buffer_width]
+    cmp r14d, eax
+    jne .draw_rect_clip_band1_start
+    mov eax, dword ptr [rip + window_buffer_height]
+    cmp r15d, eax
+    jne .draw_rect_clip_band1_start
+    mov r8d, 1
+
+.draw_rect_clip_band1_start:
+    mov r10d, dword ptr [rip + render_clip_top1]
+    cmp r10d, r13d
+    jge .draw_rect_clip_band1_end
+    mov r10d, r13d
+.draw_rect_clip_band1_end:
+    mov eax, r13d
+    add eax, r15d
+    mov r9d, dword ptr [rip + render_clip_bottom1]
+    cmp r9d, eax
+    jle .draw_rect_clip_band1_ready
+    mov r9d, eax
+.draw_rect_clip_band1_ready:
+    cmp r10d, r9d
+    jae .draw_rect_clip_band2_start
+
+.draw_rect_clip_band1_loop:
+    test r8d, r8d
+    jz .draw_rect_clip_band1_counter_done
+    inc dword ptr [rip + render_clip_background_row_visits]
+.draw_rect_clip_band1_counter_done:
+    mov eax, r10d
+    mov ecx, dword ptr [rip + window_stride]
+    imul rax, rcx
+    mov edx, r12d
+    shl edx, 2
+    add rax, rdx
+    add rax, rbx
+    mov rdi, rax
+    mov ecx, r14d
+    mov eax, r11d
+    rep stosd
+    inc r10d
+    cmp r10d, r9d
+    jb .draw_rect_clip_band1_loop
+
+.draw_rect_clip_band2_start:
+    mov r10d, dword ptr [rip + render_clip_top2]
+    cmp r10d, r13d
+    jge .draw_rect_clip_band2_skip_overlap
+    mov r10d, r13d
+.draw_rect_clip_band2_skip_overlap:
+    # Band one is always above band two in the caret/status partial path.
+    mov eax, dword ptr [rip + render_clip_bottom1]
+    cmp r10d, eax
+    jae .draw_rect_clip_band2_end
+    mov r10d, eax
+.draw_rect_clip_band2_end:
+    mov eax, r13d
+    add eax, r15d
+    mov r9d, dword ptr [rip + render_clip_bottom2]
+    cmp r9d, eax
+    jle .draw_rect_clip_band2_ready
+    mov r9d, eax
+.draw_rect_clip_band2_ready:
+    cmp r10d, r9d
+    jae .draw_rect_done
+
+.draw_rect_clip_band2_loop:
+    test r8d, r8d
+    jz .draw_rect_clip_band2_counter_done
+    inc dword ptr [rip + render_clip_background_row_visits]
+.draw_rect_clip_band2_counter_done:
+    mov eax, r10d
+    mov ecx, dword ptr [rip + window_stride]
+    imul rax, rcx
+    mov edx, r12d
+    shl edx, 2
+    add rax, rdx
+    add rax, rbx
+    mov rdi, rax
+    mov ecx, r14d
+    mov eax, r11d
+    rep stosd
+    inc r10d
+    cmp r10d, r9d
+    jb .draw_rect_clip_band2_loop
 .draw_rect_done:
     pop r15
     pop r14
