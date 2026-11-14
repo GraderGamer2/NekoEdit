@@ -722,8 +722,13 @@ def run(
                 # It therefore starts at 1x and may be replaced before attach
                 # once the initial preferred_scale event is received.
                 buffer_scale = 1 if fractional_scale_test else initial_preferred_buffer_scale
-                surface_pixel_width = 800 * buffer_scale
-                surface_pixel_height = initial_height * buffer_scale
+                raster_scale_120 = buffer_scale * 120
+
+                def scaled_dimension(value: int) -> int:
+                    return max(1, (value * raster_scale_120 + 60) // 120)
+
+                surface_pixel_width = scaled_dimension(800)
+                surface_pixel_height = scaled_dimension(initial_height)
                 buffer_width, buffer_height = (
                     (surface_pixel_height, surface_pixel_width)
                     if initial_preferred_buffer_transform % 2
@@ -733,8 +738,8 @@ def run(
 
                 def logical_buffer_pixel(logical_x: int, logical_y: int) -> int:
                     # Surface-local pixels are pre-transformed into buffer coordinates.
-                    x = logical_x * buffer_scale
-                    y = logical_y * buffer_scale
+                    x = logical_x * raster_scale_120 // 120
+                    y = logical_y * raster_scale_120 // 120
                     transform = initial_preferred_buffer_transform
                     if transform == 1:
                         bx, by = y, surface_pixel_width - 1 - x
@@ -864,13 +869,13 @@ def run(
                         initial_preferred_fractional_scale,
                     )
                     client_buffer_id = 12
-                    target_buffer_scale = 2 if initial_preferred_fractional_scale > 120 else 1
-                    if target_buffer_scale != buffer_scale:
-                        expect_message(client, (client_buffer_id, 0, b""), "destroy unattached 1x buffer")
+                    target_raster_scale_120 = initial_preferred_fractional_scale
+                    if target_raster_scale_120 != raster_scale_120:
+                        expect_message(client, (client_buffer_id, 0, b""), "destroy unattached provisional buffer")
                         client_buffer_id = 18
-                        buffer_scale = target_buffer_scale
-                        surface_pixel_width = 800 * buffer_scale
-                        surface_pixel_height = initial_height * buffer_scale
+                        raster_scale_120 = target_raster_scale_120
+                        surface_pixel_width = scaled_dimension(800)
+                        surface_pixel_height = scaled_dimension(initial_height)
                         buffer_width, buffer_height = (
                             (surface_pixel_height, surface_pixel_width)
                             if initial_preferred_buffer_transform % 2
@@ -882,11 +887,11 @@ def run(
                             (11, 0, struct.pack("<6I", client_buffer_id, 0, buffer_width, buffer_height, buffer_stride, 1)),
                             "create fractional-scale replacement buffer",
                         )
-                        if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(3, 10) != 0xFF343D4B:
-                            raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at 2x")
+                        if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(4, 10) != 0xFF343D4B:
+                            raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at the exact preferred scale")
                         if logical_buffer_pixel(400, 40) != 0xFF252A33:
                             raise AssertionError("fractional-scale replacement lost logical document background")
-                        observations.append("fractional preference replaced the unattached 1x buffer with a 2x source raster")
+                        observations.append("fractional preference rebuilt the unattached buffer at its exact preferred raster scale")
                     expect_message(
                         client, (viewport_object_id, 2, struct.pack("<ii", 800, initial_height)),
                         "set logical viewport destination without a seat",
@@ -1112,14 +1117,14 @@ def run(
                     ):
                         raise AssertionError("UI font glyphs were not rasterized at the selected density")
                     observations.append("initial output mode/scale selected a 1280x720 window and rebuilt the unattached buffer")
-                target_buffer_scale = 2 if fractional_scale_test and initial_preferred_fractional_scale > 120 else buffer_scale
-                if fractional_scale_test and target_buffer_scale != buffer_scale:
-                    expect_message(client, (client_buffer_id, 0, b""), "destroy unattached 1x buffer")
+                target_raster_scale_120 = initial_preferred_fractional_scale
+                if fractional_scale_test and target_raster_scale_120 != raster_scale_120:
+                    expect_message(client, (client_buffer_id, 0, b""), "destroy unattached provisional buffer")
                     client_buffer_id = next_test_object_id
                     next_test_object_id += 1
-                    buffer_scale = target_buffer_scale
-                    surface_pixel_width = 800 * buffer_scale
-                    surface_pixel_height = initial_height * buffer_scale
+                    raster_scale_120 = target_raster_scale_120
+                    surface_pixel_width = scaled_dimension(800)
+                    surface_pixel_height = scaled_dimension(initial_height)
                     buffer_width, buffer_height = (
                         (surface_pixel_height, surface_pixel_width)
                         if initial_preferred_buffer_transform % 2
@@ -1131,11 +1136,11 @@ def run(
                         (11, 0, struct.pack("<6I", client_buffer_id, 0, buffer_width, buffer_height, buffer_stride, 1)),
                         "create fractional-scale replacement buffer",
                     )
-                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(3, 10) != 0xFF343D4B:
-                        raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at 2x")
+                    if logical_buffer_pixel(2, 10) != 0xFF78A9D4 or logical_buffer_pixel(4, 10) != 0xFF343D4B:
+                        raise AssertionError("fractional-scale replacement did not rerasterize the accent rail at the exact preferred scale")
                     if logical_buffer_pixel(400, 40) != 0xFF252A33:
                         raise AssertionError("fractional-scale replacement lost logical document background")
-                    observations.append("fractional preference replaced the unattached 1x buffer with a 2x source raster")
+                    observations.append("fractional preference rebuilt the unattached buffer at its exact preferred raster scale")
                 # Map only after all initial client objects have been allocated.
                 # A new wl_surface already defaults to buffer_scale=1;
                 # fractional viewport mode must not send a redundant scale
@@ -1153,13 +1158,13 @@ def run(
                     )
                 if fractional_scale_test:
                     expect_message(
-                        client, (viewport_object_id, 2, struct.pack("<ii", surface_pixel_width // buffer_scale, surface_pixel_height // buffer_scale)),
+                        client, (viewport_object_id, 2, struct.pack("<ii", 800, initial_height)),
                         "set logical viewport destination before mapping",
                     )
                 expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "attach buffer")
                 expect_message(
                     client,
-                    (8, 2, struct.pack("<4I", 0, 0, surface_pixel_width // buffer_scale, surface_pixel_height // buffer_scale)),
+                    (8, 2, struct.pack("<4I", 0, 0, 800 if fractional_scale_test else surface_pixel_width // buffer_scale, initial_height if fractional_scale_test else surface_pixel_height // buffer_scale)),
                     "damage surface in compositor logical coordinates",
                 )
                 expect_message(client, (8, 6, b""), "initial map surface")
@@ -1168,6 +1173,7 @@ def run(
                         "window_surface_width", "window_surface_height",
                         "window_width", "window_height", "window_ui_scale_120",
                         "window_buffer_width", "window_buffer_height", "window_stride",
+                        "window_buffer_raster_scale_120", "window_raster_surface_width", "window_raster_surface_height",
                         "output_display_width", "output_display_height",
                         "pointer_x", "pointer_y", "pointer_surface_x", "pointer_surface_y",
                     }
@@ -1209,6 +1215,8 @@ def run(
                         "window_surface_width": 1280, "window_surface_height": 720,
                         "window_width": 853, "window_height": 480, "window_ui_scale_120": 180,
                         "window_buffer_width": 1280, "window_buffer_height": 720, "window_stride": 5120,
+                        "window_buffer_raster_scale_120": 120,
+                        "window_raster_surface_width": 1280, "window_raster_surface_height": 720,
                         "output_display_width": 1920, "output_display_height": 1080,
                         "pointer_x": 112, "pointer_y": 12,
                         "pointer_surface_x": 168, "pointer_surface_y": 18,
@@ -10836,7 +10844,7 @@ if __name__ == "__main__":
     # The preferred scale arrives before the initial wl_buffer is created.
     run(sys.argv[1], initial_preferred_buffer_scale=2)
     # Fractional-scale-v1 pairs its 120ths preference with wp_viewporter.
-    # The bounded 1x/2x source raster keeps protocol buffer_scale=1 while the
+    # The exact 120ths source raster keeps protocol buffer_scale=1 while the
     # viewport destination remains in logical surface units.
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=150)
     # The second startup sync must not consume a wl_keyboard.keymap event.
@@ -10845,8 +10853,10 @@ if __name__ == "__main__":
     run(sys.argv[1], fractional_scale_test=True, fractional_sync_keymap_test=True,
         initial_preferred_fractional_scale=150)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=180,
-        initial_preferred_buffer_transform=1)
+        initial_preferred_buffer_transform=1, initial_height=481)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=120)
+    run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=90)
+    run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=210)
     run(sys.argv[1], fractional_scale_test=True, initial_preferred_fractional_scale=180,
         seat_supported=False)
     # Exercise all seven non-normal preferred transform values before buffer attach.

@@ -4822,6 +4822,8 @@ doc_wrap_enabled:       .long 1
 .balign 16
 .global window_width, window_height, window_surface_width, window_surface_height, window_ui_scale_120
 .global window_buffer_width, window_buffer_height, window_stride, window_status_top, window_doc_bottom
+.global window_buffer_raster_scale_120, window_buffer_created_raster_scale_120
+.global window_raster_surface_width, window_raster_surface_height
 .global window_status_bytes_x, window_status_mode_x, window_doc_visible_rows, window_doc_line_height
 .global picker_ui_font_size, path_prompt_font_size, ui_transform_font_size, picker_focus, picker_mode
 .global picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected
@@ -4838,6 +4840,10 @@ window_ui_scale_120:     .long 0      # initialized to 120 before first geometry
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
+window_buffer_raster_scale_120: .long 120
+window_buffer_created_raster_scale_120: .long 0
+window_raster_surface_width: .long 0
+window_raster_surface_height: .long 0
 .global window_buffer_scale, window_buffer_created_scale, window_surface_mapped, surface_applied_buffer_scale
 .global window_buffer_transform, window_buffer_created_transform, surface_applied_buffer_transform
 window_buffer_scale:    .long 0
@@ -5326,6 +5332,10 @@ wayland_main:
     mov dword ptr [rip + pointer_surface_y], 0
     mov dword ptr [rip + window_buffer_scale], 1
     mov dword ptr [rip + window_buffer_created_scale], 0
+    mov dword ptr [rip + window_buffer_raster_scale_120], 120
+    mov dword ptr [rip + window_buffer_created_raster_scale_120], 0
+    mov dword ptr [rip + window_raster_surface_width], WIDTH
+    mov dword ptr [rip + window_raster_surface_height], HEIGHT
     mov dword ptr [rip + window_buffer_transform], 0
     mov dword ptr [rip + window_buffer_created_transform], 0
     mov dword ptr [rip + window_surface_mapped], 0
@@ -5795,6 +5805,8 @@ wayland_main:
     js .protocol_error
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    mov dword ptr [rip + window_buffer_created_raster_scale_120], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
     mov eax, dword ptr [rip + window_surface_width]
@@ -13010,13 +13022,39 @@ draw_rect:
     div ecx
     mov r15d, eax
 .draw_rect_density_done:
-    mov eax, dword ptr [rip + window_buffer_scale]
-    cmp eax, 1
-    jbe .draw_rect_scale_done
-    imul r12d, eax
-    imul r13d, eax
-    imul r14d, eax
-    imul r15d, eax
+    mov r8d, dword ptr [rip + window_buffer_raster_scale_120]
+    cmp r8d, 120
+    je .draw_rect_scale_done
+    mov eax, r12d
+    imul eax, r8d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r10d, eax
+    mov eax, r12d
+    add eax, r14d
+    imul eax, r8d
+    add eax, 119
+    xor edx, edx
+    div ecx
+    sub eax, r10d
+    mov r14d, eax
+    mov r12d, r10d
+    mov eax, r13d
+    imul eax, r8d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r10d, eax
+    mov eax, r13d
+    add eax, r15d
+    imul eax, r8d
+    add eax, 119
+    xor edx, edx
+    div ecx
+    sub eax, r10d
+    mov r15d, eax
+    mov r13d, r10d
 .draw_rect_scale_done:
     # Convert each logical-surface rectangle to its pre-transformed buffer box.
     mov eax, dword ptr [rip + window_buffer_transform]
@@ -13037,8 +13075,7 @@ draw_rect:
     jmp .draw_rect_map_done
 .draw_rect_map_90:
     mov eax, r13d
-    mov ecx, dword ptr [rip + window_surface_width]
-    imul ecx, dword ptr [rip + window_buffer_scale]
+    mov ecx, dword ptr [rip + window_raster_surface_width]
     sub ecx, r12d
     sub ecx, r14d
     mov r12d, eax
@@ -13046,20 +13083,17 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_180:
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_width]
     sub eax, r12d
     sub eax, r14d
     mov r12d, eax
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     sub eax, r13d
     sub eax, r15d
     mov r13d, eax
     jmp .draw_rect_map_done
 .draw_rect_map_270:
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     sub eax, r13d
     sub eax, r15d
     mov ecx, r12d
@@ -13068,8 +13102,7 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_flipped:
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_width]
     sub eax, r12d
     sub eax, r14d
     mov r12d, eax
@@ -13082,19 +13115,16 @@ draw_rect:
     xchg r14d, r15d
     jmp .draw_rect_map_done
 .draw_rect_map_flipped_180:
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     sub eax, r13d
     sub eax, r15d
     mov r13d, eax
     jmp .draw_rect_map_done
 .draw_rect_map_flipped_270:
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     sub eax, r13d
     sub eax, r15d
-    mov ecx, dword ptr [rip + window_surface_width]
-    imul ecx, dword ptr [rip + window_buffer_scale]
+    mov ecx, dword ptr [rip + window_raster_surface_width]
     sub ecx, r12d
     sub ecx, r14d
     mov r12d, eax
@@ -14753,13 +14783,14 @@ window_update_geometry:
 .window_geometry_virtual_height_ready:
     mov dword ptr [rip + window_height], eax
 
-    # Buffer scale is separate from virtual UI density and uses surface pixels.
+    # Keep Wayland's integer buffer-scale state separate from raster density.
+    # Fractional-scale-v1 uses wl_surface buffer_scale=1 and an exact
+    # 120ths backing raster through wp_viewport.
     mov eax, 1
     cmp dword ptr [rip + fractional_scale_enabled], 1
-    je .window_geometry_scale_protocol_ready
+    je .window_geometry_buffer_scale_ready
     cmp dword ptr [rip + compositor_version], 3
     jb .window_geometry_buffer_scale_ready
-.window_geometry_scale_protocol_ready:
     mov edx, dword ptr [rip + surface_effective_buffer_scale]
     cmp edx, 2
     jb .window_geometry_buffer_scale_ready
@@ -14778,10 +14809,89 @@ window_update_geometry:
     mov edx, dword ptr [rip + surface_preferred_buffer_transform]
 .window_geometry_transform_ready:
     mov dword ptr [rip + window_buffer_transform], edx
+
+    cmp dword ptr [rip + fractional_scale_enabled], 1
+    jne .window_geometry_integer_raster_scale
+    mov r8d, dword ptr [rip + surface_preferred_fractional_scale]
+    test r8d, r8d
+    jnz .window_geometry_fractional_scale_ready
+    mov r8d, 120
+.window_geometry_fractional_scale_ready:
+    # Cap at 2x and at the actual two-slot SHM dimensions. Rotated buffers
+    # exchange the width/height capacity axes.
+    cmp r8d, (MAX_BUFFER_SCALE * 120)
+    jbe .window_geometry_fractional_cap_ready
+    mov r8d, (MAX_BUFFER_SCALE * 120)
+.window_geometry_fractional_cap_ready:
+    test dword ptr [rip + window_buffer_transform], 1
+    jnz .window_geometry_fractional_cap_rotated
+    mov eax, (MAX_WINDOW_WIDTH * 120)
+    xor edx, edx
+    div dword ptr [rip + window_surface_width]
+    cmp r8d, eax
+    jbe .window_geometry_fractional_cap_width_ready
+    mov r8d, eax
+.window_geometry_fractional_cap_width_ready:
+    mov eax, (MAX_WINDOW_HEIGHT * 120)
+    xor edx, edx
+    div dword ptr [rip + window_surface_height]
+    cmp r8d, eax
+    jbe .window_geometry_fractional_cap_store
+    mov r8d, eax
+    jmp .window_geometry_fractional_cap_store
+.window_geometry_fractional_cap_rotated:
+    mov eax, (MAX_WINDOW_WIDTH * 120)
+    xor edx, edx
+    div dword ptr [rip + window_surface_height]
+    cmp r8d, eax
+    jbe .window_geometry_fractional_cap_rotated_width_ready
+    mov r8d, eax
+.window_geometry_fractional_cap_rotated_width_ready:
+    mov eax, (MAX_WINDOW_HEIGHT * 120)
+    xor edx, edx
+    div dword ptr [rip + window_surface_width]
+    cmp r8d, eax
+    jbe .window_geometry_fractional_cap_store
+    mov r8d, eax
+.window_geometry_fractional_cap_store:
+    test r8d, r8d
+    jnz .window_geometry_fractional_scale_store
+    mov r8d, 1
+.window_geometry_fractional_scale_store:
+    mov dword ptr [rip + window_buffer_raster_scale_120], r8d
+    jmp .window_geometry_raster_dimensions
+
+.window_geometry_integer_raster_scale:
+    mov eax, dword ptr [rip + window_buffer_scale]
+    imul eax, 120
+    mov dword ptr [rip + window_buffer_raster_scale_120], eax
+
+.window_geometry_raster_dimensions:
+    # Round positive dimensions to nearest; an exact half rounds away from zero.
     mov eax, dword ptr [rip + window_surface_width]
-    imul eax, dword ptr [rip + window_buffer_scale]
-    mov edx, dword ptr [rip + window_surface_height]
-    imul edx, dword ptr [rip + window_buffer_scale]
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    add eax, 60
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jnz .window_geometry_raster_width_ready
+    mov eax, 1
+.window_geometry_raster_width_ready:
+    mov dword ptr [rip + window_raster_surface_width], eax
+    mov eax, dword ptr [rip + window_surface_height]
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    add eax, 60
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    test eax, eax
+    jnz .window_geometry_raster_height_ready
+    mov eax, 1
+.window_geometry_raster_height_ready:
+    mov dword ptr [rip + window_raster_surface_height], eax
+    mov eax, dword ptr [rip + window_raster_surface_width]
+    mov edx, dword ptr [rip + window_raster_surface_height]
     test dword ptr [rip + window_buffer_transform], 1
     jnz .window_geometry_swapped_axes
     mov dword ptr [rip + window_buffer_width], eax
@@ -15327,6 +15437,9 @@ window_apply_pending_resize:
     mov eax, dword ptr [rip + window_buffer_scale]
     cmp eax, dword ptr [rip + window_buffer_created_scale]
     jne .window_resize_dimensions_changed
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    cmp eax, dword ptr [rip + window_buffer_created_raster_scale_120]
+    jne .window_resize_dimensions_changed
     mov eax, dword ptr [rip + window_buffer_transform]
     cmp eax, dword ptr [rip + window_buffer_created_transform]
     jne .window_resize_dimensions_changed
@@ -15394,6 +15507,8 @@ window_apply_pending_resize:
     mov qword ptr [rip + shm_mapping], rax
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    mov dword ptr [rip + window_buffer_created_raster_scale_120], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
     mov eax, dword ptr [rip + window_surface_width]
@@ -20325,23 +20440,37 @@ draw_glyph:
     div ecx
     mov r14d, eax
 .glyph_density_done:
-    mov eax, dword ptr [rip + window_buffer_scale]
-    cmp eax, 1
-    jbe .glyph_scale_done
-    imul r12d, eax
-    imul r13d, eax
-    imul r14d, eax
+    mov r8d, dword ptr [rip + window_buffer_raster_scale_120]
+    cmp r8d, 120
+    je .glyph_scale_done
+    mov eax, r12d
+    imul eax, r8d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r12d, eax
+    mov eax, r13d
+    imul eax, r8d
+    cdq
+    mov ecx, 120
+    idiv ecx
+    mov r13d, eax
+    mov eax, r14d
+    imul eax, r8d
+    add eax, 60
+    xor edx, edx
+    mov ecx, 120
+    div ecx
+    mov r14d, eax
 .glyph_scale_done:
     test r12d, r12d
     js .glyph_done
     test r13d, r13d
     js .glyph_done
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_width]
     cmp r12d, eax
     jae .glyph_done
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     cmp r13d, eax
     jae .glyph_done
     # Render parsed TrueType glyphs when a font is active; retain the compact
@@ -20360,11 +20489,9 @@ draw_glyph:
     mov dword ptr [rsp + 8], r14d
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rsp + 16], eax
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_width]
     mov dword ptr [rsp + 24], eax
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, dword ptr [rip + window_buffer_scale]
+    mov eax, dword ptr [rip + window_raster_surface_height]
     mov dword ptr [rsp + 32], eax
     call font_draw_codepoint_size
     add rsp, 48
@@ -20561,11 +20688,11 @@ draw_glyph:
     lea rbx, [rip + font_5x7]
     add rbx, rax
     mov eax, dword ptr [rip + window_ui_scale_120]
-    add eax, 119
+    imul eax, dword ptr [rip + window_buffer_raster_scale_120]
+    add eax, 14399
     xor edx, edx
-    mov ecx, 120
+    mov ecx, 14400
     div ecx
-    imul eax, dword ptr [rip + window_buffer_scale]
     mov r10d, eax
     cmp r10d, 1
     jae .glyph_fallback_scale_ready
@@ -20592,8 +20719,7 @@ draw_glyph:
     imul eax, r10d
     add eax, r13d
     add eax, r11d
-    mov ecx, dword ptr [rip + window_surface_height]
-    imul ecx, r10d
+    mov ecx, dword ptr [rip + window_raster_surface_height]
     cmp eax, ecx
     jae .glyph_fallback_next_subrow
     # Keep the physical row coordinate intact across every horizontal subpixel.
@@ -20607,8 +20733,7 @@ draw_glyph:
     imul edx, r10d
     add edx, r12d
     add edx, r9d
-    mov ecx, dword ptr [rip + window_surface_width]
-    imul ecx, r10d
+    mov ecx, dword ptr [rip + window_raster_surface_width]
     cmp edx, ecx
     jae .glyph_fallback_next_subcolumn
     # Map this physical surface pixel into the transformed SHM buffer.
@@ -20631,34 +20756,29 @@ draw_glyph:
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_90:
     mov ecx, esi
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, r10d
+    mov eax, dword ptr [rip + window_raster_surface_width]
     dec eax
     sub eax, edx
     mov edx, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_180:
-    mov edi, dword ptr [rip + window_surface_width]
-    imul edi, r10d
+    mov edi, dword ptr [rip + window_raster_surface_width]
     dec edi
     sub edi, edx
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, r10d
+    mov eax, dword ptr [rip + window_raster_surface_height]
     dec eax
     sub eax, esi
     mov edx, edi
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_270:
-    mov ecx, dword ptr [rip + window_surface_height]
-    imul ecx, r10d
+    mov ecx, dword ptr [rip + window_raster_surface_height]
     dec ecx
     sub ecx, esi
     mov eax, edx
     mov edx, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped:
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, r10d
+    mov eax, dword ptr [rip + window_raster_surface_width]
     dec eax
     sub eax, edx
     mov edx, eax
@@ -20671,18 +20791,15 @@ draw_glyph:
     mov eax, ecx
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped_180:
-    mov eax, dword ptr [rip + window_surface_height]
-    imul eax, r10d
+    mov eax, dword ptr [rip + window_raster_surface_height]
     dec eax
     sub eax, esi
     jmp .glyph_fallback_map_done
 .glyph_fallback_map_flipped_270:
-    mov ecx, dword ptr [rip + window_surface_height]
-    imul ecx, r10d
+    mov ecx, dword ptr [rip + window_raster_surface_height]
     dec ecx
     sub ecx, esi
-    mov eax, dword ptr [rip + window_surface_width]
-    imul eax, r10d
+    mov eax, dword ptr [rip + window_raster_surface_width]
     dec eax
     sub eax, edx
     mov edx, ecx
@@ -24729,12 +24846,17 @@ window_scale_schedule:
     sub rsp, 16
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rsp], eax
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    mov dword ptr [rsp + 4], eax
     call window_update_geometry
     mov eax, dword ptr [rsp]
+    mov edx, dword ptr [rsp + 4]
     add rsp, 16
     cmp r12d, dword ptr [rip + window_buffer_scale]
     jne .window_scale_schedule_changed
     cmp eax, dword ptr [rip + window_buffer_transform]
+    jne .window_scale_schedule_changed
+    cmp edx, dword ptr [rip + window_buffer_raster_scale_120]
     je .window_scale_schedule_done
 .window_scale_schedule_changed:
     mov dword ptr [rip + window_resize_pending], 1
@@ -24818,6 +24940,9 @@ window_prepare_initial_buffer_scale:
     mov eax, dword ptr [rip + window_buffer_created_scale]
     cmp eax, dword ptr [rip + window_buffer_scale]
     jne .window_prepare_initial_scale_rebuild
+    mov eax, dword ptr [rip + window_buffer_created_raster_scale_120]
+    cmp eax, dword ptr [rip + window_buffer_raster_scale_120]
+    jne .window_prepare_initial_scale_rebuild
     mov eax, dword ptr [rip + window_buffer_transform]
     cmp eax, dword ptr [rip + window_buffer_created_transform]
     je .window_prepare_initial_scale_done
@@ -24861,6 +24986,8 @@ window_prepare_initial_buffer_scale:
     mov qword ptr [rip + shm_mapping], rax
     mov eax, dword ptr [rip + window_buffer_scale]
     mov dword ptr [rip + window_buffer_created_scale], eax
+    mov eax, dword ptr [rip + window_buffer_raster_scale_120]
+    mov dword ptr [rip + window_buffer_created_raster_scale_120], eax
     mov eax, dword ptr [rip + window_buffer_transform]
     mov dword ptr [rip + window_buffer_created_transform], eax
     mov eax, dword ptr [rip + window_surface_width]
@@ -24901,18 +25028,10 @@ output_recompute_surface_scale:
     mov dword ptr [rip + surface_output_count], r13d
     mov dword ptr [rip + surface_output_max_scale], r11d
 
-    # fractional-scale-v1 reports a numerator over 120. The current software
-    # rasterizer chooses a 1x or bounded 2x source and lets wp_viewport map it
-    # to the exact logical destination. Integer-only compositors retain their
-    # preferred-buffer-scale/output-scale path.
+    # wp_viewporter keeps wl_surface buffer_scale at 1. The exact preferred
+    # 120ths raster numerator is consumed by window_update_geometry.
     cmp dword ptr [rip + fractional_scale_enabled], 1
     jne .output_recompute_integer_scale
-    mov eax, dword ptr [rip + surface_preferred_fractional_scale]
-    cmp eax, 120
-    jbe .output_recompute_fractional_1x
-    mov eax, 2
-    jmp .output_recompute_store_scale
-.output_recompute_fractional_1x:
     mov eax, 1
     jmp .output_recompute_store_scale
 .output_recompute_integer_scale:
