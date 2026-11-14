@@ -3868,7 +3868,46 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     client.sendall(buffer_release_message())
-                    wait_child_u32("frame_callback_id", 0, f"{label} frame callback completion")
+                    # A key release can race a coalesced redraw behind the frame
+                    # just committed. Drain that bounded follow-up rather than
+                    # polling memory while leaving its wl_surface.frame request
+                    # unread on the socket.
+                    original_timeout = client.gettimeout()
+                    settle_deadline = time.monotonic() + 3.0
+                    followup_frames = 0
+                    quiet_since = None
+                    try:
+                        while time.monotonic() < settle_deadline:
+                            callback_id = child_u32("frame_callback_id")
+                            busy_slots = child_u32("buffer_busy")
+                            if callback_id == 0 and busy_slots == 0:
+                                if quiet_since is None:
+                                    quiet_since = time.monotonic()
+                                elif time.monotonic() - quiet_since >= 0.025:
+                                    break
+                                time.sleep(0.002)
+                                continue
+                            quiet_since = None
+                            if callback_id != 0 and not frame_callback_stats["pending"]:
+                                if followup_frames >= 2:
+                                    raise AssertionError(
+                                        f"{label}: more than two follow-up frames were queued"
+                                    )
+                                client.settimeout(max(0.05, settle_deadline - time.monotonic()))
+                                expect_buffer_frame(f"{label} coalesced follow-up frame")
+                                client.sendall(buffer_release_message())
+                                followup_frames += 1
+                                continue
+                            time.sleep(0.002)
+                        else:
+                            raise AssertionError(
+                                f"{label}: frame/buffer gates did not settle; "
+                                f"callback={child_u32('frame_callback_id')}, "
+                                f"busy={child_u32('buffer_busy')}, "
+                                f"stats={frame_callback_stats!r}"
+                            )
+                    finally:
+                        client.settimeout(original_timeout)
                     wait_child_u32("repeat_keycode", 0, f"{label} key release")
                     if auto_confirm and child_u32("save_confirm_open") == 1:
                         key_step(
