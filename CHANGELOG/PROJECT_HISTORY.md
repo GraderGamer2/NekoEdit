@@ -1,3 +1,17 @@
+## 2026-11-15 — batch Find/Replace index maintenance
+
+Find/Replace previously replaced a match by deleting the selection and then calling the single-byte insertion routine once for every byte in the replacement buffer. That was unnecessarily expensive for multi-byte replacements and for Replace All: after each deletion invalidated the derived line index, the first inserted byte could force a full rebuild before the rest of that replacement updated the index incrementally.
+
+The replacement routine now delegates the entire contiguous replacement buffer to `doc_insert_bytes`. The range is recorded as one history insertion operation and copied in bulk. The Replace All loop performs its matching directly against document bytes, so it can process all matching ranges while the line index remains invalid. The index is rebuilt lazily on the next render, after the batch, rather than repeatedly during it. This retains the existing gap-buffer representation and line-index data structures.
+
+The Wayland mock now uses a 66-logical-line fixture. After Replace Current changes the first match, Replace All must change the remaining 65. The test validates the exact document contents, every logical line's byte span and visual-row count, nonzero unique stable line IDs, both Fenwick-tree node arrays, and the reported replacement count. The rest of the Find/Replace UI path—including query editing, highlights, Enter/F3 navigation and Escape—remains covered.
+
+Implementation [ad18f921af7038afb086d73a1822407f1d2b471c](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c) passed all 17 steps in Actions [#985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631), including the full Wayland protocol mock and 11 MiB Open/Save, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus integration, and artifact uploads.
+
+The ELF reports text 237,670 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,138 bytes and Compose packs are 120,536 bytes. The executable is 12 bytes smaller than #984, but no end-to-end performance gain is asserted and no before/after timing was collected.
+
+---
+
 ## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
 
 The document line-index rebuild now uses contiguous physical-span newline scans when the gap is inside the document. The existing EOF-gap fast path stays as-is. The edited-document count and fill phases use `REPNE SCASB` over the prefix and suffix rather than making a `doc_byte_at` call for every byte. Logical line offsets are carried across the gap, including when a single logical line is physically split by it. Existing grapheme-aware visual-row measurement is unchanged.

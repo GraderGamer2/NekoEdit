@@ -1,3 +1,15 @@
+## Latest handoff (2026-11-15 — batched Find/Replace; CI PASS #985)
+
+Continue source development on `early-alpha` at [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+The Find/Replace implementation now inserts each contiguous replacement buffer through `doc_insert_bytes`, rather than repeatedly calling the single-byte insertion routine. That range operation records the insertion as one history operation and invalidates the derived line index. Because the Replace All search path reads document bytes directly and does not force index validation, all matches are processed before one lazy rebuild on the next render.
+
+The Wayland mock's Find/Replace case now uses 65 remaining matches across a 66-logical-line fixture. It checks Replace Current and Replace All, exact final bytes, per-line spans and visual-row counts, unique stable line IDs, Fenwick-tree contents, and the final replacement count. Actions [#985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631) passed all 17 workflow steps, including the full Wayland mock and 11 MiB Open/Save, renderer equivalence, native `us(intl)` XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus and both artifact uploads.
+
+ELF `size`: text 237,670 bytes, data 64 bytes, BSS 3,764,856 bytes. The executable artifact is 151,138 bytes; Compose locale packs are 120,536 bytes. Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131304250); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631/artifacts/14131676146). Expiry: 2026-11-16 03:51 WIB. The executable is 12 bytes smaller than #984; this small size difference is not a measured speed improvement.
+
+No end-to-end performance comparison was collected, and no manual retest on the user's live GNOME session is claimed. Next candidate: audit and optimize a gap-aware sequential iterator for visible-row layout, preserving Unicode grapheme boundaries and avoiding repeated `doc_byte_at` lookup overhead.
+
 ## Latest handoff (2026-11-15 — gap-aware line-index rebuild; CI PASS #984)
 
 Continue source development on `early-alpha` at [f8ff3f8](https://github.com/GraderGamer2/NekoEdit/commit/f8ff3f8df0575a5349a3f5d7acec020890661983). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
