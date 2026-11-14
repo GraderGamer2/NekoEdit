@@ -1,3 +1,9 @@
+## 2026-11-14 — dual-slot caret pixel test correction (Actions pending)
+
+Correct the held-key caret assertions to inspect the currently attached SHM slot. The mock already tracks each `wl_buffer`'s pool offset; the caret scan, candidate diagnostics and adjacent glyph-pixel assertions now use that active offset instead of assuming slot zero. This follows Actions #964, which passed compilation, CLI smoke and rasterizer comparisons but failed because the mock inspected the other slot's older frame. Renderer code remains unchanged.
+
+---
+
 ## 2026-11-14 — dirty-render test expectation correction (Actions pending)
 
 Adjust the Wayland mock to recognize the new two-band damage requests for plain held-Left navigation, while keeping non-caret operations such as Backspace on the full-frame expectation. The focused partial-render test allows the first buffer warm-up repaint to fall back to full-frame, then requires the next three alternating caret frames to use two-band damage.

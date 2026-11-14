@@ -9560,7 +9560,7 @@ xkb_symbols "nekoedit-sparse" {
                     # The map has no usable alphabetic coverage, so its
                     # parser must leave the existing US evdev translator live.
                     key_step(1800, 30, "US fallback inserts a after sparse XKB rejection")
-                    if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                    if struct.unpack_from("<I", pixels, active_buffer["offset"] + 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                         raise AssertionError(
                             "US-QWERTY fallback did not render the first a after sparse XKB rejection"
                         )
@@ -10545,7 +10545,7 @@ xkb_symbols "nekoedit-sparse" {
                     for y in range(92, 460 - 9, 12):
                         for x in range(16, 800 - 1, 8):
                             if all(
-                                struct.unpack_from("<I", pixels, (y + dy) * 800 * 4 + x * 4)[0]
+                                struct.unpack_from("<I", pixels, active_buffer["offset"] + (y + dy) * 800 * 4 + x * 4)[0]
                                 == 0xFFFFFFFF
                                 for dy in range(9)
                             ):
@@ -10583,7 +10583,7 @@ xkb_symbols "nekoedit-sparse" {
                         f"held printable key did not repeat into the next cell: "
                         f"after_press={after_press}, after_repeat={after_repeat}"
                     )
-                if struct.unpack_from("<I", pixels, 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
+                if struct.unpack_from("<I", pixels, active_buffer["offset"] + 92 * 800 * 4 + 17 * 4)[0] != 0xFFD8DEE9:
                     raise AssertionError("repeated printable-key test did not render its first glyph")
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1711, 1711, 30, 0))
@@ -10606,7 +10606,7 @@ xkb_symbols "nekoedit-sparse" {
                         for y in range(92, 460 - 9, 12)
                         for x in range(16, 800 - 1, 8)
                         if all(
-                            struct.unpack_from("<I", pixels, (y + dy) * 800 * 4 + x * 4)[0]
+                            struct.unpack_from("<I", pixels, active_buffer["offset"] + (y + dy) * 800 * 4 + x * 4)[0]
                             == 0xFFFFFFFF
                             for dy in range(9)
                         )

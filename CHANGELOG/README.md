@@ -1,4 +1,14 @@
-## Latest handoff (2026-11-14 — dirty caret-band repaint; mock fix pending Actions)
+## Latest handoff (2026-11-14 — dirty caret repaint; dual-buffer test fix pending Actions)
+
+Continue on `early-alpha`; keep `main` as the stable application-source checkpoint and mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
+
+The first partial renderer targets plain unselected arrow navigation. It clips rectangle, bitmap glyph and TrueType glyph writes to the old/new caret-row neighbourhood and status footer, and submits matching Wayland damage bands. Per-slot snapshots gate partial reuse; unknown/stale slots take a safe full repaint. Other edits, selections, scroll, IME/Compose, overlays, scale/resize changes and transformed buffers remain full-frame.
+
+Actions #963/#964 built successfully and passed CLI smoke plus rasterizer equivalence checks. The mock corrections cover held-Left two-band damage, first-slot warm-up and correct active-SHM-slot pixel inspection for held-Enter. The third Actions run is pending. Visible-row layout traversal remains unchanged; no end-to-end latency improvement is claimed until measured. Live GNOME/Mutter verification remains outstanding.
+
+---
+
+## Previous handoff (2026-11-14 — dirty caret-band repaint; mock fix pending Actions)
 
 Continue development on `early-alpha`; keep `main` as the stable application-source checkpoint and `optimization-early-alpha` isolated. Normal development remains `-O2`, unstripped.
 

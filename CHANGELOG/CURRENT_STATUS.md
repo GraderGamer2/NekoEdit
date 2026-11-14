@@ -1,3 +1,9 @@
+## 2026-11-14 — dual-slot Wayland test correction (Actions pending)
+
+The dirty caret-band implementation is committed in `863196e`. Actions #963 passed build, CLI smoke, and rasterizer equivalence checks, then failed because the held-Left assertion required full-frame damage. Commit `d682b6b` updated the mock for two-band held-Left damage and the first-slot warm-up fallback. Actions #964 passed build, CLI smoke, and rasterizer checks, then exposed a separate mock bug: caret pixel assertions indexed the two-slot SHM pool from offset zero rather than the currently attached buffer offset. The test now adds the active slot offset for caret scans and related pixel checks. No renderer source code changed in either test correction. Actions rerun is pending; GNOME/Mutter smoke and performance testing remain outstanding.
+
+---
+
 ## 2026-11-14 — dirty-render test correction (Actions pending)
 
 Commit `863196e` contains the first dirty caret-band rendering implementation. The initial Actions run #963 compiled and linked successfully, passed CLI smoke tests, and passed rasterizer correctness/benchmark comparison. The Wayland mock then failed because its held-Left repeat assertion still expected exactly one full-frame damage rectangle. It was updated to accept the two-band damage form only for plain Left navigation, while Backspace/edit checks remain full-frame. The focused test now accepts one initial full redraw while the second SHM slot acquires its first valid snapshot, then requires three partial caret frames.

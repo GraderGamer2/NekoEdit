@@ -1,3 +1,15 @@
+## 2026-11-14 — dirty caret-band rendering and mock corrections (Actions pending)
+
+| Commit | Subject |
+|---|---|
+| [863196e](https://github.com/GraderGamer2/NekoEdit/commit/863196ef9bae96b6216b41315ba42871cbc9edac) | perf: add conservative dirty caret-band repaint |
+| [d682b6b](https://github.com/GraderGamer2/NekoEdit/commit/d682b6b547d9dd252b0d0f4e4830a8de2ea2a989) | test: accept dirty caret damage in held-key mock |
+| pending | test: inspect active SHM slot in caret assertions |
+
+The renderer uses per-SHM-slot snapshots to gate partial caret-row and footer repaint. The mock accepts narrow two-band damage for held Left navigation, tolerates the first safe full repaint while an alternate slot is initialized, and inspects pixel data at the currently attached buffer's pool offset. Actions #963 and #964 passed compilation, CLI smoke and rasterizer comparison; the Wayland mock revealed test expectation/slot-observation issues now corrected. The current run is pending.
+
+---
+
 ## 2026-11-14 — dirty caret-band repaint (mock correction pending)
 
 | Commit | Subject |
