@@ -26,10 +26,6 @@ int main(void)
             for (uint32_t i = gap_at; i < DOCUMENT_LENGTH; ++i)
                 physical[i + gap_size] = logical[i];
 
-            doc_buffer = physical;
-            doc_gap_start = gap_at;
-            doc_gap_end = gap_at + gap_size;
-
             for (uint32_t begin = 0; begin <= DOCUMENT_LENGTH; ++begin) {
                 for (uint32_t end = begin; end <= DOCUMENT_LENGTH; ++end) {
                     uint8_t actual[DOCUMENT_LENGTH];
