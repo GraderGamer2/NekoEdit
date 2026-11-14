@@ -3325,7 +3325,8 @@ xkb_symbols "nekoedit-sparse" {
                         "window_doc_pixel_width", "settings_menu_open",
                         "doc_selection_active", "render_selection_scan_start",
                         "render_selection_scan_end", "render_find_scan_start",
-                        "render_find_scan_end", "context_menu_open", "context_menu_x",
+                        "render_find_scan_end", "render_document_scan_start",
+                        "render_document_scan_end", "context_menu_open", "context_menu_x",
                         "context_menu_y",
                     }:
                         document_symbols[fields[2]] = int(fields[0], 16)
@@ -8845,18 +8846,23 @@ xkb_symbols "nekoedit-sparse" {
                     selection_view_state = read_document_state()
                     selection_scan_start = selection_view_state.get("render_selection_scan_start", 0)
                     selection_scan_end = selection_view_state.get("render_selection_scan_end", 0)
+                    document_scan_start = selection_view_state.get("render_document_scan_start", 0)
+                    document_scan_end = selection_view_state.get("render_document_scan_end", 0)
                     if (
                         selection_view_state.get("doc_view_top_row", 0) <= 0
                         or selection_scan_start <= 0
                         or selection_scan_end <= selection_scan_start
                         or selection_scan_end - selection_scan_start > 16384
+                        or document_scan_start <= 0
+                        or document_scan_end <= document_scan_start
+                        or document_scan_end - document_scan_start > 16384
                     ):
                         raise AssertionError(
-                            "selection painting scanned outside the visible middle viewport: "
+                            "document or selection painting scanned outside the visible middle viewport: "
                             + repr({
                                 "view_top": selection_view_state.get("doc_view_top_row"),
-                                "scan_start": selection_scan_start,
-                                "scan_end": selection_scan_end,
+                                "selection_range": (selection_scan_start, selection_scan_end),
+                                "document_range": (document_scan_start, document_scan_end),
                                 "doc_length": selection_view_state.get("doc_length"),
                             })
                         )
@@ -8904,7 +8910,12 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(serial + 95, 1, "Escape closes large-document Find")
                     serial += 110
                     observations.append(
-                        "large-document selection and Find painting scan only indexed visible rows after scrollbar and fast-wheel scrolling"
+                        "large-document glyph, selection, and Find painting scan only indexed visible rows after scrollbar and fast-wheel scrolling"
+                    )
+                    print(
+                        "Large-document visible paint ranges: "
+                        f"glyphs={document_scan_end - document_scan_start:,} bytes, "
+                        f"selection={selection_scan_end - selection_scan_start:,} bytes"
                     )
                     observations.append(
                         "editor scrollbar visibility, proportional thumb rendering, pointer drag, and wheel scrolling verified"

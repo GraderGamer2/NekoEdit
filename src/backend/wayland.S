@@ -5027,6 +5027,9 @@ render_selection_scan_end:   .long 0
 .global render_find_scan_start, render_find_scan_end
 render_find_scan_start: .long 0
 render_find_scan_end:   .long 0
+.global render_document_scan_start, render_document_scan_end
+render_document_scan_start: .long 0
+render_document_scan_end:   .long 0
 .global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
@@ -23605,7 +23608,7 @@ render_find_highlights_range:
     ret
 .size render_find_highlights_range, . - render_find_highlights_range
 
-.size render_find_highlights, . - render_find_highlights
+
 
 # Paint selected document cells before glyphs and the caret are rendered.
 .type render_selection, @function
@@ -23968,7 +23971,7 @@ render_selection_unwrapped:
     ret
 .size render_selection_unwrapped, . - render_selection_unwrapped
 
-.size render_selection_unwrapped, . - render_selection_unwrapped
+
 
 # ASCII alphanumerics/underscore and non-ASCII scalars form word runs.
 # Keeping Unicode scripts together is preferable to splitting multibyte words.
@@ -24393,6 +24396,8 @@ render_document:
     push r13
     push r14
     push r15
+    mov dword ptr [rip + render_document_scan_start], 0
+    mov dword ptr [rip + render_document_scan_end], 0
     mov r12d, DOC_LEFT
     cmp dword ptr [rip + doc_wrap_enabled], 0
     jne .Ldocument_render_origin_ready
@@ -24402,8 +24407,11 @@ render_document:
     xor esi, esi
     call doc_visual_to_offset
     mov r14d, eax
+    mov dword ptr [rip + render_document_scan_start], r14d
+    mov dword ptr [rip + render_document_scan_end], r14d
     mov r13d, DOC_TOP
 .Ldocument_render_loop:
+    mov dword ptr [rip + render_document_scan_end], r14d
     cmp r14d, dword ptr [rip + doc_length]
     jae .document_draw_cursor
     mov eax, dword ptr [rip + window_doc_bottom]
