@@ -10911,13 +10911,11 @@ xkb_symbols "nekoedit-sparse" {
             client_endpoint.close()
             client_endpoint = None
         # File and Settings-locale workflows include several sequential
-        # picker/menu/install/import interactions. Keep a finite but generous
-        # bound for slower hosted runners; regular keyboard/XKB cases retain
-        # the shorter timeout.
-        # The full default Wayland smoke scenario took 19.1s on the
-        # preceding passing runner. Keep a bounded margin for runner variance;
-        # fake-compositor socket deadlines still catch protocol stalls early.
-        timeout_seconds = 90 if (file_workflow or compose_locale_settings_test) else 30
+        # picker/menu/install/import interactions. The regular full Wayland
+        # smoke also exercises 100 incremental soft-wrap keystrokes and can
+        # approach 30s on a busy hosted runner. Keep process timeouts generous;
+        # fake-compositor socket and frame deadlines still catch protocol stalls.
+        timeout_seconds = 90 if (file_workflow or compose_locale_settings_test) else 60
         try:
             stdout, stderr_bytes = process.communicate(timeout=timeout_seconds)
         except subprocess.TimeoutExpired:

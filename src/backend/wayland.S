@@ -13505,6 +13505,9 @@ pointer_capture_enter:
     ret
 .size pointer_capture_enter, . - pointer_capture_enter
 
+# wl_fixed pointer coordinates are signed. During an implicit button grab,
+# motion can continue beyond the surface and produce negative X/Y values.
+# Preserve that sign when converting surface coordinates to virtual UI space.
 .type pointer_capture_motion, @function
 pointer_capture_motion:
     cmp dword ptr [rip + last_size], 12
