@@ -36,7 +36,7 @@ Keep the normal build at **O2 and unstripped** for development and symbol-based 
 The experiment remains isolated on optimization-early-alpha. No application source or default compiler flags were changed. The next step is a runtime comparison of O2 and Os on actual rendering and editing workloads.
 
 ---
-# 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
+## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
 
 The previous large-paste optimization left `doc_cursor` immediately after the final inserted byte. The common `doc_ensure_cursor_visible` path therefore treated the end of a multi-megabyte paste as the desired viewport location, even when the paste had begun at the top of an empty document. That produced an unwanted jump away from the start of the newly pasted text.
 

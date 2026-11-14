@@ -18,7 +18,7 @@ Stripping O2 saves 110,072 bytes (31.9%) without changing loadable sections. Str
 **Decision:** Keep normal O2 unstripped for development/testing. Stripping is recommended for release packaging after packaging validation. Keep Os as a performance-benchmark candidate; do not change the default until rendering, scrolling, and editing workloads are compared. Do not adopt section GC solely for size. Application source and default CFLAGS remain unchanged.
 
 ---
-# 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
+## 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
 
 Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps on final head [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7). The real Wayland mock transferred 10 MiB through the nonblocking clipboard pipe, verified every byte and all line-index records, confirmed that the caret and viewport remained at the paste's original insertion point, checked that the scrollbar thumb stayed correctly anchored at the top for a paste at offset 0, and passed full Undo/Redo. Redo restored the same caret/viewport state. The end-to-first-redraw interval was 560.7 ms on the Ubuntu 24.04 GitHub runner; Undo/Redo were checked separately and are not included in that timing.
 

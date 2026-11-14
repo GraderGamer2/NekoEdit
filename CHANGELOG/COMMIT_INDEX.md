@@ -9,7 +9,7 @@
 [Actions #927](https://github.com/GraderGamer2/NekoEdit/actions/runs/43544881549) passed all 23 steps. Stripped O2 is 234,944 bytes (31.9% smaller than unstripped O2); stripped Os is 226,264 bytes (8,680 bytes smaller than stripped O2). Section GC discards five dead input sections but reduces the stripped output by only 16 bytes at O2 and 8 bytes at Os. No default flags or application source changed. O2 remains the unstripped development/test baseline; Os awaits real workload benchmarks.
 
 ---
-# 2026-11-13 — preserve clipboard paste origin and top-of-document viewport (CI PASS #925)
+## 2026-11-13 — preserve clipboard paste origin and top-of-document viewport (CI PASS #925)
 
 | Commit | Subject |
 |---|---|
