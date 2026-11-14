@@ -1,4 +1,4 @@
-## 2026-11-14 — preserve pending buffer generations across configure (CI pending)
+## 2026-11-14 — preserve pending buffer generations across configure (CI PASS #947)
 
 **Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
 
@@ -6,7 +6,7 @@ Fixed a state-latching bug in the Wayland configure path: an unchanged xdg_surfa
 
 Added a dedicated mock scenario that owns both SHM slots simultaneously, changes preferred fractional scale several times, rotates the buffer, sends an unchanged configure in the middle, then resizes and releases slot one before slot zero. It verifies that neither old descriptor is destroyed early and that the replacement uses the final 180/120 raster, 90-degree transform, 640×360 logical destination, and 540×960 physical buffer.
 
-**Validation:** A single full Actions run is triggered by this implementation/test push. No local GNOME/Mutter desktop result is claimed; real mixed-DPI validation remains outstanding.
+**Validation:** [Actions #947](https://github.com/GraderGamer2/NekoEdit/actions/runs/43572916550) passed the full workflow: freestanding ELF build, CLI smoke tests, renderer comparison, the complete Wayland mock suite (including this two-slot fractional-generation case and the existing 11 MiB Open/Save cases), executable inspection, native XKB tests, pinned Compose-source import checks, locale-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads. The first #946 attempt failed before the Wayland suite because the new Python test helper accidentally shadowed a closure variable; [7d33087](https://github.com/GraderGamer2/NekoEdit/commit/7d330870971be5d5fa16dfcedb4e80658c4ddb34) fixes only that test-harness scoping issue. The implementation is [f7191c4](https://github.com/GraderGamer2/NekoEdit/commit/f7191c45277ed9bf29cd741951c91744177d18a6). No user-desktop run is claimed; real mixed-DPI validation remains outstanding.
 
 ---
 

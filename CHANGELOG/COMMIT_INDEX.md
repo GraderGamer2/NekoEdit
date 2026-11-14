@@ -1,11 +1,11 @@
-## 2026-11-14 — latch pending Wayland buffer generations across configure (CI pending)
+## 2026-11-14 — latch pending Wayland buffer generations across configure (CI PASS #947)
 
 Implementation/test/docs change on early-alpha:
 - Preserve an existing pending scale/transform rebuild across an unchanged xdg_surface.configure.
 - Exercise both occupied SHM slots, rapid fractional-scale updates, a preferred transform change, an unchanged configure, a logical resize, reverse-order releases, and final generation geometry/pixel rendering.
 - Keep wl_buffer.release ownership separate from wl_callback.done frame pacing.
 
-The full Actions result will be recorded after this push.
+Implementation [f7191c4](https://github.com/GraderGamer2/NekoEdit/commit/f7191c45277ed9bf29cd741951c91744177d18a6); test-harness correction [7d33087](https://github.com/GraderGamer2/NekoEdit/commit/7d330870971be5d5fa16dfcedb4e80658c4ddb34). Actions [#947](https://github.com/GraderGamer2/NekoEdit/actions/runs/43572916550) passed the full workflow, including the new compositor-ownership and generation-coalescing regression.
 
 ---
 
