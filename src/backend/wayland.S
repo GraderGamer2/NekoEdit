@@ -16372,6 +16372,18 @@ doc_grapheme_next:
     jb .Ldoc_grapheme_next_decode
     cmp eax, 127
     jae .Ldoc_grapheme_next_decode
+
+    # GB9 joins an ASCII base to a following non-ASCII Extend/ZWJ/SpacingMark.
+    # A high-bit next byte may start one of those scalars, so retain the full
+    # Unicode path in that case. ASCII controls always break and are safe.
+    lea edi, [r12d + 1]
+    cmp edi, ebx
+    jae .Ldoc_grapheme_next_ascii_done
+    call doc_byte_at
+    cmp eax, 128
+    jae .Ldoc_grapheme_next_decode
+
+.Ldoc_grapheme_next_ascii_done:
     lea r13d, [r12d + 1]
     jmp .Ldoc_grapheme_next_done
 
