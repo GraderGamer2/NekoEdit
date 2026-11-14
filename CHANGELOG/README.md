@@ -1,4 +1,14 @@
-## Latest handoff (2026-11-14 — dirty caret repaint; dual-buffer test fix pending Actions)
+## Latest handoff (2026-11-14 — dirty caret repaint; fixture correction pending Actions)
+
+Continue on `early-alpha`; keep `main` as the stable application-source checkpoint and mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
+
+The renderer has a conservative dirty caret-band path for plain unselected arrow navigation. It clips rectangle, bitmap glyph and TrueType glyph writes to the old/new caret-row neighbourhood and status footer, with matching Wayland damage bands. Per-slot snapshots gate partial reuse; unknown/stale slots take a safe full repaint. Other edits, selections, scroll, IME/Compose, overlays, scale/resize changes and transformed buffers remain full-frame.
+
+Actions #963–#965 compiled successfully and passed command-line smoke and rasterizer equivalence checks. The regular Wayland mock cases also passed in #965, including repeat/navigation and the dual-buffer pool. Its focused dirty-render scenario stopped at a generic initial-click assertion because the six-character test fixture landed at column 6 while that assertion samples columns 9–11. The fixture is now twelve characters; its test still moves to EOF explicitly before exercising dirty caret updates. The next Actions run is pending. Visible-row layout traversal remains unchanged; no end-to-end latency improvement is claimed. Live GNOME/Mutter verification remains outstanding.
+
+---
+
+## Previous handoff (2026-11-14 — dirty caret repaint; dual-buffer test fix pending Actions)
 
 Continue on `early-alpha`; keep `main` as the stable application-source checkpoint and mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
 

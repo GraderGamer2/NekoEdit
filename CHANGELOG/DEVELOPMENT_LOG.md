@@ -1,3 +1,9 @@
+## 2026-11-14 — dirty-render click fixture length correction
+
+Actions #965 passed the build, command-line tests, rasterizer comparison, and the regular Wayland mock cases, including the two-buffer pool. The focused dirty-render scenario then stopped in the shared initial-click assertion before reaching its own navigation checks. The fixture had six bytes, while that generic non-empty-file assertion samples caret positions at columns 9–11; the observed caret at column 6 was correct for the file. Extend the fixture to twelve ASCII bytes so the initial click lands in the range the generic assertion checks. The subsequent test still explicitly moves the caret to EOF before exercising repeated Left/Right navigation and insertion. Renderer source is unchanged.
+
+---
+
 ## 2026-11-14 — dual-SHM-slot caret test correction
 
 Actions run #964 compiled the ELF, passed CLI smoke tests, and passed the rasterizer equivalence/benchmark checks. The held-Enter Wayland scenario then exposed that its caret pixel scanner read from SHM pool offset zero even when the compositor had most recently attached the alternate buffer slot. The test now applies the active attached buffer's tracked offset to caret scans, failure diagnostics, and adjacent glyph-pixel assertions. This corrects the test's observation of the existing two-slot pool; the rendering source is unchanged. Actions validation is pending.

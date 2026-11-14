@@ -10942,7 +10942,7 @@ if __name__ == "__main__":
     dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-")
     try:
         with os.fdopen(dirty_fd, "wb") as dirty_file:
-            dirty_file.write(b"abcdef")
+            dirty_file.write(b"abcdefghijkl")
         run(sys.argv[1], initial_file=dirty_path, dirty_render_test=True)
     finally:
         try:

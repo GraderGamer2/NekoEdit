@@ -1,3 +1,9 @@
+## 2026-11-14 — dirty-render fixture click-position correction
+
+Extend the focused dirty-render test fixture from six to twelve ASCII characters. Actions #965 passed compilation, command-line smoke, rasterizer comparisons, and the regular Wayland mock cases, but its generic initial-click assertion samples columns 9–11 for non-empty files; the six-byte fixture correctly reported a caret at column 6 and therefore did not satisfy that generic check. The longer fixture aligns its clicked caret with the asserted range, after which the focused test places the caret at EOF before exercising partial Left/Right navigation. This is a test-only correction; renderer code is unchanged.
+
+---
+
 ## 2026-11-14 — dual-slot caret pixel test correction (Actions pending)
 
 Correct the held-key caret assertions to inspect the currently attached SHM slot. The mock already tracks each `wl_buffer`'s pool offset; the caret scan, candidate diagnostics and adjacent glyph-pixel assertions now use that active offset instead of assuming slot zero. This follows Actions #964, which passed compilation, CLI smoke and rasterizer comparisons but failed because the mock inspected the other slot's older frame. Renderer code remains unchanged.

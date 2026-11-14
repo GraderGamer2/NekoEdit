@@ -1,3 +1,9 @@
+## 2026-11-14 — dirty-render fixture correction (Actions pending)
+
+Actions #965 passed ELF build, command-line smoke tests, rasterizer reference checks, and the ordinary Wayland protocol cases, including keyboard navigation, repeat, scrolling, selection, and dual-SHM-buffer handling. It failed only at the focused dirty-render scenario's generic initial-click assertion: its six-byte fixture correctly placed the caret at column 6, but that assertion samples columns 9–11 for non-empty files. The test fixture is extended to twelve characters, matching the existing assertion's expected click area. Its next step still moves to EOF explicitly before the dirty-caret sequence. Renderer source is unchanged. Actions for this correction are pending; GNOME/Mutter and measured editor-latency validation remain outstanding.
+
+---
+
 ## 2026-11-14 — dual-slot Wayland test correction (Actions pending)
 
 The dirty caret-band implementation is committed in `863196e`. Actions #963 passed build, CLI smoke, and rasterizer equivalence checks, then failed because the held-Left assertion required full-frame damage. Commit `d682b6b` updated the mock for two-band held-Left damage and the first-slot warm-up fallback. Actions #964 passed build, CLI smoke, and rasterizer checks, then exposed a separate mock bug: caret pixel assertions indexed the two-slot SHM pool from offset zero rather than the currently attached buffer offset. The test now adds the active slot offset for caret scans and related pixel checks. No renderer source code changed in either test correction. Actions rerun is pending; GNOME/Mutter smoke and performance testing remain outstanding.
