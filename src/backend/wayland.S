@@ -4834,7 +4834,7 @@ window_width:           .long 0      # virtual application-layout width
 window_height:          .long 0      # virtual application-layout height
 window_surface_width:   .long 0      # compositor logical surface width
 window_surface_height:  .long 0      # compositor logical surface height
-window_ui_scale_120:     .long 120    # virtual layout -> surface pixels, in 120ths
+window_ui_scale_120:     .long 0      # initialized to 120 before first geometry calculation
 window_buffer_width:    .long 0
 window_buffer_height:   .long 0
 window_stride:          .long 0
@@ -24757,7 +24757,7 @@ window_apply_initial_output_size:
     # Bit 0 means explicit width; bit 1 means explicit height. A WM-managed
     # maximized/fullscreen/tiled state locks both dimensions.
     test dword ptr [rip + window_startup_size_locked], 1
-    jnz .window_initial_width_done
+    jnz .window_output_width_done
     imul eax, 2
     xor edx, edx
     mov ecx, 3
@@ -24771,9 +24771,9 @@ window_apply_initial_output_size:
     mov eax, MAX_WINDOW_WIDTH
 .window_initial_width_max_ready:
     mov dword ptr [rip + window_surface_width], eax
-.window_initial_width_done:
+.window_output_width_done:
     test dword ptr [rip + window_startup_size_locked], 2
-    jnz .window_initial_height_done
+    jnz .window_output_height_done
     mov eax, dword ptr [rip + output_display_height]
     test eax, eax
     jz .window_initial_output_size_done
@@ -24790,7 +24790,7 @@ window_apply_initial_output_size:
     mov eax, MAX_WINDOW_HEIGHT
 .window_initial_height_max_ready:
     mov dword ptr [rip + window_surface_height], eax
-.window_initial_height_done:
+.window_output_height_done:
     call window_update_geometry
 .window_initial_output_size_done:
     xor eax, eax
