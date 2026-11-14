@@ -1,3 +1,15 @@
+## Latest handoff (2026-11-15 — clipped rectangle row traversal; CI PASS #979)
+
+Continue source development on `early-alpha` at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c). Application source on `main` remains untouched; mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
+
+The partial-render path used to clip pixels and Wayland damage but still scan all rows of large rectangles. `draw_rect` now intersects each rectangle with the two ordered dirty Y bands before its row loops, so the full-window background visits only those rows on caret-only partial frames. Touching/overlapping bands are not painted twice. The full-frame path uses its own direct row loop without per-row clip checks.
+
+The Wayland mock measures full-background row iterations per caret frame and requires every partial frame to visit fewer rows than the full surface height; the full-frame fallback must not touch the clipped-row counter. The existing 4,096-row fixture still enforces bounded document traversal near EOF. Actions [#979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed the entire workflow, including the full Wayland mock and nested GNOME Shell/Mutter integration.
+
+This is a structural row-iteration reduction for eligible partial frames, not a measured end-to-end latency or FPS claim. Next target: measure the actual redraw cost on the user's GNOME session and profile remaining full-frame/edit redraw work before broadening partial rendering beyond simple caret movement.
+
+Artifacts: [Linux x86-64 executable, 151,261 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14128774572); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14129257247).
+
 ## Latest handoff (2026-11-15 — compact glyph-cache metadata; CI PASS #978)
 
 Continue source development on `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53). Application source on `main` remains untouched; mirror changelog-only updates there. Normal development remains `-O2`, unstripped.
