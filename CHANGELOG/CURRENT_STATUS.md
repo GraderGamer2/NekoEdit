@@ -1,3 +1,15 @@
+## 2026-11-15 — compact TrueType glyph-cache metadata (Actions #978 PASS)
+
+**Development branch:** `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53); stable application source on `main` remains unchanged. Normal development remains `-O2`, unstripped. **Workflow:** [Actions #978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689) passed all steps.
+
+The glyph cache now stores its hot lookup/LRU metadata separately from its 128 per-slot 16 KiB pixel masks. The old array-of-structures layout made metadata lookups and the bounded LRU victim scan step across large pixel-bearing records. The new structure-of-arrays layout keeps metadata compact and contiguous. Cache keys, hash chains, stamp-based LRU behavior, slot identity, mask storage, and rasterization/drawing results are preserved.
+
+The renderer benchmark directly compares the compact AoS reference and compact SoA implementation. For the synthetic 128-glyph working set, warm draw improved from **182.0 ns to 176.6 ns per glyph draw (3.0% lower)**. Cache-fill and warm-framebuffer checksums matched across every benchmark variant. This is a microbenchmark result, not an end-to-end typing-latency or FPS claim.
+
+Actions #978 passed the freestanding build/ELF checks, CLI tests, all renderer equivalence/benchmark variants, full Wayland protocol mock (including 10 MiB clipboard and 11 MiB Open/Save coverage), executable inspection, native `us(intl)` parsing, X.Org importer verification, Compose-pack build, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: [Linux x86-64 executable, 151,091 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128074614); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689/artifacts/14128294260). Expiry: 2026-11-16 02:38 WIB.
+
 ## 2026-11-15 — early-alpha provider-safe clipboard paste and 30 Hz key repeat (Actions #977 PASS)
 
 **Code branch:** `early-alpha`; the application source on `main` is unchanged. This is a changelog-only mirror. Implementation: [675bb06](https://github.com/GraderGamer2/NekoEdit/commit/675bb060abdbbaf69f562f4d95990e21a536c83c); repeat-test comment clarification: [8095dd5](https://github.com/GraderGamer2/NekoEdit/commit/8095dd5ffa50119910154b7650840688037799b2). **Workflow:** [Actions #977](https://github.com/GraderGamer2/NekoEdit/actions/runs/43630643206) passed all 17 steps.
