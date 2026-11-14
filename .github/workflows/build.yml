@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - early-alpha
+      - optimization-early-alpha
     paths-ignore:
       - 'CHANGELOG/**'
       - '.github/workflows/locale-packs.yml'
