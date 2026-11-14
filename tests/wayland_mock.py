@@ -5283,13 +5283,77 @@ xkb_symbols "nekoedit-sparse" {
                         workflow_redraw("flush final auto-scroll frame")
                         client.sendall(buffer_release_message())
 
+                    # Drag above the surface after scrolling down. Wayland reports
+                    # negative surface-local coordinates during the implicit grab;
+                    # converting them as unsigned would turn this into a huge
+                    # positive Y and reverse the requested scroll direction.
+                    up_start_top = child_u32("doc_view_top_row")
+                    if up_start_top <= 0:
+                        raise AssertionError(
+                            f"upward auto-scroll fixture did not start below document top: {up_start_top}"
+                        )
+                    client.sendall(
+                        wire_message(
+                            pointer_object_id, 0,
+                            struct.pack("<Iiii", 3020, 8, 20 * 256, 110 * 256),
+                        )
+                        + wire_message(
+                            pointer_object_id, 2,
+                            struct.pack("<Iii", 3021, 20 * 256, 110 * 256),
+                        )
+                        + wire_message(
+                            pointer_object_id, 3,
+                            struct.pack("<IIII", 3022, 3023, 0x110, 1),
+                        )
+                    )
+                    workflow_redraw("begin upward selection drag")
+                    client.sendall(buffer_release_message())
+                    if child_u32("pointer_button_down") != 1:
+                        raise AssertionError("upward selection drag did not acquire the primary button")
+                    client.sendall(
+                        wire_message(pointer_object_id, 1, struct.pack("<II", 3024, 8))
+                        + wire_message(
+                            pointer_object_id, 2,
+                            struct.pack("<Iii", 3025, 40 * 256, -160 * 256),
+                        )
+                    )
+                    workflow_redraw("drag above the top edge while pointer focus is outside")
+                    up_immediate_top = child_u32("doc_view_top_row")
+                    if up_immediate_top >= up_start_top:
+                        raise AssertionError(
+                            "negative pointer Y moved the document in the wrong direction: "
+                            f"before={up_start_top}, after_motion={up_immediate_top}"
+                        )
+                    client.sendall(buffer_release_message())
+                    time.sleep(0.25)
+                    up_stationary_top = child_u32("doc_view_top_row")
+                    if up_stationary_top > up_immediate_top:
+                        raise AssertionError(
+                            "stationary upward edge auto-scroll reversed direction: "
+                            f"after_motion={up_immediate_top}, after_timer={up_stationary_top}"
+                        )
+                    client.sendall(
+                        wire_message(
+                            pointer_object_id, 3,
+                            struct.pack("<IIII", 3026, 3027, 0x110, 0),
+                        )
+                        + buffer_release_message()
+                    )
+                    wait_child_u32(
+                        "pointer_button_down", 0, "upward selection release must clear drag state"
+                    )
+                    ready, _, _ = select.select([client], [], [], 0.2)
+                    if ready:
+                        workflow_redraw("flush final upward auto-scroll frame")
+                        client.sendall(buffer_release_message())
+
                     # Return pointer focus, turn wrapping off, then drag past the
                     # right edge. The horizontal viewport must follow the drag.
                     client.sendall(
-                        wire_message(pointer_object_id, 0, struct.pack("<Iiii", 3020, 8, 20 * 256, 16 * 256))
+                        wire_message(pointer_object_id, 0, struct.pack("<Iiii", 3030, 8, 20 * 256, 16 * 256))
                     )
-                    workflow_click(200, 16, 3030, "open Settings before horizontal drag test")
-                    workflow_settings_click(200, 124, 3040, "disable Wrap Lines before horizontal drag")
+                    workflow_click(200, 16, 3040, "open Settings before horizontal drag test")
+                    workflow_settings_click(200, 124, 3050, "disable Wrap Lines before horizontal drag")
                     if child_u32("doc_wrap_enabled") != 0:
                         raise AssertionError("Settings did not disable Wrap Lines for horizontal drag test")
                     # Settings intentionally stays open after toggling. The

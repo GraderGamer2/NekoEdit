@@ -13488,15 +13488,15 @@ pointer_capture_enter:
     sar eax, 8
     mov dword ptr [rip + pointer_surface_x], eax
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_x], eax
     mov eax, dword ptr [rip + event_payload + 12]
     sar eax, 8
     mov dword ptr [rip + pointer_surface_y], eax
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_y], eax
     mov dword ptr [rip + pointer_inside], 1
     mov dword ptr [rip + cursor_shape_current], 0
@@ -13513,15 +13513,15 @@ pointer_capture_motion:
     sar eax, 8
     mov dword ptr [rip + pointer_surface_x], eax
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_x], eax
     mov eax, dword ptr [rip + event_payload + 8]
     sar eax, 8
     mov dword ptr [rip + pointer_surface_y], eax
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_y], eax
 .pointer_capture_motion_done:
     xor eax, eax
@@ -15093,13 +15093,13 @@ window_update_geometry:
     # Pointer enter may precede output discovery; rebase saved surface coordinates.
     mov eax, dword ptr [rip + pointer_surface_x]
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_x], eax
     mov eax, dword ptr [rip + pointer_surface_y]
     imul eax, 120
-    xor edx, edx
-    div dword ptr [rip + window_ui_scale_120]
+    cdq
+    idiv dword ptr [rip + window_ui_scale_120]
     mov dword ptr [rip + pointer_y], eax
     ret
 .size window_update_geometry, . - window_update_geometry
