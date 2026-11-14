@@ -1,3 +1,17 @@
+## 2026-11-15 — clipped rectangle row traversal (Actions #979 PASS)
+
+**Branch:** `early-alpha` at [2d7248f](https://github.com/GraderGamer2/NekoEdit/commit/2d7248f3328fa7eac027bf1c7ca702446357537c); normal development remains `-O2`, unstripped. **Workflow:** [Actions #979](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211) passed all steps.
+
+During caret-only partial rendering, `draw_rect` previously iterated over every row of each rectangle and checked whether that row intersected either dirty clip band. This meant the full-window background rectangle still scanned the entire window height despite only repainting the caret and status bands.
+
+The rectangle rasterizer now intersects its Y range with the two ordered clip intervals before entering the paint loops. It visits only the intersecting rows, avoids duplicate work if the two intervals touch/overlap, and retains a separate unclipped full-frame loop without per-row clip checks. Pixel format, rectangle clipping, the two Wayland damage rectangles, and full-render behavior are unchanged.
+
+The dirty-render Wayland regression now records row iterations specifically for the full-window background rectangle on each committed caret frame. It requires every partial frame to visit fewer rows than the full surface height, and requires full-frame fallback to keep the clipped-row counter unchanged. The existing 4,096-row document test still verifies bounded document traversal near EOF. Actions #979 passed this assertion and the full Wayland mock, build/ELF, CLI, renderer equivalence, XKB, X.Org importer, Compose, nested GNOME Shell/Mutter, and artifact-upload checks.
+
+This verifies reduced row-loop work for eligible caret-only partial frames; it is not an end-to-end frame-time or FPS measurement.
+
+Artifacts: [Linux x86-64 executable, 151,261 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14128774572); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43633743211/artifacts/14129257247). Expiry: 2026-11-16 02:48 WIB.
+
 ## 2026-11-15 — compact TrueType glyph-cache metadata (Actions #978 PASS)
 
 **Branch:** `early-alpha` at [8fa73ea](https://github.com/GraderGamer2/NekoEdit/commit/8fa73eada67d274e0b495fcfbe791a2c42b29f53); normal development remains `-O2`, unstripped. **Workflow:** [Actions #978](https://github.com/GraderGamer2/NekoEdit/actions/runs/43632872689) passed all steps.
