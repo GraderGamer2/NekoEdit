@@ -36,6 +36,14 @@ The mock now verifies that Backspace/Delete actually arm the compositor-provided
 
 The output-aware startup sizing scenario still has not been reached in a passing CI run. Validation remains pending; do not mark the milestone complete yet.
 
+### Follow-up after CI run #939
+
+The build, CLI, renderer benchmark, and the main frame-callback repeat test all passed. The run proceeded to the separate legacy-seat compatibility case, which deliberately advertises `wl_seat` version 3. That protocol version has no `wl_keyboard.repeat_info`, so NekoEdit correctly retained its 30 Hz / 300 ms local fallback. The added assertion incorrectly expected the 10 Hz / 180 ms policy from the version-4+ case.
+
+The mock now selects its expected repeat policy from the advertised seat version: 10 Hz / 180 ms when version 4+ sends `repeat_info`, and 30 Hz / 300 ms for v3 fallback. This is a test correction; the application's repeat behavior is unchanged. The next run should proceed beyond the legacy-seat case and continue toward the output-mode startup scenario.
+
+
+
 
 
 **Changed implementation/test/docs:** `src/backend/wayland.S`, `tests/wayland_mock.py`, root README, and the Wayland, architecture, and rendering documentation. The development optimization policy remains unchanged. CI validation is pending for the first build after this change; physical GNOME/Mutter visual and input testing remains necessary after CI.

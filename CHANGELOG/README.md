@@ -4,13 +4,15 @@ Continue normal development on `early-alpha` at `-O2`. Keep `optimization-early-
 
 The implementation selects two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). Explicit configure dimensions are retained independently; maximized/fullscreen/tiled states remain compositor-managed. The app separates compositor surface dimensions from a virtual layout and applies one uniform density transform to boxes, TrueType glyphs, bitmap fallback and pointer hit-testing. Damage, buffer sizes and viewport destinations remain in surface coordinates.
 
-The tests now assert:
+The test suite now accounts for responsive resize geometry:
 - 720×480 surface -> 0.9× density -> 800×533 virtual layout.
 - 480×360 minimum surface -> 0.75× density floor -> 640×480 virtual layout.
-- Resize-time footer/picker geometry and projected pointer/pixel coordinates.
-- Backspace/Delete repeat checks synchronize on document state changes rather than assuming the next frame is the repeat frame.
+- Footer/picker geometry and pixel/pointer coordinates are projected between virtual and surface coordinates.
+- Backspace/Delete repeat checks wait for the actual document mutation before checking rendered frames.
 
-The latest Actions run passed the build, CLI and renderer benchmark, but the Wayland suite stopped in the default-size frame-callback test at a timing-sensitive Backspace repeat assertion. The test now checks the active repeat key and compositor 10 Hz / 180 ms policy, waits for the document mutation, then checks the committed pixels. CI is pending after this correction. The dedicated two-output 1080p-vs-1440p/2× sizing scenario still needs a passing run, followed by real GNOME/Mutter visual/input testing. Source implementation and `-O2` remain unchanged; do not merge the optimization branch.
+Actions #939 passed the build, CLI, renderer benchmark and the normal frame-callback repeat scenario, then failed in the independent legacy-seat v3 compatibility case. Seat v3 has no compositor `repeat_info`, so NekoEdit correctly uses its 30 Hz / 300 ms fallback; the mock incorrectly expected the v4+ 10 Hz / 180 ms values. The mock expectation is now version-aware. CI remains pending, and the dedicated two-output 1080p-vs-1440p/2× startup test still needs a passing run followed by real GNOME/Mutter visual/input testing. Application source and `-O2` remain unchanged; do not merge the optimization branch.
+
+---
 
 ---
 

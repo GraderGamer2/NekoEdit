@@ -9534,6 +9534,8 @@ xkb_symbols "nekoedit-sparse" {
 
                 # Backspace is repeatable too: after its immediate deletion,
                 # the held key should delete the preceding character again.
+                expected_repeat_rate = 10 if advertised_seat_version >= 4 else 30
+                expected_repeat_delay_ms = 180 if advertised_seat_version >= 4 else 300
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1210, 1210, 14, 1))
                 )
@@ -9546,8 +9548,8 @@ xkb_symbols "nekoedit-sparse" {
                 backspace_cursor_after_first_press = child_u32("doc_cursor")
                 if (
                     child_u32("repeat_keycode") != 14
-                    or child_u32("repeat_rate") != 10
-                    or child_u32("repeat_delay_ms") != 180
+                    or child_u32("repeat_rate") != expected_repeat_rate
+                    or child_u32("repeat_delay_ms") != expected_repeat_delay_ms
                 ):
                     raise AssertionError(
                         "held Backspace did not arm the compositor-configured repeat timer: "
@@ -9599,8 +9601,8 @@ xkb_symbols "nekoedit-sparse" {
                 delete_length_after_first_press = child_u32("doc_length")
                 if (
                     child_u32("repeat_keycode") != 111
-                    or child_u32("repeat_rate") != 10
-                    or child_u32("repeat_delay_ms") != 180
+                    or child_u32("repeat_rate") != expected_repeat_rate
+                    or child_u32("repeat_delay_ms") != expected_repeat_delay_ms
                 ):
                     raise AssertionError(
                         "held Delete did not arm the compositor-configured repeat timer: "

@@ -36,6 +36,12 @@ Updated the Backspace and Delete checks to:
 
 This distinguishes a repeat timer that did not fire from a redraw that happened to arrive before the repeat. The application repeat implementation is unchanged. The dedicated two-output startup-size test remains later in the mock sequence and is not yet CI-validated.
 
+### Follow-up after Actions #939 — preserve the legacy seat repeat fallback in the mock
+
+The normal frame-callback repeat test passed with the compositor-provided 10 Hz / 180 ms policy. The failure occurred in a later independent invocation that advertises `wl_seat` version 3. That version does not provide `wl_keyboard.repeat_info`; the correct compatibility behavior is the built-in 30 Hz / 300 ms fallback. The new repeat assertions had hard-coded 10/180 for both environments.
+
+The test now derives its expected repeat rate and delay from `advertised_seat_version`: 10/180 for version 4+ and 30/300 for version 3. It continues to verify the active repeat key, actual document mutation, and rendered pixel update. No application source changes are required.
+
 ### Regression and validation
 
 The Wayland mock now covers two reported outputs with different logical sizes: 1920×1080 at 1× and 2560×1440 at 2×. It expects NekoEdit to select the first output by logical area, destroy the unattached 800×480 buffer, and create a 1280×720 buffer. It checks the 150% virtual density, 853×480 virtual dimensions, 1280×720 buffer and 5120-byte stride, surface damage, title/accent geometry, non-background title glyph pixels, and pointer coordinate conversion (168×18 surface units to 112×12 virtual units).
