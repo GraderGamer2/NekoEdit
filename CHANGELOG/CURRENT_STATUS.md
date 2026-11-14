@@ -1,4 +1,4 @@
-## 2026-11-14 — destroy removed Wayland extension managers (CI pending)
+## 2026-11-14 — destroy removed Wayland extension managers (CI PASS #948)
 
 **Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
 
@@ -6,7 +6,7 @@ Fixed global-removal cleanup for the optional fractional-scale and viewporter ma
 
 Added a compositor mock that removes both manager globals after startup, verifies both manager destructor requests, then changes the preferred fractional scale and resizes the surface. The test verifies that the original per-surface objects remain active and that the existing viewport accepts a new logical destination while a 1.5x backing buffer is created.
 
-**Validation:** Full Actions validation is pending. No physical second-output test is claimed; this is a protocol-level manager lifecycle test that runs without additional displays.
+**Validation:** [Actions #948](https://github.com/GraderGamer2/NekoEdit/actions/runs/43574607904) passed the full workflow: freestanding ELF build, CLI checks, renderer comparison, complete Wayland mock suite (including the global-removal/child-object lifecycle regression and previous two-slot generation regression), executable inspection, native XKB and Compose-source checks, locale-pack build, nested GNOME Shell/Mutter integration, and artifact uploads. The specific mock output confirms that both manager proxies were destroyed while the per-surface fractional-scale and viewport objects remained usable. This is protocol-level validation; physical multi-output desktop testing remains outstanding. The implementation is [9d69077](https://github.com/GraderGamer2/NekoEdit/commit/9d6907749ff2a51ea3d2d82fb1c14a61ada913b7).
 
 ---
 

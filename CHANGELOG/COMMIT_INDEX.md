@@ -1,11 +1,11 @@
-## 2026-11-14 — destroy bound Wayland extension managers on global removal (CI pending)
+## 2026-11-14 — destroy bound Wayland extension managers on global removal (CI PASS #948)
 
 - Send `wp_fractional_scale_manager_v1.destroy` and `wp_viewporter.destroy` when their bound registry globals are removed.
 - Preserve the already-created per-surface `wp_fractional_scale_v1` and `wp_viewport` objects.
 - Add a protocol mock that removes both globals, then proves fractional-scale updates and viewport destination changes still work.
 - Physical multi-output validation remains a separate compositor/desktop check.
 
-Full Actions result pending.
+Implementation [9d69077](https://github.com/GraderGamer2/NekoEdit/commit/9d6907749ff2a51ea3d2d82fb1c14a61ada913b7). Actions [#948](https://github.com/GraderGamer2/NekoEdit/actions/runs/43574607904) passed the full workflow, including the new manager-removal and retained-child-object regression.
 
 ---
 
