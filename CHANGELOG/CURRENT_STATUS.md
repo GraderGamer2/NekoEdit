@@ -1,14 +1,24 @@
-## 2026-11-14 — output-aware startup sizing and responsive UI density (CI pending)
+## 2026-11-14 — exact fractional Wayland backing raster (CI PASS #945)
 
-**Branch:** `early-alpha`; normal development remains at `-O2`. The isolated `optimization-early-alpha` experiment was not changed.
+**Branch:** early-alpha; normal development remains at -O2. The separate optimization-early-alpha branch was not changed.
 
-The Wayland backend now snapshots current `wl_output.mode` and committed `wl_output.scale` values before the first buffer attachment. If the initial `xdg_toplevel.configure` leaves a dimension unspecified, the client chooses two-thirds of the largest current output in logical coordinates. A 1920×1080 output at scale 1 therefore produces a 1280×720 initial surface. A dimension explicitly supplied by the compositor is preserved independently; maximized, fullscreen, or tiled initial states preserve both compositor-managed dimensions. If no usable output mode arrives, the existing 800×480 fallback remains.
+NekoEdit now uses the compositor's exact wp_fractional_scale_v1.preferred_scale numerator in 120ths for its physical backing raster when both fractional-scale-v1 and viewporter are available. The client keeps wl_surface.set_buffer_scale at 1, sets the viewport destination to logical surface dimensions, and keeps wl_surface.damage in logical coordinates. Physical source dimensions are rounded to nearest pixel with exact half values rounded away from zero, and capped at 2× plus the two-slot shared-memory pool geometry (including odd-transform axis swaps).
 
-The app now distinguishes compositor surface dimensions from virtual application-layout dimensions. A uniform density derived from the limiting axis scales the central rectangle renderer, TrueType glyph origins and em sizes, embedded bitmap glyph rendering, and pointer coordinates used for hit-testing. The document, selection, and layout model remains in virtual units. Wayland buffer allocation, viewport destination, and surface damage continue to use actual compositor surface coordinates. The existing output-buffer scale/transform and release-gated replacement path remains separate from UI density.
+The raster scale is separate from the protocol integer scale and is now part of buffer-generation identity. Rectangle edges map to the physical grid, TrueType glyph positions/em sizes use the same density/raster transform, and the embedded 5×7 fallback uses the combined UI/raster ratio. Runtime scale changes rebuild only after both old buffer slots have been released. The startup provisional buffer may be replaced with the exact preferred raster before its first attach.
 
-**1080p reference result:** 1280×720 compositor surface; 1.5× UI density; 853×480 virtual layout; 1280×720 backing buffer at scale 1. At 1.5×, the embedded 5×7 fallback uses whole-cell upscaling and is less precise than the TrueType path.
+The Wayland mock covers 90/120 (0.75×), 120/120 (1×), 150/120 (1.25×), 180/120 (1.5×), and 210/120 (1.75×). A transformed 481-logical-pixel height at 1.5× produces 721.5 physical pixels and must round to 722. The test also checks logical viewport/damage dimensions, protocol buffer scale 1, transformed buffer geometry, pixel rendering, and seat-less startup.
 
-Regression work adds an initial-size mock with two outputs: 1920×1080 at 1× and 2560×1440 at 2×. The backend must select the former by logical area, not raw pixel area. The test verifies the replacement of the unattached startup buffer, scaled chrome and text pixels, exact surface/layout/buffer geometry, surface-damage dimensions, and the 1.5× pointer-to-layout coordinate conversion. Existing output-tracking mock scenarios now include the initial output-state roundtrip.
+**Validation:** Actions [#945](https://github.com/GraderGamer2/NekoEdit/actions/runs/43569752292) passed all 17 workflow steps, including the freestanding ELF build, CLI smoke tests, renderer cache comparison, the full Wayland mock matrix with the 11 MiB Open/Save scenario, XKB parser checks, locale-pack build, and nested GNOME Shell/Mutter integration. The preceding #944 run caught a non-zero .bss initializer; the active raster numerator now has zero-initialized storage and is set to 120 during startup. The first #945 attempt was also adjusted to sample the glyph's logical cell rather than assume a fixed 1× physical pixel coordinate.
+
+Commits:
+- [3bbdd887](https://github.com/GraderGamer2/NekoEdit/commit/3bbdd8876d11974e307718cae02da92ca52bf6a2) — exact fractional-scale raster implementation and expanded mock coverage.
+- [82757c0](https://github.com/GraderGamer2/NekoEdit/commit/82757c0eef0392b23592ab7b17f975920b8c11a9) — zero-initialize raster state in .bss.
+- [f5368cd](https://github.com/GraderGamer2/NekoEdit/commit/f5368cd32ca02cee9091b3b48eaf6049c01ab87c) — make glyph assertion robust to fractional physical pixel placement; CI #945 head.
+- [9e3987e](https://github.com/GraderGamer2/NekoEdit/commit/9e3987e36ed542873126aa433dcf796b28759a53) — update Wayland/rendering documentation.
+
+**Still outstanding:** visual and interactive testing on the user's live GNOME/Mutter session and real mixed-DPI output transitions; exercise scale changes while both slots are busy; performance profiling under a large document; and the X11 backend. CI's nested compositor result does not replace the live desktop check.
+
+---
 
 ### Follow-up after CI run #936
 

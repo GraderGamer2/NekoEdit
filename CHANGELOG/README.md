@@ -1,12 +1,14 @@
-## Latest handoff (2026-11-14 — output-aware startup sizing; CI pending)
+## Latest handoff (2026-11-14 — exact fractional Wayland raster; CI PASS #945)
 
-Continue normal development on `early-alpha` at `-O2`; keep `optimization-early-alpha` isolated.
+Continue development on early-alpha at -O2; keep optimization-early-alpha isolated.
 
-The implementation selects two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). Explicit configure dimensions are retained independently; maximized/fullscreen/tiled states remain compositor-managed. The app separates compositor surface dimensions from a virtual layout and applies one uniform density transform to boxes, TrueType glyphs, bitmap fallback and pointer hit-testing. Damage, buffer sizes and viewport destinations remain in surface coordinates.
+Fractional-scale-v1 now uses the compositor's exact preferred numerator in 120ths for its backing raster, rather than choosing only 1× or 2×. The protocol buffer scale remains 1; the viewport destination and surface damage remain logical. Backing dimensions round to nearest physical pixel with halves away from zero, are capped to 2× and the two-slot shared-memory geometry, and account for rotated axes. The numerator participates in buffer-generation identity, and old slots must both be released before replacement.
 
-Responsive resize tests cover 720×480 surface -> 0.9× density -> 800×533 virtual layout, and 480×360 minimum surface -> 0.75× density -> 640×480 virtual layout.
+Actions [#945](https://github.com/GraderGamer2/NekoEdit/actions/runs/43569752292) passed all 17 steps: freestanding build, CLI smoke tests, renderer cache comparison, Wayland mock matrix (including 11 MiB Open/Save), XKB checks, locale-pack build, and nested GNOME Shell/Mutter integration.
 
-Actions #941 passed build, CLI and renderer checks, and progressed through the main Wayland matrix into the output-tracking case. That mock exposed two stale hard-coded IDs for the hot-added output: its `wl_surface.leave` and final `wl_output.release` checks must use the dynamically allocated client object ID, while `wl_registry.global_remove` continues using the separate registry global name. Both expectations now use the dynamic ID. The dedicated 1080p-vs-1440p/2× startup-size scenario immediately follows output tracking and still needs a passing full run. CI is pending; real GNOME/Mutter visual and input testing remains outstanding. App source and `-O2` remain unchanged.
+The mock covers 0.75×, 1×, 1.25×, 1.5×, and 1.75× preferences plus the transformed 721.5→722 rounding boundary. Documentation now matches the exact fractional implementation and two-slot buffer lifecycle.
+
+Remaining work: verify visual rendering/input on the live Debian/GNOME session, test mixed-DPI output moves and updates while both buffer slots are busy, then profile large-document rendering. X11 remains a separate future backend.
 
 ---
 
