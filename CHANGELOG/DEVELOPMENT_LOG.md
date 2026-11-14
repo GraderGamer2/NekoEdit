@@ -1,3 +1,15 @@
+## 2026-11-14 — begin controlled ELF size optimization matrix
+
+A dedicated `optimization-early-alpha` branch was created from `early-alpha` at `21384d8f09072f6c1b42cb9745ac901a0a38d1cf`. This branch isolates executable-size experiments from ongoing backend development.
+
+The comparison order is deliberate: current O2 executable, O2 stripped, O2 with unused-section removal, then the same sequence repeated with Os. The reproducible eight-profile matrix separates file size, .text, .data and .bss measurements. It records GNU ld's discarded sections and checks every ELF for the no-interpreter/no-DT_NEEDED contract. Stripped binaries receive CLI smoke tests; O2-GC and Os-GC builds receive the full Wayland protocol mock. The standard unstripped O2 build remains the symbol-inspection reference.
+
+For unused-code collection, the matrix puts C functions/data into individual sections and performs a temporary source transformation that isolates typed assembly functions into individual text sections. It does not rewrite the normal source or normal application build. Assembly data tables remain grouped and are outside this first function-collection experiment.
+
+No default compiler flags or shipped binary policy have been changed pending measured results and regression review.
+
+---
+
 ## 2026-11-13 — keep the caret at the start of a clipboard paste (CI PASS #925)
 
 The previous large-paste optimization left `doc_cursor` immediately after the final inserted byte. The common `doc_ensure_cursor_visible` path therefore treated the end of a multi-megabyte paste as the desired viewport location, even when the paste had begun at the top of an empty document. That produced an unwanted jump away from the start of the newly pasted text.

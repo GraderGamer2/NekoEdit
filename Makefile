@@ -1,6 +1,8 @@
 AS       ?= as
 LD       ?= ld
 READELF  ?= readelf
+STRIP    ?= strip
+SIZE     ?= size
 PYTHON   ?= python3
 CC       ?= cc
 CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns
@@ -29,7 +31,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer locale-packs check inspect install install-user uninstall-user
+.PHONY: all clean size-compare test test-wayland test-mutter test-xkb-native test-install-user bench-renderer locale-packs check inspect install install-user uninstall-user
 
 all: $(APP_BINARY) check
 
@@ -58,6 +60,17 @@ inspect: $(APP_BINARY)
 	$(READELF) -h $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
+
+# Build a controlled O2/Os, strip, and unused-section comparison matrix.
+# The normal build remains the unstripped O2 reference for symbol-based tests.
+size-compare: $(APP_BINARY)
+	$(PYTHON) tools/elf_size_matrix.py \
+		--baseline "$(APP_BINARY)" --output-dir "$(BUILD_DIR)/size-matrix" \
+		--cc "$(CC)" --as-tool "$(AS)" --ld "$(LD)" --strip "$(STRIP)" \
+		--readelf "$(READELF)" --size "$(SIZE)" \
+		--cflags "$(CFLAGS)" --asflags "$(ASFLAGS)" --ldflags "$(LDFLAGS)" \
+		$(foreach source,$(SOURCES),--asm-source "$(source)") \
+		$(foreach source,$(C_SOURCES),--c-source "$(source)")
 
 test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)

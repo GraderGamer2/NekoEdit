@@ -1,3 +1,13 @@
+## 2026-11-14 — controlled ELF size experiment
+
+| Commit | Subject |
+|---|---|
+| Pending CI | Add eight-profile O2/Os, strip, and section-GC size matrix on `optimization-early-alpha` |
+
+The matrix retains an unstripped O2 test executable, measures stripped copies separately, and compares C function/data plus typed assembly function sections with linker garbage collection. Full Wayland mock tests cover both O2-GC and Os-GC builds. No default build policy changed pending measurements.
+
+---
+
 ## 2026-11-13 — preserve clipboard paste origin and top-of-document viewport (CI PASS #925)
 
 | Commit | Subject |

@@ -41,6 +41,9 @@ jobs:
           as --version | head -n 1
           ld --version | head -n 1
           readelf --version | head -n 1
+          strip --version | head -n 1
+          size --version | head -n 1
+          cc --version | head -n 1
           make --version | head -n 1
           python3 --version
 
@@ -52,8 +55,23 @@ jobs:
       - name: Build and verify ELF
         run: make clean all
 
+      - name: Compare O2 and Os ELF size profiles
+        run: make size-compare
+
       - name: Run command-line smoke tests
         run: make test
+
+      - name: Verify stripped O2 executable
+        run: sh tests/smoke.sh ./build/size-matrix/nekoedit-o2-stripped
+
+      - name: Run Wayland protocol mock against O2 section-GC build
+        run: python3 tests/wayland_mock.py ./build/size-matrix/nekoedit-o2-gc
+
+      - name: Verify stripped Os executable
+        run: sh tests/smoke.sh ./build/size-matrix/nekoedit-os-stripped
+
+      - name: Run Wayland protocol mock against Os section-GC build
+        run: python3 tests/wayland_mock.py ./build/size-matrix/nekoedit-os-gc
 
       - name: Compare linear-reference and hash-indexed glyph-cache rendering
         run: make bench-renderer
@@ -104,6 +122,16 @@ jobs:
         with:
           name: nekoedit-compose-locales
           path: build/locales/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload ELF size comparison matrix
+        uses: actions/upload-artifact@v4
+        with:
+          name: nekoedit-elf-size-matrix
+          path: |
+            build/size-matrix/nekoedit-*
+            build/size-matrix/SIZE_REPORT.md
           if-no-files-found: error
           retention-days: 1
 

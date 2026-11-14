@@ -1,3 +1,12 @@
+## 2026-11-14 — begin controlled ELF size optimization matrix
+
+Branch `optimization-early-alpha` isolates a controlled ELF size comparison from `early-alpha`. The workflow builds and measures eight profiles: O2 baseline, O2 stripped, O2 section-GC, O2 section-GC stripped, followed by the equivalent four Os profiles. The matrix tests C function/data sections and temporary per-function sections for the hand-written assembly before GNU ld garbage collection. It reports on-disk bytes and ELF text/data/BSS sizes, plus discarded linker sections. Stripped variants receive CLI smoke tests; both O2-GC and Os-GC variants receive the complete Wayland protocol mock. The normal O2 build remains unstripped for tests that read process symbols.
+
+The experiment is not yet adopted as the default release configuration. Await the CI size report and regression results before choosing flags or stripping policy.
+
+
+---
+
 ## 2026-11-13 — preserve the caret and viewport at the clipboard insertion point (CI PASS #925)
 
 Actions [Build and test #925](https://github.com/GraderGamer2/NekoEdit/actions/runs/43455684534) passed all 16 workflow steps on final head [de83027bc937](https://github.com/GraderGamer2/NekoEdit/commit/de83027bc9377d28eab2318d625e5532827576a7). The real Wayland mock transferred 10 MiB through the nonblocking clipboard pipe, verified every byte and all line-index records, confirmed that the caret and viewport remained at the paste's original insertion point, checked that the scrollbar thumb stayed correctly anchored at the top for a paste at offset 0, and passed full Undo/Redo. Redo restored the same caret/viewport state. The end-to-first-redraw interval was 560.7 ms on the Ubuntu 24.04 GitHub runner; Undo/Redo were checked separately and are not included in that timing.
