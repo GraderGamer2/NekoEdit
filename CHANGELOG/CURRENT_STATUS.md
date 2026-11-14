@@ -1,12 +1,28 @@
-## 2026-11-15 — opaque glyph pixel fast path (Actions #973 in progress)
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
 
-**Branch:** early-alpha; normal development remains -O2, unstripped. Implementation and benchmark changes: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776).
+**Branch:** early-alpha; normal development remains -O2, unstripped. Implementation and benchmark changes: [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). **Workflow:** [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps.
 
-The TrueType glyph blitter's normal identity-transform path now checks the mask coverage before alpha compositing. A fully covered pixel (alpha == 255) is written directly as the fixed opaque foreground color 0xffd8dee9, skipping the destination read and three-channel blend. Partially covered antialiased edge pixels retain the original blend, and the generic rotated/reflected path is unchanged.
+The TrueType glyph blitter's normal identity-transform path now checks mask coverage before alpha compositing. A fully covered pixel (alpha == 255) is written directly as the fixed opaque foreground color 0xffd8dee9, skipping the destination read and three-channel blend. Partially covered antialiased edge pixels retain the original blend, and the generic rotated/reflected path is unchanged.
 
-The rasterizer benchmark now builds four reference/current combinations: linear LRU plus generic transform and original blend; hash cache plus generic transform and original blend; hash cache plus identity fast path and original blend; and the current hash/identity/opaque-pixel path. The comparison harness requires matching framebuffer checksums across all four before reporting timing comparisons, so the new optimization is isolated from the earlier cache and identity-path gains.
+The rasterizer benchmark builds four reference/current combinations: linear LRU plus generic transform and original blend; hash cache plus generic transform and original blend; hash cache plus identity fast path and original blend; and the current hash/identity/opaque-pixel path. The comparison harness requires matching framebuffer checksums across all four before reporting timing comparisons.
 
-**Validation so far:** [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) has passed build/ELF verification, CLI smoke tests, and the renderer comparison step. The successful comparison confirms equal framebuffer checksums for all variants. The full Wayland mock is still in progress; later XKB, X.Org import, Compose, nested GNOME Shell/Mutter, and artifact steps have not yet completed. Numerical timing output has not yet been available for review, so no percentage speedup is claimed. Keep the change provisional until the full run and measured medians are reviewed.
+**Measured warm draw:** the hash-cache/identity path with the original blend measured 239.5 ns per glyph draw; the opaque-pixel fast path measured 169.2 ns, a 29.4% reduction in this synthetic 8-point-outline benchmark (seven samples, 50,000 draws per sample). Across the whole comparison, the current renderer measured 169.2 ns versus 410.0 ns for the original linear-cache/generic-transform reference (58.7% lower). All four variants produced framebuffer checksum 35084948275808.
+
+The cold outline-rasterization measurement was 20,995.9 ns for the linear reference and 21,674.3 ns for the current build. That benchmark directly exercises the separate outline-rasterization routine, not the modified glyph-compositing loop; no cold-rasterization speedup is claimed. These synthetic microbenchmark results do not establish an end-to-end editor latency or FPS gain.
+
+Actions #973 passed build/ELF verification, CLI smoke tests, the four-way renderer comparison, the full Wayland mock (including 11 MiB Open/Save), executable inspection, native us(intl) XKB parsing, pinned X.Org importer verification, Compose generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+Artifacts: [Linux x86-64 executable, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). They expire 2026-11-15 18:42:57 UTC (2026-11-16 01:42:57 WIB).
+
+---
+
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
+
+**Branch:** early-alpha; normal development remains -O2, unstripped. Implementation: [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3). Test-timeout adjustment: [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
+
+Wayland pointer coordinates are signed 24.8 surface-local values. During an implicit button grab, pointer motion can continue outside the surface and produce negative X/Y coordinates. The previous unsigned division converted negative positions into large positive virtual coordinates, which could reverse selection auto-scroll when dragging above or left of the window. Pointer enter, pointer motion, and geometry-change rebasing now use signed division for both axes; the scroll thresholds and doc_scroll_by direction logic are unchanged.
+
+The Wayland mock covers downward and upward auto-scroll, including negative Y above the surface and a stationary timer check that forbids direction reversal, as well as no-wrap horizontal drag. Actions [#972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 workflow steps, including the complete Wayland protocol mock (with 11 MiB Open/Save), ELF inspection, us(intl) keymap validation, X.Org importer checks, Compose-pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads. The user also confirmed that selection now scrolls correctly at the top and bottom edges of the screen.
 
 ---
 

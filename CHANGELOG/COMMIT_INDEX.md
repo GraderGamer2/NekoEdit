@@ -1,10 +1,25 @@
-## 2026-11-15 — opaque glyph pixel fast path (Actions #973 in progress)
+## 2026-11-15 — opaque glyph pixel fast path (Actions #973 PASS)
 
 | Commit | Subject |
 |---|---|
 | [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776) | perf: skip blending fully opaque glyph pixels |
 
-The identity-transform TrueType blitter now writes alpha-255 pixels directly as the opaque foreground color, while antialiased edges and transformed-buffer rendering retain the original blend. The rasterizer comparison builds four combinations to isolate the cache, identity-transform, and opaque-pixel fast paths, and requires exact framebuffer checksum equality before printing timings. Actions #973 passed build/ELF, CLI, and the comparison step; the Wayland mock and later integration steps remain in progress. No percentage speedup is claimed until the numerical medians and full workflow are reviewed.
+The identity-transform TrueType blitter writes alpha-255 pixels directly as the opaque foreground color, while antialiased edges and transformed-buffer rendering retain the original blend. The four-way benchmark requires matching framebuffer checksums. Actions #973 passed all 17 steps.
+
+Warm draw measured 239.5 ns with the previous identity-path blend and 169.2 ns with the opaque-pixel fast path (29.4% lower); the complete cache/transform/compositing sequence measured 410.0 ns for the original reference and 169.2 ns for the current renderer (58.7% lower). This is a synthetic microbenchmark, not an end-to-end latency claim.
+
+Artifacts: [Linux x86-64, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expiry: 2026-11-16 01:42:57 WIB.
+
+---
+
+## 2026-11-15 — signed pointer coordinates for selection edge auto-scroll (Actions #972 PASS)
+
+| Commit | Subject |
+|---|---|
+| [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3) | fix: preserve negative pointer coordinates during selection drag |
+| [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688) | test: allow more time for full hosted Wayland smoke |
+
+Actions #972 passed all 17 workflow steps, including the full Wayland mock, 11 MiB Open/Save, and nested GNOME Shell/Mutter integration. The user confirms selection auto-scroll now works correctly at both screen edges.
 
 ---
 

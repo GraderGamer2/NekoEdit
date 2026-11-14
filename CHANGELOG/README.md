@@ -1,17 +1,17 @@
-## Latest handoff (2026-11-15 — opaque glyph pixel fast path; Actions #973 in progress)
-
+## Latest handoff (2026-11-15 — opaque glyph pixel fast path; CI PASS #973)
 
 Continue source development on early-alpha at [e873215](https://github.com/GraderGamer2/NekoEdit/commit/e873215ad4e1519b72c686cfa07398a6bfe85776). Normal development remains -O2, unstripped. Keep main as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source.
 
-The normal TrueType identity-transform blitter now fast-paths fully opaque glyph mask pixels to a direct foreground-color store. It skips destination reads and blend arithmetic for those pixels; antialiased edges and rotated/reflected paths remain unchanged. The benchmark compares four isolated variants and requires exact framebuffer checksums before presenting timing results.
+The normal TrueType identity-transform blitter fast-paths fully opaque glyph mask pixels to a direct foreground-color store. Antialiased edges and rotated/reflected paths remain unchanged. The four-way benchmark requires matching framebuffer checksums before comparing the changes.
 
- [Actions #973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) has passed build/ELF, CLI smoke and renderer comparison. The Wayland protocol mock is still running, with XKB, importer, Compose, GNOME Shell/Mutter and artifact steps pending. The successful comparison step confirms identical output checksums, but timing medians have not yet been reviewed. Do not claim a percentage speedup or treat the optimization as fully validated until the full run completes and its benchmark output is examined.
+Actions [#973](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385) passed all 17 steps. In the synthetic warm-draw benchmark, the new opaque-pixel path measured 169.2 ns per draw versus 239.5 ns with the previous blend path (29.4% lower). Across all accumulated cache/transform/compositing improvements, the current path measured 169.2 ns versus 410.0 ns for the original reference (58.7% lower). The test compares seven-sample medians over 50,000 draws per sample and confirms matching framebuffer checksums across all four variants. These figures are microbenchmark-only, not a measured application FPS or end-to-end latency gain.
+
+Artifacts: [Linux x86-64 executable, 150,900 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126123549); [Compose locale packs, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43627839385/artifacts/14126687364). Expiry: 2026-11-16 01:42 WIB.
 
 The selection edge auto-scroll fix is complete: [Actions #972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43626802935) passed all 17 steps, including the full Wayland mock and nested Mutter integration. The user confirmed upward and downward edge selection works at the screen boundaries. Its signed-coordinate fix is [d0f0360](https://github.com/GraderGamer2/NekoEdit/commit/d0f036054360a2d5f8d5a8e49a828b7b75ed66f3), with the test timeout adjustment in [d3e7938](https://github.com/GraderGamer2/NekoEdit/commit/d3e7938ca6a889133e1304cda36deecc3fa62688).
 
-Next: review #973's actual medians and full regression result before selecting another rasterizer/rendering hot path. Keep any next optimization benchmarked against an unchanged reference path and preserve the full-render fallback for uncertain states.
+Next: use real editor interaction profiling to find the next hot path. Preserve unchanged reference variants and full-render fallbacks when testing any further rasterizer or repaint optimization.
 
----
 ---
 
 ## Previous handoff (2026-11-15 — caret-only document traversal bounded; CI PASS #970)
