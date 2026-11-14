@@ -9543,14 +9543,44 @@ xkb_symbols "nekoedit-sparse" {
                 )[0]
                 if first_line_b != 0xFFD8DEE9:
                     raise AssertionError("initial Backspace removed more than one character")
+                backspace_cursor_after_first_press = child_u32("doc_cursor")
+                if (
+                    child_u32("repeat_keycode") != 14
+                    or child_u32("repeat_rate") != 10
+                    or child_u32("repeat_delay_ms") != 180
+                ):
+                    raise AssertionError(
+                        "held Backspace did not arm the compositor-configured repeat timer: "
+                        + repr({
+                            "repeat_keycode": child_u32("repeat_keycode"),
+                            "repeat_rate": child_u32("repeat_rate"),
+                            "repeat_delay_ms": child_u32("repeat_delay_ms"),
+                        })
+                    )
                 client.sendall(buffer_release_message())
-
+                backspace_repeat_deadline = time.monotonic() + 2.0
+                while (
+                    child_u32("doc_cursor") >= backspace_cursor_after_first_press
+                    and time.monotonic() < backspace_repeat_deadline
+                ):
+                    time.sleep(0.005)
+                if child_u32("doc_cursor") >= backspace_cursor_after_first_press:
+                    raise AssertionError(
+                        "held Backspace timer expired without deleting the preceding character: "
+                        + repr({
+                            "doc_cursor": child_u32("doc_cursor"),
+                            "repeat_keycode": child_u32("repeat_keycode"),
+                            "repeat_rate": child_u32("repeat_rate"),
+                        })
+                    )
                 expect_redraw("repeated Backspace")
                 removed_b = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 17 * 4
                 )[0]
                 if removed_b != 0xFF252A33:
-                    raise AssertionError("held Backspace did not repeat after its initial delay")
+                    raise AssertionError(
+                        "repeated Backspace changed document state but did not render the deleted character"
+                    )
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1211, 1211, 14, 0))
                     + buffer_release_message()
@@ -9566,14 +9596,44 @@ xkb_symbols "nekoedit-sparse" {
                 )[0]
                 if first_cell != 0xFFD8DEE9:
                     raise AssertionError("initial Delete did not move the first character onto line one")
+                delete_length_after_first_press = child_u32("doc_length")
+                if (
+                    child_u32("repeat_keycode") != 111
+                    or child_u32("repeat_rate") != 10
+                    or child_u32("repeat_delay_ms") != 180
+                ):
+                    raise AssertionError(
+                        "held Delete did not arm the compositor-configured repeat timer: "
+                        + repr({
+                            "repeat_keycode": child_u32("repeat_keycode"),
+                            "repeat_rate": child_u32("repeat_rate"),
+                            "repeat_delay_ms": child_u32("repeat_delay_ms"),
+                        })
+                    )
                 client.sendall(buffer_release_message())
-
+                delete_repeat_deadline = time.monotonic() + 2.0
+                while (
+                    child_u32("doc_length") >= delete_length_after_first_press
+                    and time.monotonic() < delete_repeat_deadline
+                ):
+                    time.sleep(0.005)
+                if child_u32("doc_length") >= delete_length_after_first_press:
+                    raise AssertionError(
+                        "held Delete timer expired without deleting the next character: "
+                        + repr({
+                            "doc_length": child_u32("doc_length"),
+                            "repeat_keycode": child_u32("repeat_keycode"),
+                            "repeat_rate": child_u32("repeat_rate"),
+                        })
+                    )
                 expect_redraw("repeated Delete")
                 next_glyph = struct.unpack_from(
                     "<I", pixels, 92 * 800 * 4 + 20 * 4
                 )[0]
                 if next_glyph != 0xFF252A33:
-                    raise AssertionError("held Delete did not repeat after its initial delay")
+                    raise AssertionError(
+                        "repeated Delete changed document state but did not render the deleted character"
+                    )
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
                     + buffer_release_message()

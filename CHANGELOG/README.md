@@ -2,11 +2,17 @@
 
 Continue normal development on `early-alpha` at `-O2`. Keep `optimization-early-alpha` isolated.
 
-The implementation chooses two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). It preserves explicit compositor dimensions independently and leaves maximized/fullscreen/tiled states compositor-managed. The app uses a virtual layout coordinate system and one uniform density transform for boxes, glyphs and pointer hit-testing; Wayland surface dimensions, buffer geometry and damage remain in compositor coordinates.
+The implementation selects two-thirds of the largest current logical output when the compositor leaves initial dimensions unspecified (1920×1080 at scale 1 -> 1280×720). Explicit configure dimensions are retained independently; maximized/fullscreen/tiled states remain compositor-managed. The app separates compositor surface dimensions from a virtual layout and applies one uniform density transform to boxes, TrueType glyphs, bitmap fallback and pointer hit-testing. Damage, buffer sizes and viewport destinations remain in surface coordinates.
 
-The latest CI run passed the build, CLI and renderer checks. Its Wayland suite progressed into the file-workflow resize tests, where old assertions still treated `window_width` and `window_height` as surface dimensions. They are now virtual layout dimensions: 720×480 surface -> 0.9× density -> 800×533 virtual layout; 480×360 minimum surface -> 0.75× floor -> 640×480 virtual layout. The corresponding picker/footer pixel tests and pointer clicks have been projected through the same scale.
+The tests now assert:
+- 720×480 surface -> 0.9× density -> 800×533 virtual layout.
+- 480×360 minimum surface -> 0.75× density floor -> 640×480 virtual layout.
+- Resize-time footer/picker geometry and projected pointer/pixel coordinates.
+- Backspace/Delete repeat checks synchronize on document state changes rather than assuming the next frame is the repeat frame.
 
-CI is pending after the test correction. The dedicated initial two-output 1080p/1440p-at-2× selection case is still waiting to be reached by the full suite. Do not call the feature fully validated until that passes; real GNOME/Mutter visual/input testing is still outstanding. The source implementation is unchanged in this follow-up, and the experiment branch remains untouched.
+The latest Actions run passed the build, CLI and renderer benchmark, but the Wayland suite stopped in the default-size frame-callback test at a timing-sensitive Backspace repeat assertion. The test now checks the active repeat key and compositor 10 Hz / 180 ms policy, waits for the document mutation, then checks the committed pixels. CI is pending after this correction. The dedicated two-output 1080p-vs-1440p/2× sizing scenario still needs a passing run, followed by real GNOME/Mutter visual/input testing. Source implementation and `-O2` remain unchanged; do not merge the optimization branch.
+
+---
 
 ---
 

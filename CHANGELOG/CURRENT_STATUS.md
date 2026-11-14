@@ -26,7 +26,17 @@ The mock now checks:
 - Layout-dependent footer, picker and path-prompt geometry in virtual units, with pixel probes and pointer clicks projected back to surface coordinates.
 - The existing surface buffer sizes, strides, viewport/damage values, and compositor edge-resize behavior unchanged.
 
-The dedicated two-output startup-size case has still not been reached by CI because the broader file-workflow scenario fails earlier in its old geometry assertions. CI remains pending after this test correction; no conclusion about that new scenario is claimed yet.
+The dedicated two-output startup-size case has still not been reached by CI. Actions #938 got past the resized-window geometry checks but then exposed a timing-sensitive assumption in the default frame-callback/key-repeat scenario; the test is being made to wait for the actual document mutation before checking its rendered frame. CI remains pending; no conclusion about the dedicated startup-size scenario is claimed yet.
+
+### Follow-up after CI run #938
+
+The build, CLI and renderer steps passed. The Wayland mock completed the long file-workflow scenario, including the 720×480 and minimum-size layouts, but the first `verify_frame_callbacks` scenario then failed its held-Backspace repeat pixel assertion. The test assumed the next frame after buffer release must be the repeat frame; it can instead be a redraw already queued while frame/buffer ownership is changing.
+
+The mock now verifies that Backspace/Delete actually arm the compositor-provided repeat keycode/rate/delay and waits for the corresponding document cursor/length mutation before checking the committed pixels. This retains the 180 ms initial-delay/10 Hz repeat configuration and tests the resulting edit rather than depending on which frame happens to arrive next. The underlying key-repeat implementation is unchanged.
+
+The output-aware startup sizing scenario still has not been reached in a passing CI run. Validation remains pending; do not mark the milestone complete yet.
+
+
 
 **Changed implementation/test/docs:** `src/backend/wayland.S`, `tests/wayland_mock.py`, root README, and the Wayland, architecture, and rendering documentation. The development optimization policy remains unchanged. CI validation is pending for the first build after this change; physical GNOME/Mutter visual and input testing remains necessary after CI.
 
