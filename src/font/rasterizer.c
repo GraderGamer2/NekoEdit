@@ -315,7 +315,7 @@ static void cache_store_bitmap(struct cache_entry *slot) {
 #else
     uint32_t width=font_bitmap_width;
     for (uint32_t row=0;row<font_bitmap_height;++row) {
-        uint32_t source_row=row*cached_stride;
+        uint32_t source_row=row*BITMAP_SIDE;
         uint32_t target_row=row*width;
         for (uint32_t col=0;col<width;++col)
             slot->pixels[target_row+col]=font_bitmap_pixels[source_row+col];
@@ -489,7 +489,7 @@ int font_draw_codepoint_size(uint32_t cp,int32_t x,int32_t y,uint8_t *surface,
             int32_t py=y+e->top+(int32_t)row;
             if (py<0 || py>=clip_height || !render_clip_contains_y(py)) continue;
             uint8_t *dstrow=surface+(int64_t)py*stride;
-            uint32_t source_row=row*BITMAP_SIDE;
+            uint32_t source_row=row*cached_stride;
             for (uint32_t col=0;col<e->width;++col) {
                 uint8_t a=e->pixels[source_row+col];
                 if (!a) continue;
