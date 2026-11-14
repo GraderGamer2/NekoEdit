@@ -1,3 +1,26 @@
+## 2026-11-14 — viewport-bounded document painting (CI PASS #954)
+
+**Branch:** `early-alpha`; normal development remains `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
+
+The main glyph painter already starts from the indexed `doc_view_top_row` and stops at the bottom of the document viewport. Added regression instrumentation to verify that it does not walk from byte zero after a large scrollbar jump. More importantly, two other paint passes were doing work proportional to the document or selection size:
+
+- Wrapped selection painting previously scanned from the beginning of the document on every redraw. It now resolves the first visible visual row and the first row below the viewport through the existing line/Fenwick index, then visits only the byte span between those offsets.
+- Find highlighting previously enumerated matches across the complete document on every redraw. Added `doc_find_match_bounded` and a viewport-aware range painter. Wrapped mode searches one contiguous visible byte span with query look-behind; no-wrap mode bounds match candidates to the visible horizontal interval of each visible row.
+
+The 11 MiB / 89,414-line Wayland regression now selects the entire document, jumps the scrollbar into the middle, and asserts that both the glyph renderer and selection painter visit a bounded visible byte range. The measured span was **1,935 bytes for glyphs and 1,935 bytes for selection**, rather than the 11,534,336-byte document. It then enters Find, fast-scrolls 4,096 visual rows, and verifies that Find's search span remains within the test's 16,384-byte safety bound. The full test also retains wheel, proportional thumb, scrollbar drag, and large-document Open/Save coverage.
+
+**Validation:** [Actions #954](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465) passed all 17 workflow steps: freestanding build/ELF verification, CLI smoke tests, renderer-cache comparison, full Wayland protocol mock, executable inspection, native `us(intl)` keymap parsing, pinned X.Org importer verification, Compose pack generation, nested GNOME Shell/Mutter integration, and both artifact uploads.
+
+**Measured context:** the existing 11 MiB Open-to-first-presented-redraw samples were 119.2, 118.2, and 117.3 ms. No matched pre-change timing baseline was collected, so these values are workload context, not evidence of a speedup. The byte-span assertion is the direct validation of viewport-bounded painting.
+
+**Known limitation:** the common soft-wrapped large-document path is viewport-bounded. Very long logical lines in **Wrap Lines OFF** mode still need a sparse horizontal glyph-advance index: the current row-to-pixel mapping and main glyph traversal can walk hidden horizontal prefixes/suffixes. The next optimization should add bounded per-line horizontal checkpoints and update them safely after edits and font-size changes. Full-frame software-surface background repainting is also unchanged; this work bounds document-content traversal, not partial-buffer damage.
+
+Implementation: [213ad8c](https://github.com/GraderGamer2/NekoEdit/commit/213ad8cc5364b46ba132779269c49445e7c7105c); regression instrumentation and visible-range assertion: [ab34e2f](https://github.com/GraderGamer2/NekoEdit/commit/ab34e2fe9f4326f0e84ccd72b5d333915c191263).
+
+Artifacts: [Linux x86-64 binary (147,612 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107002397); [Compose locale packs (120,536 bytes)](https://github.com/GraderGamer2/NekoEdit/actions/runs/43578215465/artifacts/14107551738).
+
+---
+
 ## 2026-11-14 — fast-path printable ASCII reverse grapheme traversal (CI PASS #952)
 
 **Branch:** `early-alpha`; normal development remains at `-O2`, unstripped. The separate `optimization-early-alpha` branch remains unchanged.
