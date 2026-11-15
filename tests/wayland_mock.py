@@ -10029,14 +10029,30 @@ xkb_symbols "nekoedit-sparse" {
                     suffix_selection_pixel = logical_buffer_pixel(39, 103)
                     if suffix_selection_pixel != 0xFF5E81AC:
                         raise AssertionError(
-                            "selection renderer failed to carry its physical cursor across the gap: "
+                            "unwrapped selection renderer failed to carry its physical cursor across the gap: "
                             f"pixel={hex(suffix_selection_pixel)}, "
+                            f"gap=({child_u32('doc_gap_start')},{child_u32('doc_gap_end')})"
+                        )
+                    # Repeat with soft wrapping enabled so the separate wrapped
+                    # scanner must also carry its physical cursor across the gap.
+                    workflow_click(200, 16, 1292, "open Settings for wrapped split-gap selection paint")
+                    workflow_settings_click(200, 124, 1295, "enable Wrap Lines for wrapped selection test")
+                    if child_u32("doc_wrap_enabled") == 0:
+                        raise AssertionError("Settings did not enable Wrap Lines for wrapped split-gap selection test")
+                    if child_u32("doc_selection_active") == 0:
+                        raise AssertionError("changing Wrap Lines unexpectedly cleared the full-document selection")
+                    workflow_click(20, 98, 1298, "close Settings before wrapped split-gap selection check")
+                    wrapped_suffix_selection_pixel = logical_buffer_pixel(39, 103)
+                    if wrapped_suffix_selection_pixel != 0xFF5E81AC:
+                        raise AssertionError(
+                            "wrapped selection renderer failed to carry its physical cursor across the gap: "
+                            f"pixel={hex(wrapped_suffix_selection_pixel)}, "
                             f"gap=({child_u32('doc_gap_start')},{child_u32('doc_gap_end')})"
                         )
                     workflow_shortcut(1300, 31, "Ctrl+S saves split gap-buffer segments")
                     client.sendall(wire_message(10, 1))
                     observations.append(
-                        "gap movement, insertion, Backspace, Delete, UTF-8 prefix reads, selection deletion, and two-segment save"
+                        "gap movement, insertion, UTF-8 prefix reads, and wrapped/unwrapped selection painting across the split gap"
                     )
                     return
 

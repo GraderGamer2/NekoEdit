@@ -25545,7 +25545,9 @@ render_selection:
     push r13
     push r14
     push r15
-    sub rsp, 8
+    # Keep one physical gap-buffer cursor beside the wrapped path's logical
+    # offset. The extra local storage preserves 16-byte call alignment.
+    sub rsp, 24
     cmp dword ptr [rip + doc_selection_active], 0
     jne .Lneko_render_selection_active
     mov dword ptr [rip + render_selection_scan_start], 0
@@ -25575,6 +25577,18 @@ render_selection:
     mov ebp, eax
     mov dword ptr [rip + render_selection_scan_start], r14d
     mov dword ptr [rip + render_selection_scan_end], r14d
+    # Map the starting logical byte offset to its physical address around
+    # the gap, then advance the pointer as the visible selection is scanned.
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r14d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lneko_render_selection_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lneko_render_selection_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp], rax
     mov r12d, DOC_LEFT
     mov r13d, DOC_TOP
     cmp r14d, dword ptr [rip + doc_selection_end]
@@ -25590,9 +25604,8 @@ render_selection:
     jae .Lneko_render_selection_done
     cmp r14d, ebp
     jae .Lneko_render_selection_done
-    mov edi, r14d
-    call doc_byte_at
-    mov ebx, eax
+    mov rax, qword ptr [rsp]
+    movzx ebx, byte ptr [rax]
     cmp ebx, 10
     je .Lneko_render_selection_newline
     cmp ebx, 13
@@ -25641,9 +25654,53 @@ render_selection:
     call draw_rect
 .Lneko_render_selection_character_advance:
     add r12d, r15d
+    # Printable ASCII is a single-byte grapheme only when its next logical
+    # byte is also ASCII (or the current byte is at EOF). Check across the gap.
+    cmp ebx, 32
+    jb .Lneko_render_selection_grapheme_advance
+    cmp ebx, 127
+    jae .Lneko_render_selection_grapheme_advance
+    lea eax, [r14d + 1]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lneko_render_selection_ascii_advance
+    mov rsi, qword ptr [rsp]
+    inc rsi
+    cmp r14d, dword ptr [rip + doc_gap_start]
+    jae .Lneko_render_selection_next_byte_ready
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .Lneko_render_selection_next_byte_ready
+    mov rsi, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rsi, rcx
+.Lneko_render_selection_next_byte_ready:
+    cmp byte ptr [rsi], 128
+    jae .Lneko_render_selection_grapheme_advance
+.Lneko_render_selection_ascii_advance:
+    inc r14d
+    mov rax, qword ptr [rsp]
+    inc rax
+    mov qword ptr [rsp], rax
+    cmp r14d, dword ptr [rip + doc_gap_start]
+    jne .Lneko_render_selection_scan
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rax, rcx
+    mov qword ptr [rsp], rax
+    jmp .Lneko_render_selection_scan
+.Lneko_render_selection_grapheme_advance:
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r14d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lneko_render_selection_grapheme_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lneko_render_selection_grapheme_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp], rax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_tab:
@@ -25680,7 +25737,17 @@ render_selection:
     call draw_rect
 .Lneko_render_selection_tab_advance:
     add r12d, r15d
+    # A tab is one logical byte; keep the physical cursor in step with it.
     inc r14d
+    mov rax, qword ptr [rsp]
+    inc rax
+    mov qword ptr [rsp], rax
+    cmp r14d, dword ptr [rip + doc_gap_start]
+    jne .Lneko_render_selection_scan
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rax, rcx
+    mov qword ptr [rsp], rax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_newline:
@@ -25716,18 +25783,38 @@ render_selection:
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r14d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lneko_render_selection_newline_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lneko_render_selection_newline_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp], rax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_control:
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r14d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lneko_render_selection_control_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lneko_render_selection_control_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp], rax
     jmp .Lneko_render_selection_scan
 
 .Lneko_render_selection_unwrapped:
     call render_selection_unwrapped
 .Lneko_render_selection_done:
-    add rsp, 8
+    add rsp, 24
     pop r15
     pop r14
     pop r13
