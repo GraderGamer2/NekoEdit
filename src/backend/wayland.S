@@ -70,8 +70,10 @@
 .equ CURSOR_SHAPE_NS_RESIZE, 27
 .equ CURSOR_SHAPE_NESW_RESIZE, 28
 .equ CURSOR_SHAPE_NWSE_RESIZE, 29
+.equ CURSOR_SHAPE_ALL_SCROLL, 32
 .equ BTN_LEFT,          0x110
 .equ BTN_RIGHT,         0x111
+.equ BTN_MIDDLE,        0x112
 .equ CONTEXT_MENU_WIDTH, 128
 .equ CONTEXT_MENU_HEIGHT, 78
 .equ CONTEXT_MENU_ROW_HEIGHT, 26
@@ -5077,6 +5079,10 @@ doc_view_left_px:       .long 0
 doc_hwheel_remainder:   .long 0
 doc_scroll_drag:        .long 0
 doc_scroll_drag_offset: .long 0
+.global doc_auto_scroll_active, doc_auto_scroll_anchor_y, doc_auto_scroll_timer_armed
+doc_auto_scroll_active: .long 0
+doc_auto_scroll_anchor_y: .long 0
+doc_auto_scroll_timer_armed: .long 0
 doc_scroll_thumb_top:   .long 0
 doc_scroll_thumb_height: .long 0
 doc_hscroll_drag:       .long 0
@@ -6292,6 +6298,9 @@ wayland_main:
     js .protocol_error
     jmp .event_loop
 .pointer_leave:
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
     mov dword ptr [rip + pointer_inside], 0
     mov dword ptr [rip + cursor_shape_current], 0
     jmp .event_loop
@@ -6302,6 +6311,8 @@ wayland_main:
     js .protocol_error
     cmp dword ptr [rip + picker_mode], 0
     jne .pointer_picker_motion
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    je .pointer_document_auto_scroll_motion
     cmp dword ptr [rip + doc_hscroll_drag], 1
     je .pointer_document_hscroll_motion
     cmp dword ptr [rip + doc_scroll_drag], 1
@@ -6330,6 +6341,12 @@ wayland_main:
     mov esi, eax
     call picker_scrollbar_drag_to_y
     jmp .keyboard_changed
+.pointer_document_auto_scroll_motion:
+    call doc_auto_scroll_update
+    test eax, eax
+    js .protocol_error
+    jz .event_loop
+    jmp .document_scroll_redraw
 .pointer_document_hscroll_motion:
     mov esi, dword ptr [rip + pointer_x]
     call doc_hscrollbar_drag_to_x
@@ -6342,6 +6359,15 @@ wayland_main:
 .pointer_axis:
     cmp dword ptr [rip + last_size], 12
     jb .event_loop
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    jne .pointer_axis_auto_stopped
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
+.pointer_axis_auto_stopped:
     cmp dword ptr [rip + event_payload + 4], 1
     je .pointer_axis_horizontal
     cmp dword ptr [rip + event_payload + 4], 0
@@ -6413,12 +6439,24 @@ wayland_main:
 .pointer_button:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
+    cmp dword ptr [rip + event_payload + 8], BTN_MIDDLE
+    je .pointer_middle_button
     cmp dword ptr [rip + event_payload + 8], BTN_RIGHT
     je .pointer_context_button
     cmp dword ptr [rip + event_payload + 8], BTN_LEFT
     jne .event_loop
     cmp dword ptr [rip + event_payload + 12], 1
-    je .pointer_button_press
+    jne .pointer_button_release
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    jne .pointer_button_press
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
+    jmp .pointer_button_press
+.pointer_button_release:
     cmp dword ptr [rip + event_payload + 12], 0
     jne .event_loop
     cmp dword ptr [rip + picker_mode], 0
@@ -6450,6 +6488,62 @@ wayland_main:
     jne .Lneko_pointer_button_released
     mov dword ptr [rip + doc_selection_active], 0
 .Lneko_pointer_button_released:
+    jmp .event_loop
+.pointer_middle_button:
+    # Middle click toggles document auto-scroll; the second middle click stops.
+    cmp dword ptr [rip + event_payload + 12], 1
+    jne .event_loop
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    jne .pointer_middle_start
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
+    jmp .event_loop
+.pointer_middle_start:
+    cmp dword ptr [rip + pointer_inside], 1
+    jne .event_loop
+    cmp dword ptr [rip + pointer_button_down], 0
+    jne .event_loop
+    cmp dword ptr [rip + doc_scroll_drag], 0
+    jne .event_loop
+    cmp dword ptr [rip + doc_hscroll_drag], 0
+    jne .event_loop
+    cmp dword ptr [rip + picker_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + path_prompt_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + save_confirm_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + find_replace_mode], 0
+    jne .event_loop
+    cmp dword ptr [rip + context_menu_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + file_menu_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + settings_menu_open], 0
+    jne .event_loop
+    cmp dword ptr [rip + history_tab_open], 0
+    jne .event_loop
+    mov eax, dword ptr [rip + pointer_x]
+    cmp eax, DOC_LEFT
+    jb .event_loop
+    mov ecx, DOC_LEFT
+    add ecx, dword ptr [rip + window_doc_pixel_width]
+    cmp eax, ecx
+    jae .event_loop
+    mov eax, dword ptr [rip + pointer_y]
+    cmp eax, DOC_TOP
+    jl .event_loop
+    cmp eax, dword ptr [rip + window_doc_bottom]
+    jae .event_loop
+    mov dword ptr [rip + doc_auto_scroll_anchor_y], eax
+    mov dword ptr [rip + doc_auto_scroll_active], 1
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
     jmp .event_loop
 .pointer_context_button:
     # Only right-button presses open/dismiss the document context menu.
@@ -7279,6 +7373,14 @@ wayland_main:
     call linux_read_exact
     test rax, rax
     js .protocol_error
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    jne .event_drag_timer_selection
+    call doc_auto_scroll_update
+    test eax, eax
+    js .protocol_error
+    jz .event_loop
+    jmp .document_scroll_redraw
+.event_drag_timer_selection:
     cmp dword ptr [rip + pointer_button_down], 1
     jne .event_loop
     mov edi, 1
@@ -7416,6 +7518,17 @@ wayland_main:
 .keyboard_key:
     cmp dword ptr [rip + last_size], 16
     jb .event_loop
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    jne .keyboard_key_auto_stopped
+    cmp dword ptr [rip + event_payload + 12], 1
+    jne .keyboard_key_auto_stopped
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
+    call window_update_cursor_shape
+    test rax, rax
+    js .protocol_error
+.keyboard_key_auto_stopped:
     cmp dword ptr [rip + keyboard_focused], 1
     jne .event_loop
     mov eax, dword ptr [rip + event_payload]     # input serial for set_selection
@@ -13855,6 +13968,8 @@ window_update_cursor_shape:
     jne .window_cursor_shape_send
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .window_cursor_shape_send
+    cmp dword ptr [rip + doc_auto_scroll_active], 1
+    je .Lwindow_cursor_shape_all_scroll
     call window_get_resize_edges
     cmp eax, 1
     je .window_cursor_shape_ns
@@ -13872,6 +13987,9 @@ window_update_cursor_shape:
     je .window_cursor_shape_nesw
     cmp eax, 9
     je .window_cursor_shape_nesw
+    jmp .window_cursor_shape_send
+.Lwindow_cursor_shape_all_scroll:
+    mov r12d, CURSOR_SHAPE_ALL_SCROLL
     jmp .window_cursor_shape_send
 .window_cursor_shape_ew:
     mov r12d, CURSOR_SHAPE_EW_RESIZE
@@ -19296,6 +19414,111 @@ doc_drag_timer_stop:
     xor eax, eax
     ret
 .size doc_drag_timer_stop, . - doc_drag_timer_stop
+.popsection
+
+# Middle-button auto-scroll reuses the selection-drag timer, but only arms it
+# while the pointer is outside a small dead zone around its activation point.
+.type doc_auto_scroll_timer_start, @function
+.pushsection .text.doc_auto_scroll_timer_start,"ax",@progbits
+doc_auto_scroll_timer_start:
+    cmp dword ptr [rip + doc_auto_scroll_timer_armed], 1
+    je .Ldoc_auto_scroll_timer_start_done
+    cmp dword ptr [rip + doc_drag_timer_fd], 0
+    je .Ldoc_auto_scroll_timer_start_done
+    mov qword ptr [rip + doc_drag_timer_spec], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 8], DOC_DRAG_SCROLL_TICK_NS
+    mov qword ptr [rip + doc_drag_timer_spec + 16], 0
+    mov qword ptr [rip + doc_drag_timer_spec + 24], DOC_DRAG_SCROLL_TICK_NS
+    mov eax, SYS_timerfd_settime
+    mov edi, dword ptr [rip + doc_drag_timer_fd]
+    xor esi, esi
+    lea rdx, [rip + doc_drag_timer_spec]
+    xor r10d, r10d
+    syscall
+    test rax, rax
+    js .Ldoc_auto_scroll_timer_start_return
+    mov dword ptr [rip + doc_auto_scroll_timer_armed], 1
+.Ldoc_auto_scroll_timer_start_done:
+    xor eax, eax
+.Ldoc_auto_scroll_timer_start_return:
+    ret
+.size doc_auto_scroll_timer_start, . - doc_auto_scroll_timer_start
+.popsection
+
+.type doc_auto_scroll_timer_stop, @function
+.pushsection .text.doc_auto_scroll_timer_stop,"ax",@progbits
+doc_auto_scroll_timer_stop:
+    cmp dword ptr [rip + doc_auto_scroll_timer_armed], 1
+    jne .Ldoc_auto_scroll_timer_stop_done
+    call doc_drag_timer_stop
+    test rax, rax
+    js .Ldoc_auto_scroll_timer_stop_return
+    mov dword ptr [rip + doc_auto_scroll_timer_armed], 0
+.Ldoc_auto_scroll_timer_stop_done:
+    xor eax, eax
+.Ldoc_auto_scroll_timer_stop_return:
+    ret
+.size doc_auto_scroll_timer_stop, . - doc_auto_scroll_timer_stop
+.popsection
+
+.type doc_auto_scroll_stop, @function
+.pushsection .text.doc_auto_scroll_stop,"ax",@progbits
+doc_auto_scroll_stop:
+    mov dword ptr [rip + doc_auto_scroll_active], 0
+    mov dword ptr [rip + doc_auto_scroll_anchor_y], 0
+    jmp doc_auto_scroll_timer_stop
+.size doc_auto_scroll_stop, . - doc_auto_scroll_stop
+.popsection
+
+# EAX=1 if the viewport moved, 0 when idle/bounded, or a negative syscall error.
+.type doc_auto_scroll_update, @function
+.pushsection .text.doc_auto_scroll_update,"ax",@progbits
+doc_auto_scroll_update:
+    push rbx
+    push r12
+    mov eax, dword ptr [rip + pointer_y]
+    sub eax, dword ptr [rip + doc_auto_scroll_anchor_y]
+    mov r12d, eax
+    test eax, eax
+    jns .Ldoc_auto_scroll_distance_ready
+    neg eax
+.Ldoc_auto_scroll_distance_ready:
+    cmp eax, 12
+    ja .Ldoc_auto_scroll_rate
+    call doc_auto_scroll_timer_stop
+    jmp .Ldoc_auto_scroll_update_return
+.Ldoc_auto_scroll_rate:
+    sub eax, 12
+    add eax, DOC_DRAG_SCROLL_ROW_PIXELS - 1
+    xor edx, edx
+    mov ecx, DOC_DRAG_SCROLL_ROW_PIXELS
+    div ecx
+    cmp eax, DOC_DRAG_SCROLL_MAX_STEPS
+    jbe .Ldoc_auto_scroll_rate_clamped
+    mov eax, DOC_DRAG_SCROLL_MAX_STEPS
+.Ldoc_auto_scroll_rate_clamped:
+    mov ebx, eax
+    test r12d, r12d
+    jns .Ldoc_auto_scroll_down
+    neg ebx
+.Ldoc_auto_scroll_down:
+    mov edi, ebx
+    call doc_scroll_by
+    test eax, eax
+    jnz .Ldoc_auto_scroll_moved
+    call doc_auto_scroll_timer_stop
+    jmp .Ldoc_auto_scroll_update_return
+.Ldoc_auto_scroll_moved:
+    mov r12d, eax
+    call doc_auto_scroll_timer_start
+    test rax, rax
+    js .Ldoc_auto_scroll_update_return
+    mov eax, r12d
+.Ldoc_auto_scroll_update_return:
+    pop r12
+    pop rbx
+    ret
+.size doc_auto_scroll_update, . - doc_auto_scroll_update
 .popsection
 
 .type repeat_cancel, @function
