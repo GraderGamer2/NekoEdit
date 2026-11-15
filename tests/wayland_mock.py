@@ -11465,6 +11465,15 @@ xkb_symbols "nekoedit-sparse" {
                             ]
                         except AssertionError as error:
                             render_diagnostics[name] = str(error)
+                    scroll_state = read_document_state()
+                    render_diagnostics["doc_tail_repr"] = repr(scroll_state["doc_contents"][-32:])
+                    render_diagnostics["doc_tail_hex"] = scroll_state["doc_contents"][-32:].hex()
+                    render_diagnostics["last_line_records"] = scroll_state["doc_line_index_records"][-8:]
+                    render_diagnostics["last_line_ids"] = scroll_state["doc_line_index_id_values"][-8:]
+                    render_diagnostics["render_document_scan"] = (
+                        scroll_state["render_document_scan_start"],
+                        scroll_state["render_document_scan_end"],
+                    )
                     raise AssertionError(
                         "text/caret did not scroll into the visible bottom row after vertical overflow; "
                         f"pixel={hex(scrolled_glyph)}, visible_carets={visible_carets}, "
