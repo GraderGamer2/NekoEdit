@@ -26109,6 +26109,8 @@ render_document:
     push r13
     push r14
     push r15
+    push rbp
+    sub rsp, 8                  # keep System V call-site alignment
     mov dword ptr [rip + render_document_scan_start], 0
     mov dword ptr [rip + render_document_scan_end], 0
     cmp dword ptr [rip + render_partial_active], 1
@@ -26151,6 +26153,7 @@ render_document:
     lea r12d, [rdx + DOC_LEFT]
     sub r12d, dword ptr [rip + doc_view_left_px]
 .Ldocument_render_origin_ready:
+    call .Ldocument_render_sync_pointer
     mov dword ptr [rip + render_document_scan_start], r14d
     mov dword ptr [rip + render_document_scan_end], r14d
     mov r13d, DOC_TOP
@@ -26188,12 +26191,13 @@ render_document:
     mov r14d, eax
     lea r12d, [rdx + DOC_LEFT]
     sub r12d, dword ptr [rip + doc_view_left_px]
+    call .Ldocument_render_sync_pointer
     add r13d, dword ptr [rip + window_doc_line_height]
     jmp .Ldocument_render_loop
 .Ldocument_render_read_byte:
-    mov edi, r14d
-    call doc_byte_at
-    mov edx, eax
+    # RBX-independent physical cursor avoids a logical-offset translation for
+    # every visible byte. The cursor is rebased whenever the gap is crossed.
+    movzx edx, byte ptr [rbp]
     cmp edx, 10
     je .document_newline
     cmp edx, 9
@@ -26242,9 +26246,33 @@ render_document:
     call draw_glyph
 .document_printable_skip_draw:
     add r12d, r15d
+    # Printable ASCII normally forms one grapheme per byte. Inspect the next
+    # logical byte directly and keep the full Unicode path when it is non-ASCII:
+    # it may be Extend/ZWJ/SpacingMark and join this base across the gap.
+    cmp ebx, 32
+    jb .Ldocument_render_grapheme_slow
+    cmp ebx, 127
+    jae .Ldocument_render_grapheme_slow
+    lea eax, [r14d + 1]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Ldocument_render_advance_one
+    mov rsi, rbp
+    inc rsi
+    cmp r14d, dword ptr [rip + doc_gap_start]
+    jae .Ldocument_render_next_byte_ready
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .Ldocument_render_next_byte_ready
+    mov rsi, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rsi, rcx
+.Ldocument_render_next_byte_ready:
+    cmp byte ptr [rsi], 128
+    jb .Ldocument_render_advance_one
+.Ldocument_render_grapheme_slow:
     mov edi, r14d
     call doc_grapheme_next
     mov r14d, eax
+    call .Ldocument_render_sync_pointer
     jmp .Ldocument_render_loop
 
 .document_tab:
@@ -26291,14 +26319,35 @@ render_document:
     mov r14d, eax
     lea r12d, [rdx + DOC_LEFT]
     sub r12d, dword ptr [rip + doc_view_left_px]
+    call .Ldocument_render_sync_pointer
     add r13d, dword ptr [rip + window_doc_line_height]
     jmp .Ldocument_render_loop
 .Ldocument_newline_wrapped:
     mov r12d, DOC_LEFT
     add r13d, dword ptr [rip + window_doc_line_height]
 .document_next_byte:
+.Ldocument_render_advance_one:
     inc r14d
+    inc rbp
+    cmp r14d, dword ptr [rip + doc_gap_start]
+    jne .Ldocument_render_loop
+    # The next logical byte is the first byte after the physical gap.
+    mov rbp, qword ptr [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add rbp, rax
     jmp .Ldocument_render_loop
+
+.Ldocument_render_sync_pointer:
+    mov rbp, qword ptr [rip + doc_buffer]
+    mov eax, r14d
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .Ldocument_render_sync_pointer_ready
+    mov ecx, dword ptr [rip + doc_gap_end]
+    sub ecx, dword ptr [rip + doc_gap_start]
+    add eax, ecx
+.Ldocument_render_sync_pointer_ready:
+    add rbp, rax
+    ret
 
 .document_draw_cursor:
     mov edi, dword ptr [rip + doc_cursor]
@@ -26345,6 +26394,8 @@ render_document:
     mov r9d, 0xffffffff
     call draw_rect
 .document_render_done:
+    add rsp, 8
+    pop rbp
     pop r15
     pop r14
     pop r13
