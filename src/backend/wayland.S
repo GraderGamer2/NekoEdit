@@ -5194,7 +5194,7 @@ render_clip_bottom2:    .long 0
 render_clip_background_row_visits: .long 0
 .global render_status_scan_steps, render_status_column_value
 render_status_scan_steps: .long 0
-render_status_column_value: .long 1
+render_status_column_value: .long 0
 render_damage_top1:     .long 0
 render_damage_height1:  .long 0
 render_damage_top2:     .long 0
