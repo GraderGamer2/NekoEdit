@@ -1,3 +1,20 @@
+## 2026-11-15 — incremental Find-highlight coordinate traversal (CI PASS #996)
+
+| Commit | Subject |
+|---|---|
+| [f64c7fc2a6c4](https://github.com/GraderGamer2/NekoEdit/commit/f64c7fc2a6c4767f76bdc1494873ffe853fe9d33) | perf: traverse Find highlight coordinates incrementally |
+| [55998c623f1c](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0) | test: reset Find search origin after gap setup |
+
+The printable-ASCII highlight path now maps the start of each match once and advances visual row/X coordinates using actual per-glyph font widths. The wrapped path uses the same next-glyph overflow rule as the indexed visual mapper; no-wrap advances the horizontal pixel coordinate. Control/non-ASCII queries and ASCII matches preceded by non-ASCII bytes retain the original mapper.
+
+The deterministic proportional-font Wayland regression checks A=8 px, B=5 px, space=3 px, a 10 px wrap width, four visual rows, a physical gap inside the first match, exact amber glyph rectangles, and unwrapped horizontal positions. The first test run left the logical caret at byte 1 after creating the gap and therefore correctly selected the second match. The follow-up test commit resets the caret to byte 0 while asserting the gap is still at byte 1.
+
+Actions [#996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 workflow steps: build/ELF, CLI/host, renderer equivalence, complete Wayland mock including 11 MiB Open/Save, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus, and both uploads.
+
+ELF text/data/BSS: 239,542 / 64 / 3,764,856 bytes. Executable ZIP 152,139 bytes; Compose ZIP 120,536 bytes. No controlled before/after speed benchmark or live desktop retest is claimed.
+
+---
+
 ## 2026-11-15 — gap-aware Find-highlight scanning (CI PASS #994)
 
 | Commit | Subject |

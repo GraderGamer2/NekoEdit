@@ -1,3 +1,17 @@
+## 2026-11-15 — incremental Find-highlight coordinate traversal (CI PASS #996)
+
+Find-highlight painting no longer maps every printable-ASCII byte in a match independently. The renderer maps the first matched byte to a visual row and horizontal coordinate, then advances the rest of the match using actual per-character font widths. This preserves proportional fonts. Wrap Lines ON applies the same next-glyph overflow predicate used by the existing visual mapper; Wrap Lines OFF increments the horizontal pixel position without changing rows.
+
+The optimized path is intentionally narrow. Queries containing controls or non-ASCII bytes use the original mapper. A printable-ASCII match preceded by a non-ASCII document byte also takes the fallback, retaining the existing grapheme behavior for possible Unicode Prepend joins. Search comparison, byte bounds and match geometry are otherwise unchanged.
+
+The regression uses a deterministic font with 8 px A, 5 px B and 3 px space advances. A 10 px wrapped viewport lays `AB AB` out over four rows, while the first match is physically split by the gap. The test checks each amber highlight rectangle's exact row and glyph width, then repeats horizontal-coordinate checks without wrapping.
+
+The initial run #995 failed because the fixture left the logical caret at byte 1 after positioning the storage gap there; Find correctly began searching at the caret and selected the second result. Test-only correction [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0) resets the caret to byte 0 and verifies that the physical gap remains at byte 1. Actions [#996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps, including the full Wayland mock, 11 MiB Open/Save, renderer equivalence, XKB/importer/Compose checks and nested GNOME Shell/Mutter/IBus integration.
+
+No controlled before/after benchmark or manual live-desktop test was performed.
+
+---
+
 ## 2026-11-15 — gap-aware Find-highlight scanning (CI PASS #994)
 
 The bounded Find-highlight matcher now holds a physical pointer for its candidate start and a second physical pointer for query comparison. Both cursors advance without resolving each logical byte through the gap-buffer accessor and rebase when their logical position reaches the internal gap. This keeps exact byte comparison correct when a match begins in the prefix and continues in the suffix.

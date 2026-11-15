@@ -1,3 +1,19 @@
+## Latest handoff (2026-11-15 — incremental Find-highlight coordinates; CI PASS #996)
+
+Continue application-source development on `early-alpha` at [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+The Find-highlight painter maps the first byte in a printable-ASCII match once and advances subsequent positions incrementally with each glyph's real font width. It honors proportional metrics and the indexed mapper's wrap-overflow rule. Control/non-ASCII queries, and ASCII matches immediately preceded by non-ASCII bytes, retain the original per-byte mapper to protect grapheme boundary behavior.
+
+The Wayland mock now verifies a deterministic proportional face (A=8 px, B=5 px, space=3 px), a physically split first match, exact amber pixels across four visual rows at a 10 px wrap width, and proportional horizontal positions with Wrap Lines OFF. The first run #995 caught a test setup problem (search caret left at byte 1); [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0) resets the logical caret and asserts the gap remains in place.
+
+Actions [#996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps: build/ELF, CLI/host, renderer equivalence, complete Wayland mock including 11 MiB Open/Save, executable inspection, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus and both uploads.
+
+ELF text/data/BSS: 239,542 / 64 / 3,764,856 bytes. Artifacts: [Linux x86-64 executable ZIP, 152,139 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859/artifacts/14145961710); [Compose locale ZIP, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859/artifacts/14145424996). Both expire **2026-11-16 11:02 WIB**.
+
+No controlled before/after benchmark or manual live GNOME desktop retest was performed. Next candidate: inspect other repeated visual-coordinate conversions in rendering/selection paths and add focused regression coverage before changing them.
+
+---
+
 ## Latest handoff (2026-11-15 — gap-aware Find highlighting; CI PASS #994)
 
 Continue application-source development on `early-alpha` at [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
