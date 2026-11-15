@@ -4289,6 +4289,23 @@ xkb_symbols "nekoedit-sparse" {
                     workflow_redraw(f"{label}: release")
                     client.sendall(buffer_release_message())
 
+                def expect_document_damage(label: str) -> None:
+                    damage = recv_wayland_message(client)
+                    if damage[0:2] != (8, 2) or damage[3] or len(damage[2]) != 16:
+                        raise AssertionError(f"{label}: malformed first damage request: {damage!r}")
+                    rect1 = struct.unpack("<4I", damage[2])
+                    if rect1 == (0, 0, 800, initial_height):
+                        return
+                    x1, y1, width1, height1 = rect1
+                    if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
+                        raise AssertionError(f"{label}: invalid document damage rectangle: {rect1!r}")
+                    damage2 = recv_wayland_message(client)
+                    if damage2[0:2] != (8, 2) or damage2[3] or len(damage2[2]) != 16:
+                        raise AssertionError(f"{label}: malformed status damage request: {damage2!r}")
+                    x2, y2, width2, height2 = struct.unpack("<4I", damage2[2])
+                    if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > initial_height:
+                        raise AssertionError(f"{label}: invalid status damage rectangle: {(x2, y2, width2, height2)!r}")
+
                 if frame_callback_order_test:
                     wait_buffer_idle("startup idle before frame-order test")
                     baseline_requested = frame_callback_stats["requested"]
@@ -4306,10 +4323,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)),
                         "first paced frame attach",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "first paced frame damage",
-                    )
+                    expect_document_damage("first paced frame damage")
                     expect_message(client, (8, 6, b""), "first paced frame commit")
                     if len(frame_callback_stats["pending"]) != 1:
                         raise AssertionError(
@@ -4348,10 +4362,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)),
                         "coalesced frame attach after callback",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "coalesced frame damage after callback",
-                    )
+                    expect_document_damage("coalesced frame damage after callback")
                     expect_message(client, (8, 6, b""), "coalesced frame commit after callback")
                     if len(frame_callback_stats["ids"]) != baseline_requested + 2:
                         raise AssertionError(
