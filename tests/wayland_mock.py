@@ -10007,6 +10007,14 @@ xkb_symbols "nekoedit-sparse" {
                         + buffer_release_message()
                     )
                     key_step(1266, 14, "Backspace removes the selected y")
+                    workflow_shortcut(1268, 30, "Ctrl+A selects across the split gap")
+                    suffix_selection_pixel = logical_buffer_pixel(39, 103)
+                    if suffix_selection_pixel != 0xFF5E81AC:
+                        raise AssertionError(
+                            "selection renderer failed to carry its physical cursor across the gap: "
+                            f"pixel={hex(suffix_selection_pixel)}, "
+                            f"gap=({child_u32('doc_gap_start')},{child_u32('doc_gap_end')})"
+                        )
                     workflow_shortcut(1270, 31, "Ctrl+S saves split gap-buffer segments")
                     client.sendall(wire_message(10, 1))
                     observations.append(

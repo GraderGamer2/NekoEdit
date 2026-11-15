@@ -25791,6 +25791,17 @@ render_selection_unwrapped:
     mov dword ptr [rip + render_selection_scan_start], r12d
 .Lselection_unwrapped_keep_scan_start:
     mov dword ptr [rip + render_selection_scan_end], ebp
+    # Maintain a physical cursor for sequential reads in this visible row.
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r12d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lselection_unwrapped_row_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lselection_unwrapped_row_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp + 16], rax
     mov eax, r14d
     sub eax, dword ptr [rip + doc_view_top_row]
     imul eax, dword ptr [rip + window_doc_line_height]
@@ -25808,9 +25819,8 @@ render_selection_unwrapped:
     jae .Lselection_unwrapped_row_end
     cmp r12d, dword ptr [rip + doc_selection_end]
     jae .Lselection_unwrapped_done
-    mov edi, r12d
-    call doc_byte_at
-    mov ebx, eax
+    mov rax, qword ptr [rsp + 16]
+    movzx ebx, byte ptr [rax]
     cmp ebx, 9
     je .Lselection_unwrapped_tab
     cmp ebx, 32
@@ -25846,14 +25856,68 @@ render_selection_unwrapped:
     call draw_document_selection_rect
 .Lselection_unwrapped_advance:
     add r13d, r15d
+    # Fast path ordinary ASCII boundaries without resolving the logical
+    # offset or invoking the grapheme iterator for every visible character.
+    cmp ebx, 32
+    jb .Lselection_unwrapped_grapheme_advance
+    cmp ebx, 127
+    jae .Lselection_unwrapped_grapheme_advance
+    lea eax, [r12d + 1]
+    cmp eax, dword ptr [rip + doc_length]
+    jae .Lselection_unwrapped_ascii_advance
+    mov rsi, qword ptr [rsp + 16]
+    inc rsi
+    cmp r12d, dword ptr [rip + doc_gap_start]
+    jae .Lselection_unwrapped_next_byte_ready
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jb .Lselection_unwrapped_next_byte_ready
+    mov rsi, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rsi, rcx
+.Lselection_unwrapped_next_byte_ready:
+    cmp byte ptr [rsi], 128
+    jae .Lselection_unwrapped_grapheme_advance
+.Lselection_unwrapped_ascii_advance:
+    inc r12d
+    mov rax, qword ptr [rsp + 16]
+    inc rax
+    mov qword ptr [rsp + 16], rax
+    cmp r12d, dword ptr [rip + doc_gap_start]
+    jne .Lselection_unwrapped_scan
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, dword ptr [rip + doc_gap_end]
+    add rax, rcx
+    mov qword ptr [rsp + 16], rax
+    jmp .Lselection_unwrapped_scan
+.Lselection_unwrapped_grapheme_advance:
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r12d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lselection_unwrapped_grapheme_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lselection_unwrapped_grapheme_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp + 16], rax
     jmp .Lselection_unwrapped_scan
 .Lselection_unwrapped_control:
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r12d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Lselection_unwrapped_control_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Lselection_unwrapped_control_pointer_ready:
+    add rax, rcx
+    mov qword ptr [rsp + 16], rax
     jmp .Lselection_unwrapped_scan
 
 .Lselection_unwrapped_row_end:
