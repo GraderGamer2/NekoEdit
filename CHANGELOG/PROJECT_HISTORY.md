@@ -1,3 +1,15 @@
+## 2026-11-15 — in-app keyboard shortcut reference and modal IME handling (CI PASS #1003)
+
+The editor now exposes its supported keyboard shortcuts through a centered Help panel, available from F1 or the title-bar Help item. The panel is divided into File and Editing, Navigation, and Find and Replace. Its contents reflect the implemented key bindings, including Ctrl+F for the unified Find/Replace interface; the removed Ctrl+H entry point is not listed.
+
+Help behaves as a modal view. Escape, the X control, and outside clicks close it; clicks outside are consumed and cannot reposition the document caret. Keyboard and document pointer input are blocked behind the panel. Help can also be opened while viewing History. Opening the panel disables the optional text-input-v3 target and clears transient preedit state; closing it restores document text input and sends a fresh surrounding-text/cursor update.
+
+Regression coverage checks F1 and title-bar access, panel geometry and border pixels, modal typing suppression, all close paths, outside-click behavior, and IME disable/restore request sequencing. The initial IME regression in #1002 expected the wrong text-change cause after Escape; editor-originated keyboard changes use cause 1, and the corrected test passes in #1003.
+
+Actions [#1003](https://github.com/GraderGamer2/NekoEdit/actions/runs/43689046632) passed all 17 workflow steps, including the complete Wayland mock and 11 MiB Open/Save, native XKB, X.Org importer, Compose generation, nested GNOME Shell/Mutter/IBus integration and both artifact uploads. ELF text/data/BSS: 242,742 / 64 / 3,764,888 bytes. The freestanding ELF has no dynamic section. No manual live-desktop retest is claimed.
+
+---
+
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (CI PASS #1000)
 
 ## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)
