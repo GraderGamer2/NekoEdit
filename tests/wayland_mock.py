@@ -4241,9 +4241,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 def workflow_redraw(label: str) -> None:
                     expect_buffer_attach(label, skip_cursor_shape=True)
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)), f"{label} damage"
-                    )
+                    expect_document_damage(f"{label} damage")
                     expect_message(client, (8, 6, b""), f"{label} commit")
 
                 def workflow_click(x: int, y: int, serial: int, label: str) -> None:
