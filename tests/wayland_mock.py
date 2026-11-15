@@ -5503,18 +5503,28 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(pointer_object_id, 2, struct.pack("<Iii", 3320, 40 * 256, anchor_y * 256))
                     )
                     wait_child_u32("doc_auto_scroll_timer_armed", 0, "return to anchor pauses auto-scroll")
+                    # The periodic timer may have presented another frame while
+                    # stationary. Keep the compositor's buffer lifecycle intact
+                    # without assuming that another frame must be pending.
+                    if child_u32("buffer_busy") == 1:
+                        ready, _, _ = select.select([client], [], [], 0.2)
+                        if ready:
+                            workflow_redraw("stationary middle-click timer frame")
+                        client.sendall(buffer_release_message())
                     before_up = child_u32("doc_view_top_row")
                     client.sendall(
                         wire_message(pointer_object_id, 2, struct.pack("<Iii", 3330, 40 * 256, 125 * 256))
                     )
-                    workflow_redraw("middle-click auto-scroll moves upward")
+                    wait_child_u32(
+                        "doc_view_top_row", max(0, before_up - 1),
+                        "moving above anchor reverses auto-scroll"
+                    )
                     up_top = child_u32("doc_view_top_row")
                     if up_top >= before_up or child_u32("doc_auto_scroll_timer_armed") != 1:
                         raise AssertionError(
                             "moving above the anchor did not reverse auto-scroll: "
                             f"before={before_up}, after={up_top}, timer={child_u32('doc_auto_scroll_timer_armed')}"
                         )
-                    client.sendall(buffer_release_message())
                     client.sendall(
                         wire_message(pointer_object_id, 2, struct.pack("<Iii", 3340, 40 * 256, anchor_y * 256))
                     )
@@ -5530,7 +5540,10 @@ xkb_symbols "nekoedit-sparse" {
 
                     # Ordinary wheel scrolling must still work after auto-scroll.
                     before_wheel = child_u32("doc_view_top_row")
-                    workflow_axis(0, 14 * 256, 3350, "ordinary wheel scroll remains active after auto-scroll")
+                    client.sendall(
+                        wire_message(pointer_object_id, 4, struct.pack("<IIi", 3350, 0, 14 * 256))
+                    )
+                    wait_child_u32("doc_view_top_row", before_wheel + 1, "ordinary wheel scroll resumes")
                     after_wheel = child_u32("doc_view_top_row")
                     if after_wheel != before_wheel + 1:
                         raise AssertionError(
@@ -10007,7 +10020,12 @@ xkb_symbols "nekoedit-sparse" {
                         + buffer_release_message()
                     )
                     key_step(1266, 14, "Backspace removes the selected y")
-                    workflow_shortcut(1268, 30, "Ctrl+A selects across the split gap")
+                    workflow_click(200, 16, 1267, "open Settings before split-gap selection paint")
+                    workflow_settings_click(200, 124, 1275, "disable Wrap Lines for selection fast-path test")
+                    if child_u32("doc_wrap_enabled") != 0:
+                        raise AssertionError("Settings did not disable Wrap Lines for split-gap selection test")
+                    workflow_click(20, 98, 1285, "close persistent Settings before split-gap selection")
+                    workflow_shortcut(1290, 30, "Ctrl+A selects across the split gap")
                     suffix_selection_pixel = logical_buffer_pixel(39, 103)
                     if suffix_selection_pixel != 0xFF5E81AC:
                         raise AssertionError(
@@ -10015,7 +10033,7 @@ xkb_symbols "nekoedit-sparse" {
                             f"pixel={hex(suffix_selection_pixel)}, "
                             f"gap=({child_u32('doc_gap_start')},{child_u32('doc_gap_end')})"
                         )
-                    workflow_shortcut(1270, 31, "Ctrl+S saves split gap-buffer segments")
+                    workflow_shortcut(1300, 31, "Ctrl+S saves split gap-buffer segments")
                     client.sendall(wire_message(10, 1))
                     observations.append(
                         "gap movement, insertion, Backspace, Delete, UTF-8 prefix reads, selection deletion, and two-segment save"
