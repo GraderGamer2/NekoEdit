@@ -19448,6 +19448,7 @@ doc_auto_scroll_timer_start:
 .type doc_auto_scroll_timer_stop, @function
 .pushsection .text.doc_auto_scroll_timer_stop,"ax",@progbits
 doc_auto_scroll_timer_stop:
+    push rbx
     cmp dword ptr [rip + doc_auto_scroll_timer_armed], 1
     jne .Ldoc_auto_scroll_timer_stop_done
     call doc_drag_timer_stop
@@ -19457,6 +19458,7 @@ doc_auto_scroll_timer_stop:
 .Ldoc_auto_scroll_timer_stop_done:
     xor eax, eax
 .Ldoc_auto_scroll_timer_stop_return:
+    pop rbx
     ret
 .size doc_auto_scroll_timer_stop, . - doc_auto_scroll_timer_stop
 .popsection
@@ -19476,6 +19478,7 @@ doc_auto_scroll_stop:
 doc_auto_scroll_update:
     push rbx
     push r12
+    sub rsp, 8
     mov eax, dword ptr [rip + pointer_y]
     sub eax, dword ptr [rip + doc_auto_scroll_anchor_y]
     mov r12d, eax
@@ -19515,6 +19518,7 @@ doc_auto_scroll_update:
     js .Ldoc_auto_scroll_update_return
     mov eax, r12d
 .Ldoc_auto_scroll_update_return:
+    add rsp, 8
     pop r12
     pop rbx
     ret

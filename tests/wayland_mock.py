@@ -405,6 +405,7 @@ def run(
     horizontal_render_bound_test: bool = False,
     word_navigation_test: bool = False,
     pointer_drag_test: bool = False,
+    middle_click_scroll_test: bool = False,
     line_navigation_test: bool = False,
     dirty_render_test: bool = False,
     find_replace_test: bool = False,
@@ -1892,7 +1893,7 @@ def run(
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
-                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or word_navigation_test or pointer_drag_test
+                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or word_navigation_test or pointer_drag_test or middle_click_scroll_test
                     or line_navigation_test or find_replace_test or dirty_render_test
                 ):
                     def document_pixel(logical_x: int, logical_y: int) -> int:
@@ -5453,6 +5454,93 @@ xkb_symbols "nekoedit-sparse" {
                     observations.append(
                         "selection auto-scroll follows pointer_leave and stationary edge holds; horizontal dragging scrolls with Wrap Lines disabled"
                     )
+                    return
+
+                if middle_click_scroll_test:
+                    contents = b"middle-scroll-line\n" * 200
+                    initial = read_document_state()
+                    if initial["doc_contents"] != contents:
+                        raise AssertionError("middle-click auto-scroll fixture contents mismatch")
+                    wait_buffer_idle("middle-click auto-scroll startup")
+                    initial_top = child_u32("doc_view_top_row")
+                    anchor_y = 200
+                    # Position the activation point, then middle-click without
+                    # holding the button; auto-scroll is a toggle, not a drag.
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3300, 40 * 256, anchor_y * 256))
+                        + wire_message(pointer_object_id, 3, struct.pack("<IIII", 3301, 3302, 0x112, 1))
+                    )
+                    wait_child_u32("doc_auto_scroll_active", 1, "middle click activates auto-scroll")
+                    if child_u32("doc_auto_scroll_anchor_y") != anchor_y:
+                        raise AssertionError("middle-click auto-scroll did not retain its activation Y")
+                    if child_u32("doc_auto_scroll_timer_armed") != 0:
+                        raise AssertionError("auto-scroll timer should stay disarmed inside the dead zone")
+
+                    # Move below the fixed anchor: the viewport should advance
+                    # immediately and then continue at timer cadence while still.
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3310, 40 * 256, 270 * 256))
+                    )
+                    workflow_redraw("middle-click auto-scroll moves downward")
+                    down_top = child_u32("doc_view_top_row")
+                    if down_top <= initial_top or child_u32("doc_auto_scroll_timer_armed") != 1:
+                        raise AssertionError(
+                            "moving below the anchor did not start downward auto-scroll: "
+                            f"initial={initial_top}, after={down_top}, timer={child_u32('doc_auto_scroll_timer_armed')}"
+                        )
+                    client.sendall(buffer_release_message())
+                    time.sleep(0.16)
+                    continued_top = child_u32("doc_view_top_row")
+                    if continued_top <= down_top:
+                        raise AssertionError(
+                            "stationary pointer did not continue middle-click auto-scroll: "
+                            f"after_motion={down_top}, after_timer={continued_top}"
+                        )
+
+                    # Returning to the anchor is the dead zone: it stops the
+                    # timer but leaves auto-scroll active for the next movement.
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3320, 40 * 256, anchor_y * 256))
+                    )
+                    wait_child_u32("doc_auto_scroll_timer_armed", 0, "return to anchor pauses auto-scroll")
+                    before_up = child_u32("doc_view_top_row")
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3330, 40 * 256, 125 * 256))
+                    )
+                    workflow_redraw("middle-click auto-scroll moves upward")
+                    up_top = child_u32("doc_view_top_row")
+                    if up_top >= before_up or child_u32("doc_auto_scroll_timer_armed") != 1:
+                        raise AssertionError(
+                            "moving above the anchor did not reverse auto-scroll: "
+                            f"before={before_up}, after={up_top}, timer={child_u32('doc_auto_scroll_timer_armed')}"
+                        )
+                    client.sendall(buffer_release_message())
+                    client.sendall(
+                        wire_message(pointer_object_id, 2, struct.pack("<Iii", 3340, 40 * 256, anchor_y * 256))
+                    )
+                    wait_child_u32("doc_auto_scroll_timer_armed", 0, "upward motion returns to dead zone")
+
+                    # A second middle click exits and restores the normal cursor.
+                    client.sendall(
+                        wire_message(pointer_object_id, 3, struct.pack("<IIII", 3341, 3342, 0x112, 1))
+                    )
+                    wait_child_u32("doc_auto_scroll_active", 0, "second middle click cancels auto-scroll")
+                    if child_u32("doc_auto_scroll_timer_armed") != 0:
+                        raise AssertionError("cancelling auto-scroll left its timer armed")
+
+                    # Ordinary wheel scrolling must still work after auto-scroll.
+                    before_wheel = child_u32("doc_view_top_row")
+                    workflow_axis(0, 14 * 256, 3350, "ordinary wheel scroll remains active after auto-scroll")
+                    after_wheel = child_u32("doc_view_top_row")
+                    if after_wheel != before_wheel + 1:
+                        raise AssertionError(
+                            "ordinary wheel scroll did not resume after middle-click auto-scroll: "
+                            f"before={before_wheel}, after={after_wheel}"
+                        )
+                    observations.append(
+                        "middle-click auto-scroll toggles on/off, follows pointer above/below a fixed anchor, pauses at the dead zone, repeats while stationary, and preserves ordinary wheel scrolling"
+                    )
+                    client.sendall(wire_message(10, 1))
                     return
 
                 if word_navigation_test:
@@ -11840,6 +11928,17 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(word_path)
+        except FileNotFoundError:
+            pass
+
+    middle_fd, middle_path = tempfile.mkstemp(prefix="nekoedit-middle-scroll-")
+    try:
+        with os.fdopen(middle_fd, "wb") as document:
+            document.write(b"middle-scroll-line\n" * 200)
+        run(sys.argv[1], initial_file=middle_path, middle_click_scroll_test=True)
+    finally:
+        try:
+            os.unlink(middle_path)
         except FileNotFoundError:
             pass
 
