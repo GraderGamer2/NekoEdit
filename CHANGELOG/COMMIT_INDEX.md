@@ -1,5 +1,17 @@
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (CI PASS #1000)
 
+## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)
+
+NekoEdit's built-in locale remains **en_US.UTF-8**. The application UI stays English, and the default keyboard/Compose behavior stays based on the embedded US English tables. Do not bundle additional locales into the core executable or expand the built-in baseline into a multilingual locale database.
+
+Other locales are optional, separately distributed, data-only packs. Users obtain the pack they need and install it themselves through NekoEdit's local pack flow; installed packs live under `~/.nekoedit/locales/`. A selected pack replaces the corresponding Compose/dead-key table rather than merging into the built-in baseline. Packs are not executable plugins, do not add shared-library dependencies, and must not cause an automatic network download. These packs extend keyboard composition data; they are not UI translations or a reason to expand the editor's built-in locale.
+
+Unicode document editing, clipboard input, and future Unicode-capable Find/Replace fields are separate capabilities. Supporting UTF-8 or IME-committed text must not silently change the application's locale, add extra built-in locale tables, or bundle optional locale data.
+
+**Selection behavior to reconcile:** the current [Compose documentation](../docs/COMPOSE.md) describes environment-variable fallback through `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG` when no saved preference exists. The user-confirmed target is explicit user choice: keep en_US active by default and activate another locale only when the user has installed and selected that pack. Review the environment fallback against this contract before further locale work; this documentation note does not change runtime behavior.
+
+---
+
 | Commit | Subject |
 |---|---|
 | [d859c11e20c7](https://github.com/GraderGamer2/NekoEdit/commit/d859c11e20c707d3b43ea88f9b233ce4693ea15b) | feat: consolidate Find and Replace under Ctrl+F |
