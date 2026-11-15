@@ -19358,8 +19358,15 @@ doc_insert_byte:
     call history_note_insert
     mov edi, r13d
     call doc_line_index_ensure
+    cmp r13d, 10
+    je .doc_insert_full_redraw
     mov edi, dword ptr [rip + doc_cursor]
     call render_mark_document_edit
+    jmp .doc_insert_marker_done
+.doc_insert_full_redraw:
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
+.doc_insert_marker_done:
     mov edi, dword ptr [rip + doc_cursor]
     call doc_move_gap
     mov eax, dword ptr [rip + doc_gap_start]
@@ -19408,8 +19415,7 @@ doc_insert_bytes:
     test r13d, r13d
     jz .Ldoc_insert_bytes_success
 
-    mov edi, dword ptr [rip + doc_cursor]
-    call render_mark_document_edit
+    # Bulk edits can contain line breaks; retain the complete redraw path.
 
     # Reject uint32 overflow before asking the gap buffer to reserve capacity.
     mov eax, dword ptr [rip + doc_length]
@@ -19586,8 +19592,6 @@ doc_delete_at_cursor:
     jae .doc_delete_done
     call doc_line_index_ensure
     mov edi, r12d
-    call render_mark_document_edit
-    mov edi, r12d
     call doc_byte_at
     xor ebp, ebp
     cmp eax, 10
@@ -19609,6 +19613,15 @@ doc_delete_at_cursor:
     inc r14d
     jmp .Ldoc_delete_cluster_check_newline
 .Ldoc_delete_cluster_newline_checked:
+    cmp dword ptr [rip + doc_grapheme_newline_flag], 1
+    je .Ldoc_delete_full_redraw
+    mov edi, r12d
+    call render_mark_document_edit
+    jmp .Ldoc_delete_marker_done
+.Ldoc_delete_full_redraw:
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
+.Ldoc_delete_marker_done:
     mov edi, r12d
     call doc_move_gap
     mov r14d, r13d
@@ -19651,8 +19664,6 @@ doc_delete_selection:
 .Lneko_delete_selection_bounds:
     mov ebx, eax
     mov r12d, edx
-    mov edi, ebx
-    call render_mark_document_edit
     mov dword ptr [rip + doc_line_index_valid], 0
     mov edi, ebx
     mov esi, r12d
