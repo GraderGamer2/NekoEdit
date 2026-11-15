@@ -3432,6 +3432,23 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     return struct.unpack("<I", raw)[0]
 
+                def expect_document_damage(label: str) -> None:
+                    damage = recv_wayland_message(client)
+                    if damage[0:2] != (8, 2) or damage[3] or len(damage[2]) != 16:
+                        raise AssertionError(f"{label}: malformed first damage request: {damage!r}")
+                    rect1 = struct.unpack("<4I", damage[2])
+                    if rect1 == (0, 0, 800, initial_height):
+                        return
+                    x1, y1, width1, height1 = rect1
+                    if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
+                        raise AssertionError(f"{label}: invalid document damage rectangle: {rect1!r}")
+                    damage2 = recv_wayland_message(client)
+                    if damage2[0:2] != (8, 2) or damage2[3] or len(damage2[2]) != 16:
+                        raise AssertionError(f"{label}: malformed status damage request: {damage2!r}")
+                    x2, y2, width2, height2 = struct.unpack("<4I", damage2[2])
+                    if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > initial_height:
+                        raise AssertionError(f"{label}: invalid status damage rectangle: {(x2, y2, width2, height2)!r}")
+
                 def expect_buffer_attach(label: str, skip_cursor_shape: bool = False) -> int:
                     # A redraw may lazily create slot one before attaching it.
                     # Track protocol object IDs and byte offsets rather than
@@ -4281,23 +4298,6 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     workflow_redraw(f"{label}: release")
                     client.sendall(buffer_release_message())
-
-                def expect_document_damage(label: str) -> None:
-                    damage = recv_wayland_message(client)
-                    if damage[0:2] != (8, 2) or damage[3] or len(damage[2]) != 16:
-                        raise AssertionError(f"{label}: malformed first damage request: {damage!r}")
-                    rect1 = struct.unpack("<4I", damage[2])
-                    if rect1 == (0, 0, 800, initial_height):
-                        return
-                    x1, y1, width1, height1 = rect1
-                    if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
-                        raise AssertionError(f"{label}: invalid document damage rectangle: {rect1!r}")
-                    damage2 = recv_wayland_message(client)
-                    if damage2[0:2] != (8, 2) or damage2[3] or len(damage2[2]) != 16:
-                        raise AssertionError(f"{label}: malformed status damage request: {damage2!r}")
-                    x2, y2, width2, height2 = struct.unpack("<4I", damage2[2])
-                    if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > initial_height:
-                        raise AssertionError(f"{label}: invalid status damage rectangle: {(x2, y2, width2, height2)!r}")
 
                 if frame_callback_order_test:
                     wait_buffer_idle("startup idle before frame-order test")
