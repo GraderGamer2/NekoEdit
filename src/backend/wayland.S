@@ -16524,8 +16524,18 @@ render_prepare_slot:
     jbe .render_prepare_end_row_ready
     mov ecx, dword ptr [rip + window_doc_visible_rows]
 .render_prepare_end_row_ready:
+    cmp dword ptr [rip + redraw_edit_candidate], 1
+    jne .render_prepare_end_row_count_ready
+    # Edit repaint must reach the same last drawable row as the full renderer.
+    # window_doc_visible_rows counts complete rows and can omit the final
+    # partially visible row; window_doc_bottom is the authoritative clip edge.
+    mov ecx, dword ptr [rip + window_doc_bottom]
+    sub ecx, dword ptr [rip + window_doc_line_height]
+    jmp .render_prepare_end_row_store
+.render_prepare_end_row_count_ready:
     imul ecx, dword ptr [rip + window_doc_line_height]
     add ecx, DOC_TOP
+.render_prepare_end_row_store:
     mov dword ptr [rip + render_partial_end_y], ecx
 
     mov eax, dword ptr [rip + window_doc_line_height]
