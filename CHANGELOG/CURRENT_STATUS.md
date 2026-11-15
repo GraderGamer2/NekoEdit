@@ -1,3 +1,25 @@
+## 2026-11-15 — in-app keyboard shortcut reference; CI PASS #1003
+
+**Branch:** `early-alpha`, head [271dec7](https://github.com/GraderGamer2/NekoEdit/commit/271dec778a11d5514955336482c96e0a1c40af8b). Application commits: [48e0cda](https://github.com/GraderGamer2/NekoEdit/commit/48e0cdaeb50c0b00c83a3cbaa4c7779bd033de58) adds the Help panel; [a645e81](https://github.com/GraderGamer2/NekoEdit/commit/a645e8109613b5a6819b7fa07b58a5407954f644) suspends text-input-v3 while the modal is open; [271dec7](https://github.com/GraderGamer2/NekoEdit/commit/271dec778a11d5514955336482c96e0a1c40af8b) updates the IME regression expectation.
+
+### User-facing behavior
+- F1 or the title-bar **Help** item opens the in-app keyboard shortcut reference.
+- The responsive panel groups shortcuts under File and Editing, Navigation, and Find and Replace.
+- Escape, the X control, or an outside click closes it. Outside clicks do not reach the document.
+- The panel blocks background keyboard and pointer editing. F1 is handled before History-page key dispatch, so Help remains accessible there.
+- The optional text-input-v3 IME is disabled/committed while Help is open and restored with current surrounding text/caret state when it closes.
+
+### Regression coverage and validation
+The Wayland mock checks both entry points, panel geometry/rendering, typing suppression, close controls, Escape, outside-click dismissal without click-through, and IME disable/restore protocol sequencing. The #1002 failure was a test-only mismatch: Escape is an editor-originated key action and correctly uses text-change cause 1; #1003 expects that value and passes.
+
+Actions [#1003](https://github.com/GraderGamer2/NekoEdit/actions/runs/43689046632) passed all 17 workflow steps, including the complete Wayland mock, 11 MiB Open/Save, renderer equivalence, native XKB, X.Org importer, Compose generation, nested GNOME Shell/Mutter/IBus integration and both artifact uploads.
+
+ELF text/data/BSS: **242,742 / 64 / 3,764,888 bytes**; no dynamic section. Executable ZIP: **154,019 bytes**, SHA-256 `600b9fc617913c5641a70d59cf1a48861b4adf981cc70d0988cf991d6810cc5e`. Compose ZIP: **120,536 bytes**, SHA-256 `9f316248901d74cd70701ba918d8231ba91827d9973fcbd33de15ed81a5ae783`. Artifact expiry: **2026-11-16 14:17 WIB**.
+
+No live desktop/manual user retest was performed. Core editing features are considered complete by the user; next iteration is visual polish from review feedback.
+
+---
+
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (Actions #1000 PASS)
 
 ## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)

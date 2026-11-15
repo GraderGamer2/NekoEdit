@@ -1,3 +1,19 @@
+## 2026-11-15 — in-app keyboard shortcut reference (CI PASS #1003)
+
+| Commit | Subject |
+|---|---|
+| [48e0cdaeb50c](https://github.com/GraderGamer2/NekoEdit/commit/48e0cdaeb50c0b00c83a3cbaa4c7779bd033de58) | feat: add in-app keyboard shortcut reference |
+| [a645e8109613](https://github.com/GraderGamer2/NekoEdit/commit/a645e8109613b5a6819b7fa07b58a5407954f644) | fix: suspend IME while shortcut help is open |
+| [271dec778a11](https://github.com/GraderGamer2/NekoEdit/commit/271dec778a11d5514955336482c96e0a1c40af8b) | test: expect editor cause when Help restores IME |
+
+The Help panel opens with F1 or the title-bar Help item. It documents the implemented File/Editing, Navigation, and combined Find/Replace shortcuts. Escape, the X control, and outside clicks dismiss it without allowing clicks to pass through to the document. The Wayland mock covers both entry points, modal input protection, close behavior, and IME suspension/restoration.
+
+Actions [#1003](https://github.com/GraderGamer2/NekoEdit/actions/runs/43689046632) passed all 17 steps. The earlier #1002 run exposed an incorrect expected text-change cause in the new IME test; the final test now expects cause 1 for Escape's editor-originated state update.
+
+ELF text/data/BSS: **242,742 / 64 / 3,764,888 bytes**, no dynamic section. Executable ZIP: **154,019 bytes**; Compose ZIP: **120,536 bytes**. SHA-256 values and artifact URLs are recorded in the README handoff. No manual live desktop test is claimed.
+
+---
+
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (CI PASS #1000)
 
 ## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)

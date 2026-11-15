@@ -1,3 +1,19 @@
+## 2026-11-15 — in-app keyboard shortcut reference and modal IME handling (Actions #1003 PASS)
+
+NekoEdit now has an in-app keyboard reference, opened with F1 or the Help item in the title bar. The responsive centered panel groups the supported commands into File and Editing, Navigation, and Find and Replace. Its list includes file operations, undo/redo, clipboard actions, character/word deletion, caret and selection movement, and the combined Ctrl+F Find/Replace workflow. It deliberately documents the editor's actual command set rather than suggesting unimplemented features.
+
+The panel is modal: Escape, its X control, or an outside click dismisses it; an outside click is not forwarded to the editor. Keyboard input, document pointer motion, wheel scrolling and context-menu actions are blocked while it is open. F1 is available over the History view as well. Opening Help also stops the active keyboard-driven focus path from editing the document.
+
+The optional text-input-v3 path follows the modal state. Opening Help sends text-input disable and commit requests, clears any transient preedit, and prevents the document from remaining an IME target. Closing Help restores text input, sets the normal content type, and republishes the editor-originated surrounding-text and cursor state. The test expects change cause 1 for Escape because it is a keyboard/editor action, matching the existing `.keyboard_changed` path; IME-originated updates continue to use cause 0.
+
+The Wayland mock covers both entry points, responsive panel rendering, modal typing protection, the close control, Escape, outside-click dismissal without click-through/caret movement, and the text-input-v3 disable/restore sequence. The root README's stale statement that Ctrl+H opened a separate Find/Replace mode was replaced with the single Ctrl+F entry point and Help instructions.
+
+Actions [#1001](https://github.com/GraderGamer2/NekoEdit/actions/runs/43688519422) passed the first Help UI implementation and its interaction tests. The follow-up IME test initially failed in #1002 due to the cause-value expectation described above. Actions [#1003](https://github.com/GraderGamer2/NekoEdit/actions/runs/43689046632) passed all 17 steps, including build/ELF, CLI/host, renderer equivalence, the full Wayland mock and 11 MiB Open/Save, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+Final ELF text/data/BSS: **242,742 / 64 / 3,764,888 bytes**, with no dynamic section. The executable ZIP is **154,019 bytes** (SHA-256 `600b9fc617913c5641a70d59cf1a48861b4adf981cc70d0988cf991d6810cc5e`); the Compose ZIP is **120,536 bytes** (SHA-256 `9f316248901d74cd70701ba918d8231ba91827d9973fcbd33de15ed81a5ae783`). Artifacts expire 2026-11-16 14:17 WIB. No manual live-desktop retest is claimed.
+
+---
+
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (Actions #1000 PASS)
 
 ## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)
