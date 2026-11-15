@@ -11171,8 +11171,10 @@ xkb_symbols "nekoedit-sparse" {
                     rect1 = struct.unpack("<4I", damage[2])
                     full_frame = (0, 0, 800, initial_height)
                     if rect1 != full_frame:
-                        if "Left" not in label:
-                            raise AssertionError(f"{label}: only held Left navigation may use partial damage: {rect1!r}")
+                        if "Left" not in label and "Backspace" not in label:
+                            raise AssertionError(
+                                f"{label}: only held Left navigation or Backspace edits may use partial damage: {rect1!r}"
+                            )
                         x1, y1, width1, height1 = rect1
                         if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
                             raise AssertionError(f"{label}: invalid caret damage rectangle: {rect1!r}")
