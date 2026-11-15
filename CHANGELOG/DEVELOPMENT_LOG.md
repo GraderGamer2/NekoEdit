@@ -1,3 +1,19 @@
+## 2026-11-15 — incremental Find-highlight coordinate traversal (Actions #996 PASS)
+
+[f64c7fc](https://github.com/GraderGamer2/NekoEdit/commit/f64c7fc2a6c4767f76bdc1494873ffe853fe9d33) replaces repeated per-byte visual-coordinate mapping for printable-ASCII Find highlights with sequential coordinate advancement. The painter maps the first byte in each match once, then carries its visual row and horizontal pixel position across the remaining matched characters. Glyph widths still come from `font_codepoint_advance_pixels`, so proportional fonts keep their actual advances. Wrapped mode applies the same next-glyph overflow predicate as the indexed mapper; unwrapped mode advances only the horizontal coordinate.
+
+The fast path is limited to printable ASCII queries. Controls/non-ASCII retain the old mapping loop, and a match preceded by a non-ASCII document byte also falls back so the general grapheme mapper remains responsible for possible Unicode Prepend joins. Find matching and search bounds are unchanged.
+
+The new synthetic-font Wayland regression uses A=8 px, B=5 px, space=3 px and the document `AB AB`. A 10 px wrap width forces four visual rows; the first match is split by the gap. Pixel checks assert the exact amber rectangles for A and B across both wrapped rows. The fixture then restores the original viewport width and checks proportional horizontal coordinates with Wrap Lines OFF.
+
+Actions #995 exposed a fixture setup mistake: after moving the physical gap to byte 1, the logical caret was still at byte 1, so Find correctly started at and selected the second result. The follow-up test-only commit [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0) sends Ctrl+Home and explicitly verifies cursor=0 while gap_start remains 1. Actions [#996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps, including the complete Wayland mock, 11 MiB Open/Save, renderer equivalence, native XKB, X.Org importer, Compose, nested GNOME Shell/Mutter/IBus, and both artifacts.
+
+ELF text/data/BSS: 239,542 / 64 / 3,764,856 bytes. Executable ZIP: 152,139 bytes; Compose ZIP: 120,536 bytes. No controlled before/after performance benchmark or manual live-desktop test was performed.
+
+Source: [f64c7fc](https://github.com/GraderGamer2/NekoEdit/commit/f64c7fc2a6c4767f76bdc1494873ffe853fe9d33). Test-fixture correction: [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0).
+
+---
+
 ## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
 
 The bounded Find-highlight matcher now traverses the document with a physical gap-buffer cursor rather than calling `doc_byte_at` for every compared query byte. The candidate pointer advances in logical candidate order and is rebased to `doc_buffer + doc_gap_end` when it reaches `doc_gap_start`. The inner query pointer advances across the matched byte sequence and performs the same rebase if a match itself straddles the gap. The byte-exact match condition and bounded candidate interval remain unchanged.

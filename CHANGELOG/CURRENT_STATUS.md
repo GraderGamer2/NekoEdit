@@ -1,3 +1,30 @@
+## 2026-11-15 — incremental Find-highlight coordinate traversal (Actions #996 PASS)
+
+**Branch/source head:** `early-alpha` at [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0). **Workflow:** [Actions #996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps.
+
+### Source changes
+
+- [f64c7fc](https://github.com/GraderGamer2/NekoEdit/commit/f64c7fc2a6c4767f76bdc1494873ffe853fe9d33) updates `render_find_highlights_range` so a printable-ASCII query maps the first byte of each match with `doc_offset_to_visual` once, then advances the remaining glyph positions incrementally using each character's actual `font_codepoint_advance_pixels` width.
+- When Wrap Lines is ON, the incremental path uses the same next-glyph overflow rule as the normal visual mapper. With wrapping OFF, it carries the horizontal pixel coordinate across the row. It is not a fixed-width shortcut; proportional font widths remain in effect.
+- Non-printable queries retain the original per-byte mapping path. Printable ASCII matches whose preceding document byte is non-ASCII also use that fallback, preserving the general grapheme mapper at boundaries where a Unicode Prepend character may join the first matched ASCII byte.
+- The optimization does not change Find's byte-exact matching, candidate bounds, search navigation, font metrics, or highlight rectangle geometry.
+
+### Regression coverage
+
+The new deterministic synthetic-font fixture gives `A` an 8 px advance, `B` a 5 px advance, and space a 3 px advance. At a 10 px wrap width, `AB AB` spans four visual rows. The first match is split by the physical gap. The mock checks the amber highlight's position and width in each wrapped row, then restores the real viewport width and repeats the geometry checks with Wrap Lines OFF.
+
+The first run, Actions #995, compiled and passed CLI/host and renderer-equivalence tests, but the new mock fixture initially searched from byte 1 and correctly selected the second match. This was a test setup error, not a renderer failure. [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0) updates the fixture to send Ctrl+Home after placing the physical gap, and asserts the logical caret is byte 0 while the gap remains at byte 1.
+
+### Validation
+
+Actions [#996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps: freestanding build and ELF checks, CLI/host tests, renderer equivalence, full Wayland protocol mock (including the new wrapped/unwrapped proportional Find checks, existing Find/Replace, clipboard and 11 MiB Open/Save cases), executable inspection, native `us(intl)` XKB, pinned X.Org importer, Compose-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+ELF `size`: text **239,542**, data **64**, BSS **3,764,856** bytes. Executable artifact ZIP: **152,139 bytes** (SHA-256 `0b16fda6859f9cd8073e45a2100019c02dec97a8de1f53c8a47b8b153f7e6a27`); Compose ZIP: **120,536 bytes** (SHA-256 `3c52087abfebe09c005f56cc8d817344906b07e226f4dcc34e825cc836c705d5`). Both artifacts expire **2026-11-16 11:02 WIB**.
+
+No controlled before/after renderer benchmark was collected, so no measured speedup is claimed. Nested GNOME Shell/Mutter/IBus CI integration passed; a manual test on the live desktop remains outstanding.
+
+---
+
 ## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
 
 **Branch/source head:** `early-alpha` at [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429). **Workflow:** [Actions #994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 steps.
