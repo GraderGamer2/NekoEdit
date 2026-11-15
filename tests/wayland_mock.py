@@ -5126,6 +5126,33 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(releases + buffer_release_message())
                     if child_u32("save_confirm_open") == 1:
                         key_step(serial + 6, 28, label + " — confirm pending save")
+                def workflow_shift_key(serial: int, code: int, label: str) -> None:
+                    events = wire_message(
+                        keyboard_object_id, 3, struct.pack("<IIII", serial, serial, 42, 1)
+                    )
+                    events += wire_message(
+                        keyboard_object_id, 4, struct.pack("<IIIII", serial + 20, 1, 0, 0, 0)
+                    )
+                    events += wire_message(
+                        keyboard_object_id, 3,
+                        struct.pack("<IIII", serial + 1, serial + 1, code, 1)
+                    )
+                    client.sendall(events)
+                    workflow_redraw(label)
+                    releases = wire_message(
+                        keyboard_object_id, 3,
+                        struct.pack("<IIII", serial + 2, serial + 2, code, 0)
+                    )
+                    releases += wire_message(
+                        keyboard_object_id, 3,
+                        struct.pack("<IIII", serial + 3, serial + 3, 42, 0)
+                    )
+                    releases += wire_message(
+                        keyboard_object_id, 4,
+                        struct.pack("<IIIII", serial + 21, 0, 0, 0, 0)
+                    )
+                    client.sendall(releases + buffer_release_message())
+
                 if find_replace_test:
                     initial = read_document_state()
                     find_fixture = (
@@ -5509,14 +5536,38 @@ xkb_symbols "nekoedit-sparse" {
                             "Find highlight renderer missed a match spanning the gap: "
                             f"visible amber pixels={first_match_amber_pixels}"
                         )
-                    key_step(1915, 1, "Escape closes Find before opening Replace")
-                    workflow_shortcut(1920, 35, "Ctrl+H opens Find/Replace")
+                    workflow_shift_key(1915, 61, "Shift+F3 selects the previous split-gap Find match")
+                    reverse_selection = (
+                        min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                    )
+                    if reverse_selection != (4, 8) or child_u32("find_status") != 1:
+                        raise AssertionError(
+                            "Shift+F3 did not find the preceding match across the physical gap: "
+                            + repr({
+                                "selection": reverse_selection,
+                                "status": child_u32("find_status"),
+                                "gap": (child_u32("doc_gap_start"), child_u32("doc_gap_end")),
+                            })
+                        )
+                    key_step(1940, 61, "F3 returns to the second Find match")
+                    forward_selection = (
+                        min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                    )
+                    if forward_selection != (13, 17):
+                        raise AssertionError(
+                            "F3 did not return to the second Find match after reverse navigation: "
+                            + repr(forward_selection)
+                        )
+                    key_step(1945, 1, "Escape closes Find before opening Replace")
+                    workflow_shortcut(1950, 35, "Ctrl+H opens Find/Replace")
                     if child_u32("find_replace_mode") != 2:
                         raise AssertionError("Ctrl+H did not open Find/Replace mode")
-                    key_step(1930, 15, "Tab focuses replacement field")
+                    key_step(1960, 15, "Tab focuses replacement field")
                     for index, code in enumerate((31, 35, 30, 19, 37)):
-                        key_step(1940 + index * 3, code, f"enter replacement character {index + 1}")
-                    workflow_shortcut(1960, 28, "Ctrl+Enter replaces the current match")
+                        key_step(1970 + index * 3, code, f"enter replacement character {index + 1}")
+                    workflow_shortcut(1990, 28, "Ctrl+Enter replaces the current match")
                     state = read_document_state()
                     expected_current = b"one fish two shark\n" + (b"row fish\n" * 64)
                     assert_replacement_index(state, expected_current, "Replace Current")
@@ -5528,7 +5579,7 @@ xkb_symbols "nekoedit-sparse" {
                     panel_height = child_u32("find_panel_height")
                     all_x = panel_x + 316 * panel_width // 448
                     all_y = panel_y + 164 * panel_height // 192
-                    workflow_click(all_x, all_y, 1990, "Replace All replaces remaining matches")
+                    workflow_click(all_x, all_y, 2020, "Replace All replaces remaining matches")
                     state = read_document_state()
                     expected_all = b"one shark two shark\n" + (b"row shark\n" * 64)
                     assert_replacement_index(state, expected_all, "Replace All")
@@ -5537,7 +5588,7 @@ xkb_symbols "nekoedit-sparse" {
                             "Replace All did not report 65 replacements: "
                             f"count={child_u32('find_replace_count')}, status={child_u32('find_status')}"
                         )
-                    key_step(2010, 1, "Escape closes Find/Replace")
+                    key_step(2040, 1, "Escape closes Find/Replace")
                     if child_u32("find_replace_mode") != 0:
                         raise AssertionError("Escape did not close Find/Replace")
                     observations.append(

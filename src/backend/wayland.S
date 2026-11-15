@@ -21184,41 +21184,24 @@ doc_find_match:
 
 .Ldoc_find_match_backward_setup:
     cmp r13d, ebx
-    jbe .Ldoc_find_start_ready
+    jbe .Ldoc_find_match_backward_start_ready
     mov r13d, ebx
-.Ldoc_find_start_ready:
-    xor ebp, ebp
-    mov r14d, r13d
-    xor r15d, r15d
-.Ldoc_find_backward_candidate:
-    xor r10d, r10d
-.Ldoc_find_backward_compare:
-    mov edi, r14d
-    add edi, r10d
-    call doc_byte_at
-    lea rcx, [rip + find_query_buffer]
-    cmp al, byte ptr [rcx + r10]
-    jne .Ldoc_find_backward_miss
-    inc r10d
-    cmp r10d, dword ptr [rip + find_query_length]
-    jb .Ldoc_find_backward_compare
-    mov eax, r14d
+.Ldoc_find_match_backward_start_ready:
+    mov edi, r13d
+    xor esi, esi
+    call doc_find_match_reverse_bounded
+    cmp eax, -1
+    jne .Ldoc_find_match_done
+
+    # Search the wrapped segment in descending order, excluding the original
+    # starting offset so the currently selected result is not repeated.
+    lea eax, [r13 + 1]
+    cmp eax, ebx
+    ja .Ldoc_find_match_none
+    mov edi, ebx
+    lea esi, [r13 + 1]
+    call doc_find_match_reverse_bounded
     jmp .Ldoc_find_match_done
-.Ldoc_find_backward_miss:
-    test r14d, r14d
-    jz .Ldoc_find_backward_pass_end
-    dec r14d
-    cmp r14d, r15d
-    jae .Ldoc_find_backward_candidate
-.Ldoc_find_backward_pass_end:
-    test ebp, ebp
-    jnz .Ldoc_find_match_none
-    mov ebp, 1
-    mov r14d, ebx
-    lea r15d, [r13 + 1]
-    cmp r14d, r15d
-    jb .Ldoc_find_match_none
-    jmp .Ldoc_find_backward_candidate
 .Ldoc_find_match_none:
     mov eax, -1
 .Ldoc_find_match_done:
@@ -21230,6 +21213,98 @@ doc_find_match:
     pop rbx
     ret
 .size doc_find_match, . - doc_find_match
+.popsection
+
+.type doc_find_match_reverse_bounded, @function
+# EDI = highest candidate offset (inclusive); ESI = lowest candidate (inclusive).
+# Search backwards without wrapping; return the highest match or -1.
+.pushsection .text.doc_find_match_reverse_bounded,"ax",@progbits
+doc_find_match_reverse_bounded:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r12d, edi
+    mov r13d, esi
+    mov r14d, dword ptr [rip + find_query_length]
+    test r14d, r14d
+    jz .Ldoc_find_reverse_none
+    mov eax, dword ptr [rip + doc_length]
+    cmp eax, r14d
+    jb .Ldoc_find_reverse_none
+    sub eax, r14d
+    cmp r12d, eax
+    jbe .Ldoc_find_reverse_high_ready
+    mov r12d, eax
+.Ldoc_find_reverse_high_ready:
+    cmp r12d, r13d
+    jb .Ldoc_find_reverse_none
+
+    # Translate the initial logical candidate to the physical gap-buffer span.
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r12d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Ldoc_find_reverse_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Ldoc_find_reverse_pointer_ready:
+    add rax, rcx
+    mov r15, rax
+
+.Ldoc_find_reverse_candidate:
+    mov r10, r15
+    xor ebx, ebx
+.Ldoc_find_reverse_compare:
+    movzx eax, byte ptr [r10]
+    lea rcx, [rip + find_query_buffer]
+    cmp al, byte ptr [rcx + rbx]
+    jne .Ldoc_find_reverse_miss
+    inc ebx
+    cmp ebx, r14d
+    jae .Ldoc_find_reverse_match
+    inc r10
+    mov eax, r12d
+    add eax, ebx
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jne .Ldoc_find_reverse_compare
+    mov r10, qword ptr [rip + doc_buffer]
+    mov edx, dword ptr [rip + doc_gap_end]
+    add r10, rdx
+    jmp .Ldoc_find_reverse_compare
+
+.Ldoc_find_reverse_match:
+    mov eax, r12d
+    jmp .Ldoc_find_reverse_done
+
+.Ldoc_find_reverse_miss:
+    cmp r12d, r13d
+    jbe .Ldoc_find_reverse_none
+    dec r12d
+    dec r15
+    mov eax, dword ptr [rip + doc_gap_start]
+    dec eax
+    cmp r12d, eax
+    jne .Ldoc_find_reverse_candidate
+
+    # Moving to the byte before the gap jumps from the suffix to the prefix.
+    mov r15, qword ptr [rip + doc_buffer]
+    mov edx, dword ptr [rip + doc_gap_start]
+    dec edx
+    add r15, rdx
+    jmp .Ldoc_find_reverse_candidate
+
+.Ldoc_find_reverse_none:
+    mov eax, -1
+.Ldoc_find_reverse_done:
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.size doc_find_match_reverse_bounded, . - doc_find_match_reverse_bounded
 .popsection
 
 .type doc_find_match_bounded, @function
