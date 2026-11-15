@@ -1,3 +1,23 @@
+## 2026-11-15 — gap-aware Find-highlight scanning (Actions validation pending)
+
+The bounded Find-highlight matcher now traverses the document with a physical gap-buffer pointer instead of calling `doc_byte_at` for every query comparison. A candidate pointer advances between candidate starts; the inner query pointer advances between query bytes. Each cursor rebases to `doc_buffer + doc_gap_end` when its logical offset reaches `doc_gap_start`, including a query that straddles the gap. The bounded search interval and byte-exact matching semantics are unchanged.
+
+The Find-highlight paint loop uses the exact matched byte from `find_query_buffer` for glyph advance after the matcher has confirmed the complete byte sequence. This avoids fetching the same document byte a second time. Per-byte `doc_offset_to_visual` mapping and highlight rectangle geometry remain unchanged to avoid changing proportional-font or wrapping behavior.
+
+The Wayland Find/Replace fixture moves the gap to byte offset 5, between the `f` and `i` of the first `fish`. After Enter selects the first result and F3 selects the second, the first result must be visible in amber. The test also verifies that positioning the gap did not change the logical document contents. Actions validation is pending; no speedup or live desktop behavior is claimed yet.
+
+---
+
+## 2026-11-15 — wrapped selection rendering optimization (Actions #992 PASS)
+
+The wrapped selection renderer now maintains a physical cursor into the gap buffer alongside its logical byte offset. Its visible-byte reads no longer call `doc_byte_at` for every selected character. The printable-ASCII shortcut verifies the next logical byte across the gap before advancing one byte; non-ASCII, control and newline boundaries continue through the Unicode grapheme iterator and resynchronize the physical pointer. Tabs are single-byte advances. The unwrapped selection path and document representation are unchanged.
+
+The split-gap rendering test now checks the suffix-side highlight in both Wrap Lines modes, with the same selected document retained while switching the setting. Actions [#992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382) passed all 17 workflow steps, including this wrapped-mode assertion, the complete Wayland mock, large-document Open/Save, renderer equivalence and nested GNOME Shell/Mutter/IBus integration.
+
+The uploaded executable ZIP is 151,947 bytes and the Compose-pack ZIP is 120,536 bytes. No before/after benchmark or live GNOME test was performed.
+
+---
+
 ## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
 
 The rebuild already used `REPNE SCASB` when the gap was at EOF, but an internal gap sent both newline counting and line-boundary discovery through byte-at-a-time `doc_byte_at` loops. The edited-document path now scans the physical prefix and suffix as independent contiguous spans.

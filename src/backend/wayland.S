@@ -21247,7 +21247,6 @@ doc_find_match_bounded:
     push r12
     push r13
     push r14
-    sub rsp, 8
     mov r12d, edi
     mov r13d, esi
     mov r14d, dword ptr [rip + find_query_length]
@@ -21264,28 +21263,55 @@ doc_find_match_bounded:
 .Ldoc_find_bounded_limit_ready:
     cmp r12d, r13d
     jae .Ldoc_find_bounded_none
+
+    # Keep the current candidate as a physical gap-buffer pointer. A query
+    # that straddles the gap rebases its comparison cursor to the suffix.
+    mov rax, qword ptr [rip + doc_buffer]
+    mov ecx, r12d
+    cmp ecx, dword ptr [rip + doc_gap_start]
+    jb .Ldoc_find_bounded_candidate_pointer_ready
+    mov edx, dword ptr [rip + doc_gap_end]
+    sub edx, dword ptr [rip + doc_gap_start]
+    add ecx, edx
+.Ldoc_find_bounded_candidate_pointer_ready:
+    add rax, rcx
+    mov rsi, rax
+    lea rcx, [rip + find_query_buffer]
 .Ldoc_find_bounded_candidate:
+    mov r10, rsi
     xor ebx, ebx
 .Ldoc_find_bounded_compare:
-    mov edi, r12d
-    add edi, ebx
-    call doc_byte_at
-    lea rcx, [rip + find_query_buffer]
+    movzx eax, byte ptr [r10]
     cmp al, byte ptr [rcx + rbx]
     jne .Ldoc_find_bounded_miss
     inc ebx
     cmp ebx, r14d
-    jb .Ldoc_find_bounded_compare
+    jae .Ldoc_find_bounded_match
+    inc r10
+    lea eax, [r12d + rbx]
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jne .Ldoc_find_bounded_compare
+    mov r10, qword ptr [rip + doc_buffer]
+    mov edx, dword ptr [rip + doc_gap_end]
+    add r10, rdx
+    jmp .Ldoc_find_bounded_compare
+.Ldoc_find_bounded_match:
     mov eax, r12d
     jmp .Ldoc_find_bounded_done
 .Ldoc_find_bounded_miss:
     inc r12d
+    inc rsi
+    cmp r12d, dword ptr [rip + doc_gap_start]
+    jne .Ldoc_find_bounded_candidate_ready
+    mov rsi, qword ptr [rip + doc_buffer]
+    mov edx, dword ptr [rip + doc_gap_end]
+    add rsi, rdx
+.Ldoc_find_bounded_candidate_ready:
     cmp r12d, r13d
     jb .Ldoc_find_bounded_candidate
 .Ldoc_find_bounded_none:
     mov eax, -1
 .Ldoc_find_bounded_done:
-    add rsp, 8
     pop r14
     pop r13
     pop r12
@@ -25483,9 +25509,10 @@ render_find_highlights_range:
     call doc_offset_to_visual
     mov dword ptr [rsp + 4], eax
     mov dword ptr [rsp + 8], edx
-    mov edi, dword ptr [rsp]
-    call doc_byte_at
-    mov edi, eax
+    # The bounded matcher compared this match byte-for-byte against the query,
+    # so the query buffer is also the exact glyph/advance source here.
+    lea rax, [rip + find_query_buffer]
+    movzx edi, byte ptr [rax + rbx]
     call font_codepoint_advance_pixels
     mov dword ptr [rsp + 12], eax
 

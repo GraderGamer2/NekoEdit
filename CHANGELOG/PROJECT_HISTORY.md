@@ -1,3 +1,23 @@
+## 2026-11-15 — gap-aware Find-highlight scanning
+
+The bounded Find-highlight renderer now compares query bytes using a sequential physical cursor into the gap buffer. The candidate cursor advances along logical candidate offsets and the inner comparison cursor advances along the query. When either cursor reaches the logical gap boundary, it is rebased to the suffix's physical start. This avoids a logical-to-physical lookup for each compared byte and keeps matches correct when their bytes straddle the gap.
+
+Once a bounded match is found, the highlight painter uses the identical bytes in the query buffer to obtain the glyph advances instead of reading the document bytes a second time. It retains the existing byte-to-visual mapping per query byte, so proportional metrics and wrapped row positioning are not altered.
+
+The regression places the gap inside the first visible `fish` result, then selects the second result with F3 and checks that the first result is painted amber. It also verifies the document bytes are unchanged by the edit/delete sequence used to position the gap. CI validation for this follow-up is pending.
+
+---
+
+## 2026-11-15 — wrapped selection rendering (CI PASS #992)
+
+The wrapped selection renderer now uses the same gap-aware sequential cursor technique previously introduced for unwrapped selection painting. It translates the starting logical offset to a physical address once, reads subsequent bytes directly, and rebases at the gap. Printable ASCII advances directly only when the next logical byte is also ASCII; all other characters retain the Unicode grapheme path. Tabs advance by one byte, while CR/LF and control paths resynchronize after grapheme traversal.
+
+The split-gap regression paints and checks the suffix-side selection highlight in both Wrap Lines OFF and ON modes. It confirms that changing the wrap preference does not clear the full-document selection. Actions [#992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382) passed the full 17-step workflow, including the complete Wayland mock, renderer equivalence, clipboard and large-document cases, native XKB, importer, Compose and nested GNOME Shell/Mutter/IBus integration.
+
+The executable ZIP is 151,947 bytes; the Compose ZIP is 120,536 bytes. No before/after performance benchmark or manual desktop retest was performed.
+
+---
+
 ## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering
 
 NekoEdit gained a middle-button auto-scroll mode for the document viewport. Middle-click captures the pointer's current vertical coordinate as an anchor and switches the optional cursor-shape device to the all-scroll cursor. Moving the pointer above/below the anchor scrolls in the corresponding direction; the rate increases with distance, up to eight visual rows per 50 ms timer tick. A 12-pixel dead zone pauses the timer without leaving the mode; a second middle click exits. Left click, wheel input, key press, or pointer leave cancels the mode. The feature reuses the existing drag timerfd rather than adding another timer to the poll set.

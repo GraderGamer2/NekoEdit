@@ -5131,6 +5131,29 @@ xkb_symbols "nekoedit-sparse" {
                     if initial["doc_contents"] != find_fixture:
                         raise AssertionError("find/replace fixture contents mismatch")
 
+                    # Put the physical gap inside the first "fish" without
+                    # changing logical bytes. Bounded highlight matching must
+                    # compare the word across the prefix/suffix boundary.
+                    workflow_shortcut(1790, 102, "Ctrl+Home positions gap inside first Find match")
+                    for index in range(5):
+                        key_step(1800 + index * 2, 106, f"move caret to byte {index + 1} before Find")
+                    key_step(1812, 45, "insert temporary x to position Find gap")
+                    key_step(1814, 14, "delete temporary x and retain internal Find gap")
+                    gap_ready = read_document_state()
+                    if (
+                        gap_ready["doc_contents"] != find_fixture
+                        or gap_ready["doc_gap_start"] != 5
+                        or gap_ready["doc_gap_end"] <= gap_ready["doc_gap_start"]
+                    ):
+                        raise AssertionError(
+                            "Find fixture did not retain a physical gap between f and i: "
+                            + repr({
+                                "contents": gap_ready["doc_contents"],
+                                "gap_start": gap_ready["doc_gap_start"],
+                                "gap_end": gap_ready["doc_gap_end"],
+                            })
+                        )
+
                     def assert_replacement_index(state, expected_contents: bytes, label: str) -> None:
                         if state["doc_contents"] != expected_contents:
                             raise AssertionError(
@@ -5209,6 +5232,19 @@ xkb_symbols "nekoedit-sparse" {
                     end = max(child_u32("doc_selection_anchor"), child_u32("doc_cursor"))
                     if (start, end) != (13, 17):
                         raise AssertionError(f"F3 did not select the next fish: range=({start},{end})")
+                    # The first "fish" starts one byte before the internal gap
+                    # and must now be the unselected amber Find highlight.
+                    first_match_amber_pixels = sum(
+                        1
+                        for y in range(90, 116)
+                        for x in range(0, 90)
+                        if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0] == highlight_color
+                    )
+                    if first_match_amber_pixels < 4:
+                        raise AssertionError(
+                            "Find highlight renderer missed a match spanning the gap: "
+                            f"visible amber pixels={first_match_amber_pixels}"
+                        )
                     key_step(1915, 1, "Escape closes Find before opening Replace")
                     workflow_shortcut(1920, 35, "Ctrl+H opens Find/Replace")
                     if child_u32("find_replace_mode") != 2:
