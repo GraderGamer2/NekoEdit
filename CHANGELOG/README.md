@@ -1,3 +1,21 @@
+## Latest handoff (2026-11-15 — gap-aware forward/reverse Find; CI PASS #998)
+
+Continue application-source development on `early-alpha` at [f346260](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+**Find traversal:** forward Find/Next and Replace All use the bounded gap-aware matcher introduced in [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). Reverse Find/Shift+F3 uses the new descending physical-pointer matcher. Both paths avoid calling `doc_byte_at` once per compared query byte. Candidate pointers rebase at the gap boundary while query comparison remains byte-exact. The forward path also preserves the one-past-last-valid start needed to wrap correctly when invoked from EOF.
+
+**Regression coverage:** the Wayland mock places an internal gap in the first `fish` match, verifies forward navigation to the second, Shift+F3 back across the split first match, and F3 forward again. A separate proportional-font fixture checks exact wrapped/unwrapped highlight positions and F3 wraparound.
+
+Actions [#997](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684358436) and [#998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) each passed all 17 workflow steps. The complete run covers build/ELF, CLI/host, renderer equivalence, full Wayland protocol tests, 11 MiB Open/Save and clipboard handling, XKB, X.Org Compose import, locale packs, nested GNOME Shell/Mutter/IBus integration, and artifact uploads.
+
+Latest ELF text/data/BSS: **239,670 / 64 / 3,764,856 bytes**. Artifacts from #998: [Linux x86-64 executable ZIP, 152,225 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142/artifacts/14150080927); [Compose locale ZIP, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142/artifacts/14149843596). Both expire **2026-11-16 13:20 WIB**.
+
+The native randomized matcher harness passed 50,000 generated gap-layout/search cases. No controlled application-level before/after benchmark was collected, and automated GNOME/Mutter integration is not a manual retest on the live desktop.
+
+Next candidate: audit the remaining Replace Current selection-validation helper for redundant per-byte gap-buffer lookups before touching other renderer paths.
+
+---
+
 ## Latest handoff (2026-11-15 — incremental Find-highlight coordinates; CI PASS #996)
 
 Continue application-source development on `early-alpha` at [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.

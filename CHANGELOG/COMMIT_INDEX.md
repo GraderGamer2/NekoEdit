@@ -1,3 +1,27 @@
+## 2026-11-15 — gap-aware reverse Find traversal (CI PASS #998)
+
+| Commit | Subject |
+|---|---|
+| [f3462606b1d9](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf) | perf: traverse reverse Find with gap-aware pointers |
+
+The reverse matcher traverses candidate offsets with a physical cursor, rebasing from the suffix to the prefix at the gap boundary. The Wayland mock verifies Shift+F3 across a query split by the gap and then F3 back to the next result. Actions [#998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) passed all 17 workflow steps, including the full Wayland suite and nested GNOME Shell/Mutter/IBus integration.
+
+ELF text/data/BSS: 239,670 / 64 / 3,764,856 bytes. Executable ZIP: 152,225 bytes; Compose locale ZIP: 120,536 bytes. No controlled end-to-end benchmark is claimed.
+
+---
+
+## 2026-11-15 — gap-aware forward Find traversal (CI PASS #997)
+
+| Commit | Subject |
+|---|---|
+| [78229385b90f](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a) | perf: reuse gap-aware matcher for forward Find |
+
+Forward Find and Replace All now reuse the bounded physical-pointer matcher. The F3 wrap regression covers a search initiated at EOF. Actions [#997](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684358436) passed all 17 workflow steps.
+
+No controlled before/after benchmark was collected.
+
+---
+
 ## 2026-11-15 — incremental Find-highlight coordinate traversal (CI PASS #996)
 
 | Commit | Subject |
