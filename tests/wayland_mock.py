@@ -11418,9 +11418,11 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1602 + index * 4, 36, f"append scroll text {index + 1}")
                 bottom_row_y = 92 + (30 - 1) * 12
                 scrolled_glyph_pixels = sum(
-                    struct.unpack_from(
-                        "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
-                    )[0] == 0xFFD8DEE9
+                    (
+                        pixel := struct.unpack_from(
+                            "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
+                        )[0]
+                    ) not in (0xFF252A33, 0xFFFFFFFF)
                     for dy in range(12)
                     for dx in range(8)
                 )
