@@ -1,3 +1,27 @@
+## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
+
+The bounded Find-highlight matcher now traverses the document with a physical gap-buffer cursor rather than calling `doc_byte_at` for every compared query byte. The candidate pointer advances in logical candidate order and is rebased to `doc_buffer + doc_gap_end` when it reaches `doc_gap_start`. The inner query pointer advances across the matched byte sequence and performs the same rebase if a match itself straddles the gap. The byte-exact match condition and bounded candidate interval remain unchanged.
+
+After the matcher confirms a match, the highlight painter uses the identical bytes in `find_query_buffer` for glyph advances instead of fetching the document bytes a second time. This retains the existing per-byte `doc_offset_to_visual` mapping and highlight geometry; no proportional-font or wrapping rules were changed.
+
+The Wayland Find/Replace regression first moves the physical gap to byte offset 5, between the `f` and `i` of the initial `fish`, by inserting and deleting a temporary byte. It checks that the document bytes are unchanged. Enter selects the first result, F3 moves the blue selection to the second result, and a pixel check requires the first result to be painted amber.
+
+The initial push, [58a7dde](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102), failed at compilation in Actions #993 because one `lea` expression mixed 32-bit and 64-bit registers. The follow-up [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) split the 32-bit offset addition into `mov` and `add`. Actions [#994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 workflow steps, including the new split-gap Find pixel test, full Wayland mock, renderer equivalence, 11 MiB Open/Save, XKB, importer, Compose and nested GNOME Shell/Mutter/IBus integration.
+
+ELF text/data/BSS are 239,334 / 64 / 3,764,856 bytes. Linux x86-64 and Compose artifact ZIPs are 152,041 and 120,536 bytes. No before/after benchmark or manual live-desktop test was performed.
+
+---
+
+## 2026-11-15 — wrapped selection rendering optimization (Actions #992 PASS)
+
+The wrapped selection renderer now maintains a physical cursor into the gap buffer alongside its logical byte offset. Its visible-byte reads no longer call `doc_byte_at` for every selected character. The printable-ASCII shortcut verifies the next logical byte across the gap before advancing one byte; non-ASCII, control and newline boundaries continue through the Unicode grapheme iterator and resynchronize the physical pointer. Tabs are single-byte advances. The unwrapped selection path and document representation are unchanged.
+
+The split-gap rendering test now checks the suffix-side highlight in both Wrap Lines modes, with the same selected document retained while switching the setting. Actions [#992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382) passed all 17 workflow steps, including this wrapped-mode assertion, the complete Wayland mock, large-document Open/Save, renderer equivalence and nested GNOME Shell/Mutter/IBus integration.
+
+The uploaded executable ZIP is 151,947 bytes and the Compose-pack ZIP is 120,536 bytes. No before/after benchmark or live GNOME test was performed.
+
+---
+
 ## 2026-11-15 — gap-aware line-index rebuild (Actions #984 PASS)
 
 The rebuild already used `REPNE SCASB` when the gap was at EOF, but an internal gap sent both newline counting and line-boundary discovery through byte-at-a-time `doc_byte_at` loops. The edited-document path now scans the physical prefix and suffix as independent contiguous spans.

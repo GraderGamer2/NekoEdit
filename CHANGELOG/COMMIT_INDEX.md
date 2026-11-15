@@ -1,3 +1,30 @@
+## 2026-11-15 — gap-aware Find-highlight scanning (CI PASS #994)
+
+| Commit | Subject |
+|---|---|
+| [58a7dde4f5e4](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102) | perf: traverse Find highlights with gap-aware cursor |
+| [4d9d891d8725](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) | fix: correct Find matcher register-width arithmetic |
+
+The bounded Find-highlight matcher now keeps physical pointers for candidate and query traversal, rebasing across the gap. The painter uses confirmed query bytes for glyph advances instead of fetching each matched document byte again. The Wayland Find/Replace regression puts the gap between the `f` and `i` of the first `fish`, moves selection with F3, and checks the first match's amber pixels.
+
+The first build attempt failed in assembly because one address expression mixed 32-bit and 64-bit registers; the fix commit uses a separate 32-bit addition. Actions [#994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 workflow steps, including build/ELF, host tests, renderer comparison, the full Wayland mock, XKB, X.Org importer, Compose and nested GNOME Shell/Mutter/IBus.
+
+ELF text/data/BSS: 239,334 / 64 / 3,764,856 bytes. Artifacts: executable ZIP 152,041 bytes; Compose ZIP 120,536 bytes. No before/after speed benchmark is claimed.
+
+---
+
+## 2026-11-15 — wrapped selection rendering optimization (Actions #992 PASS)
+
+| Commit | Subject |
+|---|---|
+| [b5cf6f13a3ef](https://github.com/GraderGamer2/NekoEdit/commit/b5cf6f13a3efb8c33d0221e96ef875fb6a060c47) | perf: optimize wrapped selection rendering |
+
+The wrapped selection renderer now keeps a gap-aware physical cursor beside its logical byte position and uses a guarded ASCII fast path, a one-byte tab advance, and the existing Unicode grapheme path for sensitive boundaries. Regression coverage checks the suffix-side highlight pixel with both Wrap Lines settings. Actions [#992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382) passed all 17 steps.
+
+ELF size and artifacts are recorded in CURRENT_STATUS.md. No measured end-to-end speed improvement is claimed.
+
+---
+
 ## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering (Actions #991 PASS)
 
 | Commit | Subject |

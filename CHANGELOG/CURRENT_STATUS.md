@@ -1,3 +1,43 @@
+## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
+
+**Branch/source head:** `early-alpha` at [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429). **Workflow:** [Actions #994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 steps.
+
+### Source changes
+
+- `doc_find_match_bounded` now keeps the candidate start as a physical gap-buffer pointer, advancing it in place between candidate offsets. Its inner comparison cursor also advances physically and rebases to the suffix when the next logical query byte reaches `doc_gap_start`. The bounded candidate limit and byte-exact comparison are unchanged; this renderer-only helper no longer calls `doc_byte_at` for each comparison.
+- `render_find_highlights_range` uses the exact byte in `find_query_buffer` to calculate each matched glyph advance once the byte-exact matcher has confirmed a complete match. The previous document-byte lookup is redundant and is removed. The existing `doc_offset_to_visual` mapping, proportional advances, and highlight rectangle geometry remain unchanged.
+- The first build attempt, Actions #993, failed before testing because GNU `as` rejected a mixed-width address expression. Commit [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) changed it to separate 32-bit `mov` and `add` instructions; the matcher logic and search bounds were unchanged.
+
+### Regression coverage
+
+The Wayland Find/Replace fixture moves the gap to byte offset 5, between the `f` and `i` of the first `fish` match, using an insert/delete pair that leaves the logical bytes unchanged. The test then opens Find, selects the first result, presses F3 to select the second result, and checks that the first result is still painted amber across the physical gap.
+
+### Validation
+
+Actions #994 passed build and ELF inspection, CLI/host tests, renderer equivalence, the complete Wayland protocol mock (including the new split-gap Find assertion and 11 MiB Open/Save), native `us(intl)` XKB, the pinned X.Org importer, Compose-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+ELF `size`: text **239,334**, data **64**, BSS **3,764,856** bytes. Executable artifact ZIP: **152,041 bytes**; Compose ZIP: **120,536 bytes**. Both expire 2026-11-16 10:00 WIB.
+
+No controlled before/after benchmark or manual live-desktop GNOME test was performed. The change reduces repeated byte-address translation in the bounded renderer scan; it is not a measured end-to-end performance claim.
+
+---
+
+## 2026-11-15 — wrapped selection rendering optimization (Actions #992 PASS)
+
+**Branch/head:** `early-alpha` at [b5cf6f1](https://github.com/GraderGamer2/NekoEdit/commit/b5cf6f13a3efb8c33d0221e96ef875fb6a060c47). **Workflow:** [Actions #992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382) passed all 17 steps.
+
+The wrapped selection painter previously called `doc_byte_at` for each visible logical byte and invoked the grapheme iterator after each printable character. It now retains a physical gap-buffer cursor in a stack local beside its logical offset. Direct reads replace repeated gap translation. Printable ASCII advances one byte only when its next logical byte is also ASCII; this guard preserves the UAX #29 case where an ASCII base is joined to a following non-ASCII Extend, ZWJ, or SpacingMark. Tabs increment one byte directly. Newlines and controls use the existing grapheme routine, then rebase the physical cursor. The no-wrap selection renderer remains unchanged.
+
+The split-gap regression now performs the suffix-side selection pixel check once with Wrap Lines OFF and again with Wrap Lines ON. It confirms that toggling the layout mode does not clear the full-document selection.
+
+Actions #992 passed build/ELF checks, command-line and host tests, renderer equivalence, the full Wayland protocol mock, native `us(intl)` XKB, pinned X.Org importer, Compose-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads. The mock passed the added wrapped split-gap pixel assertion plus the existing gap-buffer, Unicode grapheme, large-document, clipboard and 11 MiB Open/Save cases.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382/artifacts/14143098643); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382/artifacts/14142429911). The executable ZIP is 151,947 bytes; the Compose pack ZIP is 120,536 bytes. Both expire 2026-11-16 09:50 WIB.
+
+No controlled before/after timing or manual live-desktop retest was performed. The optimization removes repeated logical-byte translation and grapheme dispatch in the wrapped selection path; it is not an end-to-end speed claim.
+
+---
+
 ## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering (Actions #991 PASS)
 
 **Branch:** `early-alpha` at [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d). **Workflow:** [Actions #991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps.
