@@ -19358,8 +19358,10 @@ doc_insert_byte:
     call history_note_insert
     mov edi, r13d
     call doc_line_index_ensure
-    cmp r13d, 10
-    je .doc_insert_full_redraw
+    cmp r13d, 32
+    jb .doc_insert_full_redraw
+    cmp r13d, 127
+    jae .doc_insert_full_redraw
     mov edi, dword ptr [rip + doc_cursor]
     call render_mark_document_edit
     jmp .doc_insert_marker_done
