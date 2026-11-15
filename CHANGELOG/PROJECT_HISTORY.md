@@ -1,3 +1,17 @@
+## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (CI PASS #1000)
+
+NekoEdit now opens a single combined Find/Replace panel with Ctrl+F. The old Ctrl+H entry point for a separate replacement mode has been removed. Search text stays in the first field; Tab or a pointer click moves focus to the replacement field. Enter/F3/Shift+F3 navigate the current query, Ctrl+Enter replaces the selected match, and Replace All remains available in the panel.
+
+The Replace Current validator was changed to walk the underlying gap-buffer storage directly. It translates the selected range's starting byte once, compares the query bytes through the physical prefix, and jumps to the suffix when the comparison crosses the gap. This avoids repeated logical-byte translation and handles a selection whose text is split by the internal gap.
+
+The Wayland regression test keeps the gap between the first `fish` match's `f` and `i`, then performs Replace Current on that exact match. It checks that only that occurrence becomes `shark`; Replace All then changes the other 65 occurrences and verifies the result and line-index structures. The large-document Find test also checks the combined Ctrl+F panel state.
+
+Actions #999 caught one stale test assertion that still expected the removed search-only mode in the large-document fixture. The test was corrected in [328a72f](https://github.com/GraderGamer2/NekoEdit/commit/328a72fd1ccbf3de51d965252ac2289901e8a4cf). Actions [#1000](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120) passed all 17 steps, including the full Wayland suite, 11 MiB Open/Save, XKB, X.Org importer, Compose and nested GNOME Shell/Mutter/IBus integration.
+
+The executable remains an unstripped, freestanding x86-64 ELF with no dynamic section. Its text/data/BSS sizes are 239,766 / 64 / 3,764,856 bytes. No controlled before/after application benchmark or manual live-desktop retest was performed.
+
+---
+
 ## 2026-11-15 — incremental Find-highlight coordinate traversal (CI PASS #996)
 
 Find-highlight painting no longer maps every printable-ASCII byte in a match independently. The renderer maps the first matched byte to a visual row and horizontal coordinate, then advances the rest of the match using actual per-character font widths. This preserves proportional fonts. Wrap Lines ON applies the same next-glyph overflow predicate used by the existing visual mapper; Wrap Lines OFF increments the horizontal pixel position without changing rows.
