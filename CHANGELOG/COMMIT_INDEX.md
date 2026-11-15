@@ -4,6 +4,7 @@
 |---|---|
 | [58a7dde4f5e4](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102) | perf: traverse Find highlights with gap-aware cursor |
 | [4d9d891d8725](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) | fix: correct Find matcher register-width arithmetic |
+| [1f061c79d102](https://github.com/GraderGamer2/NekoEdit/commit/1f061c79d102c469f0e3e95f157cda99cffb6adc) | docs: record gap-aware Find highlight validation |
 
 The bounded Find-highlight matcher now keeps physical pointers for candidate and query traversal, rebasing across the gap. The painter uses confirmed query bytes for glyph advances instead of fetching each matched document byte again. The Wayland Find/Replace regression puts the gap between the `f` and `i` of the first `fish`, moves selection with F3, and checks the first match's amber pixels.
 
