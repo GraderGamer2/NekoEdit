@@ -3481,10 +3481,7 @@ xkb_symbols "nekoedit-sparse" {
 
                 def expect_buffer_frame(label: str, skip_cursor_shape: bool = False) -> int:
                     attached_id = expect_buffer_attach(label, skip_cursor_shape=skip_cursor_shape)
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        f"{label} damage",
-                    )
+                    expect_document_damage(f"{label} damage")
                     expect_message(client, (8, 6, b""), f"{label} commit")
                     return attached_id
 
@@ -4094,11 +4091,7 @@ xkb_symbols "nekoedit-sparse" {
                                     f"{label}: queued redraw attached an unknown buffer or nonzero origin: "
                                     f"{(attached_id, attach_x, attach_y)!r}"
                                 )
-                            expect_message(
-                                client,
-                                (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                                f"{label} queued redraw damage",
-                            )
+                            expect_document_damage(f"{label} queued redraw damage")
                             expect_message(
                                 client, (8, 6, b""), f"{label} queued redraw commit"
                             )
@@ -4412,10 +4405,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)),
                         "first slot attach while slot zero is idle",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "first slot damage",
-                    )
+                    expect_document_damage("first slot damage")
                     expect_message(client, (8, 6, b""), "first slot commit")
                     first_callback_id = frame_callback_stats["pending"][-1]
                     wait_child_u32("frame_callback_id", first_callback_id, "first pool callback")
@@ -4449,10 +4439,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", slot1_id, 0, 0)),
                         "second slot attach while slot zero is still busy",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "second slot damage",
-                    )
+                    expect_document_damage("second slot damage")
                     expect_message(client, (8, 6, b""), "second slot commit")
                     second_callback_id = frame_callback_stats["pending"][-1]
                     wait_child_u32("frame_callback_id", second_callback_id, "second pool callback")
@@ -4587,10 +4574,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", slot0_id, 0, 0)),
                         "fractional slot zero attach",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "fractional slot zero logical damage",
-                    )
+                    expect_document_damage("fractional slot zero logical damage")
                     expect_message(client, (8, 6, b""), "fractional slot zero commit")
                     callback0_id = frame_callback_stats["pending"][-1]
                     wait_child_u32("frame_callback_id", callback0_id, "slot-zero frame callback")
@@ -4630,10 +4614,7 @@ xkb_symbols "nekoedit-sparse" {
                         client, (8, 1, struct.pack("<III", slot1_id, 0, 0)),
                         "fractional slot one attach",
                     )
-                    expect_message(
-                        client, (8, 2, struct.pack("<4I", 0, 0, 800, initial_height)),
-                        "fractional slot one logical damage",
-                    )
+                    expect_document_damage("fractional slot one logical damage")
                     expect_message(client, (8, 6, b""), "fractional slot one commit")
                     callback1_id = frame_callback_stats["pending"][-1]
                     wait_child_u32("frame_callback_id", callback1_id, "slot-one frame callback")
