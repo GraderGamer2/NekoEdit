@@ -4146,6 +4146,7 @@ xkb_symbols "nekoedit-sparse" {
                         document_edit_key = (
                             2 <= code <= 13 or 16 <= code <= 27
                             or 30 <= code <= 41 or 43 <= code <= 53
+                            or 71 <= code <= 83
                             or code in (14, 15, 28, 57, 111)
                         )
                         if code not in (103, 105, 106, 108) and not document_edit_key:
