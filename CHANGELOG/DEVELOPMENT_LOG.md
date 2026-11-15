@@ -1,18 +1,14 @@
-## 2026-11-15 — Find matcher compile correction (Actions #993 compile failure)
+## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
 
-The first push of the gap-aware Find-highlight matcher, commit [58a7dde](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102), failed at the freestanding assembly build before any test stage ran. GNU `as` rejected `lea eax, [r12d + rbx]` because the address expression mixed a 32-bit base with a 64-bit index.
+The bounded Find-highlight matcher now traverses the document with a physical gap-buffer cursor rather than calling `doc_byte_at` for every compared query byte. The candidate pointer advances in logical candidate order and is rebased to `doc_buffer + doc_gap_end` when it reaches `doc_gap_start`. The inner query pointer advances across the matched byte sequence and performs the same rebase if a match itself straddles the gap. The byte-exact match condition and bounded candidate interval remain unchanged.
 
-The byte offset calculation now uses `mov eax, r12d` followed by `add eax, ebx`, preserving the intended 32-bit logical-offset arithmetic without changing the physical cursor or search bounds. The implementation and split-gap Find regression remain otherwise unchanged. The corrected commit requires a fresh full Actions run; no mock, host, renderer, or GNOME test has run for this change yet.
+After the matcher confirms a match, the highlight painter uses the identical bytes in `find_query_buffer` for glyph advances instead of fetching the document bytes a second time. This retains the existing per-byte `doc_offset_to_visual` mapping and highlight geometry; no proportional-font or wrapping rules were changed.
 
----
+The Wayland Find/Replace regression first moves the physical gap to byte offset 5, between the `f` and `i` of the initial `fish`, by inserting and deleting a temporary byte. It checks that the document bytes are unchanged. Enter selects the first result, F3 moves the blue selection to the second result, and a pixel check requires the first result to be painted amber.
 
-## 2026-11-15 — gap-aware Find-highlight scanning (Actions validation pending)
+The initial push, [58a7dde](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102), failed at compilation in Actions #993 because one `lea` expression mixed 32-bit and 64-bit registers. The follow-up [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) split the 32-bit offset addition into `mov` and `add`. Actions [#994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 workflow steps, including the new split-gap Find pixel test, full Wayland mock, renderer equivalence, 11 MiB Open/Save, XKB, importer, Compose and nested GNOME Shell/Mutter/IBus integration.
 
-The bounded Find-highlight matcher now traverses the document with a physical gap-buffer pointer instead of calling `doc_byte_at` for every query comparison. A candidate pointer advances between candidate starts; the inner query pointer advances between query bytes. Each cursor rebases to `doc_buffer + doc_gap_end` when its logical offset reaches `doc_gap_start`, including a query that straddles the gap. The bounded search interval and byte-exact matching semantics are unchanged.
-
-The Find-highlight paint loop uses the exact matched byte from `find_query_buffer` for glyph advance after the matcher has confirmed the complete byte sequence. This avoids fetching the same document byte a second time. Per-byte `doc_offset_to_visual` mapping and highlight rectangle geometry remain unchanged to avoid changing proportional-font or wrapping behavior.
-
-The Wayland Find/Replace fixture moves the gap to byte offset 5, between the `f` and `i` of the first `fish`. After Enter selects the first result and F3 selects the second, the first result must be visible in amber. The test also verifies that positioning the gap did not change the logical document contents. Actions validation is pending; no speedup or live desktop behavior is claimed yet.
+ELF text/data/BSS are 239,334 / 64 / 3,764,856 bytes. Linux x86-64 and Compose artifact ZIPs are 152,041 and 120,536 bytes. No before/after benchmark or manual live-desktop test was performed.
 
 ---
 

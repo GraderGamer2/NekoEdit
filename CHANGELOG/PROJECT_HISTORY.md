@@ -1,10 +1,12 @@
-## 2026-11-15 — gap-aware Find-highlight scanning
+## 2026-11-15 — gap-aware Find-highlight scanning (CI PASS #994)
 
-The bounded Find-highlight renderer now compares query bytes using a sequential physical cursor into the gap buffer. The candidate cursor advances along logical candidate offsets and the inner comparison cursor advances along the query. When either cursor reaches the logical gap boundary, it is rebased to the suffix's physical start. This avoids a logical-to-physical lookup for each compared byte and keeps matches correct when their bytes straddle the gap.
+The bounded Find-highlight matcher now holds a physical pointer for its candidate start and a second physical pointer for query comparison. Both cursors advance without resolving each logical byte through the gap-buffer accessor and rebase when their logical position reaches the internal gap. This keeps exact byte comparison correct when a match begins in the prefix and continues in the suffix.
 
-Once a bounded match is found, the highlight painter uses the identical bytes in the query buffer to obtain the glyph advances instead of reading the document bytes a second time. It retains the existing byte-to-visual mapping per query byte, so proportional metrics and wrapped row positioning are not altered.
+After a match is found, the highlight renderer reads the matched bytes from the query buffer for glyph advance calculations instead of retrieving the same document bytes again. Existing per-byte visual-position mapping, font metrics, and highlight geometry are retained.
 
-The regression places the gap inside the first visible `fish` result, then selects the second result with F3 and checks that the first result is painted amber. It also verifies the document bytes are unchanged by the edit/delete sequence used to position the gap. CI validation for this follow-up is pending.
+The regression moves the gap to offset 5 inside the first `fish` result, confirms that document bytes remain unchanged, then selects the second result with F3 and verifies that the first cross-gap match is painted amber. The first implementation commit [58a7dde](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102) initially failed compilation because of a mixed register-width `lea`; [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) corrected the 32-bit addition. Actions [#994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed the complete 17-step workflow, including the Wayland regression, 11 MiB Open/Save, renderer equivalence, native XKB, importer, Compose and nested GNOME Shell/Mutter/IBus.
+
+No controlled before/after performance benchmark or manual desktop run was performed.
 
 ---
 

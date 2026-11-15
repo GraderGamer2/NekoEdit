@@ -1,16 +1,24 @@
-## 2026-11-15 — gap-aware Find-highlight scanning (Actions validation pending)
+## 2026-11-15 — gap-aware Find-highlight scanning (Actions #994 PASS)
 
-**Branch:** `early-alpha`. Previous source commit [b5cf6f1](https://github.com/GraderGamer2/NekoEdit/commit/b5cf6f13a3efb8c33d0221e96ef875fb6a060c47) passed Actions [#992](https://github.com/GraderGamer2/NekoEdit/actions/runs/43669396382).
+**Branch/source head:** `early-alpha` at [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429). **Workflow:** [Actions #994](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670126104) passed all 17 steps.
 
 ### Source changes
 
-- `src/backend/wayland.S`: `doc_find_match_bounded`, used by the visible Find-highlight renderer, now keeps a physical pointer for the current candidate and a second cursor for query comparison. Both are rebased when their logical offsets reach `doc_gap_start`. The bounded candidate limit and byte-exact comparison are unchanged; this path no longer calls `doc_byte_at` for every compared query byte.
-- `src/backend/wayland.S`: `render_find_highlights_range` uses the matching query-buffer byte as the glyph-advance input after a match is confirmed, avoiding another document-byte lookup for each painted query byte. Per-byte visual coordinate mapping and highlight geometry remain unchanged.
-- `tests/wayland_mock.py`: the Find/Replace fixture moves the gap to byte offset 5, between the `f` and `i` of the first `fish`. After F3 selects the second occurrence, the first occurrence must be visible as an amber highlight. Document bytes must remain identical after positioning the gap.
+- `doc_find_match_bounded` now keeps the candidate start as a physical gap-buffer pointer, advancing it in place between candidate offsets. Its inner comparison cursor also advances physically and rebases to the suffix when the next logical query byte reaches `doc_gap_start`. The bounded candidate limit and byte-exact comparison are unchanged; this renderer-only helper no longer calls `doc_byte_at` for each comparison.
+- `render_find_highlights_range` uses the exact byte in `find_query_buffer` to calculate each matched glyph advance once the byte-exact matcher has confirmed a complete match. The previous document-byte lookup is redundant and is removed. The existing `doc_offset_to_visual` mapping, proportional advances, and highlight rectangle geometry remain unchanged.
+- The first build attempt, Actions #993, failed before testing because GNU `as` rejected a mixed-width address expression. Commit [4d9d891](https://github.com/GraderGamer2/NekoEdit/commit/4d9d891d8725107654215177e833d32a7da16429) changed it to separate 32-bit `mov` and `add` instructions; the matcher logic and search bounds were unchanged.
+
+### Regression coverage
+
+The Wayland Find/Replace fixture moves the gap to byte offset 5, between the `f` and `i` of the first `fish` match, using an insert/delete pair that leaves the logical bytes unchanged. The test then opens Find, selects the first result, presses F3 to select the second result, and checks that the first result is still painted amber across the physical gap.
 
 ### Validation
 
-The first branch-push workflow [#993](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670022863) failed during GNU assembler compilation at `src/backend/wayland.S:21291`: `[r12d+rbx]` mixed register widths. No test stage ran. The calculation was corrected to separate 32-bit `mov` and `add` instructions; the corrected source is awaiting a fresh full workflow. Do not claim a pass or a measured performance improvement yet.
+Actions #994 passed build and ELF inspection, CLI/host tests, renderer equivalence, the complete Wayland protocol mock (including the new split-gap Find assertion and 11 MiB Open/Save), native `us(intl)` XKB, the pinned X.Org importer, Compose-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+ELF `size`: text **239,334**, data **64**, BSS **3,764,856** bytes. Executable artifact ZIP: **152,041 bytes**; Compose ZIP: **120,536 bytes**. Both expire 2026-11-16 10:00 WIB.
+
+No controlled before/after benchmark or manual live-desktop GNOME test was performed. The change reduces repeated byte-address translation in the bounded renderer scan; it is not a measured end-to-end performance claim.
 
 ---
 
