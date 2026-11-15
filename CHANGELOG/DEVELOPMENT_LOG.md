@@ -1,3 +1,19 @@
+## 2026-11-15 — Czech Compose pack and bounded status-column lookup (Actions #1006 PASS)
+
+The optional locale set now includes cs_CZ.UTF-8. Its source is pinned to X.Org libX11 commit ff8706a5eae25b8bafce300527079f68a201d27f, blob 022753ea937e9a1f483c9545e99ddbc6295cd485. The Czech file includes the en_US baseline and overrides two dead-caron rules: u -> ů and U -> Ů. The importer produces a flattened 4,479-record JSON table and a 304,644-byte NLP1 v2 pack. The generated JSON is compared byte-for-byte against the committed table in CI; the pinned source hash is checked in both the normal build and Release-pack workflows. The .nlp and its attribution notice remain separate assets; no locale data was added to the core executable.
+
+The editor performance change extends the existing stable-line-ID 4 KiB sparse byte/visual checkpoints with a one-based logical column. The wrapped and unwrapped index measurement passes now record the current logical column alongside byte offset, local visual row, and pixel X. The status bar obtains the current logical line through the byte Fenwick tree, starts at the closest usable checkpoint, and scans only the remaining local segment. The column counter retains current behavior for Unicode extended grapheme clusters, four-column tab stops, and control bytes. The record stride increases from 24 to 32 bytes across 4,096 slots, adding 32 KiB to BSS. The fallback scan remains when the index or checkpoint is unavailable.
+
+The Wayland mock adds a wrapped mixed-text fixture with tabs, a combining-mark grapheme, a control byte, and a Ctrl+End to the document end; it also adds a scan-bound assertion to the 4 MiB wrapped/unwrapped long-line case. The first run exposed a fixture error: plain End stops at the current visual row in wrap mode. The test now uses Ctrl+End, and the complete mock passes.
+
+Source commits: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19).
+
+Actions [#1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps, including build/ELF, CLI/host, renderer equivalence, Wayland mock/11 MiB Open and Save, native XKB, pinned X.Org regeneration, locale pack build, GNOME Shell/Mutter/IBus integration and both artifacts.
+
+ELF text/data/BSS: 242,918 / 64 / 3,797,656 bytes. Linux executable ZIP: 154,091 bytes. Locale ZIP: 148,799 bytes. The pack artifact includes the five .nlp files and their notices. No controlled before/after latency benchmark or manual live-desktop test was performed.
+
+---
+
 ## 2026-11-15 — in-app keyboard shortcut reference and modal IME handling (Actions #1003 PASS)
 
 NekoEdit now has an in-app keyboard reference, opened with F1 or the Help item in the title bar. The responsive centered panel groups the supported commands into File and Editing, Navigation, and Find and Replace. Its list includes file operations, undo/redo, clipboard actions, character/word deletion, caret and selection movement, and the combined Ctrl+F Find/Replace workflow. It deliberately documents the editor's actual command set rather than suggesting unimplemented features.
