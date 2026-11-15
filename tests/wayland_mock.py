@@ -5225,10 +5225,29 @@ xkb_symbols "nekoedit-sparse" {
                                 + buffer_release_message()
                             )
 
-                        workflow_shortcut(1760, 33, "Ctrl+F opens proportional Find")
-                        workflow_shifted_key(1790, 30, "enter proportional Find character A")
-                        workflow_shifted_key(1800, 48, "enter proportional Find character B")
-                        key_step(1810, 28, "Enter selects first proportional Find match")
+                        # Restore the caret to the start without moving the
+                        # internal gap; Find's initial search position follows
+                        # the document cursor, not the physical gap location.
+                        workflow_shortcut(1750, 102, "Ctrl+Home resets proportional Find start")
+                        search_start = read_document_state()
+                        if (
+                            search_start["doc_cursor"] != 0
+                            or search_start["doc_gap_start"] != 1
+                            or search_start["doc_contents"] != b"AB AB"
+                        ):
+                            raise AssertionError(
+                                "Ctrl+Home moved the physical gap or failed to reset the Find start: "
+                                + repr({
+                                    "cursor": search_start["doc_cursor"],
+                                    "gap_start": search_start["doc_gap_start"],
+                                    "contents": search_start["doc_contents"],
+                                })
+                            )
+
+                        workflow_shortcut(1790, 33, "Ctrl+F opens proportional Find")
+                        workflow_shifted_key(1820, 30, "enter proportional Find character A")
+                        workflow_shifted_key(1830, 48, "enter proportional Find character B")
+                        key_step(1840, 28, "Enter selects first proportional Find match")
                         selected = (
                             min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
                             max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
@@ -5266,7 +5285,7 @@ xkb_symbols "nekoedit-sparse" {
                                 })
                             )
 
-                        key_step(1820, 61, "F3 selects second proportional Find match")
+                        key_step(1850, 61, "F3 selects second proportional Find match")
                         selected = (
                             min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
                             max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
@@ -5290,7 +5309,7 @@ xkb_symbols "nekoedit-sparse" {
                         child_set_u32("window_doc_pixel_width", original_width)
                         child_set_u32("doc_wrap_enabled", 0)
                         child_set_u32("doc_line_index_valid", 0)
-                        key_step(1830, 1, "Escape closes wrapped proportional Find")
+                        key_step(1860, 1, "Escape closes wrapped proportional Find")
                         restored = read_document_state()
                         if (
                             restored["doc_line_index_valid"] != 1
@@ -5316,8 +5335,8 @@ xkb_symbols "nekoedit-sparse" {
                         child_set_u32("doc_selection_active", 0)
                         child_set_u32("doc_view_top_row", 0)
                         child_set_u32("doc_view_left_px", 0)
-                        workflow_shortcut(1840, 33, "Ctrl+F reopens Find in no-wrap mode")
-                        key_step(1850, 28, "Enter selects first no-wrap proportional match")
+                        workflow_shortcut(1880, 33, "Ctrl+F reopens Find in no-wrap mode")
+                        key_step(1890, 28, "Enter selects first no-wrap proportional match")
                         selected = (
                             min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
                             max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
@@ -5339,7 +5358,7 @@ xkb_symbols "nekoedit-sparse" {
                                 "no-wrap Find did not advance horizontal coordinates using proportional widths: "
                                 + repr(second_unwrapped)
                             )
-                        key_step(1860, 61, "F3 selects second no-wrap proportional match")
+                        key_step(1900, 61, "F3 selects second no-wrap proportional match")
                         selected = (
                             min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
                             max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
@@ -5356,7 +5375,7 @@ xkb_symbols "nekoedit-sparse" {
                                     "amber_widths": first_unwrapped,
                                 })
                             )
-                        key_step(1870, 1, "Escape closes no-wrap proportional Find")
+                        key_step(1910, 1, "Escape closes no-wrap proportional Find")
                         observations.append(
                             "Find highlight coordinates preserve 8px/5px proportional advances across a physical gap in wrapped and unwrapped layouts"
                         )
