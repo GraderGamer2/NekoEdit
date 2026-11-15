@@ -1,3 +1,40 @@
+## 2026-11-15 — gap-aware reverse Find traversal (Actions #998 PASS)
+
+**Branch/source head:** `early-alpha` at [f346260](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf). **Previous forward-search commit:** [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). **Workflow:** [Actions #998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) passed all 17 steps.
+
+### Source changes
+
+- `doc_find_match_reverse_bounded` now scans candidate offsets in descending order with a physical gap-buffer cursor. Query comparisons advance through the prefix and rebase directly to the suffix when the candidate crosses the gap; moving the candidate itself backwards across the gap jumps back to the prefix.
+- The backward branch of `doc_find_match` uses that bounded matcher for both its initial descending range and its wrapped range. It no longer calls `doc_byte_at` once per query byte.
+- Forward Find/Next and Replace All use the existing `doc_find_match_bounded` physical-pointer matcher, introduced in [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). The forward start bound retains the one-past-last-valid candidate so a search from EOF wraps to the beginning rather than clamping to and repeating the last candidate.
+- Matching remains byte-exact. Search order and existing wrap boundaries are retained; Unicode grapheme navigation and document storage are unchanged.
+
+### Regression coverage
+
+The Wayland mock places the gap between the `f` and `i` of the first `fish` result. After F3 selects the second result, Shift+F3 must select the first match across the physical gap; a subsequent F3 must return to the second. The forward-only proportional-font fixture also checks that F3 wraps from the final result to the first.
+
+### Validation
+
+Actions [#998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) passed all 17 steps: freestanding build and ELF verification; CLI/host tests; renderer-equivalence benchmark; complete Wayland protocol mock including the new reverse split-gap case, clipboard and 11 MiB Open/Save coverage; executable inspection; native `us(intl)` XKB parsing; pinned X.Org Compose importer checks; locale-pack generation; nested GNOME Shell/Mutter/IBus integration; and both artifact uploads.
+
+ELF `size`: text **239,670**, data **64**, BSS **3,764,856** bytes. Linux x86-64 artifact ZIP: **152,225 bytes** (SHA-256 `bd2b64fb4769ffe80db2c617148e8cf02b10d59fb32b0534c9b1b978547728d3`). Compose locale ZIP: **120,536 bytes** (SHA-256 `5bd61626ac54af4b6b78c2da4ed3819513d11e1973e88e87d2e295aa556f7493`). Both artifacts expire **2026-11-16 13:20 WIB**.
+
+A native randomized harness also compared the gap-aware forward and reverse matchers against a logical-byte reference over 50,000 generated gap layouts and search positions. No controlled before/after application benchmark was collected, so no end-to-end speedup is claimed. The GNOME Shell/Mutter/IBus result is automated integration coverage, not a manual retest on the user's live desktop.
+
+---
+
+## 2026-11-15 — gap-aware forward Find traversal (Actions #997 PASS)
+
+**Source commit:** [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). **Workflow:** [Actions #997](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684358436) passed all 17 steps.
+
+Forward Find and Replace All now route candidate matching through `doc_find_match_bounded`, which walks the gap buffer with physical pointers and rebases across the gap instead of translating every compared byte through `doc_byte_at`. The forward wrap bound also preserves an offset immediately after the final valid candidate, fixing the EOF case where F3 could clamp back to the last match. A Wayland regression verifies that F3 from the final result wraps to the first.
+
+Actions #997 passed the freestanding build, CLI/host tests, renderer comparison, complete Wayland protocol mock (including 11 MiB Open/Save), native XKB, X.Org importer, Compose locale generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads. The reverse-search path was handled separately in [f346260](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf) and validated by Actions #998 above.
+
+No controlled before/after benchmark was collected; this is a reduction in repeated gap-buffer address translation, not a measured end-to-end speed claim.
+
+---
+
 ## 2026-11-15 — incremental Find-highlight coordinate traversal (Actions #996 PASS)
 
 **Branch/source head:** `early-alpha` at [55998c6](https://github.com/GraderGamer2/NekoEdit/commit/55998c623f1c34569409f74535b759142b2788c0). **Workflow:** [Actions #996](https://github.com/GraderGamer2/NekoEdit/actions/runs/43674688859) passed all 17 steps.
