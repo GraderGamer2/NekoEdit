@@ -403,6 +403,8 @@ def run(
     history_test: bool = False,
     horizontal_scroll_test: bool = False,
     horizontal_render_bound_test: bool = False,
+    status_column_cache_test: bool = False,
+    expected_status_column: int = 1,
     word_navigation_test: bool = False,
     pointer_drag_test: bool = False,
     middle_click_scroll_test: bool = False,
@@ -1894,7 +1896,7 @@ def run(
                     sparse_keymap_test or punctuation_render_test or line_index_test or grapheme_test
                     or utf8_edit_test or utf8_delete_test or utf8_invalid_test or utf8_pointer_test
                     or gap_buffer_test or dynamic_growth_test or font_parser_test or font_picker_test
-                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or word_navigation_test or pointer_drag_test or middle_click_scroll_test
+                    or clipboard_test or clipboard_persistence_test or history_test or horizontal_scroll_test or horizontal_render_bound_test or status_column_cache_test or word_navigation_test or pointer_drag_test or middle_click_scroll_test
                     or line_navigation_test or find_replace_test or dirty_render_test
                 ):
                     def document_pixel(logical_x: int, logical_y: int) -> int:
@@ -3331,6 +3333,7 @@ xkb_symbols "nekoedit-sparse" {
                         "render_selection_scan_end", "render_find_scan_start",
                         "render_find_scan_end", "render_document_scan_start",
                         "render_document_scan_end", "render_clip_background_row_visits",
+                        "render_status_scan_steps", "render_status_column_value",
                         "doc_offset_visual_scan_start",
                         "doc_offset_visual_scan_end", "doc_visual_offset_scan_start",
                         "doc_visual_offset_scan_end", "context_menu_open", "context_menu_x",
@@ -4796,6 +4799,39 @@ xkb_symbols "nekoedit-sparse" {
                     client.sendall(wire_message(10, 1))
                     return
 
+                if status_column_cache_test:
+                    initial_state = read_document_state()
+                    expected_length = len(initial_state["doc_contents"])
+                    if (
+                        expected_length <= 4096
+                        or initial_state["doc_line_count"] != 1
+                        or initial_state["doc_wrap_enabled"] != 1
+                    ):
+                        raise AssertionError("status-column fixture did not load as one long wrapped line: " + repr(initial_state))
+                    key_step(3150, 107, "End moves the caret to the end of the mixed Unicode line")
+                    state = read_document_state()
+                    if (
+                        state["doc_cursor"] != expected_length
+                        or state["render_status_column_value"] != expected_status_column
+                        or not 0 < state["render_status_scan_steps"] <= 4096
+                    ):
+                        raise AssertionError(
+                            "cached status column changed tab/grapheme/control semantics or scanned too far: "
+                            + repr({
+                                "cursor": state["doc_cursor"],
+                                "length": expected_length,
+                                "column": state["render_status_column_value"],
+                                "expected_column": expected_status_column,
+                                "scan_steps": state["render_status_scan_steps"],
+                            })
+                        )
+                    observations.append(
+                        f"wrapped status-column checkpoint preserves tabs, combining graphemes and controls; "
+                        f"the final {state['render_status_scan_steps']:,} scan steps stay within one 4 KiB bucket"
+                    )
+                    client.sendall(wire_message(10, 1))
+                    return
+
                 if horizontal_render_bound_test:
                     state = read_document_state()
                     expected_length = 4 * 1024 * 1024
@@ -4870,6 +4906,18 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("large line did not become horizontally scrollable: " + repr(state))
                     key_step(3200, 107, "End moves the caret to the end of the multi-megabyte line")
                     state = read_document_state()
+                    if (
+                        state["render_status_column_value"] != expected_length + 1
+                        or state["render_status_scan_steps"] > 4096
+                    ):
+                        raise AssertionError(
+                            "status-bar column calculation rescanned the long line instead of using a nearby checkpoint: "
+                            + repr({
+                                "column": state["render_status_column_value"],
+                                "scan_steps": state["render_status_scan_steps"],
+                                "expected_column": expected_length + 1,
+                            })
+                        )
                     caret_scan_start = state["doc_offset_visual_scan_start"]
                     caret_scan_end = state["doc_offset_visual_scan_end"]
                     if (
@@ -4927,7 +4975,7 @@ xkb_symbols "nekoedit-sparse" {
                             "repeated horizontal redraw did not reuse visible-position checkpoints: " + repr(state)
                         )
                     observations.append(
-                        "4 MiB line in wrapped and unwrapped modes: byte checkpoints bound both caret-to-visual and wrapped visual-row-to-byte scans to 4 KiB; horizontal checkpoints also bound no-wrap glyph traversal across repeated scrolling"
+                        "4 MiB line in wrapped and unwrapped modes: byte checkpoints bound status-column and caret-to-visual scans to 4 KiB; horizontal checkpoints also bound no-wrap glyph traversal across repeated scrolling"
                     )
                     client.sendall(wire_message(10, 1))
                     return
@@ -12303,6 +12351,30 @@ if __name__ == "__main__":
     finally:
         try:
             os.unlink(horizontal_render_path)
+        except FileNotFoundError:
+            pass
+
+    # A long wrapped line with tabs, a combining grapheme and a C0 control
+    # checks that cached columns preserve the status bar's existing semantics.
+    status_column_fd, status_column_path = tempfile.mkstemp(prefix="nekoedit-status-column-")
+    status_column_fixture = b"A\t\xc3\xa9\xcc\x81\x01B" * 1024
+    expected_status_column = 1
+    for _ in range(1024):
+        expected_status_column += 1
+        expected_status_column = ((expected_status_column - 1 + 4) & ~3) + 1
+        expected_status_column += 2
+    try:
+        with os.fdopen(status_column_fd, "wb") as status_column_file:
+            status_column_file.write(status_column_fixture)
+        run(
+            sys.argv[1],
+            initial_file=status_column_path,
+            status_column_cache_test=True,
+            expected_status_column=expected_status_column,
+        )
+    finally:
+        try:
+            os.unlink(status_column_path)
         except FileNotFoundError:
             pass
 

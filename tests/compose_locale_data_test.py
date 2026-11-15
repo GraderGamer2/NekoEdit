@@ -161,7 +161,27 @@ def main() -> None:
     expect(el_map, "dead_key", (0x0314, 0x03B1), (0x1F01,), "el_GR")
     expect(el_map, "dead_key", (0x0300, 0x0313, 0x0345, 0x0391), (0x1F8A,), "el_GR")
 
-    print("pt_BR, fi_FI, sr_RS, and el_GR typed locale tables and NLP1 encodings passed")
+    cs, cs_map = load("cs_CZ.UTF-8")
+    cs_stats = cs["statistics"]
+    if (
+        cs_stats["final_rules"] != 4479
+        or cs_stats["locale_rules"] != 0
+        or cs_stats["locale_dead_key_rules"] != 2
+        or cs_stats["locale_overrides"] != 2
+        or cs_stats["dead_key_overrides"] != 2
+        or cs_stats["input_sequence_lengths"] != {"2": 3445, "3": 892, "4": 142}
+    ):
+        raise AssertionError("cs_CZ typed dead-caron rules or table counts changed")
+    if (
+        cs["source"]["locale_compose_path"] != "nls/cs_CZ.UTF-8/Compose.pre"
+        or cs["source"]["locale_compose_blob"] != "022753ea937e9a1f483c9545e99ddbc6295cd485"
+        or cs["source"]["libx11_commit"] != "ff8706a5eae25b8bafce300527079f68a201d27f"
+    ):
+        raise AssertionError("cs_CZ source pin or upstream metadata changed")
+    expect(cs_map, "dead_key", (0x030C, ord("u")), (0x016F,), "cs_CZ")
+    expect(cs_map, "dead_key", (0x030C, ord("U")), (0x016E,), "cs_CZ")
+
+    print("pt_BR, fi_FI, sr_RS, el_GR, and cs_CZ typed locale tables and NLP1 encodings passed")
 
 
 if __name__ == "__main__":

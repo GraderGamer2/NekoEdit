@@ -97,7 +97,7 @@
 .equ DOC_HSCROLL_CACHE_ENTRY_SIZE, 20
 .equ DOC_VBYTE_CACHE_SLOTS, 4096
 .equ DOC_VBYTE_CACHE_MASK, (DOC_VBYTE_CACHE_SLOTS - 1)
-.equ DOC_VBYTE_CACHE_ENTRY_SIZE, 24
+.equ DOC_VBYTE_CACHE_ENTRY_SIZE, 32
 .equ DOC_VBYTE_CACHE_BUCKET_SHIFT, 12
 .equ PATH_CAPACITY,    4096
 .equ PICKER_MAX_ENTRIES, 128
@@ -5192,6 +5192,9 @@ render_clip_top2:       .long 0
 render_clip_bottom2:    .long 0
 .global render_clip_background_row_visits
 render_clip_background_row_visits: .long 0
+.global render_status_scan_steps, render_status_column_value
+render_status_scan_steps: .long 0
+render_status_column_value: .long 1
 render_damage_top1:     .long 0
 render_damage_height1:  .long 0
 render_damage_top2:     .long 0
@@ -17890,13 +17893,12 @@ doc_hscroll_cache_lookup:
 # Offsets are relative to the logical line so edits before an untouched line
 # do not invalidate its cached positions.
 # EDI=line ID, ESI=4 KiB byte bucket, EDX=line-relative byte offset,
-# ECX=local visual row, R8D=pixel X.
+# ECX=local visual row, R8D=pixel X, R9D=one-based logical column.
 .type doc_vbyte_cache_store, @function
 .pushsection .text.doc_vbyte_cache_store,"ax",@progbits
 doc_vbyte_cache_store:
-    mov r9d, edx
-    mov r10d, ecx
-    mov r11d, r8d
+    mov r10d, edx
+    mov r11d, ecx
     mov eax, esi
     imul eax, eax, 13
     xor eax, edi
@@ -17908,15 +17910,17 @@ doc_vbyte_cache_store:
     mov dword ptr [rdx], eax
     mov dword ptr [rdx + 4], edi
     mov dword ptr [rdx + 8], esi
-    mov dword ptr [rdx + 12], r9d
-    mov dword ptr [rdx + 16], r10d
-    mov dword ptr [rdx + 20], r11d
+    mov dword ptr [rdx + 12], r10d
+    mov dword ptr [rdx + 16], r11d
+    mov dword ptr [rdx + 20], r8d
+    mov dword ptr [rdx + 24], r9d
     ret
 .size doc_vbyte_cache_store, . - doc_vbyte_cache_store
 .popsection
 
 # EDI=line ID, ESI=target 4 KiB bucket, EDX=line-relative target offset.
-# Returns EAX=relative offset, EDX=local visual row, ECX=pixel X; -1 on miss.
+# Returns EAX=relative offset, EDX=local visual row, ECX=pixel X,
+# R8D=one-based logical column; -1 in EAX on miss.
 .type doc_vbyte_cache_lookup, @function
 .pushsection .text.doc_vbyte_cache_lookup,"ax",@progbits
 doc_vbyte_cache_lookup:
@@ -17949,6 +17953,7 @@ doc_vbyte_cache_lookup:
     ja .Ldoc_vbyte_cache_lookup_miss
     mov edx, dword ptr [rax + 16]
     mov ecx, dword ptr [rax + 20]
+    mov r8d, dword ptr [rax + 24]
     mov eax, dword ptr [rax + 12]
     jmp .Ldoc_vbyte_cache_lookup_done
 .Ldoc_vbyte_cache_lookup_miss:
@@ -17962,6 +17967,7 @@ doc_vbyte_cache_lookup:
     mov eax, -1
     xor edx, edx
     xor ecx, ecx
+    mov r8d, 1
 .Ldoc_vbyte_cache_lookup_done:
     add rsp, 8
     pop r14
@@ -18120,6 +18126,7 @@ doc_line_index_measure_rows:
     mov r14d, edx
     mov dword ptr [rsp], 1
     mov dword ptr [rsp + 4], 0
+    mov dword ptr [rsp + 8], 1
     mov r12d, edi
     mov r15d, edi
     lea r13d, [rdi + rsi]
@@ -18137,6 +18144,7 @@ doc_line_index_measure_rows:
     xor edx, edx
     xor ecx, ecx
     xor r8d, r8d
+    mov r9d, dword ptr [rsp + 8]
     call doc_vbyte_cache_store
 .Ldoc_index_unwrapped_loop:
     cmp r12d, r13d
@@ -18153,6 +18161,7 @@ doc_line_index_measure_rows:
     sub edx, r15d
     xor ecx, ecx
     mov r8d, ebx
+    mov r9d, dword ptr [rsp + 8]
     call doc_vbyte_cache_store
 .Ldoc_index_unwrapped_horizontal_checkpoint:
 .Ldoc_index_unwrapped_checkpoint:
@@ -18188,10 +18197,17 @@ doc_line_index_measure_rows:
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
+    inc dword ptr [rsp + 8]
     jmp .Ldoc_index_unwrapped_loop
 .Ldoc_index_unwrapped_tab:
     lea ebx, [rbx + 32]
     and ebx, -32
+    mov eax, dword ptr [rsp + 8]
+    dec eax
+    add eax, 4
+    and eax, -4
+    inc eax
+    mov dword ptr [rsp + 8], eax
     inc r12d
     jmp .Ldoc_index_unwrapped_loop
 .Ldoc_index_unwrapped_control:
@@ -18217,9 +18233,10 @@ doc_line_index_measure_rows:
     push r14
     push r15
     push rbp
-    sub rsp, 8
+    sub rsp, 24
     mov dword ptr [rsp], edx
     mov dword ptr [rsp + 4], 0
+    mov dword ptr [rsp + 8], 1
     mov ebp, edi
     mov r12d, edi
     lea r13d, [rdi + rsi]
@@ -18243,6 +18260,7 @@ doc_line_index_measure_rows:
     xor edx, edx
     xor ecx, ecx
     xor r8d, r8d
+    mov r9d, dword ptr [rsp + 8]
     call doc_vbyte_cache_store
 .Ldoc_index_measure_loop:
     cmp r12d, r13d
@@ -18260,6 +18278,7 @@ doc_line_index_measure_rows:
     mov ecx, r14d
     dec ecx
     mov r8d, ebx
+    mov r9d, dword ptr [rsp + 8]
     call doc_vbyte_cache_store
 .Ldoc_index_measure_read_byte:
     mov edi, r12d
@@ -18287,6 +18306,7 @@ doc_line_index_measure_rows:
     mov edi, r12d
     call doc_grapheme_next
     mov r12d, eax
+    inc dword ptr [rsp + 8]
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_tab:
     lea eax, [rbx + 32]
@@ -18299,6 +18319,12 @@ doc_line_index_measure_rows:
 .Ldoc_index_measure_tab_fit:
     mov ebx, eax
 .Ldoc_index_measure_tab_next:
+    mov eax, dword ptr [rsp + 8]
+    dec eax
+    add eax, 4
+    and eax, -4
+    inc eax
+    mov dword ptr [rsp + 8], eax
     inc r12d
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_control:
@@ -18306,7 +18332,7 @@ doc_line_index_measure_rows:
     jmp .Ldoc_index_measure_loop
 .Ldoc_index_measure_done:
     mov eax, r14d
-    add rsp, 8
+    add rsp, 24
     pop rbp
     pop r15
     pop r14
@@ -23330,6 +23356,8 @@ render_status_bar:
     push r12
     push r13
     push r14
+    sub rsp, 16
+    mov dword ptr [rip + render_status_scan_steps], 0
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     mov edx, dword ptr [rip + window_status_top]
@@ -23361,9 +23389,24 @@ render_status_bar:
     mov edi, ebx
     mov esi, DOC_INDEX_BYTE_TREE_OFFSET
     call doc_line_index_find_prefix
+    mov dword ptr [rsp], eax
     lea r13d, [eax + 1]
     mov r14d, edx
+    mov eax, ebx
+    sub eax, r14d
+    mov dword ptr [rsp + 4], eax
+    mov edi, dword ptr [rsp]
+    call doc_line_index_get_id
+    mov edi, eax
+    mov edx, dword ptr [rsp + 4]
+    mov esi, edx
+    shr esi, DOC_VBYTE_CACHE_BUCKET_SHIFT
+    call doc_vbyte_cache_lookup
     mov ebp, 1
+    cmp eax, -1
+    je .Lneko_status_scan
+    add r14d, eax
+    mov ebp, r8d
     jmp .Lneko_status_scan
 .Lneko_status_scan_legacy:
     xor r14d, r14d
@@ -23372,6 +23415,7 @@ render_status_bar:
 .Lneko_status_scan:
     cmp r14d, ebx
     jae .Lneko_status_scan_done
+    inc dword ptr [rip + render_status_scan_steps]
     mov edi, r14d
     call doc_byte_at
     cmp eax, 10
@@ -23401,6 +23445,7 @@ render_status_bar:
     inc r14d
     jmp .Lneko_status_scan
 .Lneko_status_scan_done:
+    mov dword ptr [rip + render_status_column_value], ebp
     mov r12d, dword ptr [rip + window_status_top]
     mov eax, dword ptr [rip + ui_font_size]
     test eax, eax
@@ -23443,6 +23488,7 @@ render_status_bar:
     mov esi, r12d
     lea rdx, [rip + ui_mode_name]
     call draw_text
+    add rsp, 16
     pop r14
     pop r13
     pop r12
