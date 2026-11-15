@@ -1,18 +1,22 @@
-## Latest handoff (2026-11-15 — gap-aware forward/reverse Find; CI PASS #998)
+## Latest handoff (2026-11-15 — combined Ctrl+F Find/Replace; CI PASS #1000)
 
-Continue application-source development on `early-alpha` at [f346260](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+Continue application-source development on `early-alpha`; the latest code commits are [d859c11](https://github.com/GraderGamer2/NekoEdit/commit/d859c11e20c707d3b43ea88f9b233ce4693ea15b) and test correction [328a72f](https://github.com/GraderGamer2/NekoEdit/commit/328a72fd1ccbf3de51d965252ac2289901e8a4cf). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
 
-**Find traversal:** forward Find/Next and Replace All use the bounded gap-aware matcher introduced in [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). Reverse Find/Shift+F3 uses the new descending physical-pointer matcher. Both paths avoid calling `doc_byte_at` once per compared query byte. Candidate pointers rebase at the gap boundary while query comparison remains byte-exact. The forward path also preserves the one-past-last-valid start needed to wrap correctly when invoked from EOF.
+**One Find/Replace shortcut:** Ctrl+F always opens the combined panel. The former Ctrl+H replacement-mode entry point is removed. Enter the query in the first field; Tab or pointer-click the second field to enter replacement text. Enter/F3/Shift+F3 navigate, Ctrl+Enter performs Replace Current, and the Replace All button handles the remaining matches.
 
-**Regression coverage:** the Wayland mock places an internal gap in the first `fish` match, verifies forward navigation to the second, Shift+F3 back across the split first match, and F3 forward again. A separate proportional-font fixture checks exact wrapped/unwrapped highlight positions and F3 wraparound.
+**Gap-aware replacement validation:** `doc_find_selection_matches` now compares a selected query by physical pointer, rebasing from the prefix to the suffix at the internal gap. It rejects empty queries and out-of-document selections before comparing; it no longer calls `doc_byte_at` once per byte.
 
-Actions [#997](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684358436) and [#998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) each passed all 17 workflow steps. The complete run covers build/ELF, CLI/host, renderer equivalence, full Wayland protocol tests, 11 MiB Open/Save and clipboard handling, XKB, X.Org Compose import, locale packs, nested GNOME Shell/Mutter/IBus integration, and artifact uploads.
+**Regression coverage:** the Wayland mock positions the gap inside the first `fish` result, then verifies Replace Current on that split-gap selection and Replace All on the remaining 65 matches. The large-document Find test also asserts the combined-panel mode. Actions #999 first identified a stale mode expectation in that large-document test; #1000 passed after the test-only correction.
 
-Latest ELF text/data/BSS: **239,670 / 64 / 3,764,856 bytes**. Artifacts from #998: [Linux x86-64 executable ZIP, 152,225 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142/artifacts/14150080927); [Compose locale ZIP, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142/artifacts/14149843596). Both expire **2026-11-16 13:20 WIB**.
+Actions [#1000](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120) passed all 17 workflow steps, including build/ELF, CLI/host, renderer equivalence, the full Wayland mock and 11 MiB Open/Save, native XKB, X.Org importer, Compose generation, nested GNOME Shell/Mutter/IBus integration and both artifact uploads.
 
-The native randomized matcher harness passed 50,000 generated gap-layout/search cases. No controlled application-level before/after benchmark was collected, and automated GNOME/Mutter integration is not a manual retest on the live desktop.
+Latest ELF text/data/BSS: **239,766 / 64 / 3,764,856 bytes**. Artifacts from #1000: [Linux x86-64 executable ZIP, 152,267 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120/artifacts/14150253882); [Compose locale ZIP, 120,536 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120/artifacts/14150917527). Both expire **2026-11-16 13:44 WIB**.
 
-Next candidate: audit the remaining Replace Current selection-validation helper for redundant per-byte gap-buffer lookups before touching other renderer paths.
+No controlled before/after application benchmark was collected, and automated GNOME/Mutter integration is not a manual retest on the user's live desktop.
+
+Next candidate: expand the Find and replacement fields beyond the current ASCII-only keyboard path, adding UTF-8 editing and input-method coverage.
+
+---
 
 ---
 

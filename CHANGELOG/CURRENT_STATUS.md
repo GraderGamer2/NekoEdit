@@ -1,3 +1,32 @@
+## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (Actions #1000 PASS)
+
+**Branch/code commits:** `early-alpha`; implementation [d859c11](https://github.com/GraderGamer2/NekoEdit/commit/d859c11e20c707d3b43ea88f9b233ce4693ea15b), followed by test correction [328a72f](https://github.com/GraderGamer2/NekoEdit/commit/328a72fd1ccbf3de51d965252ac2289901e8a4cf). **Workflow:** [Actions #1000](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120) passed all 17 steps.
+
+### Unified Find/Replace entry point
+
+- Ctrl+F now always opens the combined Find/Replace panel. The separate Ctrl+H panel entry point was removed; search and replacement are handled from the same panel.
+- Type the query in the first field. Tab or a pointer click focuses the replacement field. Enter/F3/Shift+F3 navigate matches; Ctrl+Enter replaces the current selected match; Replace All remains available as a panel action.
+- The root README now documents this single-shortcut workflow.
+
+### Replace Current validation
+
+- `doc_find_selection_matches` now maps the selection start to the gap-buffer's physical address once, compares bytes through the contiguous prefix/suffix spans, and jumps across the gap directly. It no longer calls `doc_byte_at` for every query byte.
+- An empty query and selections beyond the document length are rejected before comparison. The byte-exact matching rule and replacement semantics are unchanged.
+
+### Regression coverage
+
+- The Wayland fixture puts the physical gap at byte 5, between the `f` and `i` of the first `fish`. It selects that result across the gap and verifies Replace Current yields `one shark two fish`; Replace All then replaces the remaining 65 matches and verifies the complete document/index state.
+- A second large-document assertion was updated to expect combined Find/Replace mode. The first CI attempt (#999) caught that stale test-only expectation; [328a72f](https://github.com/GraderGamer2/NekoEdit/commit/328a72fd1ccbf3de51d965252ac2289901e8a4cf) corrected it. No source rollback or behavior workaround was needed.
+
+### Validation
+
+Actions [#1000](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120) passed all 17 steps: freestanding ELF build and inspection; CLI/host tests; renderer-equivalence comparison; complete Wayland protocol mock including the combined panel, split-gap Replace Current, Replace All, large-document Find and 11 MiB Open/Save; native `us(intl)` XKB parsing; pinned X.Org importer; Compose-pack generation; nested GNOME Shell/Mutter/IBus integration; and both artifact uploads.
+
+ELF `size`: text **239,766**, data **64**, BSS **3,764,856** bytes. Linux x86-64 executable ZIP: **152,267 bytes** (SHA-256 `b4085250f4eae152897f080e533ab9ab2a2ffad0b9ebdaebfabf1e26553e6625`). Compose locale ZIP: **120,536 bytes** (SHA-256 `7fda5d4be2ffc08956897fa9a48e2f8bb9bbaa72d31f05507474c4af64972b5d`). Both artifacts expire **2026-11-16 13:44 WIB**.
+
+No controlled before/after performance benchmark was collected, so the selection matcher change is recorded as fewer logical-to-physical translations, not a measured end-to-end speedup. Nested GNOME Shell/Mutter/IBus is automated integration coverage, not a manual retest on the user's desktop.
+
+Next candidate: extend the Find and replacement fields beyond the current ASCII-only keyboard path, with UTF-8 cursor movement/deletion and input-method coverage.
 ## 2026-11-15 — gap-aware reverse Find traversal (Actions #998 PASS)
 
 **Branch/source head:** `early-alpha` at [f346260](https://github.com/GraderGamer2/NekoEdit/commit/f3462606b1d94e3b7f1858712ccea135ec00cbbf). **Previous forward-search commit:** [7822938](https://github.com/GraderGamer2/NekoEdit/commit/78229385b90f89a836d3476e7c209c446eb0644a). **Workflow:** [Actions #998](https://github.com/GraderGamer2/NekoEdit/actions/runs/43684728142) passed all 17 steps.

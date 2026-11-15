@@ -1,3 +1,16 @@
+## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (CI PASS #1000)
+
+| Commit | Subject |
+|---|---|
+| [d859c11e20c7](https://github.com/GraderGamer2/NekoEdit/commit/d859c11e20c707d3b43ea88f9b233ce4693ea15b) | feat: consolidate Find and Replace under Ctrl+F |
+| [328a72fd1ccb](https://github.com/GraderGamer2/NekoEdit/commit/328a72fd1ccbf3de51d965252ac2289901e8a4cf) | test: expect combined Ctrl+F panel in large documents |
+
+Ctrl+F opens the complete Find/Replace panel; Ctrl+H no longer opens a separate mode. The Replace Current selection validator now compares the selected query with a physical gap-aware cursor rather than calling `doc_byte_at` for each byte. The Wayland fixture replaces a query whose first occurrence crosses the storage gap, then verifies Replace All across the remaining 65 matches. Actions [#1000](https://github.com/GraderGamer2/NekoEdit/actions/runs/43686472120) passed all 17 workflow steps. Actions #999 exposed and led to correction of one stale large-document test assertion.
+
+ELF text/data/BSS: 239,766 / 64 / 3,764,856 bytes. Executable ZIP: 152,267 bytes; Compose locale ZIP: 120,536 bytes. No controlled end-to-end benchmark is claimed.
+
+---
+
 ## 2026-11-15 — gap-aware reverse Find traversal (CI PASS #998)
 
 | Commit | Subject |
