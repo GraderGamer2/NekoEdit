@@ -10,7 +10,7 @@
 
 ### Validation
 
-Actions validation is pending for this source/test change. Do not claim a pass or a measured performance improvement until the branch-push workflow completes. This test targets a split-gap Find match; it does not claim a before/after latency result or a manual GNOME desktop test.
+The first branch-push workflow [#993](https://github.com/GraderGamer2/NekoEdit/actions/runs/43670022863) failed during GNU assembler compilation at `src/backend/wayland.S:21291`: `[r12d+rbx]` mixed register widths. No test stage ran. The calculation was corrected to separate 32-bit `mov` and `add` instructions; the corrected source is awaiting a fresh full workflow. Do not claim a pass or a measured performance improvement yet.
 
 ---
 

@@ -21288,7 +21288,8 @@ doc_find_match_bounded:
     cmp ebx, r14d
     jae .Ldoc_find_bounded_match
     inc r10
-    lea eax, [r12d + rbx]
+    mov eax, r12d
+    add eax, ebx
     cmp eax, dword ptr [rip + doc_gap_start]
     jne .Ldoc_find_bounded_compare
     mov r10, qword ptr [rip + doc_buffer]

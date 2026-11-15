@@ -1,3 +1,11 @@
+## 2026-11-15 — Find matcher compile correction (Actions #993 compile failure)
+
+The first push of the gap-aware Find-highlight matcher, commit [58a7dde](https://github.com/GraderGamer2/NekoEdit/commit/58a7dde4f5e459fde6043ee8ec618670ecf25102), failed at the freestanding assembly build before any test stage ran. GNU `as` rejected `lea eax, [r12d + rbx]` because the address expression mixed a 32-bit base with a 64-bit index.
+
+The byte offset calculation now uses `mov eax, r12d` followed by `add eax, ebx`, preserving the intended 32-bit logical-offset arithmetic without changing the physical cursor or search bounds. The implementation and split-gap Find regression remain otherwise unchanged. The corrected commit requires a fresh full Actions run; no mock, host, renderer, or GNOME test has run for this change yet.
+
+---
+
 ## 2026-11-15 — gap-aware Find-highlight scanning (Actions validation pending)
 
 The bounded Find-highlight matcher now traverses the document with a physical gap-buffer pointer instead of calling `doc_byte_at` for every query comparison. A candidate pointer advances between candidate starts; the inner query pointer advances between query bytes. Each cursor rebases to `doc_buffer + doc_gap_end` when its logical offset reaches `doc_gap_start`, including a query that straddles the gap. The bounded search interval and byte-exact matching semantics are unchanged.
