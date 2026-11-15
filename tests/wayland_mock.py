@@ -4133,8 +4133,13 @@ xkb_symbols "nekoedit-sparse" {
                     rect1 = struct.unpack("<4I", damage[2])
                     partial = rect1 != (0, 0, 800, initial_height)
                     if partial:
-                        if code not in (103, 105, 106, 108):
-                            raise AssertionError(f"{label}: non-caret input unexpectedly used partial damage: {rect1!r}")
+                        document_edit_key = (
+                            2 <= code <= 13 or 16 <= code <= 27
+                            or 30 <= code <= 41 or 43 <= code <= 53
+                            or code in (14, 15, 28, 57, 111)
+                        )
+                        if code not in (103, 105, 106, 108) and not document_edit_key:
+                            raise AssertionError(f"{label}: unrelated input unexpectedly used partial damage: {rect1!r}")
                         x1, y1, width1, height1 = rect1
                         if x1 != 0 or width1 != 800 or not (0 < height1 < initial_height) or y1 + height1 > initial_height:
                             raise AssertionError(f"{label}: invalid caret-band damage rectangle: {rect1!r}")
@@ -10694,7 +10699,7 @@ xkb_symbols "nekoedit-sparse" {
                             + repr(dirty_render_background_row_deltas)
                         )
                     for frame_index, (used_partial_damage, row_visits) in enumerate(
-                        zip(partial_frames, dirty_render_background_row_deltas, strict=True)
+                        zip(partial_frames, dirty_render_background_row_deltas[:len(partial_frames)], strict=True)
                     ):
                         if used_partial_damage and row_visits >= initial_height:
                             raise AssertionError(
@@ -10737,21 +10742,54 @@ xkb_symbols "nekoedit-sparse" {
                                 "scanned_bytes": scan_end - scan_start,
                             })
                         )
-                    if expected_length > 512:
-                        observations.append(
-                            "4,096-row document: plain unselected caret movement used two clipped damage bands and scanned no more than 512 bytes near EOF"
-                        )
-                        client.sendall(wire_message(10, 1))
-                        return
                     before_edit = painted_state["doc_contents"]
-                    key_step(1020, 48, "text edit invalidates the partial-render snapshot")
-                    after_edit = read_document_state()["doc_contents"]
-                    if after_edit != before_edit + b"b":
+                    inserted_partial = key_step(
+                        1020, 48, "typing uses edit-aware dirty-region damage"
+                    )
+                    inserted_state = read_document_state()
+                    if not inserted_partial or inserted_state["doc_contents"] != before_edit + b"b":
                         raise AssertionError(
-                            f"text edit changed unexpected document bytes: before={before_edit!r}, after={after_edit!r}"
+                            "layout-stable typing did not use partial damage or changed unexpected bytes: "
+                            + repr({"partial": inserted_partial, "tail": inserted_state["doc_contents"][-32:]})
+                        )
+                    if expected_length > 512 and (
+                        inserted_state["render_document_scan_start"] < expected_length - 512
+                        or inserted_state["render_document_scan_end"] - inserted_state["render_document_scan_start"] > 512
+                    ):
+                        raise AssertionError(
+                            "edit-aware repaint traversed document rows above the dirty row: "
+                            + repr({
+                                "scan_start": inserted_state["render_document_scan_start"],
+                                "scan_end": inserted_state["render_document_scan_end"],
+                                "length": inserted_state["doc_length"],
+                            })
+                        )
+                    if dirty_render_background_row_deltas[-1] >= initial_height:
+                        raise AssertionError("typing repaint visited the entire background height")
+
+                    deleted_partial = key_step(
+                        1023, 14, "Backspace uses edit-aware dirty-region damage"
+                    )
+                    deleted_state = read_document_state()
+                    if not deleted_partial or deleted_state["doc_contents"] != before_edit:
+                        raise AssertionError(
+                            "layout-stable Backspace did not restore the original bytes with partial damage: "
+                            + repr({"partial": deleted_partial, "tail": deleted_state["doc_contents"][-32:]})
+                        )
+                    if dirty_render_background_row_deltas[-1] >= initial_height:
+                        raise AssertionError("Backspace repaint visited the entire background height")
+
+                    newline_partial = key_step(
+                        1026, 28, "newline edit retains full-frame geometry fallback"
+                    )
+                    newline_state = read_document_state()
+                    if newline_partial or newline_state["doc_contents"] != before_edit + b"\n":
+                        raise AssertionError(
+                            "newline insertion failed to use the safe full-frame fallback: "
+                            + repr({"partial": newline_partial, "tail": newline_state["doc_contents"][-32:]})
                         )
                     observations.append(
-                        "plain unselected Left/Right movement used two clipped damage bands; text insertion used full-frame damage"
+                        "caret movement and layout-stable typing/Backspace use bounded dirty-region repaint; line-count changes retain full-frame fallback"
                     )
                     client.sendall(wire_message(10, 1))
                     return

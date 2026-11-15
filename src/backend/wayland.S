@@ -4936,6 +4936,9 @@ window_buffer_slot_busy: .zero 8
 window_buffer_slot_render_valid: .zero 8
 window_buffer_slot_render_scene_generation: .zero 8
 window_buffer_slot_render_doc_revision: .zero 8
+window_buffer_slot_render_dirty_row: .zero 8
+window_buffer_slot_render_total_rows: .zero 8
+window_buffer_slot_render_max_line_width: .zero 8
 window_buffer_slot_render_view_top: .zero 8
 window_buffer_slot_render_view_left: .zero 8
 window_buffer_slot_render_caret_row: .zero 8
@@ -5183,6 +5186,7 @@ frame_callback_id:      .long 0
 present_buffer_stage:   .long 0
 redraw_pending:         .long 0
 redraw_cursor_candidate: .long 0
+redraw_edit_candidate: .long 0
 render_scene_generation: .long 0
 render_partial_active:  .long 0
 render_clip_enabled:    .long 0
@@ -6207,8 +6211,10 @@ wayland_main:
     # A pending caret-only candidate belongs to the frame callback or buffer
     # release that unblocks its first redraw attempt. Any other event changes
     # the scene ordering, so force the next presentation through full repaint.
-    cmp dword ptr [rip + redraw_cursor_candidate], 0
-    je .event_read_candidate_done
+    mov eax, dword ptr [rip + redraw_cursor_candidate]
+    or eax, dword ptr [rip + redraw_edit_candidate]
+    test eax, eax
+    jz .event_read_candidate_done
     mov eax, dword ptr [rip + frame_callback_id]
     test eax, eax
     jz .event_read_candidate_slot0
@@ -6228,6 +6234,7 @@ wayland_main:
     je .event_read_candidate_done
 .event_read_candidate_clear:
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
 .event_read_candidate_done:
     cmp dword ptr [rip + last_object], 6
     jne .check_registry_event
@@ -8779,14 +8786,17 @@ wayland_main:
     test rax, rax
     js .protocol_error
 .Lkeyboard_changed_without_ime:
-    cmp dword ptr [rip + redraw_cursor_candidate], 1
-    jne .Lkeyboard_scene_invalidate
     cmp dword ptr [rip + text_input_object], 0
+    jne .Lkeyboard_scene_invalidate
+    cmp dword ptr [rip + redraw_cursor_candidate], 1
+    je .Lkeyboard_scene_ready
+    cmp dword ptr [rip + redraw_edit_candidate], 1
     jne .Lkeyboard_scene_invalidate
     jmp .Lkeyboard_scene_ready
 .Lkeyboard_scene_invalidate:
     inc dword ptr [rip + render_scene_generation]
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
 .Lkeyboard_scene_ready:
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
@@ -8804,6 +8814,7 @@ wayland_main:
 .Ldocument_scroll_without_ime:
     inc dword ptr [rip + render_scene_generation]
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
     test rax, rax
@@ -8826,6 +8837,7 @@ wayland_main:
 .text_input_redraw_only:
     inc dword ptr [rip + render_scene_generation]
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
     mov dword ptr [rip + redraw_pending], 1
     call present_buffer
     test rax, rax
@@ -16316,7 +16328,7 @@ window_create_second_buffer:
 .size window_create_second_buffer, . - window_create_second_buffer
 .popsection
 
-# Configure software paint clipping for a simple caret move.
+# Configure software paint clipping for a caret move or layout-stable edit.
 # EDI=buffer slot (0 or 1); RAX=1 when partial repaint is safe.
 .type render_prepare_slot, @function
 .pushsection .text.render_prepare_slot,"ax",@progbits
@@ -16331,7 +16343,10 @@ render_prepare_slot:
     call render_disable_clip
 
     cmp dword ptr [rip + redraw_cursor_candidate], 1
+    je .render_prepare_candidate_ready
+    cmp dword ptr [rip + redraw_edit_candidate], 1
     jne .render_prepare_full
+.render_prepare_candidate_ready:
     cmp dword ptr [rip + window_buffer_transform], 0
     jne .render_prepare_full
     cmp dword ptr [rip + ui_transform_active], 0
@@ -16368,6 +16383,10 @@ render_prepare_slot:
     jne .render_prepare_full
     cmp dword ptr [rip + find_replace_mode], 0
     jne .render_prepare_full
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + find_query_length], 0
+    jne .render_prepare_full
     cmp dword ptr [rip + window_resize_pending], 0
     jne .render_prepare_full
     cmp dword ptr [rip + window_doc_visible_rows], 0
@@ -16382,10 +16401,13 @@ render_prepare_slot:
     mov eax, dword ptr [rbx + r12*4]
     cmp eax, dword ptr [rip + render_scene_generation]
     jne .render_prepare_full
+    cmp dword ptr [rip + redraw_edit_candidate], 1
+    je .render_prepare_revision_ready
     lea rbx, [rip + window_buffer_slot_render_doc_revision]
     mov eax, dword ptr [rbx + r12*4]
     cmp eax, dword ptr [rip + doc_revision]
     jne .render_prepare_full
+.render_prepare_revision_ready:
     lea rbx, [rip + window_buffer_slot_render_view_top]
     mov eax, dword ptr [rbx + r12*4]
     cmp eax, dword ptr [rip + doc_view_top_row]
@@ -16419,6 +16441,9 @@ render_prepare_slot:
     cmp eax, dword ptr [rip + window_buffer_transform]
     jne .render_prepare_full
 
+    cmp dword ptr [rip + redraw_edit_candidate], 1
+    je .render_prepare_edit_rows
+
     mov edi, dword ptr [rip + doc_cursor]
     call doc_offset_to_visual
     mov dword ptr [rip + render_current_caret_row], eax
@@ -16445,11 +16470,48 @@ render_prepare_slot:
     cmp r13d, r14d
     jbe .render_prepare_rows_ordered
     xchg r13d, r14d
+    jmp .render_prepare_rows_ordered
+
+.render_prepare_edit_rows:
+    # Only layout-stable edits can reuse the old slot's lower document area.
+    cmp dword ptr [rip + doc_storage_error], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_open_error], 0
+    jne .render_prepare_full
+    call doc_line_index_ensure
+    test eax, eax
+    jz .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_total_rows]
+    mov eax, dword ptr [rip + doc_total_visual_rows]
+    cmp eax, dword ptr [rbx + r12*4]
+    jne .render_prepare_full
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    jne .render_prepare_edit_width_ready
+    lea rbx, [rip + window_buffer_slot_render_max_line_width]
+    mov eax, dword ptr [rip + doc_max_line_width]
+    cmp eax, dword ptr [rbx + r12*4]
+    jne .render_prepare_full
+.render_prepare_edit_width_ready:
+    lea rbx, [rip + window_buffer_slot_render_dirty_row]
+    mov r13d, dword ptr [rbx + r12*4]
+    test r13d, r13d
+    jz .render_prepare_full
+    dec r13d
+    sub r13d, dword ptr [rip + doc_view_top_row]
+    jns .render_prepare_edit_row_visible
+    xor r13d, r13d
+.render_prepare_edit_row_visible:
+    cmp r13d, dword ptr [rip + window_doc_visible_rows]
+    jae .render_prepare_full
+    mov r14d, dword ptr [rip + window_doc_visible_rows]
+    dec r14d
+
 .render_prepare_rows_ordered:
-    # The dirty band covers the previous row plus both caret rows and one
-    # following row for glyph overhang. Retain logical row bounds so document
-    # painting can jump directly to this interval instead of scanning the
-    # entire visible viewport.
+    # Caret motion covers both caret rows and glyph overhang; edit repaint
+    # starts one row before the earliest changed row and reaches the viewport
+    # bottom. Keep logical bounds so document painting skips earlier rows.
     mov eax, r13d
     test eax, eax
     jz .render_prepare_first_row_ready
@@ -16573,6 +16635,7 @@ render_prepare_slot:
     jmp .render_prepare_done
 .render_prepare_full:
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
     call render_disable_clip
     xor eax, eax
 .render_prepare_done:
@@ -16617,6 +16680,14 @@ render_store_slot_metadata:
     mov dword ptr [rbx + r12*4], eax
     lea rbx, [rip + window_buffer_slot_render_doc_revision]
     mov eax, dword ptr [rip + doc_revision]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_dirty_row]
+    mov dword ptr [rbx + r12*4], 0
+    lea rbx, [rip + window_buffer_slot_render_total_rows]
+    mov eax, dword ptr [rip + doc_total_visual_rows]
+    mov dword ptr [rbx + r12*4], eax
+    lea rbx, [rip + window_buffer_slot_render_max_line_width]
+    mov eax, dword ptr [rip + doc_max_line_width]
     mov dword ptr [rbx + r12*4], eax
     lea rbx, [rip + window_buffer_slot_render_view_top]
     mov eax, dword ptr [rip + doc_view_top_row]
@@ -16847,6 +16918,7 @@ present_buffer:
     call render_store_slot_metadata
     mov dword ptr [rip + render_partial_active], 0
     mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 0
     lea rdx, [rip + window_buffer_slot_busy]
     mov dword ptr [rdx + r12*4], 1
     inc dword ptr [rip + buffer_busy]
@@ -19178,6 +19250,89 @@ doc_line_index_apply_delete:
 .popsection
 
 
+# Record the earliest old-layout visual row changed since each committed SHM slot.
+# EDI=logical byte offset in the document before the mutation.
+.type render_mark_document_edit, @function
+.pushsection .text.render_mark_document_edit,"ax",@progbits
+render_mark_document_edit:
+    push rbx
+    mov ebx, edi
+    cmp dword ptr [rip + doc_storage_error], 0
+    jne .render_mark_edit_done
+    cmp dword ptr [rip + doc_save_error], 0
+    jne .render_mark_edit_done
+    cmp dword ptr [rip + doc_open_error], 0
+    jne .render_mark_edit_done
+
+    cmp dword ptr [rip + doc_line_index_valid], 1
+    jne .render_mark_edit_preserve
+    mov edi, ebx
+    call doc_offset_to_visual
+    inc eax                         # zero is reserved for a clean slot
+    mov ebx, eax
+    xor r8d, r8d
+
+    lea rdx, [rip + window_buffer_slot_render_valid]
+    cmp dword ptr [rdx], 1
+    jne .render_mark_edit_slot1
+    lea rdx, [rip + window_buffer_slot_render_dirty_row]
+    mov eax, dword ptr [rdx]
+    test eax, eax
+    jz .render_mark_edit_store0
+    mov r8d, 1
+    cmp ebx, eax
+    jae .render_mark_edit_slot1
+.render_mark_edit_store0:
+    mov dword ptr [rdx], ebx
+    mov r8d, 1
+
+.render_mark_edit_slot1:
+    lea rdx, [rip + window_buffer_slot_render_valid]
+    cmp dword ptr [rdx + 4], 1
+    jne .render_mark_edit_candidate
+    lea rdx, [rip + window_buffer_slot_render_dirty_row]
+    mov eax, dword ptr [rdx + 4]
+    test eax, eax
+    jz .render_mark_edit_store1
+    mov r8d, 1
+    cmp ebx, eax
+    jae .render_mark_edit_candidate
+.render_mark_edit_store1:
+    mov dword ptr [rdx + 4], ebx
+    mov r8d, 1
+    jmp .render_mark_edit_candidate
+
+.render_mark_edit_preserve:
+    # A previous mutation may have invalidated the index. Keep its earlier
+    # dirty marker instead of rebuilding the index in the middle of a batch.
+    xor r8d, r8d
+    lea rdx, [rip + window_buffer_slot_render_valid]
+    cmp dword ptr [rdx], 1
+    jne .render_mark_edit_preserve_slot1
+    lea rdx, [rip + window_buffer_slot_render_dirty_row]
+    cmp dword ptr [rdx], 0
+    jne .render_mark_edit_preserve_found
+.render_mark_edit_preserve_slot1:
+    lea rdx, [rip + window_buffer_slot_render_valid]
+    cmp dword ptr [rdx + 4], 1
+    jne .render_mark_edit_done
+    lea rdx, [rip + window_buffer_slot_render_dirty_row]
+    cmp dword ptr [rdx + 4], 0
+    je .render_mark_edit_done
+.render_mark_edit_preserve_found:
+    mov r8d, 1
+
+.render_mark_edit_candidate:
+    test r8d, r8d
+    jz .render_mark_edit_done
+    mov dword ptr [rip + redraw_cursor_candidate], 0
+    mov dword ptr [rip + redraw_edit_candidate], 1
+.render_mark_edit_done:
+    pop rbx
+    ret
+.size render_mark_document_edit, . - render_mark_document_edit
+.popsection
+
 # Insert one byte at the logical cursor. Grow the mapping when its gap is empty.
 .global doc_insert_byte
 .type doc_insert_byte, @function
@@ -19193,6 +19348,8 @@ doc_insert_byte:
     call history_note_insert
     mov edi, r13d
     call doc_line_index_ensure
+    mov edi, dword ptr [rip + doc_cursor]
+    call render_mark_document_edit
     mov edi, dword ptr [rip + doc_cursor]
     call doc_move_gap
     mov eax, dword ptr [rip + doc_gap_start]
@@ -19240,6 +19397,9 @@ doc_insert_bytes:
     mov r13d, esi
     test r13d, r13d
     jz .Ldoc_insert_bytes_success
+
+    mov edi, dword ptr [rip + doc_cursor]
+    call render_mark_document_edit
 
     # Reject uint32 overflow before asking the gap buffer to reserve capacity.
     mov eax, dword ptr [rip + doc_length]
@@ -19416,6 +19576,8 @@ doc_delete_at_cursor:
     jae .doc_delete_done
     call doc_line_index_ensure
     mov edi, r12d
+    call render_mark_document_edit
+    mov edi, r12d
     call doc_byte_at
     xor ebp, ebp
     cmp eax, 10
@@ -19471,7 +19633,6 @@ doc_delete_selection:
     push r13
     cmp dword ptr [rip + doc_selection_active], 0
     je .Lneko_delete_selection_done
-    mov dword ptr [rip + doc_line_index_valid], 0
     mov eax, dword ptr [rip + doc_selection_anchor]
     mov edx, dword ptr [rip + doc_cursor]
     cmp eax, edx
@@ -19480,6 +19641,9 @@ doc_delete_selection:
 .Lneko_delete_selection_bounds:
     mov ebx, eax
     mov r12d, edx
+    mov edi, ebx
+    call render_mark_document_edit
+    mov dword ptr [rip + doc_line_index_valid], 0
     mov edi, ebx
     mov esi, r12d
     sub esi, ebx
