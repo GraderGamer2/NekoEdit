@@ -5375,6 +5375,19 @@ xkb_symbols "nekoedit-sparse" {
                                     "amber_widths": first_unwrapped,
                                 })
                             )
+                        key_step(1905, 61, "F3 wraps from the final match to the first")
+                        wrapped_selection = (
+                            min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                            max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        )
+                        if wrapped_selection != (0, 2) or child_u32("find_status") != 1:
+                            raise AssertionError(
+                                "F3 did not wrap from the final match to the first: "
+                                + repr({
+                                    "selection": wrapped_selection,
+                                    "status": child_u32("find_status"),
+                                })
+                            )
                         key_step(1910, 1, "Escape closes no-wrap proportional Find")
                         observations.append(
                             "Find highlight coordinates preserve 8px/5px proportional advances across a physical gap in wrapped and unwrapped layouts"

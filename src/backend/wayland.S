@@ -21158,43 +21158,37 @@ doc_find_match:
     cmp ebx, eax
     jb .Ldoc_find_match_none
     sub ebx, eax
+
+    test r12d, r12d
+    jz .Ldoc_find_match_backward_setup
+
+    # Forward search uses the bounded gap-aware matcher. Keep the requested
+    # offset one-past-the-last-valid-candidate when necessary so a search
+    # starting at EOF wraps to the first match instead of repeating the last.
+    lea eax, [rbx + 1]
+    cmp r13d, eax
+    jbe .Ldoc_find_match_forward_start_ready
+    mov r13d, eax
+.Ldoc_find_match_forward_start_ready:
+    mov edi, r13d
+    lea esi, [rbx + 1]
+    call doc_find_match_bounded
+    cmp eax, -1
+    jne .Ldoc_find_match_done
+
+    # The wrapped segment excludes the original start offset.
+    xor edi, edi
+    mov esi, r13d
+    call doc_find_match_bounded
+    jmp .Ldoc_find_match_done
+
+.Ldoc_find_match_backward_setup:
     cmp r13d, ebx
     jbe .Ldoc_find_start_ready
     mov r13d, ebx
 .Ldoc_find_start_ready:
     xor ebp, ebp
     mov r14d, r13d
-    test r12d, r12d
-    jz .Ldoc_find_backward
-    mov r15d, ebx
-.Ldoc_find_forward_candidate:
-    xor r10d, r10d
-.Ldoc_find_forward_compare:
-    mov edi, r14d
-    add edi, r10d
-    call doc_byte_at
-    lea rcx, [rip + find_query_buffer]
-    cmp al, byte ptr [rcx + r10]
-    jne .Ldoc_find_forward_miss
-    inc r10d
-    cmp r10d, dword ptr [rip + find_query_length]
-    jb .Ldoc_find_forward_compare
-    mov eax, r14d
-    jmp .Ldoc_find_match_done
-.Ldoc_find_forward_miss:
-    inc r14d
-    cmp r14d, r15d
-    jbe .Ldoc_find_forward_candidate
-    test ebp, ebp
-    jnz .Ldoc_find_match_none
-    mov ebp, 1
-    xor r14d, r14d
-    mov r15d, r13d
-    test r15d, r15d
-    jz .Ldoc_find_match_none
-    dec r15d
-    jmp .Ldoc_find_forward_candidate
-.Ldoc_find_backward:
     xor r15d, r15d
 .Ldoc_find_backward_candidate:
     xor r10d, r10d
