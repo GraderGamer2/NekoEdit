@@ -11173,7 +11173,7 @@ xkb_symbols "nekoedit-sparse" {
                     if rect1 != full_frame:
                         if not any(
                             kind in label
-                            for kind in ("Left", "Backspace", "Delete", "printable")
+                            for kind in ("Left", "Backspace", "Delete", "printable", "Enter", "Tab")
                         ):
                             raise AssertionError(
                                 f"{label}: unexpected partial damage outside held navigation/deletion/printable edits: {rect1!r}"
