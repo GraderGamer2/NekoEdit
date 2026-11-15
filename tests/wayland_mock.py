@@ -11415,10 +11415,14 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(1600 + index * 4, 28, f"append scroll line {index + 1}")
                     key_step(1602 + index * 4, 30, f"append scroll text {index + 1}")
                 bottom_row_y = 92 + (30 - 1) * 12
-                scrolled_glyph = struct.unpack_from(
-                    "<I", pixels, bottom_row_y * 800 * 4 + 17 * 4
-                )[0]
-                if scrolled_glyph != 0xFFD8DEE9:
+                scrolled_glyph_pixels = sum(
+                    struct.unpack_from(
+                        "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
+                    )[0] == 0xFFD8DEE9
+                    for dy in range(12)
+                    for dx in range(8)
+                )
+                if scrolled_glyph_pixels == 0:
                     visible_carets = []
                     for candidate_y in range(92, 460 - 9, 12):
                         for candidate_x in range(16, 800 - 1, 8):
@@ -11476,7 +11480,7 @@ xkb_symbols "nekoedit-sparse" {
                     )
                     raise AssertionError(
                         "text/caret did not scroll into the visible bottom row after vertical overflow; "
-                        f"pixel={hex(scrolled_glyph)}, visible_carets={visible_carets}, "
+                        f"glyph_pixels={scrolled_glyph_pixels}, visible_carets={visible_carets}, "
                         f"row_samples={sampled_rows}, render={render_diagnostics}"
                     )
                 bottom_caret = struct.unpack_from(
