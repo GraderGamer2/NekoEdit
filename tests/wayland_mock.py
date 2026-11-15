@@ -11420,7 +11420,7 @@ xkb_symbols "nekoedit-sparse" {
                 scrolled_glyph_pixels = sum(
                     (
                         pixel := struct.unpack_from(
-                            "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
+                            "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (32 + dx) * 4
                         )[0]
                     ) not in (0xFF252A33, 0xFFFFFFFF)
                     for dy in range(12)
@@ -11495,7 +11495,7 @@ xkb_symbols "nekoedit-sparse" {
                     render_diagnostics["forced_full_redraw_glyph_pixels"] = sum(
                         (
                             pixel := struct.unpack_from(
-                                "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
+                                "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (32 + dx) * 4
                             )[0]
                         ) not in (0xFF252A33, 0xFFFFFFFF)
                         for dy in range(12)
