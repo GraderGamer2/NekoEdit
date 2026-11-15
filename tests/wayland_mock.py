@@ -11435,10 +11435,40 @@ xkb_symbols "nekoedit-sparse" {
                         )[0]))
                         for candidate_y in range(92, 460, 12)
                     ]
+                    render_diagnostics = {}
+                    for name in (
+                        "doc_length", "doc_cursor", "doc_view_top_row",
+                        "doc_total_visual_rows", "doc_line_index_valid",
+                        "window_doc_visible_rows", "window_doc_bottom",
+                        "window_status_top", "window_doc_line_height",
+                        "doc_wrap_enabled", "render_partial_active",
+                        "render_partial_first_row", "render_partial_end_y",
+                        "render_document_scan_start", "render_document_scan_end",
+                        "render_damage_top1", "render_damage_bottom1",
+                        "render_clip_top1", "render_clip_bottom1",
+                        "redraw_edit_candidate",
+                    ):
+                        try:
+                            render_diagnostics[name] = child_u32(name)
+                        except AssertionError as error:
+                            render_diagnostics[name] = str(error)
+                    for name in (
+                        "window_buffer_slot_render_valid",
+                        "window_buffer_slot_render_dirty_row",
+                        "window_buffer_slot_render_total_rows",
+                        "window_buffer_slot_render_view_top",
+                        "window_buffer_slot_render_doc_revision",
+                    ):
+                        try:
+                            render_diagnostics[name] = [
+                                child_u32_at(name, 0), child_u32_at(name, 4)
+                            ]
+                        except AssertionError as error:
+                            render_diagnostics[name] = str(error)
                     raise AssertionError(
                         "text/caret did not scroll into the visible bottom row after vertical overflow; "
                         f"pixel={hex(scrolled_glyph)}, visible_carets={visible_carets}, "
-                        f"row_samples={sampled_rows}"
+                        f"row_samples={sampled_rows}, render={render_diagnostics}"
                     )
                 bottom_caret = struct.unpack_from(
                     "<I", pixels, bottom_row_y * 800 * 4 + 24 * 4
