@@ -154,7 +154,7 @@ ui_help_close_label:   .asciz "X"
 ui_help_file_heading:  .asciz "FILE AND EDITING"
 ui_help_nav_heading:   .asciz "NAVIGATION"
 ui_help_find_heading:  .asciz "FIND AND REPLACE"
-ui_help_footer:        .asciz "F1 or Help opens this list; Esc closes it."
+ui_help_footer:        .asciz "F1 or Help opens this list; Esc or outside click closes it."
 ui_help_ctrl_o:        .asciz "Ctrl+O"
 ui_help_open_desc:     .asciz "Open file"
 ui_help_ctrl_s:        .asciz "Ctrl+S"
@@ -178,6 +178,8 @@ ui_help_ctrl_backspace: .asciz "Ctrl+Backspace"
 ui_help_delete_prev_desc: .asciz "Delete word before"
 ui_help_ctrl_delete:   .asciz "Ctrl+Delete"
 ui_help_delete_next_desc: .asciz "Delete word after"
+ui_help_backspace_delete: .asciz "Backspace/Delete"
+ui_help_delete_char_desc: .asciz "Delete character"
 ui_help_arrows:        .asciz "Arrow keys"
 ui_help_move_caret_desc: .asciz "Move caret"
 ui_help_shift_arrows:  .asciz "Shift+Arrows"
@@ -14386,6 +14388,8 @@ text_input_update_state:
     jne .Lti_update_choose
     cmp dword ptr [rip + save_confirm_open], 0
     jne .Lti_update_choose
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .Lti_update_choose
     cmp dword ptr [rip + history_tab_open], 0
     jne .Lti_update_choose
     mov ebx, 1
@@ -24853,6 +24857,14 @@ render_help_panel:
     mov edi, 122
     mov esi, 308
     lea rdx, [rip + ui_help_delete_next_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 328
+    lea rdx, [rip + ui_help_backspace_delete]
+    call draw_text
+    mov edi, 122
+    mov esi, 328
+    lea rdx, [rip + ui_help_delete_char_desc]
     call draw_text
 
     # Right column: caret navigation and the combined Find/Replace panel.

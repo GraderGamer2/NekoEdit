@@ -3969,6 +3969,51 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("doc_length") != 0:
                         raise AssertionError("out-of-range IME deletion changed the document")
 
+                    # Help is not a text-editing target. Opening it must
+                    # disable text-input-v3; closing it restores the document
+                    # input target and republishes the surrounding/caret state.
+                    # Release the current slot before opening the modal so
+                    # its Help redraw can be observed without a deferred frame.
+                    client.sendall(wire_message(active_buffer["id"], 0))
+                    client.sendall(
+                        wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 7010, 7010, 59, 1),
+                        )
+                        + wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 7011, 7011, 59, 0),
+                        )
+                    )
+                    expect_message(client, (18, 2, b""), "Help disables text input")
+                    expect_message(client, (18, 7, b""), "Help commits disabled text input state")
+                    if child_u32("text_input_enabled") != 0 or child_u32("help_panel_open") != 1:
+                        raise AssertionError("opening Help did not suspend the active IME target")
+                    if child_u32("text_input_preedit_length") != 0:
+                        raise AssertionError("opening Help retained a stale IME preedit")
+                    expect_buffer_frame("Help panel redraw after IME disable")
+                    client.sendall(wire_message(active_buffer["id"], 0))
+                    client.sendall(
+                        wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 7020, 7020, 1, 1),
+                        )
+                        + wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 7021, 7021, 1, 0),
+                        )
+                    )
+                    expect_message(client, (18, 1, b""), "Escape restores text input after Help")
+                    expect_message(
+                        client, (18, 5, struct.pack("<II", 0, 0)),
+                        "Help restores the normal content type",
+                    )
+                    expect_state(b"", 0, "Help close restores IME surrounding text")
+                    if child_u32("text_input_enabled") != 1 or child_u32("help_panel_open") != 0:
+                        raise AssertionError("closing Help did not restore the active IME target")
+                    expect_buffer_frame("Help close redraw after IME restore")
+                    client.sendall(wire_message(active_buffer["id"], 0))
+
                     client.sendall(wire_message(18, 1, struct.pack("<I", 8)))
                     expect_message(client, (18, 2, b""), "disable text input after leave")
                     expect_message(client, (18, 7, b""), "commit disable state")
