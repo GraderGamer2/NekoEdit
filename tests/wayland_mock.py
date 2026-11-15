@@ -11413,7 +11413,9 @@ xkb_symbols "nekoedit-sparse" {
                 # becoming invisible below the window.
                 for index in range(36):
                     key_step(1600 + index * 4, 28, f"append scroll line {index + 1}")
-                    key_step(1602 + index * 4, 30, f"append scroll text {index + 1}")
+                    # The synthetic SFNT fixture includes lowercase j but not
+                    # lowercase a; use a known mapped glyph for the visibility check.
+                    key_step(1602 + index * 4, 36, f"append scroll text {index + 1}")
                 bottom_row_y = 92 + (30 - 1) * 12
                 scrolled_glyph_pixels = sum(
                     struct.unpack_from(
