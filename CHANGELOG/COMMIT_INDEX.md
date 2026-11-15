@@ -1,3 +1,21 @@
+## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering (Actions #991 PASS)
+
+| Commit | Subject |
+|---|---|
+| [a1cd860b855d](https://github.com/GraderGamer2/NekoEdit/commit/a1cd860b855d4b719d056ccfae63309694bfc2fa) | feat: add middle-click document auto-scroll |
+| [485d6fb05b65](https://github.com/GraderGamer2/NekoEdit/commit/485d6fb05b65ef9b1f5677116dac118a2beade0b) | perf: traverse unwrapped selection with gap-aware cursor |
+| [a79f7ee1d761](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d) | test: wait for upward auto-scroll activation |
+
+Middle-click now toggles document auto-scroll around a fixed pointer-Y anchor. Pointer displacement controls direction and rate; returning to the dead zone pauses, another middle click exits. The existing drag timerfd is reused; left click, wheel, key press, and pointer leave cancel. The no-wrap selection renderer also gained sequential physical-pointer traversal and an ASCII fast path, retaining the Unicode grapheme fallback and rebasing at the gap.
+
+Actions [#991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps, including the new middle-click tests, split-gap selection pixel check, complete Wayland mock, renderer equivalence, 11 MiB Open/Save, XKB, X.Org importer, Compose, and GNOME Shell/Mutter/IBus integration.
+
+ELF `size`: text 238,918, data 64, BSS 3,764,856 bytes. Executable artifact: 151,801 bytes; Compose artifact: 120,536 bytes. No before/after performance claim is made.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142963938); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142834214). Expiry: 2026-11-16 09:38 WIB.
+
+---
+
 ## 2026-11-15 — gap-aware visible-text traversal (Actions #986 PASS)
 
 | Commit | Subject |

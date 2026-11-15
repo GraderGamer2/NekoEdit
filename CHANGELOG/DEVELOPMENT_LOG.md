@@ -364,3 +364,22 @@ Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887
 ELF section sizes are text 237,846 bytes, data 64 bytes and BSS 3,764,856 bytes. Executable artifact: 151,225 bytes; Compose pack: 120,536 bytes. No before/after end-to-end timing was collected; the CI first-presented-redraw figure is not a controlled benchmark. No manual live-desktop test is claimed.
 
 Implementation: [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9).
+
+
+---
+
+## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering
+
+Added a middle-button document auto-scroll mode. A middle-button press inside the document viewport captures the current pointer Y as a fixed anchor. Pointer motion above/below the anchor scrolls upward/downward; the absolute displacement beyond a 12-pixel dead zone determines the number of visual rows advanced per 50 ms tick, clamped to eight rows. The timer is armed only while scrolling is needed, so a stationary pointer inside the dead zone does not wake the event loop. Returning to the dead zone disarms the timer but leaves the mode active. Another middle click exits. Left-button press, wheel input, keyboard press, and pointer leave cancel the mode. The optional cursor-shape manager displays the all-scroll cursor while active.
+
+The mode reuses `doc_drag_timer_fd` and its timer specification, so the event loop retains its existing timer descriptors and poll layout. The new timer helper calls were aligned for the x86-64 System V ABI. The Wayland mock added a 200-line document fixture and verifies activation, the captured anchor, downward movement, periodic movement while stationary, dead-zone pause, upward reversal, second-click cancellation, and ordinary wheel-scroll recovery.
+
+Also optimized `render_selection_unwrapped`. Each visible row establishes a physical gap-buffer cursor alongside the logical byte offset. Sequential reads fetch the byte directly; printable ASCII advances without `doc_byte_at` or a grapheme routine call when the next logical byte is ASCII. High-bit bytes and control/grapheme-sensitive cases continue through the established Unicode path and resynchronize the physical cursor. The fast path jumps from the prefix to the suffix when it reaches `doc_gap_start`. Wrapped selection rendering and the underlying storage/index/Unicode representation are unchanged. The gap-buffer fixture now disables Wrap Lines, selects across the split gap, and verifies the suffix-side selection highlight pixel.
+
+Actions [#991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps. This includes the new middle-click auto-scroll and no-wrap gap-selection regression cases, the complete Wayland mock, 10 MiB external clipboard paste, 11 MiB / 89,414-line Open/Save, renderer equivalence, native `us(intl)` keymap, pinned X.Org importer, Compose pack generation, and nested GNOME Shell/Mutter/IBus integration.
+
+ELF section sizes: text 238,918 bytes, data 64 bytes, BSS 3,764,856 bytes. The executable artifact is 151,801 bytes and Compose packs are 120,536 bytes. The executable ZIP is 576 bytes larger than #986; this is not evidence of a performance change. The 11 MiB Open first-presented-redraw observation was about 120 ms in this CI run, but no controlled before/after timing was run. No manual live-desktop test is claimed.
+
+Feature implementation: [a1cd860](https://github.com/GraderGamer2/NekoEdit/commit/a1cd860b855d4b719d056ccfae63309694bfc2fa).
+Selection traversal optimization: [485d6fb](https://github.com/GraderGamer2/NekoEdit/commit/485d6fb05b65ef9b1f5677116dac118a2beade0b).
+Final validation commit: [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d).

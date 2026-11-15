@@ -1,3 +1,17 @@
+## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering
+
+NekoEdit gained a middle-button auto-scroll mode for the document viewport. Middle-click captures the pointer's current vertical coordinate as an anchor and switches the optional cursor-shape device to the all-scroll cursor. Moving the pointer above/below the anchor scrolls in the corresponding direction; the rate increases with distance, up to eight visual rows per 50 ms timer tick. A 12-pixel dead zone pauses the timer without leaving the mode; a second middle click exits. Left click, wheel input, key press, or pointer leave cancels the mode. The feature reuses the existing drag timerfd rather than adding another timer to the poll set.
+
+The unwrapped selection renderer also gained a sequential gap-aware physical cursor. Visible bytes are read directly, and printable ASCII advances directly when the next logical byte is also ASCII. Unicode/control boundaries retain the full grapheme iterator; the pointer is resynchronized after those boundaries and jumps to the suffix when sequential traversal reaches the logical gap. A no-wrap split-gap regression selects across the prefix/suffix boundary and checks the suffix-side highlight pixel. The wrapped selection renderer, document storage format, line index and Unicode tables remain unchanged.
+
+Actions [#991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 workflow steps. The Wayland mock passed middle-click activation, both directions, dead-zone pause, stationary timer scrolling, cancellation and ordinary wheel recovery; it also passed the split-gap selection pixel regression and existing Unicode/large-document cases. Renderer equivalence, 11 MiB Open/Save, native XKB, X.Org importer, Compose and nested GNOME Shell/Mutter/IBus integration passed.
+
+ELF text/data/BSS sizes are 238,918 / 64 / 3,764,856 bytes. Executable and Compose artifacts are 151,801 and 120,536 bytes. The executable is 576 bytes larger than #986; no size or speed improvement is claimed. There was no controlled before/after performance benchmark and no manual live-desktop test.
+
+Feature [a1cd860b855d4b719d056ccfae63309694bfc2fa](https://github.com/GraderGamer2/NekoEdit/commit/a1cd860b855d4b719d056ccfae63309694bfc2fa); selection optimization [485d6fb05b65ef9b1f5677116dac118a2beade0b](https://github.com/GraderGamer2/NekoEdit/commit/485d6fb05b65ef9b1f5677116dac118a2beade0b); validation [a79f7ee1d761fe581ea03447d0347e9c9167f11d](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d).
+
+---
+
 ## 2026-11-15 — gap-aware visible-text traversal
 
 The visible document-render loop now carries a physical pointer for sequential reads beside its logical byte offset. This removes repeated logical-to-physical gap-buffer translation from the per-character rendering path. Sequential single-byte advancement increments the pointer directly and jumps to the physical suffix when it reaches the logical gap boundary.

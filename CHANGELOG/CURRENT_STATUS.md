@@ -1,3 +1,36 @@
+## 2026-11-15 — middle-click auto-scroll and gap-aware selection rendering (Actions #991 PASS)
+
+**Branch:** `early-alpha` at [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d). **Workflow:** [Actions #991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps.
+
+### Middle-button auto-scroll
+
+- A middle-button press in the document viewport toggles auto-scroll on at the current pointer Y coordinate. It is a toggle, not a hold-to-scroll gesture.
+- Moving the pointer more than 12 logical pixels above or below that anchor scrolls in the corresponding direction. Greater distance increases the visual-row rate, capped at eight rows per 50 ms timer tick. Stationary pointer positions continue scrolling while outside the dead zone.
+- Returning within the 12-pixel dead zone pauses the timer without leaving auto-scroll mode. A second middle click exits and restores the normal cursor.
+- The optional cursor-shape extension shows the all-scroll cursor. Left-click, ordinary wheel input, a keyboard press, or pointer leave cancels the mode. Existing wheel scrolling and scrollbar dragging remain separate controls.
+- The implementation reuses the existing selection drag timerfd and timer specification. It adds no third event-loop timer or background thread.
+
+Implementation: [a1cd860](https://github.com/GraderGamer2/NekoEdit/commit/a1cd860b855d4b719d056ccfae63309694bfc2fa). The timer/ABI and interaction-test refinement is [9dbbdbd](https://github.com/GraderGamer2/NekoEdit/commit/9dbbdbdcc467ee514254fd77e29a816b77e2c6e1).
+
+### Selection-rendering optimization
+
+The no-wrap selection renderer now keeps a physical gap-buffer pointer for sequential visible-byte reads instead of calling `doc_byte_at` for every selected cell. Printable ASCII advances directly when the next logical byte is also ASCII; a high-bit byte, control, tab, or other grapheme-sensitive boundary uses the established Unicode grapheme path and resynchronizes the physical pointer. Crossing `doc_gap_start` rebases the pointer to the suffix at `doc_buffer + doc_gap_end`.
+
+This optimization is isolated to `render_selection_unwrapped`. The wrapped selection renderer, document storage format, line index, Unicode 18.0 segmentation tables, selection bounds, and glyph rasterization are unchanged. A regression switches the mixed-width split-gap fixture to no-wrap mode, selects across the physical gap, and checks the highlight pixel on the suffix side.
+
+Implementation: [485d6fb](https://github.com/GraderGamer2/NekoEdit/commit/485d6fb05b65ef9b1f5677116dac118a2beade0b). The no-wrap split-gap regression is [efb2dcb](https://github.com/GraderGamer2/NekoEdit/commit/efb2dcb68c55b976a02b27d211fabedcacd3d00b), with the final auto-scroll timing assertion in [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d).
+
+### Validation
+
+Actions [#991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps: freestanding x86-64 build and ELF inspection, CLI/host tests, renderer equivalence, complete Wayland protocol mock, native `us(intl)` XKB parsing, pinned X.Org importer, Compose locale-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+The Wayland mock specifically verified middle-click activation/cancellation, upward and downward motion around the fixed anchor, dead-zone pausing, repeated scrolling while stationary, and ordinary wheel-scroll recovery. It also passed the no-wrap split-gap selection pixel check, existing gap-buffer/UTF-8/grapheme tests, large-document rendering, 10 MiB external clipboard paste, and 11 MiB / 89,414-line Open/Save. The 11 MiB fixture reached its first presented redraw in approximately 120 ms in this CI run; this is one test observation, not a controlled before/after benchmark.
+
+ELF `size`: text **238,918**, data **64**, BSS **3,764,856** bytes. Executable artifact: **151,801 bytes**; Compose locale-pack artifact: **120,536 bytes**. The executable artifact is 576 bytes larger than #986; no binary-size reduction or measured speed improvement is claimed. No manual retest on the user's live GNOME session or controlled performance comparison was performed.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142963938); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142834214). Both expire **2026-11-16 09:38 WIB**.
+
+---
 ## 2026-11-15 — gap-aware visible-text traversal (Actions #986 PASS)
 
 **Branch/source commit:** `early-alpha` at [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9). **Workflow:** [Actions #986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 steps.
