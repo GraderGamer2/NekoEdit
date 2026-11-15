@@ -148,6 +148,58 @@ ui_document_name:      .asciz "Untitled"
 ui_mode_name:          .asciz "ASCII"
 ui_file_label:         .asciz "File"
 ui_settings_label:     .asciz "Settings"
+ui_help_label:         .asciz "Help"
+ui_help_title:         .asciz "KEYBOARD SHORTCUTS"
+ui_help_close_label:   .asciz "X"
+ui_help_file_heading:  .asciz "FILE AND EDITING"
+ui_help_nav_heading:   .asciz "NAVIGATION"
+ui_help_find_heading:  .asciz "FIND AND REPLACE"
+ui_help_footer:        .asciz "F1 or Help opens this list; Esc closes it."
+ui_help_ctrl_o:        .asciz "Ctrl+O"
+ui_help_open_desc:     .asciz "Open file"
+ui_help_ctrl_s:        .asciz "Ctrl+S"
+ui_help_save_desc:     .asciz "Save"
+ui_help_ctrl_shift_s:  .asciz "Ctrl+Shift+S"
+ui_help_save_as_desc:  .asciz "Save As"
+ui_help_ctrl_z:        .asciz "Ctrl+Z"
+ui_help_undo_desc:     .asciz "Undo"
+ui_help_ctrl_y:        .asciz "Ctrl+Y"
+ui_help_redo_desc:     .asciz "Redo"
+ui_help_ctrl_shift_z:  .asciz "Ctrl+Shift+Z"
+ui_help_ctrl_c:        .asciz "Ctrl+C"
+ui_help_copy_desc:     .asciz "Copy"
+ui_help_ctrl_x:        .asciz "Ctrl+X"
+ui_help_cut_desc:      .asciz "Cut"
+ui_help_ctrl_v:        .asciz "Ctrl+V"
+ui_help_paste_desc:    .asciz "Paste"
+ui_help_ctrl_a:        .asciz "Ctrl+A"
+ui_help_select_desc:   .asciz "Select all"
+ui_help_ctrl_backspace: .asciz "Ctrl+Backspace"
+ui_help_delete_prev_desc: .asciz "Delete word before"
+ui_help_ctrl_delete:   .asciz "Ctrl+Delete"
+ui_help_delete_next_desc: .asciz "Delete word after"
+ui_help_arrows:        .asciz "Arrow keys"
+ui_help_move_caret_desc: .asciz "Move caret"
+ui_help_shift_arrows:  .asciz "Shift+Arrows"
+ui_help_select_text_desc: .asciz "Select text"
+ui_help_ctrl_lr:       .asciz "Ctrl+Left/Right"
+ui_help_word_move_desc: .asciz "Word move / select"
+ui_help_ctrl_ud:       .asciz "Ctrl+Up/Down"
+ui_help_line_move_desc: .asciz "Line move / select"
+ui_help_home_end:      .asciz "Home / End"
+ui_help_line_edge_desc: .asciz "Line start / end"
+ui_help_ctrl_home_end: .asciz "Ctrl+Home/End"
+ui_help_doc_edge_desc: .asciz "Document start / end"
+ui_help_ctrl_f:        .asciz "Ctrl+F"
+ui_help_find_desc:     .asciz "Open Find/Replace"
+ui_help_f3:            .asciz "F3 / Shift+F3"
+ui_help_next_prev_desc: .asciz "Next / previous"
+ui_help_tab:           .asciz "Tab"
+ui_help_tab_desc:      .asciz "Switch fields"
+ui_help_enter:         .asciz "Enter"
+ui_help_enter_desc:    .asciz "Find next match"
+ui_help_ctrl_enter:    .asciz "Ctrl+Enter"
+ui_help_replace_desc:  .asciz "Replace current"
 ui_menu_open_label:    .asciz "Open"
 ui_menu_save_label:    .asciz "Save"
 ui_menu_save_as_label: .asciz "Save As"
@@ -4838,6 +4890,7 @@ doc_wrap_enabled:       .long 1
 .global picker_name_length, picker_name_cursor, picker_name_view_start, picker_name_buffer, picker_selected
 .global window_buffer_id, window_is_maximized, picker_panel_x, picker_panel_y, picker_panel_width, picker_panel_height
 .global settings_panel_x, settings_panel_y, settings_panel_width, settings_panel_height, settings_ui_font_size
+.global help_panel_open, help_panel_x, help_panel_y, help_panel_width, help_panel_height, help_ui_font_size
 .global find_panel_x, find_panel_y, find_panel_width, find_panel_height, find_ui_font_size, find_replace_mode
 .global find_query_length, find_query_cursor, find_replacement_length, find_replacement_cursor, find_replace_count
 .global path_prompt_x, path_prompt_y, path_prompt_width, path_prompt_height
@@ -5179,6 +5232,8 @@ doc_open_error:         .long 0
 file_menu_open:         .long 0
 .global settings_menu_open
 settings_menu_open:     .long 0
+.global help_panel_open
+help_panel_open:        .long 0
 .global context_menu_open, context_menu_x, context_menu_y
 context_menu_open:      .long 0
 context_menu_x:         .long 0
@@ -5258,6 +5313,11 @@ settings_panel_y:       .long 0
 settings_panel_width:   .long 0
 settings_panel_height:  .long 0
 settings_ui_font_size:  .long 0
+help_panel_x:           .long 0
+help_panel_y:           .long 0
+help_panel_width:       .long 0
+help_panel_height:      .long 0
+help_ui_font_size:      .long 0
 find_panel_x:           .long 0
 find_panel_y:           .long 0
 find_panel_width:       .long 0
@@ -5428,6 +5488,7 @@ wayland_main:
     mov dword ptr [rip + window_resize_pending], 0
     mov dword ptr [rip + window_is_maximized], 0
     mov dword ptr [rip + settings_menu_open], 0
+    mov dword ptr [rip + help_panel_open], 0
     mov dword ptr [rip + save_confirm_enabled], 1
     mov dword ptr [rip + save_confirm_open], 0
     mov dword ptr [rip + save_confirm_action], 0
@@ -6309,6 +6370,8 @@ wayland_main:
     call window_update_cursor_shape
     test rax, rax
     js .protocol_error
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .event_loop
     cmp dword ptr [rip + picker_mode], 0
     jne .pointer_picker_motion
     cmp dword ptr [rip + doc_auto_scroll_active], 1
@@ -6368,6 +6431,8 @@ wayland_main:
     test rax, rax
     js .protocol_error
 .pointer_axis_auto_stopped:
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .event_loop
     cmp dword ptr [rip + event_payload + 4], 1
     je .pointer_axis_horizontal
     cmp dword ptr [rip + event_payload + 4], 0
@@ -6525,6 +6590,8 @@ wayland_main:
     jne .event_loop
     cmp dword ptr [rip + settings_menu_open], 0
     jne .event_loop
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .event_loop
     cmp dword ptr [rip + history_tab_open], 0
     jne .event_loop
     mov eax, dword ptr [rip + pointer_x]
@@ -6555,6 +6622,8 @@ wayland_main:
     mov dword ptr [rip + context_menu_open], 0
     jmp .keyboard_changed
 .pointer_context_button_open:
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .event_loop
     cmp dword ptr [rip + pointer_inside], 1
     jne .event_loop
     cmp dword ptr [rip + save_confirm_open], 0
@@ -6650,6 +6719,8 @@ wayland_main:
     mov dword ptr [rip + context_menu_open], 0
     jmp .keyboard_changed
 .pointer_no_context_menu:
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .help_panel_pointer
     cmp dword ptr [rip + save_confirm_open], 0
     jne .save_confirm_pointer
     cmp dword ptr [rip + find_replace_mode], 0
@@ -6917,6 +6988,43 @@ wayland_main:
     jmp .event_loop
 .pointer_window_close:
     call application_exit
+    jmp .event_loop
+.help_panel_pointer:
+    # The panel is modal. Only its close control is actionable; clicking
+    # outside dismisses it without forwarding the click to the document.
+    mov eax, dword ptr [rip + pointer_x]
+    sub eax, dword ptr [rip + help_panel_x]
+    test eax, eax
+    js .help_panel_pointer_outside
+    imul eax, 480
+    cdq
+    idiv dword ptr [rip + help_panel_width]
+    cmp eax, 480
+    jae .help_panel_pointer_outside
+    mov ecx, eax
+    mov eax, dword ptr [rip + pointer_y]
+    sub eax, dword ptr [rip + help_panel_y]
+    test eax, eax
+    js .help_panel_pointer_outside
+    imul eax, 360
+    cdq
+    idiv dword ptr [rip + help_panel_height]
+    cmp eax, 360
+    jae .help_panel_pointer_outside
+    cmp ecx, 444
+    jb .help_panel_pointer_inside
+    cmp eax, 8
+    jb .help_panel_pointer_inside
+    cmp eax, 32
+    jae .help_panel_pointer_inside
+    mov dword ptr [rip + help_panel_open], 0
+    jmp .keyboard_changed
+.help_panel_pointer_inside:
+    jmp .event_loop
+.help_panel_pointer_outside:
+    mov dword ptr [rip + help_panel_open], 0
+    jmp .keyboard_changed
+
 .save_confirm_pointer:
     mov eax, dword ptr [rip + window_width]
     sub eax, 432
@@ -6967,7 +7075,7 @@ wayland_main:
     cmp eax, 160
     jb .pointer_header_outside
     cmp eax, 240
-    jae .pointer_header_outside
+    jae .pointer_header_help_menu
     xor dword ptr [rip + settings_menu_open], 1
     mov dword ptr [rip + file_menu_open], 0
     cmp dword ptr [rip + settings_menu_open], 0
@@ -6977,6 +7085,13 @@ wayland_main:
     jmp .keyboard_changed
 .pointer_header_settings_closed:
     mov dword ptr [rip + settings_locale_dropdown_open], 0
+    jmp .keyboard_changed
+.pointer_header_help_menu:
+    cmp eax, 296
+    jae .pointer_header_outside
+    mov dword ptr [rip + help_panel_open], 1
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 .pointer_header_outside:
     cmp dword ptr [rip + file_menu_open], 0
@@ -7703,6 +7818,8 @@ wayland_main:
     cmp eax, 1
     je .keyboard_changed
 .keyboard_context_menu_closed:
+    cmp dword ptr [rip + help_panel_open], 0
+    jne .keyboard_help_modal
     cmp dword ptr [rip + save_confirm_open], 0
     jne .keyboard_save_confirmation
     cmp dword ptr [rip + find_replace_mode], 0
@@ -7711,6 +7828,8 @@ wayland_main:
     jne .keyboard_picker
     cmp dword ptr [rip + path_prompt_mode], 0
     jne .keyboard_path_prompt
+    cmp eax, 59
+    je .keyboard_help_open
     cmp dword ptr [rip + history_tab_open], 0
     jne .keyboard_history_page_dispatch
     # Preserve the current key/state across the C history call. This path is
@@ -8193,6 +8312,21 @@ wayland_main:
     jmp .keyboard_changed
 .keyboard_locale_dropdown_enter:
     call settings_locale_activate
+    jmp .keyboard_changed
+
+.keyboard_help_modal:
+    cmp eax, 1
+    jne .event_loop
+    mov dword ptr [rip + help_panel_open], 0
+    jmp .keyboard_changed
+
+.keyboard_help_open:
+    call doc_auto_scroll_stop
+    test rax, rax
+    js .protocol_error
+    mov dword ptr [rip + help_panel_open], 1
+    mov dword ptr [rip + file_menu_open], 0
+    mov dword ptr [rip + settings_menu_open], 0
     jmp .keyboard_changed
 
 .keyboard_open_command:
@@ -13742,6 +13876,17 @@ render_surface:
     mov esi, 12
     lea rdx, [rip + ui_settings_label]
     call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 240
+    mov edx, 4
+    mov ecx, 56
+    mov r8d, 24
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 248
+    mov esi, 12
+    lea rdx, [rip + ui_help_label]
+    call draw_text
 
 .render_document_tab:
     # A single active document tab; the launch-time basename replaces Untitled.
@@ -13816,6 +13961,7 @@ render_surface:
     call render_find_replace
 .render_surface_done:
     call render_context_menu
+    call render_help_panel
     pop rbp
     ret
 .size render_surface, . - render_surface
@@ -15612,6 +15758,52 @@ window_update_layout_geometry:
     mov eax, 6
 .window_layout_settings_font_min_ready:
     mov dword ptr [rip + settings_ui_font_size], eax
+
+    # The keyboard reference fits a 480x360 design surface into a centered
+    # 16px window margin, preserving its aspect ratio and selected UI font.
+    mov r8d, 480
+    mov ebx, dword ptr [rip + window_width]
+    sub ebx, 32
+    cmp r8d, ebx
+    jbe .window_layout_help_width_available
+    mov r8d, ebx
+.window_layout_help_width_available:
+    mov ebx, dword ptr [rip + window_height]
+    sub ebx, 32
+    imul ebx, 480
+    mov eax, ebx
+    xor edx, edx
+    mov ecx, 360
+    div ecx
+    cmp r8d, eax
+    jbe .window_layout_help_scale_ready
+    mov r8d, eax
+.window_layout_help_scale_ready:
+    mov eax, r8d
+    mov dword ptr [rip + help_panel_width], eax
+    imul eax, 360
+    xor edx, edx
+    mov ecx, 480
+    div ecx
+    mov dword ptr [rip + help_panel_height], eax
+    mov eax, dword ptr [rip + window_width]
+    sub eax, dword ptr [rip + help_panel_width]
+    shr eax, 1
+    mov dword ptr [rip + help_panel_x], eax
+    mov eax, dword ptr [rip + window_height]
+    sub eax, dword ptr [rip + help_panel_height]
+    shr eax, 1
+    mov dword ptr [rip + help_panel_y], eax
+    mov eax, dword ptr [rip + ui_font_size]
+    imul eax, 480
+    xor edx, edx
+    mov ecx, dword ptr [rip + help_panel_width]
+    div ecx
+    cmp eax, 6
+    jae .window_layout_help_font_min_ready
+    mov eax, 6
+.window_layout_help_font_min_ready:
+    mov dword ptr [rip + help_ui_font_size], eax
 
     # Find/Replace also retains its 448x192 panel geometry while its
     # labels and field text use the selected physical UI font size.
@@ -24451,6 +24643,328 @@ render_file_menu:
     pop rbp
     ret
 .size render_file_menu, . - render_file_menu
+.popsection
+
+# In-app keyboard reference. The document surface is covered while the
+# centered, responsive panel is visible; the title bar remains available.
+.type render_help_panel, @function
+.pushsection .text.render_help_panel,"ax",@progbits
+render_help_panel:
+    cmp dword ptr [rip + help_panel_open], 1
+    jne .render_help_panel_done
+    push rbx
+    # Clear the workspace below the title/tab rows so the reference is
+    # readable over both the document and the History page.
+    mov dword ptr [rip + ui_transform_active], 0
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    mov edx, 76
+    mov ecx, dword ptr [rip + window_width]
+    mov r8d, dword ptr [rip + window_height]
+    sub r8d, 76
+    mov r9d, 0xff252a33
+    call draw_rect
+
+    mov dword ptr [rip + ui_transform_active], 1
+    mov eax, dword ptr [rip + help_ui_font_size]
+    mov dword ptr [rip + ui_transform_font_size], eax
+    mov dword ptr [rip + ui_transform_base_x], 0
+    mov dword ptr [rip + ui_transform_base_y], 0
+    mov eax, dword ptr [rip + help_panel_x]
+    mov dword ptr [rip + ui_transform_origin_x], eax
+    mov eax, dword ptr [rip + help_panel_y]
+    mov dword ptr [rip + ui_transform_origin_y], eax
+    mov eax, dword ptr [rip + help_panel_width]
+    mov dword ptr [rip + ui_transform_x_num], eax
+    mov dword ptr [rip + ui_transform_x_den], 480
+    mov eax, dword ptr [rip + help_panel_height]
+    mov dword ptr [rip + ui_transform_y_num], eax
+    mov dword ptr [rip + ui_transform_y_den], 360
+
+    # Border, body, title band, close control and separators.
+    mov rdi, qword ptr [rip + shm_mapping]
+    xor esi, esi
+    xor edx, edx
+    mov ecx, 480
+    mov r8d, 360
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 1
+    mov edx, 1
+    mov ecx, 478
+    mov r8d, 358
+    mov r9d, 0xff1f242d
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 1
+    mov edx, 1
+    mov ecx, 478
+    mov r8d, 43
+    mov r9d, 0xff343d4b
+    call draw_rect
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 1
+    mov edx, 44
+    mov ecx, 478
+    mov r8d, 1
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 18
+    mov esi, 27
+    lea rdx, [rip + ui_help_title]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 446
+    mov edx, 8
+    mov ecx, 26
+    mov r8d, 24
+    mov r9d, 0xff754b52
+    call draw_rect
+    mov edi, 454
+    mov esi, 25
+    lea rdx, [rip + ui_help_close_label]
+    call draw_text
+
+    # Two-column shortcut reference.
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 242
+    mov edx, 56
+    mov ecx, 1
+    mov r8d, 278
+    mov r9d, 0xff414b5a
+    call draw_rect
+    mov edi, 18
+    mov esi, 64
+    lea rdx, [rip + ui_help_file_heading]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 18
+    mov edx, 70
+    mov ecx, 210
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 254
+    mov esi, 64
+    lea rdx, [rip + ui_help_nav_heading]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 254
+    mov edx, 70
+    mov ecx, 208
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+
+    # Left column: file operations, editing and clipboard commands.
+    mov edi, 18
+    mov esi, 88
+    lea rdx, [rip + ui_help_ctrl_o]
+    call draw_text
+    mov edi, 122
+    mov esi, 88
+    lea rdx, [rip + ui_help_open_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 108
+    lea rdx, [rip + ui_help_ctrl_s]
+    call draw_text
+    mov edi, 122
+    mov esi, 108
+    lea rdx, [rip + ui_help_save_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 128
+    lea rdx, [rip + ui_help_ctrl_shift_s]
+    call draw_text
+    mov edi, 122
+    mov esi, 128
+    lea rdx, [rip + ui_help_save_as_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 148
+    lea rdx, [rip + ui_help_ctrl_z]
+    call draw_text
+    mov edi, 122
+    mov esi, 148
+    lea rdx, [rip + ui_help_undo_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 168
+    lea rdx, [rip + ui_help_ctrl_y]
+    call draw_text
+    mov edi, 122
+    mov esi, 168
+    lea rdx, [rip + ui_help_redo_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 188
+    lea rdx, [rip + ui_help_ctrl_shift_z]
+    call draw_text
+    mov edi, 122
+    mov esi, 188
+    lea rdx, [rip + ui_help_redo_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 208
+    lea rdx, [rip + ui_help_ctrl_c]
+    call draw_text
+    mov edi, 122
+    mov esi, 208
+    lea rdx, [rip + ui_help_copy_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 228
+    lea rdx, [rip + ui_help_ctrl_x]
+    call draw_text
+    mov edi, 122
+    mov esi, 228
+    lea rdx, [rip + ui_help_cut_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 248
+    lea rdx, [rip + ui_help_ctrl_v]
+    call draw_text
+    mov edi, 122
+    mov esi, 248
+    lea rdx, [rip + ui_help_paste_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 268
+    lea rdx, [rip + ui_help_ctrl_a]
+    call draw_text
+    mov edi, 122
+    mov esi, 268
+    lea rdx, [rip + ui_help_select_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 288
+    lea rdx, [rip + ui_help_ctrl_backspace]
+    call draw_text
+    mov edi, 122
+    mov esi, 288
+    lea rdx, [rip + ui_help_delete_prev_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 308
+    lea rdx, [rip + ui_help_ctrl_delete]
+    call draw_text
+    mov edi, 122
+    mov esi, 308
+    lea rdx, [rip + ui_help_delete_next_desc]
+    call draw_text
+
+    # Right column: caret navigation and the combined Find/Replace panel.
+    mov edi, 254
+    mov esi, 88
+    lea rdx, [rip + ui_help_arrows]
+    call draw_text
+    mov edi, 372
+    mov esi, 88
+    lea rdx, [rip + ui_help_move_caret_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 108
+    lea rdx, [rip + ui_help_shift_arrows]
+    call draw_text
+    mov edi, 372
+    mov esi, 108
+    lea rdx, [rip + ui_help_select_text_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 128
+    lea rdx, [rip + ui_help_ctrl_lr]
+    call draw_text
+    mov edi, 372
+    mov esi, 128
+    lea rdx, [rip + ui_help_word_move_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 148
+    lea rdx, [rip + ui_help_ctrl_ud]
+    call draw_text
+    mov edi, 372
+    mov esi, 148
+    lea rdx, [rip + ui_help_line_move_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 168
+    lea rdx, [rip + ui_help_home_end]
+    call draw_text
+    mov edi, 372
+    mov esi, 168
+    lea rdx, [rip + ui_help_line_edge_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 188
+    lea rdx, [rip + ui_help_ctrl_home_end]
+    call draw_text
+    mov edi, 372
+    mov esi, 188
+    lea rdx, [rip + ui_help_doc_edge_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 222
+    lea rdx, [rip + ui_help_find_heading]
+    call draw_text
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov esi, 254
+    mov edx, 228
+    mov ecx, 208
+    mov r8d, 1
+    mov r9d, 0xff78a9d4
+    call draw_rect
+    mov edi, 254
+    mov esi, 248
+    lea rdx, [rip + ui_help_ctrl_f]
+    call draw_text
+    mov edi, 372
+    mov esi, 248
+    lea rdx, [rip + ui_help_find_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 268
+    lea rdx, [rip + ui_help_f3]
+    call draw_text
+    mov edi, 372
+    mov esi, 268
+    lea rdx, [rip + ui_help_next_prev_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 288
+    lea rdx, [rip + ui_help_tab]
+    call draw_text
+    mov edi, 372
+    mov esi, 288
+    lea rdx, [rip + ui_help_tab_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 308
+    lea rdx, [rip + ui_help_enter]
+    call draw_text
+    mov edi, 372
+    mov esi, 308
+    lea rdx, [rip + ui_help_enter_desc]
+    call draw_text
+    mov edi, 254
+    mov esi, 328
+    lea rdx, [rip + ui_help_ctrl_enter]
+    call draw_text
+    mov edi, 372
+    mov esi, 328
+    lea rdx, [rip + ui_help_replace_desc]
+    call draw_text
+    mov edi, 18
+    mov esi, 344
+    lea rdx, [rip + ui_help_footer]
+    call draw_text
+
+    mov dword ptr [rip + ui_transform_active], 0
+    pop rbx
+.render_help_panel_done:
+    ret
+.size render_help_panel, . - render_help_panel
 .popsection
 
 # Minimal three-command document context menu, painted after all other UI.

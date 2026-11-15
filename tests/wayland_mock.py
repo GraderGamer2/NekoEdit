@@ -5597,6 +5597,82 @@ xkb_symbols "nekoedit-sparse" {
                     key_step(2040, 1, "Escape closes Find/Replace")
                     if child_u32("find_replace_mode") != 0:
                         raise AssertionError("Escape did not close Find/Replace")
+
+                    # The shortcut reference is reachable from F1 and the
+                    # title bar. It is modal, scales with the window, and
+                    # must not allow clicks or typing to leak into the editor.
+                    workflow_shortcut(2050, 102, "Ctrl+Home places caret before Help test")
+                    key_step(2080, 59, "F1 opens the keyboard shortcut reference")
+                    if child_u32("help_panel_open") != 1:
+                        raise AssertionError("F1 did not open the keyboard shortcut panel")
+                    help_x = child_u32("help_panel_x")
+                    help_y = child_u32("help_panel_y")
+                    help_width = child_u32("help_panel_width")
+                    help_height = child_u32("help_panel_height")
+                    if help_width <= 0 or help_height <= 0:
+                        raise AssertionError("Help panel geometry was not initialized")
+                    help_border = struct.unpack_from(
+                        "<I", pixels, help_y * 800 * 4 + help_x * 4
+                    )[0]
+                    if help_border != 0xFF78A9D4:
+                        raise AssertionError(
+                            "Help panel border was not rendered at its computed origin: "
+                            + hex(help_border)
+                        )
+
+                    contents_before_help_typing = read_document_state()["doc_contents"]
+                    dispatch_before_help_typing = child_u32("keyboard_dispatch_count")
+                    client.sendall(
+                        wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 2090, 2090, 30, 1),
+                        )
+                        + wire_message(
+                            keyboard_object_id, 3,
+                            struct.pack("<IIII", 2091, 2091, 30, 0),
+                        )
+                    )
+                    wait_child_u32(
+                        "keyboard_dispatch_count", dispatch_before_help_typing + 2,
+                        "Help modal consumes printable key events",
+                    )
+                    if read_document_state()["doc_contents"] != contents_before_help_typing:
+                        raise AssertionError("typing while Help was open modified the document")
+
+                    help_close_x = help_x + 458 * help_width // 480
+                    help_close_y = help_y + 20 * help_height // 360
+                    workflow_click(help_close_x, help_close_y, 2110, "Help close control dismisses the panel")
+                    if child_u32("help_panel_open") != 0:
+                        raise AssertionError("Help close control did not dismiss the panel")
+
+                    workflow_click(260, 16, 2120, "title-bar Help item opens the shortcut reference")
+                    if child_u32("help_panel_open") != 1:
+                        raise AssertionError("title-bar Help item did not open the shortcut panel")
+                    cursor_before_help_outside_click = child_u32("doc_cursor")
+                    workflow_click(30, 100, 2130, "outside click dismisses Help without click-through")
+                    if (
+                        child_u32("help_panel_open") != 0
+                        or child_u32("doc_cursor") != cursor_before_help_outside_click
+                    ):
+                        raise AssertionError(
+                            "outside click did not dismiss Help cleanly: "
+                            + repr({
+                                "open": child_u32("help_panel_open"),
+                                "cursor_before": cursor_before_help_outside_click,
+                                "cursor_after": child_u32("doc_cursor"),
+                            })
+                        )
+
+                    key_step(2150, 59, "F1 reopens the shortcut reference")
+                    if child_u32("help_panel_open") != 1:
+                        raise AssertionError("F1 did not reopen Help after an outside dismissal")
+                    key_step(2170, 1, "Escape closes the shortcut reference")
+                    if child_u32("help_panel_open") != 0:
+                        raise AssertionError("Escape did not close the shortcut reference")
+                    observations.append(
+                        "in-app keyboard reference via F1 and title bar, responsive panel rendering, "
+                        "modal typing protection, close control, outside-click dismissal, and Escape verified"
+                    )
                     observations.append(
                         "Ctrl+F combined Find/Replace, query editing, Enter/F3/Shift+F3 navigation, Tab replacement editing, "
                         "split-gap Replace Current, Replace All, and Escape verified"
