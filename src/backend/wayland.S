@@ -27470,14 +27470,17 @@ render_document:
     call doc_visual_to_offset
     mov r14d, eax
     cmp dword ptr [rip + doc_wrap_enabled], 0
-    jne .Ldocument_render_origin_ready
+    jne .Ldocument_render_full_origin_y
     lea r12d, [rdx + DOC_LEFT]
     sub r12d, dword ptr [rip + doc_view_left_px]
+.Ldocument_render_full_origin_y:
+    mov r13d, DOC_TOP
+    jmp .Ldocument_render_origin_ready
+
 .Ldocument_render_origin_ready:
     call .Ldocument_render_sync_pointer
     mov dword ptr [rip + render_document_scan_start], r14d
     mov dword ptr [rip + render_document_scan_end], r14d
-    mov r13d, DOC_TOP
 .Ldocument_render_loop:
     mov dword ptr [rip + render_document_scan_end], r14d
     cmp dword ptr [rip + render_partial_active], 1

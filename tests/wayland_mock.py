@@ -11427,88 +11427,9 @@ xkb_symbols "nekoedit-sparse" {
                     for dx in range(8)
                 )
                 if scrolled_glyph_pixels == 0:
-                    visible_carets = []
-                    for candidate_y in range(92, 460 - 9, 12):
-                        for candidate_x in range(16, 800 - 1, 8):
-                            if all(
-                                struct.unpack_from(
-                                    "<I", pixels, (candidate_y + dy) * 800 * 4 + candidate_x * 4
-                                )[0] == 0xFFFFFFFF
-                                for dy in range(9)
-                            ):
-                                visible_carets.append((candidate_x, candidate_y))
-                    sampled_rows = [
-                        (candidate_y, hex(struct.unpack_from(
-                            "<I", pixels, candidate_y * 800 * 4 + 17 * 4
-                        )[0]))
-                        for candidate_y in range(92, 460, 12)
-                    ]
-                    render_diagnostics = {}
-                    for name in (
-                        "doc_length", "doc_cursor", "doc_view_top_row",
-                        "doc_total_visual_rows", "doc_line_index_valid",
-                        "window_doc_visible_rows", "window_doc_bottom",
-                        "window_status_top", "window_doc_line_height",
-                        "doc_wrap_enabled", "render_partial_active",
-                        "render_partial_first_row", "render_partial_end_y",
-                        "render_document_scan_start", "render_document_scan_end",
-                        "render_damage_top1", "render_damage_bottom1",
-                        "render_clip_top1", "render_clip_bottom1",
-                        "redraw_edit_candidate",
-                    ):
-                        try:
-                            render_diagnostics[name] = child_u32(name)
-                        except AssertionError as error:
-                            render_diagnostics[name] = str(error)
-                    for name in (
-                        "window_buffer_slot_render_valid",
-                        "window_buffer_slot_render_dirty_row",
-                        "window_buffer_slot_render_total_rows",
-                        "window_buffer_slot_render_view_top",
-                        "window_buffer_slot_render_doc_revision",
-                    ):
-                        try:
-                            render_diagnostics[name] = [
-                                child_u32_at(name, 0), child_u32_at(name, 4)
-                            ]
-                        except AssertionError as error:
-                            render_diagnostics[name] = str(error)
-                    scroll_state = read_document_state()
-                    render_diagnostics["doc_tail_repr"] = repr(scroll_state["doc_contents"][-32:])
-                    render_diagnostics["doc_tail_hex"] = scroll_state["doc_contents"][-32:].hex()
-                    render_diagnostics["last_line_records"] = scroll_state["doc_line_index_records"][-8:]
-                    render_diagnostics["last_line_ids"] = scroll_state["doc_line_index_id_values"][-8:]
-                    render_diagnostics["render_document_scan"] = (
-                        scroll_state["render_document_scan_start"],
-                        scroll_state["render_document_scan_end"],
-                    )
-                    for name in ("font_loaded", "font_num_glyphs", "doc_font_size"):
-                        try:
-                            render_diagnostics[name] = child_u32(name)
-                        except AssertionError as error:
-                            render_diagnostics[name] = str(error)
-                    # Invalidate the per-slot scene snapshot, then move the
-                    # caret without editing to force the ordinary full redraw.
-                    scene_generation = child_u32("render_scene_generation")
-                    child_set_u32("render_scene_generation", scene_generation + 1)
-                    key_step(1800, 105, "force full redraw diagnostic")
-                    render_diagnostics["forced_full_redraw_glyph_pixels"] = sum(
-                        (
-                            pixel := struct.unpack_from(
-                                "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (32 + dx) * 4
-                            )[0]
-                        ) not in (0xFF252A33, 0xFFFFFFFF)
-                        for dy in range(12)
-                        for dx in range(8)
-                    )
-                    render_diagnostics["forced_full_render_scan"] = (
-                        child_u32("render_document_scan_start"),
-                        child_u32("render_document_scan_end"),
-                    )
                     raise AssertionError(
-                        "text/caret did not scroll into the visible bottom row after vertical overflow; "
-                        f"glyph_pixels={scrolled_glyph_pixels}, visible_carets={visible_carets}, "
-                        f"row_samples={sampled_rows}, render={render_diagnostics}"
+                        "text was not repainted into the visible bottom row after vertical overflow: "
+                        f"foreground glyph pixels={scrolled_glyph_pixels}"
                     )
                 bottom_caret = struct.unpack_from(
                     "<I", pixels, bottom_row_y * 800 * 4 + 24 * 4
