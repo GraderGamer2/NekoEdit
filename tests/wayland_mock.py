@@ -5516,7 +5516,7 @@ xkb_symbols "nekoedit-sparse" {
                         wire_message(pointer_object_id, 2, struct.pack("<Iii", 3330, 40 * 256, 125 * 256))
                     )
                     wait_child_u32(
-                        "doc_view_top_row", max(0, before_up - 1),
+                        "doc_auto_scroll_timer_armed", 1,
                         "moving above anchor reverses auto-scroll"
                     )
                     up_top = child_u32("doc_view_top_row")
