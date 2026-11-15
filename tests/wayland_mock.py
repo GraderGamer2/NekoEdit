@@ -9660,13 +9660,17 @@ xkb_symbols "nekoedit-sparse" {
                     find_top_start = find_top_state.get("render_find_scan_start", 0)
                     find_top_end = find_top_state.get("render_find_scan_end", 0)
                     if (
-                        child_u32("find_replace_mode") != 1
+                        child_u32("find_replace_mode") != 2
                         or find_top_end <= find_top_start
                         or find_top_end - find_top_start > 16384
                     ):
                         raise AssertionError(
-                            "Find highlighting did not stay within the visible top viewport: "
-                            + repr({"scan_start": find_top_start, "scan_end": find_top_end})
+                            "combined Ctrl+F highlighting did not stay within the visible top viewport: "
+                            + repr({
+                                "mode": child_u32("find_replace_mode"),
+                                "scan_start": find_top_start,
+                                "scan_end": find_top_end,
+                            })
                         )
                     workflow_axis(
                         0, 4096 * 14 * 256, serial + 80,
