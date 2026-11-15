@@ -11482,6 +11482,29 @@ xkb_symbols "nekoedit-sparse" {
                         scroll_state["render_document_scan_start"],
                         scroll_state["render_document_scan_end"],
                     )
+                    for name in ("font_loaded", "font_num_glyphs", "doc_font_size"):
+                        try:
+                            render_diagnostics[name] = child_u32(name)
+                        except AssertionError as error:
+                            render_diagnostics[name] = str(error)
+                    # Invalidate the per-slot scene snapshot, then move the
+                    # caret without editing to force the ordinary full redraw.
+                    scene_generation = child_u32("render_scene_generation")
+                    child_set_u32("render_scene_generation", scene_generation + 1)
+                    key_step(1800, 105, "force full redraw diagnostic")
+                    render_diagnostics["forced_full_redraw_glyph_pixels"] = sum(
+                        (
+                            pixel := struct.unpack_from(
+                                "<I", pixels, (bottom_row_y + dy) * 800 * 4 + (16 + dx) * 4
+                            )[0]
+                        ) not in (0xFF252A33, 0xFFFFFFFF)
+                        for dy in range(12)
+                        for dx in range(8)
+                    )
+                    render_diagnostics["forced_full_render_scan"] = (
+                        child_u32("render_document_scan_start"),
+                        child_u32("render_document_scan_end"),
+                    )
                     raise AssertionError(
                         "text/caret did not scroll into the visible bottom row after vertical overflow; "
                         f"glyph_pixels={scrolled_glyph_pixels}, visible_carets={visible_carets}, "
