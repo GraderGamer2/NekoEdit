@@ -4008,7 +4008,9 @@ xkb_symbols "nekoedit-sparse" {
                         client, (18, 5, struct.pack("<II", 0, 0)),
                         "Help restores the normal content type",
                     )
-                    expect_state(b"", 0, "Help close restores IME surrounding text")
+                    expect_state(
+                        b"", 0, "Help close restores IME surrounding text", expected_cause=1
+                    )
                     if child_u32("text_input_enabled") != 1 or child_u32("help_panel_open") != 0:
                         raise AssertionError("closing Help did not restore the active IME target")
                     expect_buffer_frame("Help close redraw after IME restore")
