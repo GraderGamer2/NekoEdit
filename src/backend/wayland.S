@@ -25493,6 +25493,25 @@ render_find_highlights_range:
     cmp r12d, r13d
     jae .Lrender_find_range_done
 
+    # Printable ASCII query bytes are individual graphemes. Detect this once;
+    # control/non-ASCII queries retain the general per-byte mapper.
+    xor ebp, ebp
+    xor ebx, ebx
+.Lrender_find_range_query_ascii_check:
+    cmp ebx, r14d
+    jae .Lrender_find_range_query_ascii
+    lea rax, [rip + find_query_buffer]
+    movzx eax, byte ptr [rax + rbx]
+    cmp eax, 32
+    jb .Lrender_find_range_query_checked
+    cmp eax, 127
+    jae .Lrender_find_range_query_checked
+    inc ebx
+    jmp .Lrender_find_range_query_ascii_check
+.Lrender_find_range_query_ascii:
+    mov ebp, 1
+.Lrender_find_range_query_checked:
+
 .Lrender_find_range_next_match:
     mov edi, r12d
     mov esi, r13d
@@ -25501,8 +25520,37 @@ render_find_highlights_range:
     je .Lrender_find_range_done
     mov r15d, eax
     lea r12d, [rax + 1]
+    mov dword ptr [rsp + 24], 0
+
+    test ebp, ebp
+    jz .Lrender_find_range_slow_start
+    test r15d, r15d
+    jz .Lrender_find_range_fast_start
+    # A preceding non-ASCII scalar can be a Prepend grapheme joined to the
+    # match's first ASCII byte. Let the full mapper handle that boundary.
+    lea edi, [r15d - 1]
+    call doc_byte_at
+    cmp eax, 128
+    jae .Lrender_find_range_slow_start
+
+.Lrender_find_range_fast_start:
+    # Map only the first byte of this match. Later printable ASCII bytes are
+    # separate graphemes; advance their proportional glyph widths in place.
+    mov dword ptr [rsp + 24], 1
+    mov edi, r15d
+    call doc_offset_to_visual
+    mov dword ptr [rsp + 4], eax
+    mov dword ptr [rsp + 8], edx
     xor ebx, ebx
-.Lrender_find_range_match_bytes:
+    lea rax, [rip + find_query_buffer]
+    movzx edi, byte ptr [rax]
+    call font_codepoint_advance_pixels
+    mov dword ptr [rsp + 12], eax
+    jmp .Lrender_find_range_paint
+
+.Lrender_find_range_slow_start:
+    xor ebx, ebx
+.Lrender_find_range_slow_byte:
     mov eax, r15d
     add eax, ebx
     mov dword ptr [rsp], eax
@@ -25510,19 +25558,18 @@ render_find_highlights_range:
     call doc_offset_to_visual
     mov dword ptr [rsp + 4], eax
     mov dword ptr [rsp + 8], edx
-    # The bounded matcher compared this match byte-for-byte against the query,
-    # so the query buffer is also the exact glyph/advance source here.
     lea rax, [rip + find_query_buffer]
     movzx edi, byte ptr [rax + rbx]
     call font_codepoint_advance_pixels
     mov dword ptr [rsp + 12], eax
 
+.Lrender_find_range_paint:
     mov eax, dword ptr [rsp + 4]
     sub eax, dword ptr [rip + doc_view_top_row]
     test eax, eax
-    js .Lrender_find_range_advance_byte
+    js .Lrender_find_range_advance
     cmp eax, dword ptr [rip + window_doc_visible_rows]
-    jae .Lrender_find_range_advance_byte
+    jae .Lrender_find_range_advance
     imul eax, dword ptr [rip + window_doc_line_height]
     add eax, DOC_TOP
     mov dword ptr [rsp + 16], eax
@@ -25543,10 +25590,38 @@ render_find_highlights_range:
     mov r9d, 0xff8f7834
     call draw_document_selection_rect
 
-.Lrender_find_range_advance_byte:
+.Lrender_find_range_advance:
+    cmp dword ptr [rsp + 24], 0
+    je .Lrender_find_range_slow_advance
+
+    # Position the next printable ASCII byte using the same wrap predicate as
+    # doc_offset_to_visual's boundary check. Cache its advance for the next
+    # paint iteration so each query byte needs only one advance calculation.
     inc ebx
     cmp ebx, r14d
-    jb .Lrender_find_range_match_bytes
+    jae .Lrender_find_range_next_match
+    mov eax, dword ptr [rsp + 8]
+    add eax, dword ptr [rsp + 12]
+    mov dword ptr [rsp + 8], eax
+    lea rax, [rip + find_query_buffer]
+    movzx edi, byte ptr [rax + rbx]
+    call font_codepoint_advance_pixels
+    mov dword ptr [rsp + 12], eax
+    cmp dword ptr [rip + doc_wrap_enabled], 0
+    je .Lrender_find_range_fast_continue
+    mov edx, dword ptr [rsp + 8]
+    add edx, eax
+    cmp edx, dword ptr [rip + window_doc_pixel_width]
+    jbe .Lrender_find_range_fast_continue
+    inc dword ptr [rsp + 4]
+    mov dword ptr [rsp + 8], 0
+.Lrender_find_range_fast_continue:
+    jmp .Lrender_find_range_paint
+
+.Lrender_find_range_slow_advance:
+    inc ebx
+    cmp ebx, r14d
+    jb .Lrender_find_range_slow_byte
     jmp .Lrender_find_range_next_match
 
 .Lrender_find_range_done:

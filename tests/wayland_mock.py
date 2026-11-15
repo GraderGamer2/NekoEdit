@@ -409,6 +409,7 @@ def run(
     line_navigation_test: bool = False,
     dirty_render_test: bool = False,
     find_replace_test: bool = False,
+    find_geometry_test: bool = False,
     font_test_path: str | None = None,
     initial_height: int = 480,
     sparse_keymap_test: bool = False,
@@ -5127,9 +5128,240 @@ xkb_symbols "nekoedit-sparse" {
                         key_step(serial + 6, 28, label + " — confirm pending save")
                 if find_replace_test:
                     initial = read_document_state()
-                    find_fixture = b"one fish two fish\n" + (b"row fish\n" * 64)
+                    find_fixture = (
+                        b"AB AB" if find_geometry_test
+                        else b"one fish two fish\n" + (b"row fish\n" * 64)
+                    )
                     if initial["doc_contents"] != find_fixture:
                         raise AssertionError("find/replace fixture contents mismatch")
+
+                    if find_geometry_test:
+                        original_width = child_u32("window_doc_pixel_width")
+                        line_height = child_u32("window_doc_line_height")
+                        if (
+                            child_u32("font_loaded") != 1
+                            or child_u32("font_probe_advance_A") != 8
+                            or child_u32("font_probe_advance_B") != 5
+                            or child_u32("doc_wrap_enabled") != 1
+                            or line_height <= 0
+                        ):
+                            raise AssertionError(
+                                "proportional Find fixture did not load its expected font/layout: "
+                                + repr({
+                                    "font_loaded": child_u32("font_loaded"),
+                                    "A": child_u32("font_probe_advance_A"),
+                                    "B": child_u32("font_probe_advance_B"),
+                                    "wrap": child_u32("doc_wrap_enabled"),
+                                    "line_height": line_height,
+                                })
+                            )
+
+                        # A=8px, B=5px, and space=3px. At a 10px wrap width,
+                        # AB occupies rows 0/1 and the second AB occupies rows
+                        # 2/3. Put the physical gap between A and B in the first
+                        # match so both wrapping and gap traversal are exercised.
+                        child_set_u32("window_doc_pixel_width", 10)
+                        child_set_u32("doc_line_index_valid", 0)
+                        workflow_shortcut(1700, 102, "Ctrl+Home starts proportional Find fixture")
+                        key_step(1730, 106, "move gap to between proportional A and B")
+                        key_step(1732, 45, "insert temporary byte before proportional B")
+                        key_step(1734, 14, "delete temporary byte and retain split gap")
+                        gap_state = read_document_state()
+                        if (
+                            gap_state["doc_contents"] != b"AB AB"
+                            or gap_state["doc_gap_start"] != 1
+                            or gap_state["doc_gap_end"] <= gap_state["doc_gap_start"]
+                        ):
+                            raise AssertionError(
+                                "proportional Find fixture did not retain its gap between A and B: "
+                                + repr({
+                                    "contents": gap_state["doc_contents"],
+                                    "gap_start": gap_state["doc_gap_start"],
+                                    "gap_end": gap_state["doc_gap_end"],
+                                })
+                            )
+                        if (
+                            gap_state["doc_line_index_valid"] != 1
+                            or gap_state["doc_line_index_records"][0][1] != 4
+                        ):
+                            raise AssertionError(
+                                "10px proportional wrap fixture did not produce four visual rows: "
+                                + repr({
+                                    "valid": gap_state["doc_line_index_valid"],
+                                    "records": gap_state["doc_line_index_records"],
+                                    "width": child_u32("window_doc_pixel_width"),
+                                })
+                            )
+
+                        def workflow_shifted_key(serial: int, code: int, label: str) -> None:
+                            client.sendall(
+                                wire_message(
+                                    keyboard_object_id, 3,
+                                    struct.pack("<IIII", serial, serial, 42, 1),
+                                )
+                                + wire_message(
+                                    keyboard_object_id, 4,
+                                    struct.pack("<IIIII", serial + 1, 1, 0, 0, 0),
+                                )
+                                + wire_message(
+                                    keyboard_object_id, 3,
+                                    struct.pack("<IIII", serial + 2, serial + 2, code, 1),
+                                )
+                            )
+                            workflow_redraw(label)
+                            client.sendall(
+                                wire_message(
+                                    keyboard_object_id, 3,
+                                    struct.pack("<IIII", serial + 3, serial + 3, code, 0),
+                                )
+                                + wire_message(
+                                    keyboard_object_id, 3,
+                                    struct.pack("<IIII", serial + 4, serial + 4, 42, 0),
+                                )
+                                + wire_message(
+                                    keyboard_object_id, 4,
+                                    struct.pack("<IIIII", serial + 5, 0, 0, 0, 0),
+                                )
+                                + buffer_release_message()
+                            )
+
+                        workflow_shortcut(1760, 33, "Ctrl+F opens proportional Find")
+                        workflow_shifted_key(1790, 30, "enter proportional Find character A")
+                        workflow_shifted_key(1800, 48, "enter proportional Find character B")
+                        key_step(1810, 28, "Enter selects first proportional Find match")
+                        selected = (
+                            min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                            max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        )
+                        if selected != (0, 2) or child_u32("find_status") != 1:
+                            raise AssertionError(
+                                "proportional Find did not select the first AB: "
+                                + repr({"selection": selected, "status": child_u32("find_status")})
+                            )
+
+                        highlight_color = 0xFF8F7834
+                        def amber_pixels_in_visual_row(row: int, x_start: int, x_end: int) -> int:
+                            top = 92 + row * line_height
+                            return sum(
+                                1
+                                for y in range(top, top + line_height)
+                                for x in range(x_start, x_end)
+                                if struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                                == highlight_color
+                            )
+
+                        # The second match starts at column zero on rows 2/3;
+                        # A occupies x=16..23 and B occupies x=16..20.
+                        second_match_rows = (
+                            amber_pixels_in_visual_row(2, 16, 24),
+                            amber_pixels_in_visual_row(3, 16, 21),
+                        )
+                        if min(second_match_rows) < 5:
+                            raise AssertionError(
+                                "proportional Find highlight did not advance across both wrapped rows: "
+                                + repr({
+                                    "amber_rows_2_3": second_match_rows,
+                                    "line_height": line_height,
+                                    "gap": (gap_state["doc_gap_start"], gap_state["doc_gap_end"]),
+                                })
+                            )
+
+                        key_step(1820, 61, "F3 selects second proportional Find match")
+                        selected = (
+                            min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                            max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        )
+                        first_match_rows = (
+                            amber_pixels_in_visual_row(0, 16, 24),
+                            amber_pixels_in_visual_row(1, 16, 21),
+                        )
+                        if selected != (3, 5) or min(first_match_rows) < 5:
+                            raise AssertionError(
+                                "proportional Find highlight did not retain the first cross-gap match: "
+                                + repr({
+                                    "selection": selected,
+                                    "amber_rows_0_1": first_match_rows,
+                                    "gap": (child_u32("doc_gap_start"), child_u32("doc_gap_end")),
+                                })
+                            )
+
+                        # Restore the real viewport width, then verify the same
+                        # incremental coordinates without soft wrapping.
+                        child_set_u32("window_doc_pixel_width", original_width)
+                        child_set_u32("doc_wrap_enabled", 0)
+                        child_set_u32("doc_line_index_valid", 0)
+                        key_step(1830, 1, "Escape closes wrapped proportional Find")
+                        restored = read_document_state()
+                        if (
+                            restored["doc_line_index_valid"] != 1
+                            or restored["doc_line_index_records"][0][1] != 1
+                            or restored["doc_wrap_enabled"] != 0
+                            or restored["window_doc_pixel_width"] != original_width
+                        ):
+                            raise AssertionError(
+                                "proportional Find fixture did not enter the expected no-wrap layout: "
+                                + repr({
+                                    "width": restored["window_doc_pixel_width"],
+                                    "original_width": original_width,
+                                    "wrap": restored["doc_wrap_enabled"],
+                                    "valid": restored["doc_line_index_valid"],
+                                    "records": restored["doc_line_index_records"],
+                                })
+                            )
+
+                        # Find's query is intentionally retained when its panel
+                        # closes. Reset only the document cursor/selection so
+                        # Enter deterministically selects the first occurrence.
+                        child_set_u32("doc_cursor", 0)
+                        child_set_u32("doc_selection_active", 0)
+                        child_set_u32("doc_view_top_row", 0)
+                        child_set_u32("doc_view_left_px", 0)
+                        workflow_shortcut(1840, 33, "Ctrl+F reopens Find in no-wrap mode")
+                        key_step(1850, 28, "Enter selects first no-wrap proportional match")
+                        selected = (
+                            min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                            max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        )
+                        if selected != (0, 2):
+                            raise AssertionError(
+                                "no-wrap Find did not select the first AB: " + repr(selected)
+                            )
+
+                        # The second AB starts at x=16px after A+B+space.
+                        # Its unselected amber rectangles must occupy the
+                        # expected proportional widths on the single visual row.
+                        second_unwrapped = (
+                            amber_pixels_in_visual_row(0, 32, 40),
+                            amber_pixels_in_visual_row(0, 40, 45),
+                        )
+                        if min(second_unwrapped) < 5:
+                            raise AssertionError(
+                                "no-wrap Find did not advance horizontal coordinates using proportional widths: "
+                                + repr(second_unwrapped)
+                            )
+                        key_step(1860, 61, "F3 selects second no-wrap proportional match")
+                        selected = (
+                            min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                            max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        )
+                        first_unwrapped = (
+                            amber_pixels_in_visual_row(0, 16, 24),
+                            amber_pixels_in_visual_row(0, 24, 29),
+                        )
+                        if selected != (3, 5) or min(first_unwrapped) < 5:
+                            raise AssertionError(
+                                "no-wrap Find did not retain the first proportional match's amber geometry: "
+                                + repr({
+                                    "selection": selected,
+                                    "amber_widths": first_unwrapped,
+                                })
+                            )
+                        key_step(1870, 1, "Escape closes no-wrap proportional Find")
+                        observations.append(
+                            "Find highlight coordinates preserve 8px/5px proportional advances across a physical gap in wrapped and unwrapped layouts"
+                        )
+                        client.sendall(wire_message(10, 1))
+                        return
 
                     # Put the physical gap inside the first "fish" without
                     # changing logical bytes. Bounded highlight matching must
@@ -11972,6 +12204,30 @@ if __name__ == "__main__":
             os.unlink(find_path)
         except FileNotFoundError:
             pass
+
+    # Deterministic proportional-font Find geometry: A=8px, B=5px, space=3px.
+    geometry_font_fd, geometry_font_path = tempfile.mkstemp(
+        prefix="nekoedit-find-geometry-font-", suffix=".ttf"
+    )
+    geometry_fd, geometry_path = tempfile.mkstemp(prefix="nekoedit-find-geometry-")
+    try:
+        with os.fdopen(geometry_font_fd, "wb") as font_file:
+            font_file.write(synthetic_true_type_font())
+        with os.fdopen(geometry_fd, "wb") as document:
+            document.write(b"AB AB")
+        run(
+            sys.argv[1],
+            initial_file=geometry_path,
+            find_replace_test=True,
+            find_geometry_test=True,
+            font_test_path=geometry_font_path,
+        )
+    finally:
+        for path in (geometry_font_path, geometry_path):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
 
     line_fd, line_path = tempfile.mkstemp(prefix="nekoedit-line-navigation-")
     try:

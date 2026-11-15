@@ -125,6 +125,14 @@ Each SHM slot must still have a compatible committed scene snapshot, and the two
 
 This is a bounded-work assertion for the eligible caret path, not a measured end-to-end latency or frame-rate claim. Live GNOME/Mutter use and controlled on-device timings remain outstanding.
 
+## Sequential Find-highlight coordinate traversal
+
+For a match containing only printable ASCII, the highlight painter now maps the first matched byte once and then advances each subsequent character's actual font width. With wrapping enabled, it applies the same next-glyph overflow predicate as `doc_offset_to_visual`; without wrapping, it advances the horizontal pixel coordinate while retaining the mapped visual row. The next glyph advance is calculated once and carried into the following paint iteration.
+
+This avoids repeating the line-index lookup, visual-byte checkpoint lookup, and local line scan for every byte in a multi-character Find result. It does not assume fixed-width glyphs: the advance still comes from `font_codepoint_advance_pixels` for each query byte. Queries containing control/non-ASCII bytes use the original mapper, as do ASCII matches whose immediately preceding document byte is non-ASCII; that conservative guard preserves positions when a preceding Unicode Prepend scalar may share a grapheme with the first matched byte.
+
+The Wayland mock adds a deterministic proportional-font case. A synthetic face gives `A` an 8px advance, `B` a 5px advance, and space a 3px advance. At a forced 10px wrap width, `AB AB` occupies four visual rows. The first match is split by the physical gap; Enter and F3 move the selection between matches, while pixel assertions check that the other match remains amber on the expected two rows. The test restores the original viewport width before continuing.
+
 ## Text-rendering limits
 
 The document renderer decodes the first Unicode scalar of each grapheme cluster for cmap lookup and rasterization. Grapheme-aware editing/navigation is implemented separately, but that does not constitute full grapheme shaping. Combining marks are not positioned over a base glyph; ZWJ sequences, variation selectors, and multi-scalar emoji are not composed into shaped glyph runs.
