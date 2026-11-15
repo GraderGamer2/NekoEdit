@@ -1,3 +1,17 @@
+## Latest handoff (2026-11-15 — middle-click auto-scroll and gap-aware selection; CI PASS #991)
+
+Continue application-source development on `early-alpha` at [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+Middle-click in the document viewport toggles auto-scroll around the pointer's starting Y coordinate. Move above/below that point to scroll up/down; greater distance increases the rate (maximum eight visual rows per 50 ms tick). Returning within the 12-pixel dead zone pauses scrolling. Middle-click again to exit. Left-click, wheel input, key press or pointer leave cancels. The all-scroll cursor is shown when the optional cursor-shape extension is available. The existing selection-drag timerfd is reused.
+
+The no-wrap selection renderer now keeps a physical gap-buffer cursor for sequential visible-byte reads. Printable ASCII advances directly when the next logical byte is ASCII; Unicode and control boundaries retain the full grapheme path. The pointer rebases at the gap boundary. Wrapped selection rendering and the document representation are unchanged. A split-gap no-wrap regression verifies the suffix-side selection highlight.
+
+Actions [#991](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074) passed all 17 steps: build/ELF, CLI/host tests, renderer equivalence, full Wayland mock, native `us(intl)` XKB, pinned X.Org importer, Compose generation, nested GNOME Shell/Mutter/IBus, and both artifact uploads. The mock verified middle-click auto-scroll toggling, both directions, dead-zone pause, stationary scrolling and wheel recovery. It also checked selection pixels across the gap, Unicode grapheme behavior, 10 MiB external paste, and 11 MiB / 89,414-line Open/Save.
+
+ELF `size`: text 238,918 bytes, data 64 bytes, BSS 3,764,856 bytes. Executable artifact: 151,801 bytes; Compose packs: 120,536 bytes. Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142963938); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43668368074/artifacts/14142834214). Expiry: 2026-11-16 09:38 WIB. The executable ZIP is 576 bytes larger than #986; no binary-size or performance improvement is claimed.
+
+No controlled before/after benchmark or manual live-desktop GNOME retest was performed. Next candidate: inspect Find-highlight range painting for repeated per-byte gap-buffer lookups, with grapheme-accurate highlight geometry and pixel regressions before optimizing it.
+
 ## Latest handoff (2026-11-15 — gap-aware visible-text traversal; CI PASS #986)
 
 Continue application-source development on `early-alpha` at [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
