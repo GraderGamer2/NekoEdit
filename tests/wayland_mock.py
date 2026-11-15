@@ -5491,9 +5491,9 @@ xkb_symbols "nekoedit-sparse" {
                         if sum(expected_spans) != len(expected_contents):
                             raise AssertionError(label + ": line spans do not cover the document")
                     workflow_shortcut(1860, 102, "Ctrl+Home establishes search fixture start")
-                    workflow_shortcut(1870, 33, "Ctrl+F opens Find")
-                    if child_u32("find_replace_mode") != 1:
-                        raise AssertionError("Ctrl+F did not open Find mode")
+                    workflow_shortcut(1870, 33, "Ctrl+F opens combined Find/Replace")
+                    if child_u32("find_replace_mode") != 2:
+                        raise AssertionError("Ctrl+F did not open the combined Find/Replace panel")
                     for index, code in enumerate((33, 23, 31, 35)):
                         key_step(1880 + index * 3, code, f"enter Find query character {index + 1}")
                     key_step(1900, 28, "Enter selects first Find match")
@@ -5560,16 +5560,22 @@ xkb_symbols "nekoedit-sparse" {
                             "F3 did not return to the second Find match after reverse navigation: "
                             + repr(forward_selection)
                         )
-                    key_step(1945, 1, "Escape closes Find before opening Replace")
-                    workflow_shortcut(1950, 35, "Ctrl+H opens Find/Replace")
-                    if child_u32("find_replace_mode") != 2:
-                        raise AssertionError("Ctrl+H did not open Find/Replace mode")
-                    key_step(1960, 15, "Tab focuses replacement field")
+                    workflow_shift_key(1942, 61, "Shift+F3 returns to the split-gap match for Replace Current")
+                    replace_selection = (
+                        min(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                        max(child_u32("doc_selection_anchor"), child_u32("doc_cursor")),
+                    )
+                    if replace_selection != (4, 8):
+                        raise AssertionError(
+                            "Shift+F3 did not restore the split-gap result before Replace Current: "
+                            + repr(replace_selection)
+                        )
+                    key_step(1950, 15, "Tab focuses replacement field in the Ctrl+F panel")
                     for index, code in enumerate((31, 35, 30, 19, 37)):
                         key_step(1970 + index * 3, code, f"enter replacement character {index + 1}")
                     workflow_shortcut(1990, 28, "Ctrl+Enter replaces the current match")
                     state = read_document_state()
-                    expected_current = b"one fish two shark\n" + (b"row fish\n" * 64)
+                    expected_current = b"one shark two fish\n" + (b"row fish\n" * 64)
                     assert_replacement_index(state, expected_current, "Replace Current")
                     if child_u32("find_status") != 3:
                         raise AssertionError("Replace Current did not report a replacement")
@@ -5592,8 +5598,8 @@ xkb_symbols "nekoedit-sparse" {
                     if child_u32("find_replace_mode") != 0:
                         raise AssertionError("Escape did not close Find/Replace")
                     observations.append(
-                        "Ctrl+F/Find query editing, Enter/F3 navigation, Ctrl+H replacement editing, "
-                        "Replace Current, Replace All, and Escape verified"
+                        "Ctrl+F combined Find/Replace, query editing, Enter/F3/Shift+F3 navigation, Tab replacement editing, "
+                        "split-gap Replace Current, Replace All, and Escape verified"
                     )
                     client.sendall(wire_message(10, 1))
                     return

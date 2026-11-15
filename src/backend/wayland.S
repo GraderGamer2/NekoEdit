@@ -7915,8 +7915,6 @@ wayland_main:
     je .keyboard_unmodified
     cmp eax, 33
     je .keyboard_find_open
-    cmp eax, 35
-    je .keyboard_replace_open
     cmp eax, 24
     je .keyboard_open_command
     cmp eax, 30
@@ -8290,10 +8288,7 @@ wayland_main:
     jmp .keyboard_changed
 
 .keyboard_find_open:
-    mov edi, 1
-    call find_replace_open
-    jmp .keyboard_changed
-.keyboard_replace_open:
+    # Ctrl+F always opens the complete Find/Replace panel.
     mov edi, 2
     call find_replace_open
     jmp .keyboard_changed
@@ -20987,7 +20982,7 @@ doc_move_vertical:
 .size doc_move_vertical, . - doc_move_vertical
 .popsection
 
-# Open the Find/Replace modal. EDI=1 for Find, EDI=2 for Find/Replace.
+# Open the combined Find/Replace modal. EDI=2 enables both query and replacement fields.
 .type find_replace_open, @function
 .pushsection .text.find_replace_open,"ax",@progbits
 find_replace_open:
@@ -21505,29 +21500,58 @@ doc_replace_selection_with_buffer:
 doc_find_selection_matches:
     cmp dword ptr [rip + doc_selection_active], 0
     je .Ldoc_find_selection_no
+    cmp dword ptr [rip + find_query_length], 0
+    je .Ldoc_find_selection_no
+
     mov eax, dword ptr [rip + doc_selection_anchor]
     mov edx, dword ptr [rip + doc_cursor]
     cmp eax, edx
     jbe .Ldoc_find_selection_bounds
     xchg eax, edx
 .Ldoc_find_selection_bounds:
+    cmp edx, dword ptr [rip + doc_length]
+    ja .Ldoc_find_selection_no
     sub edx, eax
     cmp edx, dword ptr [rip + find_query_length]
     jne .Ldoc_find_selection_no
+
+    # Translate the selection start once, then compare contiguous physical
+    # bytes. If the next logical position reaches the gap, jump straight to
+    # the suffix instead of calling doc_byte_at for every query byte.
     push rbx
     push r12
+    push r13
     mov ebx, eax
+    mov eax, ebx
+    mov ecx, dword ptr [rip + doc_gap_start]
+    cmp eax, ecx
+    jb .Ldoc_find_selection_pointer_ready
+    mov ecx, dword ptr [rip + doc_gap_end]
+    sub ecx, dword ptr [rip + doc_gap_start]
+    add eax, ecx
+.Ldoc_find_selection_pointer_ready:
+    mov r13, qword ptr [rip + doc_buffer]
+    add r13, rax
+    lea rdx, [rip + find_query_buffer]
     xor r12d, r12d
 .Ldoc_find_selection_compare:
     cmp r12d, dword ptr [rip + find_query_length]
     jae .Ldoc_find_selection_yes
-    mov edi, ebx
-    add edi, r12d
-    call doc_byte_at
-    lea rdx, [rip + find_query_buffer]
-    cmp al, byte ptr [rdx + r12]
+    mov al, byte ptr [r13]
+    cmp al, byte ptr [rdx]
     jne .Ldoc_find_selection_no_pop
     inc r12d
+    inc r13
+    inc rdx
+    cmp r12d, dword ptr [rip + find_query_length]
+    jae .Ldoc_find_selection_compare
+    mov eax, ebx
+    add eax, r12d
+    cmp eax, dword ptr [rip + doc_gap_start]
+    jne .Ldoc_find_selection_compare
+    mov r13, qword ptr [rip + doc_buffer]
+    mov eax, dword ptr [rip + doc_gap_end]
+    add r13, rax
     jmp .Ldoc_find_selection_compare
 .Ldoc_find_selection_yes:
     mov eax, 1
@@ -21535,6 +21559,7 @@ doc_find_selection_matches:
 .Ldoc_find_selection_no_pop:
     xor eax, eax
 .Ldoc_find_selection_pop:
+    pop r13
     pop r12
     pop rbx
     ret
