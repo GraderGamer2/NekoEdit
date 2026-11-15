@@ -11283,6 +11283,13 @@ xkb_symbols "nekoedit-sparse" {
                 )[0]
                 if first_cell != 0xFFD8DEE9:
                     raise AssertionError("initial Delete did not move the first character onto line one")
+                first_cell_pixels_before_repeat = tuple(
+                    struct.unpack_from(
+                        "<I", pixels, (92 + dy) * 800 * 4 + (16 + dx) * 4
+                    )[0]
+                    for dy in range(12)
+                    for dx in range(8)
+                )
                 delete_length_after_first_press = child_u32("doc_length")
                 if (
                     child_u32("repeat_keycode") != 111
@@ -11314,12 +11321,22 @@ xkb_symbols "nekoedit-sparse" {
                         })
                     )
                 expect_redraw("repeated Delete")
-                next_glyph = struct.unpack_from(
-                    "<I", pixels, 92 * 800 * 4 + 20 * 4
-                )[0]
-                if next_glyph != 0xFF252A33:
+                after_repeated_delete = read_document_state()
+                first_cell_pixels_after_repeat = tuple(
+                    struct.unpack_from(
+                        "<I", pixels, (92 + dy) * 800 * 4 + (16 + dx) * 4
+                    )[0]
+                    for dy in range(12)
+                    for dx in range(8)
+                )
+                if after_repeated_delete["doc_contents"] != b"d":
                     raise AssertionError(
-                        "repeated Delete changed document state but did not render the deleted character"
+                        "repeated Delete did not remove the next character and preserve the shifted d: "
+                        + repr(after_repeated_delete["doc_contents"])
+                    )
+                if first_cell_pixels_after_repeat == first_cell_pixels_before_repeat:
+                    raise AssertionError(
+                        "repeated Delete changed document bytes but did not repaint the shifted first-cell glyph"
                     )
                 client.sendall(
                     wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1221, 1221, 111, 0))
