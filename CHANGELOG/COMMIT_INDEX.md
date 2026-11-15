@@ -1,3 +1,17 @@
+## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
+
+| Commit | Subject |
+|---|---|
+| [0fe2690763aa](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350) | perf: cache status columns and add Czech Compose pack |
+| [066bd21848d9](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9) | fix: zero-initialize status diagnostics in BSS |
+| [f4bbcc22e856](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19) | test: use Ctrl+End for wrapped status column fixture |
+
+The optional locale set now contains five separately distributed NLP1 packs. Czech adds two dead-caron overrides over the pinned en_US baseline and is regenerated/byte-compared in CI. The status bar reuses the existing 4 KiB line checkpoint cache for logical-column lookup; the 4 MiB and mixed Unicode/tab/control Wayland tests enforce bounded scanning and the established column semantics.
+
+Actions [#1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps, including the full Wayland mock, native XKB, pinned X.Org importer, locale pack generation, nested Mutter integration, and both uploads. ELF text/data/BSS: 242,918 / 64 / 3,797,656 bytes. Linux executable ZIP: 154,091 bytes; Compose ZIP: 148,799 bytes. No quantified end-to-end speedup is claimed.
+
+---
+
 ## 2026-11-15 — in-app keyboard shortcut reference (CI PASS #1003)
 
 | Commit | Subject |

@@ -1,3 +1,32 @@
+## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
+
+**Branch/source head:** early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Implementation: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350); BSS fix: [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9); wrapped fixture correction: [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Workflow: [Actions #1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps.
+
+### Czech locale pack
+
+- Added cs_CZ.UTF-8 as a complete flattened NLP1 v2 data pack over the pinned X.Org en_US.UTF-8 Compose baseline.
+- Pinned Czech source: libX11 commit ff8706a5eae25b8bafce300527079f68a201d27f, nls/cs_CZ.UTF-8/Compose.pre, Git blob 022753ea937e9a1f483c9545e99ddbc6295cd485.
+- The source contributes two typed dead-key overrides: dead caron + u -> U+016F (ů) and dead caron + U -> U+016E (Ů). The flattened table contains 4,479 records and the compiled .nlp is 304,644 bytes.
+- Added the Czech source hash and deterministic importer/byte-comparison steps to both the normal build and Release locale-pack workflows. make locale-packs, the locale-data tests, and both CI regeneration/comparison paths pass.
+- Locale distribution remains modular: five optional packs are provided separately (pt_BR.UTF-8, fi_FI.UTF-8, sr_RS.UTF-8, el_GR.UTF-8, cs_CZ.UTF-8). The core binary remains built-in en_US.UTF-8 only.
+
+### Status-bar column checkpoints
+
+- Extended the existing stable-line-ID 4 KiB sparse byte/visual checkpoint records with a one-based logical column. Wrapped and unwrapped line-index measurement populates it in the same pass that computes grapheme and visual metrics.
+- The status bar resolves the logical line using the byte Fenwick tree, looks up the nearest available checkpoint, and continues locally. Existing semantics are preserved: extended graphemes count once, tabs advance to the next four-column stop, and control bytes do not add columns.
+- The checkpoint stride grew from 24 to 32 bytes for 4,096 entries (+32 KiB BSS). The cache remains direct-mapped and bounded; a missing/colliding checkpoint retains the original scan fallback.
+- Wayland coverage verifies the status scan bound on a 4 MiB line in wrapped and unwrapped modes and checks a wrapped 8 KiB mixed fixture with a tab, combining grapheme, C0 control, and final caret at logical EOF.
+
+### Validation and artifacts
+
+Actions [#1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps: freestanding build/ELF, CLI/host tests, renderer equivalence, complete Wayland protocol mock including the new status cases and 11 MiB Open/Save, executable inspection, native us(intl) XKB parser, pinned X.Org source regeneration and byte-for-byte data checks, locale-pack build, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+ELF text/data/BSS: **242,918 / 64 / 3,797,656 bytes**; no interpreter or dynamic section. Linux executable ZIP: **154,091 bytes**. Locale ZIP: **148,799 bytes**, containing five .nlp files and five notice files. The Czech .nlp itself is **304,644 bytes**. Artifacts expire **2026-11-16 08:07 UTC**.
+
+No controlled application-level before/after benchmark or manual live-desktop retest was performed. The optimization is recorded as bounded scan work, not a quantified latency gain.
+
+---
+
 ## 2026-11-15 — in-app keyboard shortcut reference; CI PASS #1003
 
 **Branch:** `early-alpha`, head [271dec7](https://github.com/GraderGamer2/NekoEdit/commit/271dec778a11d5514955336482c96e0a1c40af8b). Application commits: [48e0cda](https://github.com/GraderGamer2/NekoEdit/commit/48e0cdaeb50c0b00c83a3cbaa4c7779bd033de58) adds the Help panel; [a645e81](https://github.com/GraderGamer2/NekoEdit/commit/a645e8109613b5a6819b7fa07b58a5407954f644) suspends text-input-v3 while the modal is open; [271dec7](https://github.com/GraderGamer2/NekoEdit/commit/271dec778a11d5514955336482c96e0a1c40af8b) updates the IME regression expectation.
