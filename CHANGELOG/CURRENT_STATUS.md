@@ -1,3 +1,29 @@
+## 2026-11-15 — gap-aware visible-text traversal (Actions #986 PASS)
+
+**Branch/source commit:** `early-alpha` at [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9). **Workflow:** [Actions #986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 steps.
+
+### Source changes
+
+- `src/backend/wayland.S`: `render_document` keeps a physical byte cursor beside the logical document offset. The cursor is synchronized when mapping to a new visual-row origin and after Unicode grapheme advancement.
+- Visible-byte reads use the physical pointer rather than calling `doc_byte_at` for every rendered grapheme. Single-byte advancement increments the pointer directly and rebases it to `doc_buffer + doc_gap_end` exactly when the logical offset reaches `doc_gap_start`.
+- The printable-ASCII path checks the next logical byte across either side of the gap. It advances directly when the next byte is ASCII; a high-bit byte keeps the full `doc_grapheme_next` path so combining marks, ZWJ sequences, SpacingMarks and malformed UTF-8 retain their existing handling.
+- The document representation, line index, Unicode 18.0 tables, selection renderer, glyph rasterization and wrapping rules are unchanged. The change is limited to visible document traversal.
+
+### Validation
+
+Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 workflow steps: x86-64 build and ELF checks, CLI/host tests, renderer equivalence, full Wayland protocol mock, native `us(intl)` keymap parsing, pinned X.Org importer, Compose locale-pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+The Wayland mock passed gap-buffer and rendering fixtures, Unicode 18.0 grapheme boundaries (ASCII, combining sequences, emoji modifiers and ZWJ family, RI pairs, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF), partial rendering, horizontal scrolling, large-document rendering, 10 MiB external clipboard paste, and 11 MiB / 89,414-line Open/Save coverage. The 11 MiB file reached its first presented redraw in approximately 137 ms in this run; this is a single CI observation, not a before/after measurement or local desktop benchmark.
+
+ELF `size`: text **237,846**, data **64**, BSS **3,764,856** bytes. Executable artifact: **151,225 bytes**; Compose locale-pack artifact: **120,536 bytes**. The executable artifact is 87 bytes larger than #985; no binary-size or performance improvement is claimed.
+
+No before/after end-to-end timing was collected, and this is not a manual retest on the user's live GNOME session.
+
+Implementation: [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9).
+Workflow: [Actions #986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887).
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14141397148); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14142255098). Both expire **2026-11-16 08:50 WIB**.
+
+---
 ## 2026-11-15 — batch Find/Replace index maintenance (Actions #985 PASS)
 
 **Branch/head:** `early-alpha` at [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c). **Workflow:** [Actions #985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631) passed the complete 17-step build, mock, integration and artifact workflow.

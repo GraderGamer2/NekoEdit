@@ -349,3 +349,18 @@ Actions [#985](https://github.com/GraderGamer2/NekoEdit/actions/runs/43639295631
 The executable reports text 237,670 bytes, data 64 bytes and BSS 3,764,856 bytes. The executable artifact is 151,138 bytes and the Compose artifact is 120,536 bytes. The executable artifact is 12 bytes smaller than #984; this small section/artifact-size difference is not a measured speed improvement. No before/after end-to-end timing or manual live-desktop test is claimed.
 
 Implementation commit: [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c).
+
+
+---
+
+## 2026-11-15 — gap-aware visible-text traversal
+
+The visible document renderer previously translated every logical byte offset through `doc_byte_at` and called the grapheme iterator after each printable character. `render_document` now keeps a physical cursor in `rbp` beside the logical byte offset in `r14d`. At each visible-row mapping point and after a full Unicode grapheme advance, it synchronizes the physical cursor against the gap-buffer prefix/suffix. For one-byte advancement, it increments the pointer and rebases to the suffix start when the logical offset reaches `doc_gap_start`.
+
+The printable-ASCII path checks the next logical byte directly, including when it is the first byte after the physical gap. If the next byte is also ASCII, it advances by one without calling `doc_grapheme_next`. If it is high-bit, the existing Unicode path is retained; an ASCII base may join a following combining Extend, ZWJ or SpacingMark scalar even when the bytes are on opposite sides of the gap. Malformed UTF-8 also remains on the established decoder/grapheme path. The gap-buffer format, line-index structures, wrapping and glyph drawing are unchanged.
+
+Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 workflow steps. The Wayland mock verified gap-buffer rendering, Unicode 18.0 grapheme navigation (combining sequences, emoji modifiers/ZWJ, RI pairs, Hangul, Indic conjuncts, Prepend, SpacingMark and CRLF), dirty rendering, horizontal scrolling, 10 MiB external clipboard paste and 11 MiB / 89,414-line Open/Save. Renderer equivalence, native `us(intl)` XKB, pinned X.Org importer, Compose and nested GNOME Shell/Mutter/IBus tests also passed.
+
+ELF section sizes are text 237,846 bytes, data 64 bytes and BSS 3,764,856 bytes. Executable artifact: 151,225 bytes; Compose pack: 120,536 bytes. No before/after end-to-end timing was collected; the CI first-presented-redraw figure is not a controlled benchmark. No manual live-desktop test is claimed.
+
+Implementation: [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9).
