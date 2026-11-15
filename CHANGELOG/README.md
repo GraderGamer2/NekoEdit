@@ -1,3 +1,15 @@
+## Latest handoff (2026-11-15 — gap-aware visible-text traversal; CI PASS #986)
+
+Continue application-source development on `early-alpha` at [4a074b6](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.
+
+`render_document` now maintains a physical gap-buffer cursor beside its logical document offset. Visible bytes are read directly; sequential advancement increments the pointer and rebases to the suffix when the logical cursor reaches the gap. The printable-ASCII path checks the next logical byte across the gap and advances directly when it is ASCII. A high-bit next byte retains the full grapheme routine so combining marks, ZWJ sequences, SpacingMarks and invalid UTF-8 keep their established behavior. The gap-buffer format, line index, Unicode 18.0 tables, selection renderer and glyph rasterization are unchanged.
+
+Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 steps: build/ELF, CLI/host tests, renderer equivalence, full Wayland mock, native `us(intl)` XKB, pinned X.Org importer, Compose generation, nested GNOME Shell/Mutter/IBus and both artifact uploads. The mock includes gap-buffer fixtures, Unicode grapheme cases, 10 MiB external paste and 11 MiB / 89,414-line Open/Save. The 11 MiB Open reached its first presented redraw in approximately 137 ms in this CI run; this is not a controlled before/after benchmark.
+
+ELF `size`: text 237,846 bytes, data 64 bytes, BSS 3,764,856 bytes. Executable artifact: 151,225 bytes; Compose packs: 120,536 bytes. Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14141397148); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14142255098). Expiry: 2026-11-16 08:50 WIB. The executable artifact is 87 bytes larger than #985; no binary-size or performance improvement is claimed.
+
+No before/after end-to-end timing was collected, and no manual retest on the user's live GNOME session is claimed. Next candidate: inspect selection and Find-highlight traversal for similar avoidable logical-byte lookups, preserving grapheme-accurate selection/highlight geometry; add focused visible-pixel regression coverage before changing those paths.
+
 ## Latest handoff (2026-11-15 — batched Find/Replace; CI PASS #985)
 
 Continue source development on `early-alpha` at [ad18f92](https://github.com/GraderGamer2/NekoEdit/commit/ad18f921af7038afb086d73a1822407f1d2b471c). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains `-O2`, unstripped. Keep `optimization-early-alpha` isolated.

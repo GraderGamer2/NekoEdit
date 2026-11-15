@@ -1,3 +1,19 @@
+## 2026-11-15 — gap-aware visible-text traversal (Actions #986 PASS)
+
+| Commit | Subject |
+|---|---|
+| [4a074b6fab2b](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9) | perf: traverse visible text through gap-aware cursor |
+
+`render_document` now tracks the physical address beside its logical offset, reads visible bytes directly, and rebases when sequential traversal crosses the gap. Printable ASCII advances directly when the next logical byte is ASCII; non-ASCII continuation uses the full grapheme routine. Gap-buffer representation and Unicode 18.0 segmentation are unchanged.
+
+Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed all 17 steps, including the Wayland mock, grapheme coverage, 10 MiB external paste, 11 MiB Open/Save, renderer equivalence, native XKB, X.Org importer, Compose, and GNOME Shell/Mutter/IBus integration.
+
+ELF `size`: text 237,846, data 64, BSS 3,764,856 bytes. Executable artifact: 151,225 bytes; Compose artifact: 120,536 bytes. This build is 87 bytes larger than #985; no speed or size gain is claimed.
+
+Artifacts: [Linux x86-64 executable](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14141397148); [Compose locale packs](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887/artifacts/14142255098). Expiry: 2026-11-16 08:50 WIB.
+
+---
+
 ## 2026-11-15 — batch Find/Replace index maintenance (Actions #985 PASS)
 
 | Commit | Subject |

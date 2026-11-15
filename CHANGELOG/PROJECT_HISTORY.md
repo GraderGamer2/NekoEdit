@@ -1,3 +1,15 @@
+## 2026-11-15 — gap-aware visible-text traversal
+
+The visible document-render loop now carries a physical pointer for sequential reads beside its logical byte offset. This removes repeated logical-to-physical gap-buffer translation from the per-character rendering path. Sequential single-byte advancement increments the pointer directly and jumps to the physical suffix when it reaches the logical gap boundary.
+
+Printable ASCII gets a fast path when the next logical byte is also ASCII. If that byte is non-ASCII, the existing Unicode grapheme iterator is retained so an ASCII base followed by a combining mark, ZWJ or SpacingMark remains one cluster even when the sequence crosses the storage gap. The pointer is synchronized after visual-row remapping and full grapheme traversal. The gap-buffer representation, Unicode data, line index and glyph rasterization are unchanged.
+
+Actions [#986](https://github.com/GraderGamer2/NekoEdit/actions/runs/43664719887) passed the 17-step workflow, including the Wayland mock, Unicode grapheme coverage, 10 MiB external paste, 11 MiB Open/Save, renderer equivalence, XKB, X.Org importer, Compose and nested GNOME Shell/Mutter/IBus. ELF text/data/BSS are 237,846 / 64 / 3,764,856 bytes; executable and Compose artifacts are 151,225 and 120,536 bytes. No end-to-end speed gain is claimed; no before/after benchmark or manual desktop run was performed.
+
+Implementation [4a074b6fab2b5709597078de0b165f62339370f9](https://github.com/GraderGamer2/NekoEdit/commit/4a074b6fab2b5709597078de0b165f62339370f9).
+
+---
+
 ## 2026-11-15 — batch Find/Replace index maintenance
 
 Find/Replace previously replaced a match by deleting the selection and then calling the single-byte insertion routine once for every byte in the replacement buffer. That was unnecessarily expensive for multi-byte replacements and for Replace All: after each deletion invalidated the derived line index, the first inserted byte could force a full rebuild before the rest of that replacement updated the index incrementally.
