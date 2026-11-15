@@ -10828,7 +10828,20 @@ xkb_symbols "nekoedit-sparse" {
                     + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 1013, 1013, 2, 1))
                 )
                 expect_message(client, (8, 1, struct.pack("<III", client_buffer_id, 0, 0)), "shifted key attach")
-                expect_message(client, (8, 2, struct.pack("<4I", 0, 0, 800, 480)), "shifted key damage")
+                shifted_damage = recv_wayland_message(client)
+                if shifted_damage[0:2] != (8, 2) or shifted_damage[3] or len(shifted_damage[2]) != 16:
+                    raise AssertionError(f"shifted key: malformed first damage request: {shifted_damage!r}")
+                shifted_rect1 = struct.unpack("<4I", shifted_damage[2])
+                if shifted_rect1 != (0, 0, 800, 480):
+                    x1, y1, width1, height1 = shifted_rect1
+                    if x1 != 0 or width1 != 800 or not (0 < height1 < 480) or y1 + height1 > 480:
+                        raise AssertionError(f"shifted key: invalid edit damage rectangle: {shifted_rect1!r}")
+                    shifted_damage2 = recv_wayland_message(client)
+                    if shifted_damage2[0:2] != (8, 2) or shifted_damage2[3] or len(shifted_damage2[2]) != 16:
+                        raise AssertionError(f"shifted key: malformed status damage request: {shifted_damage2!r}")
+                    x2, y2, width2, height2 = struct.unpack("<4I", shifted_damage2[2])
+                    if x2 != 0 or width2 != 800 or height2 <= 0 or y2 <= y1 or y2 + height2 > 480:
+                        raise AssertionError(f"shifted key: invalid status damage rectangle: {(x2, y2, width2, height2)!r}")
                 expect_message(client, (8, 6, b""), "shifted key commit")
                 shifted_key_pixels = bytes(pixels)
                 if read_document_state()["doc_contents"] != b"b\n2!":
