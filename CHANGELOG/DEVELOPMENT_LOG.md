@@ -1,5 +1,17 @@
 ## 2026-11-15 — unified Ctrl+F Find/Replace and gap-aware Replace Current (Actions #1000 PASS)
 
+## 2026-11-15 — user-confirmed modular locale contract (design constraint; documentation only)
+
+NekoEdit's built-in locale remains **en_US.UTF-8**. The application UI stays English, and the default keyboard/Compose behavior stays based on the embedded US English tables. Do not bundle additional locales into the core executable or expand the built-in baseline into a multilingual locale database.
+
+Other locales are optional, separately distributed, data-only packs. Users obtain the pack they need and install it themselves through NekoEdit's local pack flow; installed packs live under `~/.nekoedit/locales/`. A selected pack replaces the corresponding Compose/dead-key table rather than merging into the built-in baseline. Packs are not executable plugins, do not add shared-library dependencies, and must not cause an automatic network download. These packs extend keyboard composition data; they are not UI translations or a reason to expand the editor's built-in locale.
+
+Unicode document editing, clipboard input, and future Unicode-capable Find/Replace fields are separate capabilities. Supporting UTF-8 or IME-committed text must not silently change the application's locale, add extra built-in locale tables, or bundle optional locale data.
+
+**Selection behavior to reconcile:** the current [Compose documentation](../docs/COMPOSE.md) describes environment-variable fallback through `NEKOEDIT_LOCALE`, `LC_ALL`, `LC_CTYPE`, and `LANG` when no saved preference exists. The user-confirmed target is explicit user choice: keep en_US active by default and activate another locale only when the user has installed and selected that pack. Review the environment fallback against this contract before further locale work; this documentation note does not change runtime behavior.
+
+---
+
 The Find and Replace functions previously had two entry points: Ctrl+F opened a compact search-only mode, while Ctrl+H opened a separate replacement mode. The editor now uses one combined panel opened by Ctrl+F. The independent Ctrl+H dispatch was removed so the same workflow handles both operations. The query is entered in the first field; Tab or a pointer click focuses the replacement field. Enter/F3/Shift+F3 move through matches, Ctrl+Enter performs Replace Current, and Replace All remains available in the panel.
 
 The remaining Replace Current selection check also had a small but avoidable hot path: it called `doc_byte_at` once for every compared query byte. `doc_find_selection_matches` now translates the logical selection start to a physical pointer once, compares the query over the gap buffer's contiguous prefix and suffix, and switches directly to the suffix when the logical position reaches the gap. It rejects an empty query and checks the selection end against the current document length before reading. Search and selection matching remain byte-exact; this does not alter Unicode grapheme navigation.
