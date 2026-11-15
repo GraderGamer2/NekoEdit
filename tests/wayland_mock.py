@@ -4808,7 +4808,18 @@ xkb_symbols "nekoedit-sparse" {
                         or initial_state["doc_wrap_enabled"] != 1
                     ):
                         raise AssertionError("status-column fixture did not load as one long wrapped line: " + repr(initial_state))
-                    key_step(3150, 107, "End moves the caret to the end of the mixed Unicode line")
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3160, 3160, 29, 1))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 3180, 4, 0, 0, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3161, 3161, 107, 1))
+                    )
+                    workflow_redraw("Ctrl+End moves caret to the logical end of the mixed Unicode line")
+                    client.sendall(
+                        wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3163, 3163, 107, 0))
+                        + wire_message(keyboard_object_id, 3, struct.pack("<IIII", 3165, 3165, 29, 0))
+                        + wire_message(keyboard_object_id, 4, struct.pack("<IIIII", 3181, 0, 0, 0, 0))
+                        + buffer_release_message()
+                    )
                     state = read_document_state()
                     if (
                         state["doc_cursor"] != expected_length
