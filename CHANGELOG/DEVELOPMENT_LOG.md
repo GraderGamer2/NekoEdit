@@ -1,3 +1,15 @@
+## 2026-11-16 — edit-aware dirty-region rendering review (coverage pending)
+
+The source at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19) already contains edit-aware partial repaint in addition to the earlier caret-band path. A document edit marks the earliest affected visual row per reusable SHM slot. `render_prepare_slot` accepts that path only when the previous slot snapshot remains compatible with the current scene, viewport, font/raster scale, wrap state, geometry, and indexed layout. `render_document` then maps from the first dirty visual row, with the no-wrap mapper receiving the current horizontal pixel offset, and stops at the end of the drawable document region. Ineligible changes use full-frame rendering. This is an implementation description, not evidence of a measured application-wide speedup.
+
+The previous dirty-render test checks caret navigation, printable-ASCII insertion, Backspace, and newline fallback in the wrapped fixture. The next review adds two missing regression cases: (1) perform a layout-stable edit with Wrap Lines OFF after horizontal scrolling, and (2) replace a non-empty active selection using one printable ASCII key. Both need exact byte/caret/selection assertions; the no-wrap case also checks the partial redraw and bounded scan.
+
+A production instrumentation audit found exported scan and clipped-row counters, keyboard/keymap event counters, SFNT outline/raster probes, and XKB parse-failure snapshots. The font loader currently performs additional probe glyph outline/raster work after selecting a face. These diagnostics are only needed by tests; the follow-up will guard them with `NEKOEDIT_TESTING` and route Wayland/Mutter regression targets to a separate instrumented test binary. Production `build/nekoedit` will retain its existing `-O2` and unstripped build policy but omit the test probes and their runtime writes. No application-owned diagnostic log-file writer was found in the reviewed sources; persistent history/preferences are functional user data and remain.
+
+No source changes, benchmark results, or Actions validation are part of this review entry yet.
+
+---
+
 ## 2026-11-15 — Czech Compose pack and bounded status-column lookup (Actions #1006 PASS)
 
 The optional locale set now includes cs_CZ.UTF-8. Its source is pinned to X.Org libX11 commit ff8706a5eae25b8bafce300527079f68a201d27f, blob 022753ea937e9a1f483c9545e99ddbc6295cd485. The Czech file includes the en_US baseline and overrides two dead-caron rules: u -> ů and U -> Ů. The importer produces a flattened 4,479-record JSON table and a 304,644-byte NLP1 v2 pack. The generated JSON is compared byte-for-byte against the committed table in CI; the pinned source hash is checked in both the normal build and Release-pack workflows. The .nlp and its attribution notice remain separate assets; no locale data was added to the core executable.
