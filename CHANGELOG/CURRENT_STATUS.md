@@ -1,3 +1,25 @@
+## 2026-11-16 — edit-aware dirty-region rendering review (focused coverage pending)
+
+**Baseline:** `early-alpha` at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19).
+
+### Existing renderer behavior
+
+The current source has two conservative partial-render candidates: caret movement and layout-stable document edits. The edit marker keeps the earliest changed visual row per reusable SHM slot. Before using partial damage, the renderer verifies the slot's committed scene and viewport state, font/raster scale, wrap mode, window/document geometry, and the line-index-derived layout. For accepted edits, document traversal starts at the dirty visual row and continues through the last drawable row; rectangle clipping remains active. In Wrap Lines OFF mode, the partial painter resolves the visible starting byte using `doc_view_left_px`. Structural changes and incompatible scene states continue through the full-frame renderer.
+
+### Correctness checks still required
+
+- **Wrap Lines OFF editing:** disable wrapping, move the horizontal viewport, then type and delete at the visible end of a long logical line. Verify exact document bytes, caret state, partial damage, and bounded local traversal.
+- **ASCII replacement of an active selection:** create a non-empty selection, type one printable ASCII key, and verify the selected bytes are replaced exactly once, the caret is placed after the inserted byte, and the selection is cleared.
+- Preserve existing wrapped-mode caret/edit tests and full-frame fallback for newline/layout changes.
+
+### Runtime instrumentation audit
+
+The application build currently exposes test probes: hot-path scan/row counters, keyboard/keymap event counters, SFNT font outline/raster probes, and XKB parse-failure snapshots. The font probes cause extra outline decoding/rasterization on successful font loading. Move all of this behind `NEKOEDIT_TESTING` and build a separate test executable; the shipped `build/nekoedit` must not contain or update those counters. Keep the existing `-O2`, unstripped application build. Do not remove functional error handling or the persistent Undo/Redo journal. The reviewed editor sources have no diagnostic log-file output path.
+
+This entry records the implementation state and review plan only. The no-wrap and selection-replacement checks are not yet validated, and no Actions run is claimed here.
+
+---
+
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
 
 **Branch/source head:** early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Implementation: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350); BSS fix: [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9); wrapped fixture correction: [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Workflow: [Actions #1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps.
