@@ -1,6 +1,18 @@
 .intel_syntax noprefix
 .extern font_set_render_clip
 
+.macro TEST_DIAG_STORE symbol, value
+.ifdef NEKOEDIT_TESTING
+    mov dword ptr [rip + \symbol], \value
+.endif
+.endm
+
+.macro TEST_DIAG_INC symbol
+.ifdef NEKOEDIT_TESTING
+    inc dword ptr [rip + \symbol]
+.endif
+.endm
+
 .equ SYS_read,          0
 .equ SYS_write,         1
 .equ SYS_close,         3
@@ -5081,6 +5093,7 @@ keymap_processing_complete: .long 0
 .balign 8
 keymap_mapping:         .quad 0
 next_client_object_id:  .long 0
+.ifdef NEKOEDIT_TESTING
 .global keymap_event_count, keymap_event_processed_count, keymap_event_last_object, keymap_event_last_size, keymap_event_last_fd
 .global keyboard_dispatch_count, keyboard_dispatch_last_opcode, keyboard_dispatch_last_size
 keymap_event_count:        .long 0
@@ -5091,6 +5104,7 @@ keymap_event_last_fd:      .long 0
 keyboard_dispatch_count:  .long 0
 keyboard_dispatch_last_opcode: .long 0
 keyboard_dispatch_last_size: .long 0
+.endif
 .global seat_capabilities, next_client_object_id
 seat_capabilities:      .long 0
 pointer_button_down:    .long 0
@@ -5100,6 +5114,7 @@ doc_selection_active:   .long 0
 doc_selection_anchor:   .long 0
 doc_selection_start:    .long 0
 doc_selection_end:      .long 0
+.ifdef NEKOEDIT_TESTING
 .global render_selection_scan_start, render_selection_scan_end
 render_selection_scan_start: .long 0
 render_selection_scan_end:   .long 0
@@ -5115,6 +5130,7 @@ doc_offset_visual_scan_end:   .long 0
 .global doc_visual_offset_scan_start, doc_visual_offset_scan_end
 doc_visual_offset_scan_start: .long 0
 doc_visual_offset_scan_end:   .long 0
+.endif
 .global doc_word_drag_active, doc_word_drag_start, doc_word_drag_end
 doc_word_drag_active:   .long 0
 doc_word_drag_start:     .long 0
@@ -5194,11 +5210,13 @@ render_clip_top1:       .long 0
 render_clip_bottom1:    .long 0
 render_clip_top2:       .long 0
 render_clip_bottom2:    .long 0
+.ifdef NEKOEDIT_TESTING
 .global render_clip_background_row_visits
 render_clip_background_row_visits: .long 0
 .global render_status_scan_steps, render_status_column_value
 render_status_scan_steps: .long 0
 render_status_column_value: .long 0
+.endif
 render_damage_top1:     .long 0
 render_damage_height1:  .long 0
 render_damage_top2:     .long 0
@@ -6091,11 +6109,11 @@ wayland_main:
     jz .seat_check_sync
     cmp dword ptr [rip + last_object], eax
     jne .seat_check_sync
-    inc dword ptr [rip + keyboard_dispatch_count]
+    TEST_DIAG_INC keyboard_dispatch_count
     mov eax, dword ptr [rip + last_opcode]
-    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
+    TEST_DIAG_STORE keyboard_dispatch_last_opcode, eax
     mov eax, dword ptr [rip + last_size]
-    mov dword ptr [rip + keyboard_dispatch_last_size], eax
+    TEST_DIAG_STORE keyboard_dispatch_last_size, eax
     cmp dword ptr [rip + last_opcode], 0
     jne .seat_check_sync
     call keyboard_keymap_dispatch
@@ -7470,11 +7488,11 @@ wayland_main:
     jz .check_text_input_event
     cmp dword ptr [rip + last_object], eax
     jne .check_text_input_event
-    inc dword ptr [rip + keyboard_dispatch_count]
+    TEST_DIAG_INC keyboard_dispatch_count
     mov eax, dword ptr [rip + last_opcode]
-    mov dword ptr [rip + keyboard_dispatch_last_opcode], eax
+    TEST_DIAG_STORE keyboard_dispatch_last_opcode, eax
     mov eax, dword ptr [rip + last_size]
-    mov dword ptr [rip + keyboard_dispatch_last_size], eax
+    TEST_DIAG_STORE keyboard_dispatch_last_size, eax
     cmp dword ptr [rip + last_opcode], 0
     je .keyboard_keymap
     cmp dword ptr [rip + last_opcode], 1
@@ -13162,13 +13180,13 @@ keyboard_keymap_update:
 .type keyboard_keymap_dispatch, @function
 .pushsection .text.keyboard_keymap_dispatch,"ax",@progbits
 keyboard_keymap_dispatch:
-    inc dword ptr [rip + keymap_event_count]
+    TEST_DIAG_INC keymap_event_count
     mov eax, dword ptr [rip + last_object]
-    mov dword ptr [rip + keymap_event_last_object], eax
+    TEST_DIAG_STORE keymap_event_last_object, eax
     mov eax, dword ptr [rip + last_size]
-    mov dword ptr [rip + keymap_event_last_size], eax
+    TEST_DIAG_STORE keymap_event_last_size, eax
     mov eax, dword ptr [rip + event_fd]
-    mov dword ptr [rip + keymap_event_last_fd], eax
+    TEST_DIAG_STORE keymap_event_last_fd, eax
     cmp dword ptr [rip + last_size], 8
     jne .keyboard_keymap_dispatch_bad
     cmp dword ptr [rip + event_fd], -1
@@ -13176,7 +13194,7 @@ keyboard_keymap_dispatch:
     call keyboard_keymap_update
     test rax, rax
     js .keyboard_keymap_dispatch_done
-    inc dword ptr [rip + keymap_event_processed_count]
+    TEST_DIAG_INC keymap_event_processed_count
 .keyboard_keymap_dispatch_done:
     ret
 .keyboard_keymap_dispatch_bad:
@@ -13735,7 +13753,7 @@ draw_rect:
 .draw_rect_clip_band1_loop:
     test r8d, r8d
     jz .draw_rect_clip_band1_counter_done
-    inc dword ptr [rip + render_clip_background_row_visits]
+    TEST_DIAG_INC render_clip_background_row_visits
 .draw_rect_clip_band1_counter_done:
     mov ecx, r14d
     mov eax, r11d
@@ -13783,7 +13801,7 @@ draw_rect:
 .draw_rect_clip_band2_loop:
     test r8d, r8d
     jz .draw_rect_clip_band2_counter_done
-    inc dword ptr [rip + render_clip_background_row_visits]
+    TEST_DIAG_INC render_clip_background_row_visits
 .draw_rect_clip_band2_counter_done:
     mov ecx, r14d
     mov eax, r11d
@@ -20213,7 +20231,7 @@ doc_offset_to_visual_indexed:
     xor ebx, ebx
     xor r14d, r14d
 .Ldoc_offset_indexed_cache_ready:
-    mov dword ptr [rip + doc_offset_visual_scan_start], r13d
+    TEST_DIAG_STORE doc_offset_visual_scan_start, r13d
 .Ldoc_offset_indexed_scan:
     cmp r13d, r12d
     jae .Ldoc_offset_indexed_boundary
@@ -20297,7 +20315,7 @@ doc_offset_to_visual_indexed:
     inc ebx
     xor r14d, r14d
 .Ldoc_offset_indexed_done:
-    mov dword ptr [rip + doc_offset_visual_scan_end], r13d
+    TEST_DIAG_STORE doc_offset_visual_scan_end, r13d
     add ebp, ebx
     mov eax, ebp
     mov edx, r14d
@@ -20382,7 +20400,7 @@ doc_visual_to_offset_indexed:
     mov dword ptr [rsp + 8], eax
 .Ldoc_visual_indexed_cache_ready:
     mov ebx, dword ptr [rsp + 12]
-    mov dword ptr [rip + doc_visual_offset_scan_start], r13d
+    TEST_DIAG_STORE doc_visual_offset_scan_start, r13d
 .Ldoc_visual_indexed_scan:
     cmp r13d, r15d
     jae .Ldoc_visual_indexed_done
@@ -20486,7 +20504,7 @@ doc_visual_to_offset_indexed:
     inc r13d
     jmp .Ldoc_visual_indexed_scan
 .Ldoc_visual_indexed_done:
-    mov dword ptr [rip + doc_visual_offset_scan_end], r13d
+    TEST_DIAG_STORE doc_visual_offset_scan_end, r13d
     mov eax, r13d
     mov edx, r14d
     add rsp, 24
@@ -23544,7 +23562,7 @@ render_status_bar:
     push r13
     push r14
     sub rsp, 16
-    mov dword ptr [rip + render_status_scan_steps], 0
+    TEST_DIAG_STORE render_status_scan_steps, 0
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     mov edx, dword ptr [rip + window_status_top]
@@ -23602,7 +23620,7 @@ render_status_bar:
 .Lneko_status_scan:
     cmp r14d, ebx
     jae .Lneko_status_scan_done
-    inc dword ptr [rip + render_status_scan_steps]
+    TEST_DIAG_INC render_status_scan_steps
     mov edi, r14d
     call doc_byte_at
     cmp eax, 10
@@ -23632,7 +23650,7 @@ render_status_bar:
     inc r14d
     jmp .Lneko_status_scan
 .Lneko_status_scan_done:
-    mov dword ptr [rip + render_status_column_value], ebp
+    TEST_DIAG_STORE render_status_column_value, ebp
     mov r12d, dword ptr [rip + window_status_top]
     mov eax, dword ptr [rip + ui_font_size]
     test eax, eax
@@ -26243,8 +26261,8 @@ render_find_highlights:
     push r15
     sub rsp, 8
     mov r14d, dword ptr [rip + find_query_length]
-    mov dword ptr [rip + render_find_scan_start], 0
-    mov dword ptr [rip + render_find_scan_end], 0
+    TEST_DIAG_STORE render_find_scan_start, 0
+    TEST_DIAG_STORE render_find_scan_end, 0
     cmp dword ptr [rip + doc_wrap_enabled], 0
     je .Lrender_find_highlights_unwrapped
 
@@ -26268,8 +26286,8 @@ render_find_highlights:
     xor esi, esi
     call doc_visual_to_offset
     mov r13d, eax
-    mov dword ptr [rip + render_find_scan_start], r12d
-    mov dword ptr [rip + render_find_scan_end], r13d
+    TEST_DIAG_STORE render_find_scan_start, r12d
+    TEST_DIAG_STORE render_find_scan_end, r13d
     mov edi, r12d
     mov esi, r13d
     call render_find_highlights_range
@@ -26307,9 +26325,9 @@ render_find_highlights:
 
     cmp r15d, dword ptr [rip + doc_view_top_row]
     jne .Lrender_find_highlights_keep_start
-    mov dword ptr [rip + render_find_scan_start], r12d
+    TEST_DIAG_STORE render_find_scan_start, r12d
 .Lrender_find_highlights_keep_start:
-    mov dword ptr [rip + render_find_scan_end], r13d
+    TEST_DIAG_STORE render_find_scan_end, r13d
     mov edi, r12d
     mov esi, r13d
     call render_find_highlights_range
@@ -26506,8 +26524,8 @@ render_selection:
     sub rsp, 24
     cmp dword ptr [rip + doc_selection_active], 0
     jne .Lneko_render_selection_active
-    mov dword ptr [rip + render_selection_scan_start], 0
-    mov dword ptr [rip + render_selection_scan_end], 0
+    TEST_DIAG_STORE render_selection_scan_start, 0
+    TEST_DIAG_STORE render_selection_scan_end, 0
     jmp .Lneko_render_selection_done
 .Lneko_render_selection_active:
     cmp dword ptr [rip + doc_wrap_enabled], 0
@@ -26531,8 +26549,8 @@ render_selection:
     xor esi, esi
     call doc_visual_to_offset
     mov ebp, eax
-    mov dword ptr [rip + render_selection_scan_start], r14d
-    mov dword ptr [rip + render_selection_scan_end], r14d
+    TEST_DIAG_STORE render_selection_scan_start, r14d
+    TEST_DIAG_STORE render_selection_scan_end, r14d
     # Map the starting logical byte offset to its physical address around
     # the gap, then advance the pointer as the visible selection is scanned.
     mov rax, qword ptr [rip + doc_buffer]
@@ -26553,7 +26571,7 @@ render_selection:
     jae .Lneko_render_selection_done
 
 .Lneko_render_selection_scan:
-    mov dword ptr [rip + render_selection_scan_end], r14d
+    TEST_DIAG_STORE render_selection_scan_end, r14d
     cmp r14d, dword ptr [rip + doc_length]
     jae .Lneko_render_selection_done
     cmp r14d, dword ptr [rip + doc_selection_end]
@@ -26804,8 +26822,8 @@ render_selection_unwrapped:
     add eax, dword ptr [rip + window_doc_visible_rows]
     mov dword ptr [rsp], eax
     mov r14d, dword ptr [rip + doc_view_top_row]
-    mov dword ptr [rip + render_selection_scan_start], 0
-    mov dword ptr [rip + render_selection_scan_end], 0
+    TEST_DIAG_STORE render_selection_scan_start, 0
+    TEST_DIAG_STORE render_selection_scan_end, 0
 
 .Lselection_unwrapped_row:
     cmp r14d, dword ptr [rsp]
@@ -26831,9 +26849,9 @@ render_selection_unwrapped:
     mov ebp, eax
     cmp r14d, dword ptr [rip + doc_view_top_row]
     jne .Lselection_unwrapped_keep_scan_start
-    mov dword ptr [rip + render_selection_scan_start], r12d
+    TEST_DIAG_STORE render_selection_scan_start, r12d
 .Lselection_unwrapped_keep_scan_start:
-    mov dword ptr [rip + render_selection_scan_end], ebp
+    TEST_DIAG_STORE render_selection_scan_end, ebp
     # Maintain a physical cursor for sequential reads in this visible row.
     mov rax, qword ptr [rip + doc_buffer]
     mov ecx, r12d
@@ -26857,7 +26875,7 @@ render_selection_unwrapped:
     jae .Lselection_unwrapped_next_row
 
 .Lselection_unwrapped_scan:
-    mov dword ptr [rip + render_selection_scan_end], r12d
+    TEST_DIAG_STORE render_selection_scan_end, r12d
     cmp r12d, ebp
     jae .Lselection_unwrapped_row_end
     cmp r12d, dword ptr [rip + doc_selection_end]
@@ -27445,8 +27463,8 @@ render_document:
     push r15
     push rbp
     sub rsp, 8                  # keep System V call-site alignment
-    mov dword ptr [rip + render_document_scan_start], 0
-    mov dword ptr [rip + render_document_scan_end], 0
+    TEST_DIAG_STORE render_document_scan_start, 0
+    TEST_DIAG_STORE render_document_scan_end, 0
     cmp dword ptr [rip + render_partial_active], 1
     jne .Ldocument_render_full_map_start
     mov edi, dword ptr [rip + render_partial_first_row]
@@ -27492,10 +27510,10 @@ render_document:
 
 .Ldocument_render_origin_ready:
     call .Ldocument_render_sync_pointer
-    mov dword ptr [rip + render_document_scan_start], r14d
-    mov dword ptr [rip + render_document_scan_end], r14d
+    TEST_DIAG_STORE render_document_scan_start, r14d
+    TEST_DIAG_STORE render_document_scan_end, r14d
 .Ldocument_render_loop:
-    mov dword ptr [rip + render_document_scan_end], r14d
+    TEST_DIAG_STORE render_document_scan_end, r14d
     cmp dword ptr [rip + render_partial_active], 1
     jne .Ldocument_render_loop_full_bounds
     cmp r13d, dword ptr [rip + render_partial_end_y]
