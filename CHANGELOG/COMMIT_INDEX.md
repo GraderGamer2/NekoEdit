@@ -3,18 +3,20 @@
 | Commit | Subject |
 |---|---|
 | [3ba19adfcd2b](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda) | build: retain test-only XKB diagnostics in native parser test |
-| [0540e6c4b85f](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f) | test: keep dirty-render input event serials ordered |
-| [ea1b3de28fb5](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5) | test: keep no-wrap edits inside stable horizontal viewport |
-| [182cf409f5fd](https://github.com/GraderGamer2/NekoEdit/commit/182cf409f5fd) | build: fix test object expansion and reject release probes |
-| [950d36f230ca](https://github.com/GraderGamer2/NekoEdit/commit/950d36f230cad) | test: correct Python condition in dirty-render coverage |
-| [2cfa3d6ab101](https://github.com/GraderGamer2/NekoEdit/commit/2cfa3d6ab101) | test: cover no-wrap edits and ASCII selection replacement |
-| [6c069c20db43](https://github.com/GraderGamer2/NekoEdit/commit/6c069c20db436) | build: guard font probe globals for test binary |
-| [0039f9eeb472](https://github.com/GraderGamer2/NekoEdit/commit/0039f9eeb472) | perf: skip font validation probes in production |
-| [a3a42d542205](https://github.com/GraderGamer2/NekoEdit/commit/a3a42d542205) | perf: keep XKB parse diagnostics out of production |
-| [e823a2ee9d30](https://github.com/GraderGamer2/NekoEdit/commit/e823a2ee9d30) | perf: compile renderer and input counters out of production |
-| [58c40b11ae98](https://github.com/GraderGamer2/NekoEdit/commit/58c40b11ae98) | build: isolate editor diagnostics in test-only binary |
+| [0540e6c4b85f](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f93d17fb0718dd0ba402b01b8c764) | test: keep dirty-render input event serials ordered |
+| [ea1b3de28fb5](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5737a92a0a8b302ef9d3fed663f24) | test: keep no-wrap edits inside stable horizontal viewport |
+| [182cf409f5fd](https://github.com/GraderGamer2/NekoEdit/commit/182cf409f5fd04e8a4d6ee21ed0b89886dc7c40d) | build: fix test object expansion and reject release probes |
+| [950d36f230ca](https://github.com/GraderGamer2/NekoEdit/commit/950d36f230cadac6eba143e7d25a0c631097b001) | test: correct Python condition in dirty-render coverage |
+| [2cfa3d6ab101](https://github.com/GraderGamer2/NekoEdit/commit/2cfa3d6ab1013b7e40974406976657da31aefbd6) | test: cover no-wrap edits and ASCII selection replacement |
+| [6c069c20db43](https://github.com/GraderGamer2/NekoEdit/commit/6c069c20db43616b267ff0315781c23c09f09b31) | build: guard font probe globals for test binary |
+| [0039f9eeb472](https://github.com/GraderGamer2/NekoEdit/commit/0039f9eeb472db63540edc4de0958284d68c38f2) | perf: skip font validation probes in production |
+| [a3a42d542205](https://github.com/GraderGamer2/NekoEdit/commit/a3a42d542205cd379c9400b2e69df37f5ca3e127) | perf: keep XKB parse diagnostics out of production |
+| [e823a2ee9d30](https://github.com/GraderGamer2/NekoEdit/commit/e823a2ee9d30e292e17b608185b0d318786cbc8b) | perf: compile renderer and input counters out of production |
+| [58c40b11ae98](https://github.com/GraderGamer2/NekoEdit/commit/58c40b11ae98fdf637f8d0eff2e52f2abe114b06) | build: isolate editor diagnostics in test-only binary |
 
 The production executable now compiles out render/input counters, font test probes, and XKB failure snapshots. Wayland/Mutter coverage uses a dedicated instrumented executable, and the native XKB test builds its own test-enabled parser object. The dirty-render Wayland fixture covers wrapped edits, no-wrap edits after horizontal scrolling, exact ASCII replacement of an active selection, and full-frame fallback for newline changes. Added coverage has not yet been confirmed by a passing Actions run.
+
+---
 
 ---
 
