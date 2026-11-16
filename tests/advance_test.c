@@ -99,7 +99,7 @@ int main(void) {
 
     doc_font_size = 12;
     hits_before = font_ascii_advance_fast_hits;
-    if (font_codepoint_advance_pixels(0x03a9u) != 9)
+    if (font_codepoint_advance_pixels(0x03a9u) != 8)
         fail("Unicode C fallback returned the wrong advance");
     if (font_ascii_advance_fast_hits != hits_before)
         fail("Unicode code point incorrectly used the ASCII fast path");

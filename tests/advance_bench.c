@@ -7,7 +7,6 @@
 
 #define SAMPLE_COUNT 7u
 #define ITERATIONS 5000000u
-#define TEXT_LENGTH 32u
 
 int32_t font_loaded = 1;
 int32_t font_units_per_em = 1000;
@@ -25,8 +24,9 @@ extern void font_cache_clear(void);
 extern int font_codepoint_advance_pixels(uint32_t codepoint);
 extern int font_codepoint_advance_pixels_size(uint32_t codepoint, uint32_t size);
 
-static const uint8_t workload[TEXT_LENGTH] =
+static const uint8_t workload[] =
     "NekoEdit: efficient ASCII advances 0123456789.";
+#define TEXT_LENGTH ((uint32_t)(sizeof(workload) - 1u))
 
 static volatile uint64_t benchmark_sink;
 
