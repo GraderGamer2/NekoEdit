@@ -14,8 +14,6 @@ Continue application-source work on `early-alpha` at [3ba19ad](https://github.co
 
 ---
 
----
-
 ## Latest handoff (2026-11-15 — Czech Compose pack and status-column checkpoints; CI PASS #1006)
 
 Continue application development on early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). The implementation is [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), the BSS initialization correction is [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and the wrapped-line test uses Ctrl+End in [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Keep main as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains -O2, unstripped. Keep optimization-early-alpha isolated.
