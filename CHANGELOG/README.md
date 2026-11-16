@@ -1,3 +1,17 @@
+## Latest handoff (2026-11-16 — edit-aware dirty-render review; focused coverage pending)
+
+Continue application-source development on `early-alpha` at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Keep `optimization-early-alpha` isolated. The normal application build remains `-O2` and unstripped.
+
+**Existing edit-aware renderer:** the current source extends the conservative caret-band repaint with a layout-stable edit path. An edit records the earliest changed visual row for each compatible shared-memory buffer slot. A partial repaint is accepted only when the slot's scene, viewport, font/scale, wrapping, dimensions, and indexed layout remain compatible; the document painter starts from the affected row rather than rescanning from the document's beginning. The edit path extends through the last drawable document row and still uses clipped drawing. Wrap Lines OFF maps the visible start with the current horizontal pixel origin. Changes that can alter layout or scene geometry retain the complete repaint fallback. This is a bounded-work optimization, not a measured end-to-end latency or FPS claim.
+
+**Coverage gap identified:** the current dirty-render regression exercises caret movement and layout-stable typing/Backspace with wrapping enabled. Separate tests cover unwrapped navigation/scrolling, but the dirty-edit path still needs an explicit Wrap Lines OFF edit after horizontal scrolling and an ASCII keystroke replacing an active selection. The next correctness pass adds both assertions before treating the edit-aware path as covered.
+
+**Production instrumentation audit:** the normal executable currently contains test-facing scan/row counters, keyboard/keymap event counters, font-loader outline/raster probes, and XKB parse-failure snapshots. Some are written on input/render hot paths; the font probes also perform extra outline and raster work during font selection. The follow-up will compile those probes only into a dedicated test executable, leaving the production executable without runtime profiling/debug instrumentation. The source audit so far has not found an application-owned diagnostic log-file writer. Persistent Undo/Redo journal and preferences files are user data, not diagnostic logs; test-runner temporary output is external to the editor.
+
+This is a review checkpoint, not a completed validation result. No source changes or new Actions run are included in this documentation update.
+
+---
+
 ## Latest handoff (2026-11-15 — Czech Compose pack and status-column checkpoints; CI PASS #1006)
 
 Continue application development on early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). The implementation is [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), the BSS initialization correction is [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and the wrapped-line test uses Ctrl+End in [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Keep main as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains -O2, unstripped. Keep optimization-early-alpha isolated.
