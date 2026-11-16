@@ -1,3 +1,37 @@
+## 2026-11-16 — first UI clipping and layout-correction pass (Actions #43802500972 PASS)
+
+**Source branch/head:** `early-alpha` at [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708). `main` remains application-source stable and receives only CHANGELOG mirrors; `optimization-early-alpha` remains isolated.
+
+### Renderer and label bounds
+
+- Extended `draw_bounded_ascii_width` so overflowing labels append `...` when the remaining pixel width can fit the three glyphs.
+- Constrained the active document basename to the document tab's 120px title region.
+- Constrained History's title, document/error heading and result labels using the current window width and fixed side margins.
+
+### Help layout
+
+- Changed the shortcut reference design surface from 480×360 to 600×400, retaining centered aspect-ratio fitting and the existing modal backdrop.
+- The overlay font is capped at 14px when the user selects the maximum 16px UI font, so the two-column listing remains within its intended design columns.
+- Shortcut labels and descriptions are bounded individually. The central divider, title and close control have dedicated regions.
+- The render transform, panel-size calculation, and pointer conversion/hitbox use the same 600×400 design dimensions.
+
+### Settings and file picker
+
+- Reflowed the Settings Compose-locale actions to a 76px selector, 40px Add, 68px Remove and 60px Import button, with 4px gaps. Text is drawn inside separately bounded label regions.
+- Matched pointer ranges to button rectangles. Empty 4px gutters now consume the click without activating neighboring actions.
+- Bounded the built-in `en_US (built-in)` popup row to 124px, matching the installed-locale label policy.
+- Bounded the file picker's Show Hidden label to 108px, leaving a six-pixel design-space gap before its checkbox.
+
+### Regression coverage
+
+The Wayland mock exercises these cases at a 16px UI preference. It checks Help's centered 600×400 geometry, 14px font cap and divider; tests that Settings labels remain within their buttons and gutters remain clear; clicks each locale-action gutter and checks that Settings remains open with no picker/dialog; verifies the built-in locale popup gutter; and samples the Show Hidden/checkbox gap. The test's process-memory symbol allow-list now includes Help panel geometry.
+
+Implementation commits: [442edfc](https://github.com/GraderGamer2/NekoEdit/commit/442edfc7b36949b5582a17f4c4f2de6383e8f0c1), [1bbd28d](https://github.com/GraderGamer2/NekoEdit/commit/1bbd28d1792ab64e31f5d62ccaa8ad3483d9189e), [cf547c7](https://github.com/GraderGamer2/NekoEdit/commit/cf547c755894b75ff22a095fc30a8f07ef23e3a4), and [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708).
+
+[Actions #43802500972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43802500972) passed all **18 workflow steps** on source head [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708). Steps included the compiler sweep, production build and ELF/strip audit, CLI smoke tests, renderer equivalence, the complete Wayland mock and 11 MiB Open/Save tests, executable inspection, native `us(intl)` XKB, pinned X.Org regeneration/byte comparison, Compose pack generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads. No screenshot/manual inspection in the user's live GNOME session was performed; this is a targeted first pass, not a declaration that the whole UI is finished.
+
+---
+
 ## 2026-11-16 — measured compiler profiles, LTO release build and stripped ELF (Actions #43797788228 PASS)
 
 **Source branch:** `early-alpha`, final source head [25b2aa4](https://github.com/GraderGamer2/NekoEdit/commit/25b2aa460cc6438556b51e488e1043c8e93ccce4). `main` receives changelog-only mirrors; no application source is merged there. `optimization-early-alpha` remains isolated.

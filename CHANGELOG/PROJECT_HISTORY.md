@@ -1,3 +1,15 @@
+## 2026-11-16 — first UI clipping and layout-correction pass (Actions #43802500972 PASS)
+
+The first visual-correctness pass focused on text and control boundaries identified in the Wayland renderer. Long active-document tab names and History titles/results are now pixel-bounded, with an ellipsis when the remaining width can accommodate it. The Help shortcut reference uses a centered 600×400 two-column design and a 14px font cap under the 16px UI preference; its drawing and pointer coordinate systems were updated together. The Settings locale actions received wider Add/Remove/Import controls, bounded labels and neutral hit-test gutters. The built-in locale dropdown entry and file-picker Show Hidden label also have explicit bounds before adjacent controls.
+
+The Wayland mock now checks the Help geometry and divider at max UI font, Settings button-label pixels, all locale-action gutters, the built-in dropdown right gutter, and the Show Hidden/checkbox gutter. The initial mock failure was a missing test symbol registration, not an editor failure; the allow-list was corrected. The Settings/picker checkpoint passed the complete workflow in [Actions #43801965913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43801965913). Final source head [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708) adds inert-gutter click tests and a bounded built-in locale entry; the final run [#43802500972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43802500972) passed all 18 workflow steps.
+
+Implementation/test commits: [442edfc](https://github.com/GraderGamer2/NekoEdit/commit/442edfc7b36949b5582a17f4c4f2de6383e8f0c1), [1bbd28d](https://github.com/GraderGamer2/NekoEdit/commit/1bbd28d1792ab64e31f5d62ccaa8ad3483d9189e), [cf547c7](https://github.com/GraderGamer2/NekoEdit/commit/cf547c755894b75ff22a095fc30a8f07ef23e3a4), and [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708).
+
+This is a targeted first pass. The broader UI still needs visual hierarchy, spacing and component-by-component polish, and manual review in the user's live GNOME session remains outstanding.
+
+---
+
 ## 2026-11-16 — O2 LTO release build and full-symbol stripping (Actions #43797788228 PASS)
 
 NekoEdit's production C modules now build with `-O2 -flto`. The application links through GCC's LTO driver with `-nostdlib`, static linking, the explicit assembly `_start` entry, no executable stack, and `--gc-sections`. The project remains a direct-syscall/freestanding x86-64 application with no C runtime, interpreter or shared-library dependency. Its principal document renderer, layout and editing hot paths remain handwritten x86-64 assembly; the compiler change applies to the C rasterizer, clipboard, Compose, history and preferences modules.
