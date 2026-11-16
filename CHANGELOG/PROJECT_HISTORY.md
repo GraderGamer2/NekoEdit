@@ -1,3 +1,15 @@
+## 2026-11-16 — renderer instrumentation isolation and dirty-edit correctness coverage (Actions result unconfirmed)
+
+The normal NekoEdit executable now excludes profiling/test diagnostics from its runtime path. Wayland scan and clipped-row counters, keyboard/keymap event counters, SFNT outline/raster validation probes, and XKB parse-failure snapshots are compiled only into a dedicated test executable. Production font selection no longer performs additional diagnostic outline/raster operations. Production XKB error handling no longer scans the 32,768-entry keymap table to save diagnostic snapshots; parser reset and failure return remain intact. The production ELF check rejects the known test-only symbol families.
+
+Wayland/Mutter integration tests use `build/test/nekoedit-test`; the native XKB test builds its diagnostic-enabled parser object explicitly. The production executable remains `-O2` and unstripped. No editor-owned diagnostic log-file writer was found in the reviewed sources. Fatal errors continue to report to stderr; key-repeat and selection auto-scroll timers are functional input behavior and remain.
+
+The dirty-render regression now covers Wrap Lines OFF editing after horizontal scrolling, exact insert/delete bytes and caret positions, stable horizontal viewport, bounded partial repaint, and replacing a three-byte selection with one ASCII key. Existing wrapped-mode and newline fallback assertions are preserved. The new assertions have not yet been confirmed by a passing Actions result; no performance benchmark or end-to-end speedup is claimed.
+
+Related changes: [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda), [0540e6c](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f93d17fb0718dd0ba402b01b8c764), [ea1b3de](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5737a92a0a8b302ef9d3fed663f24).
+
+---
+
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (Actions #1006)
 
 The optional external Compose set gained `cs_CZ.UTF-8`, regenerated from the pinned libX11 source. Its dead-caron overrides produce ů/Ů; the flattened pack contains 4,479 records and the standalone NLP1 asset is 304,644 bytes. The core executable remains en_US-only and does not bundle optional locale tables.
