@@ -1,6 +1,7 @@
 AS       ?= as
 LD       ?= ld
 READELF  ?= readelf
+NM       ?= nm
 SIZE     ?= size
 PYTHON   ?= python3
 CC       ?= cc
@@ -9,7 +10,7 @@ BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 TEST_BUILD_DIR := $(BUILD_DIR)/test
 TEST_APP_BINARY := $(TEST_BUILD_DIR)/nekoedit-test
-TEST_OBJECTS := $(patsubst src/%.S,$(TEST_BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(TEST_BUILD_DIR)/%.o,$(C_SOURCES))
+TEST_OBJECTS = $(patsubst src/%.S,$(TEST_BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(TEST_BUILD_DIR)/%.o,$(C_SOURCES))
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
 CLIPBOARD_RANGE_TEST := $(BUILD_DIR)/clipboard_range_test
@@ -75,7 +76,10 @@ check: $(APP_BINARY)
 	@if $(READELF) -d $(APP_BINARY) 2>/dev/null | grep -q 'NEEDED'; then \
 		echo 'error: executable has dynamic library dependencies' >&2; exit 1; \
 	fi
-	@echo 'ELF check passed: no interpreter and no DT_NEEDED entries.'
+	@if $(NM) -g --defined-only $(APP_BINARY) | grep -Eq ' (font_probe_|render_(selection|find|document)_scan_|doc_(offset_visual|visual_offset)_scan_|keymap_event_|keyboard_dispatch_|xkb_parse_error_|render_clip_background_row_visits|render_status_scan_steps|render_status_column_value)'; then \
+		echo 'error: production executable contains test-only instrumentation symbols' >&2; exit 1; \
+	fi
+	@echo 'ELF check passed: no interpreter, dynamic dependencies, or test instrumentation.'
 
 inspect: $(APP_BINARY)
 	$(READELF) -h $(APP_BINARY)
