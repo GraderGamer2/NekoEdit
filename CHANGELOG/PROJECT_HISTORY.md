@@ -1,3 +1,15 @@
+## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (Actions #1006)
+
+The optional external Compose set gained `cs_CZ.UTF-8`, regenerated from the pinned libX11 source. Its dead-caron overrides produce ů/Ů; the flattened pack contains 4,479 records and the standalone NLP1 asset is 304,644 bytes. The core executable remains en_US-only and does not bundle optional locale tables.
+
+The status bar now reuses the stable-line-ID 4 KiB byte/visual checkpoint cache with a one-based logical column. Wrapped and unwrapped line-index passes populate the column alongside grapheme and visual metrics, including the existing four-column tab semantics. The status lookup resolves the logical line through the byte Fenwick tree, resumes from the nearest usable checkpoint, and scans only the local remainder. The entry stride grew from 24 to 32 bytes (+32 KiB for 4,096 entries).
+
+The Wayland mock verifies bounded status-column scanning on a 4 MiB line in both wrapping modes and checks a mixed wrapped fixture containing a tab, combining grapheme, and C0 control. The wrapped fixture uses Ctrl+End to reach logical EOF. Actions [#1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 workflow steps. No controlled end-to-end benchmark or manual live-desktop retest was performed.
+
+Related commits: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19).
+
+---
+
 ## 2026-11-15 — in-app keyboard shortcut reference and modal IME handling (CI PASS #1003)
 
 The editor now exposes its supported keyboard shortcuts through a centered Help panel, available from F1 or the title-bar Help item. The panel is divided into File and Editing, Navigation, and Find and Replace. Its contents reflect the implemented key bindings, including Ctrl+F for the unified Find/Replace interface; the removed Ctrl+H entry point is not listed.
