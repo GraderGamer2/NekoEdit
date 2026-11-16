@@ -23334,10 +23334,6 @@ draw_glyph:
     jae .glyph_fallback_scale_ready
     mov r10d, 1
 .glyph_fallback_scale_ready:
-    # Keep the sparse comma descender on the reference path until exact
-    # framebuffer parity is established for this particular glyph.
-    cmp r15d, ','
-    je .glyph_fallback_general
     # The common 1x fallback path needs no per-pixel transform, clipping, or
     # bounds mapping. Use direct row writes only when the full 5x7 cell fits;
     # every scaled, rotated, clipped, transformed, or edge glyph keeps the
@@ -23397,6 +23393,8 @@ draw_glyph:
     jz .glyph_fallback_fast_row_next
     mov dword ptr [rdi], 0xffd8dee9
 .glyph_fallback_fast_row_next:
+    # Advance past column five before adding the remaining row padding.
+    add rdi, 4
     mov eax, dword ptr [rip + window_stride]
     sub eax, 20
     add rdi, rax
