@@ -1,3 +1,23 @@
+## 2026-11-16 — test-only diagnostics and dirty-render regression coverage (Actions unconfirmed)
+
+| Commit | Subject |
+|---|---|
+| [3ba19adfcd2b](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda) | build: retain test-only XKB diagnostics in native parser test |
+| [0540e6c4b85f](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f) | test: keep dirty-render input event serials ordered |
+| [ea1b3de28fb5](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5) | test: keep no-wrap edits inside stable horizontal viewport |
+| [182cf409f5fd](https://github.com/GraderGamer2/NekoEdit/commit/182cf409f5fd) | build: fix test object expansion and reject release probes |
+| [950d36f230ca](https://github.com/GraderGamer2/NekoEdit/commit/950d36f230cad) | test: correct Python condition in dirty-render coverage |
+| [2cfa3d6ab101](https://github.com/GraderGamer2/NekoEdit/commit/2cfa3d6ab101) | test: cover no-wrap edits and ASCII selection replacement |
+| [6c069c20db43](https://github.com/GraderGamer2/NekoEdit/commit/6c069c20db436) | build: guard font probe globals for test binary |
+| [0039f9eeb472](https://github.com/GraderGamer2/NekoEdit/commit/0039f9eeb472) | perf: skip font validation probes in production |
+| [a3a42d542205](https://github.com/GraderGamer2/NekoEdit/commit/a3a42d542205) | perf: keep XKB parse diagnostics out of production |
+| [e823a2ee9d30](https://github.com/GraderGamer2/NekoEdit/commit/e823a2ee9d30) | perf: compile renderer and input counters out of production |
+| [58c40b11ae98](https://github.com/GraderGamer2/NekoEdit/commit/58c40b11ae98) | build: isolate editor diagnostics in test-only binary |
+
+The production executable now compiles out render/input counters, font test probes, and XKB failure snapshots. Wayland/Mutter coverage uses a dedicated instrumented executable, and the native XKB test builds its own test-enabled parser object. The dirty-render Wayland fixture covers wrapped edits, no-wrap edits after horizontal scrolling, exact ASCII replacement of an active selection, and full-frame fallback for newline changes. Added coverage has not yet been confirmed by a passing Actions run.
+
+---
+
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
 
 | Commit | Subject |
