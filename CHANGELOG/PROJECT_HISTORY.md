@@ -1,3 +1,11 @@
+## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
+
+A small status-bar polish pass introduces two understated separators so the caret position, byte count and text mode read as three distinct groups. The separators are 1px wide, 12px high, use the muted `#596273` tone, and are placed relative to the existing responsive status-field anchors rather than at new hard-coded panel positions. Text placement and document/status calculations remain unchanged.
+
+The Wayland mock verifies both separator columns in its 800×480 startup framebuffer. Implementation and regression coverage are committed in [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). Actions [#43816130665](https://github.com/GraderGamer2/NekoEdit/actions/runs/43816130665) passed all 18 workflow steps, including the complete Wayland mock and the build, executable, XKB, locale and nested Mutter integration checks. This is incremental UI refinement; broader spacing, alignment and live desktop review remain open.
+
+---
+
 ## 2026-11-16 — first UI clipping and layout-correction pass (Actions #43802500972 PASS)
 
 The first visual-correctness pass focused on text and control boundaries identified in the Wayland renderer. Long active-document tab names and History titles/results are now pixel-bounded, with an ellipsis when the remaining width can accommodate it. The Help shortcut reference uses a centered 600×400 two-column design and a 14px font cap under the 16px UI preference; its drawing and pointer coordinate systems were updated together. The Settings locale actions received wider Add/Remove/Import controls, bounded labels and neutral hit-test gutters. The built-in locale dropdown entry and file-picker Show Hidden label also have explicit bounds before adjacent controls.

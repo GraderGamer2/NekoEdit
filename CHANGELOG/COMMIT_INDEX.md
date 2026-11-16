@@ -1,3 +1,13 @@
+## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
+
+| Commit | Subject |
+|---|---|
+| [151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5) | ui: separate status bar information groups |
+
+[Actions #43816130665](https://github.com/GraderGamer2/NekoEdit/actions/runs/43816130665) passed all 18 workflow steps for source commit [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5).
+
+---
+
 ## 2026-11-16 — first UI clipping/layout correction pass (Actions #43802500972 PASS)
 
 | Commit | Subject |
