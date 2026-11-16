@@ -7284,12 +7284,20 @@ xkb_symbols "nekoedit-sparse" {
                         bitmap = glyph_bitmap(index + 1)
                         if not any(bitmap):
                             raise AssertionError(
-                                f"printable ASCII punctuation {character!r} rendered as a blank cell"
+                                f"printable ASCII punctuation {character!r} rendered as a blank cell; "
+                                f"bitmap={bitmap!r}"
                             )
                         if character != "?" and bitmap == question_bitmap:
                             raise AssertionError(
                                 f"printable ASCII punctuation {character!r} fell back to the '?' glyph"
                             )
+                    comma_bitmap = glyph_bitmap(punctuation_chars.index(",") + 1)
+                    expected_comma_bitmap = (0, 0, 0, 0, 12, 12, 8)
+                    if comma_bitmap != expected_comma_bitmap:
+                        raise AssertionError(
+                            "comma bitmap differs from its exact 5x7 fallback pattern: "
+                            + repr(comma_bitmap)
+                        )
                     observations.append(
                         "all 32 printable ASCII punctuation glyphs rendered without question-mark fallback"
                     )
