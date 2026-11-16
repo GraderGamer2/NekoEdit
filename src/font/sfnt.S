@@ -67,6 +67,7 @@ font_path_dejavu_sans:
 .global font_head_offset, font_hhea_offset, font_maxp_offset
 .global font_cmap_offset, font_cmap_length, font_hmtx_offset, font_hmtx_length
 .global font_glyf_offset, font_glyf_length, font_loca_offset, font_loca_length
+.ifdef NEKOEDIT_TESTING
 .global font_probe_A_glyph, font_probe_A_advance
 .global font_probe_A_outline_result, font_probe_A_contours, font_probe_A_points
 .global font_probe_A_last_x, font_probe_A_last_y
@@ -87,6 +88,7 @@ font_path_dejavu_sans:
 .global font_probe_byte_result, font_probe_byte_contours, font_probe_byte_points
 .global font_probe_byte_first_x, font_probe_byte_first_y, font_probe_byte_last_x, font_probe_byte_last_y
 .global font_probe_j_raster_result, font_probe_j_raster_width, font_probe_j_raster_height, font_probe_j_raster_pixels
+.endif
 .global font_glyph_contour_count, font_glyph_point_count
 .global font_glyph_x_min, font_glyph_y_min, font_glyph_x_max, font_glyph_y_max
 .global font_glyph_contour_ends, font_glyph_point_flags
@@ -114,6 +116,7 @@ font_glyf_offset:               .long 0
 font_glyf_length:               .long 0
 font_loca_offset:               .long 0
 font_loca_length:               .long 0
+.ifdef NEKOEDIT_TESTING
 font_probe_A_glyph:             .long 0
 font_probe_A_advance:           .long 0
 font_probe_A_outline_result:    .long 0
@@ -164,6 +167,7 @@ font_probe_j_raster_result:      .long 0
 font_probe_j_raster_width:       .long 0
 font_probe_j_raster_height:      .long 0
 font_probe_j_raster_pixels:      .long 0
+.endif
 font_glyph_contour_count:       .long 0
 font_glyph_point_count:         .long 0
 font_glyph_x_min:               .long 0
@@ -751,6 +755,7 @@ font_try_path:
     call font_parse_mapped
     test rax, rax
     js .Lfont_try_path_unmap_failed
+.ifdef NEKOEDIT_TESTING
     # Prove that the chosen Unicode cmap and horizontal metrics work.
     mov edi, 0x41             # 'A'
     call font_cmap_lookup
@@ -923,7 +928,9 @@ font_try_path:
     mov eax, dword ptr [rdi + rax * 4]
     mov dword ptr [rip + font_probe_byte_last_y], eax
 .Lfont_probe_byte_done:
+.endif
     mov dword ptr [rip + font_loaded], 1
+.ifdef NEKOEDIT_TESTING
     # A lowercase j commonly extends below the baseline. Rasterize its 32px
     # mask during the font fixture probe so descender padding is covered.
     mov edi, 0x6a
@@ -941,6 +948,7 @@ font_try_path:
     mov eax, dword ptr [rip + font_bitmap_pixel_count]
     mov dword ptr [rip + font_probe_j_raster_pixels], eax
 .Lfont_probe_j_done:
+.endif
     # Commit after parsing and outline probes have succeeded. The previous
     # mapping stays live until this point, so rollback never needs to reopen it.
     test rbx, rbx
@@ -2114,9 +2122,11 @@ font_init:
     push r14
     push r15
     mov dword ptr [rip + font_loaded], 0
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + font_probe_A_glyph], 0
     mov dword ptr [rip + font_probe_A_advance], 0
     mov dword ptr [rip + font_probe_advance_space], 0
+    .endif
     # The test harness can request the legacy embedded renderer explicitly.
     # This keeps old pixel-level UI tests deterministic while the font fixture
     # separately exercises the real outline-to-framebuffer path.
@@ -2208,6 +2218,7 @@ font_init:
     add rbx, 8
     jmp .Lfont_default_candidate_loop
 .Lfont_init_success:
+.ifdef NEKOEDIT_TESTING
     mov edi, 'A'
     call font_codepoint_advance_pixels
     mov dword ptr [rip + font_probe_advance_A], eax
@@ -2243,6 +2254,7 @@ font_init:
     jmp .Lfont_init_success_done
 .Lfont_init_no_curve_probe:
     mov dword ptr [rip + font_probe_curve_result], -1
+.endif
 .Lfont_init_success_done:
     xor eax, eax
     jmp .Lfont_init_return
