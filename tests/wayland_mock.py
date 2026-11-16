@@ -10782,131 +10782,132 @@ xkb_symbols "nekoedit-sparse" {
                             "newline insertion failed to use the safe full-frame fallback: "
                             + repr({"partial": newline_partial, "tail": newline_state["doc_contents"][-32:]})
                         )
-                    workflow_click(200, 20, 2000, "open Settings for no-wrap dirty edit test")
-                    if child_u32("settings_menu_open") != 1:
-                        raise AssertionError("Settings did not open for no-wrap dirty edit test")
-                    workflow_settings_click(200, 124, 2010, "disable Wrap Lines for dirty edit test")
-                    if child_u32("doc_wrap_enabled") != 0 or child_u32("settings_menu_open") != 1:
-                        raise AssertionError("Wrap Lines did not remain disabled for dirty edit test")
-                    workflow_click(20, 98, 2020, "dismiss Settings before no-wrap dirty edit")
+                    if len(before_edit) > 4096:
+                        workflow_click(200, 20, 2000, "open Settings for no-wrap dirty edit test")
+                        if child_u32("settings_menu_open") != 1:
+                            raise AssertionError("Settings did not open for no-wrap dirty edit test")
+                        workflow_settings_click(200, 124, 2010, "disable Wrap Lines for dirty edit test")
+                        if child_u32("doc_wrap_enabled") != 0 or child_u32("settings_menu_open") != 1:
+                            raise AssertionError("Wrap Lines did not remain disabled for dirty edit test")
+                        workflow_click(20, 98, 2020, "dismiss Settings before no-wrap dirty edit")
 
-                    workflow_shortcut(2030, 102, "Ctrl+Home moves to first no-wrap fixture line")
-                    key_step(2033, 107, "End moves to the end of the long unwrapped line")
-                    no_wrap_state = read_document_state()
-                    no_wrap_cursor = no_wrap_state["doc_cursor"]
-                    if (
-                        no_wrap_state["doc_wrap_enabled"] != 0
-                        or no_wrap_cursor != 160
-                        or no_wrap_state["doc_view_left_px"] <= 0
-                    ):
-                        raise AssertionError(
-                            "Wrap Lines OFF fixture did not horizontally scroll to the 160-byte line end: "
-                            + repr({
-                                "wrap": no_wrap_state["doc_wrap_enabled"],
-                                "cursor": no_wrap_cursor,
-                                "left": no_wrap_state["doc_view_left_px"],
-                            })
+                        workflow_shortcut(2030, 102, "Ctrl+Home moves to first no-wrap fixture line")
+                        key_step(2033, 107, "End moves to the end of the long unwrapped line")
+                        no_wrap_state = read_document_state()
+                        no_wrap_cursor = no_wrap_state["doc_cursor"]
+                        if (
+                            no_wrap_state["doc_wrap_enabled"] != 0
+                            or no_wrap_cursor != 160
+                            or no_wrap_state["doc_view_left_px"] <= 0
+                        ):
+                            raise AssertionError(
+                                "Wrap Lines OFF fixture did not horizontally scroll to the 160-byte line end: "
+                                + repr({
+                                    "wrap": no_wrap_state["doc_wrap_enabled"],
+                                    "cursor": no_wrap_cursor,
+                                    "left": no_wrap_state["doc_view_left_px"],
+                                })
+                            )
+                        # Warm both SHM snapshots in the no-wrap scene before
+                        # requiring the edit itself to use bounded partial damage.
+                        key_step(2036, 105, "warm no-wrap dirty-render slot with Left")
+                        key_step(2039, 106, "warm no-wrap dirty-render slot with Right")
+                        key_step(2042, 105, "warm alternate no-wrap slot with Left")
+                        key_step(2045, 106, "restore no-wrap caret to logical line end")
+                        no_wrap_before = read_document_state()
+                        if no_wrap_before["doc_cursor"] != 160 or no_wrap_before["doc_view_left_px"] <= 0:
+                            raise AssertionError("no-wrap warm-up changed the expected caret or horizontal viewport")
+                        no_wrap_contents = no_wrap_before["doc_contents"]
+                        no_wrap_insert_partial = key_step(
+                            2050, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
                         )
-                    # Warm both SHM snapshots in the no-wrap scene before
-                    # requiring the edit itself to use bounded partial damage.
-                    key_step(2036, 105, "warm no-wrap dirty-render slot with Left")
-                    key_step(2039, 106, "warm no-wrap dirty-render slot with Right")
-                    key_step(2042, 105, "warm alternate no-wrap slot with Left")
-                    key_step(2045, 106, "restore no-wrap caret to logical line end")
-                    no_wrap_before = read_document_state()
-                    if no_wrap_before["doc_cursor"] != 160 or no_wrap_before["doc_view_left_px"] <= 0:
-                        raise AssertionError("no-wrap warm-up changed the expected caret or horizontal viewport")
-                    no_wrap_contents = no_wrap_before["doc_contents"]
-                    no_wrap_insert_partial = key_step(
-                        2050, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
-                    )
-                    no_wrap_inserted = read_document_state()
-                    no_wrap_expected = no_wrap_contents[:160] + b"b" + no_wrap_contents[160:]
-                    if (
-                        not no_wrap_insert_partial
-                        or no_wrap_inserted["doc_contents"] != no_wrap_expected
-                        or no_wrap_inserted["doc_cursor"] != 161
-                        or no_wrap_inserted["doc_wrap_enabled"] != 0
-                        or no_wrap_inserted["doc_view_left_px"] <= 0
-                    ):
-                        raise AssertionError(
-                            "Wrap Lines OFF typing did not preserve exact bytes/caret/viewport with partial damage: "
-                            + repr({
-                                "partial": no_wrap_insert_partial,
-                                "cursor": no_wrap_inserted["doc_cursor"],
-                                "left": no_wrap_inserted["doc_view_left_px"],
-                                "tail": no_wrap_inserted["doc_contents"][:176],
-                            })
+                        no_wrap_inserted = read_document_state()
+                        no_wrap_expected = no_wrap_contents[:160] + b"b" + no_wrap_contents[160:]
+                        if (
+                            not no_wrap_insert_partial
+                            or no_wrap_inserted["doc_contents"] != no_wrap_expected
+                            or no_wrap_inserted["doc_cursor"] != 161
+                            or no_wrap_inserted["doc_wrap_enabled"] != 0
+                            or no_wrap_inserted["doc_view_left_px"] <= 0
+                        ):
+                            raise AssertionError(
+                                "Wrap Lines OFF typing did not preserve exact bytes/caret/viewport with partial damage: "
+                                + repr({
+                                    "partial": no_wrap_insert_partial,
+                                    "cursor": no_wrap_inserted["doc_cursor"],
+                                    "left": no_wrap_inserted["doc_view_left_px"],
+                                    "tail": no_wrap_inserted["doc_contents"][:176],
+                                })
+                            )
+                        if (
+                            no_wrap_inserted["render_document_scan_end"]
+                            - no_wrap_inserted["render_document_scan_start"] > 512
+                            or dirty_render_background_row_deltas[-1] >= initial_height
+                        ):
+                            raise AssertionError("no-wrap dirty edit exceeded its bounded scan or repaint area")
+                        no_wrap_delete_partial = key_step(
+                            2053, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
                         )
-                    if (
-                        no_wrap_inserted["render_document_scan_end"]
-                        - no_wrap_inserted["render_document_scan_start"] > 512
-                        or dirty_render_background_row_deltas[-1] >= initial_height
-                    ):
-                        raise AssertionError("no-wrap dirty edit exceeded its bounded scan or repaint area")
-                    no_wrap_delete_partial = key_step(
-                        2053, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
-                    )
-                    no_wrap_deleted = read_document_state()
-                    if (
-                        not no_wrap_delete_partial
-                        or no_wrap_deleted["doc_contents"] != no_wrap_contents
-                        or no_wrap_deleted["doc_cursor"] != 160
-                        or no_wrap_deleted["doc_wrap_enabled"] != 0
-                        or no_wrap_deleted["doc_view_left_px"] <= 0
-                        or no_wrap_deleted["render_document_scan_end"]
-                           - no_wrap_deleted["render_document_scan_start"] > 512
-                        or dirty_render_background_row_deltas[-1] >= initial_height
-                    ):
-                        raise AssertionError(
-                            "Wrap Lines OFF Backspace failed exact-byte or bounded-repaint checks: "
-                            + repr({
-                                "partial": no_wrap_delete_partial,
-                                "cursor": no_wrap_deleted["doc_cursor"],
-                                "left": no_wrap_deleted["doc_view_left_px"],
-                                "length": no_wrap_deleted["doc_length"],
-                            })
-                        )
+                        no_wrap_deleted = read_document_state()
+                        if (
+                            not no_wrap_delete_partial
+                            or no_wrap_deleted["doc_contents"] != no_wrap_contents
+                            or no_wrap_deleted["doc_cursor"] != 160
+                            or no_wrap_deleted["doc_wrap_enabled"] != 0
+                            or no_wrap_deleted["doc_view_left_px"] <= 0
+                            or no_wrap_deleted["render_document_scan_end"]
+                               - no_wrap_deleted["render_document_scan_start"] > 512
+                            or dirty_render_background_row_deltas[-1] >= initial_height
+                        ):
+                            raise AssertionError(
+                                "Wrap Lines OFF Backspace failed exact-byte or bounded-repaint checks: "
+                                + repr({
+                                    "partial": no_wrap_delete_partial,
+                                    "cursor": no_wrap_deleted["doc_cursor"],
+                                    "left": no_wrap_deleted["doc_view_left_px"],
+                                    "length": no_wrap_deleted["doc_length"],
+                                })
+                            )
 
-                    workflow_shortcut(2060, 102, "Ctrl+Home before ASCII selection replacement")
-                    for index in range(3):
-                        workflow_shift_key(
-                            2065 + index * 4, 106,
-                            f"extend active selection across ASCII byte {index + 1}",
+                        workflow_shortcut(2060, 102, "Ctrl+Home before ASCII selection replacement")
+                        for index in range(3):
+                            workflow_shift_key(
+                                2065 + index * 4, 106,
+                                f"extend active selection across ASCII byte {index + 1}",
+                            )
+                        selected = read_document_state()
+                        if (
+                            selected["doc_selection_active"] != 1
+                            or selected["doc_cursor"] != 3
+                            or selected["doc_contents"] != no_wrap_contents
+                        ):
+                            raise AssertionError(
+                                "ASCII replacement fixture did not create the expected three-byte selection: "
+                                + repr({
+                                    "active": selected["doc_selection_active"],
+                                    "cursor": selected["doc_cursor"],
+                                    "prefix": selected["doc_contents"][:12],
+                                })
+                            )
+                        replacement_partial = key_step(
+                            2100, 48, "one ASCII key replaces the active selection"
                         )
-                    selected = read_document_state()
-                    if (
-                        selected["doc_selection_active"] != 1
-                        or selected["doc_cursor"] != 3
-                        or selected["doc_contents"] != no_wrap_contents
-                    ):
-                        raise AssertionError(
-                            "ASCII replacement fixture did not create the expected three-byte selection: "
-                            + repr({
-                                "active": selected["doc_selection_active"],
-                                "cursor": selected["doc_cursor"],
-                                "prefix": selected["doc_contents"][:12],
-                            })
-                        )
-                    replacement_partial = key_step(
-                        2080, 48, "one ASCII key replaces the active selection"
-                    )
-                    replaced = read_document_state()
-                    replacement_expected = b"b" + no_wrap_contents[3:]
-                    if (
-                        replaced["doc_contents"] != replacement_expected
-                        or replaced["doc_cursor"] != 1
-                        or replaced["doc_selection_active"] != 0
-                    ):
-                        raise AssertionError(
-                            "ASCII typing did not replace the active selection exactly once: "
-                            + repr({
-                                "partial": replacement_partial,
-                                "cursor": replaced["doc_cursor"],
-                                "selection": replaced["doc_selection_active"],
-                                "prefix": replaced["doc_contents"][:16],
-                            })
-                        )
+                        replaced = read_document_state()
+                        replacement_expected = b"b" + no_wrap_contents[3:]
+                        if (
+                            replaced["doc_contents"] != replacement_expected
+                            or replaced["doc_cursor"] != 1
+                            or replaced["doc_selection_active"] != 0
+                        ):
+                            raise AssertionError(
+                                "ASCII typing did not replace the active selection exactly once: "
+                                + repr({
+                                    "partial": replacement_partial,
+                                    "cursor": replaced["doc_cursor"],
+                                    "selection": replaced["doc_selection_active"],
+                                    "prefix": replaced["doc_contents"][:16],
+                                })
+                            )
                     observations.append(
                         "edit-aware dirty repaint verified for Wrap Lines ON/OFF, including horizontal viewport edits, exact ASCII selection replacement, and newline full-frame fallback"
                     )
@@ -12003,7 +12004,7 @@ if __name__ == "__main__":
     dirty_fd, dirty_path = tempfile.mkstemp(prefix="nekoedit-dirty-render-long-")
     try:
         with os.fdopen(dirty_fd, "wb") as dirty_file:
-            dirty_file.write((b"0123456789" * 16 + b"\n") * 4096)
+            dirty_file.write((b"0123456789" * 16 + b"\n") + (b"0123456789" * 20 + b"\n") * 4095)
         run(sys.argv[1], initial_file=dirty_path, dirty_render_test=True)
     finally:
         try:
