@@ -16536,8 +16536,7 @@ render_prepare_slot:
     jz .render_prepare_full
     lea rbx, [rip + window_buffer_slot_render_dirty_row]
     mov edi, dword ptr [rbx + r12*4]
-    # Validate against the dirty row itself. The painter's one-row-earlier
-    # start is only for erasing overhang and may belong to the prior line.
+    dec edi                         # Stored dirty rows are one-based; recover the same visual row.
     xor esi, esi
     call doc_visual_to_offset
     mov edi, eax
