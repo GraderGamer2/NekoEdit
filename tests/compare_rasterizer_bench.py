@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -88,6 +89,34 @@ def main() -> int:
     if len(checksums) != 1 or len(fill_checksums) != 1:
         for result in results:
             print(f"--- {result.label} ---\n{result.output}", file=sys.stderr)
+        # Dump the cache-fill framebuffer from each variant so a checksum
+        # mismatch can be localized to exact pixel coordinates and values.
+        with tempfile.TemporaryDirectory(prefix="nekoedit-raster-diff-") as temp_dir:
+            dump_paths = []
+            for index, (_, executable) in enumerate(labels):
+                dump_path = Path(temp_dir) / f"variant-{index}.rgba"
+                subprocess.run(
+                    [executable, "--dump-cache-fill", str(dump_path)],
+                    check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                )
+                dump_paths.append(dump_path)
+            baseline = dump_paths[0].read_bytes()
+            print("=== cache-fill framebuffer differences vs. first variant ===", file=sys.stderr)
+            for index, dump_path in enumerate(dump_paths[1:], start=1):
+                candidate = dump_path.read_bytes()
+                differences = [
+                    (offset // 4, int.from_bytes(baseline[offset:offset+4], "little"),
+                     int.from_bytes(candidate[offset:offset+4], "little"))
+                    for offset in range(0, min(len(baseline), len(candidate)), 4)
+                    if baseline[offset:offset+4] != candidate[offset:offset+4]
+                ]
+                print(
+                    f"{labels[index][0]}: bytes={len(candidate)}, differing_pixels={len(differences)}, "
+                    f"first={differences[:16]}",
+                    file=sys.stderr,
+                )
+                if len(candidate) != len(baseline):
+                    print(f"  size mismatch: reference={len(baseline)}", file=sys.stderr)
         print("error: benchmark variants produced different framebuffers", file=sys.stderr)
         return 1
 

@@ -2,6 +2,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -155,7 +156,16 @@ static void print_samples(const char *label, const uint64_t *samples,
     puts("]");
 }
 
-int main(void) {
+int main(int argc,char **argv) {
+    int dump_cache_fill=0;
+    const char *dump_path=0;
+    if (argc==3 && strcmp(argv[1],"--dump-cache-fill")==0) {
+        dump_cache_fill=1;
+        dump_path=argv[2];
+    } else if (argc!=1) {
+        fprintf(stderr,"usage: rasterizer_bench [--dump-cache-fill PATH]\\n");
+        return 2;
+    }
     uint32_t framebuffer[SURFACE_WIDTH * SURFACE_HEIGHT];
     uint64_t cold_samples[BENCH_SAMPLE_COUNT], cache_fill_samples[BENCH_SAMPLE_COUNT];
     uint64_t warm_samples[BENCH_SAMPLE_COUNT];
@@ -201,6 +211,21 @@ int main(void) {
             fail("cold cache-fill sample unexpectedly reused a glyph");
     }
     cache_fill_checksum=framebuffer_checksum(framebuffer);
+    if (dump_cache_fill) {
+        FILE *dump=fopen(dump_path,"wb");
+        if (!dump) {
+            perror("fopen cache-fill dump");
+            return 2;
+        }
+        size_t written=fwrite(framebuffer,sizeof(framebuffer),1,dump);
+        int close_result=fclose(dump);
+        if (written!=1u || close_result!=0) {
+            fprintf(stderr,"failed to write complete cache-fill framebuffer dump\\n");
+            return 2;
+        }
+        printf("cache fill framebuffer checksum: %" PRIu64 "\\n",cache_fill_checksum);
+        return 0;
+    }
 
     /* Prime every entry, then repeatedly draw a deterministic pseudorandom
      * sequence over the full cache working set. Each sample starts with the
