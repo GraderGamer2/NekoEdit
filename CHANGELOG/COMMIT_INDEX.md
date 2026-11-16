@@ -1,3 +1,18 @@
+## 2026-11-16 — assembly ASCII advance lookup and scanline TrueType rasterizer (Actions #1065 PASS)
+
+| Commit | Subject |
+|---|---|
+| [4e4e48148484e6158c6d0b3487d11688d2aadde5](https://github.com/GraderGamer2/NekoEdit/commit/4e4e48148484e6158c6d0b3487d11688d2aadde5) | perf: add assembly fast path for cached ASCII advances |
+| [40431ce674903ee6408ed39f552b6b38a2bd32c2](https://github.com/GraderGamer2/NekoEdit/commit/40431ce674903ee6408ed39f552b6b38a2bd32c2) | fix: correct advance benchmark fixture and Unicode expectation |
+| [b1130028b789fbc54be471de6f8bb9b03a784ee1](https://github.com/GraderGamer2/NekoEdit/commit/b1130028b789fbc54be471de6f8bb9b03a784ee1) | scanline rasterizer, reference benchmark variants and exact-mask test |
+| [0f8bab21d7db5852c5d7b946933ffc3980693fff](https://github.com/GraderGamer2/NekoEdit/commit/0f8bab21d7db5852c5d7b946933ffc3980693fff) | test: report exact rasterizer benchmark pixel differences |
+| [50c4da081e1dc0af268f6ab4f42c2f21f4476dcb](https://github.com/GraderGamer2/NekoEdit/commit/50c4da081e1dc0af268f6ab4f42c2f21f4476dcb) | fix: accumulate all sixteen scanline coverage samples |
+| [a5c32a4bfa3ac270208bc555338d12521ef5da77](https://github.com/GraderGamer2/NekoEdit/commit/a5c32a4bfa3ac270208bc555338d12521ef5da77) | build: mark assembly test object as non-executable stack |
+
+Actions [#1064](https://github.com/GraderGamer2/NekoEdit/actions/runs/43835277268) passed all 18 steps for the corrected scanline source. Actions [#1065](https://github.com/GraderGamer2/NekoEdit/actions/runs/43836015143) passed all 18 steps on final source head [a5c32a4](https://github.com/GraderGamer2/NekoEdit/commit/a5c32a4bfa3ac270208bc555338d12521ef5da77).
+
+---
+
 ## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
 
 | Commit | Subject |

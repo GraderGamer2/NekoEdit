@@ -1,3 +1,45 @@
+## 2026-11-16 — assembly ASCII advance lookup and scanline TrueType rasterizer (Actions #1065 PASS)
+
+**Application source:** early-alpha at [a5c32a4](https://github.com/GraderGamer2/NekoEdit/commit/a5c32a4bfa3ac270208bc555338d12521ef5da77). Main receives changelog-only mirrors; no application source was merged. optimization-early-alpha remains isolated.
+
+### Implemented optimizations
+
+- Added an assembly fast path for already-cached ASCII glyph advances. Assembly reads the existing 33×128 cache directly for warmed ASCII entries and returns without the former C-wrapper call. The C rasterizer remains the owner of the cache, its invalidation, all cache misses and all Unicode lookups. The no-font 8px fallback and 12px normalization for invalid document font sizes are preserved. No duplicate cache or new runtime dependency was added.
+- Replaced the production TrueType point-in-contour-per-sample loop with an integer active-edge scanline implementation. Each horizontal 4× subpixel scanline builds signed winding-change events once; the renderer then walks the ordered sample positions and accumulates coverage across all four vertical subrows and four horizontal samples. Exact 64-bit cross products preserve the original strict edge-crossing comparison and the non-zero winding fill rule.
+- Retained the original point-in-contour implementation behind the test-only FONT_RASTERIZER_REFERENCE build define. It is not part of the production renderer.
+- Added an exact-mask equivalence test with six fixture types—straight asymmetric polygon, reversed-winding hole, quadratic contours, overlapping contours, negative-bearing/deep-descender outline, and empty outline—at 8, 12, 16, 24, 32, 48 and 64px. Reference and scanline builds produced the same FNV mask checksum: e195ffbbe30aeef8.
+- Extended the renderer benchmark to report exact cache-fill framebuffer pixel differences if its checksum gate fails. That diagnostic is test-only. Added a GNU-stack note to the assembly helper so standalone unit-test links do not warn about an implicit executable stack.
+
+### Measurements
+
+The assembly advance benchmark ran seven alternating samples of five million warmed ASCII lookups each on the CI host:
+
+| Measurement | Median |
+|---|---:|
+| Assembly direct-cache lookup | 2.19 ns/character |
+| Former C-wrapper reference | 2.81 ns/character |
+| Difference | **22.1% lower call cost** |
+
+This is an isolated lookup microbenchmark, not a 22.1% whole-editor rendering improvement. A previous standalone run measured a different C-wrapper median; the values above are from the later full validation run and are the figures retained here.
+
+The synthetic eight-point rasterizer benchmark measured seven samples of 256 cold glyph rasterizations and seven samples of 128 cold cache-fill/draw iterations:
+
+| Configuration | Cold rasterization | Cold 128-glyph cache fill/draw |
+|---|---:|---:|
+| Point-in-contour reference + legacy full-mask storage | 23,625.3 ns/glyph | 24,712.3 ns/iteration |
+| Active-edge scanline + compact active-mask storage | 2,616.9 ns/glyph | 3,072.9 ns/iteration |
+| Difference | **88.9% lower** | **87.6% lower** |
+
+The rasterizer comparison is a controlled synthetic eight-point outline workload. The baseline/current configurations also differ in legacy versus compact active-mask storage, so these percentages describe the combined configuration change, not a guaranteed speedup for every installed font. All six benchmark variants produced identical cache-fill and warm-framebuffer checksums: 35083399697745 and 35084948275808.
+
+### Validation
+
+- Actions [#1064](https://github.com/GraderGamer2/NekoEdit/actions/runs/43835277268) passed all 18 workflow steps on the corrected scanline source: exact-mask equivalence, CLI and unit tests, rasterizer checksum/timing comparison, assembly advance benchmark, Wayland mock including 11 MiB Open/Save, ELF inspection, native XKB, pinned X.Org data verification, Compose packs, nested GNOME Shell/Mutter integration and artifact uploads.
+- Actions [#1065](https://github.com/GraderGamer2/NekoEdit/actions/runs/43836015143) passed all 18 steps on the final source head [a5c32a4](https://github.com/GraderGamer2/NekoEdit/commit/a5c32a4bfa3ac270208bc555338d12521ef5da77), including the added GNU-stack metadata and clean test links.
+- The production build remains freestanding/static with no interpreter or dynamic dependencies. No compiler-flag bundle or architecture-specific ISA requirement was added. No live GNOME desktop screenshot or manual hardware benchmark is claimed.
+
+---
+
 ## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
 
 **Source branch/head:** `early-alpha` at [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). Application source remains on `early-alpha`; `main` receives changelog-only mirrors, and `optimization-early-alpha` remains isolated.

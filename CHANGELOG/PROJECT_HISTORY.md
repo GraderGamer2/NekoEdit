@@ -1,3 +1,15 @@
+## 2026-11-16 — ASCII advance lookup and scanline TrueType renderer (Actions #1065 PASS)
+
+NekoEdit now avoids the C-wrapper call for warmed ASCII advance-cache hits by reading the existing C-owned metrics cache directly from assembly. Unicode and cache misses retain the C lookup path. The change preserves the existing font-size normalization and cache-invalidation rules and adds no runtime library or ISA requirement.
+
+The TrueType rasterizer now evaluates each horizontal subpixel scanline by building exact signed edge-crossing events, then walking the ordered sample grid with a running non-zero winding count. Four horizontal by four vertical samples still contribute to each output mask pixel. The original point-in-contour implementation is retained only for test/reference builds. Six fixture classes at seven em sizes are compared byte-for-byte against that original; the exact-mask checksum is e195ffbbe30aeef8.
+
+CI measured a 22.1% lower warmed ASCII lookup call cost (2.19 ns versus 2.81 ns). Its synthetic eight-point glyph benchmark measured 88.9% lower cold rasterization time and 87.6% lower cold cache-fill/draw time for the combined scanline + compact-mask configuration versus the point-in-contour + legacy-mask baseline. These results are CI microbenchmarks, not whole-editor claims. Cache-fill and warm-framebuffer checksums match across all six comparison variants.
+
+The corrected implementation and tests passed Actions [#1064](https://github.com/GraderGamer2/NekoEdit/actions/runs/43835277268); final source cleanup passed all 18 steps in Actions [#1065](https://github.com/GraderGamer2/NekoEdit/actions/runs/43836015143). Main receives only this documentation mirror; application source remains on early-alpha.
+
+---
+
 ## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
 
 A small status-bar polish pass introduces two understated separators so the caret position, byte count and text mode read as three distinct groups. The separators are 1px wide, 12px high, use the muted `#596273` tone, and are placed relative to the existing responsive status-field anchors rather than at new hard-coded panel positions. Text placement and document/status calculations remain unchanged.

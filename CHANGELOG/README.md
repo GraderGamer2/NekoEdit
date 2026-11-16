@@ -1,3 +1,22 @@
+## Latest handoff (2026-11-16 — assembly ASCII lookup + scanline TrueType rasterizer; Actions #1065 PASS)
+
+Continue application-source development on early-alpha at [a5c32a4](https://github.com/GraderGamer2/NekoEdit/commit/a5c32a4bfa3ac270208bc555338d12521ef5da77). The main application source remains stable on main; mirror changelog updates there only. Keep optimization-early-alpha isolated.
+
+**Implemented:**
+- src/font/advance.S now returns warmed ASCII glyph advances directly from the existing C-owned 33×128 cache. Cache misses and Unicode use the existing C resolver; cache invalidation, font-size normalization and the no-font 8px fallback are preserved.
+- src/font/rasterizer.c now uses integer active-edge scanline winding events in production. The 4×4 coverage mask accumulates all 16 subsamples; the original point-in-contour rasterizer remains test-only as the reference.
+- Exact-mask equivalence covers straight polygons, reversed-winding holes, quadratic contours, overlapping contours, negative bearings/descenders and empty glyphs at seven sizes. Checksum: e195ffbbe30aeef8.
+- The benchmark comparator checks cache-fill and warm-framebuffer checksums across six variants and can report exact test-only pixel differences if a checksum gate fails.
+- The new assembly object marks its stack as non-executable for standalone test linking. Production remains freestanding/static, with no added runtime dependencies or architecture-specific CPU requirement.
+
+**Latest CI measurements:** warmed ASCII lookup 2.19 ns versus 2.81 ns (22.1% lower call cost); synthetic eight-point glyph cold rasterization 2,616.9 ns versus 23,625.3 ns (88.9% lower); cold 128-glyph cache fill/draw 3,072.9 ns versus 24,712.3 ns (87.6% lower). The rasterizer comparison combines the scanline algorithm with compact active-mask storage, so do not treat it as a universal per-font speedup or an end-to-end editor percentage. All renderer variants produced identical cache-fill and warm-framebuffer checksums.
+
+Actions [#1064](https://github.com/GraderGamer2/NekoEdit/actions/runs/43835277268) passed the corrected rasterizer tests and full CI; Actions [#1065](https://github.com/GraderGamer2/NekoEdit/actions/runs/43836015143) passed all 18 steps on final source head a5c32a4, including the complete Wayland mock, 11 MiB Open/Save, executable inspection, native XKB, pinned X.Org importer comparison, locale packs and nested GNOME Shell/Mutter integration. No live GNOME screenshot or manual performance run on the target machine was performed.
+
+**Next performance target:** build an instrument-free-in-production, test-only end-to-end workload comparing large-document typing, navigation, vertical/horizontal scrolling and partial repaint. Use that evidence to decide whether bulk line-index structural updates or the presentation path offers the next meaningful improvement. Keep any counters/test symbols under NEKOEDIT_TESTING; keep the release binary free of diagnostics and profiling state.
+
+---
+
 ## Latest handoff (2026-11-16 — status-bar grouping; Actions #43816130665 PASS)
 
 Continue application-source development on `early-alpha` at [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). This commit separates the caret line/column, byte-count and text-mode groups in the footer with two muted 1px vertical rules. Both separators follow the existing responsive status anchors and are inset four pixels from the footer edges. A Wayland framebuffer regression checks their exact color and 12px height at x=468 and x=732 on the 800×480 startup surface. No editor model, document rendering or runtime dependency changes were made.
