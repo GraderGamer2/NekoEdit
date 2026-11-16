@@ -12,8 +12,6 @@ Key commits: [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfc
 
 ---
 
----
-
 ## 2026-11-15 — Czech Compose pack and bounded status-column lookup (Actions #1006 PASS)
 
 The optional locale set now includes cs_CZ.UTF-8. Its source is pinned to X.Org libX11 commit ff8706a5eae25b8bafce300527079f68a201d27f, blob 022753ea937e9a1f483c9545e99ddbc6295cd485. The Czech file includes the en_US baseline and overrides two dead-caron rules: u -> ů and U -> Ů. The importer produces a flattened 4,479-record JSON table and a 304,644-byte NLP1 v2 pack. The generated JSON is compared byte-for-byte against the committed table in CI; the pinned source hash is checked in both the normal build and Release-pack workflows. The .nlp and its attribution notice remain separate assets; no locale data was added to the core executable.
