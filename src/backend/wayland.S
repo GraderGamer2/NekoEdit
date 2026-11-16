@@ -5219,6 +5219,8 @@ render_clip_bottom2:    .long 0
 .ifdef NEKOEDIT_TESTING
 .global render_clip_background_row_visits
 render_clip_background_row_visits: .long 0
+.global glyph_bitmap_fastpath_calls
+glyph_bitmap_fastpath_calls: .long 0
 .global render_status_scan_steps, render_status_column_value
 render_status_scan_steps: .long 0
 render_status_column_value: .long 0
@@ -23332,6 +23334,71 @@ draw_glyph:
     jae .glyph_fallback_scale_ready
     mov r10d, 1
 .glyph_fallback_scale_ready:
+    # The common 1x fallback path needs no per-pixel transform, clipping, or
+    # bounds mapping. Use direct row writes only when the full 5x7 cell fits;
+    # every scaled, rotated, clipped, transformed, or edge glyph keeps the
+    # general path below.
+    cmp r10d, 1
+    jne .glyph_fallback_general
+    cmp dword ptr [rip + ui_transform_active], 0
+    jne .glyph_fallback_general
+    cmp dword ptr [rip + window_ui_scale_120], 120
+    jne .glyph_fallback_general
+    cmp dword ptr [rip + window_buffer_raster_scale_120], 120
+    jne .glyph_fallback_general
+    cmp dword ptr [rip + window_buffer_transform], 0
+    jne .glyph_fallback_general
+    cmp dword ptr [rip + render_clip_enabled], 0
+    jne .glyph_fallback_general
+    lea eax, [r12d + 5]
+    cmp eax, dword ptr [rip + window_raster_surface_width]
+    ja .glyph_fallback_general
+    lea eax, [r13d + 7]
+    cmp eax, dword ptr [rip + window_raster_surface_height]
+    ja .glyph_fallback_general
+    TEST_DIAG_INC glyph_bitmap_fastpath_calls
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov eax, r13d
+    imul rax, qword ptr [rip + window_stride]
+    add rdi, rax
+    mov eax, r12d
+    shl rax, 2
+    add rdi, rax
+    xor r8d, r8d
+.glyph_fallback_fast_row:
+    cmp r8d, 7
+    jae .glyph_done
+    movzx edx, byte ptr [rbx + r8]
+    test dl, 0x10
+    jz .glyph_fallback_fast_col1
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_fast_col1:
+    add rdi, 4
+    test dl, 0x08
+    jz .glyph_fallback_fast_col2
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_fast_col2:
+    add rdi, 4
+    test dl, 0x04
+    jz .glyph_fallback_fast_col3
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_fast_col3:
+    add rdi, 4
+    test dl, 0x02
+    jz .glyph_fallback_fast_col4
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_fast_col4:
+    add rdi, 4
+    test dl, 0x01
+    jz .glyph_fallback_fast_row_next
+    mov dword ptr [rdi], 0xffd8dee9
+.glyph_fallback_fast_row_next:
+    mov eax, dword ptr [rip + window_stride]
+    sub eax, 20
+    add rdi, rax
+    inc r8d
+    jmp .glyph_fallback_fast_row
+.glyph_fallback_general:
     xor r14d, r14d
 .glyph_row:
     cmp r14d, 7

@@ -3416,6 +3416,14 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("short child state read for " + name)
                     return struct.unpack("<I", raw)[0]
 
+                # A normal unscaled startup frame must exercise the direct
+                # embedded-glyph path; scaled/rotated cases retain the fallback.
+                if child_u32("glyph_bitmap_fastpath_calls") == 0:
+                    raise AssertionError("1x embedded 5x7 glyph fast path was not exercised")
+                observations.append(
+                    "1x embedded 5x7 glyphs use the direct-row assembly fast path"
+                )
+
                 def child_set_u32(name: str, value: int) -> None:
                     if name not in child_symbol_addresses:
                         child_u32(name)
