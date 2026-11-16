@@ -7,6 +7,9 @@ CC       ?= cc
 CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections -fno-ident
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
+TEST_BUILD_DIR := $(BUILD_DIR)/test
+TEST_APP_BINARY := $(TEST_BUILD_DIR)/nekoedit-test
+TEST_OBJECTS := $(patsubst src/%.S,$(TEST_BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(TEST_BUILD_DIR)/%.o,$(C_SOURCES))
 PREFERENCES_TEST := $(BUILD_DIR)/preferences_test
 HISTORY_TEST := $(BUILD_DIR)/history_test
 CLIPBOARD_RANGE_TEST := $(BUILD_DIR)/clipboard_range_test
@@ -42,6 +45,10 @@ $(APP_BINARY): $(OBJECTS)
 	@mkdir -p $(@D)
 	$(LD) $(LDFLAGS) -o $@ $(OBJECTS)
 
+$(TEST_APP_BINARY): $(TEST_OBJECTS)
+	@mkdir -p $(@D)
+	$(LD) $(LDFLAGS) -o $@ $(TEST_OBJECTS)
+
 $(BUILD_DIR)/%.o: src/%.S
 	@mkdir -p $(@D)
 	$(AS) $(ASFLAGS) -o $@ $<
@@ -50,7 +57,16 @@ $(BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+$(TEST_BUILD_DIR)/%.o: src/%.S
+	@mkdir -p $(@D)
+	$(AS) $(ASFLAGS) --defsym NEKOEDIT_TESTING=1 -o $@ $<
+
+$(TEST_BUILD_DIR)/%.o: src/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -DNEKOEDIT_TESTING=1 -c -o $@ $<
+
 $(BUILD_DIR)/backend/clipboard.o $(BUILD_DIR)/editor/history.o: src/editor/gap_buffer.h
+$(TEST_BUILD_DIR)/backend/clipboard.o $(TEST_BUILD_DIR)/editor/history.o: src/editor/gap_buffer.h
 
 check: $(APP_BINARY)
 	@if $(READELF) -l $(APP_BINARY) | grep -q 'INTERP'; then \
@@ -96,8 +112,8 @@ $(CLIPBOARD_RANGE_TEST): tests/clipboard_range_test.c src/editor/gap_buffer.h
 	@mkdir -p $(@D)
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o $@ $<
 
-test-wayland: $(APP_BINARY)
-	$(PYTHON) tests/wayland_mock.py ./$(APP_BINARY)
+test-wayland: $(TEST_APP_BINARY)
+	$(PYTHON) tests/wayland_mock.py ./$(TEST_APP_BINARY)
 
 $(RASTERIZER_BENCH): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
@@ -129,8 +145,8 @@ bench-renderer: $(RASTERIZER_BENCH_LINEAR) $(RASTERIZER_BENCH_GENERIC) $(RASTERI
 test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
 	./$(XKB_NATIVE_KEYMAP_TEST)
 
-test-mutter: $(APP_BINARY) locale-packs
-	dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
+test-mutter: $(TEST_APP_BINARY) locale-packs
+	dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(TEST_APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
 
 install: $(APP_BINARY)
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/applications" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps"
