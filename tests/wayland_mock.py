@@ -8907,6 +8907,35 @@ xkb_symbols "nekoedit-sparse" {
                                         f"action_gap=({gap_left},{gap_right}), pixel=({x},{y}), color={hex(pixel)}"
                                     )
 
+                    # The three 4px gutters between locale controls are
+                    # neutral hit areas: they must not launch an adjacent action.
+                    for gap_x in (238, 282, 354):
+                        settings_click(gap_x, 200, serial, f"click inert locale-button gutter at x={gap_x}")
+                        serial += 10
+                        if picker_u32("settings_menu_open") != 1 or picker_u32("picker_mode") != 0:
+                            raise AssertionError(
+                                f"clicking locale-button gutter x={gap_x} activated an action or closed Settings"
+                            )
+
+                    # The built-in locale row is bounded to 124px inside the
+                    # 144px dropdown, leaving a clear right-side gutter.
+                    settings_click(200, 200, serial, "open locale dropdown at 16px UI size")
+                    serial += 10
+                    popup_right_start = settings_surface_x(292)
+                    popup_right_end = settings_surface_x(302)
+                    popup_row_top = settings_surface_y(89)
+                    popup_row_bottom = settings_surface_y(104)
+                    for y in range(popup_row_top, popup_row_bottom):
+                        for x in range(popup_right_start, popup_right_end):
+                            pixel = struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                            if pixel != 0xFF414B5A:
+                                raise AssertionError(
+                                    "built-in locale label escaped its bounded popup column: "
+                                    f"pixel=({x},{y}), color={hex(pixel)}"
+                                )
+                    settings_click(200, 200, serial, "close locale dropdown after bounds check")
+                    serial += 10
+
                     # Help uses a wider two-column design and a 14px cap so its
                     # shortcut descriptions stay inside their columns at the
                     # maximum 16px application UI preference.

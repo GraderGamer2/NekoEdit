@@ -7255,13 +7255,22 @@ wayland_main:
 .pointer_settings_locale_row:
     cmp eax, 236
     jb .pointer_settings_locale_select
+    cmp eax, 240
+    jb .pointer_settings_locale_gap
     cmp eax, 280
     jb .pointer_settings_locale_add
+    cmp eax, 284
+    jb .pointer_settings_locale_gap
     cmp eax, 352
     jb .pointer_settings_locale_remove
+    cmp eax, 356
+    jb .pointer_settings_locale_gap
     cmp eax, 416
     jb .pointer_settings_locale_import
     jmp .pointer_menu_outside
+
+.pointer_settings_locale_gap:
+    jmp .keyboard_changed
 
 .pointer_settings_locale_select:
     xor dword ptr [rip + settings_locale_dropdown_open], 1
@@ -9958,7 +9967,8 @@ render_settings_locale_dropdown:
     shl eax, 4
     lea esi, [rax + 101]
     lea rdx, [rip + ui_menu_locale_builtin]
-    call draw_text
+    mov ecx, 124
+    call draw_bounded_ascii_width
     jmp .render_settings_locale_dropdown_next
 .render_settings_locale_dropdown_pack:
     lea eax, [r14 - 1]
