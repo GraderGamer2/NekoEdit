@@ -64,3 +64,5 @@ font_codepoint_advance_pixels:
     mov eax, 8
     ret
 .size font_codepoint_advance_pixels, . - font_codepoint_advance_pixels
+
+.section .note.GNU-stack,"",@progbits
