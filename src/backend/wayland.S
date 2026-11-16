@@ -16528,7 +16528,8 @@ render_prepare_slot:
 .render_prepare_edit_row_visible:
     cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .render_prepare_full
-    mov r14d, dword ptr [rip + window_buffer_slot_render_dirty_line_id]
+    lea rbx, [rip + window_buffer_slot_render_dirty_line_id]
+    mov r14d, dword ptr [rbx + r12*4]
     # The selected slot has been validated above; its ID must remain nonzero.
     # Fetch the current logical line containing the dirty visual row.
     test r14d, r14d
@@ -16612,14 +16613,7 @@ render_prepare_slot:
     jge .render_prepare_top_ready
     mov r13d, DOC_TOP
 .render_prepare_top_ready:
-    lea eax, [r14d + 2]
-    imul eax, dword ptr [rip + window_doc_line_height]
-    add eax, DOC_TOP
-    cmp eax, dword ptr [rip + window_status_top]
-    jle .render_prepare_bottom_ready
-    mov eax, dword ptr [rip + window_status_top]
 .render_prepare_bottom_ready:
-    mov r15d, eax
 
     imul r13d, dword ptr [rip + window_ui_scale_120]
     mov eax, r13d
@@ -27690,6 +27684,16 @@ render_document:
     cmp r13d, eax
     jge .document_draw_cursor
 .document_printable_fit:
+.ifdef NEKOEDIT_TESTING
+    # A wrapped glyph may advance R13D before draw_glyph; account for that
+    # destination row as well as rows first encountered at the loop entry.
+    mov eax, r13d
+    cmp eax, dword ptr [rip + render_document_last_row_y]
+    je .Ldocument_render_printable_row_counted
+    inc dword ptr [rip + render_document_row_visits]
+    mov dword ptr [rip + render_document_last_row_y], eax
+.Ldocument_render_printable_row_counted:
+.endif
     cmp r13d, DOC_TOP
     jl .document_printable_skip_draw
     cmp r12d, DOC_LEFT
