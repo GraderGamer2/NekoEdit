@@ -3,9 +3,12 @@ LD       ?= ld
 READELF  ?= readelf
 NM       ?= nm
 SIZE     ?= size
+STRIP    ?= strip
 PYTHON   ?= python3
 CC       ?= cc
-CFLAGS   ?= -m64 -O2 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections -fno-ident
+OPT_FLAGS ?= -O2
+NEKOEDIT_BASE_CFLAGS := -m64 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections -fno-ident
+CFLAGS   ?= $(NEKOEDIT_BASE_CFLAGS) $(OPT_FLAGS)
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 TEST_BUILD_DIR := $(BUILD_DIR)/test
@@ -38,9 +41,9 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer locale-packs check inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer bench-compiler-flags locale-packs check strip-binary inspect install install-user uninstall-user
 
-all: $(APP_BINARY) check
+all: strip-binary
 
 $(APP_BINARY): $(OBJECTS)
 	@mkdir -p $(@D)
@@ -81,13 +84,22 @@ check: $(APP_BINARY)
 	fi
 	@echo 'ELF check passed: no interpreter, dynamic dependencies, or test instrumentation.'
 
-inspect: $(APP_BINARY)
+# Audit first, then remove non-runtime symbol/debug tables from the release ELF.
+# --gc-sections already removes unreachable code/data; stripping is a separate step.
+strip-binary: check
+	$(STRIP) --strip-all $(APP_BINARY)
+	@if $(READELF) -S $(APP_BINARY) | grep -q '[.]symtab'; then \
+		echo 'error: production executable still contains a full symbol table' >&2; exit 1; \
+	fi
+	@echo 'Strip check passed: release symbol table removed.'
+
+inspect: strip-binary
 	$(READELF) -h $(APP_BINARY)
 	$(READELF) -l $(APP_BINARY)
 	$(READELF) -d $(APP_BINARY) || true
 	$(SIZE) $(APP_BINARY)
 
-test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
+test: strip-binary $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
@@ -101,7 +113,7 @@ test: $(APP_BINARY) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) 
 	$(PYTHON) tests/compose_locale_manager_test.py ./$(COMPOSE_LOCALE_MANAGER_TEST)
 	./$(COMPOSE_LOCALE_IMPORT_TEST)
 
-test-install-user: $(APP_BINARY)
+test-install-user: strip-binary
 	sh tests/install_user.sh
 
 $(PREFERENCES_TEST): tests/preferences_test.c src/editor/preferences.c
@@ -146,19 +158,23 @@ $(RASTERIZER_BENCH_METADATA_REFERENCE): tests/rasterizer_bench.c src/font/raster
 bench-renderer: $(RASTERIZER_BENCH_LINEAR) $(RASTERIZER_BENCH_GENERIC) $(RASTERIZER_BENCH_IDENTITY_REFERENCE) $(RASTERIZER_BENCH_STORAGE_REFERENCE) $(RASTERIZER_BENCH_METADATA_REFERENCE) $(RASTERIZER_BENCH)
 	$(PYTHON) tests/compare_rasterizer_bench.py ./$(RASTERIZER_BENCH_LINEAR) ./$(RASTERIZER_BENCH_GENERIC) ./$(RASTERIZER_BENCH_IDENTITY_REFERENCE) ./$(RASTERIZER_BENCH_STORAGE_REFERENCE) ./$(RASTERIZER_BENCH_METADATA_REFERENCE) ./$(RASTERIZER_BENCH)
 
+# Compare compiler optimization levels and safe tuning/LTO candidates on identical workloads.
+bench-compiler-flags:
+	$(PYTHON) tests/compare_compiler_flags.py "$(CC)" "$(AS)" "$(LD)" "$(STRIP)" "$(NEKOEDIT_BASE_CFLAGS)"
+
 test-xkb-native: $(XKB_NATIVE_KEYMAP_TEST)
 	./$(XKB_NATIVE_KEYMAP_TEST)
 
 test-mutter: $(TEST_APP_BINARY) locale-packs
 	dbus-run-session -- bash tests/mutter_gnome_smoke.sh "$(TEST_APP_BINARY)" "$(LOCALE_PACK_DIR)/pt_BR.UTF-8.nlp"
 
-install: $(APP_BINARY)
+install: strip-binary
 	install -d "$(DESTDIR)$(PREFIX)/bin" "$(DESTDIR)$(PREFIX)/share/applications" "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps"
 	install -m 0755 "$(APP_BINARY)" "$(DESTDIR)$(PREFIX)/bin/nekoedit"
 	sed 's|@NEKOEDIT_EXEC@|nekoedit|g' data/nekoedit.desktop.in > "$(DESTDIR)$(PREFIX)/share/applications/nekoedit.desktop"
 	install -m 0644 data/nekoedit.svg "$(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/nekoedit.svg"
 
-install-user: $(APP_BINARY)
+install-user: strip-binary
 	install -d "$(USER_BIN_DIR)" "$(USER_APP_DIR)" "$(USER_ICON_DIR)"
 	install -m 0755 "$(APP_BINARY)" "$(USER_BIN_DIR)/nekoedit"
 	sed 's|@NEKOEDIT_EXEC@|$(USER_BIN_DIR)/nekoedit|g' data/nekoedit.desktop.in > "$(USER_APP_DIR)/nekoedit.desktop"
