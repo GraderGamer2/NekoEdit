@@ -10792,7 +10792,7 @@ xkb_symbols "nekoedit-sparse" {
                         workflow_click(20, 98, 2020, "dismiss Settings before no-wrap dirty edit")
 
                         workflow_shortcut(2030, 102, "Ctrl+Home moves to first no-wrap fixture line")
-                        key_step(2033, 107, "End moves to the end of the long unwrapped line")
+                        key_step(2055, 107, "End moves to the end of the long unwrapped line")
                         no_wrap_state = read_document_state()
                         no_wrap_cursor = no_wrap_state["doc_cursor"]
                         if (
@@ -10812,12 +10812,12 @@ xkb_symbols "nekoedit-sparse" {
                         # horizontally scrolled viewport. Edit away from logical
                         # EOL so this row cannot become the document's widest row.
                         for index in range(10):
-                            key_step(2036 + index * 3, 105, f"move inside the no-wrap viewport {index + 1}")
+                            key_step(2060 + index * 3, 105, f"move inside the no-wrap viewport {index + 1}")
                         # Warm both SHM snapshots with a short caret excursion.
-                        key_step(2070, 105, "warm no-wrap dirty-render slot with Left")
-                        key_step(2073, 106, "warm no-wrap dirty-render slot with Right")
-                        key_step(2076, 105, "warm alternate no-wrap slot with Left")
-                        key_step(2079, 106, "restore no-wrap caret before edit")
+                        key_step(2090, 105, "warm no-wrap dirty-render slot with Left")
+                        key_step(2093, 106, "warm no-wrap dirty-render slot with Right")
+                        key_step(2096, 105, "warm alternate no-wrap slot with Left")
+                        key_step(2099, 106, "restore no-wrap caret before edit")
                         no_wrap_before = read_document_state()
                         if (
                             no_wrap_before["doc_cursor"] != 150
@@ -10828,7 +10828,7 @@ xkb_symbols "nekoedit-sparse" {
                         no_wrap_contents = no_wrap_before["doc_contents"]
                         no_wrap_left_before = no_wrap_before["doc_view_left_px"]
                         no_wrap_insert_partial = key_step(
-                            2085, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
+                            2105, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
                         )
                         no_wrap_inserted = read_document_state()
                         no_wrap_expected = no_wrap_contents[:150] + b"b" + no_wrap_contents[150:]
@@ -10855,7 +10855,7 @@ xkb_symbols "nekoedit-sparse" {
                         ):
                             raise AssertionError("no-wrap dirty edit exceeded its bounded scan or repaint area")
                         no_wrap_delete_partial = key_step(
-                            2090, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
+                            2108, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
                         )
                         no_wrap_deleted = read_document_state()
                         if (
@@ -10878,10 +10878,10 @@ xkb_symbols "nekoedit-sparse" {
                                 })
                             )
 
-                        workflow_shortcut(2100, 102, "Ctrl+Home before ASCII selection replacement")
+                        workflow_shortcut(2120, 102, "Ctrl+Home before ASCII selection replacement")
                         for index in range(3):
                             workflow_shift_key(
-                                2130 + index * 30, 106,
+                                2150 + index * 30, 106,
                                 f"extend active selection across ASCII byte {index + 1}",
                             )
                         selected = read_document_state()
@@ -10899,7 +10899,7 @@ xkb_symbols "nekoedit-sparse" {
                                 })
                             )
                         replacement_partial = key_step(
-                            2230, 48, "one ASCII key replaces the active selection"
+                            2240, 48, "one ASCII key replaces the active selection"
                         )
                         replaced = read_document_state()
                         replacement_expected = b"b" + no_wrap_contents[3:]
