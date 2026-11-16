@@ -1,3 +1,16 @@
+## 2026-11-16 — LTO release build, compiler sweep and full symbol stripping (Actions #43797788228 PASS)
+
+| Commit | Subject |
+|---|---|
+| [25b2aa460cc6](https://github.com/GraderGamer2/NekoEdit/commit/25b2aa460cc6438556b51e488e1043c8e93ccce4) | perf: enable measured O2 link-time optimization |
+| [da12cec1421f](https://github.com/GraderGamer2/NekoEdit/commit/da12cec1421ff1a3100471ee724244c8677ce6d3) | build: benchmark compiler profiles and strip release ELF |
+
+The compiler sweep compared `-Os`, `-O2`, `-O3`, `-mtune=znver3`, architecture-specific candidates, and LTO combinations. On the Intel Xeon 6975P CI host, `-O2 -flto` measured 106.9 ns per warm glyph draw, 20.7% lower than plain `-O2` at 134.8 ns. Its stripped executable was 247,960 bytes, only 176 bytes larger than the plain `-O2` executable. The executed profiles produced identical framebuffer checksums. ISA-specific Zen 3/x86-64-v3 profiles were built but not runtime-tested on the Intel runner.
+
+The production C modules now default to `-O2 -flto` and link through GCC with `-nostdlib`; assembly stays on the direct assembler path. The test binary explicitly removes `-flto` from `TEST_CFLAGS` and retains its instrumentation globals. Release builds audit the unstripped ELF, then `strip --strip-all` removes symbols/debug metadata. Existing `--gc-sections` remains responsible for dropping unreferenced functions/data.
+
+Actions [#43797788228](https://github.com/GraderGamer2/NekoEdit/actions/runs/43797788228) passed all 18 steps, including the complete Wayland mock, large-file Open/Save, Mutter/IBus integration and both artifact uploads. Final ELF text/data/BSS: 242,172 / 64 / 3,797,208 bytes. Linux executable ZIP: 124,744 bytes; Compose ZIP: 148,799 bytes. No full-editor scrolling speedup is inferred from the isolated rasterizer benchmark.
+
 
 ---
 
