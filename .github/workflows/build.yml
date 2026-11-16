@@ -61,6 +61,9 @@ jobs:
       - name: Compare linear-reference and hash-indexed glyph-cache rendering
         run: make bench-renderer
 
+      - name: Benchmark assembly ASCII advance cache
+        run: make bench-advance
+
       - name: Run Wayland protocol mock tests (includes 11 MiB Open and Save)
         run: make test-wayland
 

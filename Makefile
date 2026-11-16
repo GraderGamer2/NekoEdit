@@ -22,6 +22,8 @@ CLIPBOARD_RANGE_TEST := $(BUILD_DIR)/clipboard_range_test
 COMPOSE_LOCALE_MANAGER_TEST := $(BUILD_DIR)/compose_locale_manager_test
 COMPOSE_LOCALE_IMPORT_TEST := $(BUILD_DIR)/compose_locale_import_test
 XKB_NATIVE_KEYMAP_TEST := $(BUILD_DIR)/xkb_native_keymap_test
+ADVANCE_TEST := $(BUILD_DIR)/advance_test
+ADVANCE_BENCH := $(BUILD_DIR)/advance_bench
 RASTERIZER_BENCH := $(BUILD_DIR)/rasterizer_bench
 RASTERIZER_BENCH_GENERIC := $(BUILD_DIR)/rasterizer_bench_generic
 RASTERIZER_BENCH_LINEAR := $(BUILD_DIR)/rasterizer_bench_linear
@@ -44,11 +46,11 @@ APP_LDFLAGS ?= -flto -nostdlib -static -no-pie -Wl,-z,noexecstack -Wl,-e,_start 
 TEST_LINKER ?= $(LD)
 TEST_LDFLAGS ?= $(LDFLAGS)
 
-SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
+SOURCES  := src/entry.S src/linux/syscall.S src/font/advance.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer bench-compiler-flags locale-packs check strip-binary inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer bench-advance bench-compiler-flags locale-packs check strip-binary inspect install install-user uninstall-user
 
 all: strip-binary
 
@@ -86,7 +88,7 @@ check: $(APP_BINARY)
 	@if $(READELF) -d $(APP_BINARY) 2>/dev/null | grep -q 'NEEDED'; then \
 		echo 'error: executable has dynamic library dependencies' >&2; exit 1; \
 	fi
-	@if $(NM) -g --defined-only $(APP_BINARY) | grep -Eq ' (font_probe_|render_(selection|find|document)_scan_|doc_(offset_visual|visual_offset)_scan_|keymap_event_|keyboard_dispatch_|xkb_parse_error_|render_clip_background_row_visits|render_status_scan_steps|render_status_column_value|render_document_byte_visits|render_document_row_visits|render_document_last_row_y)'; then \
+	@if $(NM) -g --defined-only $(APP_BINARY) | grep -Eq ' (font_probe_|render_(selection|find|document)_scan_|doc_(offset_visual|visual_offset)_scan_|keymap_event_|keyboard_dispatch_|xkb_parse_error_|render_clip_background_row_visits|render_status_scan_steps|render_status_column_value|render_document_byte_visits|render_document_row_visits|render_document_last_row_y|font_ascii_advance_fast_hits)'; then \
 		echo 'error: production executable contains test-only instrumentation symbols' >&2; exit 1; \
 	fi
 	@echo 'ELF check passed: no interpreter, dynamic dependencies, or test instrumentation.'
@@ -106,8 +108,9 @@ inspect: strip-binary
 	$(READELF) -d $(APP_BINARY) || true
 	$(SIZE) $(APP_BINARY)
 
-test: strip-binary $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
+test: strip-binary $(ADVANCE_TEST) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
+	./$(ADVANCE_TEST)
 	./$(PREFERENCES_TEST)
 	./$(HISTORY_TEST)
 	./$(CLIPBOARD_RANGE_TEST)
@@ -161,6 +164,20 @@ $(RASTERIZER_BENCH_STORAGE_REFERENCE): tests/rasterizer_bench.c src/font/rasteri
 $(RASTERIZER_BENCH_METADATA_REFERENCE): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+
+$(ADVANCE_TEST): tests/advance_test.c src/font/rasterizer.c src/font/advance.S
+	@mkdir -p "$(@D)"
+	$(AS) $(ASFLAGS) --defsym NEKOEDIT_TESTING=1 -o "$(BUILD_DIR)/advance_test_advance.o" src/font/advance.S
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DNEKOEDIT_TESTING=1 -o "$@" tests/advance_test.c src/font/rasterizer.c "$(BUILD_DIR)/advance_test_advance.o"
+
+$(ADVANCE_BENCH): tests/advance_bench.c src/font/rasterizer.c src/font/advance.S
+	@mkdir -p "$(@D)"
+	$(AS) $(ASFLAGS) -o "$(BUILD_DIR)/advance_bench_advance.o" src/font/advance.S
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" tests/advance_bench.c src/font/rasterizer.c "$(BUILD_DIR)/advance_bench_advance.o"
+
+.PHONY: bench-advance
+bench-advance: $(ADVANCE_BENCH)
+	./$(ADVANCE_BENCH)
 
 bench-renderer: $(RASTERIZER_BENCH_LINEAR) $(RASTERIZER_BENCH_GENERIC) $(RASTERIZER_BENCH_IDENTITY_REFERENCE) $(RASTERIZER_BENCH_STORAGE_REFERENCE) $(RASTERIZER_BENCH_METADATA_REFERENCE) $(RASTERIZER_BENCH)
 	$(PYTHON) tests/compare_rasterizer_bench.py ./$(RASTERIZER_BENCH_LINEAR) ./$(RASTERIZER_BENCH_GENERIC) ./$(RASTERIZER_BENCH_IDENTITY_REFERENCE) ./$(RASTERIZER_BENCH_STORAGE_REFERENCE) ./$(RASTERIZER_BENCH_METADATA_REFERENCE) ./$(RASTERIZER_BENCH)

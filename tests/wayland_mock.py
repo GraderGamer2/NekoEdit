@@ -3167,6 +3167,7 @@ xkb_symbols "nekoedit-sparse" {
                         "font_probe_curve_result", "font_probe_curve_width",
                         "font_probe_curve_height", "font_probe_curve_pixels",
                         "font_probe_advance_A", "font_probe_advance_B", "font_probe_advance_space",
+                        "font_ascii_advance_fast_hits",
                         "doc_cursor", "doc_length", "doc_line_count", "doc_line_index_base", "pointer_x", "pointer_y",
                         "window_doc_pixel_width", "window_doc_line_height", "window_doc_visible_rows",
                         "doc_line_index_valid", "doc_line_index_columns",
@@ -3314,6 +3315,10 @@ xkb_symbols "nekoedit-sparse" {
                     if not antialiased_ink_present(12, 88, 24, 16):
                         raise AssertionError(
                             "synthetic TrueType glyph A was rasterized but not painted into the Wayland framebuffer"
+                        )
+                    if values.get("font_ascii_advance_fast_hits", 0) <= 0:
+                        raise AssertionError(
+                            "repeated ASCII advances did not use the assembly cache fast path"
                         )
                     if not antialiased_ink_present(30, 92, 2, 12):
                         raise AssertionError(

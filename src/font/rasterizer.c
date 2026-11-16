@@ -12,7 +12,6 @@
 #define SAMPLES 4u
 
 extern int32_t font_loaded, font_units_per_em, font_num_glyphs, font_ascent;
-extern int32_t doc_font_size;
 extern int32_t font_glyph_contour_count, font_glyph_point_count;
 extern int32_t font_glyph_contour_ends[MAX_CONTOURS];
 extern uint8_t font_glyph_point_flags[MAX_POINTS];
@@ -81,7 +80,11 @@ static int render_clip_contains_y(int32_t y) {
 }
 /* ASCII advances are stable until the active face is replaced. Cache them
  * per document em size; zero means that the entry has not been measured. */
-static uint8_t ascii_advance_cache[33][128];
+/* Shared with advance.S: zero means that this size/codepoint pair is uncached. */
+#if defined(__GNUC__)
+__attribute__((used, externally_visible))
+#endif
+uint8_t font_ascii_advance_cache[33][128];
 
 #ifndef FONT_CACHE_LINEAR_REFERENCE
 static uint16_t cache_buckets[CACHE_HASH_BUCKETS];
@@ -130,7 +133,7 @@ static void cache_unlink_slot(uint32_t slot_index) {
 void font_cache_clear(void) {
     for (uint32_t size=0;size<=32u;++size)
         for (uint32_t cp=0;cp<128u;++cp)
-            ascii_advance_cache[size][cp]=0;
+            font_ascii_advance_cache[size][cp]=0;
     for (uint32_t i=0;i<CACHE_SLOTS;++i) {
         cache[i].valid=0;
         cache[i].stamp=0;
@@ -433,7 +436,7 @@ int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     uint32_t glyph_id, advance, upem;
     uint64_t scaled;
     uint8_t *ascii_slot=(codepoint<128u && size>0u && size<=32u)
-        ? &ascii_advance_cache[size][codepoint] : (uint8_t *)0;
+        ? &font_ascii_advance_cache[size][codepoint] : (uint8_t *)0;
     if (!font_loaded || !size || size>32) return 8;
     if (ascii_slot && *ascii_slot) return (int)*ascii_slot;
     glyph_id = font_cmap_lookup(codepoint);
@@ -455,12 +458,6 @@ int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     if (scaled > 32) scaled = 32;
     if (ascii_slot) *ascii_slot=(uint8_t)scaled;
     return (int)scaled;
-}
-
-int font_codepoint_advance_pixels(uint32_t codepoint) {
-    uint32_t size=(uint32_t)doc_font_size;
-    if (!size || size>32) size=12;
-    return font_codepoint_advance_pixels_size(codepoint,size);
 }
 
 static int map_surface_pixel_to_buffer(int32_t x,int32_t y,uint32_t transform,
