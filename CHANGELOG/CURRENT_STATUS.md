@@ -1,3 +1,23 @@
+## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
+
+**Source branch/head:** `early-alpha` at [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). Application source remains on `early-alpha`; `main` receives changelog-only mirrors, and `optimization-early-alpha` remains isolated.
+
+### Footer grouping
+
+- Added two muted, 1px-wide vertical separators to the status bar: one between the caret line/column readout and byte count, and one between byte count and text mode.
+- Each separator is positioned 12px before the existing responsive byte-count or mode anchor. Its 12px height is inset 4px from the status bar's top and bottom edges.
+- The separators use the existing subdued UI palette (`#596273`). Existing labels, values, line/column computation, status positions, document renderer, and window geometry are unchanged.
+- No runtime dependencies or additional state were introduced.
+
+### Regression coverage and validation
+
+- `tests/wayland_mock.py` inspects the initial 800×480 framebuffer and verifies the full 12px separator height at x=468 and x=732, with the expected `#596273` pixel value.
+- [Actions #43816130665](https://github.com/GraderGamer2/NekoEdit/actions/runs/43816130665) passed all **18 workflow steps** on source commit [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). This included compiler-profile comparison, production build and ELF/strip verification, CLI smoke tests, renderer-equivalence benchmark, the complete Wayland protocol mock with the new framebuffer assertions and 11 MiB Open/Save coverage, executable inspection, native `us(intl)` XKB verification, pinned X.Org regeneration/comparison, Compose pack build, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+This is a restrained visual-hierarchy improvement, not completion of the broader UI polish. No live GNOME screenshot or manual desktop review was performed. Continue reviewing the remaining panels, spacing, alignment and responsive behavior incrementally.
+
+---
+
 ## 2026-11-16 — first UI clipping and layout-correction pass (Actions #43802500972 PASS)
 
 **Source branch/head:** `early-alpha` at [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708). `main` remains application-source stable and receives only CHANGELOG mirrors; `optimization-early-alpha` remains isolated.

@@ -1,3 +1,11 @@
+## 2026-11-16 — status-bar information grouping (Actions #43816130665 PASS)
+
+The status bar now separates its three information groups—caret line/column, byte count, and text mode—with two muted 1px vertical rules. Their X positions are derived from the existing responsive byte-count and mode anchors, each 12px before its corresponding group. Each rule is 12px high and sits four pixels inside the status bar's top and bottom edges. Existing text placement, logical-column calculation, document rendering and runtime dependencies are unchanged.
+
+The Wayland framebuffer mock checks the full 12px height and exact `#596273` color at x=468 and x=732 on the 800×480 startup surface. Source implementation and regression coverage are in [151f807](https://github.com/GraderGamer2/NekoEdit/commit/151f80786ab7b9d60d83fd1cfb2964c0cfe4eaf5). Actions [#43816130665](https://github.com/GraderGamer2/NekoEdit/actions/runs/43816130665) passed all 18 workflow steps, including the Wayland mock, 11 MiB Open/Save, native XKB, pinned X.Org data comparison, locale-pack generation and nested GNOME Shell/Mutter/IBus integration. No live GNOME screenshot/manual review is claimed.
+
+---
+
 ## 2026-11-16 — O2 LTO, freestanding link and release stripping (Actions #43797788228 PASS)
 
 The CI comparison measured compiler optimization profiles with GCC 13.3.0 on an Intel Xeon 6975P host. Each eligible benchmark used seven samples of a deterministic glyph-raster workload with 50,000 warm draws per sample. All executed variants retained identical cache-fill and warm-framebuffer checksums.
