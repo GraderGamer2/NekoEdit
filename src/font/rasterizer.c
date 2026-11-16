@@ -267,6 +267,7 @@ static int inside(int64_t sx,int64_t sy,uint32_t contours) {
 #define MAX_SCANLINE_SAMPLES (BITMAP_SIDE * SAMPLES)
 static int64_t scanline_sample_x[MAX_SCANLINE_SAMPLES];
 static int32_t scanline_event_delta[MAX_SCANLINE_SAMPLES];
+static uint8_t scanline_coverage[BITMAP_SIDE];
 
 /* Build sparse winding changes for one horizontal subpixel scanline. The
  * crossing relation is kept as an exact 64-bit cross product: this preserves
@@ -359,7 +360,33 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     font_bitmap_left=(int32_t)left;
     ascent=ceil_div((int64_t)font_ascent*size,upem);
     font_bitmap_top=(int32_t)(ascent-top);
-#ifndef FONT_RASTERIZER_REFERENCE
+#ifdef FONT_RASTERIZER_REFERENCE
+    /* Keep the original 4x4 point-in-contour reference loop unchanged. */
+    for (uint32_t row=0;row<font_bitmap_height;++row) {
+        for (uint32_t col=0;col<font_bitmap_width;++col) {
+            uint32_t covered=0;
+            for (uint32_t sy=0;sy<SAMPLES;++sy) {
+                int64_t py=(((top-(int64_t)row)*8)-(int64_t)(sy*2+1))*upem/size;
+                for (uint32_t sx=0;sx<SAMPLES;++sx) {
+                    int64_t px=(((left+(int64_t)col)*8)+(int64_t)(sx*2+1))*upem/size;
+                    if (inside(px,py,contours)) ++covered;
+                }
+            }
+            uint32_t mask_index=row*BITMAP_SIDE+col;
+            if (covered) {
+                font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
+                ++font_bitmap_pixel_count;
+            }
+#ifndef FONT_GLYPH_STORAGE_REFERENCE
+            else {
+                /* The scratch buffer is reused; explicitly clear uncovered
+                 * pixels inside this glyph's active rectangle. */
+                font_bitmap_pixels[mask_index]=0;
+            }
+#endif
+        }
+    }
+#else
     uint32_t sample_count=font_bitmap_width*SAMPLES;
     for (uint32_t col=0;col<font_bitmap_width;++col) {
         for (uint32_t sx=0;sx<SAMPLES;++sx) {
@@ -367,42 +394,44 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
             int64_t grid_x=((left+(int64_t)col)*8)+(int64_t)(sx*2u+1u);
             scanline_sample_x[sample]=grid_x*upem/size;
         }
+        scanline_coverage[col]=0;
     }
-#endif
+
     for (uint32_t row=0;row<font_bitmap_height;++row) {
+        for (uint32_t col=0;col<font_bitmap_width;++col)
+            scanline_coverage[col]=0;
+
+        /* Four vertical subpixel scanlines contribute to the same pixel mask. */
         for (uint32_t sy=0;sy<SAMPLES;++sy) {
             int64_t py=(((top-(int64_t)row)*8)-(int64_t)(sy*2+1))*upem/size;
-#ifndef FONT_RASTERIZER_REFERENCE
             scanline_build_events(py,sample_count,contours);
             int32_t winding=0;
-#endif
             for (uint32_t col=0;col<font_bitmap_width;++col) {
-                uint32_t covered=0;
                 for (uint32_t sx=0;sx<SAMPLES;++sx) {
-#ifdef FONT_RASTERIZER_REFERENCE
-                    int64_t px=(((left+(int64_t)col)*8)+(int64_t)(sx*2+1))*upem/size;
-                    if (inside(px,py,contours)) ++covered;
-#else
                     uint32_t sample=col*SAMPLES+sx;
                     winding+=scanline_event_delta[sample];
-                    if (winding!=0) ++covered;
-#endif
+                    if (winding!=0) ++scanline_coverage[col];
                 }
-                uint32_t mask_index=row*BITMAP_SIDE+col;
-                if (covered) {
-                    font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
-                    ++font_bitmap_pixel_count;
-                }
-#ifndef FONT_GLYPH_STORAGE_REFERENCE
-                else {
-                    /* The scratch buffer is reused; explicitly clear uncovered
-                     * pixels inside this glyph's active rectangle. */
-                    font_bitmap_pixels[mask_index]=0;
-                }
-#endif
             }
         }
+
+        for (uint32_t col=0;col<font_bitmap_width;++col) {
+            uint32_t covered=scanline_coverage[col];
+            uint32_t mask_index=row*BITMAP_SIDE+col;
+            if (covered) {
+                font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
+                ++font_bitmap_pixel_count;
+            }
+#ifndef FONT_GLYPH_STORAGE_REFERENCE
+            else {
+                /* The scratch buffer is reused; explicitly clear uncovered
+                 * pixels inside this glyph's active rectangle. */
+                font_bitmap_pixels[mask_index]=0;
+            }
+#endif
+        }
     }
+#endif
     return 0;
 }
 
