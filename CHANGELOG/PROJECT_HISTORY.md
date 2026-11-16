@@ -1,3 +1,27 @@
+## 2026-11-16 — renderer instrumentation isolation and dirty-edit correctness coverage (Actions result unconfirmed)
+
+The normal NekoEdit executable now excludes profiling/test diagnostics from its runtime path. Wayland scan and clipped-row counters, keyboard/keymap event counters, SFNT outline/raster validation probes, and XKB parse-failure snapshots are compiled only into a dedicated test executable. Production font selection no longer performs additional diagnostic outline/raster operations. Production XKB error handling no longer scans the 32,768-entry keymap table to save diagnostic snapshots; parser reset and failure return remain intact. The production ELF check rejects the known test-only symbol families.
+
+Wayland/Mutter integration tests use `build/test/nekoedit-test`; the native XKB test builds its diagnostic-enabled parser object explicitly. The production executable remains `-O2` and unstripped. No editor-owned diagnostic log-file writer was found in the reviewed sources. Fatal errors continue to report to stderr; key-repeat and selection auto-scroll timers are functional input behavior and remain.
+
+The dirty-render regression now covers Wrap Lines OFF editing after horizontal scrolling, exact insert/delete bytes and caret positions, stable horizontal viewport, bounded partial repaint, and replacing a three-byte selection with one ASCII key. Existing wrapped-mode and newline fallback assertions are preserved. The new assertions have not yet been confirmed by a passing Actions result; no performance benchmark or end-to-end speedup is claimed.
+
+Related changes: [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda), [0540e6c](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f93d17fb0718dd0ba402b01b8c764), [ea1b3de](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5737a92a0a8b302ef9d3fed663f24).
+
+---
+
+## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (Actions #1006)
+
+The optional external Compose set gained `cs_CZ.UTF-8`, regenerated from the pinned libX11 source. Its dead-caron overrides produce ů/Ů; the flattened pack contains 4,479 records and the standalone NLP1 asset is 304,644 bytes. The core executable remains en_US-only and does not bundle optional locale tables.
+
+The status bar now reuses the stable-line-ID 4 KiB byte/visual checkpoint cache with a one-based logical column. Wrapped and unwrapped line-index passes populate the column alongside grapheme and visual metrics, including the existing four-column tab semantics. The status lookup resolves the logical line through the byte Fenwick tree, resumes from the nearest usable checkpoint, and scans only the local remainder. The entry stride grew from 24 to 32 bytes (+32 KiB for 4,096 entries).
+
+The Wayland mock verifies bounded status-column scanning on a 4 MiB line in both wrapping modes and checks a mixed wrapped fixture containing a tab, combining grapheme, and C0 control. The wrapped fixture uses Ctrl+End to reach logical EOF. Actions [#1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 workflow steps. No controlled end-to-end benchmark or manual live-desktop retest was performed.
+
+Related commits: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19).
+
+---
+
 ## 2026-11-15 — in-app keyboard shortcut reference and modal IME handling (CI PASS #1003)
 
 The editor now exposes its supported keyboard shortcuts through a centered Help panel, available from F1 or the title-bar Help item. The panel is divided into File and Editing, Navigation, and Find and Replace. Its contents reflect the implemented key bindings, including Ctrl+F for the unified Find/Replace interface; the removed Ctrl+H entry point is not listed.
