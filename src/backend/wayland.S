@@ -23359,7 +23359,7 @@ draw_glyph:
     TEST_DIAG_INC glyph_bitmap_fastpath_calls
     mov rdi, qword ptr [rip + shm_mapping]
     mov eax, r13d
-    imul rax, qword ptr [rip + window_stride]
+    imul eax, dword ptr [rip + window_stride]
     add rdi, rax
     mov eax, r12d
     shl rax, 2
