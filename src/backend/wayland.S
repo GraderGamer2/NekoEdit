@@ -7253,11 +7253,11 @@ wayland_main:
     jmp .pointer_settings_ui_font_increase
 
 .pointer_settings_locale_row:
-    cmp eax, 260
+    cmp eax, 236
     jb .pointer_settings_locale_select
-    cmp eax, 312
+    cmp eax, 280
     jb .pointer_settings_locale_add
-    cmp eax, 368
+    cmp eax, 352
     jb .pointer_settings_locale_remove
     cmp eax, 416
     jb .pointer_settings_locale_import
@@ -24259,7 +24259,8 @@ render_picker:
     mov edi, 600
     mov esi, 119
     lea rdx, [rip + ui_picker_hidden_label]
-    call draw_text
+    mov ecx, 108
+    call draw_bounded_ascii_width
     # Bordered 16x16 checkbox, with a filled interior and visible check mark.
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 714
@@ -24911,7 +24912,7 @@ render_file_menu:
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 160
     mov edx, 188
-    mov ecx, 96
+    mov ecx, 76
     mov r8d, 24
     mov r9d, 0xff414b5a
     call draw_rect
@@ -24923,49 +24924,52 @@ render_file_menu:
     jne .render_settings_locale_tag_ready
     lea rdx, [rip + ui_menu_locale_en]
 .render_settings_locale_tag_ready:
-    mov edi, 168
+    mov edi, 164
     mov esi, 204
-    mov ecx, 78
+    mov ecx, 52
     call draw_bounded_ascii_width
-    mov edi, 244
+    mov edi, 224
     mov esi, 204
     mov edx, 'v'
     mov ecx, 7
     call draw_glyph
 
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 260
+    mov esi, 240
     mov edx, 188
-    mov ecx, 44
+    mov ecx, 40
     mov r8d, 24
     mov r9d, 0xff414b5a
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 308
+    mov esi, 284
     mov edx, 188
-    mov ecx, 56
+    mov ecx, 68
     mov r8d, 24
     mov r9d, 0xff414b5a
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 368
+    mov esi, 356
     mov edx, 188
-    mov ecx, 48
+    mov ecx, 60
     mov r8d, 24
     mov r9d, 0xff414b5a
     call draw_rect
-    mov edi, 271
+    mov edi, 248
     mov esi, 204
     lea rdx, [rip + ui_menu_locale_add]
-    call draw_text
-    mov edi, 317
+    mov ecx, 30
+    call draw_bounded_ascii_width
+    mov edi, 289
     mov esi, 204
     lea rdx, [rip + ui_menu_locale_remove]
-    call draw_text
-    mov edi, 372
+    mov ecx, 58
+    call draw_bounded_ascii_width
+    mov edi, 359
     mov esi, 204
     lea rdx, [rip + ui_menu_locale_import]
-    call draw_text
+    mov ecx, 54
+    call draw_bounded_ascii_width
     call preferences_locale_is_builtin
     test eax, eax
     jnz .render_settings_locale_en

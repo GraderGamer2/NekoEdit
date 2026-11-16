@@ -7764,7 +7764,7 @@ xkb_symbols "nekoedit-sparse" {
                     installed_path = os.path.join(runtime_dir, ".nekoedit", "locales", "pt_BR.UTF-8.nlp")
                     os.unlink(installed_path)
                     click_settings(180, 10, 5070, "reopen Settings for Add Pack")
-                    click_settings_design(282, 200, 5080, "open Add Pack picker")
+                    click_settings_design(260, 200, 5080, "open Add Pack picker")
                     if child_u32("picker_mode") != 4:
                         raise AssertionError("Settings Add did not open locale-pack picker mode")
                     click_picker_design(200, 160, 5090, "select the .nlp source pack")
@@ -7804,7 +7804,7 @@ xkb_symbols "nekoedit-sparse" {
                         raise AssertionError("dropdown-selected pt_BR did not append its upstream e e mapping through the installed pack")
 
                     click_settings(180, 10, 5150, "reopen Settings for Remove Pack")
-                    click_settings_design(332, 200, 5160, "request Remove Pack confirmation")
+                    click_settings_design(318, 200, 5160, "request Remove Pack confirmation")
                     if child_u32("save_confirm_open") != 1:
                         raise AssertionError("Remove Pack did not request confirmation")
                     click_settings(300, 272, 5170, "confirm Remove Pack")
@@ -7836,7 +7836,7 @@ xkb_symbols "nekoedit-sparse" {
                     native_source_bytes = native_source_text.encode("utf-8")
 
                     click_settings(180, 10, 5180, "reopen Settings for raw XCompose import")
-                    click_settings_design(392, 200, 5190, "open Import XCompose picker")
+                    click_settings_design(386, 200, 5190, "open Import XCompose picker")
                     if child_u32("picker_mode") != 6:
                         raise AssertionError("Settings Import did not open raw XCompose picker mode")
                     click_picker_design(200, 160, 5200, "select the raw .XCompose file")
@@ -8871,6 +8871,42 @@ xkb_symbols "nekoedit-sparse" {
                                 f"{name} is not centered in the 800x480 surface: "
                                 f"x={x}, y={y}, width={width}, height={height}"
                             )
+                    # At 16px, the Settings locale action labels must remain
+                    # inside their reflowed buttons; the 4px button gutters stay
+                    # clear of text from either neighboring action.
+                    settings_x = picker_u32("settings_panel_x")
+                    settings_y = picker_u32("settings_panel_y")
+                    settings_width = picker_u32("settings_panel_width")
+                    settings_height = picker_u32("settings_panel_height")
+                    def settings_surface_x(design_x: int) -> int:
+                        return settings_x + (design_x - 160) * settings_width // 256
+                    def settings_surface_y(design_y: int) -> int:
+                        return settings_y + (design_y - 32) * settings_height // 192
+                    action_specs = [
+                        ("ADD", 240, 280, 248, 278),
+                        ("REMOVE", 284, 352, 289, 347),
+                        ("IMPORT", 356, 416, 359, 413),
+                    ]
+                    action_top = settings_surface_y(188)
+                    action_bottom = settings_surface_y(212)
+                    for action, left, right, text_left, text_right in action_specs:
+                        ink = [
+                            struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                            for y in range(action_top, action_bottom)
+                            for x in range(settings_surface_x(text_left), settings_surface_x(text_right))
+                        ]
+                        if not ink or all(pixel == 0xFF414B5A for pixel in ink):
+                            raise AssertionError(f"16px Settings {action} label was not rendered inside its button")
+                    for gap_left, gap_right in ((280, 284), (352, 356)):
+                        for y in range(action_top, action_bottom):
+                            for x in range(settings_surface_x(gap_left), settings_surface_x(gap_right)):
+                                pixel = struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                                if pixel != 0xFF1F242D:
+                                    raise AssertionError(
+                                        "16px Settings locale text crossed a button gutter: "
+                                        f"action_gap=({gap_left},{gap_right}), pixel=({x},{y}), color={hex(pixel)}"
+                                    )
+
                     # Help uses a wider two-column design and a 14px cap so its
                     # shortcut descriptions stay inside their columns at the
                     # maximum 16px application UI preference.
@@ -8931,6 +8967,20 @@ xkb_symbols "nekoedit-sparse" {
                         )
                     # Larger UI text must still fit wholly inside the 16px
                     # directory row; the selected background is the clip oracle.
+                    # The Show Hidden label is limited to the 108px strip
+                    # before the checkbox; that gutter must remain unpainted.
+                    hidden_gap_left = 28 + ((708 - 40) * 744 // 720)
+                    hidden_gap_right = 28 + ((714 - 40) * 744 // 720)
+                    hidden_gap_top = 28 + ((116 - 36) * 424 // 408)
+                    hidden_gap_bottom = 28 + ((132 - 36) * 424 // 408)
+                    for y in range(hidden_gap_top, hidden_gap_bottom):
+                        for x in range(hidden_gap_left, hidden_gap_right):
+                            pixel = struct.unpack_from("<I", pixels, y * 800 * 4 + x * 4)[0]
+                            if pixel != 0xFF1F242D:
+                                raise AssertionError(
+                                    "16px Show Hidden label crossed the checkbox gutter: "
+                                    f"pixel=({x},{y}), color={hex(pixel)}"
+                                )
                     workflow_click(110, 160, serial, "select AB row at 16px UI size")
                     serial += 10
                     large_row_top = 28 + ((160 - 36) * 424 // 408)
