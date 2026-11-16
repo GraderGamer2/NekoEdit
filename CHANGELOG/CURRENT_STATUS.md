@@ -1,33 +1,42 @@
-## 2026-11-16 — instrumentation split and dirty-render regression coverage (Actions result unconfirmed)
+## 2026-11-16 — line-local dirty repaint, measured painter work and production instrumentation isolation (Actions #43788858840 PASS)
 
-**Source branch:** `early-alpha`, latest change [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda). Production source remains separate from the stable `main` application checkpoint.
+**Source branch:** `early-alpha`, final source head [f25c8a7](https://github.com/GraderGamer2/NekoEdit/commit/f25c8a78ef4fd6e3b808d2fafa31408050b365e). `main` remains the stable application-source checkpoint; only the five changelog files are mirrored there. `optimization-early-alpha` remains isolated.
 
-### Edit-aware repaint coverage
+### Edit-aware repaint boundary
 
-The existing renderer's edit path records a dirty visual row per SHM buffer slot and accepts partial repaint only when the prior scene/layout snapshot remains compatible. No-wrap painting uses the horizontal pixel origin to find the visible byte. Structural/layout-changing edits continue to trigger a full repaint.
+Each compatible SHM slot tracks the earliest dirty visual row and the one-based logical line index that was edited. The marker uses a logical line index rather than the generated line ID because ordinary byte insertions/deletions regenerate that ID. Before partial repaint, the renderer validates that the current dirty visual row still maps to the stored logical line. It then obtains the line's exclusive visual-row end through the indexed line data/Fenwick row prefix. The painter starts one visual row earlier to erase glyph overhang and stops at the affected line's end.
 
-New Wayland mock coverage is gated to the large dirty-render fixture. The first logical line is 160 ASCII bytes while subsequent lines are 200 bytes, keeping the document maximum line width stable. The test disables Wrap Lines, scrolls horizontally to the first line, moves to byte 150, and verifies that typing and Backspace:
-- preserve exact document contents and caret positions;
-- keep Wrap Lines OFF and the horizontal viewport origin unchanged;
-- use partial damage and scan no more than 512 document bytes;
-- do not visit the full surface height for clipped background painting.
+Partial repaint remains conditional on the existing scene/viewport/font/wrap/scale/transform compatibility checks, unchanged total visual-row count, and (when wrapping is off) unchanged document maximum line width. Edits spanning multiple logical lines, newline insertion/deletion, index uncertainty, or a failed snapshot check use the full-frame fallback. Both SHM slots are invalidated for newline split/merge operations.
 
-The same fixture then selects the first three bytes, types one printable ASCII character, and verifies exact replacement, caret position 1, and cleared selection. Existing wrapped-mode caret/edit tests and newline full-frame fallback remain.
+### Test-only work counters
 
-### Runtime diagnostics removed from the production binary
+The test executable now exposes:
+- document bytes consumed by the document painter, including the remaining bytes of multi-byte graphemes;
+- distinct document rows visited by the painter, including wrapped destination rows.
 
-- Wayland renderer scan bounds, clipped-row visits, status scan counters, keyboard dispatch counters, and keymap event counters are emitted only in `NEKOEDIT_TESTING` builds.
-- SFNT face-selection outline decoding and raster test probes, plus font-init advance/raster probes, are test-only.
-- XKB parse-stage/failure snapshots and its error-only 32,768-cell table scan are test-only. Production still performs normal parser reset/error cleanup and returns the same failure result.
-- A separate `build/test/nekoedit-test` is built for Wayland and Mutter integration coverage. `test-xkb-native` explicitly links a diagnostic-enabled XKB object.
-- `make check` uses `nm` to reject known test instrumentation symbols from `build/nekoedit`.
+These are guarded by `NEKOEDIT_TESTING` and absent from the production executable. The Makefile's production-symbol audit rejects the new counter symbols as well as the existing diagnostic families. Wayland test bounds are derived from fixture line lengths and indexed visual-row counts, rather than treating a fixed 512-byte document-offset span as a proxy for work. Failure messages report measured byte/row counts, scan offsets, document length, background-row visits, and surface height.
 
-The release executable keeps its existing `-O2`, unstripped policy. The monotonic timerfds remain because they implement key repeat and pointer-selection auto-scroll, not profiling. Fatal startup/protocol error messages to stderr remain; no application log-file writer was found. Functional Undo/Redo journals and preference files are not diagnostics and are unchanged.
+### Correctness coverage
 
-### Validation status
+- Wrap Lines OFF: scroll horizontally through the 160-byte first line, edit at byte 150, and verify exact bytes, caret, unchanged horizontal origin, partial damage, and fixture-derived byte/row work bounds for both typing and Backspace.
+- ASCII selection replacement: select three bytes, type one ASCII character, and verify exactly one replacement, caret position 1, and cleared selection.
+- Wrapped edit coverage remains, including exact document contents and partial-damage checks.
+- Newline insertion retains the full-frame geometry/layout fallback.
+- Existing large-document open/save, picker, clipboard, Find, buffer-pacing and protocol mock coverage remains in the full suite.
 
-Tests have been added but not reported as passing. The available commit combined-status query returned no status entries; verify the latest Actions run. No quantitative performance claim is made.
+### Production instrumentation and logging
 
+The normal `build/nekoedit` excludes renderer/input counters, SFNT validation probes, and XKB failure snapshots/table scans. `build/test/nekoedit-test` is used for Wayland/Mutter tests; the native XKB test builds a separate diagnostic-enabled parser object. The executable remains `-O2` and unstripped. The source audit found no application-owned diagnostic log-file writer. Fatal startup/protocol errors still report to stderr; functional key-repeat/selection-scroll timers, Undo/Redo journals and preferences remain.
+
+### Validation
+
+[Actions #43788858840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840) passed all 17 workflow steps on `f25c8a7). This includes production build and ELF inspection, CLI tests, renderer equivalence, full Wayland mock, native `us(intl)` XKB parser, pinned X.Org source regeneration and byte comparisons, locale-pack build, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+Artifacts:
+- [Linux executable ZIP — 153,082 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840/artifacts/14191547719); SHA-256 `85ddde698fb0b2eedc25382b22ed25c31f25e6929c270b81569aa35bfc8f5d88`.
+- [Compose locale ZIP — 148,799 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840/artifacts/14192000650); SHA-256 `f22df0b86a9be18ee8af9fd505b1f9a6e8b940207d7e61c2b4b280676527a22e`.
+
+No controlled before/after application-level dirty-render latency measurement or manual live-desktop retest is claimed.
 ---
 
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
