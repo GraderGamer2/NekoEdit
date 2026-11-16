@@ -10808,27 +10808,36 @@ xkb_symbols "nekoedit-sparse" {
                                     "left": no_wrap_state["doc_view_left_px"],
                                 })
                             )
-                        # Warm both SHM snapshots in the no-wrap scene before
-                        # requiring the edit itself to use bounded partial damage.
-                        key_step(2036, 105, "warm no-wrap dirty-render slot with Left")
-                        key_step(2039, 106, "warm no-wrap dirty-render slot with Right")
-                        key_step(2042, 105, "warm alternate no-wrap slot with Left")
-                        key_step(2045, 106, "restore no-wrap caret to logical line end")
+                        # Move left from the right edge while staying inside the
+                        # horizontally scrolled viewport. Edit away from logical
+                        # EOL so this row cannot become the document's widest row.
+                        for index in range(10):
+                            key_step(2036 + index * 3, 105, f"move inside the no-wrap viewport {index + 1}")
+                        # Warm both SHM snapshots with a short caret excursion.
+                        key_step(2070, 105, "warm no-wrap dirty-render slot with Left")
+                        key_step(2073, 106, "warm no-wrap dirty-render slot with Right")
+                        key_step(2076, 105, "warm alternate no-wrap slot with Left")
+                        key_step(2079, 106, "restore no-wrap caret before edit")
                         no_wrap_before = read_document_state()
-                        if no_wrap_before["doc_cursor"] != 160 or no_wrap_before["doc_view_left_px"] <= 0:
+                        if (
+                            no_wrap_before["doc_cursor"] != 150
+                            or no_wrap_before["doc_view_left_px"] <= 0
+                            or no_wrap_before["doc_wrap_enabled"] != 0
+                        ):
                             raise AssertionError("no-wrap warm-up changed the expected caret or horizontal viewport")
                         no_wrap_contents = no_wrap_before["doc_contents"]
+                        no_wrap_left_before = no_wrap_before["doc_view_left_px"]
                         no_wrap_insert_partial = key_step(
-                            2050, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
+                            2085, 48, "printable ASCII insertion uses dirty repaint with Wrap Lines OFF"
                         )
                         no_wrap_inserted = read_document_state()
-                        no_wrap_expected = no_wrap_contents[:160] + b"b" + no_wrap_contents[160:]
+                        no_wrap_expected = no_wrap_contents[:150] + b"b" + no_wrap_contents[150:]
                         if (
                             not no_wrap_insert_partial
                             or no_wrap_inserted["doc_contents"] != no_wrap_expected
-                            or no_wrap_inserted["doc_cursor"] != 161
+                            or no_wrap_inserted["doc_cursor"] != 151
                             or no_wrap_inserted["doc_wrap_enabled"] != 0
-                            or no_wrap_inserted["doc_view_left_px"] <= 0
+                            or no_wrap_inserted["doc_view_left_px"] != no_wrap_left_before
                         ):
                             raise AssertionError(
                                 "Wrap Lines OFF typing did not preserve exact bytes/caret/viewport with partial damage: "
@@ -10846,15 +10855,15 @@ xkb_symbols "nekoedit-sparse" {
                         ):
                             raise AssertionError("no-wrap dirty edit exceeded its bounded scan or repaint area")
                         no_wrap_delete_partial = key_step(
-                            2053, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
+                            2090, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
                         )
                         no_wrap_deleted = read_document_state()
                         if (
                             not no_wrap_delete_partial
                             or no_wrap_deleted["doc_contents"] != no_wrap_contents
-                            or no_wrap_deleted["doc_cursor"] != 160
+                            or no_wrap_deleted["doc_cursor"] != 150
                             or no_wrap_deleted["doc_wrap_enabled"] != 0
-                            or no_wrap_deleted["doc_view_left_px"] <= 0
+                            or no_wrap_deleted["doc_view_left_px"] != no_wrap_left_before
                             or no_wrap_deleted["render_document_scan_end"]
                                - no_wrap_deleted["render_document_scan_start"] > 512
                             or dirty_render_background_row_deltas[-1] >= initial_height
@@ -10869,10 +10878,10 @@ xkb_symbols "nekoedit-sparse" {
                                 })
                             )
 
-                        workflow_shortcut(2060, 102, "Ctrl+Home before ASCII selection replacement")
+                        workflow_shortcut(2100, 102, "Ctrl+Home before ASCII selection replacement")
                         for index in range(3):
                             workflow_shift_key(
-                                2065 + index * 4, 106,
+                                2130 + index * 30, 106,
                                 f"extend active selection across ASCII byte {index + 1}",
                             )
                         selected = read_document_state()
@@ -10890,7 +10899,7 @@ xkb_symbols "nekoedit-sparse" {
                                 })
                             )
                         replacement_partial = key_step(
-                            2100, 48, "one ASCII key replaces the active selection"
+                            2230, 48, "one ASCII key replaces the active selection"
                         )
                         replaced = read_document_state()
                         replacement_expected = b"b" + no_wrap_contents[3:]
