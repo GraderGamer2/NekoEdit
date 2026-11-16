@@ -8563,6 +8563,8 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_font_size", "ui_font_size", "window_doc_line_height", "settings_menu_open",
                         "settings_panel_x", "settings_panel_y", "settings_panel_width", "settings_panel_height", "settings_ui_font_size",
                         "find_panel_x", "find_panel_y", "find_panel_width", "find_panel_height", "find_ui_font_size",
+                        "help_panel_open", "help_panel_x", "help_panel_y", "help_panel_width", "help_panel_height",
+                        "help_ui_font_size",
                         "doc_line_index_base", "doc_line_count", "doc_line_index_valid",
                         "font_loaded", "font_units_per_em", "font_num_glyphs",
                         "font_probe_A_advance", "font_file_map", "picker_error",
