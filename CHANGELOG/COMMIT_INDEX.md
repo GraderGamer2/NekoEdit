@@ -1,10 +1,19 @@
-## 2026-11-16 — test-only diagnostics and dirty-render regression coverage (Actions unconfirmed)
+
+---
+
+## 2026-11-16 — measured line-local dirty repaint and test-only instrumentation (Actions #43788858840 PASS)
 
 | Commit | Subject |
 |---|---|
+| [f25c8a78ef4f](https://github.com/GraderGamer2/NekoEdit/commit/f25c8a78ef4fd6e3b808d2fafa31408050b365e) | fix: convert dirty row marker to zero-based row |
+| [2778e41f94bd](https://github.com/GraderGamer2/NekoEdit/commit/2778e41f94bdbd1cf95f1ed45746539d2599ec0a) | fix: validate dirty line from its own visual row |
+| [6c6a232b6203](https://github.com/GraderGamer2/NekoEdit/commit/6c6a232b620323f4f367c3aac47e43fc34f4b059) | fix: retain dirty repaint bounds across ordinary edits |
+| [dcc5e49c6b79](https://github.com/GraderGamer2/NekoEdit/commit/dcc5e49c6b79a09d0cea81269588c34c855c7026) | fix: preserve slot-local dirty repaint bounds |
+| [1dd15a492715](https://github.com/GraderGamer2/NekoEdit/commit/1dd15a492715c47080d51bbcaf5b0d5d3a547e9f) | perf: bound edit repaint to the affected logical line |
 | [3ba19adfcd2b](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda) | build: retain test-only XKB diagnostics in native parser test |
 | [0540e6c4b85f](https://github.com/GraderGamer2/NekoEdit/commit/0540e6c4b85f93d17fb0718dd0ba402b01b8c764) | test: keep dirty-render input event serials ordered |
 | [ea1b3de28fb5](https://github.com/GraderGamer2/NekoEdit/commit/ea1b3de28fb5737a92a0a8b302ef9d3fed663f24) | test: keep no-wrap edits inside stable horizontal viewport |
+| [ba8807e6c5b3](https://github.com/GraderGamer2/NekoEdit/commit/ba8807e6c5b38d6a1322db0c39dfc56f76325b48) | test: scope no-wrap edit coverage to long fixture |
 | [182cf409f5fd](https://github.com/GraderGamer2/NekoEdit/commit/182cf409f5fd04e8a4d6ee21ed0b89886dc7c40d) | build: fix test object expansion and reject release probes |
 | [950d36f230ca](https://github.com/GraderGamer2/NekoEdit/commit/950d36f230cadac6eba143e7d25a0c631097b001) | test: correct Python condition in dirty-render coverage |
 | [2cfa3d6ab101](https://github.com/GraderGamer2/NekoEdit/commit/2cfa3d6ab1013b7e40974406976657da31aefbd6) | test: cover no-wrap edits and ASCII selection replacement |
@@ -14,8 +23,13 @@
 | [e823a2ee9d30](https://github.com/GraderGamer2/NekoEdit/commit/e823a2ee9d30e292e17b608185b0d318786cbc8b) | perf: compile renderer and input counters out of production |
 | [58c40b11ae98](https://github.com/GraderGamer2/NekoEdit/commit/58c40b11ae98fdf637f8d0eff2e52f2abe114b06) | build: isolate editor diagnostics in test-only binary |
 
-The production executable now compiles out render/input counters, font test probes, and XKB failure snapshots. Wayland/Mutter coverage uses a dedicated instrumented executable, and the native XKB test builds its own test-enabled parser object. The dirty-render Wayland fixture covers wrapped edits, no-wrap edits after horizontal scrolling, exact ASCII replacement of an active selection, and full-frame fallback for newline changes. Added coverage has not yet been confirmed by a passing Actions run.
+The edit renderer now bounds partial repaint to the current affected logical line for compatible single-line edits. The dirty-line marker stores the logical index rather than the regenerated internal line ID; its visual-row value remains one-based and is converted before line validation. Newline split/merge and multi-line edits keep the full-frame fallback. Test-only painter counters measure bytes consumed and rows visited; regression limits are derived from fixture line/row sizes and print measured values on failure.
 
+Actions [#43788858840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840) passed all 17 steps, including the full Wayland dirty-render/11 MiB Open-Save suite, executable inspection, native XKB, pinned X.Org importer, Compose generation, GNOME Shell/Mutter/IBus integration and both artifact uploads. No controlled end-to-end dirty-render latency speedup is claimed.
+
+---
+
+## 2026-11-15
 ---
 
 ---
