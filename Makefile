@@ -76,7 +76,7 @@ check: $(APP_BINARY)
 	@if $(READELF) -d $(APP_BINARY) 2>/dev/null | grep -q 'NEEDED'; then \
 		echo 'error: executable has dynamic library dependencies' >&2; exit 1; \
 	fi
-	@if $(NM) -g --defined-only $(APP_BINARY) | grep -Eq ' (font_probe_|render_(selection|find|document)_scan_|doc_(offset_visual|visual_offset)_scan_|keymap_event_|keyboard_dispatch_|xkb_parse_error_|render_clip_background_row_visits|render_status_scan_steps|render_status_column_value)'; then \
+	@if $(NM) -g --defined-only $(APP_BINARY) | grep -Eq ' (font_probe_|render_(selection|find|document)_scan_|doc_(offset_visual|visual_offset)_scan_|keymap_event_|keyboard_dispatch_|xkb_parse_error_|render_clip_background_row_visits|render_status_scan_steps|render_status_column_value|render_document_byte_visits|render_document_row_visits|render_document_last_row_y)'; then \
 		echo 'error: production executable contains test-only instrumentation symbols' >&2; exit 1; \
 	fi
 	@echo 'ELF check passed: no interpreter, dynamic dependencies, or test instrumentation.'

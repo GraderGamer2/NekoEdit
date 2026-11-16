@@ -4949,6 +4949,7 @@ window_buffer_slot_render_valid: .zero 8
 window_buffer_slot_render_scene_generation: .zero 8
 window_buffer_slot_render_doc_revision: .zero 8
 window_buffer_slot_render_dirty_row: .zero 8
+window_buffer_slot_render_dirty_line_id: .zero 8
 window_buffer_slot_render_total_rows: .zero 8
 window_buffer_slot_render_max_line_width: .zero 8
 window_buffer_slot_render_view_top: .zero 8
@@ -5124,6 +5125,10 @@ render_find_scan_end:   .long 0
 .global render_document_scan_start, render_document_scan_end
 render_document_scan_start: .long 0
 render_document_scan_end:   .long 0
+.global render_document_byte_visits, render_document_row_visits, render_document_last_row_y
+render_document_byte_visits: .long 0
+render_document_row_visits: .long 0
+render_document_last_row_y: .long 0
 .global doc_offset_visual_scan_start, doc_offset_visual_scan_end
 doc_offset_visual_scan_start: .long 0
 doc_offset_visual_scan_end:   .long 0
@@ -16523,13 +16528,53 @@ render_prepare_slot:
 .render_prepare_edit_row_visible:
     cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .render_prepare_full
-    mov r14d, dword ptr [rip + window_doc_visible_rows]
-    dec r14d
+    mov r14d, dword ptr [rip + window_buffer_slot_render_dirty_line_id]
+    # The selected slot has been validated above; its ID must remain nonzero.
+    # Fetch the current logical line containing the dirty visual row.
+    test r14d, r14d
+    jz .render_prepare_full
+    lea rbx, [rip + window_buffer_slot_render_dirty_row]
+    mov edi, dword ptr [rbx + r12*4]
+    dec edi
+    xor esi, esi
+    call doc_visual_to_offset
+    mov edi, eax
+    mov esi, DOC_INDEX_BYTE_TREE_OFFSET
+    call doc_line_index_find_prefix
+    mov ebx, eax
+    mov edi, eax
+    call doc_line_index_get_id
+    cmp eax, r14d
+    jne .render_prepare_full
+
+    # The line record stores its visual-row count; Fenwick prefix gives the
+    # absolute exclusive end row without scanning the document.
+    mov edi, ebx
+    mov esi, DOC_INDEX_ROW_TREE_OFFSET
+    call doc_line_index_prefix_sum
+    mov r14d, eax
+    mov rdx, qword ptr [rip + doc_line_index_base]
+    mov eax, ebx
+    shl rax, 4
+    add rdx, rax
+    mov eax, dword ptr [rdx + DOC_INDEX_ROWS_OFFSET]
+    add eax, r14d
+    sub eax, dword ptr [rip + doc_view_top_row]
+    imul eax, dword ptr [rip + window_doc_line_height]
+    add eax, DOC_TOP
+    mov ecx, dword ptr [rip + window_doc_bottom]
+    sub ecx, dword ptr [rip + window_doc_line_height]
+    cmp eax, ecx
+    jbe .render_prepare_edit_end_clamped
+    mov eax, ecx
+.render_prepare_edit_end_clamped:
+    cmp eax, DOC_TOP
+    jbe .render_prepare_full
+    mov dword ptr [rip + render_partial_end_y], eax
 
 .render_prepare_rows_ordered:
-    # Caret motion covers both caret rows and glyph overhang; edit repaint
-    # starts one row before the earliest changed row and reaches the viewport
-    # bottom. Keep logical bounds so document painting skips earlier rows.
+    # Start one visual row before the earliest changed row to erase glyph
+    # overhang. For edits, stop at the end of the one affected logical line.
     mov eax, r13d
     test eax, eax
     jz .render_prepare_first_row_ready
@@ -16537,24 +16582,27 @@ render_prepare_slot:
 .render_prepare_first_row_ready:
     add eax, dword ptr [rip + doc_view_top_row]
     mov dword ptr [rip + render_partial_first_row], eax
+
+    cmp dword ptr [rip + redraw_edit_candidate], 1
+    je .render_prepare_use_edit_end
     lea ecx, [r14d + 2]
     cmp ecx, dword ptr [rip + window_doc_visible_rows]
-    jbe .render_prepare_end_row_ready
+    jbe .render_prepare_caret_end_row_ready
     mov ecx, dword ptr [rip + window_doc_visible_rows]
-.render_prepare_end_row_ready:
-    cmp dword ptr [rip + redraw_edit_candidate], 1
-    jne .render_prepare_end_row_count_ready
-    # Edit repaint must reach the same last drawable row as the full renderer.
-    # window_doc_visible_rows counts complete rows and can omit the final
-    # partially visible row; window_doc_bottom is the authoritative clip edge.
-    mov ecx, dword ptr [rip + window_doc_bottom]
-    sub ecx, dword ptr [rip + window_doc_line_height]
-    jmp .render_prepare_end_row_store
-.render_prepare_end_row_count_ready:
+.render_prepare_caret_end_row_ready:
     imul ecx, dword ptr [rip + window_doc_line_height]
     add ecx, DOC_TOP
-.render_prepare_end_row_store:
+    jmp .render_prepare_end_y_ready
+.render_prepare_use_edit_end:
+    mov ecx, dword ptr [rip + render_partial_end_y]
+.render_prepare_end_y_ready:
     mov dword ptr [rip + render_partial_end_y], ecx
+    mov eax, ecx
+    cmp eax, dword ptr [rip + window_status_top]
+    jle .render_prepare_damage_bottom_ready
+    mov eax, dword ptr [rip + window_status_top]
+.render_prepare_damage_bottom_ready:
+    mov r15d, eax
 
     mov eax, dword ptr [rip + window_doc_line_height]
     imul r13d, eax
@@ -16710,6 +16758,8 @@ render_store_slot_metadata:
     mov eax, dword ptr [rip + doc_revision]
     mov dword ptr [rbx + r12*4], eax
     lea rbx, [rip + window_buffer_slot_render_dirty_row]
+    mov dword ptr [rbx + r12*4], 0
+    lea rbx, [rip + window_buffer_slot_render_dirty_line_id]
     mov dword ptr [rbx + r12*4], 0
     lea rbx, [rip + window_buffer_slot_render_total_rows]
     mov eax, dword ptr [rip + doc_total_visual_rows]
@@ -19284,6 +19334,8 @@ doc_line_index_apply_delete:
 .pushsection .text.render_mark_document_edit,"ax",@progbits
 render_mark_document_edit:
     push rbx
+    push r12
+    push r13
     mov ebx, edi
     cmp dword ptr [rip + doc_storage_error], 0
     jne .render_mark_edit_done
@@ -19294,10 +19346,22 @@ render_mark_document_edit:
 
     cmp dword ptr [rip + doc_line_index_valid], 1
     jne .render_mark_edit_preserve
+
+    # Resolve the stable logical-line identity before the mutation changes the
+    # line's byte/visual metrics. A second edited line invalidates partial paint.
+    mov edi, ebx
+    mov esi, DOC_INDEX_BYTE_TREE_OFFSET
+    call doc_line_index_find_prefix
+    mov edi, eax
+    call doc_line_index_get_id
+    test eax, eax
+    jz .render_mark_edit_preserve
+    mov r12d, eax
+
     mov edi, ebx
     call doc_offset_to_visual
-    inc eax                         # zero is reserved for a clean slot
-    mov ebx, eax
+    inc eax
+    mov r13d, eax
     xor r8d, r8d
 
     lea rdx, [rip + window_buffer_slot_render_valid]
@@ -19308,10 +19372,20 @@ render_mark_document_edit:
     test eax, eax
     jz .render_mark_edit_store0
     mov r8d, 1
-    cmp ebx, eax
+    lea rcx, [rip + window_buffer_slot_render_dirty_line_id]
+    cmp dword ptr [rcx], r12d
+    jne .render_mark_edit_multiline0
+    cmp r13d, eax
     jae .render_mark_edit_slot1
+    mov dword ptr [rdx], r13d
+    jmp .render_mark_edit_slot1
 .render_mark_edit_store0:
-    mov dword ptr [rdx], ebx
+    mov dword ptr [rdx], r13d
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], r12d
+    mov r8d, 1
+    jmp .render_mark_edit_slot1
+.render_mark_edit_multiline0:
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], 0
     mov r8d, 1
 
 .render_mark_edit_slot1:
@@ -19323,16 +19397,26 @@ render_mark_document_edit:
     test eax, eax
     jz .render_mark_edit_store1
     mov r8d, 1
-    cmp ebx, eax
+    lea rcx, [rip + window_buffer_slot_render_dirty_line_id]
+    cmp dword ptr [rcx + 4], r12d
+    jne .render_mark_edit_multiline1
+    cmp r13d, eax
     jae .render_mark_edit_candidate
+    mov dword ptr [rdx + 4], r13d
+    jmp .render_mark_edit_candidate
 .render_mark_edit_store1:
-    mov dword ptr [rdx + 4], ebx
+    mov dword ptr [rdx + 4], r13d
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], r12d
     mov r8d, 1
     jmp .render_mark_edit_candidate
+.render_mark_edit_multiline1:
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], 0
+    mov r8d, 1
 
 .render_mark_edit_preserve:
-    # A previous mutation may have invalidated the index. Keep its earlier
-    # dirty marker instead of rebuilding the index in the middle of a batch.
+    # When the index is unavailable, the old dirty byte/row marker is not
+    # enough to identify a safe local boundary. Force full repaint for any
+    # slot already carrying a pending dirty marker.
     xor r8d, r8d
     lea rdx, [rip + window_buffer_slot_render_valid]
     cmp dword ptr [rdx], 1
@@ -19348,6 +19432,8 @@ render_mark_document_edit:
     cmp dword ptr [rdx + 4], 0
     je .render_mark_edit_done
 .render_mark_edit_preserve_found:
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], 0
     mov r8d, 1
 
 .render_mark_edit_candidate:
@@ -19356,6 +19442,8 @@ render_mark_document_edit:
     mov dword ptr [rip + redraw_cursor_candidate], 0
     mov dword ptr [rip + redraw_edit_candidate], 1
 .render_mark_edit_done:
+    pop r13
+    pop r12
     pop rbx
     ret
 .size render_mark_document_edit, . - render_mark_document_edit
@@ -27465,6 +27553,11 @@ render_document:
     sub rsp, 8                  # keep System V call-site alignment
     TEST_DIAG_STORE render_document_scan_start, 0
     TEST_DIAG_STORE render_document_scan_end, 0
+.ifdef NEKOEDIT_TESTING
+    mov dword ptr [rip + render_document_byte_visits], 0
+    mov dword ptr [rip + render_document_row_visits], 0
+    mov dword ptr [rip + render_document_last_row_y], -1
+.endif
     cmp dword ptr [rip + render_partial_active], 1
     jne .Ldocument_render_full_map_start
     mov edi, dword ptr [rip + render_partial_first_row]
@@ -27550,6 +27643,17 @@ render_document:
     add r13d, dword ptr [rip + window_doc_line_height]
     jmp .Ldocument_render_loop
 .Ldocument_render_read_byte:
+    # Count one row per distinct document Y and every logical byte consumed by
+    # this painter. These counters exist only in the test executable.
+.ifdef NEKOEDIT_TESTING
+    mov eax, r13d
+    cmp eax, dword ptr [rip + render_document_last_row_y]
+    je .Ldocument_render_row_counted
+    inc dword ptr [rip + render_document_row_visits]
+    mov dword ptr [rip + render_document_last_row_y], eax
+.Ldocument_render_row_counted:
+    inc dword ptr [rip + render_document_byte_visits]
+.endif
     # RBX-independent physical cursor avoids a logical-offset translation for
     # every visible byte. The cursor is rebased whenever the gap is crossed.
     movzx edx, byte ptr [rbp]
@@ -27626,6 +27730,14 @@ render_document:
 .Ldocument_render_grapheme_slow:
     mov edi, r14d
     call doc_grapheme_next
+.ifdef NEKOEDIT_TESTING
+    # The first byte was counted at render entry; include the remaining bytes
+    # consumed by this complete grapheme (including multi-byte UTF-8).
+    sub eax, r14d
+    dec eax
+    add dword ptr [rip + render_document_byte_visits], eax
+    add eax, r14d
+.endif
     mov r14d, eax
     call .Ldocument_render_sync_pointer
     jmp .Ldocument_render_loop

@@ -3332,7 +3332,8 @@ xkb_symbols "nekoedit-sparse" {
                         "doc_selection_active", "render_selection_scan_start",
                         "render_selection_scan_end", "render_find_scan_start",
                         "render_find_scan_end", "render_document_scan_start",
-                        "render_document_scan_end", "render_clip_background_row_visits",
+                        "render_document_scan_end", "render_document_byte_visits",
+                        "render_document_row_visits", "render_clip_background_row_visits",
                         "render_status_scan_steps", "render_status_column_value",
                         "doc_offset_visual_scan_start",
                         "doc_offset_visual_scan_end", "doc_visual_offset_scan_start",
@@ -4117,6 +4118,22 @@ xkb_symbols "nekoedit-sparse" {
                         client.settimeout(original_timeout)
 
                 dirty_render_background_row_deltas: list[int] = []
+
+                def assert_dirty_render_work(
+                    state: dict[str, object], *, byte_limit: int, row_limit: int, label: str
+                ) -> None:
+                    byte_visits = int(state["render_document_byte_visits"])
+                    row_visits = int(state["render_document_row_visits"])
+                    if byte_visits > byte_limit or row_visits > row_limit:
+                        raise AssertionError(
+                            f"{label}: renderer work exceeded fixture-derived line bounds: "
+                            f"bytes={byte_visits}/{byte_limit}, rows={row_visits}/{row_limit}, "
+                            f"offsets=({state['render_document_scan_start']},"
+                            f"{state['render_document_scan_end']}), "
+                            f"document_bytes={state['doc_length']}, "
+                            f"background_rows={dirty_render_background_row_deltas[-1] if dirty_render_background_row_deltas else 0}, "
+                            f"surface_height={initial_height}"
+                        )
 
                 def key_step(
                     serial: int, code: int, label: str, auto_confirm: bool = True
@@ -10721,21 +10738,16 @@ xkb_symbols "nekoedit-sparse" {
                             f"dirty-render fixture caret did not reach EOF: "
                             f"{painted_state['doc_cursor']} != {expected_length}"
                         )
-                    if expected_length > 512 and (
-                        scan_start < expected_length - 512
-                        or scan_end < scan_start
-                        or scan_end - scan_start > 512
-                    ):
-                        raise AssertionError(
-                            "caret-only repaint traversed document rows outside its dirty band: "
-                            + repr({
-                                "cursor": painted_state["doc_cursor"],
-                                "length": expected_length,
-                                "scan_start": scan_start,
-                                "scan_end": scan_end,
-                                "scanned_bytes": scan_end - scan_start,
-                            })
-                        )
+                    painted_lines = painted_state["doc_contents"].split(b"\n")
+                    painted_last_line = painted_lines[-1]
+                    painted_previous_line = painted_lines[-2] if len(painted_lines) > 1 else b""
+                    painted_last_rows = painted_state["doc_line_index_records"][-1][1]
+                    assert_dirty_render_work(
+                        painted_state,
+                        byte_limit=len(painted_last_line) + len(painted_previous_line) + 1,
+                        row_limit=painted_last_rows + 1,
+                        label="caret-only repaint",
+                    )
                     before_edit = painted_state["doc_contents"]
                     inserted_partial = key_step(
                         1020, 48, "typing uses edit-aware dirty-region damage"
@@ -10746,18 +10758,16 @@ xkb_symbols "nekoedit-sparse" {
                             "layout-stable typing did not use partial damage or changed unexpected bytes: "
                             + repr({"partial": inserted_partial, "tail": inserted_state["doc_contents"][-32:]})
                         )
-                    if expected_length > 512 and (
-                        inserted_state["render_document_scan_start"] < expected_length - 512
-                        or inserted_state["render_document_scan_end"] - inserted_state["render_document_scan_start"] > 512
-                    ):
-                        raise AssertionError(
-                            "edit-aware repaint traversed document rows above the dirty row: "
-                            + repr({
-                                "scan_start": inserted_state["render_document_scan_start"],
-                                "scan_end": inserted_state["render_document_scan_end"],
-                                "length": inserted_state["doc_length"],
-                            })
-                        )
+                    inserted_lines = inserted_state["doc_contents"].split(b"\n")
+                    inserted_last_line = inserted_lines[-1]
+                    inserted_previous_line = inserted_lines[-2] if len(inserted_lines) > 1 else b""
+                    inserted_last_rows = inserted_state["doc_line_index_records"][-1][1]
+                    assert_dirty_render_work(
+                        inserted_state,
+                        byte_limit=len(inserted_last_line) + len(inserted_previous_line) + 1,
+                        row_limit=inserted_last_rows + 1,
+                        label="wrapped-mode insertion",
+                    )
                     if dirty_render_background_row_deltas[-1] >= initial_height:
                         raise AssertionError("typing repaint visited the entire background height")
 
@@ -10770,8 +10780,22 @@ xkb_symbols "nekoedit-sparse" {
                             "layout-stable Backspace did not restore the original bytes with partial damage: "
                             + repr({"partial": deleted_partial, "tail": deleted_state["doc_contents"][-32:]})
                         )
+                    deleted_lines = deleted_state["doc_contents"].split(b"\n")
+                    deleted_last_line = deleted_lines[-1]
+                    deleted_previous_line = deleted_lines[-2] if len(deleted_lines) > 1 else b""
+                    deleted_last_rows = deleted_state["doc_line_index_records"][-1][1]
+                    assert_dirty_render_work(
+                        deleted_state,
+                        byte_limit=len(deleted_last_line) + len(deleted_previous_line) + 1,
+                        row_limit=deleted_last_rows + 1,
+                        label="wrapped-mode Backspace",
+                    )
                     if dirty_render_background_row_deltas[-1] >= initial_height:
-                        raise AssertionError("Backspace repaint visited the entire background height")
+                        raise AssertionError(
+                            "Backspace repaint visited the entire background height: "
+                            f"background_rows={dirty_render_background_row_deltas[-1]}, "
+                            f"surface_height={initial_height}"
+                        )
 
                     newline_partial = key_step(
                         1026, 28, "newline edit retains full-frame geometry fallback"
@@ -10848,12 +10872,20 @@ xkb_symbols "nekoedit-sparse" {
                                     "tail": no_wrap_inserted["doc_contents"][:176],
                                 })
                             )
-                        if (
-                            no_wrap_inserted["render_document_scan_end"]
-                            - no_wrap_inserted["render_document_scan_start"] > 512
-                            or dirty_render_background_row_deltas[-1] >= initial_height
-                        ):
-                            raise AssertionError("no-wrap dirty edit exceeded its bounded scan or repaint area")
+                        first_line_byte_limit = len(no_wrap_contents.split(b"\n", 1)[0]) + 1
+                        assert_dirty_render_work(
+                            no_wrap_inserted,
+                            byte_limit=first_line_byte_limit,
+                            row_limit=1,
+                            label="Wrap Lines OFF insertion",
+                        )
+                        if dirty_render_background_row_deltas[-1] >= initial_height:
+                            raise AssertionError(
+                                "Wrap Lines OFF insertion repainted the full background: "
+                                f"background_rows={dirty_render_background_row_deltas[-1]}, "
+                                f"surface_height={initial_height}, "
+                                f"document_bytes={no_wrap_inserted['doc_length']}"
+                            )
                         no_wrap_delete_partial = key_step(
                             2108, 14, "Backspace restores text with Wrap Lines OFF dirty repaint"
                         )
@@ -10864,18 +10896,28 @@ xkb_symbols "nekoedit-sparse" {
                             or no_wrap_deleted["doc_cursor"] != 150
                             or no_wrap_deleted["doc_wrap_enabled"] != 0
                             or no_wrap_deleted["doc_view_left_px"] != no_wrap_left_before
-                            or no_wrap_deleted["render_document_scan_end"]
-                               - no_wrap_deleted["render_document_scan_start"] > 512
-                            or dirty_render_background_row_deltas[-1] >= initial_height
                         ):
                             raise AssertionError(
-                                "Wrap Lines OFF Backspace failed exact-byte or bounded-repaint checks: "
+                                "Wrap Lines OFF Backspace failed exact-byte/caret/viewport checks: "
                                 + repr({
                                     "partial": no_wrap_delete_partial,
                                     "cursor": no_wrap_deleted["doc_cursor"],
                                     "left": no_wrap_deleted["doc_view_left_px"],
                                     "length": no_wrap_deleted["doc_length"],
                                 })
+                            )
+                        assert_dirty_render_work(
+                            no_wrap_deleted,
+                            byte_limit=len(no_wrap_contents.split(b"\n", 1)[0]) + 1,
+                            row_limit=1,
+                            label="Wrap Lines OFF Backspace",
+                        )
+                        if dirty_render_background_row_deltas[-1] >= initial_height:
+                            raise AssertionError(
+                                "Wrap Lines OFF Backspace repainted the full background: "
+                                f"background_rows={dirty_render_background_row_deltas[-1]}, "
+                                f"surface_height={initial_height}, "
+                                f"document_bytes={no_wrap_deleted['doc_length']}"
                             )
 
                         workflow_shortcut(2120, 102, "Ctrl+Home before ASCII selection replacement")
