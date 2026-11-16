@@ -1,3 +1,35 @@
+## 2026-11-16 — instrumentation split and dirty-render regression coverage (Actions result unconfirmed)
+
+**Source branch:** `early-alpha`, latest change [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda). Production source remains separate from the stable `main` application checkpoint.
+
+### Edit-aware repaint coverage
+
+The existing renderer's edit path records a dirty visual row per SHM buffer slot and accepts partial repaint only when the prior scene/layout snapshot remains compatible. No-wrap painting uses the horizontal pixel origin to find the visible byte. Structural/layout-changing edits continue to trigger a full repaint.
+
+New Wayland mock coverage is gated to the large dirty-render fixture. The first logical line is 160 ASCII bytes while subsequent lines are 200 bytes, keeping the document maximum line width stable. The test disables Wrap Lines, scrolls horizontally to the first line, moves to byte 150, and verifies that typing and Backspace:
+- preserve exact document contents and caret positions;
+- keep Wrap Lines OFF and the horizontal viewport origin unchanged;
+- use partial damage and scan no more than 512 document bytes;
+- do not visit the full surface height for clipped background painting.
+
+The same fixture then selects the first three bytes, types one printable ASCII character, and verifies exact replacement, caret position 1, and cleared selection. Existing wrapped-mode caret/edit tests and newline full-frame fallback remain.
+
+### Runtime diagnostics removed from the production binary
+
+- Wayland renderer scan bounds, clipped-row visits, status scan counters, keyboard dispatch counters, and keymap event counters are emitted only in `NEKOEDIT_TESTING` builds.
+- SFNT face-selection outline decoding and raster test probes, plus font-init advance/raster probes, are test-only.
+- XKB parse-stage/failure snapshots and its error-only 32,768-cell table scan are test-only. Production still performs normal parser reset/error cleanup and returns the same failure result.
+- A separate `build/test/nekoedit-test` is built for Wayland and Mutter integration coverage. `test-xkb-native` explicitly links a diagnostic-enabled XKB object.
+- `make check` uses `nm` to reject known test instrumentation symbols from `build/nekoedit`.
+
+The release executable keeps its existing `-O2`, unstripped policy. The monotonic timerfds remain because they implement key repeat and pointer-selection auto-scroll, not profiling. Fatal startup/protocol error messages to stderr remain; no application log-file writer was found. Functional Undo/Redo journals and preference files are not diagnostics and are unchanged.
+
+### Validation status
+
+Tests have been added but not reported as passing. The available commit combined-status query returned no status entries; verify the latest Actions run. No quantitative performance claim is made.
+
+---
+
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
 
 **Branch/source head:** early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Implementation: [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350); BSS fix: [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9); wrapped fixture correction: [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Workflow: [Actions #1006](https://github.com/GraderGamer2/NekoEdit/actions/runs/43692781059) passed all 17 steps.
