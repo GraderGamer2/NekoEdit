@@ -4949,7 +4949,7 @@ window_buffer_slot_render_valid: .zero 8
 window_buffer_slot_render_scene_generation: .zero 8
 window_buffer_slot_render_doc_revision: .zero 8
 window_buffer_slot_render_dirty_row: .zero 8
-window_buffer_slot_render_dirty_line_id: .zero 8
+window_buffer_slot_render_dirty_line_index: .zero 8
 window_buffer_slot_render_total_rows: .zero 8
 window_buffer_slot_render_max_line_width: .zero 8
 window_buffer_slot_render_view_top: .zero 8
@@ -16528,7 +16528,7 @@ render_prepare_slot:
 .render_prepare_edit_row_visible:
     cmp r13d, dword ptr [rip + window_doc_visible_rows]
     jae .render_prepare_full
-    lea rbx, [rip + window_buffer_slot_render_dirty_line_id]
+    lea rbx, [rip + window_buffer_slot_render_dirty_line_index]
     mov r14d, dword ptr [rbx + r12*4]
     # The selected slot has been validated above; its ID must remain nonzero.
     # Fetch the current logical line containing the dirty visual row.
@@ -16543,8 +16543,7 @@ render_prepare_slot:
     mov esi, DOC_INDEX_BYTE_TREE_OFFSET
     call doc_line_index_find_prefix
     mov ebx, eax
-    mov edi, eax
-    call doc_line_index_get_id
+    inc eax
     cmp eax, r14d
     jne .render_prepare_full
 
@@ -16753,7 +16752,7 @@ render_store_slot_metadata:
     mov dword ptr [rbx + r12*4], eax
     lea rbx, [rip + window_buffer_slot_render_dirty_row]
     mov dword ptr [rbx + r12*4], 0
-    lea rbx, [rip + window_buffer_slot_render_dirty_line_id]
+    lea rbx, [rip + window_buffer_slot_render_dirty_line_index]
     mov dword ptr [rbx + r12*4], 0
     lea rbx, [rip + window_buffer_slot_render_total_rows]
     mov eax, dword ptr [rip + doc_total_visual_rows]
@@ -19083,6 +19082,10 @@ doc_line_index_apply_insert:
     call doc_line_index_fenwick_add
     jmp .Ldoc_index_insert_done
 .Ldoc_index_insert_newline:
+    # Splitting a logical line is structural: neither SHM snapshot may use a
+    # single-line repaint boundary after this mutation.
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index + 4], 0
     mov eax, dword ptr [rip + doc_line_count]
     inc eax
     mov edi, eax
@@ -19245,6 +19248,9 @@ doc_line_index_apply_delete:
     call doc_line_index_fenwick_add
     jmp .Ldoc_index_delete_done
 .Ldoc_index_delete_newline:
+    # Merging logical lines invalidates any single-line repaint boundary.
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index + 4], 0
     mov r12d, eax
     mov rdi, qword ptr [rip + doc_line_index_base]
     mov eax, ebx
@@ -19341,13 +19347,12 @@ render_mark_document_edit:
     cmp dword ptr [rip + doc_line_index_valid], 1
     jne .render_mark_edit_preserve
 
-    # Resolve the stable logical-line identity before the mutation changes the
-    # line's byte/visual metrics. A second edited line invalidates partial paint.
+    # Store the one-based logical line index (zero remains the invalid marker).
+    # The index ID itself is regenerated after ordinary byte edits.
     mov edi, ebx
     mov esi, DOC_INDEX_BYTE_TREE_OFFSET
     call doc_line_index_find_prefix
-    mov edi, eax
-    call doc_line_index_get_id
+    inc eax
     test eax, eax
     jz .render_mark_edit_preserve
     mov r12d, eax
@@ -19366,7 +19371,7 @@ render_mark_document_edit:
     test eax, eax
     jz .render_mark_edit_store0
     mov r8d, 1
-    lea rcx, [rip + window_buffer_slot_render_dirty_line_id]
+    lea rcx, [rip + window_buffer_slot_render_dirty_line_index]
     cmp dword ptr [rcx], r12d
     jne .render_mark_edit_multiline0
     cmp r13d, eax
@@ -19375,11 +19380,11 @@ render_mark_document_edit:
     jmp .render_mark_edit_slot1
 .render_mark_edit_store0:
     mov dword ptr [rdx], r13d
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], r12d
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index], r12d
     mov r8d, 1
     jmp .render_mark_edit_slot1
 .render_mark_edit_multiline0:
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index], 0
     mov r8d, 1
 
 .render_mark_edit_slot1:
@@ -19391,7 +19396,7 @@ render_mark_document_edit:
     test eax, eax
     jz .render_mark_edit_store1
     mov r8d, 1
-    lea rcx, [rip + window_buffer_slot_render_dirty_line_id]
+    lea rcx, [rip + window_buffer_slot_render_dirty_line_index]
     cmp dword ptr [rcx + 4], r12d
     jne .render_mark_edit_multiline1
     cmp r13d, eax
@@ -19400,11 +19405,11 @@ render_mark_document_edit:
     jmp .render_mark_edit_candidate
 .render_mark_edit_store1:
     mov dword ptr [rdx + 4], r13d
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], r12d
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index + 4], r12d
     mov r8d, 1
     jmp .render_mark_edit_candidate
 .render_mark_edit_multiline1:
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index + 4], 0
     mov r8d, 1
 
 .render_mark_edit_preserve:
@@ -19426,8 +19431,8 @@ render_mark_document_edit:
     cmp dword ptr [rdx + 4], 0
     je .render_mark_edit_done
 .render_mark_edit_preserve_found:
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id], 0
-    mov dword ptr [rip + window_buffer_slot_render_dirty_line_id + 4], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index], 0
+    mov dword ptr [rip + window_buffer_slot_render_dirty_line_index + 4], 0
     mov r8d, 1
 
 .render_mark_edit_candidate:
@@ -27684,9 +27689,11 @@ render_document:
     cmp r13d, eax
     jge .document_draw_cursor
 .document_printable_fit:
+    cmp r13d, DOC_TOP
+    jl .document_printable_skip_draw
 .ifdef NEKOEDIT_TESTING
-    # A wrapped glyph may advance R13D before draw_glyph; account for that
-    # destination row as well as rows first encountered at the loop entry.
+    # A wrapped glyph can move R13D before drawing. Count that destination
+    # row here, after confirming it is inside the document's visible area.
     mov eax, r13d
     cmp eax, dword ptr [rip + render_document_last_row_y]
     je .Ldocument_render_printable_row_counted
@@ -27694,8 +27701,6 @@ render_document:
     mov dword ptr [rip + render_document_last_row_y], eax
 .Ldocument_render_printable_row_counted:
 .endif
-    cmp r13d, DOC_TOP
-    jl .document_printable_skip_draw
     cmp r12d, DOC_LEFT
     jl .document_printable_skip_draw
     mov eax, DOC_LEFT
