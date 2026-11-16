@@ -10782,10 +10782,9 @@ xkb_symbols "nekoedit-sparse" {
                             "newline insertion failed to use the safe full-frame fallback: "
                             + repr({"partial": newline_partial, "tail": newline_state["doc_contents"][-32:]})
                         )
-                    workflow_click(200, 20, 2000, "open Settings for no-wrap dirty edit test");
-                    if (child_u32("settings_menu_open") != 1) {
+                    workflow_click(200, 20, 2000, "open Settings for no-wrap dirty edit test")
+                    if child_u32("settings_menu_open") != 1:
                         raise AssertionError("Settings did not open for no-wrap dirty edit test")
-                    }
                     workflow_settings_click(200, 124, 2010, "disable Wrap Lines for dirty edit test")
                     if child_u32("doc_wrap_enabled") != 0 or child_u32("settings_menu_open") != 1:
                         raise AssertionError("Wrap Lines did not remain disabled for dirty edit test")
