@@ -5362,6 +5362,7 @@ xkb_num_lock_mask:     .long 0           # initialized by xkb_reset_keymap
 xkb_type_count:        .long 0
 .global xkb_keymap_ready
 xkb_keymap_ready:       .long 0
+.ifdef NEKOEDIT_TESTING
 .global xkb_parse_error_stage
 xkb_parse_error_stage:  .long 0
 .global xkb_parse_error_offset
@@ -5383,6 +5384,7 @@ xkb_parse_error_table_sample_count: .long 0
 xkb_parse_error_table_samples: .zero 64
 .Lxkb_parse_stage:      .long 0
 
+.endif
 .section .text
 .global xkb_reset_keymap
 .type xkb_reset_keymap, @function
@@ -9109,6 +9111,7 @@ xkb_parse_keymap:
     mov r12, rdi
     mov r13d, esi
     call xkb_reset_keymap
+.ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + xkb_parse_error_stage], 0
     mov dword ptr [rip + xkb_parse_error_offset], 0
     mov dword ptr [rip + xkb_parse_error_token_length], 0
@@ -9124,38 +9127,51 @@ xkb_parse_keymap:
     xor eax, eax
     mov ecx, 64
     rep stosb
+.endif
     mov qword ptr [rip + .Lxkb_text_ptr], r12
     lea rax, [r12 + r13]
     mov qword ptr [rip + .Lxkb_text_end], rax
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 1
+    .endif
     call .Lxkb_parse_virtual_modifiers
     test eax, eax
     js .Lxkb_parse_keymap_fail
     call .Lxkb_rebase_builtin_types
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 2
+    .endif
     call .Lxkb_parse_keycodes
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # xkb_types is optional; when present, actual modifiers/map entries
     # replace conventional defaults before key groups resolve their types.
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 3
+    .endif
     call .Lxkb_parse_types
     test eax, eax
     js .Lxkb_parse_keymap_fail
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 4
+    .endif
     call .Lxkb_parse_symbols
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # Compatibility rules are evaluated after all key/group/level keysyms and
     # real modifier maps are available.
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 5
+    .endif
     call .Lxkb_parse_compat
     test eax, eax
     js .Lxkb_parse_keymap_fail
     # Resolve explicit plus key-bound/compatibility virtual-modifier maps.
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 6
+    .endif
     call .Lxkb_apply_virtual_modifier_maps
     test eax, eax
     js .Lxkb_parse_keymap_fail
@@ -9163,14 +9179,19 @@ xkb_parse_keymap:
     # Reparse declared types now that implicit virtual-modifier encodings are
     # known, so their effective masks include both explicit and implicit maps.
     mov qword ptr [rip + .Lxkb_text_ptr], r12
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + .Lxkb_parse_stage], 7
+    .endif
     call .Lxkb_parse_types
     test eax, eax
     js .Lxkb_parse_keymap_fail
+    .ifdef NEKOEDIT_TESTING
     mov dword ptr [rip + xkb_parse_error_stage], 0
+    .endif
     xor eax, eax
     jmp .Lxkb_parse_keymap_done
 .Lxkb_parse_keymap_fail:
+.ifdef NEKOEDIT_TESTING
     mov eax, dword ptr [rip + .Lxkb_symbol_count]
     mov dword ptr [rip + xkb_parse_error_symbol_count], eax
     mov eax, dword ptr [rip + .Lxkb_alpha_key_count]
@@ -9218,6 +9239,7 @@ xkb_parse_keymap:
     lea rdi, [rip + xkb_parse_error_token]
     rep movsb
     mov byte ptr [rdi], 0
+.endif
     call xkb_reset_keymap
     mov rax, -1
 .Lxkb_parse_keymap_done:
