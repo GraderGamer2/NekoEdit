@@ -199,5 +199,7 @@ $(COMPOSE_LOCALE_IMPORT_TEST): tests/compose_locale_import_test.c src/backend/co
 	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
 
 $(XKB_NATIVE_KEYMAP_TEST): tests/xkb_native_keymap_test.c src/backend/xkb.S
-	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^ -lxkbcommon
+	@mkdir -p "$(TEST_BUILD_DIR)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DNEKOEDIT_TESTING=1 -c -o "$(TEST_BUILD_DIR)/xkb_native_keymap_test.o" "$<"
+	$(AS) $(ASFLAGS) --defsym NEKOEDIT_TESTING=1 -o "$(TEST_BUILD_DIR)/xkb_native_keymap.o" "src/backend/xkb.S"
+	$(CC) -m64 -O2 -o "$@" "$(TEST_BUILD_DIR)/xkb_native_keymap_test.o" "$(TEST_BUILD_DIR)/xkb_native_keymap.o" -lxkbcommon
