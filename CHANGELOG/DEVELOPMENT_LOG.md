@@ -547,3 +547,20 @@ ELF section sizes: text 238,918 bytes, data 64 bytes, BSS 3,764,856 bytes. The e
 Feature implementation: [a1cd860](https://github.com/GraderGamer2/NekoEdit/commit/a1cd860b855d4b719d056ccfae63309694bfc2fa).
 Selection traversal optimization: [485d6fb](https://github.com/GraderGamer2/NekoEdit/commit/485d6fb05b65ef9b1f5677116dac118a2beade0b).
 Final validation commit: [a79f7ee](https://github.com/GraderGamer2/NekoEdit/commit/a79f7ee1d761fe581ea03447d0347e9c9167f11d).
+
+
+---
+
+## 2026-11-16 — first UI clipping and layout-correction pass (Actions #43802500972 PASS)
+
+The first UI pass was driven by a source audit because no screenshot was available for review in this chat. The goal was narrow: prevent text from running into adjacent controls, align visible controls with pointer hitboxes, and improve the two-column Help reference at the largest application UI font. The editor model, document layout, rasterizer and compiler configuration were not changed.
+
+The shared pixel-bounded ASCII renderer now adds an ellipsis when the remaining width permits it. The active document-tab name is limited to its 120px text region. History title/document/error headings and result names now have window-relative bounds, so long paths and document basenames cannot paint across the right margin into other UI.
+
+The Help panel's design surface expanded from 480×360 to 600×400. Its layout remains centered and aspect-ratio fitted. The two shortcut columns have explicit text bounds, and the Help text size is capped at 14px even when the general UI preference reaches 16px. The renderer transform and pointer coordinate conversion were updated together to preserve click alignment. The test checks exact panel dimensions and centering at 800×480, the selected Help font size, and the central divider's framebuffer pixel.
+
+The Settings Compose-locale control row had undersized Remove and Import buttons for their labels at the 16px setting. The selector/Add/Remove/Import buttons now use widths 76/40/68/60 design pixels, with bounded label areas. Pointer hit-testing uses the same boundaries; the three four-pixel gaps are inert and are covered by actual pointer clicks in the mock. The built-in en_US dropdown label is also pixel-bounded. In the file picker, Show Hidden text is limited to its 108px region before the checkbox.
+
+The Wayland mock raises UI font size to 16px and checks text/button gutters, checkbox spacing, popup text bounds, Help centering/font/divider, and neutral click gaps. The Help test allow-list was extended to expose its panel geometry to the test harness. An initial CI attempt failed only because those new Help symbols were missing from the test allow-list; the allow-list was corrected, and subsequent complete checkpoints passed. The final source commit 61041f0 adds the inert-gutter and built-in-dropdown checks. Actions [#43802500972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43802500972) then passed all 18 workflow steps, including the full Wayland mock, native XKB and pinned X.Org checks, Compose build, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+
+Source commits: 442edfc (initial layout/text changes), 1bbd28d (test symbol coverage), cf547c7 (Settings and picker layout), and 61041f0 (inert gaps and built-in popup bound). The UI remains unfinished: this milestone addresses concrete clipping/placement defects found in the code and framebuffer tests, not the entire visual hierarchy or final polish. No manual live GNOME screenshot review is claimed.

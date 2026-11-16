@@ -1,3 +1,16 @@
+## 2026-11-16 — first UI clipping/layout correction pass (Actions #43802500972 PASS)
+
+| Commit | Subject |
+|---|---|
+| [442edfc7b36949b5582a17f4c4f2de6383e8f0c1](https://github.com/GraderGamer2/NekoEdit/commit/442edfc7b36949b5582a17f4c4f2de6383e8f0c1) | ui: improve responsive layout and prevent label overflow |
+| [1bbd28d1792ab64e31f5d62ccaa8ad3483d9189e](https://github.com/GraderGamer2/NekoEdit/commit/1bbd28d1792ab64e31f5d62ccaa8ad3483d9189e) | test: expose Help geometry to UI regression checks |
+| [cf547c755894b75ff22a095fc30a8f07ef23e3a4](https://github.com/GraderGamer2/NekoEdit/commit/cf547c755894b75ff22a095fc30a8f07ef23e3a4) | ui: align Settings locale actions and bound picker labels |
+| [61041f001c78fcbde5240f410958b8a93adc2708](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708) | ui: keep Settings locale gutters inert and bound dropdown text |
+
+[Actions #43802500972](https://github.com/GraderGamer2/NekoEdit/actions/runs/43802500972) passed all 18 workflow steps for commit [61041f0](https://github.com/GraderGamer2/NekoEdit/commit/61041f001c78fcbde5240f410958b8a93adc2708). Earlier checkpoints [#43801338810](https://github.com/GraderGamer2/NekoEdit/actions/runs/43801338810) and [#43801965913](https://github.com/GraderGamer2/NekoEdit/actions/runs/43801965913) also passed all 18 steps.
+
+---
+
 ## 2026-11-16 — LTO release build, compiler sweep and full symbol stripping (Actions #43797788228 PASS)
 
 | Commit | Subject |
