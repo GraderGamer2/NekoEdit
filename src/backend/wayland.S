@@ -152,6 +152,7 @@ wayland_env_key:       .asciz "WAYLAND_DISPLAY"
 xdg_runtime_env_key:   .asciz "XDG_RUNTIME_DIR"
 default_wayland_name:  .asciz "wayland-0"
 ui_app_name:           .asciz "NekoEdit"
+ui_ellipsis:           .asciz "..."
 ui_mode_error:         .asciz "SAVE ERR"
 ui_storage_error:      .asciz "MEM ERR"
 msg_document_storage:  .ascii "NekoEdit: unable to allocate document storage\n"
@@ -7031,22 +7032,22 @@ wayland_main:
     sub eax, dword ptr [rip + help_panel_x]
     test eax, eax
     js .help_panel_pointer_outside
-    imul eax, 480
+    imul eax, 600
     cdq
     idiv dword ptr [rip + help_panel_width]
-    cmp eax, 480
+    cmp eax, 600
     jae .help_panel_pointer_outside
     mov ecx, eax
     mov eax, dword ptr [rip + pointer_y]
     sub eax, dword ptr [rip + help_panel_y]
     test eax, eax
     js .help_panel_pointer_outside
-    imul eax, 360
+    imul eax, 400
     cdq
     idiv dword ptr [rip + help_panel_height]
-    cmp eax, 360
+    cmp eax, 400
     jae .help_panel_pointer_outside
-    cmp ecx, 444
+    cmp ecx, 566
     jb .help_panel_pointer_inside
     cmp eax, 8
     jb .help_panel_pointer_inside
@@ -13947,7 +13948,8 @@ render_surface:
     mov edi, 24
     mov esi, 54
     lea rdx, [rip + active_document_name]
-    call draw_text
+    mov ecx, 120
+    call draw_bounded_ascii_width
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 168
     mov edx, 40
@@ -15801,9 +15803,9 @@ window_update_layout_geometry:
 .window_layout_settings_font_min_ready:
     mov dword ptr [rip + settings_ui_font_size], eax
 
-    # The keyboard reference fits a 480x360 design surface into a centered
+    # The keyboard reference fits a 600x400 design surface into a centered
     # 16px window margin, preserving its aspect ratio and selected UI font.
-    mov r8d, 480
+    mov r8d, 600
     mov ebx, dword ptr [rip + window_width]
     sub ebx, 32
     cmp r8d, ebx
@@ -15812,10 +15814,10 @@ window_update_layout_geometry:
 .window_layout_help_width_available:
     mov ebx, dword ptr [rip + window_height]
     sub ebx, 32
-    imul ebx, 480
+    imul ebx, 600
     mov eax, ebx
     xor edx, edx
-    mov ecx, 360
+    mov ecx, 400
     div ecx
     cmp r8d, eax
     jbe .window_layout_help_scale_ready
@@ -15823,9 +15825,9 @@ window_update_layout_geometry:
 .window_layout_help_scale_ready:
     mov eax, r8d
     mov dword ptr [rip + help_panel_width], eax
-    imul eax, 360
+    imul eax, 400
     xor edx, edx
-    mov ecx, 480
+    mov ecx, 600
     div ecx
     mov dword ptr [rip + help_panel_height], eax
     mov eax, dword ptr [rip + window_width]
@@ -15837,10 +15839,14 @@ window_update_layout_geometry:
     shr eax, 1
     mov dword ptr [rip + help_panel_y], eax
     mov eax, dword ptr [rip + ui_font_size]
-    imul eax, 480
+    imul eax, 600
     xor edx, edx
     mov ecx, dword ptr [rip + help_panel_width]
     div ecx
+    cmp eax, 14
+    jbe .window_layout_help_font_cap_ready
+    mov eax, 14
+.window_layout_help_font_cap_ready:
     cmp eax, 6
     jae .window_layout_help_font_min_ready
     mov eax, 6
@@ -24012,7 +24018,7 @@ draw_bounded_ascii_width:
     mov edi, r15d
     call ui_font_advance_pixels
     cmp eax, r14d
-    ja .draw_bounded_ascii_width_done
+    ja .draw_bounded_ascii_width_truncated
     mov ebp, eax
     mov edi, r12d
     mov esi, r13d
@@ -24027,6 +24033,17 @@ draw_bounded_ascii_width:
     sub r14d, ebp
     inc rbx
     jmp .draw_bounded_ascii_width_loop
+.draw_bounded_ascii_width_truncated:
+    mov edi, '.'
+    call ui_font_advance_pixels
+    lea ecx, [rax + rax * 2]
+    cmp ecx, r14d
+    ja .draw_bounded_ascii_width_done
+    mov edi, r12d
+    mov esi, r13d
+    lea rdx, [rip + ui_ellipsis]
+    call draw_text
+    mov r12d, eax
 .draw_bounded_ascii_width_done:
     mov eax, r12d
     add rsp, 8
@@ -25018,83 +25035,87 @@ render_help_panel:
     mov dword ptr [rip + ui_transform_origin_y], eax
     mov eax, dword ptr [rip + help_panel_width]
     mov dword ptr [rip + ui_transform_x_num], eax
-    mov dword ptr [rip + ui_transform_x_den], 480
+    mov dword ptr [rip + ui_transform_x_den], 600
     mov eax, dword ptr [rip + help_panel_height]
     mov dword ptr [rip + ui_transform_y_num], eax
-    mov dword ptr [rip + ui_transform_y_den], 360
+    mov dword ptr [rip + ui_transform_y_den], 400
 
     # Border, body, title band, close control and separators.
     mov rdi, qword ptr [rip + shm_mapping]
     xor esi, esi
     xor edx, edx
-    mov ecx, 480
-    mov r8d, 360
+    mov ecx, 600
+    mov r8d, 400
     mov r9d, 0xff78a9d4
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 1
     mov edx, 1
-    mov ecx, 478
-    mov r8d, 358
+    mov ecx, 598
+    mov r8d, 398
     mov r9d, 0xff1f242d
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 1
     mov edx, 1
-    mov ecx, 478
+    mov ecx, 598
     mov r8d, 43
     mov r9d, 0xff343d4b
     call draw_rect
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 1
     mov edx, 44
-    mov ecx, 478
+    mov ecx, 598
     mov r8d, 1
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 18
     mov esi, 27
     lea rdx, [rip + ui_help_title]
-    call draw_text
+    mov ecx, 540
+    call draw_bounded_ascii_width
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 446
+    mov esi, 566
     mov edx, 8
     mov ecx, 26
     mov r8d, 24
     mov r9d, 0xff754b52
     call draw_rect
-    mov edi, 454
+    mov edi, 574
     mov esi, 25
     lea rdx, [rip + ui_help_close_label]
-    call draw_text
+    mov ecx, 16
+    call draw_bounded_ascii_width
 
     # Two-column shortcut reference.
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 242
+    mov esi, 300
     mov edx, 56
     mov ecx, 1
-    mov r8d, 278
+    mov r8d, 320
     mov r9d, 0xff414b5a
     call draw_rect
     mov edi, 18
     mov esi, 64
     lea rdx, [rip + ui_help_file_heading]
-    call draw_text
+    mov ecx, 264
+    call draw_bounded_ascii_width
     mov rdi, qword ptr [rip + shm_mapping]
     mov esi, 18
     mov edx, 70
-    mov ecx, 210
+    mov ecx, 264
     mov r8d, 1
     mov r9d, 0xff78a9d4
     call draw_rect
-    mov edi, 254
+    mov edi, 318
     mov esi, 64
     lea rdx, [rip + ui_help_nav_heading]
-    call draw_text
+    mov ecx, 264
+    call draw_bounded_ascii_width
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 254
+    mov esi, 318
     mov edx, 70
-    mov ecx, 208
+    mov ecx, 264
     mov r8d, 1
     mov r9d, 0xff78a9d4
     call draw_rect
@@ -25103,212 +25124,262 @@ render_help_panel:
     mov edi, 18
     mov esi, 88
     lea rdx, [rip + ui_help_ctrl_o]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 88
     lea rdx, [rip + ui_help_open_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 108
     lea rdx, [rip + ui_help_ctrl_s]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 108
     lea rdx, [rip + ui_help_save_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 128
     lea rdx, [rip + ui_help_ctrl_shift_s]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 128
     lea rdx, [rip + ui_help_save_as_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 148
     lea rdx, [rip + ui_help_ctrl_z]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 148
     lea rdx, [rip + ui_help_undo_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 168
     lea rdx, [rip + ui_help_ctrl_y]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 168
     lea rdx, [rip + ui_help_redo_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 188
     lea rdx, [rip + ui_help_ctrl_shift_z]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 188
     lea rdx, [rip + ui_help_redo_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 208
     lea rdx, [rip + ui_help_ctrl_c]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 208
     lea rdx, [rip + ui_help_copy_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 228
     lea rdx, [rip + ui_help_ctrl_x]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 228
     lea rdx, [rip + ui_help_cut_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 248
     lea rdx, [rip + ui_help_ctrl_v]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 248
     lea rdx, [rip + ui_help_paste_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 268
     lea rdx, [rip + ui_help_ctrl_a]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 268
     lea rdx, [rip + ui_help_select_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 288
     lea rdx, [rip + ui_help_ctrl_backspace]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 288
     lea rdx, [rip + ui_help_delete_prev_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 308
     lea rdx, [rip + ui_help_ctrl_delete]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 308
     lea rdx, [rip + ui_help_delete_next_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
     mov edi, 18
     mov esi, 328
     lea rdx, [rip + ui_help_backspace_delete]
-    call draw_text
-    mov edi, 122
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 142
     mov esi, 328
     lea rdx, [rip + ui_help_delete_char_desc]
-    call draw_text
+    mov ecx, 150
+    call draw_bounded_ascii_width
 
     # Right column: caret navigation and the combined Find/Replace panel.
-    mov edi, 254
+    mov edi, 318
     mov esi, 88
     lea rdx, [rip + ui_help_arrows]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 88
     lea rdx, [rip + ui_help_move_caret_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 108
     lea rdx, [rip + ui_help_shift_arrows]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 108
     lea rdx, [rip + ui_help_select_text_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 128
     lea rdx, [rip + ui_help_ctrl_lr]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 128
     lea rdx, [rip + ui_help_word_move_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 148
     lea rdx, [rip + ui_help_ctrl_ud]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 148
     lea rdx, [rip + ui_help_line_move_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 168
     lea rdx, [rip + ui_help_home_end]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 168
     lea rdx, [rip + ui_help_line_edge_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 188
     lea rdx, [rip + ui_help_ctrl_home_end]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 188
     lea rdx, [rip + ui_help_doc_edge_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 222
     lea rdx, [rip + ui_help_find_heading]
-    call draw_text
+    mov ecx, 264
+    call draw_bounded_ascii_width
     mov rdi, qword ptr [rip + shm_mapping]
-    mov esi, 254
+    mov esi, 318
     mov edx, 228
-    mov ecx, 208
+    mov ecx, 264
     mov r8d, 1
     mov r9d, 0xff78a9d4
     call draw_rect
-    mov edi, 254
+    mov edi, 318
     mov esi, 248
     lea rdx, [rip + ui_help_ctrl_f]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 248
     lea rdx, [rip + ui_help_find_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 268
     lea rdx, [rip + ui_help_f3]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 268
     lea rdx, [rip + ui_help_next_prev_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 288
     lea rdx, [rip + ui_help_tab]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 288
     lea rdx, [rip + ui_help_tab_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 308
     lea rdx, [rip + ui_help_enter]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 308
     lea rdx, [rip + ui_help_enter_desc]
-    call draw_text
-    mov edi, 254
+    mov ecx, 144
+    call draw_bounded_ascii_width
+    mov edi, 318
     mov esi, 328
     lea rdx, [rip + ui_help_ctrl_enter]
-    call draw_text
-    mov edi, 372
+    mov ecx, 118
+    call draw_bounded_ascii_width
+    mov edi, 438
     mov esi, 328
     lea rdx, [rip + ui_help_replace_desc]
-    call draw_text
+    mov ecx, 144
+    call draw_bounded_ascii_width
     mov edi, 18
-    mov esi, 344
+    mov esi, 372
     lea rdx, [rip + ui_help_footer]
-    call draw_text
+    mov ecx, 564
+    call draw_bounded_ascii_width
 
     mov dword ptr [rip + ui_transform_active], 0
     pop rbx
@@ -25504,7 +25575,9 @@ render_history_manager:
     mov edi, 48
     mov esi, 120
     lea rdx, [rip + ui_history_title]
-    call draw_text
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 112
+    call draw_bounded_ascii_width
     cmp dword ptr [rip + history_open_error], 0
     jne .render_history_header_error
     call history_has_error
@@ -25513,19 +25586,25 @@ render_history_manager:
     mov edi, 48
     mov esi, 156
     lea rdx, [rip + active_document_name]
-    call draw_text
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 112
+    call draw_bounded_ascii_width
     jmp .render_history_search_box
 .render_history_header_error:
     mov edi, 48
     mov esi, 156
     lea rdx, [rip + ui_history_open_error_label]
-    call draw_text
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 112
+    call draw_bounded_ascii_width
     jmp .render_history_search_box
 .render_history_header_storage_error:
     mov edi, 48
     mov esi, 156
     lea rdx, [rip + ui_history_storage_error]
-    call draw_text
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 112
+    call draw_bounded_ascii_width
 
 .render_history_search_box:
     # A bordered, wide filter field with a separate Browse action.
@@ -25649,7 +25728,9 @@ render_history_manager:
     mov edi, 64
     lea esi, [r12 + 17]
     mov rdx, rax
-    call draw_text
+    mov ecx, dword ptr [rip + window_width]
+    sub ecx, 128
+    call draw_bounded_ascii_width
 .render_history_next_row:
     add r12d, 25
     inc ebx

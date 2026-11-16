@@ -5761,8 +5761,8 @@ xkb_symbols "nekoedit-sparse" {
                     if read_document_state()["doc_contents"] != contents_before_help_typing:
                         raise AssertionError("typing while Help was open modified the document")
 
-                    help_close_x = help_x + 458 * help_width // 480
-                    help_close_y = help_y + 20 * help_height // 360
+                    help_close_x = help_x + 579 * help_width // 600
+                    help_close_y = help_y + 20 * help_height // 400
                     workflow_click(help_close_x, help_close_y, 2110, "Help close control dismisses the panel")
                     if child_u32("help_panel_open") != 0:
                         raise AssertionError("Help close control did not dismiss the panel")
@@ -8869,6 +8869,43 @@ xkb_symbols "nekoedit-sparse" {
                                 f"{name} is not centered in the 800x480 surface: "
                                 f"x={x}, y={y}, width={width}, height={height}"
                             )
+                    # Help uses a wider two-column design and a 14px cap so its
+                    # shortcut descriptions stay inside their columns at the
+                    # maximum 16px application UI preference.
+                    key_step(serial, 59, "F1 opens the expanded Help panel at 16px UI size")
+                    serial += 10
+                    help_x = picker_u32("help_panel_x")
+                    help_y = picker_u32("help_panel_y")
+                    help_width = picker_u32("help_panel_width")
+                    help_height = picker_u32("help_panel_height")
+                    if (
+                        picker_u32("help_panel_open") != 1
+                        or help_width != 600
+                        or help_height != 400
+                        or picker_u32("help_ui_font_size") != 14
+                        or help_x != 100
+                        or help_y != 40
+                    ):
+                        raise AssertionError(
+                            "maximum-size Help layout did not use its centered 600x400/14px geometry: "
+                            f"origin=({help_x},{help_y}), size=({help_width},{help_height}), "
+                            f"font={picker_u32('help_ui_font_size')}"
+                        )
+                    divider_x = help_x + 300 * help_width // 600
+                    divider_y = help_y + 100 * help_height // 400
+                    divider_pixel = struct.unpack_from(
+                        "<I", pixels, divider_y * 800 * 4 + divider_x * 4
+                    )[0]
+                    if divider_pixel != 0xFF414B5A:
+                        raise AssertionError(
+                            "Help shortcut text crossed the two-column divider at 16px UI preference: "
+                            + hex(divider_pixel)
+                        )
+                    key_step(serial, 1, "Escape closes expanded Help panel")
+                    serial += 10
+                    workflow_click(200, 20, serial, "reopen Settings after Help layout test")
+                    serial += 10
+
                     for index in range(6):
                         settings_click(360, 100, serial, f"decrease independent UI font size {index + 1}")
                         serial += 10
