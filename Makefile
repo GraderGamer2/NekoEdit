@@ -26,6 +26,8 @@ ADVANCE_TEST := $(BUILD_DIR)/advance_test
 ADVANCE_BENCH := $(BUILD_DIR)/advance_bench
 RASTERIZER_BENCH := $(BUILD_DIR)/rasterizer_bench
 RASTERIZER_BENCH_GENERIC := $(BUILD_DIR)/rasterizer_bench_generic
+RASTERIZER_EQUIV_REFERENCE := $(BUILD_DIR)/rasterizer_equiv_reference
+RASTERIZER_EQUIV_SCANLINE := $(BUILD_DIR)/rasterizer_equiv_scanline
 RASTERIZER_BENCH_LINEAR := $(BUILD_DIR)/rasterizer_bench_linear
 RASTERIZER_BENCH_IDENTITY_REFERENCE := $(BUILD_DIR)/rasterizer_bench_identity_reference
 RASTERIZER_BENCH_STORAGE_REFERENCE := $(BUILD_DIR)/rasterizer_bench_storage_reference
@@ -50,7 +52,7 @@ SOURCES  := src/entry.S src/linux/syscall.S src/font/advance.S src/font/sfnt.S s
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
 OBJECTS  := $(patsubst src/%.S,$(BUILD_DIR)/%.o,$(SOURCES)) $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
 
-.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer bench-advance bench-compiler-flags locale-packs check strip-binary inspect install install-user uninstall-user
+.PHONY: all clean test test-wayland test-mutter test-xkb-native test-install-user bench-renderer bench-advance test-rasterizer-equivalence bench-compiler-flags locale-packs check strip-binary inspect install install-user uninstall-user
 
 all: strip-binary
 
@@ -108,7 +110,7 @@ inspect: strip-binary
 	$(READELF) -d $(APP_BINARY) || true
 	$(SIZE) $(APP_BINARY)
 
-test: strip-binary $(ADVANCE_TEST) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
+test: strip-binary test-rasterizer-equivalence $(ADVANCE_TEST) $(PREFERENCES_TEST) $(HISTORY_TEST) $(CLIPBOARD_RANGE_TEST) $(COMPOSE_LOCALE_MANAGER_TEST) $(COMPOSE_LOCALE_IMPORT_TEST) test-install-user
 	sh tests/smoke.sh ./$(APP_BINARY)
 	./$(ADVANCE_TEST)
 	./$(PREFERENCES_TEST)
@@ -147,23 +149,35 @@ $(RASTERIZER_BENCH): tests/rasterizer_bench.c src/font/rasterizer.c
 
 $(RASTERIZER_BENCH_GENERIC): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_DRAW_GENERIC_REFERENCE -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_DRAW_GENERIC_REFERENCE -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -DFONT_RASTERIZER_REFERENCE -o "$@" $^
 
 $(RASTERIZER_BENCH_LINEAR): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_LINEAR_REFERENCE -DFONT_DRAW_GENERIC_REFERENCE -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_LINEAR_REFERENCE -DFONT_DRAW_GENERIC_REFERENCE -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -DFONT_RASTERIZER_REFERENCE -o "$@" $^
 
 $(RASTERIZER_BENCH_IDENTITY_REFERENCE): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_DRAW_BLEND_REFERENCE -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -DFONT_RASTERIZER_REFERENCE -o "$@" $^
 
 $(RASTERIZER_BENCH_STORAGE_REFERENCE): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_GLYPH_STORAGE_REFERENCE -DFONT_CACHE_AOS_REFERENCE -DFONT_RASTERIZER_REFERENCE -o "$@" $^
 
 $(RASTERIZER_BENCH_METADATA_REFERENCE): tests/rasterizer_bench.c src/font/rasterizer.c
 	@mkdir -p "$(@D)"
-	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_AOS_REFERENCE -o "$@" $^
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_CACHE_AOS_REFERENCE -DFONT_RASTERIZER_REFERENCE -o "$@" $^
+
+$(RASTERIZER_EQUIV_REFERENCE): tests/rasterizer_scanline_equivalence.c src/font/rasterizer.c
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -DFONT_RASTERIZER_REFERENCE -o "$@" $^
+
+$(RASTERIZER_EQUIV_SCANLINE): tests/rasterizer_scanline_equivalence.c src/font/rasterizer.c
+	@mkdir -p "$(@D)"
+	$(CC) -m64 -O2 -std=c11 -Wall -Wextra -Werror -o "$@" $^
+
+.PHONY: test-rasterizer-equivalence
+test-rasterizer-equivalence: $(RASTERIZER_EQUIV_REFERENCE) $(RASTERIZER_EQUIV_SCANLINE)
+	$(PYTHON) tests/compare_rasterizer_equivalence.py ./$(RASTERIZER_EQUIV_REFERENCE) ./$(RASTERIZER_EQUIV_SCANLINE)
 
 $(ADVANCE_TEST): tests/advance_test.c src/font/rasterizer.c src/font/advance.S
 	@mkdir -p "$(@D)"

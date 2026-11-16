@@ -279,6 +279,11 @@ int main(void) {
         fail("font_cache_clear left stale cache entries behind");
 
     puts("NekoEdit rasterizer microbenchmark (synthetic 8-point outline)");
+#ifdef FONT_RASTERIZER_REFERENCE
+    puts("glyph rasterizer: point-in-contour reference");
+#else
+    puts("glyph rasterizer: active-edge scanline");
+#endif
 #ifdef FONT_CACHE_LINEAR_REFERENCE
     puts("cache implementation: pre-hash linear LRU reference");
 #else

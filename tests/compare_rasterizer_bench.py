@@ -75,12 +75,12 @@ def main() -> int:
         return 2
 
     labels = (
-        ("linear LRU + generic transform + reference blend/storage", sys.argv[1]),
-        ("hash cache + generic transform + reference blend/storage", sys.argv[2]),
-        ("hash cache + identity path + reference blend/storage", sys.argv[3]),
-        ("hash cache + identity + opaque blend + legacy mask storage", sys.argv[4]),
-        ("hash cache + identity + opaque blend + compact mask + AoS metadata", sys.argv[5]),
-        ("hash cache + identity + opaque blend + compact mask + SoA metadata", sys.argv[6]),
+        ("point-in-contour: linear LRU + generic transform + reference blend/storage", sys.argv[1]),
+        ("point-in-contour: hash cache + generic transform + reference blend/storage", sys.argv[2]),
+        ("point-in-contour: hash cache + identity path + reference blend/storage", sys.argv[3]),
+        ("point-in-contour: hash cache + identity + opaque blend + legacy mask storage", sys.argv[4]),
+        ("point-in-contour: hash cache + identity + opaque blend + compact mask + AoS metadata", sys.argv[5]),
+        ("active-edge scanline: hash cache + identity + opaque blend + compact mask + SoA metadata", sys.argv[6]),
     )
     results = [run(label, executable) for label, executable in labels]
     checksums = {result.checksum for result in results}
@@ -125,11 +125,11 @@ def main() -> int:
         f"{reduction(linear.warm_ns, compact_soa_metadata.warm_ns)} lower"
     )
     print(
-        "cold rasterization: legacy -> active-bounds initialization: "
+        "cold rasterization: point-in-contour -> active-edge scanline: "
         f"{reduction(opaque_legacy_storage.cold_ns, compact_soa_metadata.cold_ns)} lower"
     )
     print(
-        "cold cache fill: legacy -> compact mask storage: "
+        "cold cache fill: point-in-contour + legacy storage -> scanline + compact storage: "
         f"{reduction(opaque_legacy_storage.fill_ns, compact_soa_metadata.fill_ns)} lower"
     )
     print(f"identical cache-fill checksum: {linear.fill_checksum}")

@@ -238,8 +238,8 @@ static int flatten(void) {
     return first==points ? 0 : -1;
 }
 
-/* TrueType uses a non-zero winding fill rule. Sample coordinates are in
- * eighths of a design unit to support the 4x4 subpixel grid. */
+/* The reference implementation is retained for bit-for-bit comparison. */
+#ifdef FONT_RASTERIZER_REFERENCE
 static int inside(int64_t sx,int64_t sy,uint32_t contours) {
     int winding=0;
     uint32_t first=0;
@@ -263,6 +263,64 @@ static int inside(int64_t sx,int64_t sy,uint32_t contours) {
     }
     return winding!=0;
 }
+#else
+#define MAX_SCANLINE_SAMPLES (BITMAP_SIDE * SAMPLES)
+static int64_t scanline_sample_x[MAX_SCANLINE_SAMPLES];
+static int32_t scanline_event_delta[MAX_SCANLINE_SAMPLES];
+
+/* Build sparse winding changes for one horizontal subpixel scanline. The
+ * crossing relation is kept as an exact 64-bit cross product: this preserves
+ * the reference path's strict edge comparison without floating-point rounding.
+ * Each edge contributes once, at the first sample position where its
+ * intersection is no longer strictly to the right of that sample. */
+static void scanline_build_events(int64_t sy,uint32_t sample_count,
+                                  uint32_t contours) {
+    for (uint32_t i=0;i<sample_count;++i) scanline_event_delta[i]=0;
+
+    uint32_t first=0;
+    for (uint32_t c=0;c<contours;++c) {
+        uint32_t last=flat_ends[c];
+        if (last>=first+2u) {
+            for (uint32_t i=first;i<=last;++i) {
+                uint32_t j=(i==last)?first:i+1u;
+                int64_t x1=(int64_t)flat_x[i]*8;
+                int64_t y1=(int64_t)flat_y[i]*8;
+                int64_t x2=(int64_t)flat_x[j]*8;
+                int64_t y2=(int64_t)flat_y[j]*8;
+                int64_t x_base,y_base,dx,dy;
+                int32_t direction;
+
+                if (y1<=sy && sy<y2) {
+                    x_base=x1; y_base=y1;
+                    dx=x2-x1; dy=y2-y1;
+                    direction=1;
+                } else if (y2<=sy && sy<y1) {
+                    x_base=x2; y_base=y2;
+                    dx=x1-x2; dy=y1-y2;
+                    direction=-1;
+                } else {
+                    continue;
+                }
+
+                /* sample_x is monotonically nondecreasing, including at
+                 * subpixel scales where adjacent integer samples can coincide. */
+                uint32_t lo=0,hi=sample_count;
+                int64_t vertical=sy-y_base;
+                while (lo<hi) {
+                    uint32_t mid=lo+(hi-lo)/2u;
+                    int64_t cross=dx*vertical-
+                        (scanline_sample_x[mid]-x_base)*dy;
+                    if (cross>0) lo=mid+1u;
+                    else hi=mid;
+                }
+                if (lo<sample_count)
+                    scanline_event_delta[lo]-=direction;
+            }
+        }
+        first=last+1u;
+    }
+}
+#endif
 
 int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     int64_t minx,miny,maxx,maxy,left,right,bottom,top,ascent;
@@ -301,28 +359,48 @@ int font_rasterize_glyph(uint32_t glyph_id,uint32_t size) {
     font_bitmap_left=(int32_t)left;
     ascent=ceil_div((int64_t)font_ascent*size,upem);
     font_bitmap_top=(int32_t)(ascent-top);
+#ifndef FONT_RASTERIZER_REFERENCE
+    uint32_t sample_count=font_bitmap_width*SAMPLES;
+    for (uint32_t col=0;col<font_bitmap_width;++col) {
+        for (uint32_t sx=0;sx<SAMPLES;++sx) {
+            uint32_t sample=col*SAMPLES+sx;
+            int64_t grid_x=((left+(int64_t)col)*8)+(int64_t)(sx*2u+1u);
+            scanline_sample_x[sample]=grid_x*upem/size;
+        }
+    }
+#endif
     for (uint32_t row=0;row<font_bitmap_height;++row) {
-        for (uint32_t col=0;col<font_bitmap_width;++col) {
-            uint32_t covered=0;
-            for (uint32_t sy=0;sy<SAMPLES;++sy) {
-                int64_t py=(((top-(int64_t)row)*8)-(int64_t)(sy*2+1))*upem/size;
+        for (uint32_t sy=0;sy<SAMPLES;++sy) {
+            int64_t py=(((top-(int64_t)row)*8)-(int64_t)(sy*2+1))*upem/size;
+#ifndef FONT_RASTERIZER_REFERENCE
+            scanline_build_events(py,sample_count,contours);
+            int32_t winding=0;
+#endif
+            for (uint32_t col=0;col<font_bitmap_width;++col) {
+                uint32_t covered=0;
                 for (uint32_t sx=0;sx<SAMPLES;++sx) {
+#ifdef FONT_RASTERIZER_REFERENCE
                     int64_t px=(((left+(int64_t)col)*8)+(int64_t)(sx*2+1))*upem/size;
                     if (inside(px,py,contours)) ++covered;
-                }
-            }
-            uint32_t mask_index=row*BITMAP_SIDE+col;
-            if (covered) {
-                font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
-                ++font_bitmap_pixel_count;
-            }
-#ifndef FONT_GLYPH_STORAGE_REFERENCE
-            else {
-                /* The scratch buffer is reused; explicitly clear uncovered
-                 * pixels inside this glyph's active rectangle. */
-                font_bitmap_pixels[mask_index]=0;
-            }
+#else
+                    uint32_t sample=col*SAMPLES+sx;
+                    winding+=scanline_event_delta[sample];
+                    if (winding!=0) ++covered;
 #endif
+                }
+                uint32_t mask_index=row*BITMAP_SIDE+col;
+                if (covered) {
+                    font_bitmap_pixels[mask_index]=(uint8_t)((covered*255u+8u)/16u);
+                    ++font_bitmap_pixel_count;
+                }
+#ifndef FONT_GLYPH_STORAGE_REFERENCE
+                else {
+                    /* The scratch buffer is reused; explicitly clear uncovered
+                     * pixels inside this glyph's active rectangle. */
+                    font_bitmap_pixels[mask_index]=0;
+                }
+#endif
+            }
         }
     }
     return 0;
