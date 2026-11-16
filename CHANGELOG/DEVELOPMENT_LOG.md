@@ -1,25 +1,31 @@
-## 2026-11-16 — line-local dirty repaint and measured painter work (Actions #43788858840 PASS)
+## 2026-11-16 — O2 LTO, freestanding link and release stripping (Actions #43797788228 PASS)
 
-The dirty-edit renderer now limits partial repaint to the affected logical line when the current SHM slot's rendered snapshot and the current document layout remain compatible. Each slot stores the earliest affected visual row plus a one-based logical-line index. A logical index is used rather than the internal generated line ID because that ID is regenerated after ordinary byte insertion/deletion. Before partial repaint, the current dirty visual row is converted to the zero-based row coordinate and checked against the stored line index. The renderer derives the exclusive end of the current line from the indexed line record and Fenwick row prefix. The painter starts one visual row earlier to erase glyph overhang, but stops at the line's end rather than repainting to the viewport bottom.
+The CI comparison measured compiler optimization profiles with GCC 13.3.0 on an Intel Xeon 6975P host. Each eligible benchmark used seven samples of a deterministic glyph-raster workload with 50,000 warm draws per sample. All executed variants retained identical cache-fill and warm-framebuffer checksums.
 
-The fallback conditions remain deliberate: changed scene/viewport/font/wrap/scale/transform metadata, changed total visual row count, changed maximum line width with Wrap Lines OFF, a dirty marker spanning multiple logical lines, missing/invalid line-index state, newline split/merge, or any other failed compatibility check all use the full-frame path. Newline index insert/delete paths clear the dirty-line marker for both SHM slots.
+| Profile | Stripped ELF | Warm draw | vs. -O2 |
+|---|---:|---:|---:|
+| `-Os` | 235,000 B | 139.8 ns | 3.7% slower |
+| `-O2` | 247,784 B | 134.8 ns | baseline |
+| `-O3` | 272,152 B | 159.8 ns | 18.5% slower |
+| `-O2 -mtune=znver3` | 251,880 B | 136.4 ns | 1.2% slower |
+| `-O2 -flto` | 247,960 B | **106.9 ns** | **20.7% faster** |
+| `-O3 -flto` | 272,360 B | 117.6 ns | 12.8% faster |
 
-Test observability now measures work performed by the document painter instead of using a byte-offset span as a proxy. Test-only counters count consumed document bytes (including the remainder of multi-byte graphemes) and distinct painter rows (including wrapped destination rows). The counters live behind `NEKOEDIT_TESTING`; the production ELF symbol audit rejects them. The Wayland mock derives byte/row limits from the fixture's line lengths and indexed row counts. Assertion output includes measured counters, scan offsets, document size, background visits and surface height.
+The winning general-purpose candidate was `-O2 -flto`: warm glyph draw fell from 134.8 ns at plain `-O2` to 106.9 ns (20.7% lower), with cold rasterization and cache population also improving by about 3%. The stripped app ELF grew by only 176 bytes, from 247,784 to 247,960 bytes. `-O3` was both larger and slower than `-O2` in this benchmark; `-Os` reduced the stripped file by about 12.8 KB but ran 3.7% slower. `-O3 -flto` improved on plain `-O2` but remained slower than `-O2 -flto` and was about 9.9% larger.
 
-The dirty-render regression suite passes:
-- Wrapped editing retains partial-damage and exact-content checks; Backspace restores the original bytes.
-- Wrap Lines OFF horizontally scrolls through a 160-byte first line, inserts at byte 150, and verifies exact document bytes, caret 151, unchanged horizontal pixel origin, partial damage, one-row repaint, and line-derived byte-work bounds.
-- Wrap Lines OFF Backspace restores the exact original content, caret 150 and horizontal origin, with the same measured-work bounds.
-- A three-byte active selection is replaced by one printable ASCII character exactly once; caret becomes 1 and the selection clears.
-- Newline insertion continues to use the full-frame fallback.
+The production C objects now default to `-O2 -flto`. Since LTO requires the compiler plugin at final link, the production executable links through GCC with `-nostdlib -static`, the explicit `_start` entry, `--gc-sections`, and the no-executable-stack setting. This keeps the raw-syscall/freestanding runtime: the production ELF has no PT_INTERP or dynamic dependencies. The handwritten assembly is not recompiled by GCC and is unaffected by the C optimization level.
 
-The production instrumentation split also remains validated. The normal `build/nekoedit` omits renderer/input counters, SFNT outline/raster probes and XKB failure snapshots/table scans. Wayland/Mutter tests use the separate `build/test/nekoedit-test`; native XKB builds its diagnostic-enabled parser object explicitly. The application remains `-O2` and unstripped. The source audit found no app-owned diagnostic log-file writer; fatal stderr reporting and functional timers remain.
+The test build is deliberately different. `TEST_CFLAGS` filters out `-flto`, and the instrumented test application continues to link directly through `ld`. This preserves the globals used by the Wayland process-memory harness and keeps test-only instrumentation out of the release executable.
 
-Actions [#43788858840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840) passed all 17 steps: production build/ELF, CLI tests, renderer equivalence, full Wayland mock including the dirty-render cases and 11 MiB Open/Save, executable inspection, native `us(intl)` XKB, pinned X.Org regeneration and comparisons, locale-pack build, nested GNOME Shell/Mutter/IBus integration, and both artifacts.
+Release cleanup is now automatic. The normal ELF is audited before stripping for the absence of a PT_INTERP segment, dynamic `NEEDED` entries, and known test-only instrumentation symbols. `strip --strip-all` then removes the symbol/debug metadata; the post-strip step verifies `.symtab` is absent. Linker `--gc-sections` and compiler `-ffunction-sections -fdata-sections` continue to discard unreferenced code/data. Stripping does not itself increase execution speed and does not delete live editor functions.
 
-Artifacts: Linux executable ZIP **153,082 bytes**, SHA-256 `85ddde698fb0b2eedc25382b22ed25c31f25e6929c270b81569aa35bfc8f5d88`; Compose locale ZIP **148,799 bytes**, SHA-256 `f22df0b86a9be18ee8af9fd505b1f9a6e8b940207d7e61c2b4b280676527a22e`.
+Architecture-specific profiles (`-march=x86-64-v3`, `-march=znver3`, and `-O2 -flto -march=znver3`) were built and size-measured, but runtime testing was skipped because the hosted runner is Intel and did not advertise the required feature set. No CPU-specific ISA flag was promoted to the default. The `-mtune=znver3` profile was benchmarked on Intel and did not beat generic `-O2`.
 
-No controlled application-level before/after dirty-render latency benchmark or manual live-desktop retest was conducted.
+Actions [#43797788228](https://github.com/GraderGamer2/NekoEdit/actions/runs/43797788228) passed all 18 steps, including the compiler sweep, LTO release build and symbol audit, CLI tests, renderer equivalence, full Wayland/11 MiB Open-Save suite, XKB, pinned X.Org importer, locale-pack build, nested GNOME Shell/Mutter/IBus, and both artifact uploads.
+
+Final production ELF text/data/BSS: **242,172 / 64 / 3,797,208 bytes**. Artifacts: Linux executable ZIP **124,744 bytes**, SHA-256 `6bd7c1e94220abf1420d40648a2e5eeee11270ddc30db05f890ca08365b2c19a`; Compose locale ZIP **148,799 bytes**, SHA-256 `b5030e8afe505ecf277b4943a006f8f8183b5790e42b557f9cfb55de3c7ff698`.
+
+The measured 20.7% lower warm draw time applies to the synthetic C rasterizer benchmark only. It is not an end-to-end editor-scroll result. No manual desktop before/after test was run.
 
 
 ---

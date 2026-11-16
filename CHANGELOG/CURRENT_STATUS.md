@@ -1,42 +1,48 @@
-## 2026-11-16 — line-local dirty repaint, measured painter work and production instrumentation isolation (Actions #43788858840 PASS)
+## 2026-11-16 — measured compiler profiles, LTO release build and stripped ELF (Actions #43797788228 PASS)
 
-**Source branch:** `early-alpha`, final source head [f25c8a7](https://github.com/GraderGamer2/NekoEdit/commit/f25c8a78ef4fd6e3b808d2fafa31408050b365e). `main` remains the stable application-source checkpoint; only the five changelog files are mirrored there. `optimization-early-alpha` remains isolated.
+**Source branch:** `early-alpha`, final source head [25b2aa4](https://github.com/GraderGamer2/NekoEdit/commit/25b2aa460cc6438556b51e488e1043c8e93ccce4). `main` receives changelog-only mirrors; no application source is merged there. `optimization-early-alpha` remains isolated.
 
-### Edit-aware repaint boundary
+### Compiler comparison
 
-Each compatible SHM slot tracks the earliest dirty visual row and the one-based logical line index that was edited. The marker uses a logical line index rather than the generated line ID because ordinary byte insertions/deletions regenerate that ID. Before partial repaint, the renderer validates that the current dirty visual row still maps to the stored logical line. It then obtains the line's exclusive visual-row end through the indexed line data/Fenwick row prefix. The painter starts one visual row earlier to erase glyph overhang and stops at the affected line's end.
+The CI compiler was GCC 13.3.0 on an Intel Xeon 6975P runner. Each eligible profile ran seven samples of the deterministic glyph-raster benchmark; warm samples performed 50,000 draws. All executed profiles produced identical cache-fill and warm-framebuffer checksums.
 
-Partial repaint remains conditional on the existing scene/viewport/font/wrap/scale/transform compatibility checks, unchanged total visual-row count, and (when wrapping is off) unchanged document maximum line width. Edits spanning multiple logical lines, newline insertion/deletion, index uncertainty, or a failed snapshot check use the full-frame fallback. Both SHM slots are invalidated for newline split/merge operations.
+| Profile | Stripped ELF | Warm draw | vs. -O2 |
+|---|---:|---:|---:|
+| `-Os` | 235,000 B | 139.8 ns | 3.7% slower |
+| `-O2` | 247,784 B | 134.8 ns | baseline |
+| `-O3` | 272,152 B | 159.8 ns | 18.5% slower |
+| `-O2 -mtune=znver3` | 251,880 B | 136.4 ns | 1.2% slower |
+| `-O2 -flto` | 247,960 B | **106.9 ns** | **20.7% faster** |
+| `-O3 -flto` | 272,360 B | 117.6 ns | 12.8% faster |
 
-### Test-only work counters
+The `-O2 -flto` profile also measured 16,556.5 ns cold rasterization and 16,715.4 ns cache fill, versus 17,116.3 ns and 17,236.5 ns for plain `-O2`. The stripped executable increased only 176 bytes (247,960 versus 247,784). This benchmark covers the C rasterizer, not the handwritten assembly editor pipeline or full-document scrolling.
 
-The test executable now exposes:
-- document bytes consumed by the document painter, including the remaining bytes of multi-byte graphemes;
-- distinct document rows visited by the painter, including wrapped destination rows.
+The x86-64-v3 and Zen 3 `-march` candidates built successfully, but their runtime benchmarks were skipped on the Intel host because the relevant ISA feature gate was not satisfied. They are not part of the production defaults.
 
-These are guarded by `NEKOEDIT_TESTING` and absent from the production executable. The Makefile's production-symbol audit rejects the new counter symbols as well as the existing diagnostic families. Wayland test bounds are derived from fixture line lengths and indexed visual-row counts, rather than treating a fixed 512-byte document-offset span as a proxy for work. Failure messages report measured byte/row counts, scan offsets, document length, background-row visits, and surface height.
+### Production release configuration
 
-### Correctness coverage
+- Default C optimization is now `-O2 -flto`.
+- The application is linked through GCC with `-nostdlib`, `-static`, the explicit `_start` entry, no executable stack, and `--gc-sections`.
+- Handwritten assembly sources remain assembled with the existing GNU assembler settings; LTO applies only to the freestanding C modules.
+- Instrumented test C objects use `TEST_CFLAGS` with `-flto` removed. The Wayland/Mutter test executable remains a separate, directly linked, inspectable test binary.
+- The existing ELF checks run before stripping. `strip --strip-all` then removes release symbol/debug metadata; a post-strip check verifies `.symtab` is absent.
+- `-ffunction-sections`, `-fdata-sections`, and `--gc-sections` continue to eliminate unreachable code/data sections.
 
-- Wrap Lines OFF: scroll horizontally through the 160-byte first line, edit at byte 150, and verify exact bytes, caret, unchanged horizontal origin, partial damage, and fixture-derived byte/row work bounds for both typing and Backspace.
-- ASCII selection replacement: select three bytes, type one ASCII character, and verify exactly one replacement, caret position 1, and cleared selection.
-- Wrapped edit coverage remains, including exact document contents and partial-damage checks.
-- Newline insertion retains the full-frame geometry/layout fallback.
-- Existing large-document open/save, picker, clipboard, Find, buffer-pacing and protocol mock coverage remains in the full suite.
-
-### Production instrumentation and logging
-
-The normal `build/nekoedit` excludes renderer/input counters, SFNT validation probes, and XKB failure snapshots/table scans. `build/test/nekoedit-test` is used for Wayland/Mutter tests; the native XKB test builds a separate diagnostic-enabled parser object. The executable remains `-O2` and unstripped. The source audit found no application-owned diagnostic log-file writer. Fatal startup/protocol errors still report to stderr; functional key-repeat/selection-scroll timers, Undo/Redo journals and preferences remain.
+The final production ELF reports text/data/BSS of **242,172 / 64 / 3,797,208 bytes**. The Linux executable artifact ZIP is **124,744 bytes**. The executable remains static/freestanding with no PT_INTERP, dynamic dependencies, or test-only symbols before stripping.
 
 ### Validation
 
-[Actions #43788858840](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840) passed all 17 workflow steps on `f25c8a7). This includes production build and ELF inspection, CLI tests, renderer equivalence, full Wayland mock, native `us(intl)` XKB parser, pinned X.Org source regeneration and byte comparisons, locale-pack build, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
+[Actions #43797788228](https://github.com/GraderGamer2/NekoEdit/actions/runs/43797788228) passed all 18 workflow steps: compiler comparison, LTO production build/ELF/strip checks, CLI tests, renderer equivalence, full Wayland suite including 11 MiB Open/Save and dirty-render regressions, executable inspection, native `us(intl)` XKB, pinned X.Org regeneration/byte comparison, Compose generation, nested GNOME Shell/Mutter/IBus integration, and both artifact uploads.
 
 Artifacts:
-- [Linux executable ZIP — 153,082 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840/artifacts/14191547719); SHA-256 `85ddde698fb0b2eedc25382b22ed25c31f25e6929c270b81569aa35bfc8f5d88`.
-- [Compose locale ZIP — 148,799 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43788858840/artifacts/14192000650); SHA-256 `f22df0b86a9be18ee8af9fd505b1f9a6e8b940207d7e61c2b4b280676527a22e`.
+- [Linux x86-64 executable ZIP — 124,744 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43797788228/artifacts/14194983905); SHA-256 `6bd7c1e94220abf1420d40648a2e5eeee11270ddc30db05f890ca08365b2c19a`.
+- [Compose locale ZIP — 148,799 bytes](https://github.com/GraderGamer2/NekoEdit/actions/runs/43797788228/artifacts/14194889415); SHA-256 `b5030e8afe505ecf277b4943a006f8f8183b5790e42b557f9cfb55de3c7ff698`.
 
-No controlled before/after application-level dirty-render latency measurement or manual live-desktop retest is claimed.
+The 20.7% result is a microbenchmark improvement for the C rasterizer, not an end-to-end scrolling speedup. No live desktop before/after test was conducted.
+
+---
+
+## 2026-11-15
 ---
 
 ## 2026-11-15 — Czech Compose pack and status-column checkpoint cache (CI PASS #1006)
