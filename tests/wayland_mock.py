@@ -832,6 +832,18 @@ def run(
                         raise AssertionError("status bar accent separator was not rendered")
                     if struct.unpack_from("<I", pixels, (status_top + 1) * 800 * 4)[0] != 0xFF343D4B:
                         raise AssertionError("status bar background was not rendered")
+                    # The footer groups caret location, byte count and mode
+                    # separately; both separators follow the responsive anchors.
+                    for separator_x, separator_name in ((468, "byte-count"), (732, "mode")):
+                        for separator_y in range(status_top + 4, status_top + 16):
+                            separator_pixel = struct.unpack_from(
+                                "<I", pixels, separator_y * 800 * 4 + separator_x * 4
+                            )[0]
+                            if separator_pixel != 0xFF596273:
+                                raise AssertionError(
+                                    f"{separator_name} status separator was not rendered at "
+                                    f"({separator_x},{separator_y}): {hex(separator_pixel)}"
+                                )
     
                     if not font_parser_test and not antialiased_ink_present(16, initial_height - 16, 88, 14):
                         raise AssertionError("logical line status label was not rendered")

@@ -23683,6 +23683,33 @@ render_status_bar:
     mov r9d, 0xff78a9d4
     call draw_rect
 
+    # Keep the footer's three information groups visually distinct. The
+    # separators follow the existing responsive byte-count and mode anchors.
+    mov esi, dword ptr [rip + window_status_bytes_x]
+    sub esi, 12
+    test esi, esi
+    jle .Lneko_status_skip_byte_divider
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov edx, dword ptr [rip + window_status_top]
+    add edx, 4
+    mov ecx, 1
+    mov r8d, 12
+    mov r9d, 0xff596273
+    call draw_rect
+.Lneko_status_skip_byte_divider:
+    mov esi, dword ptr [rip + window_status_mode_x]
+    sub esi, 12
+    test esi, esi
+    jle .Lneko_status_skip_mode_divider
+    mov rdi, qword ptr [rip + shm_mapping]
+    mov edx, dword ptr [rip + window_status_top]
+    add edx, 4
+    mov ecx, 1
+    mov r8d, 12
+    mov r9d, 0xff596273
+    call draw_rect
+.Lneko_status_skip_mode_divider:
+
     # Derive the logical line with the byte-length Fenwick tree, then scan
     # only the bytes from that line's start to the insertion point for column.
     # If the bounded index is unavailable, preserve the original full scan.
