@@ -24,10 +24,12 @@ extern uint32_t font_glyph_advance(uint32_t glyph_id);
 uint8_t font_bitmap_pixels[BITMAP_BYTES];
 uint32_t font_bitmap_width, font_bitmap_height, font_bitmap_pixel_count;
 int32_t font_bitmap_left, font_bitmap_top;
+#ifdef NEKOEDIT_TESTING
 int32_t font_probe_raster_result, font_probe_raster_width;
 int32_t font_probe_raster_height, font_probe_raster_pixels;
 int32_t font_probe_curve_result, font_probe_curve_width;
 int32_t font_probe_curve_height, font_probe_curve_pixels;
+#endif
 
 static int32_t flat_x[MAX_FLAT_POINTS], flat_y[MAX_FLAT_POINTS];
 static uint32_t flat_ends[MAX_CONTOURS], flat_count;
@@ -424,7 +426,9 @@ static struct cache_entry *cached(uint32_t glyph_id,uint32_t size) {
  * em size is supplied by the document settings; the default is 12px.
  * The legacy eight-pixel advance remains active when no supported font is loaded.
  */
+#ifdef NEKOEDIT_TESTING
 int32_t font_probe_advance_A, font_probe_advance_B, font_probe_advance_space;
+#endif
 int font_codepoint_advance_pixels_size(uint32_t codepoint,uint32_t size) {
     uint32_t glyph_id, advance, upem;
     uint64_t scaled;
