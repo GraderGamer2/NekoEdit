@@ -1,3 +1,19 @@
+## Latest handoff (2026-11-16 — production instrumentation split and dirty-render coverage)
+
+Continue application-source work on `early-alpha` at [3ba19ad](https://github.com/GraderGamer2/NekoEdit/commit/3ba19adfcd2b1d218751955d7e9f28b0d5841eda). Keep `main` as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Keep `optimization-early-alpha` isolated. The normal executable remains `-O2` and unstripped.
+
+**Edit-aware dirty rendering:** the existing renderer records the earliest changed visual row for each compatible shared-memory buffer slot. It uses partial repaint only when the previous scene, viewport, font/scale, wrapping, geometry, and indexed layout remain compatible. The document painter begins at the affected visual row and retains clipping; Wrap Lines OFF resolves the visible start using the current horizontal pixel origin. Structural changes still use the full-frame fallback.
+
+**Correctness coverage added:** the long dirty-render fixture now switches Wrap Lines OFF, horizontally scrolls a 160-byte first line, edits at byte 150 inside the viewport, and checks exact bytes, caret, unchanged horizontal origin, partial damage, and bounded local traversal for both typing and Backspace. It then creates a three-byte active selection and verifies one printable ASCII key replaces it exactly once and clears the selection. The original wrapped-mode caret/edit and newline full-frame fallback checks remain.
+
+**Production/test separation:** normal `build/nekoedit` no longer contains renderer scan/clip counters, keyboard/keymap event counters, SFNT outline/raster probes, or XKB failure snapshots/table scans. `make test-wayland` and `make test-mutter` use a separate `build/test/nekoedit-test`; the native XKB test builds a diagnostic-enabled parser object explicitly. `make check` rejects known test-only symbols in the production ELF. `-O2`, unstripped output, functional input timers, error cleanup, Undo/Redo, and preferences are retained.
+
+**Logging audit:** no application-owned diagnostic log-file writer was found in the reviewed source set. Persistent Undo/Redo journal and preferences are functional user data. Test harnesses may create temporary artifacts outside the editor. Fatal startup/Wayland protocol errors still report to stderr; there is no continuous debug logging or diagnostic file output in the editor.
+
+**Validation status:** the regression cases and build split are committed, but no passing Actions result is claimed. The available commit-status response contained no status entries; check the latest branch workflow before treating the coverage as validated. No end-to-end latency or FPS improvement is claimed from this source-level removal.
+
+---
+
 ## Latest handoff (2026-11-15 — Czech Compose pack and status-column checkpoints; CI PASS #1006)
 
 Continue application development on early-alpha at [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). The implementation is [0fe2690](https://github.com/GraderGamer2/NekoEdit/commit/0fe2690763aafcba73107a24ec8d8194fa28d350), the BSS initialization correction is [066bd21](https://github.com/GraderGamer2/NekoEdit/commit/066bd21848d914080a4029d8483463ce91f10dd9), and the wrapped-line test uses Ctrl+End in [f4bbcc2](https://github.com/GraderGamer2/NekoEdit/commit/f4bbcc22e856d34b1055d4e0e3540160a1895c19). Keep main as the stable application-source checkpoint and mirror changelog-only updates there; do not merge editor source. Normal development remains -O2, unstripped. Keep optimization-early-alpha isolated.
