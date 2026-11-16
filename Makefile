@@ -6,9 +6,11 @@ SIZE     ?= size
 STRIP    ?= strip
 PYTHON   ?= python3
 CC       ?= cc
-OPT_FLAGS ?= -O2
+OPT_FLAGS ?= -O2 -flto
 NEKOEDIT_BASE_CFLAGS := -m64 -std=c11 -Wall -Wextra -Werror -ffreestanding -fno-builtin -fno-stack-protector -fno-pic -fno-pie -fno-asynchronous-unwind-tables -fno-unwind-tables -mno-red-zone -fno-tree-loop-distribute-patterns -ffunction-sections -fdata-sections -fno-ident
 CFLAGS   ?= $(NEKOEDIT_BASE_CFLAGS) $(OPT_FLAGS)
+# Test globals are read by the external Wayland harness; keep test objects non-LTO.
+TEST_CFLAGS ?= $(filter-out -flto,$(CFLAGS))
 BUILD_DIR ?= build
 APP_BINARY := $(BUILD_DIR)/nekoedit
 TEST_BUILD_DIR := $(BUILD_DIR)/test
@@ -36,6 +38,11 @@ MAKE_DEFAULT ?= 0
 
 ASFLAGS  ?= --64 --fatal-warnings
 LDFLAGS  ?= -static -no-pie -z noexecstack -e _start --gc-sections
+# GCC's driver performs LTO while -nostdlib preserves the freestanding syscall-only ELF.
+APP_LINKER ?= $(CC)
+APP_LDFLAGS ?= -flto -nostdlib -static -no-pie -Wl,-z,noexecstack -Wl,-e,_start -Wl,--gc-sections
+TEST_LINKER ?= $(LD)
+TEST_LDFLAGS ?= $(LDFLAGS)
 
 SOURCES  := src/entry.S src/linux/syscall.S src/font/sfnt.S src/backend/wayland.S src/backend/xkb.S
 C_SOURCES := src/font/rasterizer.c src/backend/clipboard.c src/backend/compose_locale.c src/editor/history.c src/editor/preferences.c
@@ -47,11 +54,11 @@ all: strip-binary
 
 $(APP_BINARY): $(OBJECTS)
 	@mkdir -p $(@D)
-	$(LD) $(LDFLAGS) -o $@ $(OBJECTS)
+	$(APP_LINKER) $(APP_LDFLAGS) -o $@ $(OBJECTS)
 
 $(TEST_APP_BINARY): $(TEST_OBJECTS)
 	@mkdir -p $(@D)
-	$(LD) $(LDFLAGS) -o $@ $(TEST_OBJECTS)
+	$(TEST_LINKER) $(TEST_LDFLAGS) -o $@ $(TEST_OBJECTS)
 
 $(BUILD_DIR)/%.o: src/%.S
 	@mkdir -p $(@D)
@@ -67,7 +74,7 @@ $(TEST_BUILD_DIR)/%.o: src/%.S
 
 $(TEST_BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -DNEKOEDIT_TESTING=1 -c -o $@ $<
+	$(CC) $(TEST_CFLAGS) -DNEKOEDIT_TESTING=1 -c -o $@ $<
 
 $(BUILD_DIR)/backend/clipboard.o $(BUILD_DIR)/editor/history.o: src/editor/gap_buffer.h
 $(TEST_BUILD_DIR)/backend/clipboard.o $(TEST_BUILD_DIR)/editor/history.o: src/editor/gap_buffer.h

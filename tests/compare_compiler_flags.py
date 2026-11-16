@@ -50,6 +50,7 @@ VARIANTS = (
     Variant("O3-x86-64-v3", ("-O3", "-march=x86-64-v3", "-mtune=znver3"), benchmark_gate="x86-64-v3"),
     Variant("O3-znver3", ("-O3", "-march=znver3"), benchmark_gate="znver3"),
     Variant("O2-LTO", ("-O2", "-flto"), link_time_optimization=True),
+    Variant("O2-LTO-znver3", ("-O2", "-flto", "-march=znver3"), link_time_optimization=True, benchmark_gate="znver3"),
     Variant("O3-LTO", ("-O3", "-flto"), link_time_optimization=True),
 )
 
@@ -80,13 +81,16 @@ def cpu_details() -> tuple[str, str, set[str]]:
 def benchmark_allowed(gate: str | None, vendor: str, flags: set[str]) -> bool:
     if gate is None:
         return True
-    v3 = {"avx", "avx2", "bmi1", "bmi2", "f16c", "fma", "lzcnt", "movbe", "osxsave", "xsave"}
+    # Linux exposes AVX only when the OS has enabled the required XSAVE state;
+    # OSXSAVE itself is a CPUID feature bit, not a dependable /proc/cpuinfo flag.
+    v3 = {"avx", "avx2", "bmi1", "bmi2", "f16c", "fma", "lzcnt", "movbe", "popcnt", "xsave"}
     if not v3.issubset(flags):
         return False
     if gate == "x86-64-v3":
         return True
     if gate == "znver3":
-        return vendor == "AuthenticAMD"
+        znver3 = v3 | {"clzero", "mwaitx", "rdpru", "sse4a"}
+        return vendor == "AuthenticAMD" and znver3.issubset(flags)
     return False
 
 def elf_sizes(binary: Path, size_tool: str) -> tuple[int, int, int]:
@@ -122,20 +126,21 @@ def build_variant(variant: Variant, base_flags: str, make_tool: str,
                   strip_tool: str, size_tool: str) -> tuple[int, int, int, int, int, Path]:
     build_dir = Path("build") / "compiler-sweep" / variant.name
     cflags = " ".join([base_flags, *variant.optimization_flags])
-    linker = ld_tool
-    ldflags = "-static -no-pie -z noexecstack -e _start --gc-sections"
+    app_linker = ld_tool
+    app_ldflags = "-static -no-pie -z noexecstack -e _start --gc-sections"
     if variant.link_time_optimization:
         # GCC's driver loads its LTO plugin. -nostdlib preserves the project's
         # direct-syscall, freestanding link model and adds no runtime libraries.
-        linker = " ".join(cc)
-        ldflags = "-flto -nostdlib -static -no-pie -Wl,-z,noexecstack -Wl,-e,_start -Wl,--gc-sections"
+        app_linker = " ".join(cc)
+        app_ldflags = "-flto -nostdlib -static -no-pie -Wl,-z,noexecstack -Wl,-e,_start -Wl,--gc-sections"
 
     common = [
         make_tool, "--no-print-directory", "-C", str(ROOT),
         f"BUILD_DIR={build_dir.as_posix()}",
         f"CFLAGS={cflags}", f"CC={' '.join(cc)}",
-        f"AS={as_tool}", f"LD={linker}", f"STRIP={strip_tool}",
-        f"LDFLAGS={ldflags}",
+        f"AS={as_tool}", f"LD={ld_tool}", f"APP_LINKER={app_linker}",
+        f"APP_LDFLAGS={app_ldflags}", f"STRIP={strip_tool}",
+        f"LDFLAGS=-static -no-pie -z noexecstack -e _start --gc-sections",
     ]
     build_output = run_checked(common + ["check"]).stdout
     binary = ROOT / build_dir / "nekoedit"
